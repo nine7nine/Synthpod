@@ -138,6 +138,15 @@ getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 		fprintf(stderr, "uv_udp_bind: %s\n", uv_err_name(err));
 		return;
 	}
+	if(udp->version == OSC_STREAM_IP_VERSION_4)
+		if(!strcmp(remote, "255.255.255.255"))
+		{
+			if((err = uv_udp_set_broadcast(&udp->socket, 1)))
+			{
+				fprintf(stderr, "uv_udp_set_broadcast: %s\n", uv_err_name(err));
+				return;
+			}
+		}
 	if((err = uv_udp_recv_start(&udp->socket, _udp_alloc, _udp_recv_cb)))
 	{
 		fprintf(stderr, "uv_udp_recv_start: %s\n", uv_err_name(err));
@@ -244,7 +253,7 @@ osc_stream_udp_send(osc_stream_t *stream, const osc_data_t *buf, size_t len)
 
 	int err;
 	if((err = uv_udp_send(&udp->tx.req, &udp->socket, &msg[0], 1, &udp->tx.addr.ip, _udp_send_cb)))
-		fprintf(stderr, "uv_udp_send: %s", uv_err_name(err));
+		fprintf(stderr, "uv_udp_send: %s\n", uv_err_name(err));
 }
 
 void
@@ -259,5 +268,5 @@ osc_stream_udp_send2(osc_stream_t *stream, const uv_buf_t *bufs, size_t bufn)
 
 	int err;
 	if((err = uv_udp_send(&udp->tx.req, &udp->socket, bufs, bufn, &udp->tx.addr.ip, _udp_send_cb)))
-		fprintf(stderr, "uv_udp_send: %s", uv_err_name(err));
+		fprintf(stderr, "uv_udp_send: %s\n", uv_err_name(err));
 }
