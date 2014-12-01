@@ -284,6 +284,7 @@ osc_stream_deinit(osc_stream_t *stream)
 
 			if((err =	uv_udp_recv_stop(&udp->socket)))
 				fprintf(stderr, "uv_udp_recv_stop: %s\n", uv_err_name(err));
+			uv_close((uv_handle_t *)&udp->socket, NULL);
 
 			break;
 		}
