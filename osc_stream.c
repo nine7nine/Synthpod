@@ -30,6 +30,20 @@ const char resolve_msg [20]		= "/stream/resolve\0,\0\0\0";
 const char connect_msg [20]		= "/stream/connect\0,\0\0\0";
 const char disconnect_msg [24]	= "/stream/disconnect\0\0,\0\0\0";
 
+#if defined(__WINDOWS__)
+static inline char *
+strndup(const char *s, size_t n)
+{
+    char *result;
+    size_t len = strlen (s);
+    if (n < len) len = n;
+    result = (char *) malloc (len + 1);
+    if (!result) return 0;
+    result[len] = '\0';
+    return (char *) strncpy (result, s, len);
+}
+#endif
+
 static int
 _osc_stream_parse_protocol(osc_stream_t *stream, const char *addr, const char **url)
 {
@@ -226,7 +240,11 @@ _osc_stream_parse_url(uv_loop_t *loop, osc_stream_t *stream, const char *url)
 			// check if file can be used as pipe
 		
 			int fd;
-			if( (fd = open(url, O_RDWR | O_NOCTTY | O_NONBLOCK, 0)) < 0)
+#if defined(__WINDOWS__)
+			if( (fd = open(url, 0, 0)) < 0)
+#else
+			if( (fd = open(url, O_RDWR | O­NOCTTY | O_NONBLOCK, 0)) < 0)
+#endif
 			{
 				fprintf(stderr, "cannot open file\n");
 				return -1;
