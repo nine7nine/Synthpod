@@ -78,7 +78,7 @@ _tcp_prefix_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		uv_close((uv_handle_t *)socket, NULL);
 		uv_cancel((uv_req_t *)&tx->req);
 
-		tcp->tx = eina_inlist_remove(tcp->tx, EINA_INLIST_GET(tx));
+		tcp->tx = inlist_remove(tcp->tx, INLIST_GET(tx));
 		free(tx);
 
 		//TODO try to reconnect?
@@ -145,7 +145,7 @@ _tcp_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		uv_close((uv_handle_t *)socket, NULL);
 		uv_cancel((uv_req_t *)&tx->req);
 
-		tcp->tx = eina_inlist_remove(tcp->tx, EINA_INLIST_GET(tx));
+		tcp->tx = inlist_remove(tcp->tx, INLIST_GET(tx));
 		free(tx);
 
 		//TODO try to reconnect?
@@ -162,7 +162,7 @@ _sender_connect(uv_connect_t *conn, int status)
 
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
 	osc_stream_cb_t *cb = &stream->cb;
-	osc_stream_tcp_tx_t *tx = EINA_INLIST_CONTAINER_GET(tcp->tx, osc_stream_tcp_tx_t);
+	osc_stream_tcp_tx_t *tx = INLIST_CONTAINER_GET(tcp->tx, osc_stream_tcp_tx_t);
 
 	if(status)
 	{
@@ -206,7 +206,7 @@ getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	osc_stream_tcp_tx_t *tx = calloc(1, sizeof(osc_stream_tcp_tx_t));
 	tx->socket.data = tcp;
 	tx->req.data = tcp;
-	tcp->tx = eina_inlist_append(NULL, EINA_INLIST_GET(tx));
+	tcp->tx = inlist_append(NULL, INLIST_GET(tx));
 
 	union {
 		const struct sockaddr *ip;
@@ -318,7 +318,7 @@ _responder_connect(uv_stream_t *socket, int status)
 	osc_stream_tcp_tx_t *tx = calloc(1, sizeof(osc_stream_tcp_tx_t));
 	tx->socket.data = tcp;
 	tx->req.data = tcp;
-	tcp->tx = eina_inlist_append(tcp->tx, EINA_INLIST_GET(tx));
+	tcp->tx = inlist_append(tcp->tx, INLIST_GET(tx));
 
 	int err;
 	if((err = uv_tcp_init(loop, &tx->socket)))
@@ -484,11 +484,11 @@ osc_stream_tcp_send(osc_stream_t *stream, const osc_data_t *buf, size_t len)
 	}
 	
 	int err;
-	tcp->count = eina_inlist_count(tcp->tx);
+	tcp->count = inlist_count(tcp->tx);
 	tcp->len = len;
 
 	osc_stream_tcp_tx_t *tx;
-	EINA_INLIST_FOREACH(tcp->tx, tx)
+	INLIST_FOREACH(tcp->tx, tx)
 	{
 		if((err =	uv_write(&tx->req, (uv_stream_t *)&tx->socket, &msg[tcp->slip], 2-tcp->slip, _tcp_send_cb)))
 			fprintf(stderr, "uv_write: %s\n", uv_err_name(err));
@@ -529,10 +529,10 @@ osc_stream_tcp_send2(osc_stream_t *stream, const uv_buf_t *bufs, size_t bufn)
 	}
 
 	int err;
-	tcp->count = eina_inlist_count(tcp->tx);
+	tcp->count = inlist_count(tcp->tx);
 
 	osc_stream_tcp_tx_t *tx;
-	EINA_INLIST_FOREACH(tcp->tx, tx)
+	INLIST_FOREACH(tcp->tx, tx)
 	{
 		if((err =	uv_write(&tx->req, (uv_stream_t *)&tx->socket, &msg[tcp->slip], bufn+1-tcp->slip, _tcp_send_cb)))
 			fprintf(stderr, "uv_write: %s\n", uv_err_name(err));

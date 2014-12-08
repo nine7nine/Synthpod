@@ -29,7 +29,7 @@ extern "C" {
 #endif
 
 #include <uv.h>
-#include <Eina.h>
+#include <inlist.h>
 
 #include <osc.h>
 
@@ -92,7 +92,7 @@ struct _osc_stream_udp_t {
 };
 
 struct _osc_stream_tcp_tx_t {
-	EINA_INLIST;
+	INLIST;
 	uv_tcp_t socket;
 	uv_write_t req;
 };
@@ -103,7 +103,7 @@ struct _osc_stream_tcp_t {
 	int server;
 	uv_getaddrinfo_t req;
 	
-	Eina_Inlist *tx;
+	Inlist *tx;
 	size_t len;
 	int count;
 	size_t nchunk;

@@ -294,16 +294,16 @@ osc_stream_deinit(osc_stream_t *stream)
 
 			// close clients
 			osc_stream_tcp_tx_t *tx;
-			printf("-> %i\n", eina_inlist_count(tcp->tx));
-			Eina_Inlist *l;
-			EINA_INLIST_FOREACH_SAFE(tcp->tx, l, tx)
+			printf("-> %i\n", inlist_count(tcp->tx));
+			Inlist *l;
+			INLIST_FOREACH_SAFE(tcp->tx, l, tx)
 			{
 				if((err = uv_read_stop((uv_stream_t *)&tx->socket)))
 					fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
 				uv_close((uv_handle_t *)&tx->socket, NULL);
 				uv_cancel((uv_req_t *)&tx->req);
 
-				tcp->tx = eina_inlist_remove(tcp->tx, EINA_INLIST_GET(tx));
+				tcp->tx = inlist_remove(tcp->tx, INLIST_GET(tx));
 				free(tx);
 			}
 
