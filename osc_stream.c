@@ -243,7 +243,7 @@ _osc_stream_parse_url(uv_loop_t *loop, osc_stream_t *stream, const char *url)
 #if defined(__WINDOWS__)
 			if( (fd = open(url, 0, 0)) < 0)
 #else
-			if( (fd = open(url, O_RDWR | O­NOCTTY | O_NONBLOCK, 0)) < 0)
+			if( (fd = open(url, O_RDWR | O_NOCTTY | O_NONBLOCK, 0)) < 0)
 #endif
 			{
 				fprintf(stderr, "cannot open file\n");
