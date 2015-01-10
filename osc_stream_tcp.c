@@ -198,98 +198,106 @@ getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
 	osc_stream_cb_t *cb = &stream->cb;
 
-	osc_stream_tcp_tx_t *tx = calloc(1, sizeof(osc_stream_tcp_tx_t));
-	tx->socket.data = tcp;
-	tx->req.data = tcp;
-	tcp->tx = inlist_append(NULL, INLIST_GET(tx));
+	if(status >= 0)
+	{
+		osc_stream_tcp_tx_t *tx = calloc(1, sizeof(osc_stream_tcp_tx_t));
+		tx->socket.data = tcp;
+		tx->req.data = tcp;
+		tcp->tx = inlist_append(NULL, INLIST_GET(tx));
 
-	union {
-		const struct sockaddr *ip;
-		const struct sockaddr_in *ip4;
-		const struct sockaddr_in6 *ip6;
-	} src;
-	char remote [128] = {'\0'};
-	
-	src.ip = res->ai_addr;;
-	
-	int err;
-	switch(tcp->version)
-	{
-		case OSC_STREAM_IP_VERSION_4:
+		union {
+			const struct sockaddr *ip;
+			const struct sockaddr_in *ip4;
+			const struct sockaddr_in6 *ip6;
+		} src;
+		char remote [128] = {'\0'};
+		
+		src.ip = res->ai_addr;;
+		
+		int err;
+		switch(tcp->version)
 		{
-			if((err = uv_ip4_name(src.ip4, remote, 127)))
+			case OSC_STREAM_IP_VERSION_4:
 			{
-				fprintf(stderr, "up_ip4_name: %s\n", uv_err_name(err));
-				return;
+				if((err = uv_ip4_name(src.ip4, remote, 127)))
+				{
+					fprintf(stderr, "up_ip4_name: %s\n", uv_err_name(err));
+					return;
+				}
+				break;
 			}
-			break;
+			case OSC_STREAM_IP_VERSION_6:
+			{
+				if((err = uv_ip6_name(src.ip6, remote, 127)))
+				{
+					fprintf(stderr, "up_ip6_name: %s\n", uv_err_name(err));
+					return;
+				}
+				break;
+			}
 		}
-		case OSC_STREAM_IP_VERSION_6:
+		
+		if((err = uv_tcp_init(loop, &tx->socket)))
 		{
-			if((err = uv_ip6_name(src.ip6, remote, 127)))
-			{
-				fprintf(stderr, "up_ip6_name: %s\n", uv_err_name(err));
-				return;
-			}
-			break;
+			fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
+			return;
 		}
-	}
-	
-	if((err = uv_tcp_init(loop, &tx->socket)))
-	{
-		fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
-		return;
-	}
-	if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
-	{
-		fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
-		return;
-	}
-	if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
-	{
-		fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
-		return;
-	}
+		if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
+		{
+			fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
+			return;
+		}
+		if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
+		{
+			fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
+			return;
+		}
 
-	union {
-		const struct sockaddr ip;
-		struct sockaddr_in ip4;
-		struct sockaddr_in6 ip6;
-	} addr;
+		union {
+			const struct sockaddr ip;
+			struct sockaddr_in ip4;
+			struct sockaddr_in6 ip6;
+		} addr;
 
-	switch(tcp->version)
-	{
-		case OSC_STREAM_IP_VERSION_4:
+		switch(tcp->version)
 		{
-			if((err = uv_ip4_addr(remote, ntohs(src.ip4->sin_port), &addr.ip4)))
+			case OSC_STREAM_IP_VERSION_4:
 			{
-				fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
-				return;
-			}
+				if((err = uv_ip4_addr(remote, ntohs(src.ip4->sin_port), &addr.ip4)))
+				{
+					fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
+					return;
+				}
 
-			break;
-		}
-		case OSC_STREAM_IP_VERSION_6:
-		{
-			if((err = uv_ip6_addr(remote, ntohs(src.ip6->sin6_port), &addr.ip6)))
-			{
-				fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
-				return;
+				break;
 			}
-			break;
+			case OSC_STREAM_IP_VERSION_6:
+			{
+				if((err = uv_ip6_addr(remote, ntohs(src.ip6->sin6_port), &addr.ip6)))
+				{
+					fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
+					return;
+				}
+				break;
+			}
 		}
+		
+		if((err = uv_tcp_connect(&tcp->conn, &tx->socket, &addr.ip, _sender_connect)))
+		{
+			fprintf(stderr, "uv_tcp_connect: %s\n", uv_err_name(err));
+			return;
+		}
+
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 	}
-	
-	if((err = uv_tcp_connect(&tcp->conn, &tx->socket, &addr.ip, _sender_connect)))
+	else
 	{
-		fprintf(stderr, "uv_tcp_connect: %s\n", uv_err_name(err));
-		return;
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
 	}
 
 	uv_freeaddrinfo(res);
-
-	if(cb->recv)
-		cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 }
 
 static void
@@ -365,72 +373,80 @@ getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	osc_stream_tcp_t *tcp = (void *)req - offsetof(osc_stream_tcp_t, req);
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
 	osc_stream_cb_t *cb = &stream->cb;
-	
-	int err;
-	osc_stream_addr_t addr;
-	char remote [128] = {'\0'};
-	unsigned int flags = 0;
 
-	tcp->tx = NULL;
-
-	if((err = uv_tcp_init(loop, &tcp->socket)))
+	if(status >= 0)
 	{
-		fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
-		return;
-	}
+		int err;
+		osc_stream_addr_t addr;
+		char remote [128] = {'\0'};
+		unsigned int flags = 0;
 
-	switch(tcp->version)
-	{
-		case OSC_STREAM_IP_VERSION_4:
+		tcp->tx = NULL;
+
+		if((err = uv_tcp_init(loop, &tcp->socket)))
 		{
-			struct sockaddr_in *ptr4 = (struct sockaddr_in *)res->ai_addr;
-			if((err = uv_ip4_name(ptr4, remote, 127)))
-			{
-				fprintf(stderr, "up_ip4_name: %s\n", uv_err_name(err));
-				return;
-			}
-			if((err = uv_ip4_addr(remote, ntohs(ptr4->sin_port), &addr.ip4)))
-			{
-				fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
-				return;
-			}
-
-			break;
+			fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
+			return;
 		}
-		case OSC_STREAM_IP_VERSION_6:
+
+		switch(tcp->version)
 		{
-			struct sockaddr_in6 *ptr6 = (struct sockaddr_in6 *)res->ai_addr;
-			if((err = uv_ip6_name(ptr6, remote, 127)))
+			case OSC_STREAM_IP_VERSION_4:
 			{
-				fprintf(stderr, "up_ip6_name: %s\n", uv_err_name(err));
-				return;
-			}
-			if((err = uv_ip6_addr(remote, ntohs(ptr6->sin6_port), &addr.ip6)))
-			{
-				fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
-				return;
-			}
-			flags |= UV_TCP_IPV6ONLY; //TODO make this configurable
+				struct sockaddr_in *ptr4 = (struct sockaddr_in *)res->ai_addr;
+				if((err = uv_ip4_name(ptr4, remote, 127)))
+				{
+					fprintf(stderr, "up_ip4_name: %s\n", uv_err_name(err));
+					return;
+				}
+				if((err = uv_ip4_addr(remote, ntohs(ptr4->sin_port), &addr.ip4)))
+				{
+					fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
+					return;
+				}
 
-			break;
+				break;
+			}
+			case OSC_STREAM_IP_VERSION_6:
+			{
+				struct sockaddr_in6 *ptr6 = (struct sockaddr_in6 *)res->ai_addr;
+				if((err = uv_ip6_name(ptr6, remote, 127)))
+				{
+					fprintf(stderr, "up_ip6_name: %s\n", uv_err_name(err));
+					return;
+				}
+				if((err = uv_ip6_addr(remote, ntohs(ptr6->sin6_port), &addr.ip6)))
+				{
+					fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
+					return;
+				}
+				flags |= UV_TCP_IPV6ONLY; //TODO make this configurable
+
+				break;
+			}
 		}
-	}
 
-	if((err = uv_tcp_bind(&tcp->socket, &addr.ip, flags)))
-	{
-		fprintf(stderr, "uv_tcp_bind: %s\n", uv_err_name(err));
-		return;
+		if((err = uv_tcp_bind(&tcp->socket, &addr.ip, flags)))
+		{
+			fprintf(stderr, "uv_tcp_bind: %s\n", uv_err_name(err));
+			return;
+		}
+		if((err = uv_listen((uv_stream_t *)&tcp->socket, 128, _responder_connect)))
+		{
+			fprintf(stderr, "uv_listen: %s\n", uv_err_name(err));
+			return;
+		}
+
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 	}
-	if((err = uv_listen((uv_stream_t *)&tcp->socket, 128, _responder_connect)))
+	else
 	{
-		fprintf(stderr, "uv_listen: %s\n", uv_err_name(err));
-		return;
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
 	}
 
 	uv_freeaddrinfo(res);
-
-	if(cb->recv)
-		cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 }
 
 static void

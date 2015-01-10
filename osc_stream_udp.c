@@ -63,94 +63,102 @@ getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
 	osc_stream_cb_t *cb = &stream->cb;
 
-	osc_stream_addr_t src;
-	char remote [128] = {'\0'};
-	unsigned int flags = 0;
-
-	int err;
-	switch(udp->version)
+	if(status >= 0)
 	{
-		case OSC_STREAM_IP_VERSION_4:
+		osc_stream_addr_t src;
+		char remote [128] = {'\0'};
+		unsigned int flags = 0;
+
+		int err;
+		switch(udp->version)
 		{
-			struct sockaddr_in *ptr4 = (struct sockaddr_in *)res->ai_addr;
-			if((err = uv_ip4_name(ptr4, remote, 127)))
+			case OSC_STREAM_IP_VERSION_4:
 			{
-				fprintf(stderr, "up_ip4_name: %s\n", uv_err_name(err));
-				return;
-			}
-			if((err = uv_udp_init(loop, &udp->socket)))
-			{
-				fprintf(stderr, "uv_udp_init: %s\n", uv_err_name(err));
-				return;
-			}
-			if((err = uv_ip4_addr(remote, ntohs(ptr4->sin_port), &tx->addr.ip4)))
-			{
-				fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
-				return;
-			}
+				struct sockaddr_in *ptr4 = (struct sockaddr_in *)res->ai_addr;
+				if((err = uv_ip4_name(ptr4, remote, 127)))
+				{
+					fprintf(stderr, "up_ip4_name: %s\n", uv_err_name(err));
+					return;
+				}
+				if((err = uv_udp_init(loop, &udp->socket)))
+				{
+					fprintf(stderr, "uv_udp_init: %s\n", uv_err_name(err));
+					return;
+				}
+				if((err = uv_ip4_addr(remote, ntohs(ptr4->sin_port), &tx->addr.ip4)))
+				{
+					fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
+					return;
+				}
 
-			if((err = uv_ip4_addr("0.0.0.0", 0, &src.ip4)))
-			{
-				fprintf(stderr, "up_ip4_addr: %s\n", uv_err_name(err));
-				return;
-			}
+				if((err = uv_ip4_addr("0.0.0.0", 0, &src.ip4)))
+				{
+					fprintf(stderr, "up_ip4_addr: %s\n", uv_err_name(err));
+					return;
+				}
 
-			break;
+				break;
+			}
+			case OSC_STREAM_IP_VERSION_6:
+			{
+				struct sockaddr_in6 *ptr6 = (struct sockaddr_in6 *)res->ai_addr;
+				if((err = uv_ip6_name(ptr6, remote, 127)))
+				{
+					fprintf(stderr, "up_ip6_name: %s\n", uv_err_name(err));
+					return;
+				}
+				if((err = uv_udp_init(loop, &udp->socket)))
+				{
+					fprintf(stderr, "uv_udp_init: %s\n", uv_err_name(err));
+					return;
+				}
+				if((err = uv_ip6_addr(remote, ntohs(ptr6->sin6_port), &tx->addr.ip6)))
+				{
+					fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
+					return;
+				}
+				
+				if((err = uv_ip6_addr("::", 0, &src.ip6)))
+				{
+					fprintf(stderr, "up_ip6_addr: %s\n", uv_err_name(err));
+					return;
+				}
+				flags |= UV_UDP_IPV6ONLY; //TODO make this configurable?
+
+				break;
+			}
 		}
-		case OSC_STREAM_IP_VERSION_6:
+		
+		if((err = uv_udp_bind(&udp->socket, &src.ip, flags)))
 		{
-			struct sockaddr_in6 *ptr6 = (struct sockaddr_in6 *)res->ai_addr;
-			if((err = uv_ip6_name(ptr6, remote, 127)))
-			{
-				fprintf(stderr, "up_ip6_name: %s\n", uv_err_name(err));
-				return;
-			}
-			if((err = uv_udp_init(loop, &udp->socket)))
-			{
-				fprintf(stderr, "uv_udp_init: %s\n", uv_err_name(err));
-				return;
-			}
-			if((err = uv_ip6_addr(remote, ntohs(ptr6->sin6_port), &tx->addr.ip6)))
-			{
-				fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
-				return;
-			}
-			
-			if((err = uv_ip6_addr("::", 0, &src.ip6)))
-			{
-				fprintf(stderr, "up_ip6_addr: %s\n", uv_err_name(err));
-				return;
-			}
-			flags |= UV_UDP_IPV6ONLY; //TODO make this configurable?
-
-			break;
+			fprintf(stderr, "uv_udp_bind: %s\n", uv_err_name(err));
+			return;
 		}
+		if(udp->version == OSC_STREAM_IP_VERSION_4)
+			if(!strcmp(remote, "255.255.255.255"))
+			{
+				if((err = uv_udp_set_broadcast(&udp->socket, 1)))
+				{
+					fprintf(stderr, "uv_udp_set_broadcast: %s\n", uv_err_name(err));
+					return;
+				}
+			}
+		if((err = uv_udp_recv_start(&udp->socket, _udp_alloc, _udp_recv_cb)))
+		{
+			fprintf(stderr, "uv_udp_recv_start: %s\n", uv_err_name(err));
+			return;
+		}
+
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 	}
-	
-	if((err = uv_udp_bind(&udp->socket, &src.ip, flags)))
+	else
 	{
-		fprintf(stderr, "uv_udp_bind: %s\n", uv_err_name(err));
-		return;
-	}
-	if(udp->version == OSC_STREAM_IP_VERSION_4)
-		if(!strcmp(remote, "255.255.255.255"))
-		{
-			if((err = uv_udp_set_broadcast(&udp->socket, 1)))
-			{
-				fprintf(stderr, "uv_udp_set_broadcast: %s\n", uv_err_name(err));
-				return;
-			}
-		}
-	if((err = uv_udp_recv_start(&udp->socket, _udp_alloc, _udp_recv_cb)))
-	{
-		fprintf(stderr, "uv_udp_recv_start: %s\n", uv_err_name(err));
-		return;
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
 	}
 
 	uv_freeaddrinfo(res);
-
-	if(cb->recv)
-		cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 }
 
 void
@@ -161,58 +169,66 @@ getaddrinfo_udp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
 	osc_stream_cb_t *cb = &stream->cb;
 
-	osc_stream_addr_t src;
-	unsigned int flags = 0;
-
-	int err;
-	if((err = uv_udp_init(loop, &udp->socket)))
+	if(status >= 0)
 	{
-		fprintf(stderr, "uv_udp_init: %s\n", uv_err_name(err));
-		return;
-	}
+		osc_stream_addr_t src;
+		unsigned int flags = 0;
 
-	switch(udp->version)
-	{
-		case OSC_STREAM_IP_VERSION_4:
+		int err;
+		if((err = uv_udp_init(loop, &udp->socket)))
 		{
-			struct sockaddr_in *ptr4 = (struct sockaddr_in *)res->ai_addr;
-			if((err = uv_ip4_addr("0.0.0.0", ntohs(ptr4->sin_port), &src.ip4)))
-			{
-				fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
-				return;
-			}
-
-			break;
+			fprintf(stderr, "uv_udp_init: %s\n", uv_err_name(err));
+			return;
 		}
-		case OSC_STREAM_IP_VERSION_6:
+
+		switch(udp->version)
 		{
-			struct sockaddr_in6 *ptr6 = (struct sockaddr_in6 *)res->ai_addr;
-			if((err = uv_ip6_addr("::", ntohs(ptr6->sin6_port), &src.ip6)))
+			case OSC_STREAM_IP_VERSION_4:
 			{
-				fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
-				return;
-			}
-			flags |= UV_UDP_IPV6ONLY; //TODO make this configurable?
+				struct sockaddr_in *ptr4 = (struct sockaddr_in *)res->ai_addr;
+				if((err = uv_ip4_addr("0.0.0.0", ntohs(ptr4->sin_port), &src.ip4)))
+				{
+					fprintf(stderr, "uv_ip4_addr: %s\n", uv_err_name(err));
+					return;
+				}
 
-			break;
+				break;
+			}
+			case OSC_STREAM_IP_VERSION_6:
+			{
+				struct sockaddr_in6 *ptr6 = (struct sockaddr_in6 *)res->ai_addr;
+				if((err = uv_ip6_addr("::", ntohs(ptr6->sin6_port), &src.ip6)))
+				{
+					fprintf(stderr, "uv_ip6_addr: %s\n", uv_err_name(err));
+					return;
+				}
+				flags |= UV_UDP_IPV6ONLY; //TODO make this configurable?
+
+				break;
+			}
 		}
+		
+		if((err = uv_udp_bind(&udp->socket, &src.ip, flags)))
+		{
+			fprintf(stderr, "uv_udp_bind: %s\n", uv_err_name(err));
+			return;
+		}
+		if((err = uv_udp_recv_start(&udp->socket, _udp_alloc, _udp_recv_cb)))
+		{
+			fprintf(stderr, "uv_udp_recv_start: %s\n", uv_err_name(err));
+			return;
+		}
+
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 	}
-	
-	if((err = uv_udp_bind(&udp->socket, &src.ip, flags)))
+	else
 	{
-		fprintf(stderr, "uv_udp_bind: %s\n", uv_err_name(err));
-		return;
-	}
-	if((err = uv_udp_recv_start(&udp->socket, _udp_alloc, _udp_recv_cb)))
-	{
-		fprintf(stderr, "uv_udp_recv_start: %s\n", uv_err_name(err));
-		return;
+		if(cb->recv)
+			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
 	}
 
 	uv_freeaddrinfo(res);
-
-	if(cb->recv)
-		cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
 }
 
 static void

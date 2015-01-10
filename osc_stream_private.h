@@ -18,6 +18,7 @@
 #include <osc_stream.h>
 
 extern const char resolve_msg [20];
+extern const char timeout_msg [20];
 extern const char connect_msg [20];
 extern const char disconnect_msg [24];
 

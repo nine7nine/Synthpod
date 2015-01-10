@@ -21,6 +21,7 @@
 #include <stdlib.h>
 
 const char resolve_msg [20]		= "/stream/resolve\0,\0\0\0";
+const char timeout_msg [20]		= "/stream/timeout\0,\0\0\0";
 const char connect_msg [20]		= "/stream/connect\0,\0\0\0";
 const char disconnect_msg [24]	= "/stream/disconnect\0\0,\0\0\0";
 
