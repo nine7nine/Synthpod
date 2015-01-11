@@ -241,16 +241,6 @@ getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 			fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
 			return;
 		}
-		if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
-		{
-			fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
-			return;
-		}
-		if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
-		{
-			fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
-			return;
-		}
 
 		union {
 			const struct sockaddr ip;
@@ -284,6 +274,16 @@ getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 		if((err = uv_tcp_connect(&tcp->conn, &tx->socket, &addr.ip, _sender_connect)))
 		{
 			fprintf(stderr, "uv_tcp_connect: %s\n", uv_err_name(err));
+			return;
+		}
+		if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
+		{
+			fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
+			return;
+		}
+		if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
+		{
+			fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
 			return;
 		}
 
@@ -327,16 +327,6 @@ _responder_connect(uv_stream_t *socket, int status)
 		fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
 		return;
 	}
-	if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
-	{
-		fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
-		return;
-	}
-	if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
-	{
-		fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
-		return;
-	}
 
 	if((err = uv_accept((uv_stream_t *)socket, (uv_stream_t *)&tx->socket)))
 	{
@@ -361,6 +351,17 @@ _responder_connect(uv_stream_t *socket, int status)
 			fprintf(stderr, "uv_read_start: %s\n", uv_err_name(err));
 			return;
 		}
+	}
+
+	if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
+	{
+		fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
+		return;
+	}
+	if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
+	{
+		fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
+		return;
 	}
 }
 
