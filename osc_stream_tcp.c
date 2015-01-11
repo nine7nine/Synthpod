@@ -59,7 +59,7 @@ _tcp_prefix_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 	}
 	else if (nread < 0)
 	{
-		if(nread == UV_EOF)
+		if( (nread == UV_EOF) || (nread == UV_ETIMEDOUT) )
 		{
 			if(cb->recv)
 				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->data);
@@ -126,7 +126,7 @@ _tcp_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 	}
 	else if (nread < 0)
 	{
-		if(nread == UV_EOF)
+		if( (nread == UV_EOF) || (nread == UV_ETIMEDOUT) )
 		{
 			if(cb->recv)
 				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->data);
