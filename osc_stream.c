@@ -307,7 +307,6 @@ osc_stream_deinit(osc_stream_t *stream)
 
 			// close clients
 			osc_stream_tcp_tx_t *tx;
-			printf("-> %i\n", inlist_count(tcp->tx));
 			Inlist *l;
 			INLIST_FOREACH_SAFE(tcp->tx, l, tx)
 			{

@@ -129,7 +129,7 @@ _tcp_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		if(nread == UV_EOF)
 		{
 			if(cb->recv)
-				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->recv);
+				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->data);
 		}
 		else
 			fprintf(stderr, "_tcp_slip_recv_cb: %s\n", uv_err_name(nread));
@@ -165,7 +165,6 @@ _sender_connect(uv_connect_t *conn, int status)
 		return; //TODO
 	}
 	
-	fprintf(stderr, "connect to responder\n");
 	if(cb->recv)
 		cb->recv(stream, (osc_data_t *)connect_msg, sizeof(connect_msg), cb->data);
 
@@ -314,7 +313,6 @@ _responder_connect(uv_stream_t *socket, int status)
 		return;
 	}
 
-	fprintf(stderr, "connect to sender\n");
 	if(cb->recv)
 		cb->recv(stream, (osc_data_t *)connect_msg, sizeof(connect_msg), cb->data);
 

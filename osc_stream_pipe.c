@@ -65,7 +65,7 @@ _pipe_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		if(nread == UV_EOF)
 		{
 			if(cb->recv)
-				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->recv);
+				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->data);
 		}
 		else
 			fprintf(stderr, "_pipe_slip_recv_cb: %s\n", uv_err_name(nread));
@@ -98,7 +98,7 @@ osc_stream_pipe_init(uv_loop_t *loop, osc_stream_t *stream, int fd)
 		fprintf(stderr, "uv_read_start: %s", uv_err_name(err));
 			
 	if(cb->recv)
-		cb->recv(stream, (osc_data_t *)connect_msg, sizeof(connect_msg), cb->recv);
+		cb->recv(stream, (osc_data_t *)connect_msg, sizeof(connect_msg), cb->data);
 }
 
 static void
