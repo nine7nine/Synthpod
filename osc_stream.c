@@ -295,9 +295,12 @@ osc_stream_deinit(osc_stream_t *stream)
 		{
 			osc_stream_udp_t *udp = &stream->payload.udp;
 
-			if((err =	uv_udp_recv_stop(&udp->socket)))
-				fprintf(stderr, "uv_udp_recv_stop: %s\n", uv_err_name(err));
-			uv_close((uv_handle_t *)&udp->socket, NULL);
+			if(uv_is_active((uv_handle_t *)&udp->socket))
+			{
+				if((err =	uv_udp_recv_stop(&udp->socket)))
+					fprintf(stderr, "uv_udp_recv_stop: %s\n", uv_err_name(err));
+				uv_close((uv_handle_t *)&udp->socket, NULL);
+			}
 
 			break;
 		}
@@ -310,10 +313,15 @@ osc_stream_deinit(osc_stream_t *stream)
 			Inlist *l;
 			INLIST_FOREACH_SAFE(tcp->tx, l, tx)
 			{
-				if((err = uv_read_stop((uv_stream_t *)&tx->socket)))
-					fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
-				uv_close((uv_handle_t *)&tx->socket, NULL);
-				uv_cancel((uv_req_t *)&tx->req);
+				if(uv_is_active((uv_handle_t *)&tx->socket))
+				{
+					if((err = uv_read_stop((uv_stream_t *)&tx->socket)))
+						fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
+					uv_close((uv_handle_t *)&tx->socket, NULL);
+				}
+
+				if(uv_is_active((uv_handle_t *)&tx->req))
+					uv_cancel((uv_req_t *)&tx->req);
 
 				tcp->tx = inlist_remove(tcp->tx, INLIST_GET(tx));
 				free(tx);
@@ -321,9 +329,11 @@ osc_stream_deinit(osc_stream_t *stream)
 
 			// close server
 			if(tcp->server)
-				uv_close((uv_handle_t *)&tcp->socket, NULL);
+				if(uv_is_active((uv_handle_t *)&tcp->socket))
+					uv_close((uv_handle_t *)&tcp->socket, NULL);
 			else
-				uv_cancel((uv_req_t *)&tcp->conn);
+				if(uv_is_active((uv_handle_t *)&tcp->conn))
+					uv_cancel((uv_req_t *)&tcp->conn);
 
 			break;
 		}
@@ -331,9 +341,12 @@ osc_stream_deinit(osc_stream_t *stream)
 		{
 			osc_stream_pipe_t *pipe = &stream->payload.pipe;
 
-			if((err = uv_read_stop((uv_stream_t *)&pipe->socket)))
-				fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
-			uv_close((uv_handle_t *)&pipe->socket, NULL);
+			if(uv_is_active((uv_handle_t *)&pipe->socket))
+			{
+				if((err = uv_read_stop((uv_stream_t *)&pipe->socket)))
+					fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
+				uv_close((uv_handle_t *)&pipe->socket, NULL);
+			}
 			//TODO close(pipe->fd)?
 
 			break;
