@@ -329,11 +329,15 @@ osc_stream_deinit(osc_stream_t *stream)
 
 			// close server
 			if(tcp->server)
+			{
 				if(uv_is_active((uv_handle_t *)&tcp->socket))
 					uv_close((uv_handle_t *)&tcp->socket, NULL);
+			}
 			else
+			{
 				if(uv_is_active((uv_handle_t *)&tcp->conn))
 					uv_cancel((uv_req_t *)&tcp->conn);
+			}
 
 			break;
 		}
