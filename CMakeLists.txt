@@ -35,6 +35,7 @@ set(LIBS ${LIBS} ${LV2_LDFLAGS})
 # synthpod
 add_executable(synthpod
 	synthpod.c
+	app.c
 	ext_urid.c
 	ext_worker.c)
 target_link_libraries(synthpod ${LIBS})
