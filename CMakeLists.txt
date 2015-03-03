@@ -36,8 +36,14 @@ set(LIBS ${LIBS} ${LV2_LDFLAGS})
 add_executable(synthpod
 	synthpod.c
 	app.c
+	varchunk.c
 	ext_urid.c
 	ext_worker.c)
 target_link_libraries(synthpod ${LIBS})
 target_compile_definitions(synthpod PUBLIC -DAPP_DIR=${APP_DIR})
 install(TARGETS synthpod DESTINATION bin)
+
+add_executable(test_varchunk
+	test_varchunk.c
+	varchunk.c)
+target_link_libraries(test_varchunk ${LIBS})

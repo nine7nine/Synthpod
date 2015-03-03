@@ -15,24 +15,29 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#include <Eina.h>
+#ifndef _SYNTHPOD_VARCHUNK_H
+#define _SYNTHPOD_VARCHUNK_H
 
-#include <app.h>
+#include <stdint.h>
 
-#define TEST_URI "http://open-music-kontrollers.ch/lv2/nuklear#cloak"
+typedef struct _varchunk_t varchunk_t;
 
-int
-main(int argc, char **argv)
-{
-	eina_init();
+varchunk_t *
+varchunk_new(size_t minimum);
 
-	app_t *app = app_new();
-	mod_t *mod = app_mod_add(app, TEST_URI);
-	app_run(app);
-	app_mod_del(app, mod);
-	app_free(app);
-	
-	eina_shutdown();
+void
+varchunk_free(varchunk_t *varchunk);
 
-	return 0;
-}
+void *
+varchunk_write_request(varchunk_t *varchunk, size_t minimum);
+
+void
+varchunk_write_advance(varchunk_t *varchunk, size_t written);
+
+const void *
+varchunk_read_request(varchunk_t *varchunk, size_t *toread);
+
+void
+varchunk_read_advance(varchunk_t *varchunk);
+
+#endif //_SYNTHPOD_ATOM_CHUNK_H
