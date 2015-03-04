@@ -21,13 +21,16 @@
 #include <lilv/lilv.h>
 
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
+#include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 
 #include <Eina.h>
+
+#include <uv.h>
 
 #include <ext_urid.h>
 #include <varchunk.h>
 
-#define APP_NUM_FEATURES 2
+#define NUM_FEATURES 3
 
 typedef struct _app_t app_t;
 typedef struct _mod_t mod_t;
@@ -50,6 +53,11 @@ struct _app_t {
 
 		LilvNode *midi;
 		LilvNode *osc;
+
+		LilvNode *chim_event;
+		LilvNode *chim_dump;
+
+		LilvNode *work_schedule;
 	} uris;
 
 	struct {
@@ -64,32 +72,56 @@ struct _app_t {
 
 		LV2_URID midi;
 		LV2_URID osc;
+
+		LV2_URID chim_event;
+		LV2_URID chim_dump;
+
+		LV2_URID work_schedule;
 	} urids;
 
 	Eina_Inlist *mods;
 
-	LV2_Feature feature_list [APP_NUM_FEATURES];
-	const LV2_Feature *features [APP_NUM_FEATURES + 1];
-
 	double sample_rate;
 	uint32_t period_size;
 	uint32_t seq_size;
+
+	uv_loop_t *loop;
+	uv_timer_t pacemaker;
 };
 
 struct _mod_t {
 	EINA_INLIST;
 
+	// worker
+	struct {
+		const LV2_Worker_Interface *iface;
+		LV2_Worker_Schedule schedule;
+
+		varchunk_t *to_thread;
+		varchunk_t *from_thread;
+		uv_thread_t thread;
+		uv_async_t async;
+		uv_async_t quit;
+	} worker;
+
+	// features
+	LV2_Feature feature_list [NUM_FEATURES];
+	const LV2_Feature *features [NUM_FEATURES + 1];
+
+	// parent
 	app_t *app;
 
+	// self
 	const LilvPlugin *plug;
 	LilvInstance *inst;
+	LV2_Handle handle;
 
+	// ports
 	uint32_t num_ports;
 	void **bufs;
 
+	// atom forge
 	LV2_Atom_Forge forge;
-
-	varchunk_t *varchunk;
 };
 
 app_t *

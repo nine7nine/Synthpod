@@ -25,7 +25,8 @@ struct _ext_worker_t {
 };
 
 static LV2_Worker_Status
-_worker_schedule(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *data)
+_worker_schedule(LV2_Worker_Schedule_Handle handle,
+	uint32_t size, const void *data)
 {
 	//TODO ringbuffer etc.
 

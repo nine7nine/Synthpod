@@ -19,7 +19,8 @@
 
 #include <app.h>
 
-#define TEST_URI "http://open-music-kontrollers.ch/lv2/nuklear#cloak"
+//#define TEST_URI "http://open-music-kontrollers.ch/lv2/nuklear#cloak"
+#define TEST_URI "http://open-music-kontrollers.ch/lv2/chimaera#injector"
 
 int
 main(int argc, char **argv)
@@ -28,7 +29,9 @@ main(int argc, char **argv)
 
 	app_t *app = app_new();
 	mod_t *mod = app_mod_add(app, TEST_URI);
+
 	app_run(app);
+
 	app_mod_del(app, mod);
 	app_free(app);
 	
