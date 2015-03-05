@@ -17,10 +17,10 @@ pkg_search_module(UV REQUIRED libuv>=1.0)
 include_directories(${UV_INCLUDE_DIRS})
 set(LIBS ${LIBS} ${UV_LDFLAGS})
 
-# eina
-pkg_search_module(EINA REQUIRED eina>=1.8)
-include_directories(${EINA_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${EINA_LDFLAGS})
+# elm
+pkg_search_module(ELM REQUIRED elementary>=1.8)
+include_directories(${ELM_INCLUDE_DIRS})
+set(LIBS ${LIBS} ${ELM_LDFLAGS})
 
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)

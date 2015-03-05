@@ -18,8 +18,6 @@
 #ifndef _SYNTHPOD_VARCHUNK_H
 #define _SYNTHPOD_VARCHUNK_H
 
-#include <stdint.h>
-
 typedef struct _varchunk_t varchunk_t;
 
 varchunk_t *

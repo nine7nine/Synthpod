@@ -17,7 +17,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <assert.h>
 
 #include <varchunk.h>
@@ -33,8 +32,8 @@ struct _varchunk_elmnt_t {
 
 struct _varchunk_t {
   size_t size;
-  size_t size_mask;
-	size_t reserved;
+  size_t mask;
+	size_t rsvd;
 
   volatile size_t head;
   volatile size_t tail;
@@ -53,13 +52,14 @@ varchunk_new(size_t minimum)
 	varchunk->size = 1;
 	while(varchunk->size < minimum)
 		varchunk->size <<= 1;
-	varchunk->size_mask = varchunk->size - 1;
+	varchunk->mask = varchunk->size - 1;
 
 	if(posix_memalign(&varchunk->buf, sizeof(varchunk_elmnt_t), varchunk->size))
 	{
 		free(varchunk);
 		return NULL;
 	}
+	//TODO mlock
 	
 	return varchunk;
 }
@@ -79,7 +79,7 @@ static inline void
 _varchunk_write_advance_raw(varchunk_t *varchunk, size_t written)
 {
 	// only producer is allowed to advance write head
-	size_t new_head = (varchunk->head + written) & varchunk->size_mask;
+	size_t new_head = (varchunk->head + written) & varchunk->mask;
 	varchunk->head = new_head;
 }
 
@@ -88,7 +88,7 @@ varchunk_write_request(varchunk_t *varchunk, size_t minimum)
 {
 	if(minimum == 0)
 	{
-		varchunk->reserved = 0;
+		varchunk->rsvd = 0;
 		return NULL;
 	}
 
@@ -100,7 +100,7 @@ varchunk_write_request(varchunk_t *varchunk, size_t minimum)
 
 	// calculate writable space
 	if(head > tail)
-		space = ((tail - head + varchunk->size) & varchunk->size_mask) - 1;
+		space = ((tail - head + varchunk->size) & varchunk->mask) - 1;
 	else if(head < tail)
 		space = (tail - head) - 1;
 	else // head == tail
@@ -117,11 +117,11 @@ varchunk_write_request(varchunk_t *varchunk, size_t minimum)
 		{
 			// get second part of available buffer
 			void *buf2 = varchunk->buf;
-			size_t len2 = end & varchunk->size_mask;
+			size_t len2 = end & varchunk->mask;
 
 			if(len2 < padded) // not enough space left on second buffer, either
 			{
-				varchunk->reserved = 0;
+				varchunk->rsvd = 0;
 				return NULL;
 			}
 			else // enough space left on second buffer, use it!
@@ -132,13 +132,13 @@ varchunk_write_request(varchunk_t *varchunk, size_t minimum)
 				elmnt->gap = 1;
 				_varchunk_write_advance_raw(varchunk, len1);
 
-				varchunk->reserved = minimum;
+				varchunk->rsvd = minimum;
 				return buf2 + sizeof(varchunk_elmnt_t);
 			}
 		}
 		else // enough space left on first part of buffer, use it!
 		{
-			varchunk->reserved = minimum;
+			varchunk->rsvd = minimum;
 			return buf1 + sizeof(varchunk_elmnt_t);
 		}
 	}
@@ -148,12 +148,12 @@ varchunk_write_request(varchunk_t *varchunk, size_t minimum)
 
 		if(space < padded) // no space left on contiguous buffer
 		{
-			varchunk->reserved = 0;
+			varchunk->rsvd = 0;
 			return NULL;
 		}
 		else // enough space on contiguous buffer, use it!
 		{
-			varchunk->reserved = minimum;
+			varchunk->rsvd = minimum;
 			return buf + sizeof(varchunk_elmnt_t);
 		}
 	}
@@ -162,8 +162,8 @@ varchunk_write_request(varchunk_t *varchunk, size_t minimum)
 void
 varchunk_write_advance(varchunk_t *varchunk, size_t written)
 {
-	// fail miserably if stupid programmer tries to write more than reserved
-	assert(written <= varchunk->reserved);
+	// fail miserably if stupid programmer tries to write more than rsvd
+	assert(written <= varchunk->rsvd);
 
 	// write elmnt header at head
 	varchunk_elmnt_t *elmnt = varchunk->buf + varchunk->head;
@@ -179,7 +179,7 @@ static inline void
 _varchunk_read_advance_raw(varchunk_t *varchunk, size_t read)
 {
 	// only consumer is allowed to advance read tail 
-	size_t new_tail = (varchunk->tail + read) & varchunk->size_mask;
+	size_t new_tail = (varchunk->tail + read) & varchunk->mask;
 	varchunk->tail = new_tail;
 }
 
@@ -194,7 +194,7 @@ varchunk_read_request(varchunk_t *varchunk, size_t *toread)
 	if(head > tail)
 		space = head - tail;
 	else
-		space = (head - tail + varchunk->size) & varchunk->size_mask;
+		space = (head - tail + varchunk->size) & varchunk->mask;
 
 	if(space > 0) // there may be chunks available for reading
 	{

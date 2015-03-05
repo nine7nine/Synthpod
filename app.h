@@ -22,8 +22,9 @@
 
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
-#include <Eina.h>
+#include <Elementary.h>
 
 #include <uv.h>
 
@@ -31,9 +32,12 @@
 #include <varchunk.h>
 
 #define NUM_FEATURES 3
+#define NUM_UI_FEATURES NUM_FEATURES 
+#define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
 typedef struct _app_t app_t;
 typedef struct _mod_t mod_t;
+typedef struct _port_t port_t;
 
 struct _app_t {
 	LilvWorld *world;
@@ -46,6 +50,8 @@ struct _app_t {
 		LilvNode *control;
 		LilvNode *cv;
 		LilvNode *atom;
+		
+		LilvNode *sequence;
 
 		LilvNode *input;
 		LilvNode *output;
@@ -58,6 +64,13 @@ struct _app_t {
 		LilvNode *chim_dump;
 
 		LilvNode *work_schedule;
+		
+		LilvNode *float_protocol;
+		LilvNode *peak_protocol;
+		LilvNode *atom_transfer;
+		LilvNode *event_transfer;
+
+		LilvNode *eo;
 	} uris;
 
 	struct {
@@ -65,6 +78,8 @@ struct _app_t {
 		LV2_URID control;
 		LV2_URID cv;
 		LV2_URID atom;
+
+		LV2_URID sequence;
 
 		LV2_URID input;
 		LV2_URID output;
@@ -77,6 +92,13 @@ struct _app_t {
 		LV2_URID chim_dump;
 
 		LV2_URID work_schedule;
+
+		LV2_URID float_protocol;
+		LV2_URID peak_protocol;
+		LV2_URID atom_transfer;
+		LV2_URID event_transfer;
+
+		LV2_URID eo;
 	} urids;
 
 	Eina_Inlist *mods;
@@ -85,8 +107,16 @@ struct _app_t {
 	uint32_t period_size;
 	uint32_t seq_size;
 
+	struct {
+		Evas_Object *win;
+		Evas_Object *box;
+	} ui;
+	
+	// rt-thread
 	uv_loop_t *loop;
 	uv_timer_t pacemaker;
+	uv_async_t quit;
+	uv_thread_t thread;
 };
 
 struct _mod_t {
@@ -97,8 +127,8 @@ struct _mod_t {
 		const LV2_Worker_Interface *iface;
 		LV2_Worker_Schedule schedule;
 
-		varchunk_t *to_thread;
-		varchunk_t *from_thread;
+		varchunk_t *to;
+		varchunk_t *from;
 		uv_thread_t thread;
 		uv_async_t async;
 		uv_async_t quit;
@@ -107,6 +137,9 @@ struct _mod_t {
 	// features
 	LV2_Feature feature_list [NUM_FEATURES];
 	const LV2_Feature *features [NUM_FEATURES + 1];
+	
+	LV2_Feature ui_feature_list [NUM_UI_FEATURES];
+	const LV2_Feature *ui_features [NUM_UI_FEATURES + 1];
 
 	// parent
 	app_t *app;
@@ -116,12 +149,38 @@ struct _mod_t {
 	LilvInstance *inst;
 	LV2_Handle handle;
 
+	// ui
+	struct {
+		const LilvUI *ui;
+
+		uv_lib_t lib;
+		const LV2UI_Descriptor *descriptor;
+
+		LV2UI_Handle handle;
+		Evas_Object *widget;
+
+		varchunk_t *to;
+		varchunk_t *from;
+	} ui;
+
 	// ports
 	uint32_t num_ports;
-	void **bufs;
+	//void **bufs;
+	port_t *ports;
 
 	// atom forge
 	LV2_Atom_Forge forge;
+};
+
+struct _port_t {
+	LV2_URID direction; // input, output, duplex
+	LV2_URID type; // audio, CV, control, atom
+	LV2_URID buffer_type; // sequence
+	LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
+
+	void *buf;
+
+	float last;
 };
 
 app_t *
@@ -132,6 +191,9 @@ app_free(app_t *app);
 
 void
 app_run(app_t *app);
+
+void
+app_stop(app_t *app);
 
 mod_t *
 app_mod_add(app_t *app, const char *uri);
