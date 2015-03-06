@@ -22,6 +22,7 @@
 
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <Elementary.h>
@@ -31,8 +32,8 @@
 #include <ext_urid.h>
 #include <varchunk.h>
 
-#define NUM_FEATURES 3
-#define NUM_UI_FEATURES NUM_FEATURES 
+#define NUM_FEATURES 4
+#define NUM_UI_FEATURES 6
 #define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
 typedef struct _app_t app_t;
@@ -70,6 +71,14 @@ struct _app_t {
 		LilvNode *atom_transfer;
 		LilvNode *event_transfer;
 
+		struct {
+			LilvNode *entry;
+			LilvNode *error;
+			LilvNode *note;
+			LilvNode *trace;
+			LilvNode *warning;
+		} log;
+
 		LilvNode *eo;
 	} uris;
 
@@ -98,6 +107,14 @@ struct _app_t {
 		LV2_URID atom_transfer;
 		LV2_URID event_transfer;
 
+		struct {
+			LV2_URID entry;
+			LV2_URID error;
+			LV2_URID note;
+			LV2_URID trace;
+			LV2_URID warning;
+		} log;
+
 		LV2_URID eo;
 	} urids;
 
@@ -110,6 +127,7 @@ struct _app_t {
 	struct {
 		Evas_Object *win;
 		Evas_Object *box;
+		Ecore_Animator *anim;
 	} ui;
 	
 	// rt-thread
@@ -161,7 +179,18 @@ struct _mod_t {
 
 		varchunk_t *to;
 		varchunk_t *from;
+
+		// LV2UI_Port_Map extention
+		LV2UI_Port_Map port_map;
+	
+		// LV2UI_Port_Subscribe extension
+		LV2UI_Port_Subscribe port_subscribe;
+
+		// LV2UI_Idle_Interface extension
+		const LV2UI_Idle_Interface *idle_interface;
 	} ui;
+
+	LV2_Log_Log log;
 
 	// ports
 	uint32_t num_ports;
@@ -176,11 +205,13 @@ struct _port_t {
 	LV2_URID direction; // input, output, duplex
 	LV2_URID type; // audio, CV, control, atom
 	LV2_URID buffer_type; // sequence
-	LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
+
+	volatile LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
 
 	void *buf;
 
 	float last;
+	uint32_t period_cnt;
 };
 
 app_t *

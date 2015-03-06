@@ -28,6 +28,7 @@
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 typedef struct _ui_write_t ui_write_t;
@@ -82,23 +83,24 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				if(port->direction != app->urids.input)
 					continue;
 
-				//TODO check for matching port protocol
+				uint32_t protocol = ui_write->protocol;
+				if(protocol == 0)
+					protocol = app->urids.float_protocol;
 
-				if( ((ui_write->protocol == app->urids.float_protocol)
-					|| (ui_write->protocol == 0))
+				if( (protocol == app->urids.float_protocol)
 					&& (port->type == app->urids.control)
 					&& (ui_write->size == sizeof(float)) )
 				{
 					const float *val = body;
 					*(float *)buf = *val;
 				}
-				else if( (ui_write->protocol == app->urids.atom_transfer)
+				else if( (protocol == app->urids.atom_transfer)
 					&& (port->type == app->urids.atom) )
 				{
 					const LV2_Atom *atom = body;
 					memcpy(buf, atom, sizeof(LV2_Atom) + atom->size);
 				}
-				else if( (ui_write->protocol == app->urids.event_transfer)
+				else if( (protocol == app->urids.event_transfer)
 					&& (port->type == app->urids.atom)
 					&& (port->buffer_type == app->urids.sequence) )
 				{
@@ -133,31 +135,6 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 			}
 		}
 
-		/*
-		// fill input buffer
-		LV2_Atom_Forge_Frame frame;
-		lv2_atom_forge_set_buffer(&mod->forge, mod->bufs[0], app->seq_size);
-		lv2_atom_forge_sequence_head(&mod->forge, &frame, 0);
-		{
-			uint8_t msg [] = {
-				'/', 'h', 'e', 'l',			'l', 'o', 0x0, 0x0,
-				',', 's', 0x0, 0x0,			'w', 'o', 'r', 'l',
-				'd', 0x0, 0x0, 0x0};
-
-			lv2_atom_forge_frame_time(&mod->forge, 0);
-			lv2_atom_forge_atom(&mod->forge, sizeof(msg), app->urids.osc);
-			lv2_atom_forge_raw(&mod->forge, msg, sizeof(msg));
-			lv2_atom_forge_pad(&mod->forge, sizeof(msg));
-		}
-		lv2_atom_forge_pop(&mod->forge, &frame);
-		*/
-
-		// set output buffer capacity
-		//LV2_Atom_Sequence *seq = mod->bufs[1];
-
-		//LV2_Atom_Sequence *seq = mod->bufs[0];
-		//seq->atom.size = app->seq_size;
-
 		// run plugin
 		lilv_instance_run(mod->inst, app->period_size);
 		
@@ -168,11 +145,10 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 			{
 				port_t *port = &mod->ports[i];
 
-				if(port->protocol == 0)
+				if(port->protocol == 0) // no notification/subscription
 					continue;
 
-				if( (port->type == app->urids.control)
-						&& (port->protocol == app->urids.float_protocol) )
+				if(port->protocol == app->urids.float_protocol)
 				{
 					float val = *(float *)port->buf;
 					if(val != port->last)
@@ -198,47 +174,53 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							; //TODO
 					}
 				}
-				else if(port->type == app->urids.atom)
+				else if(port->protocol == app->urids.peak_protocol)
+				{
+					float *buf = (float *)port->buf;
+
+					// find peak value in current period
+					float peak = 0.f;
+					for(int j=0; j<app->period_size; j++)
+						if(buf[j] > peak) peak = buf[j];
+
+					void *ptr;
+					size_t request = UI_WRITE_PADDED + sizeof(LV2UI_Peak_Data);
+					if( (ptr = varchunk_write_request(mod->ui.to, request)) )
+					{
+						ui_write_t *ui_write = ptr;
+						ui_write->size = sizeof(LV2UI_Peak_Data);
+						ui_write->protocol = app->urids.peak_protocol;
+						ui_write->port = i;
+						ptr += UI_WRITE_PADDED;
+
+						LV2UI_Peak_Data *peak_data = ptr;
+						peak_data->period_start = port->period_cnt++;
+						peak_data->period_size = app->period_size;
+						peak_data->peak = peak;
+
+						varchunk_write_advance(mod->ui.to, request);
+					}
+					else
+						; //TODO
+				}
+				else if(port->protocol == app->urids.event_transfer)
 				{
 					const LV2_Atom *atom = port->buf;
 					if(atom->size == 0)
 						continue;
 
-					if( (port->buffer_type == app->urids.sequence)
-						&& (port->protocol == app->urids.event_transfer) )
+					// transfer each atom of sequence separately
+					const LV2_Atom_Sequence *seq = port->buf;
+					LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 					{
-						// transfer each atom of sequence separately
-						const LV2_Atom_Sequence *seq = port->buf;
-						LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-						{
-							void *ptr;
-							const LV2_Atom *atom = &ev->body;
-							size_t request = UI_WRITE_PADDED + sizeof(LV2_Atom) + atom->size;
-							if( (ptr = varchunk_write_request(mod->ui.to, request)) )
-							{
-								ui_write_t *ui_write = ptr;
-								ui_write->size = sizeof(LV2_Atom) + atom->size;
-								ui_write->protocol = app->urids.event_transfer;
-								ui_write->port = i;
-								ptr += UI_WRITE_PADDED;
-
-								memcpy(ptr, atom, sizeof(LV2_Atom) + atom->size);
-								varchunk_write_advance(mod->ui.to, request);
-							}
-							else
-								; //TODO
-						}
-					}
-					else if(port->protocol == app->urids.atom_transfer)
-					{
-						// transfer whole atom
 						void *ptr;
+						const LV2_Atom *atom = &ev->body;
 						size_t request = UI_WRITE_PADDED + sizeof(LV2_Atom) + atom->size;
 						if( (ptr = varchunk_write_request(mod->ui.to, request)) )
 						{
 							ui_write_t *ui_write = ptr;
 							ui_write->size = sizeof(LV2_Atom) + atom->size;
-							ui_write->protocol = app->urids.atom_transfer;
+							ui_write->protocol = app->urids.event_transfer;
 							ui_write->port = i;
 							ptr += UI_WRITE_PADDED;
 
@@ -249,32 +231,30 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							; //TODO
 					}
 				}
+				else if(port->protocol == app->urids.atom_transfer)
+				{
+					const LV2_Atom *atom = port->buf;
+					if(atom->size == 0)
+						continue;
+					
+					void *ptr;
+					size_t request = UI_WRITE_PADDED + sizeof(LV2_Atom) + atom->size;
+					if( (ptr = varchunk_write_request(mod->ui.to, request)) )
+					{
+						ui_write_t *ui_write = ptr;
+						ui_write->size = sizeof(LV2_Atom) + atom->size;
+						ui_write->protocol = app->urids.atom_transfer;
+						ui_write->port = i;
+						ptr += UI_WRITE_PADDED;
 
-				//TODO wake up UI thread
-
-				//void *ptr;
-				//size_t written = 0;
-				//if( (ptr = varchunk_write_request(mod->ui.to, written)) )
-				//{
-				//	//TODO
-				//	varchunk_write_advance(mod->ui.to, written);
-				//}
+						memcpy(ptr, atom, sizeof(LV2_Atom) + atom->size);
+						varchunk_write_advance(mod->ui.to, request);
+					}
+					else
+						; //TODO
+				}
 			}
 		}
-
-		/*
-		// read output buffer
-		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-		{
-			const LV2_Atom *atom = LV2_ATOM_BODY_CONST(ev);
-			printf("%u %u\n", atom->size, atom->type);
-			const uint8_t *body = LV2_ATOM_BODY_CONST(atom);
-			for(int i=0; i<atom->size; i++)
-				printf("\t%02x %c\n",
-					body[i],
-					isprint(body[i]) ? body[i] : ' ');
-		}
-		*/
 	}
 }
 	
@@ -297,6 +277,45 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 	}
 
 	return LV2_WORKER_ERR_NO_SPACE;
+}
+
+// non-rt ui-thread
+static void
+_delete_request(void *data, Evas_Object *obj, void *event)
+{
+	elm_exit();
+}
+
+// non-rt ui-thread
+static Eina_Bool
+_animator(void *data)
+{
+	app_t *app = data;
+	mod_t *mod;
+
+	EINA_INLIST_FOREACH(app->mods, mod)
+	{
+		// port notification
+		const void *ptr;
+		size_t toread;
+		while( (ptr = varchunk_read_request(mod->ui.to, &toread)) )
+		{
+			const ui_write_t *ui_write = ptr;
+			const void *buf = ptr + UI_WRITE_PADDED;
+
+			if(mod->ui.descriptor->port_event)
+				mod->ui.descriptor->port_event(mod->ui.handle,
+					ui_write->port, ui_write->size, ui_write->protocol, buf);
+
+			varchunk_read_advance(mod->ui.to);
+		}
+		
+		// idle interface 
+		if(mod->ui.idle_interface)
+			mod->ui.idle_interface->idle(mod->ui.handle);
+	}
+
+	return EINA_TRUE;
 }
 
 app_t *
@@ -330,6 +349,11 @@ app_new()
 	app->uris.atom_transfer = lilv_new_uri(app->world, LV2_ATOM__atomTransfer);
 	app->uris.event_transfer = lilv_new_uri(app->world, LV2_ATOM__eventTransfer);
 	app->uris.eo = lilv_new_uri(app->world, LV2_UI__EoUI);
+	app->uris.log.entry = lilv_new_uri(app->world, LV2_LOG__Entry);
+	app->uris.log.error = lilv_new_uri(app->world, LV2_LOG__Error);
+	app->uris.log.note = lilv_new_uri(app->world, LV2_LOG__Note);
+	app->uris.log.trace = lilv_new_uri(app->world, LV2_LOG__Trace);
+	app->uris.log.warning = lilv_new_uri(app->world, LV2_LOG__Warning);
 	
 	app->urids.audio = ext_urid_map(app->ext_urid, LV2_CORE__AudioPort);
 	app->urids.control = ext_urid_map(app->ext_urid, LV2_CORE__ControlPort);
@@ -351,12 +375,35 @@ app_new()
 	app->urids.atom_transfer = ext_urid_map(app->ext_urid, LV2_ATOM__atomTransfer);
 	app->urids.event_transfer = ext_urid_map(app->ext_urid, LV2_ATOM__eventTransfer);
 	app->urids.eo = ext_urid_map(app->ext_urid, LV2_UI__EoUI);
+	app->urids.log.entry = ext_urid_map(app->ext_urid, LV2_LOG__Entry);
+	app->urids.log.error = ext_urid_map(app->ext_urid, LV2_LOG__Error);
+	app->urids.log.note = ext_urid_map(app->ext_urid, LV2_LOG__Note);
+	app->urids.log.trace= ext_urid_map(app->ext_urid, LV2_LOG__Trace);
+	app->urids.log.warning = ext_urid_map(app->ext_urid, LV2_LOG__Warning);
+
 
 	app->mods = NULL;
 
 	app->sample_rate = 32000; //TODO
 	app->period_size = 32; //TODO
 	app->seq_size = 0x2000; //TODO
+
+	// init elm
+	app->ui.win = elm_win_util_standard_add("synthpod", "Synthpod");
+	evas_object_smart_callback_add(app->ui.win, "delete,request", _delete_request, NULL);
+	evas_object_resize(app->ui.win, 800, 450);
+	evas_object_show(app->ui.win);
+
+	app->ui.box = elm_box_add(app->ui.win);
+	elm_box_horizontal_set(app->ui.box, EINA_FALSE);
+	elm_box_homogeneous_set(app->ui.box, EINA_FALSE);
+	elm_box_padding_set(app->ui.box, 5, 5);
+	evas_object_size_hint_weight_set(app->ui.box, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(app->ui.box, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(app->ui.box);
+	elm_win_resize_object_add(app->ui.win, app->ui.box);
+
+	app->ui.anim = ecore_animator_add(_animator, app);
 
 	return app;
 }
@@ -388,9 +435,21 @@ app_free(app_t *app)
 
 	lilv_node_free(app->uris.eo);
 
+	lilv_node_free(app->uris.log.entry);
+	lilv_node_free(app->uris.log.error);
+	lilv_node_free(app->uris.log.note);
+	lilv_node_free(app->uris.log.trace);
+	lilv_node_free(app->uris.log.warning);
+
 	ext_urid_free(app->ext_urid);
 
 	lilv_world_free(app->world);
+
+	// deinit elm
+	ecore_animator_del(app->ui.anim);
+	evas_object_hide(app->ui.win);
+	evas_object_del(app->ui.box);
+	evas_object_del(app->ui.win);
 
 	free(app);
 }
@@ -424,55 +483,6 @@ _app_thread(void *arg)
 void
 app_run(app_t *app)
 {
-	/*
-	// test plugin discovery
-	LILV_FOREACH(plugins, itr, app->plugs)
-	{
-		const LilvPlugin *plug = lilv_plugins_get(app->plugs, itr);
-
-		const LilvNode *bndl_uri_node = lilv_plugin_get_bundle_uri(plug);
-		const char *bndl_uri_uri = lilv_node_as_uri(bndl_uri_node);
-		const char *bndl_uri_path = lilv_uri_to_path(bndl_uri_uri);
-
-		const LilvNode *plug_uri_node = lilv_plugin_get_uri(plug);
-		const char *plug_uri_uri = lilv_node_as_uri(plug_uri_node);
-
-		uint32_t num_ports = lilv_plugin_get_num_ports(plug);
-		printf("[%s]\n\t%s\n\t%s\n\t%u\n",
-			lilv_plugin_verify(plug) ? "PASS" : "FAIL",
-			plug_uri_uri,
-			bndl_uri_path,
-			num_ports);
-
-		for(uint32_t i=0; i<num_ports; i++)
-		{
-			const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
-			if(!lilv_port_is_a(plug, port, app->uris.atom_uri)
-				|| !lilv_port_supports_event(plug, port, app->uris.osc_uri))
-				continue;
-			const LilvNode *port_symbol_node = lilv_port_get_symbol(plug, port);
-			const char *port_symbol_str = lilv_node_as_string(port_symbol_node);
-			printf("\t\t%u: %s\n", i, port_symbol_str);
-		}
-	}
-
-	// test URID map/unmap
-	ext_urid_map(app->ext_urid, LV2_ATOM__Object);
-
-	const char *uri = ext_urid_unmap(app->ext_urid, 1);
-	printf("%u %s\n", 1, uri);
-	
-	printf("%s %u\n",
-		LV2_ATOM__Object,
-		ext_urid_map(app->ext_urid, LV2_ATOM__Object));
-	printf("%s %u\n",
-		LV2_ATOM__Tuple,
-		ext_urid_map(app->ext_urid, LV2_ATOM__Tuple));
-	printf("%s %u\n",
-		LV2_ATOM__Vector,
-		ext_urid_map(app->ext_urid, LV2_ATOM__Vector));
-	*/
-
 	uv_thread_create(&app->thread, _app_thread, app);
 }
 
@@ -482,6 +492,7 @@ void app_stop(app_t *app)
 	uv_thread_join(&app->thread);
 }
 
+// non-rt worker-thread
 static void
 _mod_worker_quit(uv_async_t *quit)
 {
@@ -491,7 +502,7 @@ _mod_worker_quit(uv_async_t *quit)
 	uv_close((uv_handle_t *)&mod->worker.async, NULL);
 }
 
-// non-rt
+// non-rt worker-thread
 static LV2_Worker_Status
 _mod_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size,
 	const void *data)
@@ -510,7 +521,7 @@ _mod_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size,
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
-// non-rt
+// non-rt worker-thread
 static void
 _mod_worker_wakeup(uv_async_t *async)
 {
@@ -526,7 +537,7 @@ _mod_worker_wakeup(uv_async_t *async)
 	}
 }
 
-// non-rt
+// non-rt worker-thread
 static void
 _mod_worker_thread(void *arg)
 {
@@ -569,6 +580,138 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 		fprintf(stderr, "_ui_write_function: buffer overflow\n");
 }
 
+// non-rt ui-thread
+static uint32_t
+_port_index(LV2UI_Feature_Handle handle, const char *symbol)
+{
+	mod_t *mod = handle;
+	LilvNode *symbol_uri = lilv_new_uri(mod->app->world, symbol);
+	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
+	lilv_node_free(symbol_uri);
+
+	return port
+		? lilv_port_get_index(mod->plug, port)
+		: LV2UI_INVALID_PORT_INDEX;
+}
+
+// non-rt ui-thread
+static uint32_t
+_port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
+	const LV2_Feature *const *features) //TODO what are the features for?
+{
+	mod_t *mod = handle;
+	app_t *app = mod->app;
+			
+	if(protocol == 0)
+		protocol = app->urids.float_protocol;
+	
+	if(index < mod->num_ports)
+	{
+		port_t *port = &mod->ports[index];
+
+		if(port->protocol == 0) // not already subscribed
+		{
+			// check for matching port and protocol
+			if( (protocol == app->urids.float_protocol)
+				&& (port->type == app->urids.control) )
+			{
+				port->protocol = app->urids.float_protocol; // atomic instruction!
+				return 0; // success
+			}
+			else if ( (protocol == app->urids.peak_protocol)
+				&& ((port->type == app->urids.audio) || (port->type == app->urids.cv)) )
+			{
+				port->protocol = app->urids.peak_protocol; // atomic instruction!
+				return 0; // success
+			}
+			else if( (protocol == app->urids.atom_transfer)
+				&& (port->type == app->urids.atom) )
+			{
+				port->protocol = app->urids.atom_transfer; // atomic instruction!
+				return 0; // success
+			}
+			else if( (protocol == app->urids.event_transfer)
+				&& (port->type == app->urids.atom)
+				&& (port->buffer_type == app->urids.sequence) )
+			{
+				port->protocol = app->urids.event_transfer; // atomic instruction!
+				return 0; // success;
+			}
+		}
+	}
+
+	return 1; // fail
+
+}
+
+// non-rt ui-thread
+static uint32_t
+_port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
+	const LV2_Feature *const *features) //TODO what are the features for?
+{
+	mod_t *mod = handle;
+	app_t *app = mod->app;
+
+	if(protocol == 0)
+		protocol = app->urids.float_protocol;
+
+	if(index < mod->num_ports)
+	{
+		port_t *port = &mod->ports[index];
+
+		if(port->protocol == protocol) // do protocols match?
+		{
+			port->protocol = 0; // atomic instruction! 
+			return 0; // success
+		}
+	}
+
+	return 1; // fail
+}
+
+// non-rt || rt with LV2_LOG__Trace
+static int
+_log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
+{
+	mod_t *mod = handle;
+	app_t *app = mod->app;
+	
+	if(type == app->urids.log.trace)
+		return 1; //TODO support logging from rt-thread
+
+	const char *type_str = NULL;
+	if(type == app->urids.log.entry)
+		type_str = "Entry";
+	else if(type == app->urids.log.error)
+		type_str = "Error";
+	else if(type == app->urids.log.note)
+		type_str = "Note";
+	else if(type == app->urids.log.trace)
+		type_str = "Trace";
+	else if(type == app->urids.log.warning)
+		type_str = "Wraning";
+
+	fprintf(stderr, "[%s]", type_str); //TODO report handle 
+	vfprintf(stderr, fmt, args);
+	fputc('\n', stderr);
+
+	return 0;
+}
+
+// non-rt || rt with LV2_LOG__Trace
+static int
+_log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(handle, type, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
 mod_t *
 app_mod_add(app_t *app, const char *uri)
 {
@@ -589,22 +732,43 @@ app_mod_add(app_t *app, const char *uri)
 	mod->worker.schedule.handle = mod;
 	mod->worker.schedule.schedule_work = _schedule_work;
 
-	// populate features list
+	// populate port_map
+	mod->ui.port_map.handle = mod;
+	mod->ui.port_map.port_index = _port_index;
+
+	// populate port_subscribe
+	mod->ui.port_subscribe.handle = mod;
+	mod->ui.port_subscribe.subscribe = _port_subscribe;
+	mod->ui.port_subscribe.unsubscribe = _port_unsubscribe;
+
+	// populate log
+	mod->log.handle = mod;
+	mod->log.printf = _log_printf;
+	mod->log.vprintf = _log_vprintf;
+
+	// populate feature list
 	mod->feature_list[0].URI = LV2_URID__map;
 	mod->feature_list[0].data = ext_urid_map_get(app->ext_urid);
-	mod->ui_feature_list[0].URI = LV2_URID__map;
-	mod->ui_feature_list[0].data = ext_urid_map_get(app->ext_urid);
-	
 	mod->feature_list[1].URI = LV2_URID__unmap;
 	mod->feature_list[1].data = ext_urid_unmap_get(app->ext_urid);
-	mod->ui_feature_list[1].URI = LV2_URID__unmap;
-	mod->ui_feature_list[1].data = ext_urid_unmap_get(app->ext_urid);
-	
 	mod->feature_list[2].URI = LV2_WORKER__schedule;
 	mod->feature_list[2].data = &mod->worker.schedule;
+	mod->feature_list[3].URI = LV2_LOG__log;
+	mod->feature_list[3].data = &mod->log;
 
+	// populate UI feature list
+	mod->ui_feature_list[0].URI = LV2_URID__map;
+	mod->ui_feature_list[0].data = ext_urid_map_get(app->ext_urid);
+	mod->ui_feature_list[1].URI = LV2_URID__unmap;
+	mod->ui_feature_list[1].data = ext_urid_unmap_get(app->ext_urid);
 	mod->ui_feature_list[2].URI = LV2_UI__parent;
 	mod->ui_feature_list[2].data = app->ui.box;
+	mod->ui_feature_list[3].URI = LV2_UI__portMap;
+	mod->ui_feature_list[3].data = &mod->ui.port_map;
+	mod->ui_feature_list[4].URI = LV2_UI__portSubscribe;
+	mod->ui_feature_list[4].data = &mod->ui.port_subscribe;
+	mod->ui_feature_list[5].URI = LV2_LOG__log;
+	mod->ui_feature_list[5].data = &mod->log;
 	
 	for(int i=0; i<NUM_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];
@@ -724,7 +888,15 @@ app_mod_add(app_t *app, const char *uri)
 					break;
 				}
 			}
+		
+			// get UI extension data
+			if(mod->ui.descriptor && mod->ui.descriptor->extension_data)
+			{
+				mod->ui.idle_interface = mod->ui.descriptor->extension_data(
+					LV2_UI__idleInterface);
+			}
 
+			// instantiate UI
 			if(mod->ui.descriptor && mod->ui.descriptor->instantiate)
 			{
 				mod->ui.to = varchunk_new(8192);

@@ -21,13 +21,7 @@
 
 //#define TEST_URI "http://open-music-kontrollers.ch/lv2/nuklear#cloak"
 //#define TEST_URI "http://open-music-kontrollers.ch/lv2/chimaera#injector"
-#define TEST_URI "http://open-music-kontrollers.ch/lv2/chimaera#simulator"
-
-static void
-_delete_request(void *data, Evas_Object *obj, void *event)
-{
-	elm_exit();
-}
+//#define TEST_URI "http://open-music-kontrollers.ch/lv2/chimaera#simulator"
 
 EAPI_MAIN int
 elm_main(int argc, char **argv)
@@ -35,25 +29,11 @@ elm_main(int argc, char **argv)
 	// init app
 	app_t *app = app_new();
 
-	// init elm
-	Evas_Object *win = elm_win_util_standard_add("synthpod", "Synthpod");
-	evas_object_smart_callback_add(win, "delete,request", _delete_request, NULL);
-	evas_object_resize(win, 800, 450);
-	evas_object_show(win);
-	app->ui.win = win;
-
-	Evas_Object *box = elm_box_add(win);
-	elm_box_horizontal_set(box, EINA_FALSE);
-	elm_box_homogeneous_set(box, EINA_FALSE);
-	elm_box_padding_set(box, 5, 5);
-	evas_object_size_hint_weight_set(box, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(box, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(box);
-	elm_win_resize_object_add(win, box);
-	app->ui.box = box;
-
 	// add plugin
-	mod_t *mod = app_mod_add(app, TEST_URI);
+	mod_t *mod1 = app_mod_add(app,
+		"http://open-music-kontrollers.ch/lv2/chimaera#simulator");
+	mod_t *mod2 = app_mod_add(app,
+		"http://open-music-kontrollers.ch/lv2/chimaera#visualizer");
 
 	// run main loop
 	app_run(app);
@@ -61,13 +41,9 @@ elm_main(int argc, char **argv)
 	app_stop(app);
 
 	// deinit app
-	app_mod_del(app, mod);
+	app_mod_del(app, mod2);
+	app_mod_del(app, mod1);
 	app_free(app);
-
-	// deinit elm
-	evas_object_hide(win);
-	evas_object_del(box);
-	evas_object_del(win);
 	
 	return 0;
 }
