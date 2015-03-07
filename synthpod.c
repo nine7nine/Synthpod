@@ -19,21 +19,11 @@
 
 #include <app.h>
 
-//#define TEST_URI "http://open-music-kontrollers.ch/lv2/nuklear#cloak"
-//#define TEST_URI "http://open-music-kontrollers.ch/lv2/chimaera#injector"
-//#define TEST_URI "http://open-music-kontrollers.ch/lv2/chimaera#simulator"
-
 EAPI_MAIN int
 elm_main(int argc, char **argv)
 {
 	// init app
 	app_t *app = app_new();
-
-	// add plugin
-	mod_t *mod1 = app_mod_add(app,
-		"http://open-music-kontrollers.ch/lv2/chimaera#simulator");
-	mod_t *mod2 = app_mod_add(app,
-		"http://open-music-kontrollers.ch/lv2/chimaera#visualizer");
 
 	// run main loop
 	app_run(app);
@@ -41,8 +31,6 @@ elm_main(int argc, char **argv)
 	app_stop(app);
 
 	// deinit app
-	app_mod_del(app, mod2);
-	app_mod_del(app, mod1);
 	app_free(app);
 	
 	return 0;

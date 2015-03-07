@@ -80,6 +80,9 @@ struct _app_t {
 		} log;
 
 		LilvNode *eo;
+
+		LilvNode *integer;
+		LilvNode *toggled;
 	} uris;
 
 	struct {
@@ -126,8 +129,14 @@ struct _app_t {
 
 	struct {
 		Evas_Object *win;
-		Evas_Object *box;
+		Evas_Object *hpane;
+		Evas_Object *pluglist;
+		Evas_Object *modlist;
 		Ecore_Animator *anim;
+		Elm_Genlist_Item_Class *plugitc;
+		Elm_Genlist_Item_Class *moditc;
+		Elm_Genlist_Item_Class *eoitc;
+		Elm_Genlist_Item_Class *stditc;
 	} ui;
 	
 	// rt-thread
@@ -167,6 +176,8 @@ struct _mod_t {
 	LilvInstance *inst;
 	LV2_Handle handle;
 
+	LilvUIs *all_uis;
+
 	// ui
 	struct {
 		const LilvUI *ui;
@@ -194,7 +205,6 @@ struct _mod_t {
 
 	// ports
 	uint32_t num_ports;
-	//void **bufs;
 	port_t *ports;
 
 	// atom forge
@@ -202,6 +212,10 @@ struct _mod_t {
 };
 
 struct _port_t {
+	mod_t *mod;
+	const LilvPort *tar;
+	uint32_t index;
+
 	LV2_URID direction; // input, output, duplex
 	LV2_URID type; // audio, CV, control, atom
 	LV2_URID buffer_type; // sequence
