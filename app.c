@@ -546,9 +546,6 @@ _modlist_eo_content_get(void *data, Evas_Object *obj, const char *part)
 					mod->ui_features);
 			}
 
-			if(mod->ui.widget)
-				evas_object_size_hint_min_set(mod->ui.widget, 400, 100);
-			
 			return mod->ui.widget;
 		}
 	}
