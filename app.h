@@ -129,13 +129,15 @@ struct _app_t {
 
 	struct {
 		Evas_Object *win;
-		Evas_Object *hpane;
+		Evas_Object *plugpane;
+		Evas_Object *modpane;
 		Evas_Object *pluglist;
 		Evas_Object *modlist;
+		Evas_Object *modgrid;
 		Elm_Genlist_Item_Class *plugitc;
 		Elm_Genlist_Item_Class *moditc;
-		Elm_Genlist_Item_Class *eoitc;
 		Elm_Genlist_Item_Class *stditc;
+		Elm_Gengrid_Item_Class *griditc;
 	} ui;
 	
 	// rt-thread
@@ -179,39 +181,36 @@ struct _mod_t {
 
 	// ui
 	struct {
-		const LilvUI *ui;
-
-		uv_lib_t lib;
-		const LV2UI_Descriptor *descriptor;
-
-		LV2UI_Handle handle;
-		Evas_Object *widget;
-
 		varchunk_t *to;
 		varchunk_t *from;
-
-		// StdUI
-		void (*std_port_event)(LV2UI_Handle ui,
-											 uint32_t     port_index,
-											 uint32_t     buffer_size,
-											 uint32_t     format,
-											 const void*  buffer);
-		
-		// LV2UI_Port_Map extention
-		LV2UI_Port_Map port_map;
-	
-		// LV2UI_Port_Subscribe extension
-		LV2UI_Port_Subscribe port_subscribe;
 		Ecore_Animator *port_event_anim;
 
-		// LV2UI_Idle_Interface extension
-		const LV2UI_Idle_Interface *idle_interface;
-		Ecore_Animator *idle_anim;
-	} ui;
+		// Eo UI
+		struct {
+			const LilvUI *ui;
 
-	struct {
-		LV2UI_Descriptor descriptor;
-	} std; //TODO implement
+			uv_lib_t lib;
+			const LV2UI_Descriptor *descriptor;
+
+			LV2UI_Handle handle;
+			Evas_Object *widget;
+
+			// LV2UI_Port_Map extention
+			LV2UI_Port_Map port_map;
+		
+			// LV2UI_Port_Subscribe extension
+			LV2UI_Port_Subscribe port_subscribe;
+			
+			// LV2UI_Idle_Interface extension
+			const LV2UI_Idle_Interface *idle_interface;
+			Ecore_Animator *idle_anim;
+		} eo;
+
+		// standard "automatic" UI
+		struct {
+			LV2UI_Descriptor descriptor;
+		} std;
+	} ui;
 
 	LV2_Log_Log log;
 
