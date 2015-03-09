@@ -132,7 +132,6 @@ struct _app_t {
 		Evas_Object *hpane;
 		Evas_Object *pluglist;
 		Evas_Object *modlist;
-		Ecore_Animator *anim;
 		Elm_Genlist_Item_Class *plugitc;
 		Elm_Genlist_Item_Class *moditc;
 		Elm_Genlist_Item_Class *eoitc;
@@ -191,15 +190,28 @@ struct _mod_t {
 		varchunk_t *to;
 		varchunk_t *from;
 
+		// StdUI
+		void (*std_port_event)(LV2UI_Handle ui,
+											 uint32_t     port_index,
+											 uint32_t     buffer_size,
+											 uint32_t     format,
+											 const void*  buffer);
+		
 		// LV2UI_Port_Map extention
 		LV2UI_Port_Map port_map;
 	
 		// LV2UI_Port_Subscribe extension
 		LV2UI_Port_Subscribe port_subscribe;
+		Ecore_Animator *port_event_anim;
 
 		// LV2UI_Idle_Interface extension
 		const LV2UI_Idle_Interface *idle_interface;
+		Ecore_Animator *idle_anim;
 	} ui;
+
+	struct {
+		LV2UI_Descriptor descriptor;
+	} std; //TODO implement
 
 	LV2_Log_Log log;
 
