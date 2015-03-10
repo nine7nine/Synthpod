@@ -11,6 +11,7 @@ include_directories(${PROJECT_BINARY_DIR})
 
 set(APP_DIR share/synthpod)
 set(LIBS "")
+#add_definitions("-std=gnu99" "-fdump-rtl-expand")
 	
 # libuv
 pkg_search_module(UV REQUIRED libuv>=1.0)

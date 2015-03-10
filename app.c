@@ -31,7 +31,19 @@
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
+typedef enum _job_type_t job_type_t;
+typedef struct _job_t job_t;
 typedef struct _ui_write_t ui_write_t;
+
+enum  _job_type_t {
+	JOB_TYPE_MODULE_ADD,
+	JOB_TYPE_MODULE_DEL
+};
+
+struct _job_t {
+	job_type_t type;
+	void *ptr; // pointer to elsewhere
+};
 
 struct _ui_write_t {
 	uint32_t size;
@@ -39,18 +51,59 @@ struct _ui_write_t {
 	uint32_t port;
 };
 
-#define UI_WRITE_SIZE ( sizeof(ui_write_t) )
-#define UI_WRITE_PADDED ( (sizeof(ui_write_t) + 7U) & (~7U) )
+#define JOB_SIZE ( sizeof(job_t) )
 
-// rt
+#define UI_WRITE_SIZE ( sizeof(ui_write_t) )
+#define UI_WRITE_PADDED ( (UI_WRITE_SIZE + 7U) & (~7U) )
+
+// rt-thread
 static void
 _pacemaker_cb(uv_timer_t *pacemaker)
 {
 	app_t *app = pacemaker->data;
 
+	// handle jobs
+	{
+		const void *ptr;
+		size_t toread;
+		while( (ptr = varchunk_read_request(app->rt.to, &toread)) )
+		{
+			const job_t *job = ptr;
+
+			if(job->type == JOB_TYPE_MODULE_ADD)
+			{
+				mod_t *mod = job->ptr;
+
+				// inject module
+				app->mods = eina_inlist_append(app->mods, EINA_INLIST_GET(mod));
+			}
+
+			varchunk_read_advance(app->rt.to);
+		}
+	}
+
 	mod_t *mod;
 	EINA_INLIST_FOREACH(app->mods, mod)
 	{
+		if(mod->dead) // handle dead modules
+		{
+			// eject module
+			app->mods = eina_inlist_remove(app->mods, EINA_INLIST_GET(mod));
+
+			void *ptr;
+			if( (ptr = varchunk_write_request(app->rt.from, JOB_SIZE)) )
+			{
+				job_t *job = ptr;
+
+				job->type = JOB_TYPE_MODULE_DEL;
+				job->ptr = mod;
+
+				varchunk_write_advance(app->rt.from, JOB_SIZE);
+			}
+
+			continue; // skip dead modules
+		}
+
 		// handle work
 		if(mod->worker.iface && mod->worker.from)
 		{
@@ -79,31 +132,18 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				port_t *port = &mod->ports[ui_write->port];
 				void *buf = port->buf;
 
-				// check for input port
-				if(port->direction != app->urids.input)
-					continue;
-
-				uint32_t protocol = ui_write->protocol;
-				if(protocol == 0)
-					protocol = app->urids.float_protocol;
-
-				if( (protocol == app->urids.float_protocol)
-					&& (port->type == app->urids.control)
-					&& (ui_write->size == sizeof(float)) )
+				if(ui_write->protocol == app->regs.port.float_protocol.urid)
 				{
 					const float *val = body;
 					*(float *)buf = *val;
 					port->last = *val;
 				}
-				else if( (protocol == app->urids.atom_transfer)
-					&& (port->type == app->urids.atom) )
+				else if(ui_write->protocol == app->regs.port.atom_transfer.urid)
 				{
 					const LV2_Atom *atom = body;
 					memcpy(buf, atom, sizeof(LV2_Atom) + atom->size);
 				}
-				else if( (protocol == app->urids.event_transfer)
-					&& (port->type == app->urids.atom)
-					&& (port->buffer_type == app->urids.sequence) )
+				else if(ui_write->protocol == app->regs.port.event_transfer.urid)
 				{
 					const LV2_Atom *atom = body;
 					LV2_Atom_Sequence *seq = buf;
@@ -149,7 +189,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				if(port->protocol == 0) // no notification/subscription
 					continue;
 
-				if(port->protocol == app->urids.float_protocol)
+				if(port->protocol == app->regs.port.float_protocol.urid)
 				{
 					float val = *(float *)port->buf;
 					if(val != port->last)
@@ -164,7 +204,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 						{
 							ui_write_t *ui_write = ptr;
 							ui_write->size = sizeof(float);
-							ui_write->protocol = app->urids.float_protocol;
+							ui_write->protocol = port->protocol;
 							ui_write->port = i;
 							ptr += UI_WRITE_PADDED;
 
@@ -175,9 +215,9 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							; //TODO
 					}
 				}
-				else if(port->protocol == app->urids.peak_protocol)
+				else if(port->protocol == app->regs.port.peak_protocol.urid)
 				{
-					float *buf = (float *)port->buf;
+					const float *buf = (float *)port->buf;
 
 					// find peak value in current period
 					float peak = 0.f;
@@ -199,7 +239,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 						{
 							ui_write_t *ui_write = ptr;
 							ui_write->size = sizeof(LV2UI_Peak_Data);
-							ui_write->protocol = app->urids.peak_protocol;
+							ui_write->protocol = port->protocol;
 							ui_write->port = i;
 							ptr += UI_WRITE_PADDED;
 
@@ -214,10 +254,10 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							; //TODO
 					}
 				}
-				else if(port->protocol == app->urids.event_transfer)
+				else if(port->protocol == app->regs.port.event_transfer.urid)
 				{
 					const LV2_Atom *atom = port->buf;
-					if(atom->size == 0)
+					if(atom->size == 0) // empty atom
 						continue;
 
 					// transfer each atom of sequence separately
@@ -231,7 +271,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 						{
 							ui_write_t *ui_write = ptr;
 							ui_write->size = sizeof(LV2_Atom) + atom->size;
-							ui_write->protocol = app->urids.event_transfer;
+							ui_write->protocol = port->protocol;
 							ui_write->port = i;
 							ptr += UI_WRITE_PADDED;
 
@@ -242,10 +282,10 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							; //TODO
 					}
 				}
-				else if(port->protocol == app->urids.atom_transfer)
+				else if(port->protocol == app->regs.port.atom_transfer.urid)
 				{
 					const LV2_Atom *atom = port->buf;
-					if(atom->size == 0)
+					if(atom->size == 0) // empty atom
 						continue;
 					
 					void *ptr;
@@ -254,7 +294,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 					{
 						ui_write_t *ui_write = ptr;
 						ui_write->size = sizeof(LV2_Atom) + atom->size;
-						ui_write->protocol = app->urids.atom_transfer;
+						ui_write->protocol = port->protocol;
 						ui_write->port = i;
 						ptr += UI_WRITE_PADDED;
 
@@ -268,7 +308,8 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 		}
 	}
 }
-	
+
+// rt-thread
 static LV2_Worker_Status
 _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *data)
 {
@@ -295,6 +336,31 @@ static void
 _delete_request(void *data, Evas_Object *obj, void *event)
 {
 	elm_exit();
+}
+
+// non-rt ui-thread
+static Eina_Bool
+_rt_animator(void *data)
+{
+	app_t *app = data;
+
+	const void *ptr;
+	size_t toread;
+	while( (ptr = varchunk_read_request(app->rt.from, &toread)) )
+	{
+		const job_t *job = ptr;
+
+		if(job->type == JOB_TYPE_MODULE_DEL)
+		{
+			mod_t *mod = job->ptr;
+
+			app_mod_del(app, mod);
+		}
+
+		varchunk_read_advance(app->rt.from);
+	}
+
+	return EINA_TRUE;
 }
 
 // non-rt ui-thread
@@ -327,13 +393,13 @@ _port_event_animator(void *data)
 		if(  mod->ui.eo.ui
 			&& mod->ui.eo.descriptor
 			&& mod->ui.eo.descriptor->port_event
-			&& mod->ui.eo.handle)
+			&& mod->ui.eo.handle) //TODO simplify check
 		{
 			mod->ui.eo.descriptor->port_event(mod->ui.eo.handle,
 				ui_write->port, ui_write->size, ui_write->protocol, buf);
 		}
 
-		// update StdUI
+		// update StdUI (descriptor is always present, thus no check)
 		mod->ui.std.descriptor.port_event(mod,
 			ui_write->port, ui_write->size, ui_write->protocol, buf);
 
@@ -343,6 +409,7 @@ _port_event_animator(void *data)
 	return EINA_TRUE;
 }
 
+// non-rt ui-thread
 static char * 
 _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -367,6 +434,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 		return NULL;
 }
 
+// non-rt ui-thread
 static void
 _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 {
@@ -386,12 +454,13 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	
 		if(mod->ui.eo.ui) // has EoUI
 		{
-			elm_gengrid_item_append(app->ui.modgrid, app->ui.griditc, mod,
+			mod->ui.eo.itm = elm_gengrid_item_append(app->ui.modgrid, app->ui.griditc, mod,
 				NULL, NULL);
 		}
 	}
 }
 
+// non-rt ui-thread
 static void
 _list_expand_request(void *data, Evas_Object *obj, void *event_info)
 {
@@ -401,6 +470,7 @@ _list_expand_request(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_expanded_set(itm, EINA_TRUE);
 }
 
+// non-rt ui-thread
 static void
 _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 {
@@ -410,6 +480,7 @@ _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_expanded_set(itm, EINA_FALSE);
 }
 
+// non-rt ui-thread
 static void
 _std_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -421,23 +492,24 @@ _std_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 	printf("_std_port_event: %u %u %u\n", index, size, protocol);
 
 	if(protocol == 0)
-		protocol = app->urids.float_protocol;
+		protocol = app->regs.port.float_protocol.urid;
 
-	// check for matching protocol
+	// check for subscription AND matching protocol
 	if(protocol != port->protocol)
 		return;
+
 	// check for expanded list
 	if(!elm_genlist_item_expanded_get(mod->ui.std.itm))
 		return;
 
-	// check for realized widget
+	// check for realized port widget
 	if(!port->std.widget)
 		return;
 
-	if(port->type == app->urids.control)
+	if(protocol == app->regs.port.float_protocol.urid)
 	{
 		const float val = *(float *)buf;
-		int toggled = lilv_port_has_property(mod->plug, port->tar, app->uris.toggled);
+		int toggled = lilv_port_has_property(mod->plug, port->tar, app->regs.port.toggled.node);
 
 		if(toggled)
 			elm_check_state_set(port->std.widget, val > 0.f ? EINA_TRUE : EINA_FALSE);
@@ -458,11 +530,10 @@ _std_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 				}
 			}
 		}
-		else
+		else // integer or float
 			elm_slider_value_set(port->std.widget, val);
 	}
-	else if(port->type == app->urids.audio
-		|| port->type == app->urids.cv)
+	else if(protocol == app->regs.port.peak_protocol.urid)
 	{
 		const LV2UI_Peak_Data *peak_data = buf;
 		elm_progressbar_value_set(port->std.widget, peak_data->peak);
@@ -471,6 +542,7 @@ _std_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 		; //TODO atom, sequence
 }
 
+// non-rt ui-thread
 static void
 _eo_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -482,6 +554,7 @@ _eo_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 
 	if(  mod->ui.eo.ui
 		&& mod->ui.eo.descriptor
+		&& mod->ui.eo.descriptor->port_event
 		&& mod->ui.eo.handle)
 	{
 		mod->ui.eo.descriptor->port_event(mod->ui.eo.handle,
@@ -489,6 +562,7 @@ _eo_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 	}
 }
 
+// non-rt ui-thread
 static void
 _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 {
@@ -501,7 +575,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		port_t *port = &mod->ports[i];
 
 		// only add control, audio, cv ports
-		if(port->type == app->urids.atom)
+		if(port->type == app->regs.port.atom.urid)
 			continue;
 
 		Elm_Object_Item *elmnt;
@@ -514,6 +588,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 	mod->ui.port_event_anim = ecore_animator_add(_port_event_animator, mod);
 }
 
+// non-rt ui-thread
 static void
 _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 {
@@ -529,6 +604,7 @@ _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_subitems_clear(itm);
 }
 
+// non-rt ui-thread
 static char * 
 _modlist_label_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -556,10 +632,102 @@ _modlist_label_get(void *data, Evas_Object *obj, const char *part)
 
 // non-rt ui-thread
 static void
+_modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+	app_t *app = mod->app;
+
+	// remove StdUI list item
+	elm_genlist_item_expanded_set(mod->ui.std.itm, EINA_FALSE);
+	elm_object_item_del(mod->ui.std.itm);
+	mod->ui.std.itm = NULL;
+
+	// remove EoUI grid item, if present
+	if(mod->ui.eo.itm)
+	{
+		elm_object_item_del(mod->ui.eo.itm);
+		mod->ui.eo.itm = NULL;
+	}
+}
+
+// non-rt ui-thread
+static Evas_Object *
+_modlist_content_get(void *data, Evas_Object *obj, const char *part)
+{
+	mod_t *mod = data;
+
+	if(!strcmp(part, "elm.swallow.end"))
+	{
+		Evas_Object *icon = elm_icon_add(obj);
+		elm_icon_standard_set(icon, "close");
+		evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
+		evas_object_size_hint_max_set(icon, 16, 16);
+		evas_object_show(icon);
+
+		return icon;
+	}
+	else
+		return NULL;
+}
+
+static inline int
+_match_port_protocol(port_t *port, uint32_t protocol, uint32_t size)
+{
+	mod_t *mod = port->mod;
+	app_t *app = mod->app;
+
+	if(  (protocol == app->regs.port.float_protocol.urid)
+		&& (port->type == app->regs.port.control.urid)
+		&& (size == sizeof(float)) )
+	{
+		return 1;
+	}
+	else if ( (protocol == app->regs.port.peak_protocol.urid)
+		&& ((port->type == app->regs.port.audio.urid) || (port->type == app->regs.port.cv.urid)) )
+	{
+		return 1;
+	}
+	else if( (protocol == app->regs.port.atom_transfer.urid)
+				&& (port->type == app->regs.port.atom.urid) )
+	{
+		return 1;
+	}
+	else if( (protocol == app->regs.port.event_transfer.urid)
+				&& (port->type == app->regs.port.atom.urid)
+				&& (port->buffer_type == app->regs.port.sequence.urid) )
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+// non-rt ui-thread
+static void
 _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
 {
 	mod_t *mod = controller;
+	app_t *app = mod->app;
+	port_t *tar = &mod->ports[port];
+
+	// ignore output ports
+	if(tar->direction != app->regs.port.input.urid)
+	{
+		fprintf(stderr, "_ui_write_function: UI can only write to input port\n");
+		return;
+	}
+
+	// handle special meaning of protocol=0
+	if(protocol == 0)
+		protocol = app->regs.port.float_protocol.urid;
+
+	// check for matching protocol <-> port type
+	if(!_match_port_protocol(tar, protocol, size))
+	{
+		fprintf(stderr, "_ui_write_function: port type - protocol mismatch\n");
+		return;
+	}
 
 	ui_write_t header = {
 		.size = size,
@@ -580,6 +748,7 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 		fprintf(stderr, "_ui_write_function: buffer overflow\n");
 }
 
+// non-rt ui-thread
 static void
 _eo_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
@@ -591,6 +760,7 @@ _eo_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	_std_port_event(controller, port, size, protocol, buffer);
 }
 
+// non-rt ui-thread
 static void
 _std_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
@@ -611,40 +781,17 @@ _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
 	app_t *app = mod->app;
 			
 	if(protocol == 0)
-		protocol = app->urids.float_protocol;
+		protocol = app->regs.port.float_protocol.urid;
 	
 	if(index < mod->num_ports)
 	{
 		port_t *port = &mod->ports[index];
-
-		if(port->protocol == 0) // not already subscribed
+	
+		if(  (port->protocol == 0) // not already subscribed
+			&& _match_port_protocol(port, protocol, sizeof(float)) ) // matching protocols?
 		{
-			// check for matching port and protocol
-			if( (protocol == app->urids.float_protocol)
-				&& (port->type == app->urids.control) )
-			{
-				port->protocol = app->urids.float_protocol; // atomic instruction!
-				return 0; // success
-			}
-			else if ( (protocol == app->urids.peak_protocol)
-				&& ((port->type == app->urids.audio) || (port->type == app->urids.cv)) )
-			{
-				port->protocol = app->urids.peak_protocol; // atomic instruction!
-				return 0; // success
-			}
-			else if( (protocol == app->urids.atom_transfer)
-				&& (port->type == app->urids.atom) )
-			{
-				port->protocol = app->urids.atom_transfer; // atomic instruction!
-				return 0; // success
-			}
-			else if( (protocol == app->urids.event_transfer)
-				&& (port->type == app->urids.atom)
-				&& (port->buffer_type == app->urids.sequence) )
-			{
-				port->protocol = app->urids.event_transfer; // atomic instruction!
-				return 0; // success;
-			}
+			port->protocol = protocol; // atomic instruction!
+			return 0; // success
 		}
 	}
 
@@ -660,13 +807,13 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	app_t *app = mod->app;
 
 	if(protocol == 0)
-		protocol = app->urids.float_protocol;
+		protocol = app->regs.port.float_protocol.urid;
 
 	if(index < mod->num_ports)
 	{
 		port_t *port = &mod->ports[index];
 
-		if(port->protocol == protocol) // do protocols match?
+		if(port->protocol == protocol) // matching protocols?
 		{
 			port->protocol = 0; // atomic instruction! 
 			return 0; // success
@@ -676,6 +823,7 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	return 1; // fail
 }
 
+// non-rt ui-thread
 static void
 _check_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -686,9 +834,10 @@ _check_changed(void *data, Evas_Object *obj, void *event)
 	float val = elm_check_state_get(obj);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
-		app->urids.float_protocol, &val);
+		app->regs.port.float_protocol.urid, &val);
 }
 
+// non-rt ui-thread
 static void
 _segment_control_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -702,9 +851,10 @@ _segment_control_changed(void *data, Evas_Object *obj, void *event)
 	const float val = lilv_node_as_float(val_node);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
-		app->urids.float_protocol, &val);
+		app->regs.port.float_protocol.urid, &val);
 }
 
+// non-rt ui-thread
 static void
 _sldr_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -715,9 +865,10 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 	float val = elm_slider_value_get(obj);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
-		app->urids.float_protocol, &val);
+		app->regs.port.float_protocol.urid, &val);
 }
 
+// non-rt ui-thread
 static Evas_Object * 
 _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -733,10 +884,10 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	type_str = lilv_node_as_string(name_node);
 
 	Evas_Object *child = NULL;
-	if(port->type == app->urids.control)
+	if(port->type == app->regs.port.control.urid)
 	{
-		int integer = lilv_port_has_property(mod->plug, port->tar, app->uris.integer);
-		int toggled = lilv_port_has_property(mod->plug, port->tar, app->uris.toggled);
+		int integer = lilv_port_has_property(mod->plug, port->tar, app->regs.port.integer.node);
+		int toggled = lilv_port_has_property(mod->plug, port->tar, app->regs.port.toggled.node);
 		float step_val = integer ? 1.f : (port->max - port->min) / 1000;
 
 		if(toggled)
@@ -791,8 +942,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_object_text_set(child, type_str);
 		}
 	}
-	else if(port->type == app->urids.audio
-		|| port->type == app->urids.cv)
+	else if(port->type == app->regs.port.audio.urid
+		|| port->type == app->regs.port.cv.urid)
 	{
 		Evas_Object *prog = elm_progressbar_add(obj);
 		elm_progressbar_horizontal_set(prog, EINA_TRUE);
@@ -805,7 +956,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 	if(child)
 	{
-		elm_object_disabled_set(child, port->direction == app->urids.output);
+		elm_object_disabled_set(child, port->direction == app->regs.port.output.urid);
 		evas_object_size_hint_weight_set(child, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(child, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(child);
@@ -813,24 +964,25 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 	// subscribe to port
 	const uint32_t i = port->index;
-	if(port->type == app->urids.control)
-		_port_subscribe(mod, i, app->urids.float_protocol, NULL);
-	else if(port->type == app->urids.audio)
-		_port_subscribe(mod, i, app->urids.peak_protocol, NULL);
-	else if(port->type == app->urids.cv)
-		_port_subscribe(mod, i, app->urids.peak_protocol, NULL);
-	else if(port->type == app->urids.atom)
+	if(port->type == app->regs.port.control.urid)
+		_port_subscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
+	else if(port->type == app->regs.port.audio.urid)
+		_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+	else if(port->type == app->regs.port.cv.urid)
+		_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+	else if(port->type == app->regs.port.atom.urid)
 	{
-		if(port->buffer_type == app->urids.sequence)
-			_port_subscribe(mod, i, app->urids.event_transfer, NULL);
+		if(port->buffer_type == app->regs.port.sequence.urid)
+			_port_subscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 		else
-			_port_subscribe(mod, i, app->urids.atom_transfer, NULL);
+			_port_subscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
 	}
 
 	port->std.widget = child;
 	return child;
 }
 
+// non-rt ui-thread
 static void
 _modlist_std_del(void *data, Evas_Object *obj)
 {
@@ -842,40 +994,31 @@ _modlist_std_del(void *data, Evas_Object *obj)
 	
 	// unsubscribe from port
 	const uint32_t i = port->index;
-	if(port->type == app->urids.control)
-		_port_unsubscribe(mod, i, app->urids.float_protocol, NULL);
-	else if(port->type == app->urids.audio)
-		_port_unsubscribe(mod, i, app->urids.peak_protocol, NULL);
-	else if(port->type == app->urids.cv)
-		_port_unsubscribe(mod, i, app->urids.peak_protocol, NULL);
-	else if(port->type == app->urids.atom)
+	if(port->type == app->regs.port.control.urid)
+		_port_unsubscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
+	else if(port->type == app->regs.port.audio.urid)
+		_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+	else if(port->type == app->regs.port.cv.urid)
+		_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+	else if(port->type == app->regs.port.atom.urid)
 	{
-		if(port->buffer_type == app->urids.sequence)
-			_port_unsubscribe(mod, i, app->urids.event_transfer, NULL);
+		if(port->buffer_type == app->regs.port.sequence.urid)
+			_port_unsubscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 		else
-			_port_unsubscribe(mod, i, app->urids.atom_transfer, NULL);
+			_port_unsubscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
 	}
 }
 
+// non-rt ui-thread
 static void
 _modlist_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
-	app_t *app = mod->app;
 
-	if(mod->ui.eo.ui)
-	{
-
-		if(mod->ui.eo.descriptor && mod->ui.eo.descriptor->cleanup && mod->ui.eo.handle)
-			mod->ui.eo.descriptor->cleanup(mod->ui.eo.handle);
-
-		uv_dlclose(&mod->ui.eo.lib);
-	}
-
-	app_mod_del(app, mod);
+	mod->dead = 1; // atomic instruction!
 }
 
-
+// non-rt ui-thread
 static char *
 _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -896,6 +1039,7 @@ _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	return NULL;
 }
 
+// non-rt ui-thread
 static Evas_Object *
 _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -972,21 +1116,23 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 			{
 				port_t *port = &mod->ports[i];
 
-				if(port->type == app->urids.control)
+				if(port->type == app->regs.port.control.urid)
 				{
-					_port_subscribe(mod, i, app->urids.float_protocol, NULL);
-					_eo_port_event(mod, i, sizeof(float), app->urids.float_protocol, &port->dflt);
+					_port_subscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
+					// initialize StdUI and EoUI
+					_eo_port_event(mod, i, sizeof(float), app->regs.port.float_protocol.urid, &port->dflt);
+					_std_port_event(mod, i, sizeof(float), app->regs.port.float_protocol.urid, &port->dflt);
 				}
-				else if(port->type == app->urids.audio)
-					_port_subscribe(mod, i, app->urids.peak_protocol, NULL);
-				else if(port->type == app->urids.cv)
-					_port_subscribe(mod, i, app->urids.peak_protocol, NULL);
-				else if(port->type == app->urids.atom)
+				else if(port->type == app->regs.port.audio.urid)
+					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+				else if(port->type == app->regs.port.cv.urid)
+					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+				else if(port->type == app->regs.port.atom.urid)
 				{
-					if(port->buffer_type == app->urids.sequence)
-						_port_subscribe(mod, i, app->urids.event_transfer, NULL);
+					if(port->buffer_type == app->regs.port.sequence.urid)
+						_port_subscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 					else
-						_port_subscribe(mod, i, app->urids.atom_transfer, NULL);
+						_port_subscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
 				}
 			}
 
@@ -1001,6 +1147,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	return NULL;
 }
 
+// non-rt ui-thread
 static void
 _modgrid_del(void *data, Evas_Object *obj)
 {
@@ -1012,33 +1159,49 @@ _modgrid_del(void *data, Evas_Object *obj)
 	{
 		port_t *port = &mod->ports[i];
 
-		if(port->type == app->urids.control)
-			_port_unsubscribe(mod, i, app->urids.float_protocol, NULL);
-		else if(port->type == app->urids.audio)
-			_port_unsubscribe(mod, i, app->urids.peak_protocol, NULL);
-		else if(port->type == app->urids.cv)
-			_port_unsubscribe(mod, i, app->urids.peak_protocol, NULL);
-		else if(port->type == app->urids.atom)
+		if(port->type == app->regs.port.control.urid)
+			_port_unsubscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
+		else if(port->type == app->regs.port.audio.urid)
+			_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+		else if(port->type == app->regs.port.cv.urid)
+			_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+		else if(port->type == app->regs.port.atom.urid)
 		{
-			if(port->buffer_type == app->urids.sequence)
-				_port_unsubscribe(mod, i, app->urids.event_transfer, NULL);
+			if(port->buffer_type == app->regs.port.sequence.urid)
+				_port_unsubscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 			else
-				_port_unsubscribe(mod, i, app->urids.atom_transfer, NULL);
+				_port_unsubscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
 		}
+	}
+
+	// cleanup EoUI
+	if(mod->ui.eo.ui)
+	{
+		if(  mod->ui.eo.descriptor
+			&& mod->ui.eo.descriptor->cleanup
+			&& mod->ui.eo.handle)
+		{
+			mod->ui.eo.descriptor->cleanup(mod->ui.eo.handle);
+		}
+
+		uv_dlclose(&mod->ui.eo.lib);
 	}
 	
 	// del idle animator
 	if(mod->ui.eo.idle_anim)
 	{
 		mod->ui.eo.idle_anim = ecore_animator_del(mod->ui.eo.idle_anim);
+		mod->ui.eo.idle_interface = NULL;
 		mod->ui.eo.idle_anim = NULL;
 	}
 
-	// clear handle and widget pointer
+	// clear parameters
+	mod->ui.eo.descriptor = NULL;
 	mod->ui.eo.handle = NULL;
-	mod->ui.eo.widget = 0;
+	mod->ui.eo.widget = NULL;
 }
 
+// non-rt ui-thread
 app_t *
 app_new()
 {
@@ -1050,60 +1213,79 @@ app_new()
 
 	app->ext_urid = ext_urid_new();
 
-	app->uris.audio = lilv_new_uri(app->world, LV2_CORE__AudioPort);
-	app->uris.control = lilv_new_uri(app->world, LV2_CORE__ControlPort);
-	app->uris.cv = lilv_new_uri(app->world, LV2_CORE__CVPort);
-	app->uris.atom = lilv_new_uri(app->world, LV2_ATOM__AtomPort);
-	app->uris.sequence = lilv_new_uri(app->world, LV2_ATOM__Sequence);
-	app->uris.input = lilv_new_uri(app->world, LV2_CORE__InputPort);
-	app->uris.output = lilv_new_uri(app->world, LV2_CORE__OutputPort);
-	app->uris.midi = lilv_new_uri(app->world, LV2_MIDI__MidiEvent);
-	app->uris.osc = lilv_new_uri(app->world,
-		"http://opensoundcontrol.org#OscEvent");
-	app->uris.chim_event = lilv_new_uri(app->world,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Event");
-	app->uris.chim_dump = lilv_new_uri(app->world,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Dump");
-	app->uris.work_schedule = lilv_new_uri(app->world, LV2_WORKER__schedule);
-	app->uris.float_protocol = lilv_new_uri(app->world, LV2_UI_PREFIX"floatProtocol");
-	app->uris.peak_protocol = lilv_new_uri(app->world, LV2_UI_PREFIX"peakProtocol");
-	app->uris.atom_transfer = lilv_new_uri(app->world, LV2_ATOM__atomTransfer);
-	app->uris.event_transfer = lilv_new_uri(app->world, LV2_ATOM__eventTransfer);
-	app->uris.eo = lilv_new_uri(app->world, LV2_UI__EoUI);
-	app->uris.integer = lilv_new_uri(app->world, LV2_CORE__integer);
-	app->uris.toggled = lilv_new_uri(app->world, LV2_CORE__toggled);
-	app->uris.log.entry = lilv_new_uri(app->world, LV2_LOG__Entry);
-	app->uris.log.error = lilv_new_uri(app->world, LV2_LOG__Error);
-	app->uris.log.note = lilv_new_uri(app->world, LV2_LOG__Note);
-	app->uris.log.trace = lilv_new_uri(app->world, LV2_LOG__Trace);
-	app->uris.log.warning = lilv_new_uri(app->world, LV2_LOG__Warning);
-	
-	app->urids.audio = ext_urid_map(app->ext_urid, LV2_CORE__AudioPort);
-	app->urids.control = ext_urid_map(app->ext_urid, LV2_CORE__ControlPort);
-	app->urids.cv = ext_urid_map(app->ext_urid, LV2_CORE__CVPort);
-	app->urids.atom = ext_urid_map(app->ext_urid, LV2_ATOM__AtomPort);
-	app->urids.sequence = ext_urid_map(app->ext_urid, LV2_ATOM__Sequence);
-	app->urids.input = ext_urid_map(app->ext_urid, LV2_CORE__InputPort);
-	app->urids.output = ext_urid_map(app->ext_urid, LV2_CORE__OutputPort);
-	app->urids.midi = ext_urid_map(app->ext_urid, LV2_MIDI__MidiEvent);
-	app->urids.osc = ext_urid_map(app->ext_urid,
-		"http://opensoundcontrol.org#OscEvent");
-	app->urids.chim_event = ext_urid_map(app->ext_urid,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Event");
-	app->urids.chim_dump = ext_urid_map(app->ext_urid,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Dump");
-	app->urids.work_schedule = ext_urid_map(app->ext_urid, LV2_WORKER__schedule);
-	app->urids.float_protocol = ext_urid_map(app->ext_urid, LV2_UI_PREFIX"floatProtocol");
-	app->urids.peak_protocol = ext_urid_map(app->ext_urid, LV2_UI_PREFIX"peakProtocol");
-	app->urids.atom_transfer = ext_urid_map(app->ext_urid, LV2_ATOM__atomTransfer);
-	app->urids.event_transfer = ext_urid_map(app->ext_urid, LV2_ATOM__eventTransfer);
-	app->urids.eo = ext_urid_map(app->ext_urid, LV2_UI__EoUI);
-	app->urids.log.entry = ext_urid_map(app->ext_urid, LV2_LOG__Entry);
-	app->urids.log.error = ext_urid_map(app->ext_urid, LV2_LOG__Error);
-	app->urids.log.note = ext_urid_map(app->ext_urid, LV2_LOG__Note);
-	app->urids.log.trace= ext_urid_map(app->ext_urid, LV2_LOG__Trace);
-	app->urids.log.warning = ext_urid_map(app->ext_urid, LV2_LOG__Warning);
+	// initialzie URI nodes
+	app->regs.port.input.node = lilv_new_uri(app->world, LV2_CORE__InputPort);
+	app->regs.port.output.node = lilv_new_uri(app->world, LV2_CORE__OutputPort);
 
+	app->regs.port.control.node = lilv_new_uri(app->world, LV2_CORE__ControlPort);
+	app->regs.port.audio.node = lilv_new_uri(app->world, LV2_CORE__AudioPort);
+	app->regs.port.cv.node = lilv_new_uri(app->world, LV2_CORE__CVPort);
+	app->regs.port.atom.node = lilv_new_uri(app->world, LV2_ATOM__AtomPort);
+
+	app->regs.port.sequence.node = lilv_new_uri(app->world, LV2_ATOM__Sequence);
+	app->regs.port.midi.node = lilv_new_uri(app->world, LV2_MIDI__MidiEvent);
+	app->regs.port.osc.node = lilv_new_uri(app->world,
+		"http://opensoundcontrol.org#OscEvent");
+	app->regs.port.chim_event.node = lilv_new_uri(app->world,
+		"http://open-music-kontrollers.ch/lv2/chimaera#Event");
+	app->regs.port.chim_dump.node = lilv_new_uri(app->world,
+		"http://open-music-kontrollers.ch/lv2/chimaera#Dump");
+
+	app->regs.port.integer.node = lilv_new_uri(app->world, LV2_CORE__integer);
+	app->regs.port.toggled.node = lilv_new_uri(app->world, LV2_CORE__toggled);
+
+	app->regs.port.float_protocol.node = lilv_new_uri(app->world, LV2_UI_PREFIX"floatProtocol");
+	app->regs.port.peak_protocol.node = lilv_new_uri(app->world, LV2_UI_PREFIX"peakProtocol");
+	app->regs.port.atom_transfer.node = lilv_new_uri(app->world, LV2_ATOM__atomTransfer);
+	app->regs.port.event_transfer.node = lilv_new_uri(app->world, LV2_ATOM__eventTransfer);
+
+	app->regs.work.schedule.node = lilv_new_uri(app->world, LV2_WORKER__schedule);
+
+	app->regs.log.entry.node = lilv_new_uri(app->world, LV2_LOG__Entry);
+	app->regs.log.error.node = lilv_new_uri(app->world, LV2_LOG__Error);
+	app->regs.log.note.node = lilv_new_uri(app->world, LV2_LOG__Note);
+	app->regs.log.trace.node = lilv_new_uri(app->world, LV2_LOG__Trace);
+	app->regs.log.warning.node = lilv_new_uri(app->world, LV2_LOG__Warning);
+
+	app->regs.ui.eo.node = lilv_new_uri(app->world, LV2_UI__EoUI);
+
+	// initialize URIDS
+	app->regs.port.input.urid = ext_urid_map(app->ext_urid, LV2_CORE__InputPort);
+	app->regs.port.output.urid = ext_urid_map(app->ext_urid, LV2_CORE__OutputPort);
+
+	app->regs.port.control.urid = ext_urid_map(app->ext_urid, LV2_CORE__ControlPort);
+	app->regs.port.audio.urid = ext_urid_map(app->ext_urid, LV2_CORE__AudioPort);
+	app->regs.port.cv.urid = ext_urid_map(app->ext_urid, LV2_CORE__CVPort);
+	app->regs.port.atom.urid = ext_urid_map(app->ext_urid, LV2_ATOM__AtomPort);
+
+	app->regs.port.sequence.urid = ext_urid_map(app->ext_urid, LV2_ATOM__Sequence);
+	app->regs.port.midi.urid = ext_urid_map(app->ext_urid, LV2_MIDI__MidiEvent);
+	app->regs.port.osc.urid = ext_urid_map(app->ext_urid,
+		"http://opensoundcontrol.org#OscEvent");
+	app->regs.port.chim_event.urid = ext_urid_map(app->ext_urid,
+		"http://open-music-kontrollers.ch/lv2/chimaera#Event");
+	app->regs.port.chim_dump.urid = ext_urid_map(app->ext_urid,
+		"http://open-music-kontrollers.ch/lv2/chimaera#Dump");
+
+	app->regs.port.integer.urid = ext_urid_map(app->ext_urid, LV2_CORE__integer);
+	app->regs.port.toggled.urid= ext_urid_map(app->ext_urid, LV2_CORE__toggled);
+
+	app->regs.port.float_protocol.urid = ext_urid_map(app->ext_urid, LV2_UI_PREFIX"floatProtocol");
+	app->regs.port.peak_protocol.urid = ext_urid_map(app->ext_urid, LV2_UI_PREFIX"peakProtocol");
+	app->regs.port.atom_transfer.urid = ext_urid_map(app->ext_urid, LV2_ATOM__atomTransfer);
+	app->regs.port.event_transfer.urid = ext_urid_map(app->ext_urid, LV2_ATOM__eventTransfer);
+
+	app->regs.work.schedule.urid = ext_urid_map(app->ext_urid, LV2_WORKER__schedule);
+
+	app->regs.log.entry.urid = ext_urid_map(app->ext_urid, LV2_LOG__Entry);
+	app->regs.log.error.urid = ext_urid_map(app->ext_urid, LV2_LOG__Error);
+	app->regs.log.note.urid = ext_urid_map(app->ext_urid, LV2_LOG__Note);
+	app->regs.log.trace.urid = ext_urid_map(app->ext_urid, LV2_LOG__Trace);
+	app->regs.log.warning.urid = ext_urid_map(app->ext_urid, LV2_LOG__Warning);
+	
+	app->regs.ui.eo.urid = ext_urid_map(app->ext_urid, LV2_UI__EoUI);
+
+	// reset module list
 	app->mods = NULL;
 
 	app->sample_rate = 32000; //TODO
@@ -1183,7 +1365,7 @@ app_new()
 	app->ui.moditc = elm_genlist_item_class_new();
 	app->ui.moditc->item_style = "double_label";
 	app->ui.moditc->func.text_get = _modlist_label_get;
-	app->ui.moditc->func.content_get = NULL;
+	app->ui.moditc->func.content_get = _modlist_content_get;
 	app->ui.moditc->func.state_get = NULL;
 	app->ui.moditc->func.del = _modlist_del;
 
@@ -1211,44 +1393,54 @@ app_new()
 	app->ui.griditc->func.state_get = NULL;
 	app->ui.griditc->func.del = _modgrid_del;
 
+	app->rt.anim = ecore_animator_add(_rt_animator, app);
+	app->rt.to = varchunk_new(8192);
+	app->rt.from = varchunk_new(8192);
+
 	return app;
 }
 
+// non-rt ui-thread
 void
 app_free(app_t *app)
 {
-	lilv_node_free(app->uris.audio);
-	lilv_node_free(app->uris.control);
-	lilv_node_free(app->uris.cv);
-	lilv_node_free(app->uris.atom);
-	lilv_node_free(app->uris.sequence);
+	ecore_animator_del(app->rt.anim);
+	varchunk_free(app->rt.to);
+	varchunk_free(app->rt.from);
 
-	lilv_node_free(app->uris.input);
-	lilv_node_free(app->uris.output);
+	// free URI nodes
+	lilv_node_free(app->regs.port.input.node);
+	lilv_node_free(app->regs.port.output.node);
 
-	lilv_node_free(app->uris.midi);
-	lilv_node_free(app->uris.osc);
-	
-	lilv_node_free(app->uris.chim_event);
-	lilv_node_free(app->uris.chim_dump);
-	
-	lilv_node_free(app->uris.work_schedule);
+	lilv_node_free(app->regs.port.control.node);
+	lilv_node_free(app->regs.port.audio.node);
+	lilv_node_free(app->regs.port.cv.node);
+	lilv_node_free(app->regs.port.atom.node);
 
-	lilv_node_free(app->uris.float_protocol);
-	lilv_node_free(app->uris.peak_protocol);
-	lilv_node_free(app->uris.atom_transfer);
-	lilv_node_free(app->uris.event_transfer);
+	lilv_node_free(app->regs.port.sequence.node);
 
-	lilv_node_free(app->uris.eo);
+	lilv_node_free(app->regs.port.midi.node);
+	lilv_node_free(app->regs.port.osc.node);
+	lilv_node_free(app->regs.port.chim_event.node);
+	lilv_node_free(app->regs.port.chim_dump.node);
 
-	lilv_node_free(app->uris.integer);
-	lilv_node_free(app->uris.toggled);
+	lilv_node_free(app->regs.port.integer.node);
+	lilv_node_free(app->regs.port.toggled.node);
 
-	lilv_node_free(app->uris.log.entry);
-	lilv_node_free(app->uris.log.error);
-	lilv_node_free(app->uris.log.note);
-	lilv_node_free(app->uris.log.trace);
-	lilv_node_free(app->uris.log.warning);
+	lilv_node_free(app->regs.port.float_protocol.node);
+	lilv_node_free(app->regs.port.peak_protocol.node);
+	lilv_node_free(app->regs.port.atom_transfer.node);
+	lilv_node_free(app->regs.port.event_transfer.node);
+
+	lilv_node_free(app->regs.work.schedule.node);
+
+	lilv_node_free(app->regs.log.entry.node);
+	lilv_node_free(app->regs.log.error.node);
+	lilv_node_free(app->regs.log.note.node);
+	lilv_node_free(app->regs.log.trace.node);
+	lilv_node_free(app->regs.log.warning.node);
+
+	lilv_node_free(app->regs.ui.eo.node);
 
 	ext_urid_free(app->ext_urid);
 
@@ -1271,6 +1463,7 @@ app_free(app_t *app)
 	free(app);
 }
 
+// rt-thread 
 static void
 _app_quit(uv_async_t *quit)
 {
@@ -1280,6 +1473,7 @@ _app_quit(uv_async_t *quit)
 	uv_timer_stop(&app->pacemaker);
 }
 
+// rt-thread 
 static void
 _app_thread(void *arg)
 {
@@ -1297,12 +1491,14 @@ _app_thread(void *arg)
 	uv_run(app->loop, UV_RUN_DEFAULT);
 }
 
+// non-rt ui-thread 
 void
 app_run(app_t *app)
 {
 	uv_thread_create(&app->thread, _app_thread, app);
 }
 
+// non-rt ui-thread 
 void app_stop(app_t *app)
 {
 	uv_async_send(&app->quit);
@@ -1385,7 +1581,6 @@ _port_index(LV2UI_Feature_Handle handle, const char *symbol)
 		: LV2UI_INVALID_PORT_INDEX;
 }
 
-
 // non-rt || rt with LV2_LOG__Trace
 static int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
@@ -1393,19 +1588,19 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	mod_t *mod = handle;
 	app_t *app = mod->app;
 	
-	if(type == app->urids.log.trace)
+	if(type == app->regs.log.trace.urid)
 		return 1; //TODO support logging from rt-thread
 
 	const char *type_str = NULL;
-	if(type == app->urids.log.entry)
+	if(type == app->regs.log.entry.urid)
 		type_str = "Entry";
-	else if(type == app->urids.log.error)
+	else if(type == app->regs.log.error.urid)
 		type_str = "Error";
-	else if(type == app->urids.log.note)
+	else if(type == app->regs.log.note.urid)
 		type_str = "Note";
-	else if(type == app->urids.log.trace)
+	else if(type == app->regs.log.trace.urid)
 		type_str = "Trace";
-	else if(type == app->urids.log.warning)
+	else if(type == app->regs.log.warning.urid)
 		type_str = "Wraning";
 
 	fprintf(stderr, "[%s]", type_str); //TODO report handle 
@@ -1429,6 +1624,7 @@ _log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
+// non-rt ui-thread
 mod_t *
 app_mod_add(app_t *app, const char *uri)
 {
@@ -1501,7 +1697,7 @@ app_mod_add(app_t *app, const char *uri)
 	mod->app = app;
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
-	if(lilv_plugin_has_feature(mod->plug, app->uris.work_schedule))
+	if(lilv_plugin_has_feature(mod->plug, app->regs.work.schedule.node))
 	{
 		mod->worker.to = varchunk_new(8192);
 		mod->worker.from = varchunk_new(8192);
@@ -1524,21 +1720,21 @@ app_mod_add(app_t *app, const char *uri)
 		tar->tar = port;
 		tar->index = i;
 
-		if(lilv_port_is_a(plug, port, app->uris.audio))
+		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
 			size = app->period_size * sizeof(float);
-			tar->type =  app->urids.cv;
+			tar->type =  app->regs.port.audio.urid;
 		}
-		else if(lilv_port_is_a(plug, port, app->uris.cv))
+		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
 			size = app->period_size * sizeof(float);
-			tar->type = app->urids.cv;
+			tar->type = app->regs.port.cv.urid;
 		}
-		else if(lilv_port_is_a(plug, port, app->uris.control))
+		else if(lilv_port_is_a(plug, port, app->regs.port.control.node))
 		{
 			size = sizeof(float);
-			tar->type = app->urids.control;
-			tar->protocol = app->urids.float_protocol;
+			tar->type = app->regs.port.control.urid;
+			tar->protocol = app->regs.port.float_protocol.urid; //TODO remove?
 			tar->points = lilv_port_get_scale_points(mod->plug, port);
 			
 			LilvNode *dflt_node;
@@ -1552,20 +1748,20 @@ app_mod_add(app_t *app, const char *uri)
 			lilv_node_free(min_node);
 			lilv_node_free(max_node);
 		}
-		else if(lilv_port_is_a(plug, port, app->uris.atom))
+		else if(lilv_port_is_a(plug, port, app->regs.port.atom.node)) 
 		{
 			size = app->seq_size;
-			tar->type = app->urids.atom;
-			tar->buffer_type = lilv_port_is_a(plug, port, app->uris.sequence)
-				? app->urids.sequence
+			tar->type = app->regs.port.atom.urid;
+			tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
+				? app->regs.port.sequence.urid
 				: 0;
 		}
 		else
 			tar->type = 0; // ignored
 
-		tar->direction = lilv_port_is_a(plug, port, app->uris.input)
-			? app->urids.input
-			: app->urids.output;
+		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
+			? app->regs.port.input.urid
+			: app->regs.port.output.urid;
 
 		// allocate 8-byte aligned buffer
 		posix_memalign(&tar->buf, 8, size); //TODO mlock
@@ -1580,7 +1776,7 @@ app_mod_add(app_t *app, const char *uri)
 	LILV_FOREACH(uis, ptr, mod->all_uis)
 	{
 		const LilvUI *ui = lilv_uis_get(mod->all_uis, ptr);
-		if(lilv_ui_is_a(ui, app->uris.eo))
+		if(lilv_ui_is_a(ui, app->regs.ui.eo.node))
 		{
 			mod->ui.eo.ui = ui;
 			break;
@@ -1592,16 +1788,27 @@ app_mod_add(app_t *app, const char *uri)
 
 	lv2_atom_forge_init(&mod->forge, ext_urid_map_get(app->ext_urid));
 
-	app->mods = eina_inlist_append(app->mods, EINA_INLIST_GET(mod));
+	// inject module into rt thread
+	void *ptr;
+	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
+	{
+		job_t *job = ptr;
+
+		job->type = JOB_TYPE_MODULE_ADD;
+		job->ptr = mod;
+
+		varchunk_write_advance(app->rt.to, JOB_SIZE);
+	}
+	else
+		fprintf(stderr, "rt varchunk buffer overrun");
 
 	return mod;
 }
 
+// non-rt ui-thread
 void
 app_mod_del(app_t *app, mod_t *mod)
 {
-	app->mods = eina_inlist_remove(app->mods, EINA_INLIST_GET(mod));
-
 	varchunk_free(mod->ui.to);
 	varchunk_free(mod->ui.from);
 

@@ -39,6 +39,12 @@
 typedef struct _app_t app_t;
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
+typedef struct _reg_t reg_t;
+
+struct _reg_t {
+	LilvNode *node;
+	LV2_URID urid;
+};
 
 struct _app_t {
 	LilvWorld *world;
@@ -47,79 +53,51 @@ struct _app_t {
 	ext_urid_t *ext_urid;
 
 	struct {
-		LilvNode *audio;
-		LilvNode *control;
-		LilvNode *cv;
-		LilvNode *atom;
-		
-		LilvNode *sequence;
+		struct {
+			reg_t input;
+			reg_t output;
 
-		LilvNode *input;
-		LilvNode *output;
-		//LilvNode *duplex;
+			reg_t control;
+			reg_t audio;
+			reg_t cv;
+			reg_t atom;
 
-		LilvNode *midi;
-		LilvNode *osc;
+			// atom buffer type
+			reg_t sequence;
 
-		LilvNode *chim_event;
-		LilvNode *chim_dump;
+			// atom sequence event types
+			reg_t midi;
+			reg_t osc;
+			reg_t chim_event;
+			reg_t chim_dump;
 
-		LilvNode *work_schedule;
-		
-		LilvNode *float_protocol;
-		LilvNode *peak_protocol;
-		LilvNode *atom_transfer;
-		LilvNode *event_transfer;
+			// control port property
+			reg_t integer;
+			reg_t toggled;
+
+			// port protocols
+			reg_t float_protocol;
+			reg_t peak_protocol;
+			reg_t atom_transfer;
+			reg_t event_transfer;
+		} port;
 
 		struct {
-			LilvNode *entry;
-			LilvNode *error;
-			LilvNode *note;
-			LilvNode *trace;
-			LilvNode *warning;
-		} log;
-
-		LilvNode *eo;
-
-		LilvNode *integer;
-		LilvNode *toggled;
-	} uris;
-
-	struct {
-		LV2_URID audio;
-		LV2_URID control;
-		LV2_URID cv;
-		LV2_URID atom;
-
-		LV2_URID sequence;
-
-		LV2_URID input;
-		LV2_URID output;
-		//LV2_URID duplex;
-
-		LV2_URID midi;
-		LV2_URID osc;
-
-		LV2_URID chim_event;
-		LV2_URID chim_dump;
-
-		LV2_URID work_schedule;
-
-		LV2_URID float_protocol;
-		LV2_URID peak_protocol;
-		LV2_URID atom_transfer;
-		LV2_URID event_transfer;
+			reg_t schedule;
+		} work;
 
 		struct {
-			LV2_URID entry;
-			LV2_URID error;
-			LV2_URID note;
-			LV2_URID trace;
-			LV2_URID warning;
+			reg_t entry;
+			reg_t error;
+			reg_t note;
+			reg_t trace;
+			reg_t warning;
 		} log;
 
-		LV2_URID eo;
-	} urids;
+		struct {
+			reg_t eo;
+		} ui;
+	} regs;
 
 	Eina_Inlist *mods;
 
@@ -139,6 +117,12 @@ struct _app_t {
 		Elm_Genlist_Item_Class *stditc;
 		Elm_Gengrid_Item_Class *griditc;
 	} ui;
+
+	struct {
+		Ecore_Animator *anim;
+		varchunk_t *to;
+		varchunk_t *from;
+	} rt;
 	
 	// rt-thread
 	uv_loop_t *loop;
@@ -149,6 +133,8 @@ struct _app_t {
 
 struct _mod_t {
 	EINA_INLIST;
+
+	volatile uint32_t dead;
 
 	// worker
 	struct {
@@ -188,11 +174,11 @@ struct _mod_t {
 		// Eo UI
 		struct {
 			const LilvUI *ui;
-
 			uv_lib_t lib;
-			const LV2UI_Descriptor *descriptor;
 
+			const LV2UI_Descriptor *descriptor;
 			LV2UI_Handle handle;
+			Elm_Object_Item *itm;
 			Evas_Object *widget;
 
 			// LV2UI_Port_Map extention
