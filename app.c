@@ -188,25 +188,31 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							peak = val;
 					}
 
-					void *ptr;
-					size_t request = UI_WRITE_PADDED + sizeof(LV2UI_Peak_Data);
-					if( (ptr = varchunk_write_request(mod->ui.to, request)) )
+					if(peak != port->last)
 					{
-						ui_write_t *ui_write = ptr;
-						ui_write->size = sizeof(LV2UI_Peak_Data);
-						ui_write->protocol = app->urids.peak_protocol;
-						ui_write->port = i;
-						ptr += UI_WRITE_PADDED;
+						// update last value
+						port->last = peak;
 
-						LV2UI_Peak_Data *peak_data = ptr;
-						peak_data->period_start = port->period_cnt++;
-						peak_data->period_size = app->period_size;
-						peak_data->peak = peak;
+						void *ptr;
+						size_t request = UI_WRITE_PADDED + sizeof(LV2UI_Peak_Data);
+						if( (ptr = varchunk_write_request(mod->ui.to, request)) )
+						{
+							ui_write_t *ui_write = ptr;
+							ui_write->size = sizeof(LV2UI_Peak_Data);
+							ui_write->protocol = app->urids.peak_protocol;
+							ui_write->port = i;
+							ptr += UI_WRITE_PADDED;
 
-						varchunk_write_advance(mod->ui.to, request);
+							LV2UI_Peak_Data *peak_data = ptr;
+							peak_data->period_start = port->period_cnt++;
+							peak_data->period_size = app->period_size;
+							peak_data->peak = peak;
+
+							varchunk_write_advance(mod->ui.to, request);
+						}
+						else
+							; //TODO
 					}
-					else
-						; //TODO
 				}
 				else if(port->protocol == app->urids.event_transfer)
 				{
@@ -375,13 +381,12 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 
 	if(mod)
 	{
-		Elm_Object_Item *moditm;
-		moditm = elm_genlist_item_append(app->ui.modlist, app->ui.moditc, mod, NULL,
+		mod->ui.std.itm = elm_genlist_item_append(app->ui.modlist, app->ui.moditc, mod, NULL,
 			ELM_GENLIST_ITEM_TREE, NULL, NULL);
 	
 		if(mod->ui.eo.ui) // has EoUI
 		{
-			moditm = elm_gengrid_item_append(app->ui.modgrid, app->ui.griditc, mod,
+			elm_gengrid_item_append(app->ui.modgrid, app->ui.griditc, mod,
 				NULL, NULL);
 		}
 	}
@@ -411,9 +416,59 @@ _std_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 {
 	mod_t *mod = ui;
 	app_t *app = mod->app;
+	port_t *port = &mod->ports[index];
 
-	//TODO implement
 	printf("_std_port_event: %u %u %u\n", index, size, protocol);
+
+	if(protocol == 0)
+		protocol = app->urids.float_protocol;
+
+	// check for matching protocol
+	if(protocol != port->protocol)
+		return;
+	// check for expanded list
+	if(!elm_genlist_item_expanded_get(mod->ui.std.itm))
+		return;
+
+	// check for realized widget
+	if(!port->std.widget)
+		return;
+
+	if(port->type == app->urids.control)
+	{
+		const float val = *(float *)buf;
+		int toggled = lilv_port_has_property(mod->plug, port->tar, app->uris.toggled);
+
+		if(toggled)
+			elm_check_state_set(port->std.widget, val > 0.f ? EINA_TRUE : EINA_FALSE);
+		else if(port->points)
+		{
+			int cnt = elm_segment_control_item_count_get(port->std.widget);
+			for(int i=0; i<cnt; i++)
+			{
+				Elm_Object_Item *itm = elm_segment_control_item_get(port->std.widget, i);
+				const LilvScalePoint *point = elm_object_item_data_get(itm);
+				const LilvNode *val_node = lilv_scale_point_get_value(point);
+				const float value = lilv_node_as_float(val_node);
+
+				if(val == value)
+				{
+					elm_segment_control_item_selected_set(itm, EINA_TRUE);
+					break;
+				}
+			}
+		}
+		else
+			elm_slider_value_set(port->std.widget, val);
+	}
+	else if(port->type == app->urids.audio
+		|| port->type == app->urids.cv)
+	{
+		const LV2UI_Peak_Data *peak_data = buf;
+		elm_progressbar_value_set(port->std.widget, peak_data->peak);
+	}
+	else
+		; //TODO atom, sequence
 }
 
 static void
@@ -445,8 +500,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 	{
 		port_t *port = &mod->ports[i];
 
-		// only add control ports
-		if(port->type != app->urids.control)
+		// only add control, audio, cv ports
+		if(port->type == app->urids.atom)
 			continue;
 
 		Elm_Object_Item *elmnt;
@@ -642,7 +697,9 @@ _segment_control_changed(void *data, Evas_Object *obj, void *event)
 	mod_t *mod = port->mod;
 	app_t *app = mod->app;
 
-	float val = 0.f; //TODO derive from itm
+	const LilvScalePoint *point = elm_object_item_data_get(itm);
+	const LilvNode *val_node = lilv_scale_point_get_value(point);
+	const float val = lilv_node_as_float(val_node);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
 		app->urids.float_protocol, &val);
@@ -675,68 +732,84 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	const LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 	type_str = lilv_node_as_string(name_node);
 
-	LilvNode *dflt_node;
-	LilvNode *min_node;
-	LilvNode *max_node;
-	lilv_port_get_range(mod->plug, port->tar, &dflt_node, &min_node, &max_node);
-	float dflt_val = dflt_node ? lilv_node_as_float(dflt_node) : 0.f;
-	float min_val = min_node ? lilv_node_as_float(min_node) : 0.f;
-	float max_val = max_node ? lilv_node_as_float(max_node) : 0.f;
-	int integer = lilv_port_has_property(mod->plug, port->tar, app->uris.integer);
-	int toggled = lilv_port_has_property(mod->plug, port->tar, app->uris.toggled);
-	LilvScalePoints *points = lilv_port_get_scale_points(mod->plug, port->tar);
-	float step_val = integer ? 1.f : (max_val - min_val) / 1000;
-	lilv_node_free(dflt_node);
-	lilv_node_free(min_node);
-	lilv_node_free(max_node);
-
 	Evas_Object *child = NULL;
-	if(toggled)
+	if(port->type == app->urids.control)
 	{
-		Evas_Object *check = elm_check_add(obj);
-		elm_check_state_set(check, dflt_val > 0.f ? EINA_TRUE : EINA_FALSE);
-		elm_object_style_set(check, "toggle");
-		evas_object_smart_callback_add(check, "changed", _check_changed, port);
+		int integer = lilv_port_has_property(mod->plug, port->tar, app->uris.integer);
+		int toggled = lilv_port_has_property(mod->plug, port->tar, app->uris.toggled);
+		float step_val = integer ? 1.f : (port->max - port->min) / 1000;
 
-		child = check;
-		elm_object_text_set(child, type_str);
-	}
-	else if(points)
-	{
-		Evas_Object *seg = elm_segment_control_add(obj);
-		LILV_FOREACH(scale_points, itr, points)
+		if(toggled)
 		{
-			const LilvScalePoint *point = lilv_scale_points_get(points, itr);
-			const LilvNode *label_node = lilv_scale_point_get_label(point);
-			const char *label_str = lilv_node_as_string(label_node);
-			elm_segment_control_item_add(seg, NULL, label_str);
+			Evas_Object *check = elm_check_add(obj);
+			elm_check_state_set(check, port->dflt > 0.f ? EINA_TRUE : EINA_FALSE);
+			elm_object_style_set(check, "toggle");
+			evas_object_smart_callback_add(check, "changed", _check_changed, port);
+
+			child = check;
+			elm_object_text_set(child, type_str);
 		}
-		evas_object_smart_callback_add(seg, "changed", _segment_control_changed, port);
+		else if(port->points)
+		{
+			Evas_Object *hbox = elm_box_add(obj);
+			elm_box_horizontal_set(hbox, EINA_TRUE);
+			elm_box_homogeneous_set(hbox, EINA_FALSE);
 
-		child = seg;
-		//TODO elm_object_text_set(child, type_str);
+			Evas_Object *lbl = elm_label_add(hbox);
+			elm_object_text_set(lbl, type_str);
+			evas_object_show(lbl);
+			elm_box_pack_end(hbox, lbl);
+
+			Evas_Object *seg = elm_segment_control_add(hbox);
+			LILV_FOREACH(scale_points, itr, port->points)
+			{
+				const LilvScalePoint *point = lilv_scale_points_get(port->points, itr);
+				const LilvNode *label_node = lilv_scale_point_get_label(point);
+				const char *label_str = lilv_node_as_string(label_node);
+				Elm_Object_Item *elmnt = elm_segment_control_item_add(seg, NULL, label_str);
+				elm_object_item_data_set(elmnt, (void *)point);
+			}
+			evas_object_smart_callback_add(seg, "changed", _segment_control_changed, port);
+			evas_object_size_hint_weight_set(seg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(seg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(seg);
+			elm_box_pack_end(hbox, seg);
+
+			child = hbox;
+		}
+		else // integer or float
+		{
+			Evas_Object *sldr = elm_slider_add(obj);
+			elm_slider_horizontal_set(sldr, EINA_TRUE);
+			elm_slider_unit_format_set(sldr, integer ? "%.0f" : "%.4f");
+			elm_slider_min_max_set(sldr, port->min, port->max);
+			elm_slider_value_set(sldr, port->dflt);
+			elm_slider_step_set(sldr, step_val);
+			evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
+
+			child = sldr;
+			elm_object_text_set(child, type_str);
+		}
 	}
-	else // integer or float
+	else if(port->type == app->urids.audio
+		|| port->type == app->urids.cv)
 	{
-		Evas_Object *sldr = elm_slider_add(obj);
-		elm_slider_horizontal_set(sldr, EINA_TRUE);
-		elm_slider_unit_format_set(sldr, integer ? "%.0f" : "%.4f");
-		elm_slider_min_max_set(sldr, min_val, max_val);
-		elm_slider_value_set(sldr, dflt_val);
-		elm_slider_step_set(sldr, step_val);
-		evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
+		Evas_Object *prog = elm_progressbar_add(obj);
+		elm_progressbar_horizontal_set(prog, EINA_TRUE);
+		elm_progressbar_unit_format_set(prog, NULL);
+		elm_progressbar_value_set(prog, 0.f);
 
-		child = sldr;
+		child = prog;
 		elm_object_text_set(child, type_str);
 	}
 
-	elm_object_disabled_set(child, port->direction == app->urids.output);
-	evas_object_size_hint_weight_set(child, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(child, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(child);
-
-	if(points)
-		lilv_scale_points_free(points);
+	if(child)
+	{
+		elm_object_disabled_set(child, port->direction == app->urids.output);
+		evas_object_size_hint_weight_set(child, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(child, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(child);
+	}
 
 	// subscribe to port
 	const uint32_t i = port->index;
@@ -754,6 +827,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			_port_subscribe(mod, i, app->urids.atom_transfer, NULL);
 	}
 
+	port->std.widget = child;
 	return child;
 }
 
@@ -763,6 +837,8 @@ _modlist_std_del(void *data, Evas_Object *obj)
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	app_t *app = mod->app;
+
+	port->std.widget = NULL;
 	
 	// unsubscribe from port
 	const uint32_t i = port->index;
@@ -897,7 +973,10 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 				port_t *port = &mod->ports[i];
 
 				if(port->type == app->urids.control)
+				{
 					_port_subscribe(mod, i, app->urids.float_protocol, NULL);
+					_eo_port_event(mod, i, sizeof(float), app->urids.float_protocol, &port->dflt);
+				}
 				else if(port->type == app->urids.audio)
 					_port_subscribe(mod, i, app->urids.peak_protocol, NULL);
 				else if(port->type == app->urids.cv)
@@ -1460,7 +1539,18 @@ app_mod_add(app_t *app, const char *uri)
 			size = sizeof(float);
 			tar->type = app->urids.control;
 			tar->protocol = app->urids.float_protocol;
-			//TODO set default value
+			tar->points = lilv_port_get_scale_points(mod->plug, port);
+			
+			LilvNode *dflt_node;
+			LilvNode *min_node;
+			LilvNode *max_node;
+			lilv_port_get_range(mod->plug, tar->tar, &dflt_node, &min_node, &max_node);
+			tar->dflt = dflt_node ? lilv_node_as_float(dflt_node) : 0.f;
+			tar->min = min_node ? lilv_node_as_float(min_node) : 0.f;
+			tar->max = max_node ? lilv_node_as_float(max_node) : 1.f;
+			lilv_node_free(dflt_node);
+			lilv_node_free(min_node);
+			lilv_node_free(max_node);
 		}
 		else if(lilv_port_is_a(plug, port, app->uris.atom))
 		{
@@ -1533,7 +1623,14 @@ app_mod_del(app_t *app, mod_t *mod)
 
 	// deinit ports
 	for(uint32_t i=0; i<mod->num_ports; i++)
-		free(mod->ports[i].buf);
+	{
+		port_t *port = &mod->ports[i];
+
+		if(port->points)
+			lilv_scale_points_free(port->points);
+
+		free(port->buf);
+	}
 	free(mod->ports);
 
 	free(mod);

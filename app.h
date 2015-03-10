@@ -209,6 +209,7 @@ struct _mod_t {
 		// standard "automatic" UI
 		struct {
 			LV2UI_Descriptor descriptor;
+			Elm_Object_Item *itm;
 		} std;
 	} ui;
 
@@ -232,11 +233,20 @@ struct _port_t {
 	LV2_URID buffer_type; // sequence
 
 	volatile LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
+	LilvScalePoints *points;
 
 	void *buf;
 
 	float last;
 	uint32_t period_cnt;
+
+	float dflt;
+	float min;
+	float max;
+			
+	struct {
+		Evas_Object *widget;
+	} std;
 };
 
 app_t *
