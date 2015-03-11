@@ -39,6 +39,7 @@
 typedef struct _app_t app_t;
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
+typedef struct _conn_t conn_t;
 typedef struct _reg_t reg_t;
 
 struct _reg_t {
@@ -100,6 +101,7 @@ struct _app_t {
 	} regs;
 
 	Eina_Inlist *mods;
+	Eina_Inlist *conns;
 
 	double sample_rate;
 	uint32_t period_size;
@@ -233,6 +235,13 @@ struct _port_t {
 	struct {
 		Evas_Object *widget;
 	} std;
+};
+
+struct _conn_t {
+	EINA_INLIST;
+
+	port_t *source;
+	port_t *sink;
 };
 
 app_t *

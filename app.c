@@ -37,7 +37,9 @@ typedef struct _ui_write_t ui_write_t;
 
 enum  _job_type_t {
 	JOB_TYPE_MODULE_ADD,
-	JOB_TYPE_MODULE_DEL
+	JOB_TYPE_MODULE_DEL,
+	JOB_TYPE_CONN_ADD,
+	JOB_TYPE_CONN_DEL
 };
 
 struct _job_t {
@@ -70,12 +72,41 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 		{
 			const job_t *job = ptr;
 
-			if(job->type == JOB_TYPE_MODULE_ADD)
+			switch(job->type)
 			{
-				mod_t *mod = job->ptr;
-
-				// inject module
-				app->mods = eina_inlist_append(app->mods, EINA_INLIST_GET(mod));
+				case JOB_TYPE_MODULE_ADD: // inject module
+				{
+					mod_t *mod = job->ptr;
+					app->mods = eina_inlist_append(app->mods, EINA_INLIST_GET(mod));
+					break;
+				}
+				case JOB_TYPE_MODULE_DEL:
+				{
+					// never called
+					break;
+				}
+				case JOB_TYPE_CONN_ADD: // inject connection
+				{
+					conn_t *conn = job->ptr;
+					// rewire source port output buffer to sink input buffer
+					lilv_instance_connect_port(
+						conn->source->mod->inst,
+						conn->source->index,
+						conn->sink->buf);
+					app->conns = eina_inlist_append(app->conns, EINA_INLIST_GET(conn));
+					break;
+				}
+				case JOB_TYPE_CONN_DEL: // eject connection
+				{
+					conn_t *conn = job->ptr;
+					// rewire source port output buffer to itself 
+					lilv_instance_connect_port(
+						conn->source->mod->inst,
+						conn->source->index,
+						conn->source->buf);
+					app->conns = eina_inlist_remove(app->conns, EINA_INLIST_GET(conn));
+					break;
+				}
 			}
 
 			varchunk_read_advance(app->rt.to);
@@ -217,7 +248,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				else if(port->protocol == app->regs.port.peak_protocol.urid)
 				{
-					const float *buf = (float *)port->buf;
+					const float *buf = (const float *)port->buf;
 
 					// find peak value in current period
 					float peak = 0.f;
@@ -228,8 +259,14 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							peak = val;
 					}
 
-					if(peak != port->last)
+					port->period_cnt++;
+
+					if(  (peak != port->last) //TODO make below two configurable
+						&& (fabs(peak - port->last) > 0.001) // ignore smaller changes
+						&& ((port->period_cnt & 0x1f) == 0x00) ) // only update every 32 samples
 					{
+						printf("peak different: %i %i\n", port->last == 0.f, peak == 0.f);
+
 						// update last value
 						port->last = peak;
 
@@ -244,7 +281,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							ptr += UI_WRITE_PADDED;
 
 							LV2UI_Peak_Data *peak_data = ptr;
-							peak_data->period_start = port->period_cnt++;
+							peak_data->period_start = port->period_cnt;
 							peak_data->period_size = app->period_size;
 							peak_data->peak = peak;
 
@@ -489,7 +526,7 @@ _std_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 	app_t *app = mod->app;
 	port_t *port = &mod->ports[index];
 
-	printf("_std_port_event: %u %u %u\n", index, size, protocol);
+	//printf("_std_port_event: %u %u %u\n", index, size, protocol);
 
 	if(protocol == 0)
 		protocol = app->regs.port.float_protocol.urid;
@@ -536,6 +573,7 @@ _std_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 	else if(protocol == app->regs.port.peak_protocol.urid)
 	{
 		const LV2UI_Peak_Data *peak_data = buf;
+		printf("peak: %f\n", peak_data->peak);
 		elm_progressbar_value_set(port->std.widget, peak_data->peak);
 	}
 	else
@@ -550,7 +588,7 @@ _eo_port_event(LV2UI_Handle ui, uint32_t index, uint32_t size,
 	mod_t *mod = ui;
 	app_t *app = mod->app;
 
-	printf("_eo_port_event: %u %u %u\n", index, size, protocol);
+	//printf("_eo_port_event: %u %u %u\n", index, size, protocol);
 
 	if(  mod->ui.eo.ui
 		&& mod->ui.eo.descriptor
@@ -1025,8 +1063,6 @@ _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	mod_t *mod = data;
 	const LilvPlugin *plug = mod->plug;
 	
-	printf("_modgrid_label_get: %s\n", part);
-
 	if(!strcmp(part, "elm.text"))
 	{
 		LilvNode *name_node = lilv_plugin_get_name(plug);
@@ -1046,8 +1082,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	mod_t *mod = data;
 	app_t *app = mod->app;
 
-	printf("_modgrid_content_get: %s\n", part);
-
 	if(strcmp(part, "elm.swallow.icon"))
 		return NULL;
 
@@ -1056,7 +1090,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 		const char *plugin_string = lilv_node_as_string(plugin_uri);
 
-		printf("has Eo UI\n");
+		//printf("has Eo UI\n");
 		const LilvNode *ui_uri = lilv_ui_get_uri(mod->ui.eo.ui);
 		const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->ui.eo.ui);
 		const LilvNode *binary_uri = lilv_ui_get_binary_uri(mod->ui.eo.ui);
@@ -1065,9 +1099,9 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
 		const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
 
-		printf("ui_string: %s\n", ui_string);
-		printf("bundle_path: %s\n", bundle_path);
-		printf("binary_path: %s\n", binary_path);
+		//printf("ui_string: %s\n", ui_string);
+		//printf("bundle_path: %s\n", bundle_path);
+		//printf("binary_path: %s\n", binary_path);
 
 		uv_dlopen(binary_path, &mod->ui.eo.lib); //TODO check
 		
@@ -1634,7 +1668,7 @@ app_mod_add(app_t *app, const char *uri)
 
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
-	printf("plugin_string: %s\n", plugin_string);
+	//printf("plugin_string: %s\n", plugin_string);
 			
 	if(!plug || !lilv_plugin_verify(plug))
 		return NULL;
