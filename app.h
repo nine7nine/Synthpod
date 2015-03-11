@@ -109,11 +109,16 @@ struct _app_t {
 
 	struct {
 		Evas_Object *win;
+
 		Evas_Object *plugpane;
 		Evas_Object *modpane;
+		Evas_Object *patchpane;
+
 		Evas_Object *pluglist;
 		Evas_Object *modlist;
 		Evas_Object *modgrid;
+		Evas_Object *patchbox;
+
 		Elm_Genlist_Item_Class *plugitc;
 		Elm_Genlist_Item_Class *moditc;
 		Elm_Genlist_Item_Class *stditc;

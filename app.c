@@ -20,6 +20,7 @@
 #include <ctype.h>
 
 #include <app.h>
+#include <patcher.h>
 
 // include lv2 core header
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
@@ -1373,11 +1374,38 @@ app_new()
 
 	app->ui.modpane = elm_panes_add(app->ui.plugpane);
 	elm_panes_horizontal_set(app->ui.modpane, EINA_FALSE);
-	elm_panes_content_left_size_set(app->ui.modpane, 0.5);
+	elm_panes_content_left_size_set(app->ui.modpane, 0.3);
 	evas_object_size_hint_weight_set(app->ui.modpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(app->ui.modpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(app->ui.modpane);
 	elm_object_part_content_set(app->ui.plugpane, "left", app->ui.modpane);
+	
+	app->ui.patchpane = elm_panes_add(app->ui.modpane);
+	elm_panes_horizontal_set(app->ui.patchpane, EINA_TRUE);
+	elm_panes_content_left_size_set(app->ui.patchpane, 0.8);
+	evas_object_size_hint_weight_set(app->ui.patchpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(app->ui.patchpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(app->ui.patchpane);
+	elm_object_part_content_set(app->ui.modpane, "right", app->ui.patchpane);
+
+	app->ui.patchbox = elm_box_add(app->ui.patchpane);
+	elm_box_horizontal_set(app->ui.patchbox, EINA_TRUE);
+	elm_box_homogeneous_set(app->ui.patchbox, EINA_FALSE);
+	elm_box_padding_set(app->ui.patchbox, 10, 10);
+	evas_object_size_hint_weight_set(app->ui.patchbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(app->ui.patchbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(app->ui.patchbox);
+	elm_object_part_content_set(app->ui.patchpane, "right", app->ui.patchbox);
+
+	for(int i=0; i<4; i++)
+	{
+		Evas_Object *matrix = patcher_object_add(app->ui.patchbox);
+		patcher_object_dimension_set(matrix, 10-i, 10+i);
+		evas_object_size_hint_weight_set(matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(matrix);
+		elm_box_pack_end(app->ui.patchbox, matrix);
+	}
 
 	app->ui.modlist = elm_genlist_add(app->ui.modpane);
 	elm_genlist_select_mode_set(app->ui.modlist, ELM_OBJECT_SELECT_MODE_DEFAULT);
@@ -1410,7 +1438,7 @@ app_new()
 	app->ui.stditc->func.state_get = NULL;
 	app->ui.stditc->func.del = _modlist_std_del;
 
-	app->ui.modgrid = elm_gengrid_add(app->ui.modpane);
+	app->ui.modgrid = elm_gengrid_add(app->ui.patchpane);
 	elm_gengrid_select_mode_set(app->ui.modgrid, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_gengrid_reorder_mode_set(app->ui.modgrid, EINA_TRUE);
 	elm_gengrid_item_size_set(app->ui.modgrid, 400, 400);
@@ -1418,7 +1446,7 @@ app_new()
 	evas_object_size_hint_weight_set(app->ui.modgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(app->ui.modgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(app->ui.modgrid);
-	elm_object_part_content_set(app->ui.modpane, "right", app->ui.modgrid);
+	elm_object_part_content_set(app->ui.patchpane, "left", app->ui.modgrid);
 
 	app->ui.griditc = elm_gengrid_item_class_new();
 	app->ui.griditc->item_style = "default";
@@ -1482,9 +1510,20 @@ app_free(app_t *app)
 
 	// deinit elm
 	evas_object_hide(app->ui.win);
+
+	elm_gengrid_clear(app->ui.modgrid);
 	evas_object_del(app->ui.modgrid);
+
+	elm_genlist_clear(app->ui.modlist);
 	evas_object_del(app->ui.modlist);
+
+	elm_genlist_clear(app->ui.pluglist);
 	evas_object_del(app->ui.pluglist);
+
+	elm_box_clear(app->ui.patchbox);
+	evas_object_del(app->ui.patchbox);
+
+	evas_object_del(app->ui.patchpane);
 	evas_object_del(app->ui.modpane);
 	evas_object_del(app->ui.plugpane);
 	evas_object_del(app->ui.win);
