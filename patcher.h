@@ -24,12 +24,18 @@ Evas_Object *
 patcher_object_add(Evas *e);
 
 void
-patcher_object_dimension_set(Evas_Object *o, int cols, int rows);
+patcher_object_dimension_set(Evas_Object *o, int sources, int sinks);
 
 void
-patcher_object_dimension_get(Evas_Object *o, int *cols, int *rows);
+patcher_object_dimension_get(Evas_Object *o, int *sources, int *sinks);
 
 void
-patcher_object_state_set(Evas_Object *o, int col, int row, Eina_Bool state);
+patcher_object_state_set(Evas_Object *o, int source, int sink, Eina_Bool state);
+
+void
+patcher_object_source_data_set(Evas_Object *o, int source, void *data);
+
+void
+patcher_object_sink_data_set(Evas_Object *o, int sink, void *data);
 
 #endif // _SYNTHPOD_PATCHER_H

@@ -45,7 +45,10 @@ enum  _job_type_t {
 
 struct _job_t {
 	job_type_t type;
-	void *ptr; // pointer to elsewhere
+	union {
+		mod_t *mod; // pointer to elsewhere
+		conn_t conn;
+	} payload;
 };
 
 struct _ui_write_t {
@@ -77,7 +80,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 			{
 				case JOB_TYPE_MODULE_ADD: // inject module
 				{
-					mod_t *mod = job->ptr;
+					mod_t *mod = job->payload.mod;
 					app->mods = eina_inlist_append(app->mods, EINA_INLIST_GET(mod));
 					break;
 				}
@@ -88,24 +91,24 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				case JOB_TYPE_CONN_ADD: // inject connection
 				{
-					conn_t *conn = job->ptr;
+					const conn_t *conn = &job->payload.conn;
 					// rewire source port output buffer to sink input buffer
 					lilv_instance_connect_port(
-						conn->source->mod->inst,
-						conn->source->index,
-						conn->sink->buf);
-					app->conns = eina_inlist_append(app->conns, EINA_INLIST_GET(conn));
+						conn->sink->mod->inst,
+						conn->sink->index,
+						conn->source->buf);
+
 					break;
 				}
 				case JOB_TYPE_CONN_DEL: // eject connection
 				{
-					conn_t *conn = job->ptr;
+					const conn_t *conn = &job->payload.conn;
 					// rewire source port output buffer to itself 
 					lilv_instance_connect_port(
-						conn->source->mod->inst,
-						conn->source->index,
-						conn->source->buf);
-					app->conns = eina_inlist_remove(app->conns, EINA_INLIST_GET(conn));
+						conn->sink->mod->inst,
+						conn->sink->index,
+						conn->sink->buf);
+
 					break;
 				}
 			}
@@ -114,8 +117,33 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 		}
 	}
 
+	//TODO FIXME
+	// clear atom inputs
 	mod_t *mod;
 	EINA_INLIST_FOREACH(app->mods, mod)
+	{
+		if(mod->dead)
+			continue; // ignore dead mods
+
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+			{
+				LV2_Atom_Sequence *seq = port->buf;
+
+				seq->atom.type = app->regs.port.sequence.urid;
+				seq->atom.size = port->direction == PORT_DIRECTION_INPUT
+					? sizeof(LV2_Atom_Sequence_Body) // empty sequence
+					: app->seq_size; // capacity
+			}
+		}
+	}
+
+	Eina_Inlist *l;
+	EINA_INLIST_FOREACH_SAFE(app->mods, l, mod)
 	{
 		if(mod->dead) // handle dead modules
 		{
@@ -128,7 +156,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				job_t *job = ptr;
 
 				job->type = JOB_TYPE_MODULE_DEL;
-				job->ptr = mod;
+				job->payload.mod = mod;
 
 				varchunk_write_advance(app->rt.from, JOB_SIZE);
 			}
@@ -199,7 +227,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 					LV2_Atom_Event *new_last = ptr;
 					new_last->time.frames = last ? last->time.frames : 0;
 					memcpy(&new_last->body, atom, sizeof(LV2_Atom) + atom->size);
-					seq->atom.size += sizeof(LV2_Atom_Event) + atom->size;
+					seq->atom.size += sizeof(LV2_Atom_Event) + ((atom->size + 7U) & (~7U));
 				}
 				else
 					; //ignore, protocol not supported
@@ -294,12 +322,11 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				else if(port->protocol == app->regs.port.event_transfer.urid)
 				{
-					const LV2_Atom *atom = port->buf;
-					if(atom->size == 0) // empty atom
+					const LV2_Atom_Sequence *seq = port->buf;
+					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // empty seq
 						continue;
 
 					// transfer each atom of sequence separately
-					const LV2_Atom_Sequence *seq = port->buf;
 					LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 					{
 						void *ptr;
@@ -390,9 +417,14 @@ _rt_animator(void *data)
 
 		if(job->type == JOB_TYPE_MODULE_DEL)
 		{
-			mod_t *mod = job->ptr;
+			mod_t *mod = job->payload.mod;
 
 			app_mod_del(app, mod);
+		}
+		else if(job->type == JOB_TYPE_CONN_DEL)
+		{
+			const conn_t *conn = &job->payload.conn;
+			//TODO
 		}
 
 		varchunk_read_advance(app->rt.from);
@@ -418,7 +450,7 @@ static Eina_Bool
 _port_event_animator(void *data)
 {
 	mod_t *mod = data;
-
+		
 	// handle pending port notifications
 	const void *ptr;
 	size_t toread;
@@ -505,7 +537,9 @@ _list_expand_request(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *itm = event_info;
 	app_t *app = data;
 
+	Eina_Bool selected = elm_genlist_item_selected_get(itm);
 	elm_genlist_item_expanded_set(itm, EINA_TRUE);
+	elm_genlist_item_selected_set(itm, !selected); // preserve selection
 }
 
 // non-rt ui-thread
@@ -515,7 +549,9 @@ _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *itm = event_info;
 	app_t *app = data;
 
+	Eina_Bool selected = elm_genlist_item_selected_get(itm);
 	elm_genlist_item_expanded_set(itm, EINA_FALSE);
+	elm_genlist_item_selected_set(itm, !selected); // preserve selection
 }
 
 // non-rt ui-thread
@@ -614,7 +650,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		port_t *port = &mod->ports[i];
 
 		// only add control, audio, cv ports
-		if(port->type == app->regs.port.atom.urid)
+		if(port->type == PORT_TYPE_ATOM)
 			continue;
 
 		Elm_Object_Item *elmnt;
@@ -622,9 +658,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 	}
-
-	// add port_event animator
-	mod->ui.port_event_anim = ecore_animator_add(_port_event_animator, mod);
 }
 
 // non-rt ui-thread
@@ -634,10 +667,6 @@ _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *itm = event_info;
 	mod_t *mod = elm_object_item_data_get(itm);
 	app_t *app = data;
-
-	// del port_event animator
-	ecore_animator_del(mod->ui.port_event_anim);
-	mod->ui.port_event_anim = NULL;
 
 	// clear items
 	elm_genlist_item_subitems_clear(itm);
@@ -690,12 +719,112 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 }
 
 // non-rt ui-thread
+static void
+_patches_update(app_t *app)
+{
+	int count [PORT_DIRECTION_NUM][PORT_TYPE_NUM];
+	// clear counters
+	memset(&count, 0, PORT_DIRECTION_NUM*PORT_TYPE_NUM*sizeof(int));
+
+	// count input|output ports per type
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(app->ui.modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
+	{
+		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
+		if(itc != app->ui.moditc)
+			continue; // ignore port items
+
+		mod_t *mod = elm_object_item_data_get(itm);
+		if(!mod->selected)
+			continue; // ignore unselected mods
+
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+			if(!port->selected)
+				continue; // ignore unselected ports
+
+			count[port->direction][port->type] += 1;
+		}
+	}
+
+	// set dimension of patchers
+	for(int t=0; t<PORT_TYPE_NUM; t++)
+	{
+		patcher_object_dimension_set(app->ui.matrix[t], 
+			count[PORT_DIRECTION_OUTPUT][t], // sources
+			count[PORT_DIRECTION_INPUT][t]); // sinks
+	}
+
+	// clear counters
+	memset(&count, 0, PORT_DIRECTION_NUM*PORT_TYPE_NUM*sizeof(int));
+
+	// populate patchers
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(app->ui.modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
+	{
+		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
+		if(itc != app->ui.moditc)
+			continue; // ignore port items
+
+		mod_t *mod = elm_object_item_data_get(itm);
+		if(!mod->selected)
+			continue; // ignore unselected mods
+
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+			if(!port->selected)
+				continue; // ignore unselected ports
+			
+			//patcher_object_state_set(app->ui.matrix[port->type], 0, 0, EINA_TRUE);
+			if(port->direction == PORT_DIRECTION_OUTPUT) // source
+			{
+				patcher_object_source_data_set(app->ui.matrix[port->type],
+					count[port->direction][port->type], port);
+			}
+			else // sink
+			{
+				patcher_object_sink_data_set(app->ui.matrix[port->type],
+					count[port->direction][port->type], port);
+			}
+		
+			printf("%p\n", port);
+			count[port->direction][port->type] += 1;
+		}
+	}
+}
+
+// non-rt ui-thread
+static void
+_modlist_check_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+	app_t *app = mod->app;
+
+	mod->selected = elm_check_state_get(obj);
+	printf("_modlist_check_changed: %i\n", mod->selected);
+	_patches_update(app);
+}
+
+// non-rt ui-thread
 static Evas_Object *
 _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 {
 	mod_t *mod = data;
 
-	if(!strcmp(part, "elm.swallow.end"))
+	if(!strcmp(part, "elm.swallow.icon"))
+	{
+		Evas_Object *check = elm_check_add(obj);
+		elm_check_state_set(check, mod->selected);
+		evas_object_smart_callback_add(check, "changed", _modlist_check_changed, mod);
+		evas_object_show(check);
+
+		return check;
+	}
+	else if(!strcmp(part, "elm.swallow.end"))
 	{
 		Evas_Object *icon = elm_icon_add(obj);
 		elm_icon_standard_set(icon, "close");
@@ -716,24 +845,24 @@ _match_port_protocol(port_t *port, uint32_t protocol, uint32_t size)
 	app_t *app = mod->app;
 
 	if(  (protocol == app->regs.port.float_protocol.urid)
-		&& (port->type == app->regs.port.control.urid)
+		&& (port->type == PORT_TYPE_CONTROL)
 		&& (size == sizeof(float)) )
 	{
 		return 1;
 	}
 	else if ( (protocol == app->regs.port.peak_protocol.urid)
-		&& ((port->type == app->regs.port.audio.urid) || (port->type == app->regs.port.cv.urid)) )
+		&& ((port->type == PORT_TYPE_AUDIO) || (port->type == PORT_TYPE_CV)) )
 	{
 		return 1;
 	}
 	else if( (protocol == app->regs.port.atom_transfer.urid)
-				&& (port->type == app->regs.port.atom.urid) )
+				&& (port->type == PORT_TYPE_ATOM) )
 	{
 		return 1;
 	}
 	else if( (protocol == app->regs.port.event_transfer.urid)
-				&& (port->type == app->regs.port.atom.urid)
-				&& (port->buffer_type == app->regs.port.sequence.urid) )
+				&& (port->type == PORT_TYPE_ATOM)
+				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 	{
 		return 1;
 	}
@@ -751,7 +880,7 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	port_t *tar = &mod->ports[port];
 
 	// ignore output ports
-	if(tar->direction != app->regs.port.input.urid)
+	if(tar->direction != PORT_DIRECTION_INPUT)
 	{
 		fprintf(stderr, "_ui_write_function: UI can only write to input port\n");
 		return;
@@ -864,106 +993,13 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 
 // non-rt ui-thread
 static void
-_patches_update(app_t *app)
-{
-	int audio_ins = eina_list_count(app->patches.audio_in);
-	int audio_outs = eina_list_count(app->patches.audio_out);
-	int cv_ins = eina_list_count(app->patches.cv_in);
-	int cv_outs = eina_list_count(app->patches.cv_out);
-	int control_ins = eina_list_count(app->patches.control_in);
-	int control_outs = eina_list_count(app->patches.control_out);
-	int atom_ins = eina_list_count(app->patches.atom_in);
-	int atom_outs = eina_list_count(app->patches.atom_out);
-
-	patcher_object_dimension_set(app->ui.audiomatrix, audio_ins, audio_outs);
-	patcher_object_dimension_set(app->ui.cvmatrix, cv_ins, cv_outs);
-	patcher_object_dimension_set(app->ui.controlmatrix, control_ins, control_outs);
-	patcher_object_dimension_set(app->ui.atommatrix, atom_ins, atom_outs);
-
-	Eina_List *l, *k;
-	port_t *source, *sink;
-	EINA_LIST_FOREACH(app->patches.audio_in, l, source)
-		EINA_LIST_FOREACH(app->patches.audio_out, k, sink)
-		{
-			// TODO update patchbays 
-			patcher_object_state_set(app->ui.audiomatrix, 0, 0, EINA_TRUE);
-		}
-}
-
-// non-rt ui-thread
-static void
 _patched_changed(void *data, Evas_Object *obj, void *event)
 {
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	app_t *app = mod->app;
 
-	int state = elm_check_state_get(obj);
-	port->patched = state;
-	
-	if(state) // enable on patchbay
-	{
-		if(port->type == app->regs.port.audio.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.audio_in = eina_list_append(app->patches.audio_in, port);
-			else
-				app->patches.audio_out = eina_list_append(app->patches.audio_out, port);
-		}
-		else if(port->type == app->regs.port.cv.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.cv_in = eina_list_append(app->patches.cv_in, port);
-			else
-				app->patches.cv_out = eina_list_append(app->patches.cv_out, port);
-		}
-		else if(port->type == app->regs.port.control.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.control_in = eina_list_append(app->patches.control_in, port);
-			else
-				app->patches.control_out = eina_list_append(app->patches.control_out, port);
-		}
-		else if(port->type == app->regs.port.atom.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.atom_in = eina_list_append(app->patches.atom_in, port);
-			else
-				app->patches.atom_out = eina_list_append(app->patches.atom_out, port);
-		}
-	}
-	else // disable on patybay
-	{
-		if(port->type == app->regs.port.audio.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.audio_in = eina_list_remove(app->patches.audio_in, port);
-			else
-				app->patches.audio_out = eina_list_remove(app->patches.audio_out, port);
-		}
-		else if(port->type == app->regs.port.cv.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.cv_in = eina_list_remove(app->patches.cv_in, port);
-			else
-				app->patches.cv_out = eina_list_remove(app->patches.cv_out, port);
-		}
-		else if(port->type == app->regs.port.control.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.control_in = eina_list_remove(app->patches.control_in, port);
-			else
-				app->patches.control_out = eina_list_remove(app->patches.control_out, port);
-		}
-		else if(port->type == app->regs.port.atom.urid)
-		{
-			if(port->direction == app->regs.port.input.urid)
-				app->patches.atom_in = eina_list_remove(app->patches.atom_in, port);
-			else
-				app->patches.atom_out = eina_list_remove(app->patches.atom_out, port);
-		}
-	}
-
+	port->selected = elm_check_state_get(obj);
 	_patches_update(app);
 }
 
@@ -1041,7 +1077,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	elm_box_pack_end(hbox, patched);
 
 	Evas_Object *child = NULL;
-	if(port->type == app->regs.port.control.urid)
+	if(port->type == PORT_TYPE_CONTROL)
 	{
 		int integer = lilv_port_has_property(mod->plug, port->tar, app->regs.port.integer.node);
 		int toggled = lilv_port_has_property(mod->plug, port->tar, app->regs.port.toggled.node);
@@ -1091,8 +1127,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_object_text_set(child, type_str);
 		}
 	}
-	else if(port->type == app->regs.port.audio.urid
-		|| port->type == app->regs.port.cv.urid)
+	else if(port->type == PORT_TYPE_AUDIO
+		|| port->type == PORT_TYPE_CV)
 	{
 		Evas_Object *prog = elm_progressbar_add(hbox);
 		elm_progressbar_horizontal_set(prog, EINA_TRUE);
@@ -1103,12 +1139,12 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		elm_object_text_set(child, type_str);
 	}
 	
-	if(port->patched)
+	if(port->selected)
 		elm_check_state_set(patched, EINA_TRUE);
 
 	if(child)
 	{
-		elm_object_disabled_set(child, port->direction == app->regs.port.output.urid);
+		elm_object_disabled_set(child, port->direction == PORT_DIRECTION_OUTPUT);
 		evas_object_size_hint_weight_set(child, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(child, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(child);
@@ -1117,15 +1153,15 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 	// subscribe to port
 	const uint32_t i = port->index;
-	if(port->type == app->regs.port.control.urid)
+	if(port->type == PORT_TYPE_CONTROL)
 		_port_subscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
-	else if(port->type == app->regs.port.audio.urid)
+	else if(port->type == PORT_TYPE_AUDIO)
 		_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-	else if(port->type == app->regs.port.cv.urid)
+	else if(port->type == PORT_TYPE_CV)
 		_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-	else if(port->type == app->regs.port.atom.urid)
+	else if(port->type == PORT_TYPE_ATOM)
 	{
-		if(port->buffer_type == app->regs.port.sequence.urid)
+		if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
 			_port_subscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 		else
 			_port_subscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
@@ -1147,15 +1183,15 @@ _modlist_std_del(void *data, Evas_Object *obj)
 	
 	// unsubscribe from port
 	const uint32_t i = port->index;
-	if(port->type == app->regs.port.control.urid)
+	if(port->type == PORT_TYPE_CONTROL)
 		_port_unsubscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
-	else if(port->type == app->regs.port.audio.urid)
+	else if(port->type == PORT_TYPE_AUDIO)
 		_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-	else if(port->type == app->regs.port.cv.urid)
+	else if(port->type == PORT_TYPE_CV)
 		_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-	else if(port->type == app->regs.port.atom.urid)
+	else if(port->type == PORT_TYPE_ATOM)
 	{
-		if(port->buffer_type == app->regs.port.sequence.urid)
+		if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
 			_port_unsubscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 		else
 			_port_unsubscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
@@ -1260,25 +1296,51 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					mod->ui_features);
 			}
 
+	/* FIXME
+	LilvNodes* notes               = lilv_world_find_nodes(
+		lworld, lilv_ui_get_uri(ui), ui_portNotification, NULL);
+	LILV_FOREACH(nodes, n, notes) {
+		const LilvNode* note = lilv_nodes_get(notes, n);
+		const LilvNode* sym  = lilv_world_get(lworld, note, lv2_symbol, NULL);
+		const LilvNode* plug = lilv_world_get(lworld, note, ui_plugin, NULL);
+		if (plug && !lilv_node_is_uri(plug)) {
+			world->log().error(fmt("%1% UI has non-URI ui:plugin\n")
+			                   % block->plugin()->uri().c_str());
+			continue;
+		}
+		if (plug && strcmp(lilv_node_as_uri(plug), block->plugin()->uri().c_str())) {
+			continue;  // Notification is for another plugin
+		}
+		if (sym) {
+			uint32_t index = lv2_ui_port_index(ret.get(), lilv_node_as_string(sym));
+			if (index != LV2UI_INVALID_PORT_INDEX) {
+				lv2_ui_subscribe(ret.get(), index, 0, NULL);
+				ret->_subscribed_ports.insert(index);
+			}
+		}
+	}
+	lilv_nodes_free(notes);
+	*/
+
 			// subscribe to all ports
 			for(int i=0; i<mod->num_ports; i++)
 			{
 				port_t *port = &mod->ports[i];
 
-				if(port->type == app->regs.port.control.urid)
+				if(port->type == PORT_TYPE_CONTROL)
 				{
 					_port_subscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
 					// initialize StdUI and EoUI
 					_eo_port_event(mod, i, sizeof(float), app->regs.port.float_protocol.urid, &port->dflt);
 					_std_port_event(mod, i, sizeof(float), app->regs.port.float_protocol.urid, &port->dflt);
 				}
-				else if(port->type == app->regs.port.audio.urid)
+				else if(port->type == PORT_TYPE_AUDIO)
 					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-				else if(port->type == app->regs.port.cv.urid)
+				else if(port->type == PORT_TYPE_CV)
 					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-				else if(port->type == app->regs.port.atom.urid)
+				else if(port->type == PORT_TYPE_ATOM)
 				{
-					if(port->buffer_type == app->regs.port.sequence.urid)
+					if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
 						_port_subscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 					else
 						_port_subscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
@@ -1308,15 +1370,15 @@ _modgrid_del(void *data, Evas_Object *obj)
 	{
 		port_t *port = &mod->ports[i];
 
-		if(port->type == app->regs.port.control.urid)
+		if(port->type == PORT_TYPE_CONTROL)
 			_port_unsubscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
-		else if(port->type == app->regs.port.audio.urid)
+		else if(port->type == PORT_TYPE_AUDIO)
 			_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-		else if(port->type == app->regs.port.cv.urid)
+		else if(port->type == PORT_TYPE_CV)
 			_port_unsubscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-		else if(port->type == app->regs.port.atom.urid)
+		else if(port->type == PORT_TYPE_ATOM)
 		{
-			if(port->buffer_type == app->regs.port.sequence.urid)
+			if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) 
 				_port_unsubscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
 			else
 				_port_unsubscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
@@ -1354,20 +1416,59 @@ static void
 _matrix_connect(void *data, Evas_Object *obj, void *event_info)
 {
 	app_t *app = data;
-	int *ev = event_info;
+	port_t **ports = event_info;
+	port_t *source = ports[0];
+	port_t *sink = ports[1];
 
-	printf("_matrix_connect: %i %i\n", ev[0], ev[1]);
-	//TODO
+	if(sink->links > 0) // TODO only one link per sink allowed for now
+		return;
+
+	printf("_matrix_connect: %p %p\n", source, sink);
+
+	void *ptr;
+	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
+	{
+		job_t *job = ptr;
+
+		job->type = JOB_TYPE_CONN_ADD;
+		job->payload.conn.source = source;
+		job->payload.conn.sink = sink;
+
+		varchunk_write_advance(app->rt.to, JOB_SIZE);
+
+		sink->links += 1;
+		source->links += 1;
+	}
+	else
+		fprintf(stderr, "rt varchunk buffer overrun");
 }
 
 static void
 _matrix_disconnect(void *data, Evas_Object *obj, void *event_info)
 {
 	app_t *app = data;
-	int *ev = event_info;
+	port_t **ports = event_info;
+	port_t *source = ports[0];
+	port_t *sink = ports[1];
 
-	printf("_matrix_disconnect: %i %i\n", ev[0], ev[1]);
-	//TODO
+	printf("_matrix_disconnect: %p %p\n", source, sink);
+
+	void *ptr;
+	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
+	{
+		job_t *job = ptr;
+
+		job->type = JOB_TYPE_CONN_DEL;
+		job->payload.conn.source = source;
+		job->payload.conn.sink = sink;
+
+		varchunk_write_advance(app->rt.to, JOB_SIZE);
+		
+		sink->links -= 1;
+		source->links -= 1;
+	}
+	else
+		fprintf(stderr, "rt varchunk buffer overrun");
 }
 
 // non-rt ui-thread
@@ -1407,6 +1508,7 @@ app_new()
 	app->regs.port.peak_protocol.node = lilv_new_uri(app->world, LV2_UI_PREFIX"peakProtocol");
 	app->regs.port.atom_transfer.node = lilv_new_uri(app->world, LV2_ATOM__atomTransfer);
 	app->regs.port.event_transfer.node = lilv_new_uri(app->world, LV2_ATOM__eventTransfer);
+	app->regs.port.notification.node = lilv_new_uri(app->world, LV2_UI__portNotification);
 
 	app->regs.work.schedule.node = lilv_new_uri(app->world, LV2_WORKER__schedule);
 
@@ -1443,6 +1545,7 @@ app_new()
 	app->regs.port.peak_protocol.urid = ext_urid_map(app->ext_urid, LV2_UI_PREFIX"peakProtocol");
 	app->regs.port.atom_transfer.urid = ext_urid_map(app->ext_urid, LV2_ATOM__atomTransfer);
 	app->regs.port.event_transfer.urid = ext_urid_map(app->ext_urid, LV2_ATOM__eventTransfer);
+	app->regs.port.notification.urid = ext_urid_map(app->ext_urid, LV2_UI__portNotification);
 
 	app->regs.work.schedule.urid = ext_urid_map(app->ext_urid, LV2_WORKER__schedule);
 
@@ -1531,26 +1634,22 @@ app_new()
 	evas_object_show(app->ui.patchbox);
 	elm_object_part_content_set(app->ui.patchpane, "right", app->ui.patchbox);
 
-	Evas_Object *matrix [4];
-	for(int i=0; i<4; i++)
+	for(int t=0; t<PORT_TYPE_NUM; t++)
 	{
-		matrix[i] = patcher_object_add(app->ui.patchbox);
-		//patcher_object_dimension_set(matrix[i], 0, 0);
-		evas_object_smart_callback_add(matrix[i], "connect", _matrix_connect, app);
-		evas_object_smart_callback_add(matrix[i], "disconnect", _matrix_disconnect, app);
-		evas_object_size_hint_weight_set(matrix[i], EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(matrix[i], EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_show(matrix[i]);
-		elm_box_pack_end(app->ui.patchbox, matrix[i]);
+		Evas_Object *matrix = patcher_object_add(app->ui.patchbox);
+		//patcher_object_dimension_set(matrix, 0, 0);
+		evas_object_smart_callback_add(matrix, "connect", _matrix_connect, app);
+		evas_object_smart_callback_add(matrix, "disconnect", _matrix_disconnect, app);
+		evas_object_size_hint_weight_set(matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(matrix);
+		elm_box_pack_end(app->ui.patchbox, matrix);
+		app->ui.matrix[t] = matrix;
 	}
-	app->ui.audiomatrix = matrix[0];
-	app->ui.cvmatrix = matrix[1];
-	app->ui.controlmatrix = matrix[2];
-	app->ui.atommatrix = matrix[3];
 
 	app->ui.modlist = elm_genlist_add(app->ui.modpane);
-	elm_genlist_select_mode_set(app->ui.modlist, ELM_OBJECT_SELECT_MODE_DEFAULT);
-	elm_genlist_reorder_mode_set(app->ui.modlist, EINA_TRUE);
+	elm_genlist_select_mode_set(app->ui.modlist, ELM_OBJECT_SELECT_MODE_NONE);
+	//elm_genlist_reorder_mode_set(app->ui.modlist, EINA_TRUE);
 	evas_object_smart_callback_add(app->ui.modlist, "expand,request",
 		_list_expand_request, app);
 	evas_object_smart_callback_add(app->ui.modlist, "contract,request",
@@ -1634,6 +1733,7 @@ app_free(app_t *app)
 	lilv_node_free(app->regs.port.peak_protocol.node);
 	lilv_node_free(app->regs.port.atom_transfer.node);
 	lilv_node_free(app->regs.port.event_transfer.node);
+	lilv_node_free(app->regs.port.notification.node);
 
 	lilv_node_free(app->regs.work.schedule.node);
 
@@ -1934,33 +2034,25 @@ app_mod_add(app_t *app, const char *uri)
 		tar->tar = port;
 		tar->index = i;
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
-			? app->regs.port.input.urid
-			: app->regs.port.output.urid;
+			? PORT_DIRECTION_INPUT
+			: PORT_DIRECTION_OUTPUT;
 
 		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
 			size = app->period_size * sizeof(float);
-			tar->type =  app->regs.port.audio.urid;
-			tar->patched = 1;
-			if(tar->direction == app->regs.port.input.urid)
-				app->patches.audio_in = eina_list_append(app->patches.audio_in, tar);
-			else
-				app->patches.audio_out = eina_list_append(app->patches.audio_out, tar);
+			tar->type =  PORT_TYPE_AUDIO;
+			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
 			size = app->period_size * sizeof(float);
-			tar->type = app->regs.port.cv.urid;
-			tar->patched = 1;
-			if(tar->direction == app->regs.port.input.urid)
-				app->patches.cv_in = eina_list_append(app->patches.cv_in, tar);
-			else
-				app->patches.cv_out = eina_list_append(app->patches.cv_out, tar);
+			tar->type = PORT_TYPE_CV;
+			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.control.node))
 		{
 			size = sizeof(float);
-			tar->type = app->regs.port.control.urid;
+			tar->type = PORT_TYPE_CONTROL;
 			tar->protocol = app->regs.port.float_protocol.urid; //TODO remove?
 			tar->points = lilv_port_get_scale_points(mod->plug, port);
 			
@@ -1978,20 +2070,15 @@ app_mod_add(app_t *app, const char *uri)
 		else if(lilv_port_is_a(plug, port, app->regs.port.atom.node)) 
 		{
 			size = app->seq_size;
-			tar->type = app->regs.port.atom.urid;
-			tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
-				? app->regs.port.sequence.urid
-				: 0;
-			tar->patched = 1;
-			if(tar->direction == app->regs.port.input.urid)
-				app->patches.atom_in = eina_list_append(app->patches.atom_in, tar);
-			else
-				app->patches.atom_out = eina_list_append(app->patches.atom_out, tar);
+			tar->type = PORT_TYPE_ATOM;
+			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
+			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
+			//	? PORT_BUFFER_TYPE_SEQUENCE
+			//	: PORT_BUFFER_TYPE_NONE; //FIXME
+			tar->selected = 1;
 		}
 		else
-			tar->type = 0; // ignored
-			
-		_patches_update(app);
+			; //TODO abort
 
 		// allocate 8-byte aligned buffer
 		posix_memalign(&tar->buf, 8, size); //TODO mlock
@@ -2016,6 +2103,9 @@ app_mod_add(app_t *app, const char *uri)
 	mod->ui.to = varchunk_new(8192);
 	mod->ui.from = varchunk_new(8192);
 
+	// add port_event animator
+	mod->ui.port_event_anim = ecore_animator_add(_port_event_animator, mod);
+
 	lv2_atom_forge_init(&mod->forge, ext_urid_map_get(app->ext_urid));
 
 	// inject module into rt thread
@@ -2025,7 +2115,7 @@ app_mod_add(app_t *app, const char *uri)
 		job_t *job = ptr;
 
 		job->type = JOB_TYPE_MODULE_ADD;
-		job->ptr = mod;
+		job->payload.mod = mod;
 
 		varchunk_write_advance(app->rt.to, JOB_SIZE);
 	}
@@ -2039,6 +2129,10 @@ app_mod_add(app_t *app, const char *uri)
 void
 app_mod_del(app_t *app, mod_t *mod)
 {
+	// del port_event animator
+	ecore_animator_del(mod->ui.port_event_anim);
+	mod->ui.port_event_anim = NULL;
+
 	varchunk_free(mod->ui.to);
 	varchunk_free(mod->ui.from);
 

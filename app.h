@@ -36,11 +36,59 @@
 #define NUM_UI_FEATURES 6
 #define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
+typedef enum _port_type_t port_type_t;
+typedef enum _port_buffer_type_t port_buffer_type_t;
+typedef enum _port_direction_t port_direction_t;
+typedef enum _port_widget_t port_widget_t;
+typedef enum _port_protocol_t port_protocol_t;
+
 typedef struct _app_t app_t;
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
 typedef struct _conn_t conn_t;
 typedef struct _reg_t reg_t;
+
+enum _port_type_t {
+	PORT_TYPE_CONTROL,
+	PORT_TYPE_AUDIO,
+	PORT_TYPE_CV,
+	PORT_TYPE_ATOM,
+
+	PORT_TYPE_NUM
+};
+
+enum _port_buffer_type_t {
+	PORT_BUFFER_TYPE_NONE = 0,
+	PORT_BUFFER_TYPE_SEQUENCE,
+
+	PORT_BUFFER_TYPE_NUM
+};
+
+enum _port_direction_t {
+	PORT_DIRECTION_INPUT = 0,
+	PORT_DIRECTION_OUTPUT,
+
+	PORT_DIRECTION_NUM
+};
+
+enum _port_widget_t {
+	PORT_WIDGET_SLIDER = 0,
+	PORT_WIDGET_CHECK,
+	PORT_WIDGET_DROPBOX,
+	PORT_WIDGET_SEGMENT,
+	PORT_WIDGET_PROGRESS,
+
+	PORT_WIDGET_NUM
+};
+
+enum _port_protocol_t {
+	PORT_PROTOCOL_FLOAT = 0,
+	PORT_PROTOCOL_PEAK,
+	PORT_PROTOCOL_ATOM,
+	PORT_PROTOCOL_SEQUENCE,
+
+	PORT_PROTOCOL_NUM
+}; //TODO use this
 
 struct _reg_t {
 	LilvNode *node;
@@ -81,6 +129,8 @@ struct _app_t {
 			reg_t peak_protocol;
 			reg_t atom_transfer;
 			reg_t event_transfer;
+
+			reg_t notification;
 		} port;
 
 		struct {
@@ -103,17 +153,6 @@ struct _app_t {
 	Eina_Inlist *mods;
 	Eina_Inlist *conns;
 
-	struct {
-		Eina_List *audio_in;
-		Eina_List *audio_out;
-		Eina_List *cv_in;
-		Eina_List *cv_out;
-		Eina_List *control_in;
-		Eina_List *control_out;
-		Eina_List *atom_in;
-		Eina_List *atom_out;
-	} patches;
-
 	double sample_rate;
 	uint32_t period_size;
 	uint32_t seq_size;
@@ -129,11 +168,7 @@ struct _app_t {
 		Evas_Object *modlist;
 		Evas_Object *modgrid;
 		Evas_Object *patchbox;
-
-		Evas_Object *audiomatrix;
-		Evas_Object *cvmatrix;
-		Evas_Object *controlmatrix;
-		Evas_Object *atommatrix;
+		Evas_Object *matrix[PORT_TYPE_NUM];
 
 		Elm_Genlist_Item_Class *plugitc;
 		Elm_Genlist_Item_Class *moditc;
@@ -156,6 +191,8 @@ struct _app_t {
 
 struct _mod_t {
 	EINA_INLIST;
+
+	int selected;
 
 	volatile uint32_t dead;
 
@@ -233,13 +270,17 @@ struct _mod_t {
 };
 
 struct _port_t {
+	int selected;
+
 	mod_t *mod;
 	const LilvPort *tar;
 	uint32_t index;
 
-	LV2_URID direction; // input, output, duplex
-	LV2_URID type; // audio, CV, control, atom
-	LV2_URID buffer_type; // sequence
+	int links; // how many?
+
+	port_direction_t direction; // input, output
+	port_type_t type; // audio, CV, control, atom
+	port_buffer_type_t buffer_type; // none, sequence
 
 	volatile LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
 	LilvScalePoints *points;
@@ -252,8 +293,6 @@ struct _port_t {
 	float dflt;
 	float min;
 	float max;
-
-	int patched; // expose in patchbay
 			
 	struct {
 		Evas_Object *widget;
@@ -261,8 +300,6 @@ struct _port_t {
 };
 
 struct _conn_t {
-	EINA_INLIST;
-
 	port_t *source;
 	port_t *sink;
 };

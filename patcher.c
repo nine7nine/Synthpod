@@ -30,13 +30,17 @@ typedef struct _event_t event_t;
 struct _patcher_t {
 	Evas_Object *matrix;
 	int **state;
-	int cols;
-	int rows;
+	struct {
+		void **source;
+		void **sink;
+	} data;
+	int sources;
+	int sinks;
 };
 
 struct _event_t {
-	int source;
-	int sink;
+	void *source;
+	void *sink;
 };
 
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
@@ -66,17 +70,17 @@ _node_toggled(void *data, Evas_Object *edj, const char *emission, const char *so
 {
 	Evas_Object *o = data;
 	patcher_t *priv = evas_object_smart_data_get(o);
-	int max = priv->rows > priv->cols ? priv->rows : priv->cols;
-	unsigned short i, j;
+	int max = priv->sinks > priv->sources ? priv->sinks : priv->sources;
+	unsigned short src, snk;
 
-	evas_object_table_pack_get(priv->matrix, edj, &i, &j, NULL, NULL);
+	evas_object_table_pack_get(priv->matrix, edj, &src, &snk, NULL, NULL);
 
 	event_t ev = {
-		.source = i + priv->rows - max,
-		.sink = j + priv->cols - max
+		.source = priv->data.source[src + priv->sources - max],
+		.sink = priv->data.sink[snk + priv->sinks - max]
 	};
 	
-	if(priv->state[i][j]) // is on
+	if(priv->state[src][snk]) // is on
 	{
 		evas_object_smart_callback_call(o, PATCHER_DISCONNECT, (void *)&ev);
 		edje_object_signal_emit(edj, "off", PATCHER_UI);
@@ -87,7 +91,7 @@ _node_toggled(void *data, Evas_Object *edj, const char *emission, const char *so
 		edje_object_signal_emit(edj, "on", PATCHER_UI);
 	}
 
-	priv->state[i][j] ^= 1; // toggle state
+	priv->state[src][snk] ^= 1; // toggle state
 }
 
 static void
@@ -97,25 +101,28 @@ _patcher_smart_init(Evas_Object *o)
 	patcher_t *priv = evas_object_smart_data_get(o);
 	Evas_Object *elmnt;
 
-	if( !(priv->rows && priv->cols) )
+	if( !(priv->sinks && priv->sources) )
 		return;
 
+	priv->data.source = calloc(priv->sources, sizeof(void *));
+	priv->data.sink = calloc(priv->sinks, sizeof(void *));
+
 	// create state
-	priv->state = calloc(priv->rows, sizeof(int *));
-	for(int r=0; r<priv->rows; r++)
-		priv->state[r] = calloc(priv->cols, sizeof(int));
+	priv->state = calloc(priv->sources, sizeof(int *));
+	for(int src=0; src<priv->sources; src++)
+		priv->state[src] = calloc(priv->sinks, sizeof(int));
 
-	int max = priv->rows > priv->cols ? priv->rows : priv->cols;
+	int max = priv->sinks > priv->sources ? priv->sinks : priv->sources;
 
-	for(int r=max-priv->rows; r<=max; r++)
+	for(int src=max-priv->sources; src<=max; src++)
 	{
-		for(int c=max-priv->cols; c<=max; c++)
+		for(int snk=max-priv->sinks; snk<=max; snk++)
 		{
-			if( (r == max) && (c == max) )
+			if( (src == max) && (snk == max) )
 				continue;
 
 			elmnt = edje_object_add(e);
-			if( (r == max) || (c == max) ) // is port
+			if( (src == max) || (snk == max) ) // is port
 			{
 				edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
 					"/synthpod/patcher/port"); //TODO
@@ -131,11 +138,11 @@ _patcher_smart_init(Evas_Object *o)
 			evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(elmnt);
-			evas_object_table_pack(priv->matrix, elmnt, r, c, 1, 1);
+			evas_object_table_pack(priv->matrix, elmnt, src, snk, 1, 1);
 		}
 	}
 	
-	// col label
+	// source label
 	elmnt = edje_object_add(e);
 	edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
 		"/synthpod/patcher/label/horizontal"); //TODO
@@ -144,7 +151,7 @@ _patcher_smart_init(Evas_Object *o)
 	evas_object_show(elmnt);
 	evas_object_table_pack(priv->matrix, elmnt, 0, max+1, max, 1);
 
-	// row label
+	// sink label
 	elmnt = edje_object_add(e);
 	edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
 		"/synthpod/patcher/label/vertical"); //TODO
@@ -159,13 +166,25 @@ _patcher_smart_deinit(Evas_Object *o)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 
+	if(priv->data.source)
+		free(priv->data.source);
+	if(priv->data.sink)
+		free(priv->data.sink);
+
 	// free state
 	if(priv->state)
 	{
-		for(int r=0; r<priv->rows; r++)
-			free(priv->state[r]);
+		for(int src=0; src<priv->sources; src++)
+		{
+			if(priv->state[src])
+				free(priv->state[src]);
+		}
 		free(priv->state);
 	}
+
+	priv->data.source = NULL;
+	priv->data.sink = NULL;
+	priv->state = NULL;
 
 	evas_object_table_clear(priv->matrix, EINA_TRUE);
 }
@@ -185,8 +204,10 @@ _patcher_smart_add(Evas_Object *o)
 	evas_object_smart_member_add(priv->matrix, o);
 
 	priv->state = NULL;
-	priv->cols = 0;
-	priv->rows = 0;
+	priv->data.source = NULL;
+	priv->data.sink = NULL;
+	priv->sources = 0;
+	priv->sinks = 0;
 
 	_patcher_smart_init(o);
 }
@@ -220,7 +241,7 @@ _patcher_smart_calculate(Evas_Object *o)
 	patcher_t *priv = evas_object_smart_data_get(o);
 	Evas_Coord x, y, w, h;
 
-	int max = priv->rows > priv->cols ? priv->rows : priv->cols;
+	int max = priv->sinks > priv->sources ? priv->sinks : priv->sources;
 	evas_object_geometry_get(o, &x, &y, &w, &h);
 	float dw = (float)w / (max + 2); // + port number + axis label
 	float dh = (float)h / (max + 2);
@@ -249,38 +270,56 @@ patcher_object_add(Evas *e)
 }
 
 void
-patcher_object_dimension_set(Evas_Object *o, int cols, int rows)
+patcher_object_dimension_set(Evas_Object *o, int sources, int sinks)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 
-	if( (priv->cols == cols) && (priv->rows == rows) )
+	if( (priv->sources == sources) && (priv->sinks == sinks) )
 		return;
 
 	_patcher_smart_deinit(o);
 
-	priv->cols = cols;
-	priv->rows = rows;
+	priv->sources = sources;
+	priv->sinks = sinks;
 
 	_patcher_smart_init(o);
 }
 
 void
-patcher_object_dimension_get(Evas_Object *o, int *cols, int *rows)
+patcher_object_dimension_get(Evas_Object *o, int *sources, int *sinks)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 
-	if(cols)
-		*cols = priv->cols;
-	if(rows)
-		*rows = priv->rows;
+	if(sources)
+		*sources = priv->sources;
+	if(sinks)
+		*sinks = priv->sinks;
 }
 
 void
-patcher_object_state_set(Evas_Object *o, int col, int row, Eina_Bool state)
+patcher_object_state_set(Evas_Object *o, int source, int sink, Eina_Bool state)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 
-	priv->state[col][row] = state;
-	Evas_Object *child = evas_object_table_child_get(priv->matrix, col, row);
+	priv->state[source][sink] = state;
+	Evas_Object *child = evas_object_table_child_get(priv->matrix, source, sink);
 	edje_object_signal_emit(child, state ? "on" : "off", PATCHER_UI);
+}
+
+void
+patcher_object_source_data_set(Evas_Object *o, int source, void *data)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+
+	if(priv->data.source)
+		priv->data.source[source] = data;
+}
+
+void
+patcher_object_sink_data_set(Evas_Object *o, int sink, void *data)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+
+	if(priv->data.sink)
+		priv->data.sink[sink] = data;
 }
