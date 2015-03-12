@@ -103,6 +103,17 @@ struct _app_t {
 	Eina_Inlist *mods;
 	Eina_Inlist *conns;
 
+	struct {
+		Eina_List *audio_in;
+		Eina_List *audio_out;
+		Eina_List *cv_in;
+		Eina_List *cv_out;
+		Eina_List *control_in;
+		Eina_List *control_out;
+		Eina_List *atom_in;
+		Eina_List *atom_out;
+	} patches;
+
 	double sample_rate;
 	uint32_t period_size;
 	uint32_t seq_size;
@@ -118,6 +129,11 @@ struct _app_t {
 		Evas_Object *modlist;
 		Evas_Object *modgrid;
 		Evas_Object *patchbox;
+
+		Evas_Object *audiomatrix;
+		Evas_Object *cvmatrix;
+		Evas_Object *controlmatrix;
+		Evas_Object *atommatrix;
 
 		Elm_Genlist_Item_Class *plugitc;
 		Elm_Genlist_Item_Class *moditc;
@@ -236,6 +252,8 @@ struct _port_t {
 	float dflt;
 	float min;
 	float max;
+
+	int patched; // expose in patchbay
 			
 	struct {
 		Evas_Object *widget;

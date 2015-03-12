@@ -29,4 +29,7 @@ patcher_object_dimension_set(Evas_Object *o, int cols, int rows);
 void
 patcher_object_dimension_get(Evas_Object *o, int *cols, int *rows);
 
+void
+patcher_object_state_set(Evas_Object *o, int col, int row, Eina_Bool state);
+
 #endif // _SYNTHPOD_PATCHER_H

@@ -66,13 +66,14 @@ _node_toggled(void *data, Evas_Object *edj, const char *emission, const char *so
 {
 	Evas_Object *o = data;
 	patcher_t *priv = evas_object_smart_data_get(o);
+	int max = priv->rows > priv->cols ? priv->rows : priv->cols;
 	unsigned short i, j;
 
 	evas_object_table_pack_get(priv->matrix, edj, &i, &j, NULL, NULL);
 
 	event_t ev = {
-		.source = i,
-		.sink = j
+		.source = i + priv->rows - max,
+		.sink = j + priv->cols - max
 	};
 	
 	if(priv->state[i][j]) // is on
@@ -96,7 +97,7 @@ _patcher_smart_init(Evas_Object *o)
 	patcher_t *priv = evas_object_smart_data_get(o);
 	Evas_Object *elmnt;
 
-	if(priv->rows + priv->cols == 0)
+	if( !(priv->rows && priv->cols) )
 		return;
 
 	// create state
@@ -272,4 +273,14 @@ patcher_object_dimension_get(Evas_Object *o, int *cols, int *rows)
 		*cols = priv->cols;
 	if(rows)
 		*rows = priv->rows;
+}
+
+void
+patcher_object_state_set(Evas_Object *o, int col, int row, Eina_Bool state)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+
+	priv->state[col][row] = state;
+	Evas_Object *child = evas_object_table_child_get(priv->matrix, col, row);
+	edje_object_signal_emit(child, state ? "on" : "off", PATCHER_UI);
 }

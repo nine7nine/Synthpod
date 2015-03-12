@@ -864,6 +864,111 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 
 // non-rt ui-thread
 static void
+_patches_update(app_t *app)
+{
+	int audio_ins = eina_list_count(app->patches.audio_in);
+	int audio_outs = eina_list_count(app->patches.audio_out);
+	int cv_ins = eina_list_count(app->patches.cv_in);
+	int cv_outs = eina_list_count(app->patches.cv_out);
+	int control_ins = eina_list_count(app->patches.control_in);
+	int control_outs = eina_list_count(app->patches.control_out);
+	int atom_ins = eina_list_count(app->patches.atom_in);
+	int atom_outs = eina_list_count(app->patches.atom_out);
+
+	patcher_object_dimension_set(app->ui.audiomatrix, audio_ins, audio_outs);
+	patcher_object_dimension_set(app->ui.cvmatrix, cv_ins, cv_outs);
+	patcher_object_dimension_set(app->ui.controlmatrix, control_ins, control_outs);
+	patcher_object_dimension_set(app->ui.atommatrix, atom_ins, atom_outs);
+
+	Eina_List *l, *k;
+	port_t *source, *sink;
+	EINA_LIST_FOREACH(app->patches.audio_in, l, source)
+		EINA_LIST_FOREACH(app->patches.audio_out, k, sink)
+		{
+			// TODO update patchbays 
+			patcher_object_state_set(app->ui.audiomatrix, 0, 0, EINA_TRUE);
+		}
+}
+
+// non-rt ui-thread
+static void
+_patched_changed(void *data, Evas_Object *obj, void *event)
+{
+	port_t *port = data;
+	mod_t *mod = port->mod;
+	app_t *app = mod->app;
+
+	int state = elm_check_state_get(obj);
+	port->patched = state;
+	
+	if(state) // enable on patchbay
+	{
+		if(port->type == app->regs.port.audio.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.audio_in = eina_list_append(app->patches.audio_in, port);
+			else
+				app->patches.audio_out = eina_list_append(app->patches.audio_out, port);
+		}
+		else if(port->type == app->regs.port.cv.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.cv_in = eina_list_append(app->patches.cv_in, port);
+			else
+				app->patches.cv_out = eina_list_append(app->patches.cv_out, port);
+		}
+		else if(port->type == app->regs.port.control.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.control_in = eina_list_append(app->patches.control_in, port);
+			else
+				app->patches.control_out = eina_list_append(app->patches.control_out, port);
+		}
+		else if(port->type == app->regs.port.atom.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.atom_in = eina_list_append(app->patches.atom_in, port);
+			else
+				app->patches.atom_out = eina_list_append(app->patches.atom_out, port);
+		}
+	}
+	else // disable on patybay
+	{
+		if(port->type == app->regs.port.audio.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.audio_in = eina_list_remove(app->patches.audio_in, port);
+			else
+				app->patches.audio_out = eina_list_remove(app->patches.audio_out, port);
+		}
+		else if(port->type == app->regs.port.cv.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.cv_in = eina_list_remove(app->patches.cv_in, port);
+			else
+				app->patches.cv_out = eina_list_remove(app->patches.cv_out, port);
+		}
+		else if(port->type == app->regs.port.control.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.control_in = eina_list_remove(app->patches.control_in, port);
+			else
+				app->patches.control_out = eina_list_remove(app->patches.control_out, port);
+		}
+		else if(port->type == app->regs.port.atom.urid)
+		{
+			if(port->direction == app->regs.port.input.urid)
+				app->patches.atom_in = eina_list_remove(app->patches.atom_in, port);
+			else
+				app->patches.atom_out = eina_list_remove(app->patches.atom_out, port);
+		}
+	}
+
+	_patches_update(app);
+}
+
+// non-rt ui-thread
+static void
 _check_changed(void *data, Evas_Object *obj, void *event)
 {
 	port_t *port = data;
@@ -922,6 +1027,19 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	const LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 	type_str = lilv_node_as_string(name_node);
 
+	Evas_Object *hbox = elm_box_add(obj);
+	elm_box_horizontal_set(hbox, EINA_TRUE);
+	elm_box_homogeneous_set(hbox, EINA_FALSE);
+	elm_box_padding_set(hbox, 0, 0);
+	evas_object_size_hint_weight_set(hbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(hbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(hbox);
+	
+	Evas_Object *patched = elm_check_add(hbox);
+	evas_object_smart_callback_add(patched, "changed", _patched_changed, port);
+	evas_object_show(patched);
+	elm_box_pack_end(hbox, patched);
+
 	Evas_Object *child = NULL;
 	if(port->type == app->regs.port.control.urid)
 	{
@@ -931,7 +1049,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 		if(toggled)
 		{
-			Evas_Object *check = elm_check_add(obj);
+			Evas_Object *check = elm_check_add(hbox);
 			elm_check_state_set(check, port->dflt > 0.f ? EINA_TRUE : EINA_FALSE);
 			elm_object_style_set(check, "toggle");
 			evas_object_smart_callback_add(check, "changed", _check_changed, port);
@@ -941,10 +1059,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		}
 		else if(port->points)
 		{
-			Evas_Object *hbox = elm_box_add(obj);
-			elm_box_horizontal_set(hbox, EINA_TRUE);
-			elm_box_homogeneous_set(hbox, EINA_FALSE);
-
 			Evas_Object *lbl = elm_label_add(hbox);
 			elm_object_text_set(lbl, type_str);
 			evas_object_show(lbl);
@@ -960,16 +1074,12 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 				elm_object_item_data_set(elmnt, (void *)point);
 			}
 			evas_object_smart_callback_add(seg, "changed", _segment_control_changed, port);
-			evas_object_size_hint_weight_set(seg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(seg, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(seg);
-			elm_box_pack_end(hbox, seg);
 
-			child = hbox;
+			child = seg;
 		}
 		else // integer or float
 		{
-			Evas_Object *sldr = elm_slider_add(obj);
+			Evas_Object *sldr = elm_slider_add(hbox);
 			elm_slider_horizontal_set(sldr, EINA_TRUE);
 			elm_slider_unit_format_set(sldr, integer ? "%.0f" : "%.4f");
 			elm_slider_min_max_set(sldr, port->min, port->max);
@@ -984,7 +1094,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	else if(port->type == app->regs.port.audio.urid
 		|| port->type == app->regs.port.cv.urid)
 	{
-		Evas_Object *prog = elm_progressbar_add(obj);
+		Evas_Object *prog = elm_progressbar_add(hbox);
 		elm_progressbar_horizontal_set(prog, EINA_TRUE);
 		elm_progressbar_unit_format_set(prog, NULL);
 		elm_progressbar_value_set(prog, 0.f);
@@ -992,6 +1102,9 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		child = prog;
 		elm_object_text_set(child, type_str);
 	}
+	
+	if(port->patched)
+		elm_check_state_set(patched, EINA_TRUE);
 
 	if(child)
 	{
@@ -999,6 +1112,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_weight_set(child, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(child, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(child);
+		elm_box_pack_end(hbox, child);
 	}
 
 	// subscribe to port
@@ -1018,7 +1132,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	}
 
 	port->std.widget = child;
-	return child;
+	return hbox;
 }
 
 // non-rt ui-thread
@@ -1236,6 +1350,26 @@ _modgrid_del(void *data, Evas_Object *obj)
 	mod->ui.eo.widget = NULL;
 }
 
+static void
+_matrix_connect(void *data, Evas_Object *obj, void *event_info)
+{
+	app_t *app = data;
+	int *ev = event_info;
+
+	printf("_matrix_connect: %i %i\n", ev[0], ev[1]);
+	//TODO
+}
+
+static void
+_matrix_disconnect(void *data, Evas_Object *obj, void *event_info)
+{
+	app_t *app = data;
+	int *ev = event_info;
+
+	printf("_matrix_disconnect: %i %i\n", ev[0], ev[1]);
+	//TODO
+}
+
 // non-rt ui-thread
 app_t *
 app_new()
@@ -1397,15 +1531,22 @@ app_new()
 	evas_object_show(app->ui.patchbox);
 	elm_object_part_content_set(app->ui.patchpane, "right", app->ui.patchbox);
 
+	Evas_Object *matrix [4];
 	for(int i=0; i<4; i++)
 	{
-		Evas_Object *matrix = patcher_object_add(app->ui.patchbox);
-		patcher_object_dimension_set(matrix, 10-i, 10+i);
-		evas_object_size_hint_weight_set(matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_show(matrix);
-		elm_box_pack_end(app->ui.patchbox, matrix);
+		matrix[i] = patcher_object_add(app->ui.patchbox);
+		//patcher_object_dimension_set(matrix[i], 0, 0);
+		evas_object_smart_callback_add(matrix[i], "connect", _matrix_connect, app);
+		evas_object_smart_callback_add(matrix[i], "disconnect", _matrix_disconnect, app);
+		evas_object_size_hint_weight_set(matrix[i], EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(matrix[i], EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(matrix[i]);
+		elm_box_pack_end(app->ui.patchbox, matrix[i]);
 	}
+	app->ui.audiomatrix = matrix[0];
+	app->ui.cvmatrix = matrix[1];
+	app->ui.controlmatrix = matrix[2];
+	app->ui.atommatrix = matrix[3];
 
 	app->ui.modlist = elm_genlist_add(app->ui.modpane);
 	elm_genlist_select_mode_set(app->ui.modlist, ELM_OBJECT_SELECT_MODE_DEFAULT);
@@ -1792,16 +1933,29 @@ app_mod_add(app_t *app, const char *uri)
 		tar->mod = mod;
 		tar->tar = port;
 		tar->index = i;
+		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
+			? app->regs.port.input.urid
+			: app->regs.port.output.urid;
 
 		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
 			size = app->period_size * sizeof(float);
 			tar->type =  app->regs.port.audio.urid;
+			tar->patched = 1;
+			if(tar->direction == app->regs.port.input.urid)
+				app->patches.audio_in = eina_list_append(app->patches.audio_in, tar);
+			else
+				app->patches.audio_out = eina_list_append(app->patches.audio_out, tar);
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
 			size = app->period_size * sizeof(float);
 			tar->type = app->regs.port.cv.urid;
+			tar->patched = 1;
+			if(tar->direction == app->regs.port.input.urid)
+				app->patches.cv_in = eina_list_append(app->patches.cv_in, tar);
+			else
+				app->patches.cv_out = eina_list_append(app->patches.cv_out, tar);
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.control.node))
 		{
@@ -1828,13 +1982,16 @@ app_mod_add(app_t *app, const char *uri)
 			tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
 				? app->regs.port.sequence.urid
 				: 0;
+			tar->patched = 1;
+			if(tar->direction == app->regs.port.input.urid)
+				app->patches.atom_in = eina_list_append(app->patches.atom_in, tar);
+			else
+				app->patches.atom_out = eina_list_append(app->patches.atom_out, tar);
 		}
 		else
 			tar->type = 0; // ignored
-
-		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
-			? app->regs.port.input.urid
-			: app->regs.port.output.urid;
+			
+		_patches_update(app);
 
 		// allocate 8-byte aligned buffer
 		posix_memalign(&tar->buf, 8, size); //TODO mlock
