@@ -251,7 +251,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 
 				if(port->protocol == app->regs.port.float_protocol.urid)
 				{
-					float val = *(float *)port->buf;
+					float val = *(float *)port->buf; //FIXME relinked buffers
 					if(val != port->last)
 					{
 						// update last value
@@ -277,7 +277,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				else if(port->protocol == app->regs.port.peak_protocol.urid)
 				{
-					const float *buf = (const float *)port->buf;
+					const float *buf = (const float *)port->buf; //FIXME relinked buffers
 
 					// find peak value in current period
 					float peak = 0.f;
@@ -322,7 +322,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				else if(port->protocol == app->regs.port.event_transfer.urid)
 				{
-					const LV2_Atom_Sequence *seq = port->buf;
+					const LV2_Atom_Sequence *seq = port->buf; //FIXME relinked buffers
 					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // empty seq
 						continue;
 
@@ -349,7 +349,7 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				else if(port->protocol == app->regs.port.atom_transfer.urid)
 				{
-					const LV2_Atom *atom = port->buf;
+					const LV2_Atom *atom = port->buf; //FIXME relinked buffers
 					if(atom->size == 0) // empty atom
 						continue;
 					
@@ -779,7 +779,6 @@ _patches_update(app_t *app)
 			if(!port->selected)
 				continue; // ignore unselected ports
 			
-			//patcher_object_state_set(app->ui.matrix[port->type], 0, 0, EINA_TRUE);
 			if(port->direction == PORT_DIRECTION_OUTPUT) // source
 			{
 				patcher_object_source_data_set(app->ui.matrix[port->type],
@@ -791,7 +790,6 @@ _patches_update(app_t *app)
 					count[port->direction][port->type], port);
 			}
 		
-			printf("%p\n", port);
 			count[port->direction][port->type] += 1;
 		}
 	}
@@ -1413,17 +1411,19 @@ _modgrid_del(void *data, Evas_Object *obj)
 }
 
 static void
-_matrix_connect(void *data, Evas_Object *obj, void *event_info)
+_matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 {
 	app_t *app = data;
-	port_t **ports = event_info;
-	port_t *source = ports[0];
-	port_t *sink = ports[1];
+	patcher_event_t *ev = event_info;
+	patcher_event_t *source = &ev[0];
+	patcher_event_t *sink = &ev[1];
+	port_t *source_port = source->ptr;
+	port_t *sink_port = sink->ptr;
 
-	if(sink->links > 0) // TODO only one link per sink allowed for now
+	if(sink_port->links > 0) // TODO only one link per sink allowed for now
 		return;
 
-	printf("_matrix_connect: %p %p\n", source, sink);
+	printf("_matrix_connect_request: %p %p\n", source->ptr, sink->ptr);
 
 	void *ptr;
 	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
@@ -1431,27 +1431,31 @@ _matrix_connect(void *data, Evas_Object *obj, void *event_info)
 		job_t *job = ptr;
 
 		job->type = JOB_TYPE_CONN_ADD;
-		job->payload.conn.source = source;
-		job->payload.conn.sink = sink;
+		job->payload.conn.source = source->ptr;
+		job->payload.conn.sink = sink->ptr;
 
 		varchunk_write_advance(app->rt.to, JOB_SIZE);
 
-		sink->links += 1;
-		source->links += 1;
+		sink_port->links += 1;
+		source_port->links += 1;
+
+		patcher_object_connected_set(obj, source->index, sink->index, EINA_TRUE);
 	}
 	else
 		fprintf(stderr, "rt varchunk buffer overrun");
 }
 
 static void
-_matrix_disconnect(void *data, Evas_Object *obj, void *event_info)
+_matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 {
 	app_t *app = data;
-	port_t **ports = event_info;
-	port_t *source = ports[0];
-	port_t *sink = ports[1];
+	patcher_event_t *ev = event_info;
+	patcher_event_t *source = &ev[0];
+	patcher_event_t *sink = &ev[1];
+	port_t *source_port = source->ptr;
+	port_t *sink_port = sink->ptr;
 
-	printf("_matrix_disconnect: %p %p\n", source, sink);
+	printf("_matrix_disconnect_request: %p %p\n", source->ptr, sink->ptr);
 
 	void *ptr;
 	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
@@ -1459,13 +1463,15 @@ _matrix_disconnect(void *data, Evas_Object *obj, void *event_info)
 		job_t *job = ptr;
 
 		job->type = JOB_TYPE_CONN_DEL;
-		job->payload.conn.source = source;
-		job->payload.conn.sink = sink;
+		job->payload.conn.source = source->ptr;
+		job->payload.conn.sink = sink->ptr;
 
 		varchunk_write_advance(app->rt.to, JOB_SIZE);
 		
-		sink->links -= 1;
-		source->links -= 1;
+		sink_port->links -= 1;
+		source_port->links -= 1;
+
+		patcher_object_connected_set(obj, source->index, sink->index, EINA_FALSE);
 	}
 	else
 		fprintf(stderr, "rt varchunk buffer overrun");
@@ -1637,9 +1643,10 @@ app_new()
 	for(int t=0; t<PORT_TYPE_NUM; t++)
 	{
 		Evas_Object *matrix = patcher_object_add(app->ui.patchbox);
-		//patcher_object_dimension_set(matrix, 0, 0);
-		evas_object_smart_callback_add(matrix, "connect", _matrix_connect, app);
-		evas_object_smart_callback_add(matrix, "disconnect", _matrix_disconnect, app);
+		evas_object_smart_callback_add(matrix, "connect,request",
+			_matrix_connect_request, app);
+		evas_object_smart_callback_add(matrix, "disconnect,request",
+			_matrix_disconnect_request, app);
 		evas_object_size_hint_weight_set(matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(matrix);

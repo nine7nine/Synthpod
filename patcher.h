@@ -20,6 +20,13 @@
 
 #include <Evas.h>
 
+typedef struct _patcher_event_t patcher_event_t;
+
+struct _patcher_event_t {
+	int index;
+	void *ptr;
+};
+
 Evas_Object *
 patcher_object_add(Evas *e);
 
@@ -30,7 +37,7 @@ void
 patcher_object_dimension_get(Evas_Object *o, int *sources, int *sinks);
 
 void
-patcher_object_state_set(Evas_Object *o, int source, int sink, Eina_Bool state);
+patcher_object_connected_set(Evas_Object *o, int source, int sink, Eina_Bool state);
 
 void
 patcher_object_source_data_set(Evas_Object *o, int source, void *data);

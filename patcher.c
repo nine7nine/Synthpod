@@ -21,11 +21,11 @@
 
 #define PATCHER_UI "/synthpod/patcher/ui"
 #define PATCHER_TYPE "Matrix Patcher"
-#define PATCHER_CONNECT "connect"
-#define PATCHER_DISCONNECT "disconnect"
+
+#define PATCHER_CONNECT_REQUEST "connect,request"
+#define PATCHER_DISCONNECT_REQUEST "disconnect,request"
 
 typedef struct _patcher_t patcher_t;
-typedef struct _event_t event_t;
 
 struct _patcher_t {
 	Evas_Object *matrix;
@@ -38,14 +38,9 @@ struct _patcher_t {
 	int sinks;
 };
 
-struct _event_t {
-	void *source;
-	void *sink;
-};
-
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
-	{PATCHER_CONNECT, "(ii)"},
-	{PATCHER_DISCONNECT, "(ii)"},
+	{PATCHER_CONNECT_REQUEST, "(ip)(ip)"},
+	{PATCHER_DISCONNECT_REQUEST, "(ip)(ip)"},
 	{NULL, NULL}
 };
 
@@ -74,24 +69,24 @@ _node_toggled(void *data, Evas_Object *edj, const char *emission, const char *so
 	unsigned short src, snk;
 
 	evas_object_table_pack_get(priv->matrix, edj, &src, &snk, NULL, NULL);
+	int src_index = src + priv->sources - max;
+	int snk_index = snk + priv->sinks - max;
 
-	event_t ev = {
-		.source = priv->data.source[src + priv->sources - max],
-		.sink = priv->data.sink[snk + priv->sinks - max]
+	patcher_event_t ev [2] = {
+		{
+			.index = src_index,
+			.ptr = priv->data.source[src_index]
+		},
+		{
+			.index = snk_index,
+			.ptr = priv->data.sink[snk_index]
+		}
 	};
 	
-	if(priv->state[src][snk]) // is on
-	{
-		evas_object_smart_callback_call(o, PATCHER_DISCONNECT, (void *)&ev);
-		edje_object_signal_emit(edj, "off", PATCHER_UI);
-	}
-	else // is off
-	{
-		evas_object_smart_callback_call(o, PATCHER_CONNECT, (void *)&ev);
-		edje_object_signal_emit(edj, "on", PATCHER_UI);
-	}
-
-	priv->state[src][snk] ^= 1; // toggle state
+	if(priv->state[src][snk]) // is on currently
+		evas_object_smart_callback_call(o, PATCHER_DISCONNECT_REQUEST, (void *)ev);
+	else // is off currently
+		evas_object_smart_callback_call(o, PATCHER_CONNECT_REQUEST, (void *)ev);
 }
 
 static void
@@ -297,13 +292,31 @@ patcher_object_dimension_get(Evas_Object *o, int *sources, int *sinks)
 }
 
 void
-patcher_object_state_set(Evas_Object *o, int source, int sink, Eina_Bool state)
+patcher_object_connected_set(Evas_Object *o, int source, int sink, Eina_Bool state)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
+	Evas_Object *edj = evas_object_table_child_get(priv->matrix, source, sink);
+	
+	patcher_event_t ev [2] = {
+		{
+			.index = source,
+			.ptr = priv->data.source[source]
+		},
+		{
+			.index = sink,
+			.ptr = priv->data.sink[sink]
+		}
+	};
+
+	if(priv->state[source][sink] == state)
+		return; // no change, thus nothing to do
+	
+	if(state) // enable node
+		edje_object_signal_emit(edj, "on", PATCHER_UI);
+	else // disable node
+		edje_object_signal_emit(edj, "off", PATCHER_UI);
 
 	priv->state[source][sink] = state;
-	Evas_Object *child = evas_object_table_child_get(priv->matrix, source, sink);
-	edje_object_signal_emit(child, state ? "on" : "off", PATCHER_UI);
 }
 
 void
