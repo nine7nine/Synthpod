@@ -1294,33 +1294,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					mod->ui_features);
 			}
 
-	/* FIXME
-	LilvNodes* notes               = lilv_world_find_nodes(
-		lworld, lilv_ui_get_uri(ui), ui_portNotification, NULL);
-	LILV_FOREACH(nodes, n, notes) {
-		const LilvNode* note = lilv_nodes_get(notes, n);
-		const LilvNode* sym  = lilv_world_get(lworld, note, lv2_symbol, NULL);
-		const LilvNode* plug = lilv_world_get(lworld, note, ui_plugin, NULL);
-		if (plug && !lilv_node_is_uri(plug)) {
-			world->log().error(fmt("%1% UI has non-URI ui:plugin\n")
-			                   % block->plugin()->uri().c_str());
-			continue;
-		}
-		if (plug && strcmp(lilv_node_as_uri(plug), block->plugin()->uri().c_str())) {
-			continue;  // Notification is for another plugin
-		}
-		if (sym) {
-			uint32_t index = lv2_ui_port_index(ret.get(), lilv_node_as_string(sym));
-			if (index != LV2UI_INVALID_PORT_INDEX) {
-				lv2_ui_subscribe(ret.get(), index, 0, NULL);
-				ret->_subscribed_ports.insert(index);
-			}
-		}
-	}
-	lilv_nodes_free(notes);
-	*/
-
-			// subscribe to all ports
+			// subscribe automatically to all non-atom ports by default
 			for(int i=0; i<mod->num_ports; i++)
 			{
 				port_t *port = &mod->ports[i];
@@ -1336,6 +1310,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
 				else if(port->type == PORT_TYPE_CV)
 					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
+				/*
 				else if(port->type == PORT_TYPE_ATOM)
 				{
 					if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
@@ -1343,7 +1318,68 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					else
 						_port_subscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
 				}
+				*/
 			}
+
+			// subscribe manually for port notifications
+			const LilvNode *plug_uri_node = lilv_plugin_get_uri(mod->plug);
+			LilvNode *lv2_symbol = lilv_new_uri(app->world, LV2_CORE__symbol);
+			LilvNode *lv2_index = lilv_new_uri(app->world, LV2_CORE__index);
+			LilvNode *ui_plugin = lilv_new_uri(app->world, LV2_UI__plugin);
+			LilvNode *ui_prot = lilv_new_uri(app->world, LV2_UI_PREFIX"protocol");
+
+			LilvNodes *notifs = lilv_world_find_nodes(app->world,
+				lilv_ui_get_uri(mod->ui.eo.ui), app->regs.port.notification.node, NULL);
+			LILV_FOREACH(nodes, n, notifs)
+			{
+				const LilvNode *notif = lilv_nodes_get(notifs, n);
+				const LilvNode *sym = lilv_world_get(app->world, notif, lv2_symbol, NULL);
+				const LilvNode *ind = lilv_world_get(app->world, notif, lv2_index, NULL);
+				const LilvNode *plug = lilv_world_get(app->world, notif, ui_plugin, NULL);
+				const LilvNode *prot = lilv_world_get(app->world, notif, ui_prot, NULL);
+
+				//if(plug && strcmp(lilv_node_as_uri(plug), lilv_node_as_uri(plug_uri_node)))
+				if(plug && !lilv_node_equals(plug, plug_uri_node))
+					continue; // notification not for this plugin 
+
+				uint32_t index = LV2UI_INVALID_PORT_INDEX;
+				if(ind)
+				{
+					index = lilv_node_as_int(ind);
+				}
+				else if(sym)
+				{
+					const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, sym);
+					index = lilv_port_get_index(mod->plug, port);
+				}
+
+				if(index != LV2UI_INVALID_PORT_INDEX)
+				{
+					if(lilv_node_equals(prot, app->regs.port.float_protocol.node))
+						_port_subscribe(mod, index, app->regs.port.float_protocol.urid, NULL);
+					else if(lilv_node_equals(prot, app->regs.port.peak_protocol.node))
+						_port_subscribe(mod, index, app->regs.port.peak_protocol.urid, NULL);
+					else if(lilv_node_equals(prot, app->regs.port.atom_transfer.node))
+						_port_subscribe(mod, index, app->regs.port.atom_transfer.urid, NULL);
+					else if(lilv_node_equals(prot, app->regs.port.event_transfer.node))
+						_port_subscribe(mod, index, app->regs.port.event_transfer.urid, NULL);
+					else
+						; //TODO protocol not supported
+
+					printf("port has notification for: %s %s %u %u %u %u\n",
+						lilv_node_as_string(sym),
+						lilv_node_as_uri(prot),
+						index,
+						mod->ports[index].protocol,
+						app->regs.port.atom_transfer.urid,
+						app->regs.port.event_transfer.urid);
+				}
+			}
+			lilv_nodes_free(notifs);
+			lilv_node_free(lv2_symbol);
+			lilv_node_free(lv2_index);
+			lilv_node_free(ui_plugin);
+			lilv_node_free(ui_prot);
 
 			// add idle animator
 			if(mod->ui.eo.idle_interface)
@@ -1423,7 +1459,9 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 	if(sink_port->links > 0) // TODO only one link per sink allowed for now
 		return;
 
-	printf("_matrix_connect_request: %p %p\n", source->ptr, sink->ptr);
+	printf("_matrix_connect_request: %p (%i) %p (%i)\n",
+		source->ptr, source->index,
+		sink->ptr, sink->index);
 
 	void *ptr;
 	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
@@ -1455,7 +1493,9 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 	port_t *source_port = source->ptr;
 	port_t *sink_port = sink->ptr;
 
-	printf("_matrix_disconnect_request: %p %p\n", source->ptr, sink->ptr);
+	printf("_matrix_disconnect_request: %p (%i) %p (%i)\n",
+		source->ptr, source->index,
+		sink->ptr, sink->index);
 
 	void *ptr;
 	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
