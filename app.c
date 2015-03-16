@@ -1705,11 +1705,16 @@ app_new()
 	app->regs.port.integer.node = lilv_new_uri(app->world, LV2_CORE__integer);
 	app->regs.port.toggled.node = lilv_new_uri(app->world, LV2_CORE__toggled);
 
-	app->regs.port.float_protocol.node = lilv_new_uri(app->world, LV2_UI_PREFIX"floatProtocol");
-	app->regs.port.peak_protocol.node = lilv_new_uri(app->world, LV2_UI_PREFIX"peakProtocol");
-	app->regs.port.atom_transfer.node = lilv_new_uri(app->world, LV2_ATOM__atomTransfer);
-	app->regs.port.event_transfer.node = lilv_new_uri(app->world, LV2_ATOM__eventTransfer);
-	app->regs.port.notification.node = lilv_new_uri(app->world, LV2_UI__portNotification);
+	app->regs.port.float_protocol.node = lilv_new_uri(app->world,
+		LV2_UI_PREFIX"floatProtocol");
+	app->regs.port.peak_protocol.node = lilv_new_uri(app->world,
+		LV2_UI_PREFIX"peakProtocol");
+	app->regs.port.atom_transfer.node = lilv_new_uri(app->world,
+		LV2_ATOM__atomTransfer);
+	app->regs.port.event_transfer.node = lilv_new_uri(app->world,
+		LV2_ATOM__eventTransfer);
+	app->regs.port.notification.node = lilv_new_uri(app->world,
+		LV2_UI__portNotification);
 
 	app->regs.work.schedule.node = lilv_new_uri(app->world, LV2_WORKER__schedule);
 
@@ -1742,11 +1747,16 @@ app_new()
 	app->regs.port.integer.urid = ext_urid_map(app->ext_urid, LV2_CORE__integer);
 	app->regs.port.toggled.urid= ext_urid_map(app->ext_urid, LV2_CORE__toggled);
 
-	app->regs.port.float_protocol.urid = ext_urid_map(app->ext_urid, LV2_UI_PREFIX"floatProtocol");
-	app->regs.port.peak_protocol.urid = ext_urid_map(app->ext_urid, LV2_UI_PREFIX"peakProtocol");
-	app->regs.port.atom_transfer.urid = ext_urid_map(app->ext_urid, LV2_ATOM__atomTransfer);
-	app->regs.port.event_transfer.urid = ext_urid_map(app->ext_urid, LV2_ATOM__eventTransfer);
-	app->regs.port.notification.urid = ext_urid_map(app->ext_urid, LV2_UI__portNotification);
+	app->regs.port.float_protocol.urid = ext_urid_map(app->ext_urid,
+		LV2_UI_PREFIX"floatProtocol");
+	app->regs.port.peak_protocol.urid = ext_urid_map(app->ext_urid,
+		LV2_UI_PREFIX"peakProtocol");
+	app->regs.port.atom_transfer.urid = ext_urid_map(app->ext_urid,
+		LV2_ATOM__atomTransfer);
+	app->regs.port.event_transfer.urid = ext_urid_map(app->ext_urid,
+		LV2_ATOM__eventTransfer);
+	app->regs.port.notification.urid = ext_urid_map(app->ext_urid,
+		LV2_UI__portNotification);
 
 	app->regs.work.schedule.urid = ext_urid_map(app->ext_urid, LV2_WORKER__schedule);
 
