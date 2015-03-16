@@ -194,8 +194,6 @@ struct _mod_t {
 
 	int selected;
 
-	volatile uint32_t dead;
-
 	// worker
 	struct {
 		const LV2_Worker_Interface *iface;
@@ -269,6 +267,8 @@ struct _mod_t {
 	LV2_Atom_Forge forge;
 };
 
+typedef struct _link_t link_t;
+
 struct _port_t {
 	int selected;
 
@@ -276,13 +276,16 @@ struct _port_t {
 	const LilvPort *tar;
 	uint32_t index;
 
-	int links; // how many?
+	// only for sink port
+	int num_sources;
+	port_t *sources [32]; // TODO how many?
 
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
 	port_buffer_type_t buffer_type; // none, sequence
 
 	volatile LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
+	int subscriptions; // subsriptions reference counter
 	LilvScalePoints *points;
 
 	void *buf;

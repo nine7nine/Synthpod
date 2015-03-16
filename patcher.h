@@ -42,4 +42,7 @@ patcher_object_source_data_set(Evas_Object *o, int source, void *data);
 void
 patcher_object_sink_data_set(Evas_Object *o, int sink, void *data);
 
+void
+patcher_object_realize(Evas_Object *o);
+
 #endif // _SYNTHPOD_PATCHER_H

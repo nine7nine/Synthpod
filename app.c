@@ -86,28 +86,78 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				case JOB_TYPE_MODULE_DEL:
 				{
-					// never called
+					mod_t *mod = job->payload.mod;
+					app->mods = eina_inlist_remove(app->mods, EINA_INLIST_GET(mod));
+
+					void *ptr;
+					if( (ptr = varchunk_write_request(app->rt.from, JOB_SIZE)) )
+					{
+						job_t *job = ptr;
+
+						job->type = JOB_TYPE_MODULE_DEL;
+						job->payload.mod = mod;
+
+						varchunk_write_advance(app->rt.from, JOB_SIZE);
+					}
+
+					//FIXME invalidate existing port connections
+
 					break;
 				}
 				case JOB_TYPE_CONN_ADD: // inject connection
 				{
 					const conn_t *conn = &job->payload.conn;
-					// rewire source port output buffer to sink input buffer
-					lilv_instance_connect_port(
-						conn->sink->mod->inst,
-						conn->sink->index,
-						conn->source->buf);
+
+					conn->sink->sources[conn->sink->num_sources] = conn->source;;
+					conn->sink->num_sources += 1; //TODO check <32
+
+					if(conn->sink->num_sources == 1)
+					{
+						// directly wire source port output buffer to sink input buffer
+						lilv_instance_connect_port(
+							conn->sink->mod->inst,
+							conn->sink->index,
+							conn->sink->sources[0]->buf);
+					}
+					else
+					{
+						// multiplex multiple source port output buffers to sink input buffer
+						lilv_instance_connect_port(
+							conn->sink->mod->inst,
+							conn->sink->index,
+							conn->sink->buf);
+					}
 
 					break;
 				}
 				case JOB_TYPE_CONN_DEL: // eject connection
 				{
 					const conn_t *conn = &job->payload.conn;
-					// rewire source port output buffer to itself 
-					lilv_instance_connect_port(
-						conn->sink->mod->inst,
-						conn->sink->index,
-						conn->sink->buf);
+
+					// update sources list 
+					for(int i=0, j=0; i<conn->sink->num_sources; i++)
+					{
+						if(conn->sink->sources[i] != conn->source)
+							conn->sink->sources[j++] = conn->sink->sources[i];
+					}
+					conn->sink->num_sources -= 1;
+
+					if(conn->sink->num_sources == 1)
+					{
+						// directly wire source port output buffer to sink input buffer
+						lilv_instance_connect_port(
+							conn->sink->mod->inst,
+							conn->sink->index,
+							conn->sink->sources[0]->buf);
+					}
+					else
+					{
+						// multiplex multiple source port output buffers to sink input buffer
+						lilv_instance_connect_port(
+							conn->sink->mod->inst,
+							conn->sink->index,
+							conn->sink->buf);
+					}
 
 					break;
 				}
@@ -117,53 +167,10 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 		}
 	}
 
-	//TODO FIXME
-	// clear atom inputs
+	// iterate over all modules
 	mod_t *mod;
 	EINA_INLIST_FOREACH(app->mods, mod)
 	{
-		if(mod->dead)
-			continue; // ignore dead mods
-
-		for(int i=0; i<mod->num_ports; i++)
-		{
-			port_t *port = &mod->ports[i];
-
-			if(  (port->type == PORT_TYPE_ATOM)
-				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
-			{
-				LV2_Atom_Sequence *seq = port->buf;
-
-				seq->atom.type = app->regs.port.sequence.urid;
-				seq->atom.size = port->direction == PORT_DIRECTION_INPUT
-					? sizeof(LV2_Atom_Sequence_Body) // empty sequence
-					: app->seq_size; // capacity
-			}
-		}
-	}
-
-	Eina_Inlist *l;
-	EINA_INLIST_FOREACH_SAFE(app->mods, l, mod)
-	{
-		if(mod->dead) // handle dead modules
-		{
-			// eject module
-			app->mods = eina_inlist_remove(app->mods, EINA_INLIST_GET(mod));
-
-			void *ptr;
-			if( (ptr = varchunk_write_request(app->rt.from, JOB_SIZE)) )
-			{
-				job_t *job = ptr;
-
-				job->type = JOB_TYPE_MODULE_DEL;
-				job->payload.mod = mod;
-
-				varchunk_write_advance(app->rt.from, JOB_SIZE);
-			}
-
-			continue; // skip dead modules
-		}
-
 		// handle work
 		if(mod->worker.iface && mod->worker.from)
 		{
@@ -179,8 +186,114 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 			if(mod->worker.iface->end_run)
 				mod->worker.iface->end_run(mod->handle);
 		}
+	
+		// clear atom sequence input / output buffers where needed
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
 
-		// handle ui pre
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+			{
+				if(port->num_sources == 1)
+					continue; // atom already cleared/filled by source (direct link)
+
+				LV2_Atom_Sequence *seq = port->buf;
+				seq->atom.type = app->regs.port.sequence.urid;
+				seq->atom.size = port->direction == PORT_DIRECTION_INPUT
+					? sizeof(LV2_Atom_Sequence_Body) // empty sequence
+					: app->seq_size; // capacity
+			}
+		}
+
+		// multiplex multiple sources to single sink where needed
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+
+			if(port->direction == PORT_DIRECTION_OUTPUT)
+				continue; // not a sink
+
+			if(port->num_sources > 1) // needs multiplexing
+			{
+				if(port->type == PORT_TYPE_CONTROL)
+				{
+					float *val = port->buf;
+					*val = 0; // init
+					for(int i=0; i<port->num_sources; i++)
+					{
+						float *src = port->sources[i]->buf;
+						*val += *src;
+					}
+				}
+				else if( (port->type == PORT_TYPE_AUDIO)
+							|| (port->type == PORT_TYPE_CV) )
+				{
+					float *val = port->buf;
+					memset(val, 0, app->period_size * sizeof(float)); // init
+					for(int i=0; i<port->num_sources; i++)
+					{
+						float *src = port->sources[i]->buf;
+						for(int j=0; j<app->period_size; j++)
+						{
+							val[j] += src[j];
+						}
+					}
+				}
+				else if( (port->type == PORT_TYPE_ATOM)
+							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+				{
+					lv2_atom_forge_set_buffer(&mod->forge, port->buf, app->seq_size);
+					LV2_Atom_Forge_Frame frame;
+					lv2_atom_forge_sequence_head(&mod->forge, &frame, 0);
+
+					LV2_Atom_Sequence *seq [32]; //TODO how big?
+					LV2_Atom_Event *itr [32]; //TODO how big?
+					for(int i=0; i<port->num_sources; i++)
+					{
+						seq[i] = port->sources[i]->buf;
+						itr[i] = lv2_atom_sequence_begin(&seq[i]->body);
+					}
+
+					while(1)
+					{
+						int nxt = -1;
+						int64_t frames = app->period_size;
+
+						// search for next event in timeline accross source ports
+						for(i=0; i<port->num_sources; i++)
+						{
+							if(lv2_atom_sequence_is_end(&seq[i]->body, seq[i]->atom.size, itr[i]))
+								continue; // reached sequence end
+							
+							if(itr[i]->time.frames < frames)
+							{
+								frames = itr[i]->time.frames;
+								nxt = i;
+							}
+						}
+
+						if(nxt >= 0) // next event found
+						{
+							// add event to forge
+							size_t len = sizeof(LV2_Atom) + itr[nxt]->body.size;
+							lv2_atom_forge_frame_time(&mod->forge, frames);
+							lv2_atom_forge_raw(&mod->forge, &itr[nxt]->body, len);
+							lv2_atom_forge_pad(&mod->forge, len);
+
+							// advance iterator
+							itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
+						}
+						else
+							break; // no more events to process
+					};
+					
+					lv2_atom_forge_pop(&mod->forge, &frame);
+				}
+			}
+		}
+
+		// handle port messages from ui
 		if(mod->ui.from)
 		{
 			const void *ptr;
@@ -189,8 +302,12 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 			{
 				const ui_write_t *ui_write = ptr;
 				const void *body = ptr + UI_WRITE_PADDED;
+				if(ui_write->port >= mod->num_ports)
+					continue;
 				port_t *port = &mod->ports[ui_write->port];
-				void *buf = port->buf;
+				void *buf = port->num_sources == 1
+					? port->sources[0]->buf // direct link to source output buffer
+					: port->buf; // empty (n==0) or multiplexed (n>1) link
 
 				if(ui_write->protocol == app->regs.port.float_protocol.urid)
 				{
@@ -248,11 +365,15 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 
 				if(port->protocol == 0) // no notification/subscription
 					continue;
+					
+				const void *buf = port->num_sources == 1
+					? port->sources[0]->buf // direct link to source buffer
+					: port->buf; // dummy (n==0) or multiplexed (n>1) link
 
 				if(port->protocol == app->regs.port.float_protocol.urid)
 				{
-					float val = *(float *)port->buf; //FIXME relinked buffers
-					if(val != port->last)
+					const float val = *(const float *)buf;
+					if(val != port->last) // has value changed since last time?
 					{
 						// update last value
 						port->last = val;
@@ -277,18 +398,19 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 				}
 				else if(port->protocol == app->regs.port.peak_protocol.urid)
 				{
-					const float *buf = (const float *)port->buf; //FIXME relinked buffers
+					const float *vec = (const float *)buf;
 
 					// find peak value in current period
 					float peak = 0.f;
 					for(int j=0; j<app->period_size; j++)
 					{
-						float val = fabs(buf[j]);
+						float val = fabs(vec[j]);
 						if(val > peak)
 							peak = val;
 					}
 
-					port->period_cnt++;
+					port->period_cnt += 1; // increase period counter
+					//printf("%u %f\n", port->period_cnt, peak);
 
 					if(  (peak != port->last) //TODO make below two configurable
 						&& (fabs(peak - port->last) > 0.001) // ignore smaller changes
@@ -320,9 +442,31 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 							; //TODO
 					}
 				}
+				else if(port->protocol == app->regs.port.atom_transfer.urid)
+				{
+					const LV2_Atom *atom = buf;
+					if(atom->size == 0) // empty atom
+						continue;
+					
+					void *ptr;
+					size_t request = UI_WRITE_PADDED + sizeof(LV2_Atom) + atom->size;
+					if( (ptr = varchunk_write_request(mod->ui.to, request)) )
+					{
+						ui_write_t *ui_write = ptr;
+						ui_write->size = sizeof(LV2_Atom) + atom->size;
+						ui_write->protocol = port->protocol;
+						ui_write->port = i;
+						ptr += UI_WRITE_PADDED;
+
+						memcpy(ptr, atom, sizeof(LV2_Atom) + atom->size);
+						varchunk_write_advance(mod->ui.to, request);
+					}
+					else
+						; //TODO
+				}
 				else if(port->protocol == app->regs.port.event_transfer.urid)
 				{
-					const LV2_Atom_Sequence *seq = port->buf; //FIXME relinked buffers
+					const LV2_Atom_Sequence *seq = buf;
 					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // empty seq
 						continue;
 
@@ -346,28 +490,6 @@ _pacemaker_cb(uv_timer_t *pacemaker)
 						else
 							; //TODO
 					}
-				}
-				else if(port->protocol == app->regs.port.atom_transfer.urid)
-				{
-					const LV2_Atom *atom = port->buf; //FIXME relinked buffers
-					if(atom->size == 0) // empty atom
-						continue;
-					
-					void *ptr;
-					size_t request = UI_WRITE_PADDED + sizeof(LV2_Atom) + atom->size;
-					if( (ptr = varchunk_write_request(mod->ui.to, request)) )
-					{
-						ui_write_t *ui_write = ptr;
-						ui_write->size = sizeof(LV2_Atom) + atom->size;
-						ui_write->protocol = port->protocol;
-						ui_write->port = i;
-						ptr += UI_WRITE_PADDED;
-
-						memcpy(ptr, atom, sizeof(LV2_Atom) + atom->size);
-						varchunk_write_advance(mod->ui.to, request);
-					}
-					else
-						; //TODO
 				}
 			}
 		}
@@ -403,6 +525,10 @@ _delete_request(void *data, Evas_Object *obj, void *event)
 	elm_exit();
 }
 
+//TODO forward declaration
+static void
+_patches_update(app_t *app);
+
 // non-rt ui-thread
 static Eina_Bool
 _rt_animator(void *data)
@@ -420,6 +546,7 @@ _rt_animator(void *data)
 			mod_t *mod = job->payload.mod;
 
 			app_mod_del(app, mod);
+			_patches_update(app);
 		}
 		else if(job->type == JOB_TYPE_CONN_DEL)
 		{
@@ -793,6 +920,9 @@ _patches_update(app_t *app)
 			count[port->direction][port->type] += 1;
 		}
 	}
+
+	for(int t=0; t<PORT_TYPE_NUM; t++)
+		patcher_object_realize(app->ui.matrix[t]);
 }
 
 // non-rt ui-thread
@@ -803,7 +933,6 @@ _modlist_check_changed(void *data, Evas_Object *obj, void *event_info)
 	app_t *app = mod->app;
 
 	mod->selected = elm_check_state_get(obj);
-	printf("_modlist_check_changed: %i\n", mod->selected);
 	_patches_update(app);
 }
 
@@ -953,10 +1082,12 @@ _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
 	{
 		port_t *port = &mod->ports[index];
 	
-		if(  (port->protocol == 0) // not already subscribed
-			&& _match_port_protocol(port, protocol, sizeof(float)) ) // matching protocols?
+		if(  ((port->protocol == 0) // no subscription?
+			&& _match_port_protocol(port, protocol, sizeof(float))) // matching protocols?
+			|| (port->protocol == protocol) ) // already has subscriptions
 		{
 			port->protocol = protocol; // atomic instruction!
+			port->subscriptions += 1;
 			return 0; // success
 		}
 	}
@@ -981,7 +1112,9 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 
 		if(port->protocol == protocol) // matching protocols?
 		{
-			port->protocol = 0; // atomic instruction! 
+			port->subscriptions -= 1;
+			if(port->subscriptions == 0)
+				port->protocol = 0; // atomic instruction! 
 			return 0; // success
 		}
 	}
@@ -1136,9 +1269,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		child = prog;
 		elm_object_text_set(child, type_str);
 	}
-	
-	if(port->selected)
-		elm_check_state_set(patched, EINA_TRUE);
 
 	if(child)
 	{
@@ -1148,6 +1278,9 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_show(child);
 		elm_box_pack_end(hbox, child);
 	}
+
+	if(port->selected)
+		elm_check_state_set(patched, EINA_TRUE);
 
 	// subscribe to port
 	const uint32_t i = port->index;
@@ -1178,7 +1311,7 @@ _modlist_std_del(void *data, Evas_Object *obj)
 	app_t *app = mod->app;
 
 	port->std.widget = NULL;
-	
+
 	// unsubscribe from port
 	const uint32_t i = port->index;
 	if(port->type == PORT_TYPE_CONTROL)
@@ -1201,8 +1334,18 @@ static void
 _modlist_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
+	app_t *app = mod->app;
+		
+	void *ptr;
+	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
+	{
+		job_t *job = ptr;
 
-	mod->dead = 1; // atomic instruction!
+		job->type = JOB_TYPE_MODULE_DEL;
+		job->payload.mod = mod;
+
+		varchunk_write_advance(app->rt.to, JOB_SIZE);
+	}
 }
 
 // non-rt ui-thread
@@ -1310,15 +1453,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
 				else if(port->type == PORT_TYPE_CV)
 					_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
-				/*
-				else if(port->type == PORT_TYPE_ATOM)
-				{
-					if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-						_port_subscribe(mod, i, app->regs.port.event_transfer.urid, NULL);
-					else
-						_port_subscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
-				}
-				*/
 			}
 
 			// subscribe manually for port notifications
@@ -1338,7 +1472,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 				const LilvNode *plug = lilv_world_get(app->world, notif, ui_plugin, NULL);
 				const LilvNode *prot = lilv_world_get(app->world, notif, ui_prot, NULL);
 
-				//if(plug && strcmp(lilv_node_as_uri(plug), lilv_node_as_uri(plug_uri_node)))
 				if(plug && !lilv_node_equals(plug, plug_uri_node))
 					continue; // notification not for this plugin 
 
@@ -1456,12 +1589,11 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 	port_t *source_port = source->ptr;
 	port_t *sink_port = sink->ptr;
 
-	if(sink_port->links > 0) // TODO only one link per sink allowed for now
-		return;
-
+	/*
 	printf("_matrix_connect_request: %p (%i) %p (%i)\n",
 		source->ptr, source->index,
 		sink->ptr, sink->index);
+	*/
 
 	void *ptr;
 	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
@@ -1473,9 +1605,6 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 		job->payload.conn.sink = sink->ptr;
 
 		varchunk_write_advance(app->rt.to, JOB_SIZE);
-
-		sink_port->links += 1;
-		source_port->links += 1;
 
 		patcher_object_connected_set(obj, source->index, sink->index, EINA_TRUE);
 	}
@@ -1493,9 +1622,11 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 	port_t *source_port = source->ptr;
 	port_t *sink_port = sink->ptr;
 
+	/*
 	printf("_matrix_disconnect_request: %p (%i) %p (%i)\n",
 		source->ptr, source->index,
 		sink->ptr, sink->index);
+	*/
 
 	void *ptr;
 	if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
@@ -1508,13 +1639,37 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 
 		varchunk_write_advance(app->rt.to, JOB_SIZE);
 		
-		sink_port->links -= 1;
-		source_port->links -= 1;
-
 		patcher_object_connected_set(obj, source->index, sink->index, EINA_FALSE);
 	}
 	else
 		fprintf(stderr, "rt varchunk buffer overrun");
+}
+
+static void
+_matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
+{
+	app_t *app = data;
+	patcher_event_t *ev = event_info;
+	patcher_event_t *source = &ev[0];
+	patcher_event_t *sink = &ev[1];
+	port_t *source_port = source->ptr;
+	port_t *sink_port = sink->ptr;
+
+	/*
+	printf("_matrix_realize_request: %p (%i) %p (%i)\n",
+		source->ptr, source->index,
+		sink->ptr, sink->index);
+	*/
+
+	//FIXME make this thread-safe
+	Eina_Bool linked = EINA_FALSE;
+	for(int i=0; i<sink_port->num_sources; i++)
+		if(source_port == sink_port->sources[i])
+		{
+			linked = EINA_TRUE;
+			break;
+		}
+	patcher_object_connected_set(obj, source->index, sink->index, linked);
 }
 
 // non-rt ui-thread
@@ -1687,6 +1842,8 @@ app_new()
 			_matrix_connect_request, app);
 		evas_object_smart_callback_add(matrix, "disconnect,request",
 			_matrix_disconnect_request, app);
+		evas_object_smart_callback_add(matrix, "realize,request",
+			_matrix_realize_request, app);
 		evas_object_size_hint_weight_set(matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(matrix);

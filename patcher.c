@@ -24,6 +24,7 @@
 
 #define PATCHER_CONNECT_REQUEST "connect,request"
 #define PATCHER_DISCONNECT_REQUEST "disconnect,request"
+#define PATCHER_REALIZE_REQUEST "realize,request"
 
 typedef struct _patcher_t patcher_t;
 
@@ -42,6 +43,7 @@ struct _patcher_t {
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
 	{PATCHER_CONNECT_REQUEST, "(ip)(ip)"},
 	{PATCHER_DISCONNECT_REQUEST, "(ip)(ip)"},
+	{PATCHER_REALIZE_REQUEST, "(ip)(ip)"},
 	{NULL, NULL}
 };
 
@@ -313,4 +315,27 @@ patcher_object_sink_data_set(Evas_Object *o, int sink, void *data)
 
 	if(priv->data.sink)
 		priv->data.sink[sink] = data;
+}
+
+void
+patcher_object_realize(Evas_Object *o)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+
+	for(int src=0; src<priv->sources; src++)
+		for(int snk=0; snk<priv->sinks; snk++)
+		{
+			patcher_event_t ev [2] = {
+				{
+					.index = src,
+					.ptr = priv->data.source[src]
+				},
+				{
+					.index = snk,
+					.ptr = priv->data.sink[snk]
+				}
+			};
+
+			evas_object_smart_callback_call(o, PATCHER_REALIZE_REQUEST, (void *)ev);
+		}
 }
