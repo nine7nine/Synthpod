@@ -68,3 +68,5 @@ add_custom_command(
 		${PROJECT_SOURCE_DIR}/patcher.edc)
 add_custom_target(THEME ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod.edj)
 install(FILES ${PROJECT_BINARY_DIR}/synthpod.edj DESTINATION ${APP_DIR})
+
+add_subdirectory(plugins)
