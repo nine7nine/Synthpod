@@ -18,7 +18,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include <uuid.h>
 #include <RtMidi.h>
 
 extern "C" {
@@ -165,14 +164,8 @@ activate(LV2_Handle instance)
 {
 	handle_t *handle = (handle_t *)instance;
 
-	//uuid_t uuid;
-	//uuid_generate_random(uuid);
-	//char id [37];
-	//uuid_unparse(uuid, id);
-  
 	try
 	{
-		//handle->io->openVirtualPort(id);
 		handle->io->openVirtualPort("midi_out");
 	}
 	catch(RtMidiError &error)

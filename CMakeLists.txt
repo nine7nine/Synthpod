@@ -33,6 +33,11 @@ pkg_search_module(LV2 REQUIRED lv2>=1.10)
 include_directories(${LV2_INCLUDE_DIRS})
 set(LIBS ${LIBS} ${LV2_LDFLAGS})
 
+# uuid
+pkg_search_module(UUID REQUIRED uuid>=2.25)
+include_directories(${UUID_INCLUDE_DIRS})
+set(LIBS ${LIBS} ${UUID_LDFLAGS})
+
 # synthpod
 add_executable(synthpod
 	synthpod.c
@@ -70,3 +75,4 @@ add_custom_target(THEME ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod.edj)
 install(FILES ${PROJECT_BINARY_DIR}/synthpod.edj DESTINATION ${APP_DIR})
 
 add_subdirectory(plugins)
+add_subdirectory(ext)

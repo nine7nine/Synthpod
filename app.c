@@ -2151,6 +2151,65 @@ _log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
 
 	return ret;
 }
+	
+typedef	struct _foo_t foo_t;
+
+struct _foo_t {
+	const char *type;
+
+	union {
+		int32_t i;
+		int64_t h;
+		float f;
+		double d;
+		const char *s;
+		const void *p;
+	};
+};
+
+static LV2_State_Status
+_state_store(LV2_State_Handle handle, uint32_t key, const void *value,
+	size_t size, uint32_t type, uint32_t flags)
+{
+	mod_t *mod = handle;
+	app_t *app = mod->app;
+
+	//TODO check flags
+
+	const char *key_str = ext_urid_unmap(app->ext_urid, key);
+	const char *type_str = ext_urid_unmap(app->ext_urid, type); //TODO
+
+	char entry_str [512];
+	uuid_unparse(mod->uuid, entry_str);
+	sprintf(entry_str+36, "/state/%s", key_str);
+
+	if(eet_write(app->eet, entry_str, value, size, 0) != size)
+		fprintf(stderr, "_state_store: eet write failed\n");
+
+	return LV2_STATE_SUCCESS;
+}
+
+static const void *
+_state_retrieve(LV2_State_Handle handle, uint32_t key, size_t *size,
+	uint32_t *type, uint32_t *flags)
+{
+	mod_t *mod = handle;
+	app_t *app = mod->app;
+
+	const char *key_str = ext_urid_unmap(app->ext_urid, key);
+	const char *type_str = "hello"; //TODO
+	
+	char entry_str [512];
+	uuid_unparse(mod->uuid, entry_str);
+	sprintf(entry_str+36, "/state/%s", key_str);
+
+	int size_ret;
+	const void *data = eet_read_direct(app->eet, entry_str, &size_ret);
+	*size = size_ret;
+	*type = ext_urid_map(app->ext_urid, type_str);
+	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
+	return data;
+}
 
 // non-rt ui-thread
 mod_t *
@@ -2223,6 +2282,7 @@ app_mod_add(app_t *app, const char *uri)
 	mod->ui_features[NUM_UI_FEATURES] = NULL; // sentinel
 		
 	mod->app = app;
+	uuid_generate_random(mod->uuid);
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 	if(lilv_plugin_has_feature(mod->plug, app->regs.work.schedule.node))
@@ -2235,6 +2295,16 @@ app_mod_add(app_t *app, const char *uri)
 	mod->handle = lilv_instance_get_handle(mod->inst),
 	mod->worker.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_WORKER__interface);
+	mod->state.iface = lilv_instance_get_extension_data(mod->inst,
+		LV2_STATE__interface);
+	if(mod->state.iface) // restore state
+	{
+		app->eet = eet_open("/home/hp/.local/share/synthpod/state.eet", EET_FILE_MODE_READ);
+		printf("eet: %p\n", app->eet);
+		mod->state.iface->restore(mod->handle, _state_retrieve, mod,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		eet_close(app->eet);
+	}
 	lilv_instance_activate(mod->inst);
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
@@ -2245,6 +2315,7 @@ app_mod_add(app_t *app, const char *uri)
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
 
 		tar->mod = mod;
+		uuid_generate_random(tar->uuid);
 		tar->tar = port;
 		tar->index = i;
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
@@ -2360,6 +2431,16 @@ app_mod_del(app_t *app, mod_t *mod)
 		uv_thread_join(&mod->worker.thread);
 		varchunk_free(mod->worker.to);
 		varchunk_free(mod->worker.from);
+	}
+	
+	if(mod->state.iface) // save state
+	{
+		app->eet = eet_open("/home/hp/.local/share/synthpod/state.eet", EET_FILE_MODE_WRITE);
+		printf("eet: %p\n", app->eet);
+		mod->state.iface->save(mod->handle, _state_store, mod,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		eet_sync(app->eet);
+		eet_close(app->eet);
 	}
 
 	// deinit instance

@@ -22,12 +22,15 @@
 
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <Elementary.h>
 
 #include <uv.h>
+
+#include <uuid.h>
 
 #include <ext_urid.h>
 #include <varchunk.h>
@@ -187,11 +190,15 @@ struct _app_t {
 	uv_timer_t pacemaker;
 	uv_async_t quit;
 	uv_thread_t thread;
+
+	// state
+	Eet_File *eet;
 };
 
 struct _mod_t {
 	EINA_INLIST;
 
+	uuid_t uuid;
 	int selected;
 
 	// worker
@@ -205,6 +212,11 @@ struct _mod_t {
 		uv_async_t async;
 		uv_async_t quit;
 	} worker;
+
+	// state
+	struct {
+		const LV2_State_Interface *iface;
+	} state;
 
 	// features
 	LV2_Feature feature_list [NUM_FEATURES];
@@ -267,9 +279,8 @@ struct _mod_t {
 	LV2_Atom_Forge forge;
 };
 
-typedef struct _link_t link_t;
-
 struct _port_t {
+	uuid_t uuid;
 	int selected;
 
 	mod_t *mod;

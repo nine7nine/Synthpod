@@ -3,10 +3,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 set(DEST lib/lv2/rtmidi.lv2)
 set(LIB_EXT ".so")
 
-# uuid
-pkg_search_module(UUID REQUIRED uuid>=2.25)
-include_directories(${UUID_INCLUDE_DIRS})
-
 # rtmidi
 pkg_search_module(RTMIDI REQUIRED librtmidi>=2.1)
 include_directories(${RTMIDI_INCLUDE_DIRS})
@@ -15,7 +11,7 @@ add_library(rtmidi MODULE
 	rtmidi.c
 	rtmidi_in.cpp
 	rtmidi_out.cpp)
-target_link_libraries(rtmidi ${UUID_LDFLAGS} ${RTMIDI_LDFLAGS})
+target_link_libraries(rtmidi ${RTMIDI_LDFLAGS})
 set_target_properties(rtmidi PROPERTIES PREFIX "")
 install(TARGETS rtmidi DESTINATION ${DEST})
 
