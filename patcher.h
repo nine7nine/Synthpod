@@ -20,6 +20,8 @@
 
 #include <Evas.h>
 
+#define PATCHER_UI "/synthpod/patcher/ui"
+
 typedef struct _patcher_event_t patcher_event_t;
 
 struct _patcher_event_t {
@@ -41,6 +43,14 @@ patcher_object_source_data_set(Evas_Object *o, int source, void *data);
 
 void
 patcher_object_sink_data_set(Evas_Object *o, int sink, void *data);
+
+void
+patcher_object_source_color_set(Evas_Object *o, int source,
+	uint8_t r, uint8_t g, uint8_t b);
+
+void
+patcher_object_sink_color_set(Evas_Object *o, int sink,
+	uint8_t r, uint8_t g, uint8_t b);
 
 void
 patcher_object_realize(Evas_Object *o);

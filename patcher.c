@@ -19,7 +19,6 @@
 
 #include <patcher.h>
 
-#define PATCHER_UI "/synthpod/patcher/ui"
 #define PATCHER_TYPE "Matrix Patcher"
 
 #define PATCHER_CONNECT_REQUEST "connect,request"
@@ -120,7 +119,9 @@ _patcher_smart_init(Evas_Object *o)
 			if( (src == priv->max) || (snk == priv->max) ) // is port
 			{
 				edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
-					"/synthpod/patcher/port"); //TODO
+					"/synthpod/patcher/port");
+				edje_object_signal_emit(elmnt,
+					snk == priv->max ? "source" : "sink", PATCHER_UI);
 			}
 			else // is node
 			{
@@ -315,6 +316,30 @@ patcher_object_sink_data_set(Evas_Object *o, int sink, void *data)
 
 	if(priv->data.sink)
 		priv->data.sink[sink] = data;
+}
+
+void
+patcher_object_source_color_set(Evas_Object *o, int source,
+	uint8_t r, uint8_t g, uint8_t b)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+	int src = source + priv->max - priv->sources;
+	int snk = priv->max;
+
+	Evas_Object *edj = evas_object_table_child_get(priv->matrix, src, snk);
+	evas_object_color_set(edj, r, g, b, 0xff);
+}
+
+void
+patcher_object_sink_color_set(Evas_Object *o, int sink,
+	uint8_t r, uint8_t g, uint8_t b)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+	int src = priv->max;
+	int snk = sink + priv->max - priv->sinks;
+
+	Evas_Object *edj = evas_object_table_child_get(priv->matrix, src, snk);
+	evas_object_color_set(edj, r, g, b, 0xff);
 }
 
 void

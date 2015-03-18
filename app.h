@@ -240,6 +240,7 @@ struct _mod_t {
 		varchunk_t *to;
 		varchunk_t *from;
 		Ecore_Animator *port_event_anim;
+		const uint8_t *col;
 
 		// Eo UI
 		struct {
