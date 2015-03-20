@@ -25,9 +25,21 @@ elm_main(int argc, char **argv)
 	// init app
 	app_t *app = app_new();
 
+	const char *path = "/home/hp/.local/share/synthpod/state.eet";
+	if( (argc > 1) && (argv[1]) )
+		path = argv[1];
+
+	// load state
+	app_load(app, path);
+
 	// run main loop
 	app_run(app);
 	elm_run();
+
+	// save state
+	app_save(app, path);
+
+	// stop app
 	app_stop(app);
 
 	// deinit app

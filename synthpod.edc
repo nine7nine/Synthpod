@@ -21,7 +21,7 @@ collections {
 	}
 
 	fonts {
-		font: "DejaVuSansMono-Bold.ttf" "default";
+		//font: "DejaVuSansMono-Bold.ttf" "default";
 	}
 
 #	include <patcher.edc>

@@ -53,13 +53,223 @@ EVAS_SMART_SUBCLASS_NEW(PATCHER_TYPE, _patcher,
 static void
 _node_in(void *data, Evas_Object *edj, const char *emission, const char *source)
 {
-	//TODO
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short src, snk;
+	evas_object_table_pack_get(priv->matrix, edj, &src, &snk, NULL, NULL);
+
+	for(int j=snk+1; j<priv->max; j++)
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+		edje_object_signal_emit(tar, "vertical", PATCHER_UI);
+	}
+	for(int i=src+1; i<priv->max; i++)
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+		edje_object_signal_emit(tar, "horizontal", PATCHER_UI);
+	}
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+		edje_object_signal_emit(tar, "edge", PATCHER_UI);
+	}
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, priv->max);
+		edje_object_signal_emit(tar, "on", PATCHER_UI);
+	}
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
+		edje_object_signal_emit(tar, "on", PATCHER_UI);
+	}
 }
 
 static void
 _node_out(void *data, Evas_Object *edj, const char *emission, const char *source)
 {
-	//TODO
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short src, snk;
+	evas_object_table_pack_get(priv->matrix, edj, &src, &snk, NULL, NULL);
+
+	for(int j=snk+1; j<priv->max; j++)
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+		edje_object_signal_emit(tar, "clear", PATCHER_UI);
+	}
+	for(int i=src+1; i<priv->max; i++)
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+		edje_object_signal_emit(tar, "clear", PATCHER_UI);
+	}
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+		edje_object_signal_emit(tar, "clear", PATCHER_UI);
+	}
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, priv->max);
+		edje_object_signal_emit(tar, "off", PATCHER_UI);
+	}
+	{
+		Evas_Object *tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
+		edje_object_signal_emit(tar, "off", PATCHER_UI);
+	}
+}
+
+static void
+_source_in(void *data, Evas_Object *edj, const char *emission, const char *source)
+{
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short src;
+	evas_object_table_pack_get(priv->matrix, edj, &src, NULL, NULL, NULL);
+	int src_index = src + priv->sources - priv->max;
+	
+	edje_object_signal_emit(edj, "on", PATCHER_UI);
+
+	int first = 1;
+	for(int j=0; j<priv->sinks; j++)
+	{
+		int snk = j + priv->max - priv->sinks;
+		if(priv->state[src_index][j]) // connected
+		{
+			for(int i=src+1; i<priv->max; i++)
+			{
+				Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+				edje_object_signal_emit(tar, "horizontal", PATCHER_UI);
+			}
+
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			if(first)
+			{
+				edje_object_signal_emit(tar, "edge", PATCHER_UI);
+				first = 0;
+			}
+			else
+				edje_object_signal_emit(tar, "edge,vertical", PATCHER_UI);
+
+			tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
+			edje_object_signal_emit(tar, "on", PATCHER_UI);
+		}
+		else if(!first)
+		{
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			edje_object_signal_emit(tar, "vertical", PATCHER_UI);
+		}
+	}
+}
+
+static void
+_source_out(void *data, Evas_Object *edj, const char *emission, const char *source)
+{
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short src;
+	evas_object_table_pack_get(priv->matrix, edj, &src, NULL, NULL, NULL);
+	int src_index = src + priv->sources - priv->max;
+	
+	edje_object_signal_emit(edj, "off", PATCHER_UI);
+	
+	for(int j=0; j<priv->sinks; j++)
+	{
+		int snk = j + priv->max - priv->sinks;
+		if(priv->state[src_index][j]) // connected
+		{
+			for(int i=src+1; i<priv->max; i++)
+			{
+				Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+				edje_object_signal_emit(tar, "clear", PATCHER_UI);
+			}
+
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			edje_object_signal_emit(tar, "clear", PATCHER_UI);
+			
+			tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
+			edje_object_signal_emit(tar, "off", PATCHER_UI);
+		}
+		else
+		{
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			edje_object_signal_emit(tar, "clear", PATCHER_UI);
+		}
+	}
+}
+
+static void
+_sink_in(void *data, Evas_Object *edj, const char *emission, const char *source)
+{
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short snk;
+	evas_object_table_pack_get(priv->matrix, edj, NULL, &snk, NULL, NULL);
+	int snk_index = snk + priv->sinks - priv->max;
+	
+	edje_object_signal_emit(edj, "on", PATCHER_UI);
+	
+	int first = 1;
+	for(int i=0; i<priv->sources; i++)
+	{
+		int src = i + priv->max - priv->sources;
+		if(priv->state[i][snk_index]) // connected
+		{
+			for(int j=snk+1; j<priv->max; j++)
+			{
+				Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+				edje_object_signal_emit(tar, "vertical", PATCHER_UI);
+			}
+
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			if(first)
+			{
+				edje_object_signal_emit(tar, "edge", PATCHER_UI);
+				first = 0;
+			}
+			else
+				edje_object_signal_emit(tar, "edge,horizontal", PATCHER_UI);
+
+			tar = evas_object_table_child_get(priv->matrix, src, priv->max);
+			edje_object_signal_emit(tar, "on", PATCHER_UI);
+		}
+		else if(!first)
+		{
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			edje_object_signal_emit(tar, "horizontal", PATCHER_UI);
+		}
+	}
+}
+
+static void
+_sink_out(void *data, Evas_Object *edj, const char *emission, const char *source)
+{
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short snk;
+	evas_object_table_pack_get(priv->matrix, edj, NULL, &snk, NULL, NULL);
+	int snk_index = snk + priv->sinks - priv->max;
+	
+	edje_object_signal_emit(edj, "off", PATCHER_UI);
+	
+	for(int i=0; i<priv->sources; i++)
+	{
+		int src = i + priv->max - priv->sources;
+		if(priv->state[i][snk_index]) // connected
+		{
+			for(int j=snk+1; j<priv->max; j++)
+			{
+				Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+				edje_object_signal_emit(tar, "clear", PATCHER_UI);
+			}
+
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			edje_object_signal_emit(tar, "clear", PATCHER_UI);
+
+			tar = evas_object_table_child_get(priv->matrix, src, priv->max);
+			edje_object_signal_emit(tar, "off", PATCHER_UI);
+		}
+		else
+		{
+			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			edje_object_signal_emit(tar, "clear", PATCHER_UI);
+		}
+	}
 }
 
 static void
@@ -108,53 +318,69 @@ _patcher_smart_init(Evas_Object *o)
 	for(int src=0; src<priv->sources; src++)
 		priv->state[src] = calloc(priv->sinks, sizeof(Eina_Bool));
 
-	for(int src=priv->max - priv->sources; src<=priv->max; src++)
+	// create nodes
+	for(int src=priv->max - priv->sources; src<priv->max; src++)
 	{
-		for(int snk=priv->max - priv->sinks; snk<=priv->max; snk++)
+		for(int snk=priv->max - priv->sinks; snk<priv->max; snk++)
 		{
-			if( (src == priv->max) && (snk == priv->max) )
-				continue;
-
 			elmnt = edje_object_add(e);
-			if( (src == priv->max) || (snk == priv->max) ) // is port
-			{
-				edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
-					"/synthpod/patcher/port");
-				edje_object_signal_emit(elmnt,
-					snk == priv->max ? "source" : "sink", PATCHER_UI);
-			}
-			else // is node
-			{
-				edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
-					"/synthpod/patcher/node"); //TODO
-				edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _node_in, o);
-				edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _node_out, o);
-				edje_object_signal_callback_add(elmnt, "toggled", PATCHER_UI, _node_toggled, o);
-			}
+			edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+				"/synthpod/patcher/node"); //TODO
+			edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _node_in, o);
+			edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _node_out, o);
+			edje_object_signal_callback_add(elmnt, "toggled", PATCHER_UI, _node_toggled, o);
 			evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(elmnt);
 			evas_object_table_pack(priv->matrix, elmnt, src, snk, 1, 1);
 		}
 	}
-	
-	// source label
-	elmnt = edje_object_add(e);
-	edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
-		"/synthpod/patcher/label/horizontal"); //TODO
-	evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(elmnt);
-	evas_object_table_pack(priv->matrix, elmnt, 0, priv->max+1, priv->max, 1);
 
-	// sink label
-	elmnt = edje_object_add(e);
-	edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
-		"/synthpod/patcher/label/vertical"); //TODO
-	evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(elmnt);
-	evas_object_table_pack(priv->matrix, elmnt, priv->max+1, 0, 1, priv->max);
+	// create source ports & labels
+	for(int src=priv->max - priv->sources; src<priv->max; src++)
+	{
+		elmnt = edje_object_add(e);
+		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+			"/synthpod/patcher/port");
+		edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _source_in, o);
+		edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _source_out, o);
+		edje_object_signal_emit(elmnt, "source", PATCHER_UI);
+		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(elmnt);
+		evas_object_table_pack(priv->matrix, elmnt, src, priv->max, 1, 1);
+
+		elmnt = edje_object_add(e);
+		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+			"/synthpod/patcher/label/vertical");
+		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(elmnt);
+		evas_object_table_pack(priv->matrix, elmnt, src, priv->max + 1, 1, 8);
+	}
+
+	// create sink ports & labels
+	for(int snk=priv->max - priv->sinks; snk<priv->max; snk++)
+	{
+		elmnt = edje_object_add(e);
+		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+			"/synthpod/patcher/port");
+		edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _sink_in, o);
+		edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _sink_out, o);
+		edje_object_signal_emit(elmnt, "sink", PATCHER_UI);
+		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(elmnt);
+		evas_object_table_pack(priv->matrix, elmnt, priv->max, snk, 1, 1);
+		
+		elmnt = edje_object_add(e);
+		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+			"/synthpod/patcher/label/horizontal");
+		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(elmnt);
+		evas_object_table_pack(priv->matrix, elmnt, priv->max + 1, snk, 8, 1);
+	}
 }
 
 static void
@@ -238,12 +464,12 @@ _patcher_smart_calculate(Evas_Object *o)
 	Evas_Coord x, y, w, h;
 
 	evas_object_geometry_get(o, &x, &y, &w, &h);
-	float dw = (float)w / (priv->max + 2); // + port number + axis label
-	float dh = (float)h / (priv->max + 2);
+	float dw = (float)w / (priv->max + 1 + 8); // + port number + axis label
+	float dh = (float)h / (priv->max + 1 + 8);
 	if(dw < dh)
-		h = dw * (priv->max + 2);
+		h = dw * (priv->max + 1 + 8);
 	else // dw >= dh
-		w = dh * (priv->max + 2);
+		w = dh * (priv->max + 1 + 8);
 	evas_object_resize(priv->matrix, w, h);
 	evas_object_move(priv->matrix, x, y);
 }
@@ -319,27 +545,51 @@ patcher_object_sink_data_set(Evas_Object *o, int sink, void *data)
 }
 
 void
-patcher_object_source_color_set(Evas_Object *o, int source,
-	uint8_t r, uint8_t g, uint8_t b)
+patcher_object_source_color_set(Evas_Object *o, int source, int col)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 	int src = source + priv->max - priv->sources;
 	int snk = priv->max;
 
 	Evas_Object *edj = evas_object_table_child_get(priv->matrix, src, snk);
-	evas_object_color_set(edj, r, g, b, 0xff);
+	char msg [7];
+	sprintf(msg, "col,%02i", col);
+	edje_object_signal_emit(edj, msg, PATCHER_UI);
 }
 
 void
-patcher_object_sink_color_set(Evas_Object *o, int sink,
-	uint8_t r, uint8_t g, uint8_t b)
+patcher_object_sink_color_set(Evas_Object *o, int sink, int col)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 	int src = priv->max;
 	int snk = sink + priv->max - priv->sinks;
 
 	Evas_Object *edj = evas_object_table_child_get(priv->matrix, src, snk);
-	evas_object_color_set(edj, r, g, b, 0xff);
+	char msg [7];
+	sprintf(msg, "col,%02i", col);
+	edje_object_signal_emit(edj, msg, PATCHER_UI);
+}
+
+void
+patcher_object_source_label_set(Evas_Object *o, int source, const char *label)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+	int src = source + priv->max - priv->sources;
+	int snk = priv->max + 1;
+
+	Evas_Object *edj = evas_object_table_child_get(priv->matrix, src, snk);
+	edje_object_part_text_set(edj, "default", label);
+}
+
+void
+patcher_object_sink_label_set(Evas_Object *o, int sink, const char *label)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+	int src = priv->max + 1;
+	int snk = sink + priv->max - priv->sinks;
+
+	Evas_Object *edj = evas_object_table_child_get(priv->matrix, src, snk);
+	edje_object_part_text_set(edj, "default", label);
 }
 
 void

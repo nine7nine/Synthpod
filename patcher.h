@@ -45,12 +45,16 @@ void
 patcher_object_sink_data_set(Evas_Object *o, int sink, void *data);
 
 void
-patcher_object_source_color_set(Evas_Object *o, int source,
-	uint8_t r, uint8_t g, uint8_t b);
+patcher_object_source_color_set(Evas_Object *o, int source, int col);
 
 void
-patcher_object_sink_color_set(Evas_Object *o, int sink,
-	uint8_t r, uint8_t g, uint8_t b);
+patcher_object_sink_color_set(Evas_Object *o, int sink, int col);
+
+void
+patcher_object_source_label_set(Evas_Object *o, int source, const char *label);
+
+void
+patcher_object_sink_label_set(Evas_Object *o, int source, const char *label);
 
 void
 patcher_object_realize(Evas_Object *o);

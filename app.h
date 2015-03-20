@@ -22,7 +22,6 @@
 
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
-#include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
@@ -190,9 +189,6 @@ struct _app_t {
 	uv_timer_t pacemaker;
 	uv_async_t quit;
 	uv_thread_t thread;
-
-	// state
-	Eet_File *eet;
 };
 
 struct _mod_t {
@@ -212,11 +208,6 @@ struct _mod_t {
 		uv_async_t async;
 		uv_async_t quit;
 	} worker;
-
-	// state
-	struct {
-		const LV2_State_Interface *iface;
-	} state;
 
 	// features
 	LV2_Feature feature_list [NUM_FEATURES];
@@ -240,7 +231,7 @@ struct _mod_t {
 		varchunk_t *to;
 		varchunk_t *from;
 		Ecore_Animator *port_event_anim;
-		const uint8_t *col;
+		int col;
 
 		// Eo UI
 		struct {
@@ -336,5 +327,11 @@ app_mod_add(app_t *app, const char *uri);
 
 void
 app_mod_del(app_t *app, mod_t *mod);
+
+void
+app_load(app_t *app, const char *path);
+
+void
+app_save(app_t *app, const char *path);
 
 #endif // _SYNTHPOD_APP_H

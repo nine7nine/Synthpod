@@ -29,6 +29,7 @@
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
@@ -62,42 +63,15 @@ struct _ui_write_t {
 #define UI_WRITE_SIZE ( sizeof(ui_write_t) )
 #define UI_WRITE_PADDED ( (UI_WRITE_SIZE + 7U) & (~7U) )
 
-#define COLORS_MAX 20
-static const uint8_t colors [COLORS_MAX] [3] = {
-	{0xFF, 0xB3, 0x00}, // Vivid Yellow
-	{0x80, 0x3E, 0x75}, // Strong Purple
-	{0xFF, 0x68, 0x00}, // Vivid Orange
-	{0xA6, 0xBD, 0xD7}, // Very Light Blue
-	{0xC1, 0x00, 0x20}, // Vivid Red
-	{0xCE, 0xA2, 0x62}, // Grayish Yellow
-	{0x81, 0x70, 0x66}, // Medium Gray
+#define COLORS_MAX 20 // FIXME read from theme
+static uint8_t color_cnt = 1;
 
-	{0x00, 0x7D, 0x34}, // Vivid Green
-	{0xF6, 0x76, 0x8E}, // Strong Purplish Pink
-	{0x00, 0x53, 0x8A}, // Strong Blue
-	{0xFF, 0x7A, 0x5C}, // Strong Yellowish Pink
-	{0x53, 0x37, 0x7A}, // Strong Violet
-	{0xFF, 0x8E, 0x00}, // Vivid Orange Yellow
-	{0xB3, 0x28, 0x51}, // Strong Purplish Red
-	{0xF4, 0xC8, 0x00}, // Vivid Greenish Yellow
-	{0x7F, 0x18, 0x0D}, // Strong Reddish Brown
-	{0x93, 0xAA, 0x00}, // Vivid Yellowish Green
-	{0x59, 0x33, 0x15}, // Deep Yellowish Brown
-	{0xF1, 0x3A, 0x13}, // Vivid Reddish Orange
-	{0x23, 0x2C, 0x16}, // Dark Olive Green
-	
-	//{0x00, 0x00, 0x00}, // Black 
-	//{0xFF, 0xFF, 0xFF}, // White 
-};
-
-static uint8_t color_cnt = 0;
-
-static inline const uint8_t *
+static inline int
 _next_color()
 {
-	const uint8_t *col = colors[color_cnt++];
+	int col = color_cnt++;
 	if(color_cnt >= COLORS_MAX)
-		color_cnt = 0;
+		color_cnt = 1;
 	return col;
 }
 
@@ -806,6 +780,11 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 	}
+
+	Elm_Object_Item *elmnt;
+	elmnt = elm_genlist_item_append(app->ui.modlist, app->ui.stditc, NULL, itm,
+		ELM_GENLIST_ITEM_NONE, NULL, NULL);
+	elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 }
 
 // non-rt ui-thread
@@ -926,23 +905,30 @@ _patches_update(app_t *app)
 			port_t *port = &mod->ports[i];
 			if(!port->selected)
 				continue; // ignore unselected ports
+
+			LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
+			const char *name_str = lilv_node_as_string(name_node);
 			
 			if(port->direction == PORT_DIRECTION_OUTPUT) // source
 			{
 				patcher_object_source_data_set(app->ui.matrix[port->type],
 					count[port->direction][port->type], port);
 				patcher_object_source_color_set(app->ui.matrix[port->type],
-					count[port->direction][port->type],
-					mod->ui.col[0], mod->ui.col[1], mod->ui.col[2]);
+					count[port->direction][port->type], mod->ui.col);
+				patcher_object_source_label_set(app->ui.matrix[port->type],
+					count[port->direction][port->type], name_str);
 			}
 			else // sink
 			{
 				patcher_object_sink_data_set(app->ui.matrix[port->type],
 					count[port->direction][port->type], port);
 				patcher_object_sink_color_set(app->ui.matrix[port->type],
-					count[port->direction][port->type],
-					mod->ui.col[0], mod->ui.col[1], mod->ui.col[2]);
+					count[port->direction][port->type], mod->ui.col);
+				patcher_object_sink_label_set(app->ui.matrix[port->type],
+					count[port->direction][port->type], name_str);
 			}
+			
+			lilv_node_free(name_node);
 		
 			count[port->direction][port->type] += 1;
 		}
@@ -969,45 +955,39 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 {
 	mod_t *mod = data;
 
-	if(!strcmp(part, "elm.swallow.icon"))
-	{
-		Evas_Object *check = elm_check_add(obj);
-		elm_check_state_set(check, mod->selected);
-		evas_object_smart_callback_add(check, "changed", _modlist_check_changed, mod);
-		evas_object_show(check);
-
-		return check;
-	}
-	else if(!strcmp(part, "elm.swallow.end"))
-	{
-		Evas_Object *vbox = elm_box_add(obj);
-		elm_box_horizontal_set(vbox, EINA_TRUE);
-		elm_box_padding_set(vbox, 5, 0);
-		evas_object_show(vbox);
-
-		Evas_Object *icon = elm_icon_add(vbox);
-		elm_icon_standard_set(icon, "close");
-		evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
-		evas_object_size_hint_weight_set(icon, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(icon, EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_size_hint_min_set(icon, 16, 16);
-		evas_object_size_hint_max_set(icon, 16, 16);
-		evas_object_show(icon);
-		elm_box_pack_end(vbox, icon);
-
-		Evas_Object *bg = elm_bg_add(vbox);
-		elm_bg_color_set(bg, mod->ui.col[0], mod->ui.col[1], mod->ui.col[2]);
-		evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(bg, 1.f, EVAS_HINT_FILL);
-		evas_object_size_hint_min_set(bg, 8, 32);
-		evas_object_size_hint_max_set(bg, 8, 32);
-		evas_object_show(bg);
-		elm_box_pack_end(vbox, bg);
-
-		return vbox;
-	}
-	else
+	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
+
+	Evas_Object *lay = elm_layout_add(obj);
+	elm_layout_file_set(lay, "/usr/local/share/synthpod/synthpod.edj",
+		"/synthpod/modlist/module");
+	evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(lay);
+
+	LilvNode *name_node = lilv_plugin_get_name(mod->plug);
+	const char *name_str = lilv_node_as_string(name_node);
+	lilv_node_free(name_node);
+	elm_layout_text_set(lay, "elm.text", name_str);
+	
+	char col [7];
+	sprintf(col, "col,%02i", mod->ui.col);
+	elm_layout_signal_emit(lay, col, PATCHER_UI);
+
+	Evas_Object *check = elm_check_add(lay);
+	elm_check_state_set(check, mod->selected);
+	evas_object_smart_callback_add(check, "changed", _modlist_check_changed, mod);
+	evas_object_show(check);
+	elm_layout_icon_set(lay, check);
+	elm_layout_content_set(lay, "elm.swallow.icon", check);
+
+	Evas_Object *icon = elm_icon_add(lay);
+	elm_icon_standard_set(icon, "close");
+	evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
+	evas_object_show(icon);
+	elm_layout_content_set(lay, "elm.swallow.end", icon);
+
+	return lay;
 }
 
 static inline int
@@ -1040,6 +1020,16 @@ _match_port_protocol(port_t *port, uint32_t protocol, uint32_t size)
 	}
 
 	return 0;
+}
+
+// non-rt ui-thread
+static void
+_ui_update_request(mod_t *mod, uint32_t index)
+{
+	port_t *port = &mod->ports[index];
+
+	// should trigger port update notification FIXME
+	port->last = INFINITY; // atomic instruction!
 }
 
 // non-rt ui-thread
@@ -1226,64 +1216,49 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 static Evas_Object * 
 _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 {
+	if(!data)
+		return NULL;
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	app_t *app = mod->app;
 	
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
+	
+	Evas_Object *lay = elm_layout_add(obj);
+	elm_layout_file_set(lay, "/usr/local/share/synthpod/synthpod.edj",
+		"/synthpod/modlist/port");
+	evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(lay);
+
+	Evas_Object *patched = elm_check_add(lay);
+	evas_object_smart_callback_add(patched, "changed", _patched_changed, port);
+	evas_object_show(patched);
+	elm_layout_content_set(lay, "elm.swallow.icon", patched);
+	
+	Evas_Object *dir = edje_object_add(evas_object_evas_get(lay));
+	edje_object_file_set(dir, "/usr/local/share/synthpod/synthpod.edj",
+		"/synthpod/patcher/port");
+	char col [7];
+	sprintf(col, "col,%02i", mod->ui.col);
+	edje_object_signal_emit(dir, col, PATCHER_UI);
+	evas_object_show(dir);
+	if(port->direction == PORT_DIRECTION_OUTPUT)
+	{
+		edje_object_signal_emit(dir, "source", PATCHER_UI);
+		elm_layout_content_set(lay, "elm.swallow.source", dir);
+	}
+	else
+	{
+		edje_object_signal_emit(dir, "sink", PATCHER_UI);
+		elm_layout_content_set(lay, "elm.swallow.sink", dir);
+	}
 
 	const char *type_str = NULL;
 	const LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 	type_str = lilv_node_as_string(name_node);
-	
-	Evas_Object *hbox0 = elm_grid_add(obj);
-	evas_object_size_hint_weight_set(hbox0, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(hbox0, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(hbox0);
-
-	Evas_Object *hbox1 = elm_box_add(hbox0);
-	elm_box_horizontal_set(hbox1, EINA_TRUE);
-	elm_box_homogeneous_set(hbox1, EINA_FALSE);
-	evas_object_size_hint_weight_set(hbox1, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(hbox1, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(hbox1);
-	elm_grid_pack(hbox0, hbox1, 0, 0, 35, 100);
-			
-	Evas_Object *source = edje_object_add(evas_object_evas_get(hbox1));
-	edje_object_file_set(source, "/usr/local/share/synthpod/synthpod.edj",
-		"/synthpod/patcher/port");
-	edje_object_signal_emit(source,
-		port->direction == PORT_DIRECTION_OUTPUT ? "source" : "none", PATCHER_UI);
-	evas_object_color_set(source, mod->ui.col[0], mod->ui.col[1], mod->ui.col[2], 0xff);
-	evas_object_size_hint_min_set(source, 16, 16);
-	evas_object_size_hint_max_set(source, 16, 16);
-	evas_object_show(source);
-	elm_box_pack_end(hbox1, source);
-	
-	Evas_Object *patched = elm_check_add(hbox1);
-	evas_object_smart_callback_add(patched, "changed", _patched_changed, port);
-	evas_object_show(patched);
-	elm_box_pack_end(hbox1, patched);
-
-	Evas_Object *sink = edje_object_add(evas_object_evas_get(hbox1));
-	edje_object_file_set(sink, "/usr/local/share/synthpod/synthpod.edj",
-		"/synthpod/patcher/port");
-	edje_object_signal_emit(sink,
-		port->direction == PORT_DIRECTION_INPUT ? "sink" : "none", PATCHER_UI);
-	evas_object_color_set(sink, mod->ui.col[0], mod->ui.col[1], mod->ui.col[2], 0xff);
-	evas_object_size_hint_min_set(sink, 16, 16);
-	evas_object_size_hint_max_set(sink, 16, 16);
-	evas_object_show(sink);
-	elm_box_pack_end(hbox1, sink);
-		
-	Evas_Object *lbl = elm_label_add(hbox1);
-	elm_label_ellipsis_set(lbl, EINA_TRUE);
-	elm_object_text_set(lbl, type_str);
-	evas_object_size_hint_weight_set(lbl, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(lbl, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(lbl);
-	elm_box_pack_end(hbox1, lbl);
+	elm_layout_text_set(lay, "elm.text", type_str);
 
 	Evas_Object *child = NULL;
 	if(port->type == PORT_TYPE_CONTROL)
@@ -1291,11 +1266,12 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		int integer = lilv_port_has_property(mod->plug, port->tar, app->regs.port.integer.node);
 		int toggled = lilv_port_has_property(mod->plug, port->tar, app->regs.port.toggled.node);
 		float step_val = integer ? 1.f : (port->max - port->min) / 1000;
+		float val = port->dflt;
 
 		if(toggled)
 		{
-			Evas_Object *check = elm_check_add(hbox0);
-			elm_check_state_set(check, port->dflt > 0.f ? EINA_TRUE : EINA_FALSE);
+			Evas_Object *check = elm_check_add(lay);
+			elm_check_state_set(check, val > 0.f ? EINA_TRUE : EINA_FALSE);
 			elm_object_style_set(check, "toggle");
 			evas_object_smart_callback_add(check, "changed", _check_changed, port);
 
@@ -1303,9 +1279,9 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		}
 		else if(port->points)
 		{
-			Evas_Object *spin = elm_spinner_add(hbox0);
+			Evas_Object *spin = elm_spinner_add(lay);
 			elm_spinner_min_max_set(spin, port->min, port->max);
-			elm_spinner_value_set(spin, port->dflt);
+			elm_spinner_value_set(spin, val);
 			elm_spinner_step_set(spin, 1);
 			elm_spinner_editable_set(spin, EINA_FALSE);
 			elm_spinner_wrap_set(spin, EINA_FALSE);
@@ -1327,11 +1303,11 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		}
 		else // integer or float
 		{
-			Evas_Object *sldr = elm_slider_add(hbox0);
+			Evas_Object *sldr = elm_slider_add(lay);
 			elm_slider_horizontal_set(sldr, EINA_TRUE);
 			elm_slider_unit_format_set(sldr, integer ? "%.0f" : "%.4f");
 			elm_slider_min_max_set(sldr, port->min, port->max);
-			elm_slider_value_set(sldr, port->dflt);
+			elm_slider_value_set(sldr, val);
 			elm_slider_step_set(sldr, step_val);
 			evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
 
@@ -1341,7 +1317,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	else if(port->type == PORT_TYPE_AUDIO
 		|| port->type == PORT_TYPE_CV)
 	{
-		Evas_Object *prog = elm_progressbar_add(hbox0);
+		Evas_Object *prog = elm_progressbar_add(lay);
 		elm_progressbar_horizontal_set(prog, EINA_TRUE);
 		elm_progressbar_unit_format_set(prog, NULL);
 		elm_progressbar_value_set(prog, 0.f);
@@ -1350,7 +1326,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	}
 	else if(port->type == PORT_TYPE_ATOM)
 	{
-		Evas_Object *lbl = elm_label_add(hbox0);
+		Evas_Object *lbl = elm_label_add(lay);
 		elm_object_text_set(lbl, "Atom Port");
 
 		child = lbl;
@@ -1359,10 +1335,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	if(child)
 	{
 		elm_object_disabled_set(child, port->direction == PORT_DIRECTION_OUTPUT);
-		evas_object_size_hint_weight_set(child, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(child, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(child);
-		elm_grid_pack(hbox0, child, 35, 0, 65, 100);
+		elm_layout_content_set(lay, "elm.swallow.content", child);
 	}
 
 	if(port->selected)
@@ -1385,15 +1359,18 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			_port_subscribe(mod, i, app->regs.port.atom_transfer.urid, NULL);
 	}
 	*/
+	_ui_update_request(mod, port->index);
 
 	port->std.widget = child;
-	return hbox0;
+	return lay;
 }
 
 // non-rt ui-thread
 static void
 _modlist_std_del(void *data, Evas_Object *obj)
 {
+	if(!data) // empty element
+		return;
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	app_t *app = mod->app;
@@ -1532,9 +1509,10 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					if(port->type == PORT_TYPE_CONTROL)
 					{
 						_port_subscribe(mod, i, app->regs.port.float_protocol.urid, NULL);
-						// initialize StdUI and EoUI
-						_eo_port_event(mod, i, sizeof(float), app->regs.port.float_protocol.urid, &port->dflt);
-						_std_port_event(mod, i, sizeof(float), app->regs.port.float_protocol.urid, &port->dflt);
+						// initialize EoUI
+						float val = port->dflt;
+						_eo_port_event(mod, i, sizeof(float), app->regs.port.float_protocol.urid, &val);
+						_ui_update_request(mod, port->index);
 					}
 					else if(port->type == PORT_TYPE_AUDIO)
 						_port_subscribe(mod, i, app->regs.port.peak_protocol.urid, NULL);
@@ -1611,6 +1589,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	}
 	else if(!strcmp(part, "elm.swallow.end"))
 	{
+		/* FIXME
 		Evas_Object *bg = elm_bg_add(obj);
 		elm_bg_color_set(bg, mod->ui.col[0], mod->ui.col[1], mod->ui.col[2]);
 		evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
@@ -1620,6 +1599,8 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_show(bg);
 
 		return bg;
+		*/
+		return NULL;
 	}
 	
 	return NULL;
@@ -1779,7 +1760,11 @@ app_new()
 	app_t *app = calloc(1, sizeof(app_t));
 
 	app->world = lilv_world_new();
-	lilv_world_load_all(app->world);
+	LilvNode *bundle_uri = lilv_new_file_uri(app->world, NULL,
+		"/usr/local/lib/lv2/chimaera.lv2/");
+	lilv_world_load_bundle(app->world, bundle_uri);
+	lilv_node_free(bundle_uri);
+	//lilv_world_load_all(app->world);
 	app->plugs = lilv_world_get_all_plugins(app->world);
 
 	app->ext_urid = ext_urid_new();
@@ -1907,7 +1892,8 @@ app_new()
 	elm_object_part_content_set(app->ui.plugpane, "right", app->ui.pluglist);
 
 	app->ui.plugitc = elm_genlist_item_class_new();
-	app->ui.plugitc->item_style = "double_label";
+	//app->ui.plugitc->item_style = "double_label";
+	app->ui.plugitc->item_style = "default";
 	app->ui.plugitc->func.text_get = _pluglist_label_get;
 	app->ui.plugitc->func.content_get = NULL;
 	app->ui.plugitc->func.state_get = NULL;
@@ -1979,7 +1965,8 @@ app_new()
 	elm_object_part_content_set(app->ui.modpane, "left", app->ui.modlist);
 	
 	app->ui.moditc = elm_genlist_item_class_new();
-	app->ui.moditc->item_style = "double_label";
+	//app->ui.moditc->item_style = "double_label";
+	app->ui.moditc->item_style = "full";
 	app->ui.moditc->func.text_get = _modlist_label_get;
 	app->ui.moditc->func.content_get = _modlist_content_get;
 	app->ui.moditc->func.state_get = NULL;
@@ -2021,6 +2008,32 @@ void
 app_free(app_t *app)
 {
 	ecore_animator_del(app->rt.anim);
+
+	// deinit elm
+	evas_object_hide(app->ui.win);
+
+	elm_gengrid_clear(app->ui.modgrid);
+	evas_object_del(app->ui.modgrid);
+
+	elm_genlist_clear(app->ui.modlist);
+	evas_object_del(app->ui.modlist);
+
+	elm_genlist_clear(app->ui.pluglist);
+	evas_object_del(app->ui.pluglist);
+
+	elm_box_clear(app->ui.patchbox);
+	evas_object_del(app->ui.patchbox);
+
+	evas_object_del(app->ui.patchpane);
+	evas_object_del(app->ui.modpane);
+	evas_object_del(app->ui.plugpane);
+	evas_object_del(app->ui.win);
+	
+	elm_genlist_item_class_free(app->ui.plugitc);
+	elm_gengrid_item_class_free(app->ui.griditc);
+	elm_genlist_item_class_free(app->ui.moditc);
+	elm_genlist_item_class_free(app->ui.stditc);
+	
 	varchunk_free(app->rt.to);
 	varchunk_free(app->rt.from);
 
@@ -2062,31 +2075,6 @@ app_free(app_t *app)
 	ext_urid_free(app->ext_urid);
 
 	lilv_world_free(app->world);
-
-	// deinit elm
-	evas_object_hide(app->ui.win);
-
-	elm_gengrid_clear(app->ui.modgrid);
-	evas_object_del(app->ui.modgrid);
-
-	elm_genlist_clear(app->ui.modlist);
-	evas_object_del(app->ui.modlist);
-
-	elm_genlist_clear(app->ui.pluglist);
-	evas_object_del(app->ui.pluglist);
-
-	elm_box_clear(app->ui.patchbox);
-	evas_object_del(app->ui.patchbox);
-
-	evas_object_del(app->ui.patchpane);
-	evas_object_del(app->ui.modpane);
-	evas_object_del(app->ui.plugpane);
-	evas_object_del(app->ui.win);
-	
-	elm_genlist_item_class_free(app->ui.plugitc);
-	elm_gengrid_item_class_free(app->ui.griditc);
-	elm_genlist_item_class_free(app->ui.moditc);
-	elm_genlist_item_class_free(app->ui.stditc);
 
 	free(app);
 }
@@ -2200,7 +2188,7 @@ static uint32_t
 _port_index(LV2UI_Feature_Handle handle, const char *symbol)
 {
 	mod_t *mod = handle;
-	LilvNode *symbol_uri = lilv_new_uri(mod->app->world, symbol);
+	LilvNode *symbol_uri = lilv_new_string(mod->app->world, symbol);
 	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
 	lilv_node_free(symbol_uri);
 
@@ -2250,65 +2238,6 @@ _log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
   va_end(args);
 
 	return ret;
-}
-	
-typedef	struct _foo_t foo_t;
-
-struct _foo_t {
-	const char *type;
-
-	union {
-		int32_t i;
-		int64_t h;
-		float f;
-		double d;
-		const char *s;
-		const void *p;
-	};
-};
-
-static LV2_State_Status
-_state_store(LV2_State_Handle handle, uint32_t key, const void *value,
-	size_t size, uint32_t type, uint32_t flags)
-{
-	mod_t *mod = handle;
-	app_t *app = mod->app;
-
-	//TODO check flags
-
-	const char *key_str = ext_urid_unmap(app->ext_urid, key);
-	const char *type_str = ext_urid_unmap(app->ext_urid, type); //TODO
-
-	char entry_str [512];
-	uuid_unparse(mod->uuid, entry_str);
-	sprintf(entry_str+36, "/state/%s", key_str);
-
-	if(eet_write(app->eet, entry_str, value, size, 0) != size)
-		fprintf(stderr, "_state_store: eet write failed\n");
-
-	return LV2_STATE_SUCCESS;
-}
-
-static const void *
-_state_retrieve(LV2_State_Handle handle, uint32_t key, size_t *size,
-	uint32_t *type, uint32_t *flags)
-{
-	mod_t *mod = handle;
-	app_t *app = mod->app;
-
-	const char *key_str = ext_urid_unmap(app->ext_urid, key);
-	const char *type_str = "hello"; //TODO
-	
-	char entry_str [512];
-	uuid_unparse(mod->uuid, entry_str);
-	sprintf(entry_str+36, "/state/%s", key_str);
-
-	int size_ret;
-	const void *data = eet_read_direct(app->eet, entry_str, &size_ret);
-	*size = size_ret;
-	*type = ext_urid_map(app->ext_urid, type_str);
-	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
-	return data;
 }
 
 // non-rt ui-thread
@@ -2395,16 +2324,6 @@ app_mod_add(app_t *app, const char *uri)
 	mod->handle = lilv_instance_get_handle(mod->inst),
 	mod->worker.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_WORKER__interface);
-	mod->state.iface = lilv_instance_get_extension_data(mod->inst,
-		LV2_STATE__interface);
-	if(mod->state.iface) // restore state
-	{
-		app->eet = eet_open("/home/hp/.local/share/synthpod/state.eet", EET_FILE_MODE_READ);
-		printf("eet: %p\n", app->eet);
-		mod->state.iface->restore(mod->handle, _state_retrieve, mod,
-			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-		eet_close(app->eet);
-	}
 	lilv_instance_activate(mod->inst);
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
@@ -2440,7 +2359,7 @@ app_mod_add(app_t *app, const char *uri)
 			tar->type = PORT_TYPE_CONTROL;
 			tar->protocol = app->regs.port.float_protocol.urid; //TODO remove?
 			tar->points = lilv_port_get_scale_points(mod->plug, port);
-			
+		
 			LilvNode *dflt_node;
 			LilvNode *min_node;
 			LilvNode *max_node;
@@ -2468,6 +2387,10 @@ app_mod_add(app_t *app, const char *uri)
 		// allocate 8-byte aligned buffer
 		posix_memalign(&tar->buf, 8, size); //TODO mlock
 		memset(tar->buf, 0x0, size);
+
+		// initialize control buffers to default value
+		if(tar->type == PORT_TYPE_CONTROL)
+			*(float *)tar->buf = tar->dflt;
 
 		// set port buffer
 		lilv_instance_connect_port(mod->inst, i, tar->buf);
@@ -2534,16 +2457,6 @@ app_mod_del(app_t *app, mod_t *mod)
 		varchunk_free(mod->worker.to);
 		varchunk_free(mod->worker.from);
 	}
-	
-	if(mod->state.iface) // save state
-	{
-		app->eet = eet_open("/home/hp/.local/share/synthpod/state.eet", EET_FILE_MODE_WRITE);
-		printf("eet: %p\n", app->eet);
-		mod->state.iface->save(mod->handle, _state_store, mod,
-			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-		eet_sync(app->eet);
-		eet_close(app->eet);
-	}
 
 	// deinit instance
 	lilv_instance_deactivate(mod->inst);
@@ -2562,4 +2475,150 @@ app_mod_del(app_t *app, mod_t *mod)
 	free(mod->ports);
 
 	free(mod);
+}
+
+static void
+_state_set_value(const char *symbol, void *data,
+	const void *value, uint32_t size, uint32_t type)
+{
+	mod_t *mod = data;
+	app_t *app = mod->app;
+
+	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
+	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
+	lilv_node_free(symbol_uri);
+	uint32_t index = lilv_port_get_index(mod->plug, port);
+
+	float val = 0.f;
+
+	if(type == mod->forge.Int)
+		val = *(const int32_t *)value;
+	else if(type == mod->forge.Long)
+		val = *(const int64_t *)value;
+	else if(type == mod->forge.Float)
+		val = *(const float *)value;
+	else if(type == mod->forge.Double)
+		val = *(const double *)value;
+	else
+		return; //TODO warning
+
+	//printf("%u %f\n", index, val);
+
+	// to rt-thread
+	_ui_write_function(mod, index, sizeof(float),
+		app->regs.port.float_protocol.urid, &val);
+}
+
+void
+app_load(app_t *app, const char *path)
+{
+	Eet_File *eet = eet_open(path, EET_FILE_MODE_READ);
+	if(!eet)
+		return;
+
+	int cnt;
+	char **keys = eet_list(eet, "*", &cnt);
+	for(int i=0; i<cnt; i++)
+	{
+		int size;
+		char *state_str = eet_read(eet, keys[i], &size);
+		LilvState *state = lilv_state_new_from_string(app->world,
+			ext_urid_map_get(app->ext_urid), state_str);
+		free(state_str);
+
+		const LilvNode *uri_node = lilv_state_get_plugin_uri(state);
+		const char *uri_str = lilv_node_as_string(uri_node);
+		printf("load: %s %s\n", keys[i], uri_str);
+
+		mod_t *mod = app_mod_add(app, uri_str);
+		if(mod)
+		{
+			mod->ui.std.itm = elm_genlist_item_append(app->ui.modlist, app->ui.moditc, mod, NULL,
+				ELM_GENLIST_ITEM_TREE, NULL, NULL);
+		
+			if(mod->ui.eo.ui) // has EoUI
+			{
+				mod->ui.eo.itm = elm_gengrid_item_append(app->ui.modgrid, app->ui.griditc, mod,
+					NULL, NULL);
+			}
+
+			uuid_parse(keys[i], mod->uuid);
+			lilv_state_restore(state, mod->inst, _state_set_value, mod,
+				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		}
+
+		lilv_state_free(state);
+	}
+	free(keys);
+
+	eet_close(eet);
+}
+
+static const void *
+_state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
+{
+	mod_t *mod = data;
+	app_t *app = mod->app;
+	
+	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
+	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
+	lilv_node_free(symbol_uri);
+	uint32_t index = lilv_port_get_index(mod->plug, port);
+
+	port_t *tar = &mod->ports[index];
+
+	if(  (tar->direction == PORT_DIRECTION_INPUT)
+		&& (tar->type == PORT_TYPE_CONTROL) )
+	{
+		*size = sizeof(float);
+		*type = mod->forge.Float;
+		return tar->buf;
+	}
+
+	*size = 0;
+	*type = 0;
+	return NULL;
+}
+
+void
+app_save(app_t *app, const char *path)
+{
+	Eet_File *eet = eet_open(path, EET_FILE_MODE_WRITE);
+	if(!eet)
+		return;
+
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(app->ui.modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
+	{
+		mod_t *mod = elm_object_item_data_get(itm);
+
+		if(!mod || !mod->plug || !mod->inst)
+			continue;
+
+		LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+			ext_urid_map_get(app->ext_urid), NULL, NULL, NULL, NULL,
+			_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+		char *state_str = lilv_state_to_string(app->world,
+			ext_urid_map_get(app->ext_urid), ext_urid_unmap_get(app->ext_urid),
+			state, "http://open-music-kontrollers.ch/lv2/synthpod/state", NULL);
+		
+		const LilvNode *uri_node = lilv_state_get_plugin_uri(state);
+		const char *uri_str = lilv_node_as_string(uri_node);
+
+		char uuid_str [37];
+		uuid_unparse(mod->uuid, uuid_str);
+		printf("save: %s %s\n", uuid_str, uri_str);
+
+		//printf("%s\n", state_str);
+
+		eet_write(eet, uuid_str, state_str, strlen(state_str) + 1, 0);
+
+		free(state_str);
+		lilv_state_free(state);
+	}
+
+	eet_sync(eet);
+	eet_close(eet);
 }
