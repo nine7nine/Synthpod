@@ -15,8 +15,8 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#ifndef _RTMIDI_LV2_H
-#define _RTMIDI_LV2_H
+#ifndef _OSC_IO_LV2_H
+#define _OSC_IO_LV2_H
 
 #include <stdint.h>
 
@@ -27,13 +27,15 @@
 #include "lv2/lv2plug.in/ns/ext/worker/worker.h"
 #include "lv2/lv2plug.in/ns/extensions/ui/ui.h"
 #include "lv2/lv2plug.in/ns/lv2core/lv2.h"
+
+#define LV2_OSC__OscEvent							"http://opensoundcontrol.org#OscEvent"
 	
-#define RTMIDI_URI										"http://open-music-kontrollers.ch/lv2/rtmidi"
+#define OSC_IO_URI										"http://open-music-kontrollers.ch/lv2/osc_io"
 
-#define RTMIDI_OUT_URI								RTMIDI_URI"#out"
-#define RTMIDI_IN_URI									RTMIDI_URI"#in"
+#define OSC_IO_OUT_URI								OSC_IO_URI"#out"
+#define OSC_IO_IN_URI									OSC_IO_URI"#in"
 
-extern const LV2_Descriptor rtmidi_out;
-extern const LV2_Descriptor rtmidi_in;
+extern const LV2_Descriptor osc_io_out;
+extern const LV2_Descriptor osc_io_in;
 
-#endif // _RTMIDI_LV2_H
+#endif // _OSC_IO_LV2_H

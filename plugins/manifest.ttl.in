@@ -18,25 +18,24 @@
 @prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
 
 @prefix rtmidi:	<http://open-music-kontrollers.ch/lv2/rtmidi#> .
+@prefix osc_io:	<http://open-music-kontrollers.ch/lv2/osc_io#> .
 
 rtmidi:out
 	a lv2:Plugin ;
 	lv2:binary <rtmidi@LIB_EXT@> ;
-#	ui:ui rtmidi:out_ui ;
-#	ui:ui rtmidi:out_eo ;
 	rdfs:seeAlso <rtmidi.ttl> .
-
-#rtmidi:out_ui
-#	a ui:X11UI ;
-#	ui:binary <rtmidi_ui@LIB_EXT@> ;
-#	rdfs:seeAlso <rtmidi.ttl> .
-#
-#rtmidi:out_eo
-#	a ui:EoUI ;
-#	ui:binary <rtmidi_ui@LIB_EXT@> ;
-#	rdfs:seeAlso <rtmidi.ttl> .
 
 rtmidi:in
 	a lv2:Plugin ;
 	lv2:binary <rtmidi@LIB_EXT@> ;
 	rdfs:seeAlso <rtmidi.ttl> .
+
+osc_io:out
+	a lv2:Plugin ;
+	lv2:binary <osc_io@LIB_EXT@> ;
+	rdfs:seeAlso <osc_io.ttl> .
+
+osc_io:in
+	a lv2:Plugin ;
+	lv2:binary <osc_io@LIB_EXT@> ;
+	rdfs:seeAlso <osc_io.ttl> .

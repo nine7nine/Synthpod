@@ -1,0 +1,6 @@
+[submodule "plugins/libosc"]
+	path = plugins/libosc
+	url = https://github.com/OpenMusicKontrollers/libosc.git
+[submodule "plugins/libosc_stream"]
+	path = plugins/libosc_stream
+	url = https://github.com/OpenMusicKontrollers/libosc_stream.git

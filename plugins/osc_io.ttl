@@ -20,13 +20,13 @@
 @prefix ui:		<http://lv2plug.in/ns/extensions/ui#> .
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
 @prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
-@prefix midi:	<http://lv2plug.in/ns/ext/midi#> .
 @prefix work: <http://lv2plug.in/ns/ext/worker#> .
 
+@prefix osc:	<http://opensoundcontrol.org#> .
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:	<http://open-music-kontrollers.ch/lv2/> .
-@prefix rtmidi:	<http://open-music-kontrollers.ch/lv2/rtmidi#> .
+@prefix osc_io:	<http://open-music-kontrollers.ch/lv2/osc_io#> .
 
 # Maintainer
 omk:me
@@ -36,18 +36,18 @@ omk:me
 	foaf:homepage <http://open-music-kontrollers.ch> .
 
 # Project
-proj:rtmidi
+proj:osc_io
 	a doap:Project ;
 	doap:maintainer omk:me ;
-	doap:name "RtMidi Bundle" .
+	doap:name "OSC Bundle" .
 
 # Output Plugin
-rtmidi:out
+osc_io:out
 	a lv2:Plugin,
 		lv2:ConverterPlugin ;
-	doap:name "RtMidi Output" ;
+	doap:name "OSC Output" ;
 	doap:license lic:Artistic-2.0 ;
-	lv2:project proj:rtmidi ;
+	lv2:project proj:osc_io ;
 	lv2:extensionData work:interface ;
 	lv2:requiredFeature work:schedule ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -57,20 +57,20 @@ rtmidi:out
 	  a lv2:InputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
+		atom:supports osc:OscEvent ;
 		lv2:designation lv2:control ;
 		lv2:index 0 ;
-		lv2:symbol "midi_out" ;
-		lv2:name "Midi Out" ;
+		lv2:symbol "osc_out" ;
+		lv2:name "OSC Out" ;
 	] .
 
 # Input Plugin
-rtmidi:in
+osc_io:in
 	a lv2:Plugin,
 		lv2:ConverterPlugin ;
-	doap:name "RtMidi Input" ;
+	doap:name "OSC Input" ;
 	doap:license lic:Artistic-2.0 ;
-	lv2:project proj:rtmidi ;
+	lv2:project proj:osc_io ;
 	lv2:extensionData work:interface ;
 	lv2:requiredFeature work:schedule ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -80,9 +80,9 @@ rtmidi:in
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
+		atom:supports osc:OscEvent ;
 		lv2:designation lv2:control ;
 		lv2:index 0 ;
-		lv2:symbol "midi_in" ;
-		lv2:name "Midi In" ;
+		lv2:symbol "osc_in" ;
+		lv2:name "OSC In" ;
 	] .

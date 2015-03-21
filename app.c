@@ -1760,11 +1760,20 @@ app_new()
 	app_t *app = calloc(1, sizeof(app_t));
 
 	app->world = lilv_world_new();
+	/*
 	LilvNode *bundle_uri = lilv_new_file_uri(app->world, NULL,
 		"/usr/local/lib/lv2/chimaera.lv2/");
 	lilv_world_load_bundle(app->world, bundle_uri);
 	lilv_node_free(bundle_uri);
-	//lilv_world_load_all(app->world);
+	bundle_uri = lilv_new_file_uri(app->world, NULL,
+		"/usr/local/lib/lv2/rtmidi.lv2/");
+	lilv_world_load_bundle(app->world, bundle_uri);
+	bundle_uri = lilv_new_file_uri(app->world, NULL,
+		"/usr/local/lib/lv2/sherlock.lv2/");
+	lilv_world_load_bundle(app->world, bundle_uri);
+	lilv_node_free(bundle_uri);
+	*/
+	lilv_world_load_all(app->world);
 	app->plugs = lilv_world_get_all_plugins(app->world);
 
 	app->ext_urid = ext_urid_new();
