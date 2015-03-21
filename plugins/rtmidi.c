@@ -24,6 +24,8 @@ lv2_descriptor(uint32_t index)
 	{
 		case 0:
 			return &rtmidi_out;
+		case 1:
+			return &rtmidi_in;
 		default:
 			return NULL;
 	}

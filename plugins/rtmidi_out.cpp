@@ -36,7 +36,7 @@ struct _handle_t {
 	
 	RtMidiOut *io;
 
-	const LV2_Atom_Sequence *midi_in;
+	const LV2_Atom_Sequence *midi_out;
 };
 
 // non-rt thread
@@ -152,7 +152,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->midi_in = (const LV2_Atom_Sequence *)data;
+			handle->midi_out = (const LV2_Atom_Sequence *)data;
 			break;
 		default:
 			break;
@@ -180,7 +180,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	handle_t *handle = (handle_t *)instance;
 	
 	const LV2_Atom_Event *ev = NULL;
-	LV2_ATOM_SEQUENCE_FOREACH(handle->midi_in, ev)
+	LV2_ATOM_SEQUENCE_FOREACH(handle->midi_out, ev)
 	{
 		const LV2_Atom *atom = &ev->body;
 		if(atom->type == handle->uris.midi_MidiEvent)

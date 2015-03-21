@@ -31,10 +31,12 @@
 #define RTMIDI_URI										"http://open-music-kontrollers.ch/lv2/rtmidi"
 
 #define RTMIDI_OUT_URI								RTMIDI_URI"#out"
+#define RTMIDI_IN_URI									RTMIDI_URI"#in"
 //#define RTMIDI_ATOM_INSPECTOR_UI_URI	RTMIDI_URI"#out_ui"
 //#define RTMIDI_ATOM_INSPECTOR_EO_URI	RTMIDI_URI"#out_eo"
 
 extern const LV2_Descriptor rtmidi_out;
+extern const LV2_Descriptor rtmidi_in;
 //extern const LV2UI_Descriptor rtmidi_out_ui;
 //extern const LV2UI_Descriptor rtmidi_out_eo;
 
