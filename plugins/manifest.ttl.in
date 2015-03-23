@@ -30,12 +30,7 @@ rtmidi:in
 	lv2:binary <rtmidi@LIB_EXT@> ;
 	rdfs:seeAlso <rtmidi.ttl> .
 
-osc_io:out
-	a lv2:Plugin ;
-	lv2:binary <osc_io@LIB_EXT@> ;
-	rdfs:seeAlso <osc_io.ttl> .
-
-osc_io:in
+osc_io:io
 	a lv2:Plugin ;
 	lv2:binary <osc_io@LIB_EXT@> ;
 	rdfs:seeAlso <osc_io.ttl> .

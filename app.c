@@ -2104,7 +2104,7 @@ _app_thread(void *arg)
 {
 	app_t *app = arg;
 
-	app->loop = uv_loop_new();
+	app->loop = uv_loop_new(); // FIXME deprecated
 	
 	app->quit.data = app;
 	uv_async_init(app->loop, &app->quit, _app_quit);
@@ -2181,7 +2181,7 @@ _mod_worker_thread(void *arg)
 {
 	mod_t *mod = arg;
 
-	uv_loop_t *loop = uv_loop_new();
+	uv_loop_t *loop = uv_loop_new(); //TODO deprecated
 	
 	mod->worker.quit.data = mod;
 	uv_async_init(loop, &mod->worker.quit, _mod_worker_quit);
@@ -2226,9 +2226,9 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	else if(type == app->regs.log.trace.urid)
 		type_str = "Trace";
 	else if(type == app->regs.log.warning.urid)
-		type_str = "Wraning";
+		type_str = "Warning";
 
-	fprintf(stderr, "[%s]", type_str); //TODO report handle 
+	fprintf(stderr, "[%s] ", type_str); //TODO report handle 
 	vfprintf(stderr, fmt, args);
 	fputc('\n', stderr);
 

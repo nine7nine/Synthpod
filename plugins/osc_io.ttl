@@ -21,6 +21,8 @@
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
 @prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
 @prefix work: <http://lv2plug.in/ns/ext/worker#> .
+@prefix state: <http://lv2plug.in/ns/ext/state#> .
+@prefix log:  <http://lv2plug.in/ns/ext/log#> .
 
 @prefix osc:	<http://opensoundcontrol.org#> .
 @prefix lic:	<http://opensource.org/licenses/> .
@@ -41,48 +43,49 @@ proj:osc_io
 	doap:maintainer omk:me ;
 	doap:name "OSC Bundle" .
 
-# Output Plugin
-osc_io:out
-	a lv2:Plugin,
+# IO Plugin
+osc_io:io
+	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
-	doap:name "OSC Output" ;
+	doap:name "OSC In-Out" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:osc_io ;
-	lv2:extensionData work:interface ;
+	lv2:extensionData work:interface ,
+		state:interface ;
 	lv2:requiredFeature work:schedule ;
-	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:optionalFeature lv2:isLive ,
+		lv2:hardRTCapable ,
+		log:log ;
 
 	lv2:port [
-		# input event port
+		# sink event port
 	  a lv2:InputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports osc:OscEvent ;
 		lv2:designation lv2:control ;
 		lv2:index 0 ;
-		lv2:symbol "osc_out" ;
-		lv2:name "OSC Out" ;
-	] .
-
-# Input Plugin
-osc_io:in
-	a lv2:Plugin,
-		lv2:ConverterPlugin ;
-	doap:name "OSC Input" ;
-	doap:license lic:Artistic-2.0 ;
-	lv2:project proj:osc_io ;
-	lv2:extensionData work:interface ;
-	lv2:requiredFeature work:schedule ;
-	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-
-	lv2:port [
-		# output event port
+		lv2:symbol "osc_sink" ;
+		lv2:name "OSC Sink" ;
+	] , [
+		# source event port
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports osc:OscEvent ;
 		lv2:designation lv2:control ;
-		lv2:index 0 ;
-		lv2:symbol "osc_in" ;
-		lv2:name "OSC In" ;
+		lv2:index 1 ;
+		lv2:symbol "osc_source" ;
+		lv2:name "OSC Source" ;
+	] , [
+		# control output ports
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "connected" ;
+		lv2:name "Connected" ;
+		lv2:default 0.0 ;
+		lv2:min 0.0 ;
+		lv2:max 1.0 ;
+		lv2:portProperty lv2:toggled ;
 	] .

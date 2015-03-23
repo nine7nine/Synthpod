@@ -23,9 +23,7 @@ lv2_descriptor(uint32_t index)
 	switch(index)
 	{
 		case 0:
-			return &osc_io_out;
-		case 1:
-			return &osc_io_in;
+			return &osc_io_io;
 		default:
 			return NULL;
 	}

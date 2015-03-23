@@ -36,8 +36,7 @@ add_library(osc_io MODULE
 	libosc_stream/osc_stream_pipe.c
 	libosc_stream/osc_stream_slip.c
 	osc_io.c
-	osc_in.c
-	osc_out.c)
+	osc_io_io.c)
 target_link_libraries(osc_io ${UV_LDFLAGS})
 set_target_properties(osc_io PROPERTIES PREFIX "")
 install(TARGETS osc_io DESTINATION ${DEST})

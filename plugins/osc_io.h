@@ -25,6 +25,8 @@
 #include "lv2/lv2plug.in/ns/ext/midi/midi.h"
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/worker/worker.h"
+#include "lv2/lv2plug.in/ns/ext/state/state.h"
+#include "lv2/lv2plug.in/ns/ext/log/log.h"
 #include "lv2/lv2plug.in/ns/extensions/ui/ui.h"
 #include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 
@@ -32,10 +34,16 @@
 	
 #define OSC_IO_URI										"http://open-music-kontrollers.ch/lv2/osc_io"
 
-#define OSC_IO_OUT_URI								OSC_IO_URI"#out"
-#define OSC_IO_IN_URI									OSC_IO_URI"#in"
+// state keys
+#define OSC_IO_TRIG_URI								OSC_IO_URI"#trig"
+#define OSC_IO_DIRTY_URI							OSC_IO_URI"#dirty"
 
-extern const LV2_Descriptor osc_io_out;
-extern const LV2_Descriptor osc_io_in;
+// worker keys
+#define OSC_IO_URL_URI								OSC_IO_URI"#url"
+
+// plugin uris
+#define OSC_IO_IO_URI									OSC_IO_URI"#io"
+
+extern const LV2_Descriptor osc_io_io;
 
 #endif // _OSC_IO_LV2_H
