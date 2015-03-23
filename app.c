@@ -22,6 +22,8 @@
 #include <app.h>
 #include <patcher.h>
 
+#include <cJSON.h>
+
 // include lv2 core header
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
 
@@ -2525,42 +2527,109 @@ app_load(app_t *app, const char *path)
 	if(!eet)
 		return;
 
-	int cnt;
-	char **keys = eet_list(eet, "*", &cnt);
-	for(int i=0; i<cnt; i++)
+	int size;
+	char *root_str = eet_read(eet, "synthpod", &size);
+	if(!root_str)
+		return;
+
+	cJSON *root_json = cJSON_Parse(root_str);
+	// iterate over mods, create and apply states
+	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;
+		mod_json;
+		mod_json = mod_json->next)
 	{
-		int size;
-		char *state_str = eet_read(eet, keys[i], &size);
-		LilvState *state = lilv_state_new_from_string(app->world,
-			ext_urid_map_get(app->ext_urid), state_str);
-		free(state_str);
+		const char *mod_uri_str = cJSON_GetObjectItem(mod_json, "uri")->valuestring;
 
-		const LilvNode *uri_node = lilv_state_get_plugin_uri(state);
-		const char *uri_str = lilv_node_as_string(uri_node);
-		printf("load: %s %s\n", keys[i], uri_str);
+		mod_t *mod = app_mod_add(app, mod_uri_str);
+		if(!mod)
+			continue;
 
-		mod_t *mod = app_mod_add(app, uri_str);
-		if(mod)
+		const char *mod_uuid_str = cJSON_GetObjectItem(mod_json, "uuid")->valuestring;
+		uuid_parse(mod_uuid_str, mod->uuid);
+		mod->selected = cJSON_GetObjectItem(mod_json, "selected")->type == cJSON_True;
+
+		mod->ui.std.itm = elm_genlist_item_append(app->ui.modlist, app->ui.moditc, mod, NULL,
+			ELM_GENLIST_ITEM_TREE, NULL, NULL);
+	
+		if(mod->ui.eo.ui) // has EoUI
 		{
-			mod->ui.std.itm = elm_genlist_item_append(app->ui.modlist, app->ui.moditc, mod, NULL,
-				ELM_GENLIST_ITEM_TREE, NULL, NULL);
-		
-			if(mod->ui.eo.ui) // has EoUI
-			{
-				mod->ui.eo.itm = elm_gengrid_item_append(app->ui.modgrid, app->ui.griditc, mod,
-					NULL, NULL);
-			}
-
-			uuid_parse(keys[i], mod->uuid);
-			lilv_state_restore(state, mod->inst, _state_set_value, mod,
-				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+			mod->ui.eo.itm = elm_gengrid_item_append(app->ui.modgrid, app->ui.griditc, mod,
+				NULL, NULL);
 		}
 
+		char *state_str = eet_read(eet, mod_uuid_str, &size);
+		LilvState *state = lilv_state_new_from_string(app->world,
+			ext_urid_map_get(app->ext_urid), state_str);
+		lilv_state_restore(state, mod->inst, _state_set_value, mod,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 		lilv_state_free(state);
+		free(state_str);
+
+		// iterate over ports
+		for(cJSON *port_json = cJSON_GetObjectItem(mod_json, "ports")->child;
+			port_json;
+			port_json = port_json->next)
+		{
+			const char *port_symbol_str = cJSON_GetObjectItem(port_json, "symbol")->valuestring;
+
+			for(int i=0; i<mod->num_ports; i++)
+			{
+				port_t *port = &mod->ports[i];
+				const LilvNode *port_symbol_node = lilv_port_get_symbol(mod->plug, port->tar);
+
+				if(!strcmp(port_symbol_str, lilv_node_as_string(port_symbol_node)))
+				{
+					const char *port_uuid_str = cJSON_GetObjectItem(port_json, "uuid")->valuestring;
+					uuid_parse(port_uuid_str, port->uuid);
+					port->selected = cJSON_GetObjectItem(port_json, "selected")->valueint;
+
+					for(cJSON *source_json = cJSON_GetObjectItem(port_json, "sources")->child;
+						source_json;
+						source_json = source_json->next)
+					{
+						uuid_t source_uuid;
+						uuid_parse(source_json->valuestring, source_uuid);
+					
+						for(Elm_Object_Item *itm = elm_genlist_first_item_get(app->ui.modlist);
+							itm != NULL;
+							itm = elm_genlist_item_next_get(itm))
+						{
+							mod_t *source = elm_object_item_data_get(itm);
+
+							for(int j=0; j<source->num_ports; j++)
+							{
+								port_t *tar = &source->ports[j];
+								if(!uuid_compare(source_uuid, tar->uuid))
+								{
+									void *ptr;
+									if( (ptr = varchunk_write_request(app->rt.to, JOB_SIZE)) )
+									{
+										job_t *job = ptr;
+
+										job->type = JOB_TYPE_CONN_ADD;
+										job->payload.conn.source = tar;
+										job->payload.conn.sink = port;
+
+										varchunk_write_advance(app->rt.to, JOB_SIZE);
+									}
+									else
+										fprintf(stderr, "rt varchunk buffer overrun");
+								}
+							}
+						}
+					}
+
+					break;
+				}
+			}
+		}
 	}
-	free(keys);
+	cJSON_Delete(root_json);
+	free(root_str);
 
 	eet_close(eet);
+
+	_patches_update(app); // TODO connections are not yet shown 
 }
 
 static const void *
@@ -2596,6 +2665,11 @@ app_save(app_t *app, const char *path)
 	if(!eet)
 		return;
 
+	// create json object
+	cJSON *root_json = cJSON_CreateObject();
+	cJSON *arr_json = cJSON_CreateArray();
+	cJSON_AddItemToObject(root_json, "items", arr_json);
+
 	for(Elm_Object_Item *itm = elm_genlist_first_item_get(app->ui.modlist);
 		itm != NULL;
 		itm = elm_genlist_item_next_get(itm))
@@ -2618,15 +2692,53 @@ app_save(app_t *app, const char *path)
 
 		char uuid_str [37];
 		uuid_unparse(mod->uuid, uuid_str);
-		printf("save: %s %s\n", uuid_str, uri_str);
 
-		//printf("%s\n", state_str);
-
+		// write mod state
 		eet_write(eet, uuid_str, state_str, strlen(state_str) + 1, 0);
-
 		free(state_str);
 		lilv_state_free(state);
+
+		// fill mod json object
+		cJSON *mod_json = cJSON_CreateObject();
+		cJSON *mod_uuid_json = cJSON_CreateString(uuid_str);
+		cJSON *mod_uri_json = cJSON_CreateString(uri_str);
+		cJSON *mod_selected_json = cJSON_CreateBool(mod->selected);
+		cJSON *mod_ports_json = cJSON_CreateArray();
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+			uuid_unparse(port->uuid, uuid_str);
+
+			cJSON *port_json = cJSON_CreateObject();
+			cJSON *port_uuid_json = cJSON_CreateString(uuid_str);
+			cJSON *port_symbol_json = cJSON_CreateString(lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar)));
+			cJSON *port_selected_json = cJSON_CreateBool(port->selected);
+			cJSON *port_sources_json = cJSON_CreateArray();
+			for(int j=0; j<port->num_sources; j++)
+			{
+				port_t *source = port->sources[j];
+				uuid_unparse(source->uuid, uuid_str);
+				cJSON *source_uuid_json = cJSON_CreateString(uuid_str);
+				cJSON_AddItemToArray(port_sources_json, source_uuid_json);
+			}
+			cJSON_AddItemToObject(port_json, "uuid", port_uuid_json);
+			cJSON_AddItemToObject(port_json, "symbol", port_symbol_json);
+			cJSON_AddItemToObject(port_json, "selected", port_selected_json);
+			cJSON_AddItemToObject(port_json, "sources", port_sources_json);
+			cJSON_AddItemToArray(mod_ports_json, port_json);
+		}
+		cJSON_AddItemToObject(mod_json, "uuid", mod_uuid_json);
+		cJSON_AddItemToObject(mod_json, "uri", mod_uri_json);
+		cJSON_AddItemToObject(mod_json, "selected", mod_selected_json);
+		cJSON_AddItemToObject(mod_json, "ports", mod_ports_json);
+		cJSON_AddItemToArray(arr_json, mod_json);
 	}
+
+	// serialize json object
+	char *root_str = cJSON_Print(root_json);	
+	eet_write(eet, "synthpod", root_str, strlen(root_str) + 1, 0);
+	free(root_str);
+	cJSON_Delete(root_json);
 
 	eet_sync(eet);
 	eet_close(eet);

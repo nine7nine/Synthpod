@@ -7,6 +7,7 @@ find_package(PkgConfig REQUIRED)
 include(CheckIncludeFiles)
 
 include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/cjson)
 include_directories(${PROJECT_BINARY_DIR})
 
 set(APP_DIR share/synthpod)
@@ -44,7 +45,8 @@ add_executable(synthpod
 	app.c
 	varchunk.c
 	patcher.c
-	ext_urid.c)
+	ext_urid.c
+	cjson/cJSON.c)
 target_link_libraries(synthpod ${LIBS})
 target_compile_definitions(synthpod PUBLIC -DAPP_DIR=${APP_DIR})
 install(TARGETS synthpod DESTINATION bin)
