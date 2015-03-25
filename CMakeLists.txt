@@ -40,16 +40,17 @@ include_directories(${UUID_INCLUDE_DIRS})
 set(LIBS ${LIBS} ${UUID_LDFLAGS})
 
 # synthpod
-add_executable(synthpod
+add_executable(synthpod.app
 	synthpod.c
 	app.c
 	varchunk.c
 	patcher.c
 	ext_urid.c
 	cjson/cJSON.c)
-target_link_libraries(synthpod ${LIBS})
-target_compile_definitions(synthpod PUBLIC -DAPP_DIR=${APP_DIR})
-install(TARGETS synthpod DESTINATION bin)
+target_link_libraries(synthpod.app ${LIBS})
+target_compile_definitions(synthpod.app PUBLIC -DAPP_DIR=${APP_DIR})
+set_target_properties(synthpod.app PROPERTIES OUTPUT_NAME "synthpod")
+install(TARGETS synthpod.app DESTINATION bin)
 
 add_executable(test_varchunk
 	test_varchunk.c
@@ -76,5 +77,7 @@ add_custom_command(
 add_custom_target(THEME ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod.edj)
 install(FILES ${PROJECT_BINARY_DIR}/synthpod.edj DESTINATION ${APP_DIR})
 
+add_subdirectory(lib)
+add_subdirectory(bin)
 add_subdirectory(plugins)
 add_subdirectory(ext)

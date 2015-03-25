@@ -13,13 +13,15 @@
 # along the source as a COPYING file. If not, obtain it from
 # http://www.perlfoundation.org/artistic_license_2_0.
 
-@prefix lv2:  <http://lv2plug.in/ns/lv2core#> .
-@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
+@prefix lv2:      <http://lv2plug.in/ns/lv2core#> .
+@prefix rdfs:     <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ui:       <http://lv2plug.in/ns/extensions/ui#> .
 
-@prefix rtmidi:	<http://open-music-kontrollers.ch/lv2/rtmidi#> .
-@prefix osc_io:	<http://open-music-kontrollers.ch/lv2/osc_io#> .
+@prefix rtmidi:	  <http://open-music-kontrollers.ch/lv2/rtmidi#> .
+@prefix osc_io:	  <http://open-music-kontrollers.ch/lv2/osc_io#> .
+@prefix synthpod: <http://open-music-kontrollers.ch/lv2/synthpod#> .
 
+# RtMidi
 rtmidi:out
 	a lv2:Plugin ;
 	lv2:binary <rtmidi@LIB_EXT@> ;
@@ -30,7 +32,26 @@ rtmidi:in
 	lv2:binary <rtmidi@LIB_EXT@> ;
 	rdfs:seeAlso <rtmidi.ttl> .
 
+# OSC
 osc_io:io
 	a lv2:Plugin ;
 	lv2:binary <osc_io@LIB_EXT@> ;
 	rdfs:seeAlso <osc_io.ttl> .
+
+# Synthpod
+synthpod:stereo
+	a lv2:Plugin ;
+	lv2:binary <synthpod@LIB_EXT@> ;
+	ui:ui synthpod:common_ui ;
+	ui:ui synthpod:common_eo ;
+	rdfs:seeAlso <synthpod.ttl> .
+
+synthpod:common_ui
+	a ui:X11UI ;
+	lv2:binary <synthpod_ui@LIB_EXT@> ;
+	rdfs:seeAlso <synthpod.ttl> .
+
+synthpod:common_eo
+	a ui:EoUI ;
+	lv2:binary <synthpod_ui@LIB_EXT@> ;
+	rdfs:seeAlso <synthpod.ttl> .

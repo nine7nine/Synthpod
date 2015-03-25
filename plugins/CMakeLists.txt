@@ -1,3 +1,4 @@
+include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod.h
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
@@ -41,3 +42,20 @@ target_link_libraries(osc_io ${UV_LDFLAGS})
 set_target_properties(osc_io PROPERTIES PREFIX "")
 install(TARGETS osc_io DESTINATION ${DEST})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/osc_io.ttl DESTINATION ${DEST})
+
+# synthpod
+add_library(synthpod.lv2 MODULE
+	synthpod_lv2.c
+	synthpod_stereo.c)
+target_link_libraries(synthpod.lv2 synthpod.lib)
+set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
+install(TARGETS synthpod.lv2 DESTINATION ${DEST})
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${DEST})
+
+# synthpod_ui
+add_library(synthpod_ui.lv2 MODULE
+	synthpod_lv2_ui.c
+	synthpod_common_ui.c)
+target_link_libraries(synthpod_ui.lv2 synthpod_ui.lib)
+set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
+install(TARGETS synthpod_ui.lv2 DESTINATION ${DEST})
