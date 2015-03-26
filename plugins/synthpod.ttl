@@ -19,7 +19,6 @@
 @prefix lv2:	<http://lv2plug.in/ns/lv2core#> .
 @prefix ui:		<http://lv2plug.in/ns/extensions/ui#> .
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
-@prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
 @prefix work: <http://lv2plug.in/ns/ext/worker#> .
 @prefix state: <http://lv2plug.in/ns/ext/state#> .
 @prefix log:  <http://lv2plug.in/ns/ext/log#> .

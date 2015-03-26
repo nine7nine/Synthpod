@@ -16,14 +16,31 @@
  */
 
 #include <stdlib.h>
+#include <math.h>
 #include <uuid.h>
 
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-typedef struct _work_t work_t;
+#define NUM_FEATURES 4
+
+typedef enum _job_type_t job_type_t;
+
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
+typedef struct _work_t work_t;
+typedef struct _job_t job_t;
+
+enum _job_type_t {
+	JOB_TYPE_MODULE_ADD,
+	JOB_TYPE_MODULE_DEL
+};
+
+struct _job_t {
+	job_type_t type;
+	mod_t *mod;
+	char uri [0];
+};
 
 struct _work_t {
 	void *target;
@@ -96,30 +113,46 @@ struct _sp_app_t {
 	LV2_Atom_Forge forge;
 
 	uint32_t num_mods;
-	mod_t *mods [512]; //TODO how big?
+	mod_t *mods [512]; //TODO how many?
 };
 
 // rt
-static inline int
-_sp_app_to_ui(sp_app_t *app, LV2_Atom *atom)
+static inline void *
+_sp_app_to_ui_request(sp_app_t *app, size_t size)
 {
-	return app->driver->to_ui_cb(atom, app->data);
+	return app->driver->to_ui_request(size, app->data);
+}
+static inline void
+_sp_app_to_ui_advance(sp_app_t *app, size_t size)
+{
+	app->driver->to_ui_advance(size, app->data);
 }
 
 // rt
-static inline int
-_sp_app_to_worker(sp_app_t *app, LV2_Atom *atom)
+static inline void *
+_sp_app_to_worker_request(sp_app_t *app, size_t size)
 {
-	return app->driver->to_worker_cb(atom, app->data);
+	return app->driver->to_worker_request(size, app->data);
+}
+static inline void
+_sp_app_to_worker_advance(sp_app_t *app, size_t size)
+{
+	app->driver->to_worker_advance(size, app->data);
 }
 
 // non-rt worker-thread
-static inline int
-_sp_worker_to_app(sp_app_t *app, LV2_Atom *atom)
+static inline void *
+_sp_worker_to_app_request(sp_app_t *app, size_t size)
 {
-	return app->driver->to_app_cb(atom, app->data);
+	return app->driver->to_app_request(size, app->data);
+}
+static inline void
+_sp_worker_to_app_advance(sp_app_t *app, size_t size)
+{
+	app->driver->to_app_advance(size, app->data);
 }
 
+//TODO move to synthpod_jack
 // non-rt || rt with LV2_LOG__Trace
 static int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
@@ -177,13 +210,12 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	app->driver = driver;
 	app->data = data;
 
-	lv2_atom_forge_init(&app->forge, app->driver->map);
-
 	app->world = lilv_world_new();
 	lilv_world_load_all(app->world);
 	app->plugs = lilv_world_get_all_plugins(app->world);
 
-	sp_regs_init(&app->regs, app->world, driver->map);
+	lv2_atom_forge_init(&app->forge, app->driver->map);
+	sp_regs_init(&app->regs, app->world, app->driver->map);
 	
 	return app;
 }
@@ -214,7 +246,8 @@ void *
 sp_app_get_system_source(sp_app_t *app, uint32_t index)
 {
 	//TODO
-	return NULL;
+	static uint8_t tmp [8192];
+	return tmp;
 }
 
 // rt
@@ -222,7 +255,8 @@ const void *
 sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 {
 	//TODO
-	return NULL;
+	static uint8_t tmp [8192];
+	return tmp;
 }
 
 // rt
@@ -232,15 +266,18 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 	mod_t *mod = handle;
 	sp_app_t *app = mod->app;
 
-	LV2_Atom *atom = NULL;
-	//TODO
-	_sp_app_to_worker(app, atom);
+	size_t work_size = sizeof(work_t) + size;
+	work_t *work = _sp_app_to_worker_request(app, work_size);
+	work->target = mod;
+	work->size = size;
+	memcpy(work->payload, data, size);
+	_sp_app_to_worker_advance(app, work_size);
 
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
 // non-rt worker-thread
-static inline void
+static inline mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri)
 {
 	LilvNode *uri_node = lilv_new_uri(app->world, uri);
@@ -251,7 +288,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 			
 	if(!plug || !lilv_plugin_verify(plug))
-		return;
+		return NULL;
 
 	mod_t *mod = calloc(1, sizeof(mod_t));
 
@@ -337,7 +374,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
 			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
-			//	: PORT_BUFFER_TYPE_NONE; //FIXME
+			//	: PORT_BUFFER_TYPE_NONE; //TODO discriminate properly
 		}
 		else
 			; //TODO abort
@@ -354,233 +391,225 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		lilv_instance_connect_port(mod->inst, i, tar->buf);
 	}
 
-	struct {
-		LV2_Atom_Object obj;
-		LV2_Atom_Property_Body prop1;
-		int32_t val1;
-	} note = {
-		.obj = {
-			.atom = {
-				.size = sizeof(LV2_Atom_Object_Body) + sizeof(LV2_Atom_Property_Body)
-							+ sizeof(int32_t),
-				.type = app->forge.Object
-			},
-			.body = {
-				.id = 0,
-				.otype = app->regs.synthpod.module_add.urid
-			}
-		},
-		.prop1 = {
-			.key = app->regs.synthpod.module_index.urid,
-			.context = 0,
-			.value = {
-				.size = sizeof(int32_t),
-				.type = app->forge.Int
-			}
-		},
-		.val1 = app->num_mods
-	};
-	_sp_worker_to_app(app, &note.obj.atom);
-	
-	//TODO move to rt-thread app->mods[app->num_mods++] = mod;
+	return mod;
 }
 
 // non-rt worker-thread
 static inline void
-_sp_app_mod_del(sp_app_t *app, uint32_t module_index)
+_sp_app_mod_del(sp_app_t *app, mod_t *mod)
 {
-	mod_t *mod = app->mods[module_index];
-	
 	// deinit instance
 	lilv_instance_deactivate(mod->inst);
 	lilv_instance_free(mod->inst);
 
 	// deinit ports
-	for(uint32_t i=0; i<mod->num_ports; i++)
+	for(int i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 		free(port->buf);
 	}
 	free(mod->ports);
 	free(mod);
-
-	struct {
-		LV2_Atom_Object obj;
-		LV2_Atom_Property_Body prop1;
-		int32_t val1;
-	} note = {
-		.obj = {
-			.atom = {
-				.size = sizeof(LV2_Atom_Object_Body) + sizeof(LV2_Atom_Property_Body)
-							+ sizeof(int32_t),
-				.type = app->forge.Object
-			},
-			.body = {
-				.id = 0,
-				.otype = app->regs.synthpod.module_del.urid
-			}
-		},
-		.prop1 = {
-			.key = app->regs.synthpod.module_index.urid,
-			.context = 0,
-			.value = {
-				.size = sizeof(int32_t),
-				.type = app->forge.Int
-			}
-		},
-		.val1 = module_index
-	};
-	_sp_worker_to_app(app, &note.obj.atom);
 }
 
-// rt
-static inline void
-_sp_app_port_set(sp_app_t *app,
-	uint32_t module_index, uint32_t port_index, const LV2_Atom *atom)
+static inline mod_t *
+_sp_app_mod_get(sp_app_t *app, uuid_t uuid)
 {
-	mod_t *mod = app->mods[module_index];
-	port_t *port = &mod->ports[port_index];
-
-	switch(port->protocol)
+	for(int i=0; i<app->num_mods; i++)
 	{
-		case PORT_PROTOCOL_FLOAT:
-		{
-			const LV2_Atom_Float *val = (const LV2_Atom_Float *)atom;
-			*(float *)port->buf = val->body;
-			port->last = val->body;
-		}
-		case PORT_PROTOCOL_ATOM:
-		{
-			size_t size = sizeof(LV2_Atom) + atom->size;
-			memcpy(port->buf, atom, size);
-		}
-		case PORT_PROTOCOL_SEQUENCE:
-		{
-			//TODO inject at end of sequence
-		}
-		case PORT_PROTOCOL_PEAK:
-			// is never sent from ui
-			break;
+		mod_t *mod = app->mods[i];
+		if(!uuid_compare(mod->uuid, uuid))
+			return mod;
 	}
+
+	return NULL;
 }
 
-// rt
-static inline void
-_sp_app_port_connect(sp_app_t *app,
-	uint32_t module_source_index, uint32_t port_source_index,
-	uint32_t module_sink_index, uint32_t port_sink_index)
+static inline port_t *
+_sp_app_port_get(sp_app_t *app, uuid_t uuid, uint32_t index)
 {
-	//TODO
-}
-
-// rt
-static inline void
-_sp_app_port_disconnect(sp_app_t *app,
-	uint32_t module_source_index, uint32_t port_source_index,
-	uint32_t module_sink_index, uint32_t port_sink_index)
-{
-	//TODO
+	mod_t *mod = _sp_app_mod_get(app, uuid);
+	if(mod && (index < mod->num_ports) )
+		return &mod->ports[index];
+	
+	return NULL;
 }
 
 // rt
 void
-sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom, void *data)
+sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 {
-	const LV2_Atom_Object *ao = (const LV2_Atom_Object *)atom;
-	const LV2_Atom_Object_Body *body = &ao->body;
+	const transmit_t *transmit = (const transmit_t *)atom;
+	LV2_URID protocol = transmit->protocol.body;
 
-	if(body->otype == app->regs.synthpod.module_add.urid)
+	if(protocol == app->regs.port.float_protocol.urid)
 	{
-		// redirect to worker thread
-		_sp_app_to_worker(app, (LV2_Atom *)ao);
+		const transfer_float_t *trans = (const transfer_float_t *)atom;
+
+		uuid_t uuid;
+		uuid_parse(trans->transfer.str, uuid);
+		port_t *port = _sp_app_port_get(app, uuid, trans->transfer.port.body);
+		if(!port) // port not found
+			return;
+
+		// set port value
+		void *buf = port->num_sources == 1
+			? port->sources[0]->buf // direct link to source output buffer
+			: port->buf; // empty (n==0) or multiplexed (n>1) link
+		*(float *)buf = trans->value.body;
+		port->last = trans->value.body;
 	}
-	else if(body->otype == app->regs.synthpod.module_del.urid)
+	else if(protocol == app->regs.port.atom_transfer.urid)
 	{
-		// redirect to worker thread
-		_sp_app_to_worker(app, (LV2_Atom *)ao);
+		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
+
+		uuid_t uuid;
+		uuid_parse(trans->transfer.str, uuid);
+		port_t *port = _sp_app_port_get(app, uuid, trans->transfer.port.body);
+		if(!port) // port not found
+			return;
+
+		// set port value
+		void *buf = port->num_sources == 1
+			? port->sources[0]->buf // direct link to source output buffer
+			: port->buf; // empty (n==0) or multiplexed (n>1) link
+		memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
 	}
-	else if(body->otype == app->regs.synthpod.port_update.urid)
+	else if(protocol == app->regs.port.event_transfer.urid)
 	{
-		const LV2_Atom_Int *module_index = NULL;
-		const LV2_Atom_Int *port_index = NULL;
-		const LV2_Atom *port_value = NULL;
-		LV2_Atom_Object_Query q [] = {
-			{ app->regs.synthpod.module_index.urid, (const LV2_Atom **)&module_index },
-			{ app->regs.synthpod.port_index.urid, (const LV2_Atom **)&port_index },
-			{ app->regs.synthpod.port_value.urid, &port_value },
-			LV2_ATOM_OBJECT_QUERY_END
-		};
-		lv2_atom_object_query(ao, q);
+		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
 
-		_sp_app_port_set(app, module_index->body, port_index->body, port_value);
+		uuid_t uuid;
+		uuid_parse(trans->transfer.str, uuid);
+		port_t *port = _sp_app_port_get(app, uuid, trans->transfer.port.body);
+		if(!port) // port not found
+			return;
+
+		void *buf = port->num_sources == 1
+			? port->sources[0]->buf // direct link to source output buffer
+			: port->buf; // empty (n==0) or multiplexed (n>1) link
+
+		//inject atom at end of (existing) sequence
+		LV2_Atom_Sequence *seq = buf;
+
+		// find last event in sequence
+		LV2_Atom_Event *last = NULL;
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+			last = ev;
+
+		void *ptr;
+		if(last)
+		{
+			ptr = last;
+			ptr += sizeof(LV2_Atom_Event) + last->body.size;
+		}
+		else
+			ptr = LV2_ATOM_CONTENTS(LV2_Atom_Sequence, seq);
+
+		// append event at end of sequence
+		// TODO check for buffer overflow
+		LV2_Atom_Event *new_last = ptr;
+		new_last->time.frames = last ? last->time.frames : 0;
+		memcpy(&new_last->body, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+		seq->atom.size += sizeof(LV2_Atom_Event) + ((atom->size + 7U) & (~7U));
 	}
-	else if(body->otype == app->regs.synthpod.port_connect.urid)
+	else if(protocol == app->regs.synthpod.module_add.urid)
 	{
-		const LV2_Atom_Int* module_source_index = NULL;
-		const LV2_Atom_Int* module_sink_index = NULL;
-		const LV2_Atom_Int* port_source_index = NULL;
-		const LV2_Atom_Int* port_sink_index = NULL;
+		const transmit_module_add_t *module_add = (const transmit_module_add_t *)atom;
 
-		LV2_Atom_Object_Query q [] = {
-			{ app->regs.synthpod.module_source_index.urid, (const LV2_Atom **)&module_source_index },
-			{ app->regs.synthpod.module_sink_index.urid, (const LV2_Atom **)&module_sink_index },
-			{ app->regs.synthpod.port_source_index.urid, (const LV2_Atom **)&port_source_index },
-			{ app->regs.synthpod.port_sink_index.urid, (const LV2_Atom **)&port_sink_index },
-			LV2_ATOM_OBJECT_QUERY_END
-		};
-		lv2_atom_object_query(ao, q);
-
-		_sp_app_port_connect(app, module_source_index->body, port_source_index->body,
-			module_sink_index->body, port_sink_index->body);
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + module_add->uri.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+			work->target = app;
+			work->size = size - sizeof(work_t);
+		job_t *job = (job_t *)work->payload;
+			job->type = JOB_TYPE_MODULE_ADD;
+			memcpy(job->uri, module_add->str, module_add->uri.atom.size);
+		_sp_app_to_worker_advance(app, size);
 	}
-	else if(body->otype == app->regs.synthpod.port_disconnect.urid)
+	else if(protocol == app->regs.synthpod.module_del.urid)
 	{
-		const LV2_Atom_Int* module_source_index = NULL;
-		const LV2_Atom_Int* module_sink_index = NULL;
-		const LV2_Atom_Int* port_source_index = NULL;
-		const LV2_Atom_Int* port_sink_index = NULL;
+		const transmit_module_del_t *module_del = (const transmit_module_del_t *)atom;
 
-		LV2_Atom_Object_Query q [] = {
-			{ app->regs.synthpod.module_source_index.urid, (const LV2_Atom **)&module_source_index },
-			{ app->regs.synthpod.module_sink_index.urid, (const LV2_Atom **)&module_sink_index },
-			{ app->regs.synthpod.port_source_index.urid, (const LV2_Atom **)&port_source_index },
-			{ app->regs.synthpod.port_sink_index.urid, (const LV2_Atom **)&port_sink_index },
-			LV2_ATOM_OBJECT_QUERY_END
-		};
-		lv2_atom_object_query(ao, q);
+		// search mod according to its UUID
+		uuid_t uuid;
+		uuid_parse(module_del->str, uuid);
+		mod_t *mod = _sp_app_mod_get(app, uuid);
+		if(!mod) // mod not found
+			return;
 
-		_sp_app_port_disconnect(app, module_source_index->body, port_source_index->body,
-			module_sink_index->body, port_sink_index->body);
+		// eject module from graph
+		int offset = mod - app->mods[0];
+		app->num_mods -= 1;
+		for(int m=offset; m<app->num_mods; m++)
+			app->mods[m] = app->mods[m+1];
+
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t);
+		work_t *work = _sp_app_to_worker_request(app, size);
+			work->target = app;
+			work->size = size - sizeof(work_t);
+		job_t *job = (job_t *)work->payload;
+			job->type = JOB_TYPE_MODULE_DEL;
+			job->mod = mod;
+		_sp_app_to_worker_advance(app, size);
+	}
+	else if(protocol == app->regs.synthpod.port_connect.urid)
+	{
+		const transmit_port_connect_t *conn = (const transmit_port_connect_t *)atom;
+
+		uuid_t src_uuid;
+		uuid_t snk_uuid;
+		uuid_parse(conn->src_str, src_uuid);
+		uuid_parse(conn->snk_str, snk_uuid);
+		port_t *src_port = _sp_app_port_get(app, src_uuid, conn->src_port.body);
+		port_t *snk_port = _sp_app_port_get(app, snk_uuid, conn->snk_port.body);
+
+		//TODO actually connect
+	}
+	else if(protocol == app->regs.synthpod.port_disconnect.urid)
+	{
+		const transmit_port_disconnect_t *disconn = (const transmit_port_disconnect_t *)atom;
+
+		uuid_t src_uuid;
+		uuid_t snk_uuid;
+		uuid_parse(disconn->src_str, src_uuid);
+		uuid_parse(disconn->snk_str, snk_uuid);
+		port_t *src_port = _sp_app_port_get(app, src_uuid, disconn->src_port.body);
+		port_t *snk_port = _sp_app_port_get(app, snk_uuid, disconn->snk_port.body);
+
+		//TODO actually disconnect
 	}
 }
 
 // rt
 void
-sp_app_from_worker(sp_app_t *app, const LV2_Atom *atom, void *data)
+sp_app_from_worker(sp_app_t *app, const void *data)
 {
-	if(atom->type == app->forge.Object)
+	const work_t *work = data;
+
+	if(work->target == app) // work is for self
 	{
-		const LV2_Atom_Object *ao = (const LV2_Atom_Object *)atom;
-		const LV2_Atom_Object_Body *body = &ao->body;
+		const job_t *job = (const job_t *)work->payload;
 
-		if(body->otype == app->regs.synthpod.module_add.urid)
+		switch(job->type)
 		{
-			// TODO actually inject into graph
+			case JOB_TYPE_MODULE_ADD:
+			{
+				// inject module into module graph
+				app->mods[app->num_mods] = job->mod;
+				app->num_mods += 1;
+				
+				//TODO signal to UI
 
-			// redirect to UI
-			_sp_app_to_ui(app, (LV2_Atom *)ao);
-		}
-		else if(body->otype == app->regs.synthpod.module_del.urid)
-		{
-			// TODO actually inject into graph
-
-			// redirect to UI
-			_sp_app_to_ui(app, (LV2_Atom *)ao);
+				break;
+			}
+			default:
+				break; // never reached
 		}
 	}
-	else
-	{	
-		const work_t *work = LV2_ATOM_BODY_CONST(atom);
+	else // work is for module
+	{
 		mod_t *mod = work->target;
 
 		if(mod && mod->worker.iface && mod->worker.iface->work_response)
@@ -597,63 +626,60 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 {
 	mod_t *mod = handle;
 	sp_app_t *app = mod->app;
-	uint8_t *payload = (uint8_t *)data;
 
-	uint8_t buf [8192]; //TODO solve differently
+	size_t work_size = sizeof(work_t) + size;
+	work_t *work = _sp_worker_to_app_request(app, work_size);
+		work->target = mod;
+		work->size = size;
+		memcpy(work->payload, data, size);
+	_sp_worker_to_app_advance(app, work_size);
 
-	LV2_Atom *atom = (LV2_Atom *)buf;
-	atom->type = 0; //TODO
-	atom->size = size;
-
-	work_t *work = LV2_ATOM_BODY(atom);
-	work->target = mod;
-	memcpy(work->payload, data, size);
-
-	_sp_worker_to_app(app, atom);
 	return LV2_WORKER_SUCCESS;
 }
 
 // non-rt worker thread
 void
-sp_worker_from_app(sp_app_t *app, const LV2_Atom *atom, void *data)
+sp_worker_from_app(sp_app_t *app, const void *data)
 {
-	if(atom->type == app->forge.Object)
+	const work_t *work = data;
+
+	if(work->target == app) // work is for self
 	{
-		const LV2_Atom_Object *ao = (const LV2_Atom_Object *)atom;
-		const LV2_Atom_Object_Body *body = &ao->body;
+		const job_t *job = (const job_t *)work->payload;
 
-		if(body->otype == app->regs.synthpod.module_add.urid)
+		switch(job->type)
 		{
-			const LV2_Atom_String* module_uri = NULL;
-			LV2_Atom_Object_Query q [] = {
-				{ app->forge.URI, (const LV2_Atom **)&module_uri },
-				LV2_ATOM_OBJECT_QUERY_END
-			};
-			lv2_atom_object_query(ao, q);
-			
-			_sp_app_mod_add(app, LV2_ATOM_BODY_CONST(module_uri));
-		}
-		else if(body->otype == app->regs.synthpod.module_del.urid)
-		{
-			const LV2_Atom_Int* module_index = NULL;
-			LV2_Atom_Object_Query q [] = {
-				{ app->regs.synthpod.module_index.urid, (const LV2_Atom **)&module_index },
-				LV2_ATOM_OBJECT_QUERY_END
-			};
-			lv2_atom_object_query(ao, q);
+			case JOB_TYPE_MODULE_ADD:
+			{
+				mod_t *mod = _sp_app_mod_add(app, job->uri);
 
-			_sp_app_mod_del(app, module_index->body);
+				size_t work_size = sizeof(work_t) + sizeof(job_t);
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+					work->target = app;
+					work->size = sizeof(job_t);
+				job_t *job = (job_t *)work->payload;
+					job->type = JOB_TYPE_MODULE_ADD;
+					job->mod = mod;
+				_sp_worker_to_app_advance(app, work_size);
+
+				break;
+			}
+			case JOB_TYPE_MODULE_DEL:
+			{
+				_sp_app_mod_del(app, job->mod);
+
+				break;
+			}
 		}
 	}
-	else
+	else // work is for module
 	{
-		const work_t *work = LV2_ATOM_BODY_CONST(atom);
 		mod_t *mod = work->target;
-
+		
 		if(mod && mod->worker.iface && mod->worker.iface->work)
 		{
 			mod->worker.iface->work(mod->handle, _sp_worker_respond, mod,
-				work->size, &work->payload);
+				work->size, work->payload);
 			//TODO check return status
 		}
 	}
@@ -661,9 +687,312 @@ sp_worker_from_app(sp_app_t *app, const LV2_Atom *atom, void *data)
 
 // rt
 void
-sp_app_run(sp_app_t *app, uint32_t nsamples)
+sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 {
-	//TODO
+	// iterate over all modules
+	for(int m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		// handle work
+		if(mod->worker.iface)
+		{
+			// the actual work should already be done at this point in time
+
+			if(mod->worker.iface->end_run)
+				mod->worker.iface->end_run(mod->handle);
+		}
+	
+		// clear atom sequence input / output buffers where needed
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+			{
+				if(port->num_sources == 1)
+					continue; // atom already cleared/filled by source (direct link)
+
+				LV2_Atom_Sequence *seq = port->buf;
+				seq->atom.type = app->regs.port.sequence.urid;
+				seq->atom.size = port->direction == PORT_DIRECTION_INPUT
+					? sizeof(LV2_Atom_Sequence_Body) // empty sequence
+					: app->driver->seq_size; // capacity
+			}
+		}
+
+		// multiplex multiple sources to single sink where needed
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+
+			if(port->direction == PORT_DIRECTION_OUTPUT)
+				continue; // not a sink
+
+			if(port->num_sources > 1) // needs multiplexing
+			{
+				if(port->type == PORT_TYPE_CONTROL)
+				{
+					float *val = port->buf;
+					*val = 0; // init
+					for(int i=0; i<port->num_sources; i++)
+					{
+						float *src = port->sources[i]->buf;
+						*val += *src;
+					}
+				}
+				else if( (port->type == PORT_TYPE_AUDIO)
+							|| (port->type == PORT_TYPE_CV) )
+				{
+					float *val = port->buf;
+					memset(val, 0, app->driver->period_size * sizeof(float)); // init
+					for(int i=0; i<port->num_sources; i++)
+					{
+						float *src = port->sources[i]->buf;
+						for(int j=0; j<app->driver->period_size; j++)
+						{
+							val[j] += src[j];
+						}
+					}
+				}
+				else if( (port->type == PORT_TYPE_ATOM)
+							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+				{
+					LV2_Atom_Forge *forge = &app->forge;
+					lv2_atom_forge_set_buffer(forge, port->buf, app->driver->seq_size);
+					LV2_Atom_Forge_Frame frame;
+					lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+					LV2_Atom_Sequence *seq [32]; //TODO how big?
+					LV2_Atom_Event *itr [32]; //TODO how big?
+					for(int i=0; i<port->num_sources; i++)
+					{
+						seq[i] = port->sources[i]->buf;
+						itr[i] = lv2_atom_sequence_begin(&seq[i]->body);
+					}
+
+					while(1)
+					{
+						int nxt = -1;
+						int64_t frames = app->driver->period_size;
+
+						// search for next event in timeline accross source ports
+						for(i=0; i<port->num_sources; i++)
+						{
+							if(lv2_atom_sequence_is_end(&seq[i]->body, seq[i]->atom.size, itr[i]))
+								continue; // reached sequence end
+							
+							if(itr[i]->time.frames < frames)
+							{
+								frames = itr[i]->time.frames;
+								nxt = i;
+							}
+						}
+
+						if(nxt >= 0) // next event found
+						{
+							// add event to forge
+							size_t len = sizeof(LV2_Atom) + itr[nxt]->body.size;
+							lv2_atom_forge_frame_time(forge, frames);
+							lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
+							lv2_atom_forge_pad(forge, len);
+
+							// advance iterator
+							itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
+						}
+						else
+							break; // no more events to process
+					};
+					
+					lv2_atom_forge_pop(forge, &frame);
+				}
+			}
+		}
+	}
+}
+
+//rt
+static inline void
+_sp_transfer_fill(sp_app_t *app, transfer_t *trans, uint32_t size,
+	LV2_URID protocol, port_t *port)
+{
+	trans->transmit.tuple.atom.size = size - sizeof(LV2_Atom);
+	trans->transmit.tuple.atom.type = app->forge.Tuple;
+
+	trans->transmit.protocol.atom.size = sizeof(LV2_URID);
+	trans->transmit.protocol.atom.type = app->forge.URID;
+	trans->transmit.protocol.body = protocol;
+
+	trans->uuid.atom.size = 37;
+	trans->uuid.atom.type = app->forge.String;
+	uuid_unparse(port->mod->uuid, trans->str);
+	
+	trans->port.atom.size = sizeof(int32_t);
+	trans->port.atom.type = app->forge.Int;
+	trans->port.body = port->index;
+}
+
+// rt
+static inline void
+_sp_transfer_float_fill(sp_app_t *app, transfer_float_t *trans,
+	port_t *port, float value)
+{
+	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_float_t),
+		app->regs.port.float_protocol.urid, port);
+	
+	trans->value.atom.size = sizeof(float);
+	trans->value.atom.type = app->forge.Float;
+	trans->value.body = value;
+}
+
+// rt
+static inline void
+_sp_transfer_peak_fill(sp_app_t *app, transfer_peak_t *trans,
+	port_t *port, uint32_t period_start, uint32_t period_size, float peak)
+{
+	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_peak_t),
+		app->regs.port.peak_protocol.urid, port);
+	
+	trans->period_start.atom.size = sizeof(uint32_t);
+	trans->period_start.atom.type = app->forge.Int;
+	trans->period_start.body = period_start;
+	
+	trans->period_size.atom.size = sizeof(uint32_t);
+	trans->period_size.atom.type = app->forge.Int;
+	trans->period_size.body = period_size;
+	
+	trans->peak.atom.size = sizeof(float);
+	trans->peak.atom.type = app->forge.Float;
+	trans->peak.body = peak;
+}
+
+// rt
+static inline void
+_sp_transfer_atom_fill(sp_app_t *app, transfer_atom_t *trans,
+	port_t *port, const LV2_Atom *atom)
+{
+	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
+
+	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_atom_t) + atom_size,
+		app->regs.port.atom_transfer.urid, port);
+
+	memcpy(trans->atom, atom, atom_size);
+}
+
+// rt
+static inline void
+_sp_transfer_event_fill(sp_app_t *app, transfer_atom_t *trans,
+	port_t *port, const LV2_Atom *atom)
+{
+	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
+
+	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_atom_t) + atom_size,
+		app->regs.port.event_transfer.urid, port);
+
+	memcpy(trans->atom, atom, atom_size);
+}
+
+// rt
+void
+sp_app_run_post(sp_app_t *app, uint32_t nsamples)
+{
+	// iterate over all modules
+	for(int m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		// run plugin
+		lilv_instance_run(mod->inst, app->driver->period_size);
+		
+		// handle ui post
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+
+			if(port->protocol == 0) // no notification/subscription
+				continue;
+				
+			const void *buf = port->num_sources == 1
+				? port->sources[0]->buf // direct link to source buffer
+				: port->buf; // dummy (n==0) or multiplexed (n>1) link
+
+			if(port->protocol == app->regs.port.float_protocol.urid)
+			{
+				const float val = *(const float *)buf;
+				if(val != port->last) // has value changed since last time?
+				{
+					// update last value
+					port->last = val;
+
+					size_t size = sizeof(transfer_float_t);
+					transfer_float_t *trans = _sp_app_to_ui_request(app, size);
+					_sp_transfer_float_fill(app, trans, port, val);
+					_sp_app_to_ui_advance(app, size);
+				}
+			}
+			else if(port->protocol == app->regs.port.peak_protocol.urid)
+			{
+				const float *vec = (const float *)buf;
+
+				// find peak value in current period
+				float peak = 0.f;
+				for(int j=0; j<app->driver->period_size; j++)
+				{
+					float val = fabs(vec[j]);
+					if(val > peak)
+						peak = val;
+				}
+
+				port->period_cnt += 1; // increase period counter
+				//printf("%u %f\n", port->period_cnt, peak);
+
+				if(  (peak != port->last) //TODO make below two configurable
+					&& (fabs(peak - port->last) > 0.001) // ignore smaller changes
+					&& ((port->period_cnt & 0x1f) == 0x00) ) // only update every 32 samples
+				{
+					printf("peak different: %i %i\n", port->last == 0.f, peak == 0.f);
+
+					// update last value
+					port->last = peak;
+
+					size_t size = sizeof(transfer_peak_t);
+					transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
+					_sp_transfer_peak_fill(app, trans, port,
+						port->period_cnt, app->driver->period_size, peak);
+					_sp_app_to_ui_advance(app, size);
+				}
+			}
+			else if(port->protocol == app->regs.port.atom_transfer.urid)
+			{
+				const LV2_Atom *atom = buf;
+				if(atom->size == 0) // empty atom
+					continue;
+		
+				size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
+				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
+				_sp_transfer_atom_fill(app, trans, port, atom);
+				_sp_app_to_ui_advance(app, size);
+			}
+			else if(port->protocol == app->regs.port.event_transfer.urid)
+			{
+				const LV2_Atom_Sequence *seq = buf;
+				if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // empty seq
+					continue;
+
+				// transfer each atom of sequence separately
+				LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+				{
+					const LV2_Atom *atom = &ev->body;
+
+					size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
+					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
+					_sp_transfer_event_fill(app, trans, port, atom);
+					_sp_app_to_ui_advance(app, size);
+				}
+			}
+		}
+	}
 }
 
 // non-rt
@@ -679,6 +1008,10 @@ sp_app_free(sp_app_t *app)
 {
 	if(!app)
 		return;
+
+	// free mods
+	for(int m=0; m<app->num_mods; m++)
+		_sp_app_mod_del(app, app->mods[m]);
 	
 	sp_regs_deinit(&app->regs);
 

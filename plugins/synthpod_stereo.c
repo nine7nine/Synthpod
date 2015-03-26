@@ -30,6 +30,8 @@
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 
+#include <Eina.h>
+
 typedef struct _handle_t handle_t;
 
 struct _handle_t {
@@ -63,6 +65,12 @@ struct _handle_t {
 		LV2_Worker_Respond_Function respond;
 		LV2_Worker_Respond_Handle target;
 	} worker;
+
+	struct {
+		uint8_t ui [8192];
+		uint8_t worker [8192];
+		uint8_t app [8192];
+	} buf;
 };
 
 static void
@@ -136,7 +144,7 @@ _work(LV2_Handle instance,
 
 	const LV2_Atom *atom = body;
 	assert(size == sizeof(LV2_Atom) + atom->size);
-	sp_worker_from_app(handle->app, atom, handle);
+	sp_worker_from_app(handle->app, atom);
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -149,7 +157,7 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 
 	const LV2_Atom *atom = body;
 	assert(size == sizeof(LV2_Atom) + atom->size);
-	sp_app_from_worker(handle->app, atom, handle);
+	sp_app_from_worker(handle->app, atom);
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -170,47 +178,76 @@ static const LV2_Worker_Interface work_iface = {
 };
 
 // rt-thread
-static int
-_to_ui_cb(LV2_Atom *atom, void *data)
+static void *
+_to_ui_request(size_t size, void *data)
+{
+	handle_t *handle = data;
+
+	return handle->buf.ui;
+}
+static void
+_to_ui_advance(size_t size, void *data)
 {
 	handle_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge.notify;
 
+	LV2_Atom *atom = (LV2_Atom *)handle->buf.ui;
+
 	if(forge->offset + sizeof(LV2_Atom_Event) + atom->size > forge->size)
-		return -1; // buffer overflow
+		return; // buffer overflow
 
-	uint32_t size = sizeof(LV2_Atom_Forge) + atom->size;
+	uint32_t eventsize = sizeof(LV2_Atom_Event) + atom->size;
 	lv2_atom_forge_frame_time(forge, 0);
-	lv2_atom_forge_raw(forge, atom, size);
-	lv2_atom_forge_pad(forge, size);
-
-	return 0;
+	lv2_atom_forge_raw(forge, atom, eventsize);
+	lv2_atom_forge_pad(forge, eventsize);
 }
 
 // rt-thread
-static int
-_to_worker_cb(LV2_Atom *atom, void *data)
+static void *
+_to_worker_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return handle->driver.schedule->schedule_work(handle->driver.schedule->handle,
-		sizeof(LV2_Atom) + atom->size, atom) == LV2_WORKER_SUCCESS ? 0 : -1;
+	return handle->buf.worker;
+}
+static void
+_to_worker_advance(size_t size, void *data)
+{
+	handle_t *handle = data;
+	
+	LV2_Atom *atom = (LV2_Atom *)handle->buf.worker;
+
+	handle->driver.schedule->schedule_work(handle->driver.schedule->handle,
+		sizeof(LV2_Atom) + atom->size, atom);
+	//TODO check return result
 }
 
 // non-rt worker-thread
-static int
-_to_app_cb(LV2_Atom *atom, void *data)
+static void *
+_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return handle->worker.respond(handle->worker.target,
-		sizeof(LV2_Atom) + atom->size, atom) == LV2_WORKER_SUCCESS ? 0 : -1;
+	return handle->buf.app;
+}
+static void
+_to_app_advance(size_t size, void *data)
+{
+	handle_t *handle = data;
+
+	LV2_Atom *atom = (LV2_Atom *)handle->buf.app;
+
+	handle->worker.respond(handle->worker.target,
+		sizeof(LV2_Atom) + atom->size, atom);
+	//TODO check return result
 }
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
 {
+	eina_init();
+
 	int i;
 	handle_t *handle = calloc(1, sizeof(handle_t));
 	if(!handle)
@@ -223,7 +260,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	for(i=0; features[i]; i++)
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
-		if(!strcmp(features[i]->URI, LV2_URID__unmap))
+		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
 			handle->driver.schedule = (LV2_Worker_Schedule *)features[i]->data;
@@ -247,15 +284,18 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	handle->driver.to_ui_cb = _to_ui_cb;
-	handle->driver.to_worker_cb = _to_worker_cb;
-	handle->driver.to_app_cb = _to_app_cb;
+	handle->driver.to_ui_request = _to_ui_request;
+	handle->driver.to_ui_advance = _to_ui_advance;
+	handle->driver.to_worker_request = _to_worker_request;
+	handle->driver.to_worker_advance = _to_worker_advance;
+	handle->driver.to_app_request = _to_app_request;
+	handle->driver.to_app_advance = _to_app_advance;
 
 	handle->app = sp_app_new(&handle->driver, handle);
 	if(!handle->app)
 	{
 		lprintf(handle, handle->uri.log.error,
-			"%s: creatio of app failed\n",
+			"%s: creation of app failed\n",
 			descriptor->URI);
 		free(handle);
 		return NULL;
@@ -345,16 +385,19 @@ run(LV2_Handle instance, uint32_t nsamples)
 		(uint8_t *)handle->port.event_source, handle->port.notify->atom.size);
 	lv2_atom_forge_sequence_head(&handle->forge.notify, &frame.notify, 0);
 
+	// run app pre
+	sp_app_run_pre(app, nsamples);
+
 	// handle events from UI
 	LV2_ATOM_SEQUENCE_FOREACH(handle->port.control, ev)
 	{
 		const LV2_Atom *atom = &ev->body;
 		//TODO check atom type
-		sp_app_from_ui(app, atom, handle);
+		sp_app_from_ui(app, atom);
 	}
-
-	// run app
-	sp_app_run(app, nsamples);
+	
+	// run app post
+	sp_app_run_post(app, nsamples);
 		
 	// end sequence(s)
 	lv2_atom_forge_pop(&handle->forge.event_source, &frame.event_source);
@@ -376,6 +419,8 @@ cleanup(LV2_Handle instance)
 
 	sp_app_free(handle->app);
 	free(handle);
+
+	eina_shutdown();
 }
 
 static const void*

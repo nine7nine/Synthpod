@@ -25,14 +25,11 @@
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 
-#include <synthpod.h>
-
-#define NUM_FEATURES 4
-
 typedef struct _sp_app_t sp_app_t;
 typedef struct _sp_app_driver_t sp_app_driver_t;
 
-typedef int (*sp_to_cb_t)(LV2_Atom *atom, void *data);
+typedef void *(*sp_to_request_t)(size_t size, void *data);
+typedef void (*sp_to_advance_t)(size_t size, void *data);
 
 struct _sp_app_driver_t {
 	uint32_t sample_rate;
@@ -45,11 +42,15 @@ struct _sp_app_driver_t {
 	LV2_Log_Log *log;
 
 	// from app
-	sp_to_cb_t to_ui_cb;
-	sp_to_cb_t to_worker_cb;
+	sp_to_request_t to_ui_request;
+	sp_to_advance_t to_ui_advance;
+	
+	sp_to_request_t to_worker_request;
+	sp_to_advance_t to_worker_advance;
 
 	// from worker
-	sp_to_cb_t to_app_cb;
+	sp_to_request_t to_app_request;
+	sp_to_advance_t to_app_advance;
 };
 
 sp_app_t *
@@ -71,16 +72,19 @@ const void *
 sp_app_get_system_sink(sp_app_t *app, uint32_t index);
 
 void
-sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom, void *data);
+sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom);
 
 void
-sp_app_from_worker(sp_app_t *app, const LV2_Atom *atom, void *data);
+sp_app_from_worker(sp_app_t *app, const void *data);
 
 void
-sp_worker_from_app(sp_app_t *app, const LV2_Atom *atom, void *data);
+sp_worker_from_app(sp_app_t *app, const void *data);
 
 void
-sp_app_run(sp_app_t *app, uint32_t nsamples);
+sp_app_run_pre(sp_app_t *app, uint32_t nsamples);
+
+void
+sp_app_run_post(sp_app_t *app, uint32_t nsamples);
 
 void
 sp_app_deactivate(sp_app_t *app);

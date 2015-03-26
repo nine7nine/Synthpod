@@ -48,10 +48,10 @@ synthpod:stereo
 
 synthpod:common_ui
 	a ui:X11UI ;
-	lv2:binary <synthpod_ui@LIB_EXT@> ;
+	ui:binary <synthpod_ui@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_eo
 	a ui:EoUI ;
-	lv2:binary <synthpod_ui@LIB_EXT@> ;
+	ui:binary <synthpod_ui@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .

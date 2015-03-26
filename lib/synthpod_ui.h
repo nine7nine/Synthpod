@@ -24,11 +24,7 @@
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
-#include <synthpod.h>
-
 #include <Elementary.h>
-
-#define NUM_UI_FEATURES 6
 
 typedef enum _port_widget_t port_widget_t;
 
@@ -45,14 +41,16 @@ enum _port_widget_t {
 typedef struct _sp_ui_t sp_ui_t;
 typedef struct _sp_ui_driver_t sp_ui_driver_t;
 
-typedef int (*sp_to_cb_t)(LV2_Atom *atom, void *data);
+typedef void *(*sp_to_request_t)(size_t size, void *data);
+typedef void (*sp_to_advance_t)(size_t size, void *data);
 
 struct _sp_ui_driver_t {
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 
 	// from ui
-	sp_to_cb_t to_app_cb;
+	sp_to_request_t to_app_request;
+	sp_to_advance_t to_app_advance;
 };
 
 sp_ui_t *

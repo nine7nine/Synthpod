@@ -23,11 +23,124 @@
 
 #include <lilv/lilv.h>
 
+#include <lv2/lv2plug.in/ns/lv2core/lv2.h>
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
+
+typedef enum _port_type_t port_type_t;
+typedef enum _port_buffer_type_t port_buffer_type_t;
+typedef enum _port_direction_t port_direction_t;
+typedef enum _port_protocol_t port_protocol_t;
+
+enum _port_type_t {
+	PORT_TYPE_CONTROL,
+	PORT_TYPE_AUDIO,
+	PORT_TYPE_CV,
+	PORT_TYPE_ATOM,
+
+	PORT_TYPE_NUM
+};
+
+enum _port_buffer_type_t {
+	PORT_BUFFER_TYPE_NONE = 0,
+	PORT_BUFFER_TYPE_SEQUENCE,
+
+	PORT_BUFFER_TYPE_NUM
+};
+
+enum _port_direction_t {
+	PORT_DIRECTION_INPUT = 0,
+	PORT_DIRECTION_OUTPUT,
+
+	PORT_DIRECTION_NUM
+};
+
+enum _port_protocol_t {
+	PORT_PROTOCOL_FLOAT = 0,
+	PORT_PROTOCOL_PEAK,
+	PORT_PROTOCOL_ATOM,
+	PORT_PROTOCOL_SEQUENCE,
+
+	PORT_PROTOCOL_NUM
+}; //TODO use this
+
+typedef struct _reg_item_t reg_item_t;
+typedef struct _reg_t reg_t;
+
+struct _reg_item_t {
+	LilvNode *node;
+	LV2_URID urid;
+};
+	
+struct _reg_t {
+	struct {
+		reg_item_t input;
+		reg_item_t output;
+
+		reg_item_t control;
+		reg_item_t audio;
+		reg_item_t cv;
+		reg_item_t atom;
+
+		// atom buffer type
+		reg_item_t sequence;
+
+		// atom sequence event types
+		reg_item_t midi;
+		reg_item_t osc;
+		reg_item_t chim_event;
+		reg_item_t chim_dump;
+
+		// control port property
+		reg_item_t integer;
+		reg_item_t toggled;
+
+		// port protocols
+		reg_item_t float_protocol;
+		reg_item_t peak_protocol;
+		reg_item_t atom_transfer;
+		reg_item_t event_transfer;
+
+		reg_item_t notification;
+	} port;
+
+	struct {
+		reg_item_t schedule;
+	} work;
+
+	struct {
+		reg_item_t entry;
+		reg_item_t error;
+		reg_item_t note;
+		reg_item_t trace;
+		reg_item_t warning;
+	} log;
+
+	struct {
+		reg_item_t eo;
+	} ui;
+
+	struct {
+		reg_item_t module_add;
+		reg_item_t module_del;
+		reg_item_t port_update;
+		reg_item_t port_connect;
+		reg_item_t port_disconnect;
+
+		reg_item_t module_index;
+		reg_item_t module_source_index;
+		reg_item_t module_sink_index;
+
+		reg_item_t port_index;
+		reg_item_t port_source_index;
+		reg_item_t port_sink_index;
+		
+		reg_item_t port_value;
+	} synthpod;
+};
 
 static inline void
 sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
@@ -161,5 +274,81 @@ sp_regs_deinit(reg_t *regs)
 
 	lilv_node_free(regs->ui.eo.node);
 }
+
+#define _ATOM_ALIGNED __attribute__((aligned(8)))
+
+// app <-> ui communication for module/port manipulations
+typedef struct _transmit_t transmit_t;
+typedef struct _transmit_module_add_t transmit_module_add_t;
+typedef struct _transmit_module_del_t transmit_module_del_t;
+typedef struct _transmit_port_connect_t transmit_port_connect_t;
+typedef struct _transmit_port_disconnect_t transmit_port_disconnect_t;
+
+struct _transmit_t {
+	LV2_Atom_Tuple tuple _ATOM_ALIGNED;
+	LV2_Atom_URID protocol _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_module_add_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_String uri _ATOM_ALIGNED;
+		char str [0] _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_module_del_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_String uuid _ATOM_ALIGNED;
+		char str [37] _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_port_connect_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_String src_uuid _ATOM_ALIGNED;
+		char src_str [37] _ATOM_ALIGNED;
+	LV2_Atom_Int src_port _ATOM_ALIGNED;
+	LV2_Atom_String snk_uuid _ATOM_ALIGNED;
+		char snk_str [37] _ATOM_ALIGNED;
+	LV2_Atom_Int snk_port _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_port_disconnect_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_String src_uuid _ATOM_ALIGNED;
+		char src_str [37] _ATOM_ALIGNED;
+	LV2_Atom_Int src_port _ATOM_ALIGNED;
+	LV2_Atom_String snk_uuid _ATOM_ALIGNED;
+		char snk_str [37] _ATOM_ALIGNED;
+	LV2_Atom_Int snk_port _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+// app <-> ui communication for port notifications
+typedef struct _transfer_t transfer_t;
+typedef struct _transfer_float_t transfer_float_t;
+typedef struct _transfer_peak_t transfer_peak_t;
+typedef struct _transfer_atom_t transfer_atom_t;
+
+struct _transfer_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_String uuid _ATOM_ALIGNED;
+		char str [37] _ATOM_ALIGNED; //TODO use
+	LV2_Atom_Int port _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transfer_float_t {
+	transfer_t transfer _ATOM_ALIGNED;
+	LV2_Atom_Float value _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transfer_peak_t {
+	transfer_t transfer _ATOM_ALIGNED;
+	LV2_Atom_Int period_start _ATOM_ALIGNED;
+	LV2_Atom_Int period_size _ATOM_ALIGNED;
+	LV2_Atom_Float peak _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transfer_atom_t {
+	transfer_t transfer _ATOM_ALIGNED;
+	LV2_Atom atom [0] _ATOM_ALIGNED;
+};
 
 #endif // _SYNTHPOD_PRIVATE_H

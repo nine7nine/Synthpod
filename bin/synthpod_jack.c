@@ -69,7 +69,6 @@ struct _handle_t {
 	uv_async_t worker_quit;
 	uv_async_t worker_wake;
 
-	uv_thread_t ui_thread;
 	Ecore_Animator *ui_anim;
 };
 
@@ -100,7 +99,7 @@ _worker_wake(uv_async_t *quit)
 	const LV2_Atom *atom;
 	while((atom = varchunk_read_request(handle->to_worker, &size)))
 	{
-		sp_worker_from_app(handle->app, atom, handle);
+		sp_worker_from_app(handle->app, atom);
 		varchunk_read_advance(handle->to_worker);
 	}
 }
@@ -159,19 +158,6 @@ _ui_animator(void *data)
 	return EINA_TRUE; // continue animator
 }
 
-// non-rt ui-thread
-static void
-_ui_thread(void *data)
-{
-	handle_t *handle = data;
-
-	handle->ui_anim = ecore_animator_add(_ui_animator, handle);
-
-	elm_run();
-
-	ecore_animator_del(handle->ui_anim);
-}
-
 // rt
 static int
 _process(jack_nframes_t nsamples, void *data)
@@ -221,12 +207,13 @@ _process(jack_nframes_t nsamples, void *data)
 		const LV2_Atom *atom;
 		while((atom = varchunk_read_request(handle->from_worker, &size)))
 		{
-			sp_app_from_worker(handle->app, atom, handle);
+			sp_app_from_worker(handle->app, atom);
 			varchunk_read_advance(handle->from_worker);
 		}
 	}
 
-	//TODO send work_end
+	// run synthpod app pre
+	sp_app_run_pre(handle->app, nsamples);
 
 	// read events from UI
 	{
@@ -234,13 +221,13 @@ _process(jack_nframes_t nsamples, void *data)
 		const LV2_Atom *atom;
 		while((atom = varchunk_read_request(handle->from_ui, &size)))
 		{
-			sp_app_from_ui(handle->app, atom, handle);
+			sp_app_from_ui(handle->app, atom);
 			varchunk_read_advance(handle->from_ui);
 		}
 	}
-
-	// run synthpod app
-	sp_app_run(handle->app, nsamples);
+	
+	// run synthpod app pre
+	sp_app_run_post(handle->app, nsamples);
 
 	// fill midi output buffer
 	jack_midi_clear_buffer(midi_out_buf);
@@ -256,107 +243,75 @@ _process(jack_nframes_t nsamples, void *data)
 }
 
 // rt
-static int
-_app_to_ui_cb(LV2_Atom *atom, void *data)
+static void *
+_app_to_ui_request(size_t size, void *data)
 {
 	handle_t *handle = data;
-	size_t size = sizeof(LV2_Atom) + atom->size;
-	void *ptr;
 
-	if((ptr = varchunk_write_request(handle->to_ui, size)))
-	{
-		memcpy(ptr, atom, size);
-		varchunk_write_advance(handle->to_ui, size);
-		return 0;
-	}
+	return varchunk_write_request(handle->to_ui, size);
+}
+static void
+_app_to_ui_advance(size_t size, void *data)
+{
+	handle_t *handle = data;
 
-	return -1;
+	varchunk_write_advance(handle->to_ui, size);
 }
 
 // rt
-static int
-_app_to_worker_cb(LV2_Atom *atom, void *data)
+static void *
+_app_to_worker_request(size_t size, void *data)
 {
 	handle_t *handle = data;
-	size_t size = sizeof(LV2_Atom) + atom->size;
-	void *ptr;
 
-	if((ptr = varchunk_write_request(handle->to_worker, size)))
-	{
-		memcpy(ptr, atom, size);
-		varchunk_write_advance(handle->to_worker, size);
-		uv_async_send(&handle->worker_wake); // wake up worker thread
-		//TODO only do once at end of sp_app_run ?
-		return 0;
-	}
+	return varchunk_write_request(handle->to_worker, size);
+}
+static void
+_app_to_worker_advance(size_t size, void *data)
+{
+	handle_t *handle = data;
 
-	return -1;
+	varchunk_write_advance(handle->to_worker, size);
+	uv_async_send(&handle->worker_wake); // wake up worker thread
+	//TODO only do once at end of sp_app_run ?
 }
 
 // non-rt worker-thread
-static int
-_worker_to_app_cb(LV2_Atom *atom, void *data)
+static void *
+_worker_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
-	size_t size = sizeof(LV2_Atom) + atom->size;
-	void *ptr;
 
-	if((ptr = varchunk_write_request(handle->from_worker, size)))
-	{
-		memcpy(ptr, atom, size);
-		varchunk_write_advance(handle->from_worker, size);
-		return 0;
-	}
+	return varchunk_write_request(handle->from_worker, size);
+}
+static void
+_worker_to_app_advance(size_t size, void *data)
+{
+	handle_t *handle = data;
 
-	return -1;
+	varchunk_write_advance(handle->from_worker, size);
 }
 
 // non-rt ui-thread
-static int
-_ui_to_app_cb(LV2_Atom *atom, void *data)
+static void *
+_ui_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
-	size_t size = sizeof(LV2_Atom) + atom->size;
-	void *ptr;
 
-	if((ptr = varchunk_write_request(handle->from_ui, size)))
-	{
-		memcpy(ptr, atom, size);
-		varchunk_write_advance(handle->from_ui, size);
-		return 0;
-	}
+	return varchunk_write_request(handle->from_ui, size);
+}
+static void
+_ui_to_app_advance(size_t size, void *data)
+{
+	handle_t *handle = data;
 
-	return -1;
+	varchunk_write_advance(handle->from_ui, size);
 }
 
 int
-main(int argc, char **argv)
+elm_main(int argc, char **argv)
 {
 	static handle_t handle;
-
-	// jack init
-	handle.client = jack_client_open("Synthpod", JackNullOption, NULL);
-	jack_set_process_callback(handle.client, _process, &handle);
-	handle.midi_in = jack_port_register(handle.client, "midi_in",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	handle.audio_in[0] = jack_port_register(handle.client, "audio_in_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.audio_in[1] = jack_port_register(handle.client, "audio_in_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.midi_out = jack_port_register(handle.client, "midi_out",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[0] = jack_port_register(handle.client, "audio_out_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[1] = jack_port_register(handle.client, "audio_out_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	jack_activate(handle.client);
-
-	// elm init
-	elm_init(argc, argv);
-	Evas_Object *win = elm_win_util_standard_add("synthpod_jack", "Synthpod");
-	evas_object_smart_callback_add(win, "delete,request", _ui_delete_request, &handle);
-	evas_object_resize(win, 800, 450);
-	evas_object_show(win);
 
 	// varchunk init
 	handle.to_ui = varchunk_new(8192);
@@ -380,16 +335,36 @@ main(int argc, char **argv)
 	handle.app_driver.unmap = unmap;
 	handle.app_driver.schedule = NULL; //TODO
 	handle.app_driver.log = NULL; //TODO
-	handle.app_driver.to_ui_cb = _app_to_ui_cb;
-	handle.app_driver.to_worker_cb = _app_to_worker_cb;
-	handle.app_driver.to_app_cb = _worker_to_app_cb;
+	handle.app_driver.to_ui_request = _app_to_ui_request;
+	handle.app_driver.to_ui_advance = _app_to_ui_advance;
+	handle.app_driver.to_worker_request = _app_to_worker_request;
+	handle.app_driver.to_worker_advance = _app_to_worker_advance;
+	handle.app_driver.to_app_request = _worker_to_app_request;
+	handle.app_driver.to_app_advance = _worker_to_app_advance;
 	
-	handle.app_driver.map = map;
-	handle.app_driver.unmap = unmap;
-	handle.app_driver.to_app_cb = _ui_to_app_cb;
+	handle.ui_driver.map = map;
+	handle.ui_driver.unmap = unmap;
+	handle.ui_driver.to_app_request = _ui_to_app_request;
+	handle.ui_driver.to_app_advance = _ui_to_app_advance;
 
 	handle.app = sp_app_new(&handle.app_driver, &handle);
-	handle.ui = sp_ui_new(win, &handle.ui_driver, &handle);
+
+	// jack init
+	handle.client = jack_client_open("Synthpod", JackNullOption, NULL);
+	jack_set_process_callback(handle.client, _process, &handle);
+	handle.midi_in = jack_port_register(handle.client, "midi_in",
+		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	handle.audio_in[0] = jack_port_register(handle.client, "audio_in_1",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+	handle.audio_in[1] = jack_port_register(handle.client, "audio_in_2",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+	handle.midi_out = jack_port_register(handle.client, "midi_out",
+		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	handle.audio_out[0] = jack_port_register(handle.client, "audio_out_1",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	handle.audio_out[1] = jack_port_register(handle.client, "audio_out_2",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	jack_activate(handle.client);
 
 	// uv init
 	handle.loop = uv_default_loop();
@@ -400,32 +375,28 @@ main(int argc, char **argv)
 
 	// threads init
 	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
-	uv_thread_create(&handle.ui_thread, _ui_thread, &handle);
 
-	// uv run
-	uv_run(handle.loop, UV_RUN_DEFAULT);
+	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);
+	Evas_Object *win = elm_win_add(NULL, "Synthpod", ELM_WIN_BASIC);
+	evas_object_smart_callback_add(win, "delete,request", _ui_delete_request, &handle);
+	evas_object_resize(win, 800, 450);
+	evas_object_show(win);
+
+	// ui init
+	handle.ui = sp_ui_new(win, &handle.ui_driver, &handle);
+
+	// main loop
+	elm_run();
+
+	// ui deinit
+	sp_ui_free(handle.ui);
+
+	evas_object_del(win);
+	ecore_animator_del(handle.ui_anim);
 
 	// threads deinit
 	uv_async_send(&handle.worker_quit);
 	uv_thread_join(&handle.worker_thread);
-	ecore_main_loop_thread_safe_call_async (_ui_quit, &handle);
-	uv_thread_join(&handle.ui_thread);
-
-	// synthpod deinit
-	sp_app_free(handle.app);
-
-	// ext_urid deinit
-	ext_urid_free(handle.ext_urid);
-
-	// varchunk deinit
-	varchunk_free(handle.to_ui);
-	varchunk_free(handle.from_ui);
-	varchunk_free(handle.to_worker);
-	varchunk_free(handle.from_worker);
-
-	// elm deinit
-	evas_object_del(win);
-	elm_shutdown();
 
 	// jack deinit
 	if(handle.client)
@@ -446,6 +417,20 @@ main(int argc, char **argv)
 		jack_deactivate(handle.client);
 		jack_client_close(handle.client);
 	}
+	
+	// synthpod deinit
+	sp_app_free(handle.app);
+
+	// ext_urid deinit
+	ext_urid_free(handle.ext_urid);
+
+	// varchunk deinit
+	varchunk_free(handle.to_ui);
+	varchunk_free(handle.from_ui);
+	varchunk_free(handle.to_worker);
+	varchunk_free(handle.from_worker);
 
 	return 0;
 }
+
+ELM_MAIN()

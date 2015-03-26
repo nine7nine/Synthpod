@@ -10,10 +10,6 @@ set(LIB_EXT ".so")
 pkg_search_module(RTMIDI REQUIRED librtmidi>=2.1)
 include_directories(${RTMIDI_INCLUDE_DIRS})
 
-# libuv
-pkg_search_module(UV REQUIRED libuv>=1.0)
-include_directories(${UV_INCLUDE_DIRS})
-
 # manifest
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/plugins/manifest.ttl)
 install(FILES ${PROJECT_BINARY_DIR}/plugins/manifest.ttl DESTINATION ${DEST})

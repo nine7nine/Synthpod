@@ -40,6 +40,10 @@ struct _handle_t {
 	Ecore_Evas *ee;
 	Evas *e;
 	Evas_Object *parent;
+
+	struct {
+		uint8_t app [8192];
+	} buf;
 };
 
 // Idle interface
@@ -116,16 +120,23 @@ _delete(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	sp_ui_free(handle->ui);
 }
 
-static int
-_to_app_cb(LV2_Atom *atom, void *data)
+static void *
+_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
+
+	return handle->buf.app;
+}
+static void
+_to_app_advance(size_t size, void *data)
+{
+	handle_t *handle = data;
+
+	LV2_Atom *atom = (LV2_Atom *)handle->buf.app;
 
 	uint32_t port_index = 1; // control port
 	handle->write_function(handle->controller, port_index,
 		sizeof(LV2_Atom) + atom->size, handle->uri.event_transfer, atom);
-
-	return 0;
 }
 
 static LV2UI_Handle
@@ -180,8 +191,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		handle->e = ecore_evas_get(handle->ee);
 		ecore_evas_show(handle->ee);
 		
-		handle->parent = evas_object_rectangle_add(handle->e);
-		evas_object_color_set(handle->parent, 48, 48, 48, 255);
+		handle->parent = elm_win_fake_add(handle->ee);
 		evas_object_resize(handle->parent, handle->w, handle->h);
 		evas_object_show(handle->parent);
 	}
@@ -195,10 +205,11 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	if(resize)
     resize->ui_resize(resize->handle, handle->w, handle->h);
 
-	handle->driver.to_app_cb = _to_app_cb;
+	handle->driver.to_app_request = _to_app_request;
+	handle->driver.to_app_advance = _to_app_advance;
 	handle->ui = sp_ui_new(handle->parent, &handle->driver, handle);
 	//TODO check handle->ui
-	
+
 	if(handle->ee) // X11 UI
 		*(Evas_Object **)widget = NULL;
 	else // Eo UI
@@ -218,7 +229,7 @@ cleanup(LV2UI_Handle instance)
 		{
 			ecore_evas_hide(handle->ee);
 			evas_object_del(handle->parent);
-			ecore_evas_free(handle->ee);
+			//ecore_evas_free(handle->ee);
 		}
 		
 		free(handle);

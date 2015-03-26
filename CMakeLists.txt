@@ -11,46 +11,40 @@ include_directories(${PROJECT_SOURCE_DIR}/cjson)
 include_directories(${PROJECT_BINARY_DIR})
 
 set(APP_DIR share/synthpod)
-set(LIBS "")
+#set(LIBS "")
 #add_definitions("-std=gnu99" "-fdump-rtl-expand")
 	
 # libuv
 pkg_search_module(UV REQUIRED libuv>=1.0)
 include_directories(${UV_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${UV_LDFLAGS})
+
+# libuv
+pkg_search_module(UV REQUIRED libuv>=1.0)
+include_directories(${UV_INCLUDE_DIRS})
+
+# eina
+pkg_search_module(EINA REQUIRED eina>=1.8)
+include_directories(${EINA_INCLUDE_DIRS})
 
 # elm
 pkg_search_module(ELM REQUIRED elementary>=1.8)
 include_directories(${ELM_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${ELM_LDFLAGS})
 
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
 include_directories(${LILV_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${LILV_LDFLAGS})
 
 # lv2
 pkg_search_module(LV2 REQUIRED lv2>=1.10)
 include_directories(${LV2_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${LV2_LDFLAGS})
 
 # uuid
 pkg_search_module(UUID REQUIRED uuid>=2.25)
 include_directories(${UUID_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${UUID_LDFLAGS})
 
-# synthpod
-add_executable(synthpod.app
-	synthpod.c
-	app.c
-	varchunk.c
-	patcher.c
-	ext_urid.c
-	cjson/cJSON.c)
-target_link_libraries(synthpod.app ${LIBS})
-target_compile_definitions(synthpod.app PUBLIC -DAPP_DIR=${APP_DIR})
-set_target_properties(synthpod.app PROPERTIES OUTPUT_NAME "synthpod")
-install(TARGETS synthpod.app DESTINATION bin)
+# elm
+pkg_search_module(ELM REQUIRED elementary>=1.8)
+include_directories(${ELM_INCLUDE_DIRS})
 
 add_executable(test_varchunk
 	test_varchunk.c
