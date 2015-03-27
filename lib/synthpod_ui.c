@@ -16,6 +16,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include <uuid.h>
 
 #include <uv.h>
@@ -66,7 +67,6 @@ struct _mod_t {
 		
 		// LV2UI_Idle_Interface extension
 		const LV2UI_Idle_Interface *idle_interface;
-		Ecore_Animator *idle_anim;
 	} eo;
 
 	// standard "automatic" UI
@@ -78,7 +78,6 @@ struct _mod_t {
 
 struct _port_t {
 	mod_t *mod;
-	uuid_t uuid;
 	int selected;
 
 	const LilvPort *tar;
@@ -89,9 +88,6 @@ struct _port_t {
 	port_buffer_type_t buffer_type; // none, sequence
 
 	LilvScalePoints *points;
-	
-	LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
-	int subscriptions; // subsriptions reference counter
 
 	float dflt;
 	float min;
@@ -113,7 +109,6 @@ struct _sp_ui_t {
 	LV2_Atom_Forge forge;
 
 	Evas_Object *win;
-	Evas_Object *bg;
 	Evas_Object *plugpane;
 	Evas_Object *modpane;
 	Evas_Object *patchpane;
@@ -155,86 +150,6 @@ _next_color()
 	return col;
 }
 
-/*
-// non-rt ui-thread
-static Eina_Bool
-_rt_animator(void *data)
-{
-	app_t *app = data;
-
-	const void *ptr;
-	size_t toread;
-	while( (ptr = varchunk_read_request(app->rt.from, &toread)) )
-	{
-		const job_t *job = ptr;
-
-		if(job->type == JOB_TYPE_MODULE_DEL)
-		{
-			mod_t *mod = job->payload.mod;
-
-			app_mod_del(app, mod);
-			_patches_update(app);
-		}
-		else if(job->type == JOB_TYPE_CONN_DEL)
-		{
-			const conn_t *conn = &job->payload.conn;
-			//TODO
-		}
-
-		varchunk_read_advance(app->rt.from);
-	}
-
-	return EINA_TRUE;
-}
-
-// non-rt ui-thread
-static Eina_Bool
-_idle_animator(void *data)
-{
-	mod_t *mod = data;
-
-	// call idle callback
-	mod->ui.eo.idle_interface->idle(mod->ui.eo.handle);
-
-	return EINA_TRUE;
-}
-
-// non-rt ui-thread
-static Eina_Bool
-_port_event_animator(void *data)
-{
-	mod_t *mod = data;
-		
-	// handle pending port notifications
-	const void *ptr;
-	size_t toread;
-	while( (ptr = varchunk_read_request(mod->ui.to, &toread)) )
-	{
-		const ui_write_t *ui_write = ptr;
-		const void *buf = ptr + UI_WRITE_PADDED;
-
-		// update EoUI, if present
-		if(  mod->ui.eo.ui
-			&& mod->ui.eo.descriptor
-			&& mod->ui.eo.descriptor->port_event
-			&& mod->ui.eo.handle) //TODO simplify check
-		{
-			mod->ui.eo.descriptor->port_event(mod->ui.eo.handle,
-				ui_write->port, ui_write->size, ui_write->protocol, buf);
-		}
-
-		// update StdUI (descriptor is always present, thus no check)
-		mod->ui.std.descriptor.port_event(mod,
-			ui_write->port, ui_write->size, ui_write->protocol, buf);
-
-		varchunk_read_advance(mod->ui.to);
-	}
-
-	return EINA_TRUE;
-}
-*/
-
-//TODO use it!
 static inline void *
 _sp_ui_to_app_request(sp_ui_t *ui, size_t size)
 {
@@ -278,8 +193,7 @@ _match_port_protocol(port_t *port, uint32_t protocol, uint32_t size)
 	return 0;
 }
 
-// non-rt ui-thread
-static void
+static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
@@ -291,10 +205,6 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
-
-	// check for subscription AND matching protocol
-	if(protocol != port->protocol)
-		return;
 
 	// check for expanded list
 	if(!elm_genlist_item_expanded_get(mod->std.itm))
@@ -326,7 +236,25 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		; //TODO atom, sequence
 }
 
-// non-rt ui-thread
+static inline void
+_eo_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf)
+{
+	mod_t *mod = handle;
+	sp_ui_t *ui = mod->ui;
+
+	//printf("_eo_port_event: %u %u %u\n", index, size, protocol);
+
+	if(  mod->eo.ui
+		&& mod->eo.descriptor
+		&& mod->eo.descriptor->port_event
+		&& mod->eo.handle)
+	{
+		mod->eo.descriptor->port_event(mod->eo.handle,
+			index, size, protocol, buf);
+	}
+}
+
 static uint32_t
 _port_index(LV2UI_Feature_Handle handle, const char *symbol)
 {
@@ -340,38 +268,27 @@ _port_index(LV2UI_Feature_Handle handle, const char *symbol)
 		: LV2UI_INVALID_PORT_INDEX;
 }
 
-// non-rt ui-thread
 static uint32_t
 _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
-	const LV2_Feature *const *features) //TODO what are the features for?
+	const LV2_Feature *const *features)
 {
 	mod_t *mod = handle;
 	sp_ui_t *ui = mod->ui;
 			
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
-	
-	if(index < mod->num_ports)
-	{
-		port_t *port = &mod->ports[index];
-	
-		if(  ((port->protocol == 0) // no subscription?
-			&& _match_port_protocol(port, protocol, sizeof(float))) // matching protocols?
-			|| (port->protocol == protocol) ) // already has subscriptions
-		{
-			port->protocol = protocol; // atomic instruction!
-			port->subscriptions += 1;
-			return 0; // success
-		}
-	}
 
-	return 1; // fail
+	size_t size = sizeof(transmit_port_subscribe_t);
+	transmit_port_subscribe_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_subscribe_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index, protocol);
+	_sp_ui_to_app_advance(ui, size);
+
+	return 0;
 }
 
-// non-rt ui-thread
 static uint32_t
 _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
-	const LV2_Feature *const *features) //TODO what are the features for?
+	const LV2_Feature *const *features)
 {
 	mod_t *mod = handle;
 	sp_ui_t *ui = mod->ui;
@@ -379,25 +296,16 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
 
-	if(index < mod->num_ports)
-	{
-		port_t *port = &mod->ports[index];
+	size_t size = sizeof(transmit_port_unsubscribe_t);
+	transmit_port_unsubscribe_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_unsubscribe_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index, protocol);
+	_sp_ui_to_app_advance(ui, size);
 
-		if(port->protocol == protocol) // matching protocols?
-		{
-			port->subscriptions -= 1;
-			if(port->subscriptions == 0)
-				port->protocol = 0; // atomic instruction! 
-			return 0; // success
-		}
-	}
-
-	return 1; // fail
+	return 0;
 }
 
-// non-rt worker-thread
-static inline void
-_sp_ui_mod_add(sp_ui_t *ui, const char *uri)
+static mod_t *
+_sp_ui_mod_add(sp_ui_t *ui, const char *uri, uuid_t uuid)
 {
 	LilvNode *uri_node = lilv_new_uri(ui->world, uri);
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(ui->plugs, uri_node);
@@ -407,7 +315,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri)
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 			
 	if(!plug || !lilv_plugin_verify(plug))
-		return;
+		return NULL;
 
 	mod_t *mod = calloc(1, sizeof(mod_t));
 
@@ -439,10 +347,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri)
 		mod->features[i] = &mod->feature_list[i];
 	mod->features[NUM_UI_FEATURES] = NULL; // sentinel
 
-	//XXX
-		
 	mod->ui = ui;
-	uuid_generate_random(mod->uuid);
+	uuid_copy(mod->uuid, uuid);
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 
@@ -453,7 +359,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri)
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
 
 		tar->mod = mod;
-		uuid_generate_random(tar->uuid); //FIXME
 		tar->tar = port;
 		tar->index = i;
 		tar->direction = lilv_port_is_a(plug, port, ui->regs.port.input.node)
@@ -463,15 +368,16 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri)
 		if(lilv_port_is_a(plug, port, ui->regs.port.audio.node))
 		{
 			tar->type =  PORT_TYPE_AUDIO;
+			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, ui->regs.port.cv.node))
 		{
 			tar->type = PORT_TYPE_CV;
+			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, ui->regs.port.control.node))
 		{
 			tar->type = PORT_TYPE_CONTROL;
-			tar->protocol = ui->regs.port.float_protocol.urid; //TODO remove?
 		
 			LilvNode *dflt_node;
 			LilvNode *min_node;
@@ -490,10 +396,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri)
 			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
 			//tar->buffer_type = lilv_port_is_a(plug, port, ui->regs.port.sequence.node)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
-			//	: PORT_BUFFER_TYPE_NONE; //FIXME
+			//	: PORT_BUFFER_TYPE_NONE; //TODO
+			tar->selected = 1;
 		}
-		else
-			; //TODO abort
 	}
 		
 	//ui
@@ -510,16 +415,13 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri)
 	
 	mod->col = _next_color();
 	
-	// add port_event animator
-	//mod->port_event_anim = ecore_animator_add(_port_event_animator, mod);
+	return mod;
 }
 
-// non-rt ui-thread
 void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
-	//ecore_animator_del(mod->port_event_anim);
-	//mod->port_event_anim = NULL;
+	//TODO disconnect all ports
 
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
@@ -527,7 +429,6 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	free(mod);
 }
 
-// non-rt ui-thread
 static char * 
 _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -552,7 +453,6 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 		return NULL;
 }
 
-// non-rt ui-thread
 static void
 _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 {
@@ -563,24 +463,12 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	const LilvNode *uri_node = lilv_plugin_get_uri(plug);
 	const char *uri_str = lilv_node_as_string(uri_node);
 
-	//mod_t *mod = _sp_ui_mod_add(ui, uri_str);
-	mod_t *mod = NULL; //TODO
-	_sp_ui_mod_add(ui, uri_str); //TODO
-
-	if(mod)
-	{
-		mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod, NULL,
-			ELM_GENLIST_ITEM_TREE, NULL, NULL);
-	
-		if(mod->eo.ui) // has EoUI
-		{
-			mod->eo.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-				NULL, NULL);
-		}
-	}
+	size_t size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, NULL, uri_str);
+	_sp_ui_to_app_advance(ui, size);
 }
 
-// non-rt ui-thread
 static void
 _list_expand_request(void *data, Evas_Object *obj, void *event_info)
 {
@@ -592,7 +480,6 @@ _list_expand_request(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_selected_set(itm, !selected); // preserve selection
 }
 
-// non-rt ui-thread
 static void
 _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 {
@@ -604,27 +491,6 @@ _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_selected_set(itm, !selected); // preserve selection
 }
 
-// non-rt ui-thread
-static void
-_eo_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
-	uint32_t protocol, const void *buf)
-{
-	mod_t *mod = handle;
-	sp_ui_t *ui = mod->ui;
-
-	//printf("_eo_port_event: %u %u %u\n", index, size, protocol);
-
-	if(  mod->eo.ui
-		&& mod->eo.descriptor
-		&& mod->eo.descriptor->port_event
-		&& mod->eo.handle)
-	{
-		mod->eo.descriptor->port_event(mod->eo.handle,
-			index, size, protocol, buf);
-	}
-}
-
-// non-rt ui-thread
 static void
 _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 {
@@ -649,7 +515,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 }
 
-// non-rt ui-thread
 static void
 _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 {
@@ -661,7 +526,6 @@ _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_subitems_clear(itm);
 }
 
-// non-rt ui-thread
 static char * 
 _modlist_label_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -687,7 +551,6 @@ _modlist_label_get(void *data, Evas_Object *obj, const char *part)
 		return NULL;
 }
 
-// non-rt ui-thread
 static void
 _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 {
@@ -707,7 +570,6 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 	}
 }
 
-// non-rt ui-thread
 static void
 _patches_update(sp_ui_t *ui)
 {
@@ -800,7 +662,6 @@ _patches_update(sp_ui_t *ui)
 		patcher_object_realize(ui->matrix[t]);
 }
 
-// non-rt ui-thread
 static void
 _modlist_check_changed(void *data, Evas_Object *obj, void *event_info)
 {
@@ -811,7 +672,6 @@ _modlist_check_changed(void *data, Evas_Object *obj, void *event_info)
 	_patches_update(ui);
 }
 
-// non-rt ui-thread
 static Evas_Object *
 _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -852,18 +712,17 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	return lay;
 }
 
-
-// non-rt ui-thread
 static void
 _ui_update_request(mod_t *mod, uint32_t index)
 {
-	port_t *port = &mod->ports[index];
+	sp_ui_t *ui = mod->ui;
 
-	// should trigger port update notification FIXME
-	//port->last = INFINITY; // atomic instruction!
+	size_t size = sizeof(transmit_port_refresh_t);
+	transmit_port_refresh_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_refresh_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index);
+	_sp_ui_to_app_advance(ui, size);
 }
 
-// non-rt ui-thread
 static void
 _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
@@ -883,35 +742,34 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
 
-	// check for matching protocol <-> port type
-	if(!_match_port_protocol(tar, protocol, size))
+	if(protocol == ui->regs.port.float_protocol.urid)
 	{
-		fprintf(stderr, "_ui_write_function: port type - protocol mismatch\n");
-		return;
+		const float *val = buffer;
+		size_t size = sizeof(transfer_float_t);
+		transfer_float_t *trans = _sp_ui_to_app_request(ui, size);
+		_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, val);
+		_sp_ui_to_app_advance(ui, size);
 	}
-
-	ui_write_t header = {
-		.size = size,
-		.protocol = protocol,
-		.port = port
-	};
-
-	const size_t padded = UI_WRITE_PADDED + size;
-
-	/* TODO
-	void *ptr;
-	if( (ptr = varchunk_write_request(mod->from, padded)) )
+	else if(protocol == ui->regs.port.atom_transfer.urid)
 	{
-		memcpy(ptr, &header, UI_WRITE_SIZE);
-		memcpy(ptr + UI_WRITE_PADDED, buffer, size);
-		varchunk_write_advance(mod->from, padded);
+		const LV2_Atom *atom = buffer;
+		size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
+		_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
+		_sp_ui_to_app_advance(ui, size);
 	}
-	else
-		fprintf(stderr, "_ui_write_function: buffer overflow\n");
-	*/
+	else if(protocol == ui->regs.port.event_transfer.urid)
+	{
+		const LV2_Atom *atom = buffer;
+		size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
+		_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
+		_sp_ui_to_app_advance(ui, size);
+	}
+	else if(protocol == ui->regs.port.peak_protocol.urid)
+		; // makes no sense
 }
 
-// non-rt ui-thread
 static void
 _eo_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
@@ -923,7 +781,6 @@ _eo_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	_std_port_event(controller, port, size, protocol, buffer);
 }
 
-// non-rt ui-thread
 static void
 _std_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
@@ -936,7 +793,6 @@ _std_ui_write_function(LV2UI_Controller controller, uint32_t port,
 }
 
 
-// non-rt ui-thread
 static void
 _patched_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -948,7 +804,6 @@ _patched_changed(void *data, Evas_Object *obj, void *event)
 	_patches_update(ui);
 }
 
-// non-rt ui-thread
 static void
 _check_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -962,7 +817,6 @@ _check_changed(void *data, Evas_Object *obj, void *event)
 		ui->regs.port.float_protocol.urid, &val);
 }
 
-// non-rt ui-thread
 static void
 _spinner_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -977,7 +831,6 @@ _spinner_changed(void *data, Evas_Object *obj, void *event)
 		ui->regs.port.float_protocol.urid, &val);
 }
 
-// non-rt ui-thread
 static void
 _sldr_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -991,7 +844,6 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 		ui->regs.port.float_protocol.urid, &val);
 }
 
-// non-rt ui-thread
 static Evas_Object * 
 _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -1144,7 +996,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	return lay;
 }
 
-// non-rt ui-thread
 static void
 _modlist_std_del(void *data, Evas_Object *obj)
 {
@@ -1173,28 +1024,18 @@ _modlist_std_del(void *data, Evas_Object *obj)
 	}
 }
 
-// non-rt ui-thread
 static void
 _modlist_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 	
-	/* TODO
-	void *ptr;
-	if( (ptr = varchunk_write_request(ui->rt.to, JOB_SIZE)) )
-	{
-		job_t *job = ptr;
-
-		job->type = JOB_TYPE_MODULE_DEL;
-		job->payload.mod = mod;
-
-		varchunk_write_advance(ui->rt.to, JOB_SIZE);
-	}
-	*/
+	size_t size = sizeof(transmit_module_del_t);
+	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uuid);
+	_sp_ui_to_app_advance(ui, size);
 }
 
-// non-rt ui-thread
 static char *
 _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -1213,7 +1054,6 @@ _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	return NULL;
 }
 
-// non-rt ui-thread
 static Evas_Object *
 _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -1345,11 +1185,10 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 						else
 							; //TODO protocol not supported
 
-						printf("port has notification for: %s %s %u %u %u %u\n",
+						printf("port has notification for: %s %s %u %u %u\n",
 							lilv_node_as_string(sym),
 							lilv_node_as_uri(prot),
 							index,
-							mod->ports[index].protocol,
 							ui->regs.port.atom_transfer.urid,
 							ui->regs.port.event_transfer.urid);
 					}
@@ -1359,10 +1198,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 				lilv_node_free(lv2_index);
 				lilv_node_free(ui_plugin);
 				lilv_node_free(ui_prot);
-
-				// add idle animator
-				//if(mod->eo.idle_interface) TODO
-				//	mod->eo.idle_anim = ecore_animator_add(_idle_animator, mod);
 
 				return mod->eo.widget;
 			}
@@ -1387,7 +1222,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	return NULL;
 }
 
-// non-rt ui-thread
 static void
 _modgrid_del(void *data, Evas_Object *obj)
 {
@@ -1427,14 +1261,6 @@ _modgrid_del(void *data, Evas_Object *obj)
 		uv_dlclose(&mod->eo.lib);
 	}
 	
-	// del idle animator
-	if(mod->eo.idle_anim)
-	{
-		mod->eo.idle_anim = ecore_animator_del(mod->eo.idle_anim);
-		mod->eo.idle_interface = NULL;
-		mod->eo.idle_anim = NULL;
-	}
-
 	// clear parameters
 	mod->eo.descriptor = NULL;
 	mod->eo.handle = NULL;
@@ -1457,23 +1283,15 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 		sink->ptr, sink->index);
 	*/
 
-	/* TODO
-	void *ptr;
-	if( (ptr = varchunk_write_request(ui->rt.to, JOB_SIZE)) )
-	{
-		job_t *job = ptr;
+	size_t size = sizeof(transmit_port_connect_t);
+	transmit_port_connect_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_connect_fill(&ui->regs, &ui->forge, trans, size,
+		source_port->mod->uuid, source_port->index,
+		sink_port->mod->uuid, sink_port->index);
+	_sp_ui_to_app_advance(ui, size);
 
-		job->type = JOB_TYPE_CONN_ADD;
-		job->payload.conn.source = source->ptr;
-		job->payload.conn.sink = sink->ptr;
-
-		varchunk_write_advance(ui->rt.to, JOB_SIZE);
-
-		patcher_object_connected_set(obj, source->index, sink->index, EINA_TRUE);
-	}
-	else
-		fprintf(stderr, "rt varchunk buffer overrun");
-	*/
+	//TODO only patch after successful connection
+	//patcher_object_connected_set(obj, source->index, sink->index, EINA_TRUE);
 }
 
 static void
@@ -1492,23 +1310,15 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 		sink->ptr, sink->index);
 	*/
 
-	/* TODO
-	void *ptr;
-	if( (ptr = varchunk_write_request(ui->rt.to, JOB_SIZE)) )
-	{
-		job_t *job = ptr;
+	size_t size = sizeof(transmit_port_disconnect_t);
+	transmit_port_disconnect_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_disconnect_fill(&ui->regs, &ui->forge, trans, size,
+		source_port->mod->uuid, source_port->index,
+		sink_port->mod->uuid, sink_port->index);
+	_sp_ui_to_app_advance(ui, size);
 
-		job->type = JOB_TYPE_CONN_DEL;
-		job->payload.conn.source = source->ptr;
-		job->payload.conn.sink = sink->ptr;
-
-		varchunk_write_advance(ui->rt.to, JOB_SIZE);
-		
-		patcher_object_connected_set(obj, source->index, sink->index, EINA_FALSE);
-	}
-	else
-		fprintf(stderr, "rt varchunk buffer overrun");
-	*/
+	//TODO only unpatch after successful connection
+	//patcher_object_connected_set(obj, source->index, sink->index, EINA_FALSE);
 }
 
 static void
@@ -1548,7 +1358,6 @@ _resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	Evas_Coord w, h;
 	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
 
-	evas_object_resize(ui->bg, w, h);
 	evas_object_resize(ui->plugpane, w, h);
 }
 
@@ -1574,13 +1383,11 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 
 	sp_regs_init(&ui->regs, ui->world, driver->map);
 	
-	ui->bg = elm_bg_add(ui->win);
-	elm_bg_color_set(ui->bg, 48, 48, 48);
-	evas_object_show(ui->bg);
-	
 	ui->plugpane = elm_panes_add(ui->win);
 	elm_panes_horizontal_set(ui->plugpane, EINA_FALSE);
 	elm_panes_content_right_size_set(ui->plugpane, 0.25);
+	evas_object_size_hint_weight_set(ui->plugpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(ui->plugpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->plugpane);
 
 	_resize(ui, NULL, ui->win, NULL);
@@ -1717,19 +1524,143 @@ sp_ui_widget_get(sp_ui_t *ui)
 	return ui->plugpane;
 }
 
-void
-sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom, void *data)
+static inline mod_t *
+_sp_ui_mod_get(sp_ui_t *ui, uuid_t uuid)
 {
-	const LV2_Atom_Object *ao = (const LV2_Atom_Object *)atom;
-	const LV2_Atom_Object_Body *body = &ao->body;
-
-	if(body->otype == ui->regs.synthpod.module_add.urid)
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
 	{
-		//TODO
+		mod_t *mod = elm_object_item_data_get(itm);
+		if(mod && !uuid_compare(mod->uuid, uuid))
+			return mod;
 	}
-	else if(body->otype == ui->regs.synthpod.module_del.urid)
+
+	return NULL;
+}
+
+static inline port_t *
+_sp_ui_port_get(sp_ui_t *ui, uuid_t uuid, uint32_t index)
+{
+	mod_t *mod = _sp_ui_mod_get(ui, uuid);
+	if(mod && (index < mod->num_ports) )
+		return &mod->ports[index];
+	
+	return NULL;
+}
+
+void
+sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	const transmit_t *transmit = (const transmit_t *)atom;
+	LV2_URID protocol = transmit->protocol.body;
+
+	if(protocol == ui->regs.synthpod.module_add.urid)
 	{
-		//TODO
+		const transmit_module_add_t *trans = (const transmit_module_add_t *)atom;
+		uuid_t module_uuid;
+		uuid_parse(trans->uuid_str, module_uuid);
+
+		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, module_uuid);
+		if(mod)
+		{
+			mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod, NULL,
+				ELM_GENLIST_ITEM_TREE, NULL, NULL);
+		
+			if(mod->eo.ui) // has EoUI
+			{
+				mod->eo.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+					NULL, NULL);
+			}
+		}
+	}
+	else if(protocol == ui->regs.synthpod.module_del.urid)
+	{
+		const transmit_module_del_t *trans = (const transmit_module_del_t *)atom;
+		uuid_t module_uuid;
+		uuid_parse(trans->str, module_uuid);
+		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		//TODO 
+	}
+	else if(protocol == ui->regs.synthpod.port_connect.urid)
+	{
+		const transmit_port_connect_t *trans = (const transmit_port_connect_t *)atom;
+		uuid_t src_uuid;
+		uuid_t snk_uuid;
+		uuid_parse(trans->src_str, src_uuid);
+		uuid_parse(trans->snk_str, snk_uuid);
+		uint32_t src_index = trans->src_port.body;
+		uint32_t snk_index = trans->snk_port.body;
+		port_t *src = _sp_ui_port_get(ui, src_uuid, src_index);
+		port_t *snk = _sp_ui_port_get(ui, snk_uuid, snk_index);
+		//TODO call patcher
+	}
+	else if(protocol == ui->regs.synthpod.port_disconnect.urid)
+	{
+		const transmit_port_disconnect_t *trans = (const transmit_port_disconnect_t *)atom;
+		uuid_t src_uuid;
+		uuid_t snk_uuid;
+		uuid_parse(trans->src_str, src_uuid);
+		uuid_parse(trans->snk_str, snk_uuid);
+		uint32_t src_index = trans->src_port.body;
+		uint32_t snk_index = trans->snk_port.body;
+		port_t *src = _sp_ui_port_get(ui, src_uuid, src_index);
+		port_t *snk = _sp_ui_port_get(ui, snk_uuid, snk_index);
+		//TODO call patcher
+	}
+	else if(protocol == ui->regs.port.float_protocol.urid)
+	{
+		const transfer_float_t *trans = (const transfer_float_t *)atom;
+		uuid_t module_uuid;
+		uuid_parse(trans->transfer.str, module_uuid);
+		uint32_t port_index = trans->transfer.port.body;
+		float value = trans->value.body;
+
+		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		_eo_port_event(mod, port_index, sizeof(float), protocol, &value);
+		_std_port_event(mod, port_index, sizeof(float), protocol, &value);
+	}
+	else if(protocol == ui->regs.port.peak_protocol.urid)
+	{
+		const transfer_peak_t *trans = (const transfer_peak_t *)atom;
+		uuid_t module_uuid;
+		uuid_parse(trans->transfer.str, module_uuid);
+		uint32_t port_index = trans->transfer.port.body;
+		LV2UI_Peak_Data data = {
+			.period_start = trans->period_start.body,
+			.period_size = trans->period_size.body,
+			.peak = trans->peak.body
+		};
+
+		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		_eo_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
+		_std_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
+	}
+	else if(protocol == ui->regs.port.atom_transfer.urid)
+	{
+		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
+		uuid_t module_uuid;
+		uuid_parse(trans->transfer.str, module_uuid);
+		uint32_t port_index = trans->transfer.port.body;
+		const LV2_Atom *atom = trans->atom;
+		uint32_t size = sizeof(LV2_Atom) + atom->size;
+
+		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		_eo_port_event(mod, port_index, size, protocol, atom);
+		_std_port_event(mod, port_index, size, protocol, &atom);
+	}
+	else if(protocol == ui->regs.port.event_transfer.urid)
+	{
+		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
+		uuid_t module_uuid;
+		uuid_parse(trans->transfer.str, module_uuid);
+		uint32_t port_index = trans->transfer.port.body;
+		const LV2_Atom *atom = trans->atom;
+		uint32_t size = sizeof(LV2_Atom) + atom->size;
+
+		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		_eo_port_event(mod, port_index, size, protocol, atom);
+		_std_port_event(mod, port_index, size, protocol, &atom);
 	}
 }
 
@@ -1772,7 +1703,6 @@ sp_ui_free(sp_ui_t *ui)
 	evas_object_del(ui->patchpane);
 	evas_object_del(ui->modpane);
 	evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _resize);
-	evas_object_del(ui->bg);
 	evas_object_del(ui->plugpane);
 	
 	elm_genlist_item_class_free(ui->plugitc);

@@ -38,7 +38,7 @@ struct _handle_t {
 
 	int w, h;
 	Ecore_Evas *ee;
-	Evas *e;
+	Evas_Object *bg;
 	Evas_Object *parent;
 
 	struct {
@@ -104,7 +104,8 @@ resize_cb(LV2UI_Feature_Handle instance, int w, int h)
 	if(handle->ee)
 	{
 		ecore_evas_resize(handle->ee, handle->w, handle->h);
-		evas_object_resize(handle->parent, handle->w, handle->h);
+		//evas_object_resize(handle->parent, handle->w, handle->h);
+		evas_object_resize(handle->bg, handle->w, handle->h);
 	}
 
 	sp_ui_resize(handle->ui, handle->w, handle->h);
@@ -134,7 +135,7 @@ _to_app_advance(size_t size, void *data)
 
 	LV2_Atom *atom = (LV2_Atom *)handle->buf.app;
 
-	uint32_t port_index = 1; // control port
+	uint32_t port_index = 0; // control port
 	handle->write_function(handle->controller, port_index,
 		sizeof(LV2_Atom) + atom->size, handle->uri.event_transfer, atom);
 }
@@ -145,8 +146,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	LV2UI_Controller controller, LV2UI_Widget *widget,
 	const LV2_Feature *const *features)
 {
-	elm_init(1, (char **)&plugin_uri);
-
 	if(strcmp(plugin_uri, SYNTHPOD_STEREO_URI))
 		return NULL;
 
@@ -174,7 +173,11 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
   }
 
-	//TODO check for parent/map/unmap feature
+	if(!parent || !handle->driver.map || !handle->driver.unmap)
+	{
+		free(handle);
+		return NULL;
+	}
 
 	handle->uri.float_protocol = handle->driver.map->map(handle->driver.map->handle,
 		LV2_UI_PREFIX"floatProtocol");
@@ -183,23 +186,32 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	if(descriptor == &synthpod_common_ui)
 	{
-		handle->ee = ecore_evas_gl_x11_new(NULL, (Ecore_X_Window)parent, 0, 0, handle->w, handle->h);
+		_elm_startup_time = ecore_time_unix_get();
+		elm_init(0, NULL);
+
+		Ecore_X_Window xwin = (Ecore_X_Window)parent;
+		handle->ee = ecore_evas_gl_x11_new(NULL, xwin, 0, 0, handle->w, handle->h);
 		if(!handle->ee)
-			handle->ee = ecore_evas_software_x11_new(NULL, (Ecore_X_Window)parent, 0, 0, handle->w, handle->h);
+			handle->ee = ecore_evas_software_x11_new(NULL, xwin, 0, 0, handle->w, handle->h);
 		if(!handle->ee)
-			printf("could not start evas\n");
-		handle->e = ecore_evas_get(handle->ee);
+		{
+			free(handle);
+			return NULL;
+		}
 		ecore_evas_show(handle->ee);
 		
 		handle->parent = elm_win_fake_add(handle->ee);
 		evas_object_resize(handle->parent, handle->w, handle->h);
 		evas_object_show(handle->parent);
+
+		handle->bg = elm_bg_add(handle->parent);
+		evas_object_resize(handle->bg, handle->w, handle->w);
+		evas_object_show(handle->bg);
 	}
 	else if(descriptor == &synthpod_common_eo)
 	{
 		handle->ee = NULL;
 		handle->parent = (Evas_Object *)parent;
-		handle->e = evas_object_evas_get((Evas_Object *)parent);
 	}
 
 	if(resize)
@@ -208,12 +220,21 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->driver.to_app_request = _to_app_request;
 	handle->driver.to_app_advance = _to_app_advance;
 	handle->ui = sp_ui_new(handle->parent, &handle->driver, handle);
+	if(!handle->ui)
+	{
+		free(handle);
+		return NULL;
+	}
+
+	Evas_Object *widg = sp_ui_widget_get(handle->ui);
+	evas_object_event_callback_add(widg, EVAS_CALLBACK_DEL, _delete, handle);
+
 	//TODO check handle->ui
 
 	if(handle->ee) // X11 UI
 		*(Evas_Object **)widget = NULL;
 	else // Eo UI
-		*(Evas_Object **)widget = sp_ui_widget_get(handle->ui);
+		*(Evas_Object **)widget = widg;
 
 	return handle;
 }
@@ -228,14 +249,16 @@ cleanup(LV2UI_Handle instance)
 		if(handle->ee)
 		{
 			ecore_evas_hide(handle->ee);
+
+			evas_object_del(handle->bg);
 			evas_object_del(handle->parent);
+
 			//ecore_evas_free(handle->ee);
+			//elm_shutdown();
 		}
 		
 		free(handle);
 	}
-
-	elm_shutdown();
 }
 
 static void
@@ -243,13 +266,15 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 	uint32_t format, const void *buffer)
 {
 	handle_t *handle = instance;
+	
+	printf("_to_ui: %u %u\n", port_index, size);
 
-	if(  ( port_index == 5) // notify port
+	if(  ( port_index == 4) // notify port
 		&& (format == handle->uri.event_transfer) )
 	{
 		const LV2_Atom *atom = buffer;
 		assert(size == sizeof(LV2_Atom) + atom->size);
-		sp_ui_from_app(handle->ui, atom, handle);
+		sp_ui_from_app(handle->ui, atom);
 	}
 	else
 		; //TODO subscribe to audio/event ports?

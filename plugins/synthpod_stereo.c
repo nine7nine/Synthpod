@@ -142,9 +142,7 @@ _work(LV2_Handle instance,
 	handle->worker.respond = respond;
 	handle->worker.target = target;
 
-	const LV2_Atom *atom = body;
-	assert(size == sizeof(LV2_Atom) + atom->size);
-	sp_worker_from_app(handle->app, atom);
+	sp_worker_from_app(handle->app, size, body);
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -155,9 +153,7 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 {
 	handle_t *handle = instance;
 
-	const LV2_Atom *atom = body;
-	assert(size == sizeof(LV2_Atom) + atom->size);
-	sp_app_from_worker(handle->app, atom);
+	sp_app_from_worker(handle->app, size, body);
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -192,11 +188,12 @@ _to_ui_advance(size_t size, void *data)
 	LV2_Atom_Forge *forge = &handle->forge.notify;
 
 	LV2_Atom *atom = (LV2_Atom *)handle->buf.ui;
-
-	if(forge->offset + sizeof(LV2_Atom_Event) + atom->size > forge->size)
-		return; // buffer overflow
+	printf("_to_ui_advance: %u\n", atom->size);
 
 	uint32_t eventsize = sizeof(LV2_Atom_Event) + atom->size;
+	if(forge->offset + eventsize > forge->size)
+		return; // buffer overflow
+
 	lv2_atom_forge_frame_time(forge, 0);
 	lv2_atom_forge_raw(forge, atom, eventsize);
 	lv2_atom_forge_pad(forge, eventsize);
@@ -207,6 +204,8 @@ static void *
 _to_worker_request(size_t size, void *data)
 {
 	handle_t *handle = data;
+	
+	//TODO test capacity
 
 	return handle->buf.worker;
 }
@@ -215,10 +214,10 @@ _to_worker_advance(size_t size, void *data)
 {
 	handle_t *handle = data;
 	
-	LV2_Atom *atom = (LV2_Atom *)handle->buf.worker;
-
+	printf("_to_worker_advance: %zu\n", size);
+	
 	handle->driver.schedule->schedule_work(handle->driver.schedule->handle,
-		sizeof(LV2_Atom) + atom->size, atom);
+		size, handle->buf.worker);
 	//TODO check return result
 }
 
@@ -227,6 +226,8 @@ static void *
 _to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
+
+	//TODO test capacity
 
 	return handle->buf.app;
 }
@@ -237,8 +238,9 @@ _to_app_advance(size_t size, void *data)
 
 	LV2_Atom *atom = (LV2_Atom *)handle->buf.app;
 
-	handle->worker.respond(handle->worker.target,
-		sizeof(LV2_Atom) + atom->size, atom);
+	printf("_to_app_advance: %zu\n", size);
+
+	handle->worker.respond(handle->worker.target, size, handle->buf.app);
 	//TODO check return result
 }
 
@@ -323,11 +325,11 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->port.event_sink = (const LV2_Atom_Sequence *)data;
-			sp_app_set_system_source(app, 0, data);
+			handle->port.control = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->port.control = (const LV2_Atom_Sequence *)data;
+			handle->port.event_sink = (const LV2_Atom_Sequence *)data;
+			sp_app_set_system_source(app, 0, data);
 			break;
 		case 2:
 			handle->port.audio_in[0] = (const float *)data;
@@ -338,11 +340,11 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			sp_app_set_system_source(app, 2, data);
 			break;
 		case 4:
-			handle->port.event_source = (LV2_Atom_Sequence *)data;
-			sp_app_set_system_sink(app, 0, data);
+			handle->port.notify = (LV2_Atom_Sequence *)data;
 			break;
 		case 5:
-			handle->port.notify = (LV2_Atom_Sequence *)data;
+			handle->port.event_source = (LV2_Atom_Sequence *)data;
+			sp_app_set_system_sink(app, 0, data);
 			break;
 		case 6:
 			handle->port.audio_out[0] = (float *)data;

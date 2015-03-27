@@ -60,7 +60,7 @@ Evas_Object *
 sp_ui_widget_get(sp_ui_t *ui);
 
 void
-sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom, void *data);
+sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom);
 
 void
 sp_ui_resize(sp_ui_t *ui, int w, int h);

@@ -57,10 +57,13 @@ struct _handle_t {
 	jack_port_t *midi_out;
 	jack_port_t *audio_out[2];
 
-	varchunk_t *to_ui;
-	varchunk_t *from_ui;
-	varchunk_t *to_worker;
-	varchunk_t *from_worker;
+	varchunk_t *app_to_ui;
+	varchunk_t *app_from_ui;
+	varchunk_t *app_to_worker;
+	varchunk_t *app_from_worker;
+	
+	varchunk_t *ui_to_app;
+	varchunk_t *ui_from_app;
 
 	uv_loop_t *loop;
 	uv_signal_t quit;
@@ -70,6 +73,7 @@ struct _handle_t {
 	uv_async_t worker_wake;
 
 	Ecore_Animator *ui_anim;
+	Evas_Object *win;
 };
 
 // non-rt main-thread
@@ -96,11 +100,11 @@ _worker_wake(uv_async_t *quit)
 	handle_t *handle = quit->data;
 
 	size_t size;
-	const LV2_Atom *atom;
-	while((atom = varchunk_read_request(handle->to_worker, &size)))
+	const void *body;
+	while((body = varchunk_read_request(handle->app_to_worker, &size)))
 	{
-		sp_worker_from_app(handle->app, atom);
-		varchunk_read_advance(handle->to_worker);
+		sp_worker_from_app(handle->app, size, body);
+		varchunk_read_advance(handle->app_to_worker);
 	}
 }
 
@@ -149,10 +153,10 @@ _ui_animator(void *data)
 
 	size_t size;
 	const LV2_Atom *atom;
-	while((atom = varchunk_read_request(handle->to_ui, &size)))
+	while((atom = varchunk_read_request(handle->app_to_ui, &size)))
 	{
-		sp_ui_from_app(handle->ui, atom, handle);
-		varchunk_read_advance(handle->to_ui);
+		sp_ui_from_app(handle->ui, atom);
+		varchunk_read_advance(handle->app_to_ui);
 	}
 
 	return EINA_TRUE; // continue animator
@@ -204,11 +208,11 @@ _process(jack_nframes_t nsamples, void *data)
 	// read events from worker
 	{
 		size_t size;
-		const LV2_Atom *atom;
-		while((atom = varchunk_read_request(handle->from_worker, &size)))
+		const void *body;
+		while((body = varchunk_read_request(handle->app_from_worker, &size)))
 		{
-			sp_app_from_worker(handle->app, atom);
-			varchunk_read_advance(handle->from_worker);
+			sp_app_from_worker(handle->app, size, body);
+			varchunk_read_advance(handle->app_from_worker);
 		}
 	}
 
@@ -219,10 +223,10 @@ _process(jack_nframes_t nsamples, void *data)
 	{
 		size_t size;
 		const LV2_Atom *atom;
-		while((atom = varchunk_read_request(handle->from_ui, &size)))
+		while((atom = varchunk_read_request(handle->app_from_ui, &size)))
 		{
 			sp_app_from_ui(handle->app, atom);
-			varchunk_read_advance(handle->from_ui);
+			varchunk_read_advance(handle->app_from_ui);
 		}
 	}
 	
@@ -248,14 +252,14 @@ _app_to_ui_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return varchunk_write_request(handle->to_ui, size);
+	return varchunk_write_request(handle->app_to_ui, size);
 }
 static void
 _app_to_ui_advance(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	varchunk_write_advance(handle->to_ui, size);
+	varchunk_write_advance(handle->app_to_ui, size);
 }
 
 // rt
@@ -264,16 +268,16 @@ _app_to_worker_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return varchunk_write_request(handle->to_worker, size);
+	return varchunk_write_request(handle->app_to_worker, size);
 }
 static void
 _app_to_worker_advance(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	varchunk_write_advance(handle->to_worker, size);
+	varchunk_write_advance(handle->app_to_worker, size);
 	uv_async_send(&handle->worker_wake); // wake up worker thread
-	//TODO only do once at end of sp_app_run ?
+	//TODO only do once at end of sp_app_run_post ?
 }
 
 // non-rt worker-thread
@@ -282,14 +286,14 @@ _worker_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return varchunk_write_request(handle->from_worker, size);
+	return varchunk_write_request(handle->app_from_worker, size);
 }
 static void
 _worker_to_app_advance(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	varchunk_write_advance(handle->from_worker, size);
+	varchunk_write_advance(handle->app_from_worker, size);
 }
 
 // non-rt ui-thread
@@ -298,26 +302,26 @@ _ui_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return varchunk_write_request(handle->from_ui, size);
+	return varchunk_write_request(handle->app_from_ui, size);
 }
 static void
 _ui_to_app_advance(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	varchunk_write_advance(handle->from_ui, size);
+	varchunk_write_advance(handle->app_from_ui, size);
 }
 
-int
+EAPI_MAIN int
 elm_main(int argc, char **argv)
 {
 	static handle_t handle;
 
 	// varchunk init
-	handle.to_ui = varchunk_new(8192);
-	handle.from_ui = varchunk_new(8192);
-	handle.to_worker = varchunk_new(8192);
-	handle.from_worker = varchunk_new(8192);
+	handle.app_to_ui = varchunk_new(8192);
+	handle.app_from_ui = varchunk_new(8192);
+	handle.app_to_worker = varchunk_new(8192);
+	handle.app_from_worker = varchunk_new(8192);
 
 	// ext_urid init
 	handle.ext_urid = ext_urid_new();
@@ -377,13 +381,14 @@ elm_main(int argc, char **argv)
 	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
 
 	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);
-	Evas_Object *win = elm_win_add(NULL, "Synthpod", ELM_WIN_BASIC);
-	evas_object_smart_callback_add(win, "delete,request", _ui_delete_request, &handle);
-	evas_object_resize(win, 800, 450);
-	evas_object_show(win);
+	//handle.win = elm_win_add(NULL, "Synthpod", ELM_WIN_BASIC);
+	handle.win = elm_win_util_standard_add("synthpod", "Synthpod");
+	evas_object_smart_callback_add(handle.win, "delete,request", _ui_delete_request, &handle);
+	evas_object_resize(handle.win, 1280, 720);
+	evas_object_show(handle.win);
 
 	// ui init
-	handle.ui = sp_ui_new(win, &handle.ui_driver, &handle);
+	handle.ui = sp_ui_new(handle.win, &handle.ui_driver, &handle);
 
 	// main loop
 	elm_run();
@@ -391,7 +396,7 @@ elm_main(int argc, char **argv)
 	// ui deinit
 	sp_ui_free(handle.ui);
 
-	evas_object_del(win);
+	evas_object_del(handle.win);
 	ecore_animator_del(handle.ui_anim);
 
 	// threads deinit
@@ -425,10 +430,10 @@ elm_main(int argc, char **argv)
 	ext_urid_free(handle.ext_urid);
 
 	// varchunk deinit
-	varchunk_free(handle.to_ui);
-	varchunk_free(handle.from_ui);
-	varchunk_free(handle.to_worker);
-	varchunk_free(handle.from_worker);
+	varchunk_free(handle.app_to_ui);
+	varchunk_free(handle.app_from_ui);
+	varchunk_free(handle.app_to_worker);
+	varchunk_free(handle.app_from_worker);
 
 	return 0;
 }

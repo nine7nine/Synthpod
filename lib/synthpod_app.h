@@ -75,10 +75,10 @@ void
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom);
 
 void
-sp_app_from_worker(sp_app_t *app, const void *data);
+sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data);
 
 void
-sp_worker_from_app(sp_app_t *app, const void *data);
+sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data);
 
 void
 sp_app_run_pre(sp_app_t *app, uint32_t nsamples);

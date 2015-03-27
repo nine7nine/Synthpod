@@ -77,7 +77,6 @@ struct _mod_t {
 
 struct _port_t {
 	mod_t *mod;
-	uuid_t uuid;
 	
 	const LilvPort *tar;
 	uint32_t index;
@@ -333,7 +332,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
 
 		tar->mod = mod;
-		uuid_generate_random(tar->uuid);
 		tar->tar = port;
 		tar->index = i;
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
@@ -354,7 +352,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		{
 			size = sizeof(float);
 			tar->type = PORT_TYPE_CONTROL;
-			tar->protocol = app->regs.port.float_protocol.urid; //TODO remove?
 		
 			LilvNode *dflt_node;
 			LilvNode *min_node;
@@ -524,7 +521,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			work->size = size - sizeof(work_t);
 		job_t *job = (job_t *)work->payload;
 			job->type = JOB_TYPE_MODULE_ADD;
-			memcpy(job->uri, module_add->str, module_add->uri.atom.size);
+			memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
 		_sp_app_to_worker_advance(app, size);
 	}
 	else if(protocol == app->regs.synthpod.module_del.urid)
@@ -565,7 +562,27 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		port_t *src_port = _sp_app_port_get(app, src_uuid, conn->src_port.body);
 		port_t *snk_port = _sp_app_port_get(app, snk_uuid, conn->snk_port.body);
 
-		//TODO actually connect
+		snk_port->sources[snk_port->num_sources] = src_port;;
+		snk_port->num_sources += 1; //TODO check <32
+
+		if(snk_port->num_sources == 1)
+		{
+			// directly wire source port output buffer to sink input buffer
+			lilv_instance_connect_port(
+				snk_port->mod->inst,
+				snk_port->index,
+				snk_port->sources[0]->buf);
+		}
+		else
+		{
+			// multiplex multiple source port output buffers to sink input buffer
+			lilv_instance_connect_port(
+				snk_port->mod->inst,
+				snk_port->index,
+				snk_port->buf);
+		}
+
+		//TODO signal ui?
 	}
 	else if(protocol == app->regs.synthpod.port_disconnect.urid)
 	{
@@ -578,13 +595,70 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		port_t *src_port = _sp_app_port_get(app, src_uuid, disconn->src_port.body);
 		port_t *snk_port = _sp_app_port_get(app, snk_uuid, disconn->snk_port.body);
 
-		//TODO actually disconnect
+		// update sources list 
+		for(int i=0, j=0; i<snk_port->num_sources; i++)
+		{
+			if(snk_port->sources[i] != src_port)
+				snk_port->sources[j++] = snk_port->sources[i];
+		}
+		snk_port->num_sources -= 1;
+
+		if(snk_port->num_sources == 1)
+		{
+			// directly wire source port output buffer to sink input buffer
+			lilv_instance_connect_port(
+				snk_port->mod->inst,
+				snk_port->index,
+				snk_port->sources[0]->buf);
+		}
+		else
+		{
+			// multiplex multiple source port output buffers to sink input buffer
+			lilv_instance_connect_port(
+				snk_port->mod->inst,
+				snk_port->index,
+				snk_port->buf);
+		}
+
+		//TODO signal ui?
+	}
+	else if(protocol == app->regs.synthpod.port_subscribe.urid)
+	{
+		const transmit_port_subscribe_t *subscribe = (const transmit_port_subscribe_t *)atom;
+
+		uuid_t uuid;
+		uuid_parse(subscribe->str, uuid);
+		port_t *port = _sp_app_port_get(app, uuid, subscribe->port.body);
+
+		port->protocol = subscribe->prot.body;
+		port->subscriptions += 1;
+	}
+	else if(protocol == app->regs.synthpod.port_unsubscribe.urid)
+	{
+		const transmit_port_unsubscribe_t *unsubscribe = (const transmit_port_unsubscribe_t *)atom;
+
+		uuid_t uuid;
+		uuid_parse(unsubscribe->str, uuid);
+		port_t *port = _sp_app_port_get(app, uuid, unsubscribe->port.body);
+
+		if(port->subscriptions > 0)
+			port->subscriptions -= 1;
+	}
+	else if(protocol == app->regs.synthpod.port_refresh.urid)
+	{
+		const transmit_port_refresh_t *refresh = (const transmit_port_refresh_t *)atom;
+
+		uuid_t uuid;
+		uuid_parse(refresh->str, uuid);
+		port_t *port = _sp_app_port_get(app, uuid, refresh->port.body);
+
+		port->last = *(float *)port->buf - 0.1; // will force notification
 	}
 }
 
 // rt
 void
-sp_app_from_worker(sp_app_t *app, const void *data)
+sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 {
 	const work_t *work = data;
 
@@ -599,8 +673,15 @@ sp_app_from_worker(sp_app_t *app, const void *data)
 				// inject module into module graph
 				app->mods[app->num_mods] = job->mod;
 				app->num_mods += 1;
+			
+				const LilvNode *uri_node = lilv_plugin_get_uri(job->mod->plug);
+				const char *uri_str = lilv_node_as_string(uri_node);
 				
-				//TODO signal to UI
+				//signal to UI
+				size_t size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
+				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size, job->mod->uuid, uri_str);
+				_sp_app_to_ui_advance(app, size);
 
 				break;
 			}
@@ -639,7 +720,7 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 
 // non-rt worker thread
 void
-sp_worker_from_app(sp_app_t *app, const void *data)
+sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 {
 	const work_t *work = data;
 
@@ -812,87 +893,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 	}
 }
 
-//rt
-static inline void
-_sp_transfer_fill(sp_app_t *app, transfer_t *trans, uint32_t size,
-	LV2_URID protocol, port_t *port)
-{
-	trans->transmit.tuple.atom.size = size - sizeof(LV2_Atom);
-	trans->transmit.tuple.atom.type = app->forge.Tuple;
-
-	trans->transmit.protocol.atom.size = sizeof(LV2_URID);
-	trans->transmit.protocol.atom.type = app->forge.URID;
-	trans->transmit.protocol.body = protocol;
-
-	trans->uuid.atom.size = 37;
-	trans->uuid.atom.type = app->forge.String;
-	uuid_unparse(port->mod->uuid, trans->str);
-	
-	trans->port.atom.size = sizeof(int32_t);
-	trans->port.atom.type = app->forge.Int;
-	trans->port.body = port->index;
-}
-
-// rt
-static inline void
-_sp_transfer_float_fill(sp_app_t *app, transfer_float_t *trans,
-	port_t *port, float value)
-{
-	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_float_t),
-		app->regs.port.float_protocol.urid, port);
-	
-	trans->value.atom.size = sizeof(float);
-	trans->value.atom.type = app->forge.Float;
-	trans->value.body = value;
-}
-
-// rt
-static inline void
-_sp_transfer_peak_fill(sp_app_t *app, transfer_peak_t *trans,
-	port_t *port, uint32_t period_start, uint32_t period_size, float peak)
-{
-	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_peak_t),
-		app->regs.port.peak_protocol.urid, port);
-	
-	trans->period_start.atom.size = sizeof(uint32_t);
-	trans->period_start.atom.type = app->forge.Int;
-	trans->period_start.body = period_start;
-	
-	trans->period_size.atom.size = sizeof(uint32_t);
-	trans->period_size.atom.type = app->forge.Int;
-	trans->period_size.body = period_size;
-	
-	trans->peak.atom.size = sizeof(float);
-	trans->peak.atom.type = app->forge.Float;
-	trans->peak.body = peak;
-}
-
-// rt
-static inline void
-_sp_transfer_atom_fill(sp_app_t *app, transfer_atom_t *trans,
-	port_t *port, const LV2_Atom *atom)
-{
-	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-
-	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_atom_t) + atom_size,
-		app->regs.port.atom_transfer.urid, port);
-
-	memcpy(trans->atom, atom, atom_size);
-}
-
-// rt
-static inline void
-_sp_transfer_event_fill(sp_app_t *app, transfer_atom_t *trans,
-	port_t *port, const LV2_Atom *atom)
-{
-	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-
-	_sp_transfer_fill(app, &trans->transfer, sizeof(transfer_atom_t) + atom_size,
-		app->regs.port.event_transfer.urid, port);
-
-	memcpy(trans->atom, atom, atom_size);
-}
-
 // rt
 void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples)
@@ -910,7 +910,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		{
 			port_t *port = &mod->ports[i];
 
-			if(port->protocol == 0) // no notification/subscription
+			if(port->subscriptions == 0) // no notification/subscription
 				continue;
 				
 			const void *buf = port->num_sources == 1
@@ -927,7 +927,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					size_t size = sizeof(transfer_float_t);
 					transfer_float_t *trans = _sp_app_to_ui_request(app, size);
-					_sp_transfer_float_fill(app, trans, port, val);
+					_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, &val);
 					_sp_app_to_ui_advance(app, size);
 				}
 			}
@@ -956,10 +956,15 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					// update last value
 					port->last = peak;
 
+					LV2UI_Peak_Data data = {
+						.period_start = port->period_cnt,
+						.period_size = app->driver->period_size,
+						.peak = peak
+					};
+
 					size_t size = sizeof(transfer_peak_t);
 					transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
-					_sp_transfer_peak_fill(app, trans, port,
-						port->period_cnt, app->driver->period_size, peak);
+					_sp_transfer_peak_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, &data);
 					_sp_app_to_ui_advance(app, size);
 				}
 			}
@@ -971,7 +976,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		
 				size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
 				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-				_sp_transfer_atom_fill(app, trans, port, atom);
+				_sp_transfer_atom_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, atom);
 				_sp_app_to_ui_advance(app, size);
 			}
 			else if(port->protocol == app->regs.port.event_transfer.urid)
@@ -987,7 +992,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
 					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-					_sp_transfer_event_fill(app, trans, port, atom);
+					_sp_transfer_event_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, atom);
 					_sp_app_to_ui_advance(app, size);
 				}
 			}
