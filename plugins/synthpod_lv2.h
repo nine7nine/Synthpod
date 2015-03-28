@@ -26,12 +26,17 @@
 
 // plugin uris
 #define SYNTHPOD_STEREO_URI			SYNTHPOD_URI"#stereo"
+#define SYNTHPOD_SOURCE_URI			SYNTHPOD_URI"#source"
+#define SYNTHPOD_SINK_URI				SYNTHPOD_URI"#sink"
 
 // UI uris
 #define SYNTHPOD_COMMON_UI_URI	SYNTHPOD_URI"#common_ui"
 #define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_eo"
 
 extern const LV2_Descriptor synthpod_stereo;
+extern const LV2_Descriptor synthpod_source;
+extern const LV2_Descriptor synthpod_sink;
+
 extern const LV2UI_Descriptor synthpod_common_ui;
 extern const LV2UI_Descriptor synthpod_common_eo;
 

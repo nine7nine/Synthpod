@@ -42,7 +42,8 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/osc_io.ttl DESTINATION ${DEST})
 # synthpod
 add_library(synthpod.lv2 MODULE
 	synthpod_lv2.c
-	synthpod_stereo.c)
+	synthpod_stereo.c
+	synthpod_sinksource.c)
 target_link_libraries(synthpod.lv2 synthpod.lib)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lv2 DESTINATION ${DEST})

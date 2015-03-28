@@ -127,21 +127,8 @@ struct _reg_t {
 		reg_item_t module_add;
 		reg_item_t module_del;
 		reg_item_t port_refresh;
-		reg_item_t port_connect;
-		reg_item_t port_disconnect;
-
-		reg_item_t module_index;
-		reg_item_t module_source_index;
-		reg_item_t module_sink_index;
-
-		reg_item_t port_index;
-		reg_item_t port_source_index;
-		reg_item_t port_sink_index;
-		
-		reg_item_t port_value;
-		
-		reg_item_t port_subscribe;
-		reg_item_t port_unsubscribe;
+		reg_item_t port_connected;
+		reg_item_t port_subscribed;
 	} synthpod;
 };
 
@@ -225,21 +212,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->synthpod.module_add.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleAdd");
 	regs->synthpod.module_del.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleDel");
 	regs->synthpod.port_refresh.urid = map->map(map->handle, SYNTHPOD_PREFIX"portRefresh");
-	regs->synthpod.port_connect.urid = map->map(map->handle, SYNTHPOD_PREFIX"portConnect");
-	regs->synthpod.port_disconnect.urid = map->map(map->handle, SYNTHPOD_PREFIX"portDisconnect");
-
-	regs->synthpod.module_index.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleIndex");
-	regs->synthpod.module_source_index.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleSourceIndex");
-	regs->synthpod.module_sink_index.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleSinkIndex");
-
-	regs->synthpod.port_index.urid = map->map(map->handle, SYNTHPOD_PREFIX"portIndex");
-	regs->synthpod.port_source_index.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSourceIndex");
-	regs->synthpod.port_sink_index.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSinkIndex");
-	
-	regs->synthpod.port_value.urid = map->map(map->handle, SYNTHPOD_PREFIX"portValue");
-	
-	regs->synthpod.port_subscribe.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSubscribe");
-	regs->synthpod.port_unsubscribe.urid = map->map(map->handle, SYNTHPOD_PREFIX"portUnsubscribe");
+	regs->synthpod.port_connected.urid = map->map(map->handle, SYNTHPOD_PREFIX"portConnect");
+	regs->synthpod.port_subscribed.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSubscribe");
 }
 
 static inline void
@@ -287,10 +261,8 @@ sp_regs_deinit(reg_t *regs)
 typedef struct _transmit_t transmit_t;
 typedef struct _transmit_module_add_t transmit_module_add_t;
 typedef struct _transmit_module_del_t transmit_module_del_t;
-typedef struct _transmit_port_connect_t transmit_port_connect_t;
-typedef struct _transmit_port_disconnect_t transmit_port_disconnect_t;
-typedef struct _transmit_port_subscribe_t transmit_port_subscribe_t;
-typedef struct _transmit_port_unsubscribe_t transmit_port_unsubscribe_t;
+typedef struct _transmit_port_connected_t transmit_port_connected_t;
+typedef struct _transmit_port_subscribed_t transmit_port_subscribed_t;
 typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
 
 struct _transmit_t {
@@ -312,7 +284,7 @@ struct _transmit_module_del_t {
 		char str [37] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
-struct _transmit_port_connect_t {
+struct _transmit_port_connected_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_String src_uuid _ATOM_ALIGNED;
 		char src_str [37] _ATOM_ALIGNED;
@@ -320,32 +292,16 @@ struct _transmit_port_connect_t {
 	LV2_Atom_String snk_uuid _ATOM_ALIGNED;
 		char snk_str [37] _ATOM_ALIGNED;
 	LV2_Atom_Int snk_port _ATOM_ALIGNED;
+	LV2_Atom_Int state _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
-struct _transmit_port_disconnect_t {
-	transmit_t transmit _ATOM_ALIGNED;
-	LV2_Atom_String src_uuid _ATOM_ALIGNED;
-		char src_str [37] _ATOM_ALIGNED;
-	LV2_Atom_Int src_port _ATOM_ALIGNED;
-	LV2_Atom_String snk_uuid _ATOM_ALIGNED;
-		char snk_str [37] _ATOM_ALIGNED;
-	LV2_Atom_Int snk_port _ATOM_ALIGNED;
-} _ATOM_ALIGNED;
-
-struct _transmit_port_subscribe_t {
+struct _transmit_port_subscribed_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_String uuid _ATOM_ALIGNED;
 		char str [37] _ATOM_ALIGNED;
 	LV2_Atom_Int port _ATOM_ALIGNED;
 	LV2_Atom_URID prot _ATOM_ALIGNED;
-} _ATOM_ALIGNED;
-
-struct _transmit_port_unsubscribe_t {
-	transmit_t transmit _ATOM_ALIGNED;
-	LV2_Atom_String uuid _ATOM_ALIGNED;
-		char str [37] _ATOM_ALIGNED;
-	LV2_Atom_Int port _ATOM_ALIGNED;
-	LV2_Atom_URID prot _ATOM_ALIGNED;
+	LV2_Atom_Int state _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_port_refresh_t {
@@ -398,7 +354,8 @@ _sp_transmit_fill(LV2_Atom_Forge *forge, transmit_t *trans, uint32_t size,
 }
 
 static inline void
-_sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_module_add_t *trans, uint32_t size,
+_sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_add_t *trans, uint32_t size,
 	uuid_t module_uuid, const char *module_uri)
 {
 	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.module_add.urid);
@@ -419,8 +376,8 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_module
 }
 
 static inline void
-_sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_module_del_t *trans, uint32_t size,
-	uuid_t module_uuid)
+_sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_del_t *trans, uint32_t size, uuid_t module_uuid)
 {
 	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.module_del.urid);
 
@@ -430,10 +387,11 @@ _sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_module
 }
 
 static inline void
-_sp_transmit_port_connect_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_port_connect_t *trans, uint32_t size,
-	uuid_t src_uuid, uint32_t src_port, uuid_t snk_uuid, uint32_t snk_port)
+_sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_port_connected_t *trans, uint32_t size, uuid_t src_uuid,
+	uint32_t src_port, uuid_t snk_uuid, uint32_t snk_port, int32_t state)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_connect.urid);
+	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_connected.urid);
 
 	trans->src_uuid.atom.size = 37;
 	trans->src_uuid.atom.type = forge->String;
@@ -450,36 +408,18 @@ _sp_transmit_port_connect_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_port
 	trans->snk_port.atom.size = sizeof(int32_t);
 	trans->snk_port.atom.type = forge->Int;
 	trans->snk_port.body = snk_port;
-}
-
-static inline void
-_sp_transmit_port_disconnect_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_port_disconnect_t *trans, uint32_t size,
-	uuid_t src_uuid, uint32_t src_port, uuid_t snk_uuid, uint32_t snk_port)
-{
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_disconnect.urid);
-
-	trans->src_uuid.atom.size = 37;
-	trans->src_uuid.atom.type = forge->String;
-	uuid_unparse(src_uuid, trans->src_str);
-
-	trans->src_port.atom.size = sizeof(int32_t);
-	trans->src_port.atom.type = forge->Int;
-	trans->src_port.body = src_port;
 	
-	trans->snk_uuid.atom.size = 37;
-	trans->snk_uuid.atom.type = forge->String;
-	uuid_unparse(snk_uuid, trans->snk_str);
-
-	trans->snk_port.atom.size = sizeof(int32_t);
-	trans->snk_port.atom.type = forge->Int;
-	trans->snk_port.body = snk_port;
+	trans->state.atom.size = sizeof(int32_t);
+	trans->state.atom.type = forge->Int;
+	trans->state.body = state; // -1 (query), 0 (disconnected), 1 (connected)
 }
 
 static inline void
-_sp_transmit_port_subscribe_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_port_subscribe_t *trans, uint32_t size,
-	uuid_t module_uuid, uint32_t port_index, LV2_URID prot)
+_sp_transmit_port_subscribed_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_port_subscribed_t *trans, uint32_t size,
+	uuid_t module_uuid, uint32_t port_index, LV2_URID prot, int32_t state)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_subscribe.urid);
+	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_subscribed.urid);
 
 	trans->uuid.atom.size = 37;
 	trans->uuid.atom.type = forge->String;
@@ -492,29 +432,15 @@ _sp_transmit_port_subscribe_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_po
 	trans->prot.atom.size = sizeof(LV2_URID);
 	trans->prot.atom.type = forge->URID;
 	trans->prot.body = prot;
-}
-
-static inline void
-_sp_transmit_port_unsubscribe_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_port_unsubscribe_t *trans, uint32_t size,
-	uuid_t module_uuid, uint32_t port_index, LV2_URID prot)
-{
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_unsubscribe.urid);
-
-	trans->uuid.atom.size = 37;
-	trans->uuid.atom.type = forge->String;
-	uuid_unparse(module_uuid, trans->str);
-
-	trans->port.atom.size = sizeof(int32_t);
-	trans->port.atom.type = forge->Int;
-	trans->port.body = port_index;
 	
-	trans->prot.atom.size = sizeof(LV2_URID);
-	trans->prot.atom.type = forge->URID;
-	trans->prot.body = prot;
+	trans->state.atom.size = sizeof(int32_t);
+	trans->state.atom.type = forge->Int;
+	trans->state.body = state; // -1 (query), 0 (disconnected), 1 (connected)
 }
 
 static inline void
-_sp_transmit_port_refresh_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_port_refresh_t *trans, uint32_t size,
+_sp_transmit_port_refresh_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_port_refresh_t *trans, uint32_t size,
 	uuid_t module_uuid, uint32_t port_index)
 {
 	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_refresh.urid);

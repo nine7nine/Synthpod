@@ -47,15 +47,15 @@ struct _handle_t {
 	} uri;
 
 	struct {
-		LV2_Atom_Forge event_source;
+		LV2_Atom_Forge event_out;
 		LV2_Atom_Forge notify;
 	} forge;
 
 	struct {
-		const LV2_Atom_Sequence *event_sink;
+		const LV2_Atom_Sequence *event_in;
 		const LV2_Atom_Sequence *control;
 		const float *audio_in[2];
-		LV2_Atom_Sequence *event_source;
+		LV2_Atom_Sequence *event_out;
 		LV2_Atom_Sequence *notify;
 		float *audio_out[2];
 	} port;
@@ -310,7 +310,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->uri.log.trace = handle->driver.map->map(handle->driver.map->handle,
 		LV2_LOG__Trace);
 
-	lv2_atom_forge_init(&handle->forge.event_source, handle->driver.map);
+	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
 	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);
 
 	return handle;
@@ -328,7 +328,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->port.control = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->port.event_sink = (const LV2_Atom_Sequence *)data;
+			handle->port.event_in = (const LV2_Atom_Sequence *)data;
 			sp_app_set_system_source(app, 0, data);
 			break;
 		case 2:
@@ -343,7 +343,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->port.notify = (LV2_Atom_Sequence *)data;
 			break;
 		case 5:
-			handle->port.event_source = (LV2_Atom_Sequence *)data;
+			handle->port.event_out = (LV2_Atom_Sequence *)data;
 			sp_app_set_system_sink(app, 0, data);
 			break;
 		case 6:
@@ -374,17 +374,17 @@ run(LV2_Handle instance, uint32_t nsamples)
 	sp_app_t *app = handle->app;
 
 	struct {
-		LV2_Atom_Forge_Frame event_source;
+		LV2_Atom_Forge_Frame event_out;
 		LV2_Atom_Forge_Frame notify;
 	} frame;
 
 	// prepare forge(s) & sequence(s)
-	lv2_atom_forge_set_buffer(&handle->forge.event_source,
-		(uint8_t *)handle->port.event_source, handle->port.event_source->atom.size);
-	lv2_atom_forge_sequence_head(&handle->forge.event_source, &frame.event_source, 0);
+	lv2_atom_forge_set_buffer(&handle->forge.event_out,
+		(uint8_t *)handle->port.event_out, handle->port.event_out->atom.size);
+	lv2_atom_forge_sequence_head(&handle->forge.event_out, &frame.event_out, 0);
 	
 	lv2_atom_forge_set_buffer(&handle->forge.notify,
-		(uint8_t *)handle->port.event_source, handle->port.notify->atom.size);
+		(uint8_t *)handle->port.event_out, handle->port.notify->atom.size);
 	lv2_atom_forge_sequence_head(&handle->forge.notify, &frame.notify, 0);
 
 	// run app pre
@@ -402,7 +402,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	sp_app_run_post(app, nsamples);
 		
 	// end sequence(s)
-	lv2_atom_forge_pop(&handle->forge.event_source, &frame.event_source);
+	lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
 	lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
 }
 

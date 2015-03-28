@@ -50,6 +50,34 @@ EVAS_SMART_SUBCLASS_NEW(PATCHER_TYPE, _patcher,
 	Evas_Smart_Class, Evas_Smart_Class,
 	evas_object_smart_clipped_class_get, _smart_callbacks);
 
+static int 
+_patcher_object_source_index_get(Evas_Object *o, void *data)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+
+	for(int i=0; i<priv->sources; i++)
+	{
+		if(priv->data.source[i] == data)
+			return i;
+	}
+
+	return -1;
+}
+
+static int 
+_patcher_object_sink_index_get(Evas_Object *o, void *data)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+
+	for(int i=0; i<priv->sinks; i++)
+	{
+		if(priv->data.sink[i] == data)
+			return i;
+	}
+
+	return -1;
+}
+
 static void
 _node_in(void *data, Evas_Object *edj, const char *emission, const char *source)
 {
@@ -507,8 +535,9 @@ patcher_object_dimension_set(Evas_Object *o, int sources, int sinks)
 	_patcher_smart_init(o);
 }
 
-void
-patcher_object_connected_set(Evas_Object *o, int source, int sink, Eina_Bool state)
+static inline void 
+_patcher_object_connected_index_set(Evas_Object *o, int source, int sink,
+	Eina_Bool state)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 	int src = source + priv->max - priv->sources;
@@ -524,6 +553,19 @@ patcher_object_connected_set(Evas_Object *o, int source, int sink, Eina_Bool sta
 		edje_object_signal_emit(edj, "off", PATCHER_UI);
 
 	priv->state[source][sink] = state;
+}
+
+void
+patcher_object_connected_set(Evas_Object *o, void *source_data,
+	void *sink_data, Eina_Bool state)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+	int source = _patcher_object_source_index_get(o, source_data);
+	int sink = _patcher_object_sink_index_get(o, sink_data);
+	if( (source == -1) || (sink == -1) )
+		return;
+
+	_patcher_object_connected_index_set(o, source, sink, state);
 }
 
 void

@@ -74,6 +74,11 @@ struct _mod_t {
 		LV2UI_Descriptor descriptor;
 		Elm_Object_Item *itm;
 	} std;
+
+	struct {
+		int source;
+		int sink;
+	} system;
 };
 
 struct _port_t {
@@ -123,6 +128,8 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *moditc;
 	Elm_Genlist_Item_Class *stditc;
 	Elm_Gengrid_Item_Class *griditc;
+		
+	Elm_Object_Item *sink_itm;
 };
 
 typedef struct _ui_write_t ui_write_t;
@@ -278,9 +285,10 @@ _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
 
-	size_t size = sizeof(transmit_port_subscribe_t);
-	transmit_port_subscribe_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_subscribe_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index, protocol);
+	size_t size = sizeof(transmit_port_subscribed_t);
+	transmit_port_subscribed_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
+		mod->uuid, index, protocol, 1);
 	_sp_ui_to_app_advance(ui, size);
 
 	return 0;
@@ -296,9 +304,10 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
 
-	size_t size = sizeof(transmit_port_unsubscribe_t);
-	transmit_port_unsubscribe_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_unsubscribe_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index, protocol);
+	size_t size = sizeof(transmit_port_subscribed_t);
+	transmit_port_subscribed_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
+		mod->uuid, index, protocol, 0);
 	_sp_ui_to_app_advance(ui, size);
 
 	return 0;
@@ -352,6 +361,12 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, uuid_t uuid)
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 
+	// discover system modules
+	if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#source"))
+		mod->system.source = 1;
+	else if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#sink"))
+		mod->system.sink = 1;
+
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
 	for(uint32_t i=0; i<mod->num_ports; i++)
 	{
@@ -399,6 +414,12 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, uuid_t uuid)
 			//	: PORT_BUFFER_TYPE_NONE; //TODO
 			tar->selected = 1;
 		}
+
+		// ignore dummy system ports
+		if(mod->system.source && (tar->direction == PORT_DIRECTION_INPUT) )
+			tar->selected = 0;
+		if(mod->system.sink && (tar->direction == PORT_DIRECTION_OUTPUT) )
+			tar->selected = 0;
 	}
 		
 	//ui
@@ -413,7 +434,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, uuid_t uuid)
 		}
 	}
 	
-	mod->col = _next_color();
+	if(mod->system.source || mod->system.sink)
+		mod->col = 0; // reserved color for system ports
+	else
+		mod->col = _next_color();
 	
 	return mod;
 }
@@ -421,8 +445,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, uuid_t uuid)
 void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
-	//TODO disconnect all ports
-
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
 
@@ -502,6 +524,12 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 	{
 		port_t *port = &mod->ports[i];
 
+		// ignore dummy system ports
+		if(mod->system.source && (port->direction == PORT_DIRECTION_INPUT) )
+			continue;
+		if(mod->system.sink && (port->direction == PORT_DIRECTION_OUTPUT) )
+			continue;
+
 		// only add control, audio, cv ports
 		Elm_Object_Item *elmnt;
 		elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
@@ -509,6 +537,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 	}
 
+	// separator
 	Elm_Object_Item *elmnt;
 	elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, NULL, itm,
 		ELM_GENLIST_ITEM_NONE, NULL, NULL);
@@ -556,18 +585,11 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
-
-	// remove StdUI list item
-	elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
-	elm_object_item_del(mod->std.itm);
-	mod->std.itm = NULL;
-
-	// remove EoUI grid item, if present
-	if(mod->eo.itm)
-	{
-		elm_object_item_del(mod->eo.itm);
-		mod->eo.itm = NULL;
-	}
+	
+	size_t size = sizeof(transmit_module_del_t);
+	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uuid);
+	_sp_ui_to_app_advance(ui, size);
 }
 
 static void
@@ -703,11 +725,16 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	elm_layout_icon_set(lay, check);
 	elm_layout_content_set(lay, "elm.swallow.icon", check);
 
-	Evas_Object *icon = elm_icon_add(lay);
-	elm_icon_standard_set(icon, "close");
-	evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
-	evas_object_show(icon);
-	elm_layout_content_set(lay, "elm.swallow.end", icon);
+	if(!mod->system.source && !mod->system.sink)
+	{
+		Evas_Object *icon = elm_icon_add(lay);
+		elm_icon_standard_set(icon, "close");
+		evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
+		evas_object_show(icon);
+		elm_layout_content_set(lay, "elm.swallow.end", icon);
+	}
+	else
+		; // system mods cannot be removed
 
 	return lay;
 }
@@ -1030,10 +1057,7 @@ _modlist_del(void *data, Evas_Object *obj)
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 	
-	size_t size = sizeof(transmit_module_del_t);
-	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uuid);
-	_sp_ui_to_app_advance(ui, size);
+	_patches_update(ui);
 }
 
 static char *
@@ -1228,6 +1252,7 @@ _modgrid_del(void *data, Evas_Object *obj)
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
+	//TODO this is futile, as module has already been removed in app
 	// unsubscribe from all ports
 	for(int i=0; i<mod->num_ports; i++)
 	{
@@ -1283,15 +1308,12 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 		sink->ptr, sink->index);
 	*/
 
-	size_t size = sizeof(transmit_port_connect_t);
-	transmit_port_connect_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_connect_fill(&ui->regs, &ui->forge, trans, size,
+	size_t size = sizeof(transmit_port_connected_t);
+	transmit_port_connected_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
 		source_port->mod->uuid, source_port->index,
-		sink_port->mod->uuid, sink_port->index);
+		sink_port->mod->uuid, sink_port->index, 1);
 	_sp_ui_to_app_advance(ui, size);
-
-	//TODO only patch after successful connection
-	//patcher_object_connected_set(obj, source->index, sink->index, EINA_TRUE);
 }
 
 static void
@@ -1310,15 +1332,12 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 		sink->ptr, sink->index);
 	*/
 
-	size_t size = sizeof(transmit_port_disconnect_t);
-	transmit_port_disconnect_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_disconnect_fill(&ui->regs, &ui->forge, trans, size,
+	size_t size = sizeof(transmit_port_connected_t);
+	transmit_port_connected_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
 		source_port->mod->uuid, source_port->index,
-		sink_port->mod->uuid, sink_port->index);
+		sink_port->mod->uuid, sink_port->index, 0);
 	_sp_ui_to_app_advance(ui, size);
-
-	//TODO only unpatch after successful connection
-	//patcher_object_connected_set(obj, source->index, sink->index, EINA_FALSE);
 }
 
 static void
@@ -1336,18 +1355,13 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 		source->ptr, source->index,
 		sink->ptr, sink->index);
 	*/
-
-	//FIXME make this thread-safe
-	Eina_Bool linked = EINA_FALSE;
-	/*
-	for(int i=0; i<sink_port->num_sources; i++)
-		if(source_port == sink_port->sources[i])
-		{
-			linked = EINA_TRUE;
-			break;
-		}
-	*/
-	patcher_object_connected_set(obj, source->index, sink->index, linked);
+	
+	size_t size = sizeof(transmit_port_connected_t);
+	transmit_port_connected_t *trans = _sp_ui_to_app_request(ui, size);
+	_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
+		source_port->mod->uuid, source_port->index,
+		sink_port->mod->uuid, sink_port->index, -1);
+	_sp_ui_to_app_advance(ui, size);
 }
 
 static void
@@ -1564,8 +1578,19 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, module_uuid);
 		if(mod)
 		{
-			mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod, NULL,
-				ELM_GENLIST_ITEM_TREE, NULL, NULL);
+			if(mod->system.source || mod->system.sink)
+			{
+				mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod,
+					NULL, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+
+				if(mod->system.sink)
+					ui->sink_itm = mod->std.itm;
+			}
+			else
+			{
+				mod->std.itm = elm_genlist_item_insert_before(ui->modlist, ui->moditc, mod,
+					NULL, ui->sink_itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+			}
 		
 			if(mod->eo.ui) // has EoUI
 			{
@@ -1580,11 +1605,24 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		uuid_t module_uuid;
 		uuid_parse(trans->str, module_uuid);
 		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
-		//TODO 
+
+		// remove StdUI list item
+		elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
+		elm_object_item_del(mod->std.itm);
+		mod->std.itm = NULL;
+
+		// remove EoUI grid item, if present
+		if(mod->eo.itm)
+		{
+			elm_object_item_del(mod->eo.itm);
+			mod->eo.itm = NULL;
+		}
+		
+		_sp_ui_mod_del(ui, mod);
 	}
-	else if(protocol == ui->regs.synthpod.port_connect.urid)
+	else if(protocol == ui->regs.synthpod.port_connected.urid)
 	{
-		const transmit_port_connect_t *trans = (const transmit_port_connect_t *)atom;
+		const transmit_port_connected_t *trans = (const transmit_port_connected_t *)atom;
 		uuid_t src_uuid;
 		uuid_t snk_uuid;
 		uuid_parse(trans->src_str, src_uuid);
@@ -1593,20 +1631,10 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		uint32_t snk_index = trans->snk_port.body;
 		port_t *src = _sp_ui_port_get(ui, src_uuid, src_index);
 		port_t *snk = _sp_ui_port_get(ui, snk_uuid, snk_index);
-		//TODO call patcher
-	}
-	else if(protocol == ui->regs.synthpod.port_disconnect.urid)
-	{
-		const transmit_port_disconnect_t *trans = (const transmit_port_disconnect_t *)atom;
-		uuid_t src_uuid;
-		uuid_t snk_uuid;
-		uuid_parse(trans->src_str, src_uuid);
-		uuid_parse(trans->snk_str, snk_uuid);
-		uint32_t src_index = trans->src_port.body;
-		uint32_t snk_index = trans->snk_port.body;
-		port_t *src = _sp_ui_port_get(ui, src_uuid, src_index);
-		port_t *snk = _sp_ui_port_get(ui, snk_uuid, snk_index);
-		//TODO call patcher
+
+		Evas_Object *matrix = ui->matrix[src->type];
+		patcher_object_connected_set(matrix, src, snk,
+			trans->state.body ? EINA_TRUE : EINA_FALSE);
 	}
 	else if(protocol == ui->regs.port.float_protocol.urid)
 	{

@@ -42,6 +42,120 @@ proj:synthpod
 	doap:maintainer omk:me ;
 	doap:name "Synthpod Bundle" .
 
+# Source Plugin
+synthpod:source
+	a lv2:Plugin ,
+		lv2:InstrumentPlugin ;
+	doap:name "Synthpod Source" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:optionalFeature lv2:isLive ,
+		lv2:hardRTCapable ,
+		log:log ;
+	
+	lv2:port [
+		# event in
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
+	] , [
+		# audio in 1
+	  a lv2:InputPort ,
+			lv2:AudioPort ;
+		lv2:index 1 ;
+		lv2:symbol "audio_in_1" ;
+		lv2:name "Audio In 1" ;
+	] , [
+		# audio in 2
+	  a lv2:InputPort ,
+			lv2:AudioPort ;
+		lv2:index 2 ;
+		lv2:symbol "audio_in_2" ;
+		lv2:name "Audio In 2" ;
+	] , [
+		# event out 
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		lv2:index 3 ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Out" ;
+	] , [
+		# audio out 1
+	  a lv2:OutputPort ,
+			lv2:AudioPort ;
+		lv2:index 4 ;
+		lv2:symbol "audio_out_1" ;
+		lv2:name "Audio Out 1" ;
+	] , [
+		# audio out 2
+	  a lv2:OutputPort ,
+			lv2:AudioPort ;
+		lv2:index 5 ;
+		lv2:symbol "audio_out_2" ;
+		lv2:name "Audio Out 2" ;
+	] .
+
+# Sink Plugin
+synthpod:sink
+	a lv2:Plugin ,
+		lv2:InstrumentPlugin ;
+	doap:name "Synthpod Sink" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:optionalFeature lv2:isLive ,
+		lv2:hardRTCapable ,
+		log:log ;
+	
+	lv2:port [
+		# event in 
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
+	] , [
+		# audio in 1
+	  a lv2:InputPort ,
+			lv2:AudioPort ;
+		lv2:index 1 ;
+		lv2:symbol "audio_in_1" ;
+		lv2:name "Audio In 1" ;
+	] , [
+		# audio in 2
+	  a lv2:InputPort ,
+			lv2:AudioPort ;
+		lv2:index 2 ;
+		lv2:symbol "audio_in_2" ;
+		lv2:name "Audio In 2" ;
+	] , [
+		# event out 
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		lv2:index 3 ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Out" ;
+	] , [
+		# audio out 1
+	  a lv2:OutputPort ,
+			lv2:AudioPort ;
+		lv2:index 4 ;
+		lv2:symbol "audio_out_1" ;
+		lv2:name "Audio Out 1" ;
+	] , [
+		# audio out 2
+	  a lv2:OutputPort ,
+			lv2:AudioPort ;
+		lv2:index 5 ;
+		lv2:symbol "audio_out_2" ;
+		lv2:name "Audio Out 2" ;
+	] .
+
 # Common X11UI
 synthpod:common_ui
 	a ui:X11UI ;
@@ -88,13 +202,13 @@ synthpod:stereo
 		lv2:designation lv2:control ;
 		rsz:minimumSize 16384;
 	] , [
-		# sink event port
+		# event in
 	  a lv2:InputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		lv2:index 1 ;
-		lv2:symbol "event_sink" ;
-		lv2:name "Event Sink" ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
 	] , [
 		# audio in 1
 	  a lv2:InputPort ,
@@ -120,13 +234,13 @@ synthpod:stereo
 		lv2:designation lv2:control ;
 		rsz:minimumSize 16384;
 	] , [
-		# source event port
+		# event out
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		lv2:index 5 ;
-		lv2:symbol "event_source" ;
-		lv2:name "Event Source" ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Out" ;
 	] , [
 		# audio out 1
 	  a lv2:OutputPort ,

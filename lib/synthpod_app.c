@@ -23,6 +23,8 @@
 #include <synthpod_private.h>
 
 #define NUM_FEATURES 4
+#define MAX_SOURCES 32 // TODO how many?
+#define MAX_MODS 512 // TODO how many?
 
 typedef enum _job_type_t job_type_t;
 
@@ -82,7 +84,7 @@ struct _port_t {
 	uint32_t index;
 
 	int num_sources;
-	port_t *sources [32]; // TODO how many?
+	port_t *sources [MAX_SOURCES];
 
 	void *buf;
 
@@ -112,7 +114,7 @@ struct _sp_app_t {
 	LV2_Atom_Forge forge;
 
 	uint32_t num_mods;
-	mod_t *mods [512]; //TODO how many?
+	mod_t *mods [MAX_MODS];
 };
 
 // rt
@@ -196,30 +198,6 @@ _log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
 }
 
 // non-rt
-sp_app_t *
-sp_app_new(sp_app_driver_t *driver, void *data)
-{
-	if(!driver || !data)
-		return NULL;
-
-	sp_app_t *app = calloc(1, sizeof(sp_app_t));
-	if(!app)
-		return NULL;
-
-	app->driver = driver;
-	app->data = data;
-
-	app->world = lilv_world_new();
-	lilv_world_load_all(app->world);
-	app->plugs = lilv_world_get_all_plugins(app->world);
-
-	lv2_atom_forge_init(&app->forge, app->driver->map);
-	sp_regs_init(&app->regs, app->world, app->driver->map);
-	
-	return app;
-}
-
-// non-rt
 void
 sp_app_activate(sp_app_t *app)
 {
@@ -230,32 +208,40 @@ sp_app_activate(sp_app_t *app)
 void
 sp_app_set_system_source(sp_app_t *app, uint32_t index, const void *buf)
 {
-	//TODO
+	// get first mod aka system source
+	mod_t *mod = app->mods[0];
+
+	lilv_instance_connect_port(mod->inst, index, (void *)buf);
 }
 
 // rt
 void
 sp_app_set_system_sink(sp_app_t *app, uint32_t index, void *buf)
 {
-	//TODO
+	// get last mod aka system sink
+	mod_t *mod = app->mods[app->num_mods - 1];
+
+	lilv_instance_connect_port(mod->inst, index + 3, (void *)buf);
 }
 
 // rt
 void *
 sp_app_get_system_source(sp_app_t *app, uint32_t index)
 {
-	//TODO
-	static uint8_t tmp [8192];
-	return tmp;
+	// get last mod aka system source
+	mod_t *mod = app->mods[0];
+
+	return mod->ports[index].buf;
 }
 
 // rt
 const void *
 sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 {
-	//TODO
-	static uint8_t tmp [8192];
-	return tmp;
+	// get last mod aka system sink
+	mod_t *mod = app->mods[app->num_mods - 1];
+
+	return mod->ports[index + 3].buf;
 }
 
 // rt
@@ -374,7 +360,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			//	: PORT_BUFFER_TYPE_NONE; //TODO discriminate properly
 		}
 		else
-			; //TODO abort
+			; //TODO
 
 		// allocate 8-byte aligned buffer
 		posix_memalign(&tar->buf, 8, size); //TODO mlock
@@ -430,6 +416,126 @@ _sp_app_port_get(sp_app_t *app, uuid_t uuid, uint32_t index)
 		return &mod->ports[index];
 	
 	return NULL;
+}
+
+static inline int
+_sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
+{
+	if(snk_port->num_sources >= MAX_SOURCES)
+		return 0;
+
+	snk_port->sources[snk_port->num_sources] = src_port;;
+	snk_port->num_sources += 1;
+
+	if(snk_port->num_sources == 1)
+	{
+		// directly wire source port output buffer to sink input buffer
+		lilv_instance_connect_port(
+			snk_port->mod->inst,
+			snk_port->index,
+			snk_port->sources[0]->buf);
+	}
+	else
+	{
+		// multiplex multiple source port output buffers to sink input buffer
+		lilv_instance_connect_port(
+			snk_port->mod->inst,
+			snk_port->index,
+			snk_port->buf);
+	}
+
+	return 1;
+}
+
+static inline void
+_sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
+{
+	// update sources list 
+	int connected = 0;
+	for(int i=0, j=0; i<snk_port->num_sources; i++)
+	{
+		if(snk_port->sources[i] == src_port)
+		{
+			connected = 1;
+			continue;
+		}
+
+		snk_port->sources[j++] = snk_port->sources[i];
+	}
+
+	if(!connected)
+		return;
+
+	snk_port->num_sources -= 1;
+
+	if(snk_port->num_sources == 1)
+	{
+		// directly wire source port output buffer to sink input buffer
+		lilv_instance_connect_port(
+			snk_port->mod->inst,
+			snk_port->index,
+			snk_port->sources[0]->buf);
+	}
+	else
+	{
+		// multiplex multiple source port output buffers to sink input buffer
+		lilv_instance_connect_port(
+			snk_port->mod->inst,
+			snk_port->index,
+			snk_port->buf);
+	}
+}
+
+// non-rt
+sp_app_t *
+sp_app_new(sp_app_driver_t *driver, void *data)
+{
+	if(!driver || !data)
+		return NULL;
+
+	sp_app_t *app = calloc(1, sizeof(sp_app_t));
+	if(!app)
+		return NULL;
+
+	app->driver = driver;
+	app->data = data;
+
+	app->world = lilv_world_new();
+	lilv_world_load_all(app->world);
+	app->plugs = lilv_world_get_all_plugins(app->world);
+
+	lv2_atom_forge_init(&app->forge, app->driver->map);
+	sp_regs_init(&app->regs, app->world, app->driver->map);
+
+	const char *uri_str;
+	size_t size;
+	mod_t *mod;
+
+	// inject source mod
+	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#source";
+	mod = _sp_app_mod_add(app, uri_str);
+	app->mods[app->num_mods] = mod;
+	app->num_mods += 1;
+	// signal to ui
+	size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+	transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
+	_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+		mod->uuid, uri_str);
+	_sp_app_to_ui_advance(app, size);
+
+	// inject sink mod
+	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#sink";
+	mod = _sp_app_mod_add(app, uri_str);
+	app->mods[app->num_mods] = mod;
+	app->num_mods += 1;
+	// signal to ui
+	size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+	trans = _sp_app_to_ui_request(app, size);
+	_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+		mod->uuid, uri_str);
+	_sp_app_to_ui_advance(app, size);
+	
+	return app;
 }
 
 // rt
@@ -541,6 +647,21 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		for(int m=offset; m<app->num_mods; m++)
 			app->mods[m] = app->mods[m+1];
 
+		// disconnect all ports
+		for(int p1=0; p1<mod->num_ports; p1++)
+		{
+			port_t *port = &mod->ports[p1];
+
+			// disconnect sources
+			for(int s=0; s<port->num_sources; s++)
+				_sp_app_port_disconnect(app, port->sources[s], port);
+
+			// disconnect sinks
+			for(int m=0; m<app->num_mods; m++)
+				for(int p2=0; p2<app->mods[m]->num_ports; p2++)
+					_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]);
+		}
+
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t);
 		work_t *work = _sp_app_to_worker_request(app, size);
@@ -550,10 +671,16 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			job->type = JOB_TYPE_MODULE_DEL;
 			job->mod = mod;
 		_sp_app_to_worker_advance(app, size);
+
+		// signal to ui
+		size = sizeof(transmit_module_del_t);
+		transmit_module_del_t *trans = _sp_app_to_ui_request(app, size);
+		_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uuid);
+		_sp_app_to_ui_advance(app, size);
 	}
-	else if(protocol == app->regs.synthpod.port_connect.urid)
+	else if(protocol == app->regs.synthpod.port_connected.urid)
 	{
-		const transmit_port_connect_t *conn = (const transmit_port_connect_t *)atom;
+		const transmit_port_connected_t *conn = (const transmit_port_connected_t *)atom;
 
 		uuid_t src_uuid;
 		uuid_t snk_uuid;
@@ -561,88 +688,65 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		uuid_parse(conn->snk_str, snk_uuid);
 		port_t *src_port = _sp_app_port_get(app, src_uuid, conn->src_port.body);
 		port_t *snk_port = _sp_app_port_get(app, snk_uuid, conn->snk_port.body);
+		if(!src_port || !snk_port)
+			return;
 
-		snk_port->sources[snk_port->num_sources] = src_port;;
-		snk_port->num_sources += 1; //TODO check <32
-
-		if(snk_port->num_sources == 1)
+		int32_t state = 0;
+		switch(conn->state.body)
 		{
-			// directly wire source port output buffer to sink input buffer
-			lilv_instance_connect_port(
-				snk_port->mod->inst,
-				snk_port->index,
-				snk_port->sources[0]->buf);
-		}
-		else
-		{
-			// multiplex multiple source port output buffers to sink input buffer
-			lilv_instance_connect_port(
-				snk_port->mod->inst,
-				snk_port->index,
-				snk_port->buf);
+			case -1: // query
+			{
+				for(int s=0; s<snk_port->num_sources; s++)
+				{
+					if(snk_port->sources[s] == src_port)
+					{
+						state = 1;
+						break;
+					}
+				}
+				break;
+			}
+			case 0: // disconnect
+			{
+				_sp_app_port_disconnect(app, src_port, snk_port);
+				state = 0;
+				break;
+			}
+			case 1: // connect
+			{
+				state = _sp_app_port_connect(app, src_port, snk_port);
+				break;
+			}
 		}
 
-		//TODO signal ui?
+		// signal to ui
+		size_t size = sizeof(transmit_port_connected_t);
+		transmit_port_connected_t *trans = _sp_app_to_ui_request(app, size);
+		_sp_transmit_port_connected_fill(&app->regs, &app->forge, trans, size,
+			src_port->mod->uuid, src_port->index,
+			snk_port->mod->uuid, snk_port->index, state);
+		_sp_app_to_ui_advance(app, size);
 	}
-	else if(protocol == app->regs.synthpod.port_disconnect.urid)
+	else if(protocol == app->regs.synthpod.port_subscribed.urid)
 	{
-		const transmit_port_disconnect_t *disconn = (const transmit_port_disconnect_t *)atom;
-
-		uuid_t src_uuid;
-		uuid_t snk_uuid;
-		uuid_parse(disconn->src_str, src_uuid);
-		uuid_parse(disconn->snk_str, snk_uuid);
-		port_t *src_port = _sp_app_port_get(app, src_uuid, disconn->src_port.body);
-		port_t *snk_port = _sp_app_port_get(app, snk_uuid, disconn->snk_port.body);
-
-		// update sources list 
-		for(int i=0, j=0; i<snk_port->num_sources; i++)
-		{
-			if(snk_port->sources[i] != src_port)
-				snk_port->sources[j++] = snk_port->sources[i];
-		}
-		snk_port->num_sources -= 1;
-
-		if(snk_port->num_sources == 1)
-		{
-			// directly wire source port output buffer to sink input buffer
-			lilv_instance_connect_port(
-				snk_port->mod->inst,
-				snk_port->index,
-				snk_port->sources[0]->buf);
-		}
-		else
-		{
-			// multiplex multiple source port output buffers to sink input buffer
-			lilv_instance_connect_port(
-				snk_port->mod->inst,
-				snk_port->index,
-				snk_port->buf);
-		}
-
-		//TODO signal ui?
-	}
-	else if(protocol == app->regs.synthpod.port_subscribe.urid)
-	{
-		const transmit_port_subscribe_t *subscribe = (const transmit_port_subscribe_t *)atom;
+		const transmit_port_subscribed_t *subscribe = (const transmit_port_subscribed_t *)atom;
 
 		uuid_t uuid;
 		uuid_parse(subscribe->str, uuid);
 		port_t *port = _sp_app_port_get(app, uuid, subscribe->port.body);
+		if(!port)
+			return;
 
-		port->protocol = subscribe->prot.body;
-		port->subscriptions += 1;
-	}
-	else if(protocol == app->regs.synthpod.port_unsubscribe.urid)
-	{
-		const transmit_port_unsubscribe_t *unsubscribe = (const transmit_port_unsubscribe_t *)atom;
-
-		uuid_t uuid;
-		uuid_parse(unsubscribe->str, uuid);
-		port_t *port = _sp_app_port_get(app, uuid, unsubscribe->port.body);
-
-		if(port->subscriptions > 0)
-			port->subscriptions -= 1;
+		if(subscribe->state.body) // subscribe
+		{
+			port->protocol = subscribe->prot.body;
+			port->subscriptions += 1;
+		}
+		else // unsubscribe
+		{
+			if(port->subscriptions > 0)
+				port->subscriptions -= 1;
+		}
 	}
 	else if(protocol == app->regs.synthpod.port_refresh.urid)
 	{
@@ -651,6 +755,8 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		uuid_t uuid;
 		uuid_parse(refresh->str, uuid);
 		port_t *port = _sp_app_port_get(app, uuid, refresh->port.body);
+		if(!port)
+			return;
 
 		port->last = *(float *)port->buf - 0.1; // will force notification
 	}
@@ -670,8 +776,12 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 		{
 			case JOB_TYPE_MODULE_ADD:
 			{
+				if(app->num_mods >= MAX_MODS)
+					break; //TODO delete mod
+
 				// inject module into module graph
-				app->mods[app->num_mods] = job->mod;
+				app->mods[app->num_mods] = app->mods[app->num_mods-1]; // system sink
+				app->mods[app->num_mods-1] = job->mod;
 				app->num_mods += 1;
 			
 				const LilvNode *uri_node = lilv_plugin_get_uri(job->mod->plug);
@@ -680,7 +790,8 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				//signal to UI
 				size_t size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
-				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size, job->mod->uuid, uri_str);
+				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+					job->mod->uuid, uri_str);
 				_sp_app_to_ui_advance(app, size);
 
 				break;
