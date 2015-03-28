@@ -26,18 +26,17 @@
 typedef struct _handle_t handle_t;
 
 struct _handle_t {
-	const LV2_Atom_Sequence *event_in;
-	const float *audio_in[2];
+	const LV2_Atom_Sequence *event_out;
+	const float *audio_out[2];
 
-	LV2_Atom_Sequence *event_out;
-	float *audio_out[2];
+	LV2_Atom_Sequence *event_in;
+	float *audio_in[2];
 };
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
 {
-	int i;
 	handle_t *handle = calloc(1, sizeof(handle_t));
 	if(!handle)
 		return NULL;
@@ -53,22 +52,22 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->event_in = (const LV2_Atom_Sequence *)data;
+			handle->event_out = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->audio_in[0] = (const float *)data;
+			handle->audio_out[0] = (const float *)data;
 			break;
 		case 2:
-			handle->audio_in[1] = (const float *)data;
+			handle->audio_out[1] = (const float *)data;
 			break;
 		case 3:
-			handle->event_out = (LV2_Atom_Sequence *)data;
+			handle->event_in = (LV2_Atom_Sequence *)data;
 			break;
 		case 4:
-			handle->audio_out[0] = (float *)data;
+			handle->audio_in[0] = (float *)data;
 			break;
 		case 5:
-			handle->audio_out[1] = (float *)data;
+			handle->audio_in[1] = (float *)data;
 			break;
 		default:
 			break;
@@ -89,11 +88,11 @@ run(LV2_Handle instance, uint32_t nsamples)
 	handle_t *handle = instance;
 
 	size_t audio_size = nsamples * sizeof(float);
-	memcpy(handle->audio_out[0], handle->audio_in[0], audio_size);
-	memcpy(handle->audio_out[1], handle->audio_in[1], audio_size);
+	memcpy(handle->audio_in[0], handle->audio_out[0], audio_size);
+	memcpy(handle->audio_in[1], handle->audio_out[1], audio_size);
 
-	size_t seq_size = sizeof(LV2_Atom) + handle->event_in->atom.size;
-	memcpy(handle->event_out, handle->event_in, seq_size);
+	size_t seq_size = sizeof(LV2_Atom) + handle->event_out->atom.size;
+	memcpy(handle->event_in, handle->event_out, seq_size);
 }
 
 static void

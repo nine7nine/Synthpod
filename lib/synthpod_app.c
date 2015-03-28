@@ -115,6 +115,11 @@ struct _sp_app_t {
 
 	uint32_t num_mods;
 	mod_t *mods [MAX_MODS];
+
+	struct {
+		mod_t *source;
+		mod_t *sink;
+	} system;
 };
 
 // rt
@@ -209,8 +214,9 @@ void
 sp_app_set_system_source(sp_app_t *app, uint32_t index, const void *buf)
 {
 	// get first mod aka system source
-	mod_t *mod = app->mods[0];
+	mod_t *mod = app->system.source;
 
+	mod->ports[index].num_sources = 1;
 	lilv_instance_connect_port(mod->inst, index, (void *)buf);
 }
 
@@ -219,9 +225,10 @@ void
 sp_app_set_system_sink(sp_app_t *app, uint32_t index, void *buf)
 {
 	// get last mod aka system sink
-	mod_t *mod = app->mods[app->num_mods - 1];
+	mod_t *mod = app->system.sink;
 
-	lilv_instance_connect_port(mod->inst, index + 3, (void *)buf);
+	index += 3;
+	lilv_instance_connect_port(mod->inst, index, (void *)buf);
 }
 
 // rt
@@ -229,8 +236,10 @@ void *
 sp_app_get_system_source(sp_app_t *app, uint32_t index)
 {
 	// get last mod aka system source
-	mod_t *mod = app->mods[0];
+	mod_t *mod = app->system.source;
 
+	mod->ports[index].num_sources = 1;
+	//lilv_instance_connect_port(mod->inst, index, mod->ports[index].buf);
 	return mod->ports[index].buf;
 }
 
@@ -239,9 +248,11 @@ const void *
 sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 {
 	// get last mod aka system sink
-	mod_t *mod = app->mods[app->num_mods - 1];
+	mod_t *mod = app->system.sink;
 
-	return mod->ports[index + 3].buf;
+	index += 3;
+	//lilv_instance_connect_port(mod->inst, index, mod->ports[index].buf);
+	return mod->ports[index].buf;
 }
 
 // rt
@@ -514,6 +525,7 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	// inject source mod
 	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#source";
 	mod = _sp_app_mod_add(app, uri_str);
+	app->system.source = mod;
 	app->mods[app->num_mods] = mod;
 	app->num_mods += 1;
 	// signal to ui
@@ -526,6 +538,7 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	// inject sink mod
 	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#sink";
 	mod = _sp_app_mod_add(app, uri_str);
+	app->system.sink = mod;
 	app->mods[app->num_mods] = mod;
 	app->num_mods += 1;
 	// signal to ui
@@ -1060,9 +1073,9 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 				if(  (peak != port->last) //TODO make below two configurable
 					&& (fabs(peak - port->last) > 0.001) // ignore smaller changes
-					&& ((port->period_cnt & 0x1f) == 0x00) ) // only update every 32 samples
+					&& ((port->period_cnt & 0x3ff) == 0x00) ) // only update every 32 samples
 				{
-					printf("peak different: %i %i\n", port->last == 0.f, peak == 0.f);
+					//printf("peak different: %i %i\n", port->last == 0.f, peak == 0.f);
 
 					// update last value
 					port->last = peak;

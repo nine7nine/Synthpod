@@ -236,7 +236,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 	{
 		const LV2UI_Peak_Data *peak_data = buf;
-		printf("peak: %f\n", peak_data->peak);
+		//printf("peak: %f\n", peak_data->peak);
 		elm_progressbar_value_set(port->std.widget, peak_data->peak);
 	}
 	else

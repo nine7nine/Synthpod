@@ -187,9 +187,11 @@ _process(jack_nframes_t nsamples, void *data)
 	sp_app_set_system_sink(app, 1, audio_out_buf[0]);
 	sp_app_set_system_sink(app, 2, audio_out_buf[1]);
 
+	//printf("1: %p %p\n", seq_in, seq_out);
+
 	LV2_Atom_Forge *forge = &handle->forge;
 	LV2_Atom_Forge_Frame frame;
-	lv2_atom_forge_set_buffer(forge, (void *)seq_in, 8192);
+	lv2_atom_forge_set_buffer(forge, (void *)seq_in, 8192); //TODO
 	lv2_atom_forge_sequence_head(forge, &frame, 0);
 	int n = jack_midi_get_event_count(midi_in_buf);	
 	for(int i=0; i<n; i++)
@@ -230,7 +232,7 @@ _process(jack_nframes_t nsamples, void *data)
 		}
 	}
 	
-	// run synthpod app pre
+	// run synthpod app post
 	sp_app_run_post(handle->app, nsamples);
 
 	// fill midi output buffer
@@ -330,10 +332,25 @@ elm_main(int argc, char **argv)
 
 	lv2_atom_forge_init(&handle.forge, map);
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
+	
+	// jack init
+	handle.client = jack_client_open("Synthpod", JackNullOption, NULL);
+	handle.midi_in = jack_port_register(handle.client, "midi_in",
+		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	handle.audio_in[0] = jack_port_register(handle.client, "audio_in_1",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+	handle.audio_in[1] = jack_port_register(handle.client, "audio_in_2",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+	handle.midi_out = jack_port_register(handle.client, "midi_out",
+		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	handle.audio_out[0] = jack_port_register(handle.client, "audio_out_1",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	handle.audio_out[1] = jack_port_register(handle.client, "audio_out_2",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
 	// synthpod init
-	handle.app_driver.sample_rate = 32000;
-	handle.app_driver.period_size = 32; //TODO
+	handle.app_driver.sample_rate = jack_get_sample_rate(handle.client);
+	handle.app_driver.period_size = jack_get_buffer_size(handle.client);
 	handle.app_driver.seq_size = 8192; //TODO
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
@@ -353,21 +370,8 @@ elm_main(int argc, char **argv)
 
 	handle.app = sp_app_new(&handle.app_driver, &handle);
 
-	// jack init
-	handle.client = jack_client_open("Synthpod", JackNullOption, NULL);
+	// jack activate
 	jack_set_process_callback(handle.client, _process, &handle);
-	handle.midi_in = jack_port_register(handle.client, "midi_in",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	handle.audio_in[0] = jack_port_register(handle.client, "audio_in_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.audio_in[1] = jack_port_register(handle.client, "audio_in_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.midi_out = jack_port_register(handle.client, "midi_out",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[0] = jack_port_register(handle.client, "audio_out_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[1] = jack_port_register(handle.client, "audio_out_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 	jack_activate(handle.client);
 
 	// uv init
