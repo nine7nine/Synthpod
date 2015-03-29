@@ -41,7 +41,6 @@ struct _sp_app_driver_t {
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
-	LV2_Log_Log *log;
 
 	// from app
 	sp_to_request_t to_ui_request;

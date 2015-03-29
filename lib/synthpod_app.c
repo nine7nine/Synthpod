@@ -126,36 +126,48 @@ struct _sp_app_t {
 static inline void *
 _sp_app_to_ui_request(sp_app_t *app, size_t size)
 {
-	return app->driver->to_ui_request(size, app->data);
+	if(app->driver->to_ui_request)
+		return app->driver->to_ui_request(size, app->data);
+	else
+		return NULL;
 }
 static inline void
 _sp_app_to_ui_advance(sp_app_t *app, size_t size)
 {
-	app->driver->to_ui_advance(size, app->data);
+	if(app->driver->to_ui_advance)
+		app->driver->to_ui_advance(size, app->data);
 }
 
 // rt
 static inline void *
 _sp_app_to_worker_request(sp_app_t *app, size_t size)
 {
-	return app->driver->to_worker_request(size, app->data);
+	if(app->driver->to_worker_request)
+		return app->driver->to_worker_request(size, app->data);
+	else
+		return NULL;
 }
 static inline void
 _sp_app_to_worker_advance(sp_app_t *app, size_t size)
 {
-	app->driver->to_worker_advance(size, app->data);
+	if(app->driver->to_worker_advance)
+		app->driver->to_worker_advance(size, app->data);
 }
 
 // non-rt worker-thread
 static inline void *
 _sp_worker_to_app_request(sp_app_t *app, size_t size)
 {
-	return app->driver->to_app_request(size, app->data);
+	if(app->driver->to_app_request)
+		return app->driver->to_app_request(size, app->data);
+	else
+		return NULL;
 }
 static inline void
 _sp_worker_to_app_advance(sp_app_t *app, size_t size)
 {
-	app->driver->to_app_advance(size, app->data);
+	if(app->driver->to_app_advance)
+		app->driver->to_app_advance(size, app->data);
 }
 
 // non-rt || rt with LV2_LOG__Trace

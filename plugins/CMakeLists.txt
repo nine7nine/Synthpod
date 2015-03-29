@@ -6,23 +6,26 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
 set(DEST lib/lv2/synthpod.lv2)
 set(LIB_EXT ".so")
 
+options(BUILD_RTMIDI OFF)
+if(BUILD_RTMIDI)
 # rtmidi
-pkg_search_module(RTMIDI REQUIRED librtmidi>=2.1)
-include_directories(${RTMIDI_INCLUDE_DIRS})
+	pkg_search_module(RTMIDI REQUIRED librtmidi>=2.1)
+	include_directories(${RTMIDI_INCLUDE_DIRS})
 
 # manifest
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/plugins/manifest.ttl)
-install(FILES ${PROJECT_BINARY_DIR}/plugins/manifest.ttl DESTINATION ${DEST})
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/plugins/manifest.ttl)
+	install(FILES ${PROJECT_BINARY_DIR}/plugins/manifest.ttl DESTINATION ${DEST})
 
 # RtMidi
-add_library(rtmidi MODULE
-	rtmidi.c
-	rtmidi_in.cpp
-	rtmidi_out.cpp)
-target_link_libraries(rtmidi ${RTMIDI_LDFLAGS})
-set_target_properties(rtmidi PROPERTIES PREFIX "")
-install(TARGETS rtmidi DESTINATION ${DEST})
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/rtmidi.ttl DESTINATION ${DEST})
+	add_library(rtmidi MODULE
+		rtmidi.c
+		rtmidi_in.cpp
+		rtmidi_out.cpp)
+	target_link_libraries(rtmidi ${RTMIDI_LDFLAGS})
+	set_target_properties(rtmidi PROPERTIES PREFIX "")
+	install(TARGETS rtmidi DESTINATION ${DEST})
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/rtmidi.ttl DESTINATION ${DEST})
+endif()
 
 # OSC
 add_library(osc_io MODULE
@@ -49,10 +52,12 @@ set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lv2 DESTINATION ${DEST})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${DEST})
 
+if(BUILD_UI)
 # synthpod_ui
-add_library(synthpod_ui.lv2 MODULE
-	synthpod_lv2_ui.c
-	synthpod_common_ui.c)
-target_link_libraries(synthpod_ui.lv2 synthpod_ui.lib)
-set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
-install(TARGETS synthpod_ui.lv2 DESTINATION ${DEST})
+	add_library(synthpod_ui.lv2 MODULE
+		synthpod_lv2_ui.c
+		synthpod_common_ui.c)
+	target_link_libraries(synthpod_ui.lv2 synthpod_ui.lib)
+	set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
+	install(TARGETS synthpod_ui.lv2 DESTINATION ${DEST})
+endif()

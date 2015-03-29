@@ -13,22 +13,14 @@ include_directories(${PROJECT_BINARY_DIR})
 set(APP_DIR share/synthpod)
 #set(LIBS "")
 #add_definitions("-std=gnu99" "-fdump-rtl-expand")
-	
-# libuv
-pkg_search_module(UV REQUIRED libuv>=1.0)
-include_directories(${UV_INCLUDE_DIRS})
-
-# libuv
-pkg_search_module(UV REQUIRED libuv>=1.0)
-include_directories(${UV_INCLUDE_DIRS})
 
 # eina
 pkg_search_module(EINA REQUIRED eina>=1.8)
 include_directories(${EINA_INCLUDE_DIRS})
-
-# elm
-pkg_search_module(ELM REQUIRED elementary>=1.8)
-include_directories(${ELM_INCLUDE_DIRS})
+	
+# libuv
+pkg_search_module(UV REQUIRED libuv>=1.0)
+include_directories(${UV_INCLUDE_DIRS})
 
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
@@ -42,9 +34,12 @@ include_directories(${LV2_INCLUDE_DIRS})
 pkg_search_module(UUID REQUIRED uuid>=2.25)
 include_directories(${UUID_INCLUDE_DIRS})
 
+option(BUILD_UI OFF)
+if(BUILD_UI)
 # elm
-pkg_search_module(ELM REQUIRED elementary>=1.8)
-include_directories(${ELM_INCLUDE_DIRS})
+	pkg_search_module(ELM REQUIRED elementary>=1.8)
+	include_directories(${ELM_INCLUDE_DIRS})
+endif()
 
 add_executable(test_varchunk
 	test_varchunk.c

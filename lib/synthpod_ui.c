@@ -160,12 +160,16 @@ _next_color()
 static inline void *
 _sp_ui_to_app_request(sp_ui_t *ui, size_t size)
 {
-	return ui->driver->to_app_request(size, ui->data);
+	if(ui->driver->to_app_request)
+		return ui->driver->to_app_request(size, ui->data);
+	else
+		return NULL;
 }
 static inline void
 _sp_ui_to_app_advance(sp_ui_t *ui, size_t size)
 {
-	ui->driver->to_app_advance(size, ui->data);
+	if(ui->driver->to_app_advance)
+		ui->driver->to_app_advance(size, ui->data);
 }
 
 static inline int
