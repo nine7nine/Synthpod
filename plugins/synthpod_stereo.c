@@ -38,11 +38,16 @@ struct _handle_t {
 	sp_app_t *app;
 	sp_app_driver_t driver;
 
+	LV2_Worker_Schedule *schedule;
+	LV2_Log_Log *log;
+
 	struct {
 		struct {
-			LV2_URID note;
+			LV2_URID entry;
 			LV2_URID error;
+			LV2_URID note;
 			LV2_URID trace;
+			LV2_URID warning;
 		} log;
 	} uri;
 
@@ -73,31 +78,51 @@ struct _handle_t {
 	} buf;
 };
 
-static void
-lprintf(handle_t *handle, LV2_URID type, const char *fmt, ...)
+static int
+_log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
-	if(handle->driver.log)
+	handle_t *handle = data;
+
+	if(handle->log)
 	{
-		va_list args;
-		va_start(args, fmt);
-		handle->driver.log->vprintf(handle->driver.log->handle, type, fmt, args);
-		va_end(args);
+		return handle->log->vprintf(handle->log->handle, type, fmt, args);
 	}
 	else if(type != handle->uri.log.trace)
 	{
 		const char *type_str = NULL;
-		if(type == handle->uri.log.note)
-			type_str = "Note";
+		if(type == handle->uri.log.entry)
+			type_str = "Entry";
 		else if(type == handle->uri.log.error)
 			type_str = "Error";
+		else if(type == handle->uri.log.note)
+			type_str = "Note";
+		else if(type == handle->uri.log.trace)
+			type_str = "Trace";
+		else if(type == handle->uri.log.warning)
+			type_str = "Warning";
 
 		fprintf(stderr, "[%s]", type_str);
-		va_list args;
-		va_start(args, fmt);
 		vfprintf(stderr, fmt, args);
-		va_end(args);
 		fputc('\n', stderr);
+
+		return 0;
 	}
+	
+	return -1;
+}
+
+// non-rt || rt with LV2_LOG__Trace
+static int
+_log_printf(void *data, LV2_URID type, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(data, type, fmt, args);
+  va_end(args);
+
+	return ret;
 }
 
 static LV2_State_Status
@@ -216,7 +241,7 @@ _to_worker_advance(size_t size, void *data)
 	
 	printf("_to_worker_advance: %zu\n", size);
 	
-	handle->driver.schedule->schedule_work(handle->driver.schedule->handle,
+	handle->schedule->schedule_work(handle->schedule->handle,
 		size, handle->buf.worker);
 	//TODO check return result
 }
@@ -257,29 +282,31 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	handle->driver.sample_rate = rate;
 	handle->driver.period_size = 32; //TODO
-	handle->driver.seq_size = 8192; //TODO
+	handle->driver.seq_size = 0x2000; //TODO
+	handle->driver.log_printf = _log_printf;
+	handle->driver.log_vprintf = _log_vprintf;
 
 	for(i=0; features[i]; i++)
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
-		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
-			handle->driver.schedule = (LV2_Worker_Schedule *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
-			handle->driver.log = (LV2_Log_Log *)features[i]->data;
+			handle->log = (LV2_Log_Log *)features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
+			handle->schedule = (LV2_Worker_Schedule *)features[i]->data;
 
 	if(!handle->driver.map)
 	{
-		lprintf(handle, handle->uri.log.error,
+		_log_printf(handle, handle->uri.log.error,
 			"%s: Host does not support urid:map\n", descriptor->URI);
 		free(handle);
 		return NULL;
 	}
 	
-	if(!handle->driver.schedule)
+	if(!handle->schedule)
 	{
-		lprintf(handle, handle->uri.log.error,
+		_log_printf(handle, handle->uri.log.error,
 			"%s: Host does not support worker:schedule\n",
 			descriptor->URI);
 		free(handle);
@@ -296,19 +323,23 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->app = sp_app_new(&handle->driver, handle);
 	if(!handle->app)
 	{
-		lprintf(handle, handle->uri.log.error,
+		_log_printf(handle, handle->uri.log.error,
 			"%s: creation of app failed\n",
 			descriptor->URI);
 		free(handle);
 		return NULL;
 	}
 
-	handle->uri.log.note = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Note);
+	handle->uri.log.entry = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Entry);
 	handle->uri.log.error = handle->driver.map->map(handle->driver.map->handle,
 		LV2_LOG__Error);
+	handle->uri.log.note = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Note);
 	handle->uri.log.trace = handle->driver.map->map(handle->driver.map->handle,
 		LV2_LOG__Trace);
+	handle->uri.log.warning = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Warning);
 
 	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
 	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);

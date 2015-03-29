@@ -31,6 +31,9 @@ typedef struct _sp_app_driver_t sp_app_driver_t;
 typedef void *(*sp_to_request_t)(size_t size, void *data);
 typedef void (*sp_to_advance_t)(size_t size, void *data);
 
+typedef int (*sp_printf)(void *data, LV2_URID type, const char *fmt, ...);
+typedef int (*sp_vprintf)(void *data, LV2_URID type, const char *fmt, va_list args);
+
 struct _sp_app_driver_t {
 	uint32_t sample_rate;
 	uint32_t period_size;
@@ -38,7 +41,6 @@ struct _sp_app_driver_t {
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
-	LV2_Worker_Schedule *schedule;
 	LV2_Log_Log *log;
 
 	// from app
@@ -51,6 +53,10 @@ struct _sp_app_driver_t {
 	// from worker
 	sp_to_request_t to_app_request;
 	sp_to_advance_t to_app_advance;
+
+	// logging
+	sp_printf log_printf;
+	sp_vprintf log_vprintf;
 };
 
 sp_app_t *

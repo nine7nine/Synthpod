@@ -158,32 +158,19 @@ _sp_worker_to_app_advance(sp_app_t *app, size_t size)
 	app->driver->to_app_advance(size, app->data);
 }
 
-//TODO move to synthpod_jack
 // non-rt || rt with LV2_LOG__Trace
 static int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
 {
 	mod_t *mod = handle;
 	sp_app_t *app = mod->app;
+
+	char buf [1024]; //TODO how big?
+	uuid_unparse(mod->uuid, buf);
+	buf[37] = ' ';
+	vsprintf(&buf[38], fmt, args);
 	
-	if(type == app->regs.log.trace.urid)
-		return 1; //TODO support logging from rt-thread
-
-	const char *type_str = NULL;
-	if(type == app->regs.log.entry.urid)
-		type_str = "Entry";
-	else if(type == app->regs.log.error.urid)
-		type_str = "Error";
-	else if(type == app->regs.log.note.urid)
-		type_str = "Note";
-	else if(type == app->regs.log.trace.urid)
-		type_str = "Trace";
-	else if(type == app->regs.log.warning.urid)
-		type_str = "Warning";
-
-	fprintf(stderr, "[%s] ", type_str); //TODO report handle 
-	vfprintf(stderr, fmt, args);
-	fputc('\n', stderr);
+	app->driver->log_printf(app->data, type, "s", buf);
 
 	return 0;
 }
@@ -264,10 +251,13 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 
 	size_t work_size = sizeof(work_t) + size;
 	work_t *work = _sp_app_to_worker_request(app, work_size);
-	work->target = mod;
-	work->size = size;
-	memcpy(work->payload, data, size);
-	_sp_app_to_worker_advance(app, work_size);
+	if(work)
+	{
+		work->target = mod;
+		work->size = size;
+		memcpy(work->payload, data, size);
+		_sp_app_to_worker_advance(app, work_size);
+	}
 
 	return LV2_WORKER_ERR_NO_SPACE;
 }
@@ -531,9 +521,12 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	// signal to ui
 	size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
 	transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
-	_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-		mod->uuid, uri_str);
-	_sp_app_to_ui_advance(app, size);
+	if(trans)
+	{
+		_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+			mod->uuid, uri_str);
+		_sp_app_to_ui_advance(app, size);
+	}
 
 	// inject sink mod
 	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#sink";
@@ -544,9 +537,12 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	// signal to ui
 	size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
 	trans = _sp_app_to_ui_request(app, size);
-	_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-		mod->uuid, uri_str);
-	_sp_app_to_ui_advance(app, size);
+	if(trans)
+	{
+		_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+			mod->uuid, uri_str);
+		_sp_app_to_ui_advance(app, size);
+	}
 	
 	return app;
 }
@@ -636,12 +632,15 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t) + module_add->uri.atom.size;
 		work_t *work = _sp_app_to_worker_request(app, size);
-			work->target = app;
-			work->size = size - sizeof(work_t);
-		job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_MODULE_ADD;
-			memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
-		_sp_app_to_worker_advance(app, size);
+		if(work)
+		{
+				work->target = app;
+				work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+				job->type = JOB_TYPE_MODULE_ADD;
+				memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
+			_sp_app_to_worker_advance(app, size);
+		}
 	}
 	else if(protocol == app->regs.synthpod.module_del.urid)
 	{
@@ -655,10 +654,13 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return;
 
 		// eject module from graph
-		int offset = mod - app->mods[0];
 		app->num_mods -= 1;
-		for(int m=offset; m<app->num_mods; m++)
-			app->mods[m] = app->mods[m+1];
+		for(int m=0, offset=0; m<app->num_mods; m++)
+		{
+			if(app->mods[m] == mod)
+				offset += 1;
+			app->mods[m] = app->mods[m+offset];
+		}
 
 		// disconnect all ports
 		for(int p1=0; p1<mod->num_ports; p1++)
@@ -678,18 +680,24 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t);
 		work_t *work = _sp_app_to_worker_request(app, size);
-			work->target = app;
-			work->size = size - sizeof(work_t);
-		job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_MODULE_DEL;
-			job->mod = mod;
-		_sp_app_to_worker_advance(app, size);
+		if(work)
+		{
+				work->target = app;
+				work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+				job->type = JOB_TYPE_MODULE_DEL;
+				job->mod = mod;
+			_sp_app_to_worker_advance(app, size);
+		}
 
 		// signal to ui
 		size = sizeof(transmit_module_del_t);
 		transmit_module_del_t *trans = _sp_app_to_ui_request(app, size);
-		_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uuid);
-		_sp_app_to_ui_advance(app, size);
+		if(trans)
+		{
+			_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uuid);
+			_sp_app_to_ui_advance(app, size);
+		}
 	}
 	else if(protocol == app->regs.synthpod.port_connected.urid)
 	{
@@ -735,10 +743,13 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		// signal to ui
 		size_t size = sizeof(transmit_port_connected_t);
 		transmit_port_connected_t *trans = _sp_app_to_ui_request(app, size);
-		_sp_transmit_port_connected_fill(&app->regs, &app->forge, trans, size,
-			src_port->mod->uuid, src_port->index,
-			snk_port->mod->uuid, snk_port->index, state);
-		_sp_app_to_ui_advance(app, size);
+		if(trans)
+		{
+			_sp_transmit_port_connected_fill(&app->regs, &app->forge, trans, size,
+				src_port->mod->uuid, src_port->index,
+				snk_port->mod->uuid, snk_port->index, state);
+			_sp_app_to_ui_advance(app, size);
+		}
 	}
 	else if(protocol == app->regs.synthpod.port_subscribed.urid)
 	{
@@ -803,9 +814,12 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				//signal to UI
 				size_t size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
-				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-					job->mod->uuid, uri_str);
-				_sp_app_to_ui_advance(app, size);
+				if(trans)
+				{
+					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+						job->mod->uuid, uri_str);
+					_sp_app_to_ui_advance(app, size);
+				}
 
 				break;
 			}
@@ -834,10 +848,13 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 
 	size_t work_size = sizeof(work_t) + size;
 	work_t *work = _sp_worker_to_app_request(app, work_size);
-		work->target = mod;
-		work->size = size;
-		memcpy(work->payload, data, size);
-	_sp_worker_to_app_advance(app, work_size);
+	if(work)
+	{
+			work->target = mod;
+			work->size = size;
+			memcpy(work->payload, data, size);
+		_sp_worker_to_app_advance(app, work_size);
+	}
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -860,12 +877,15 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
-					work->target = app;
-					work->size = sizeof(job_t);
-				job_t *job = (job_t *)work->payload;
-					job->type = JOB_TYPE_MODULE_ADD;
-					job->mod = mod;
-				_sp_worker_to_app_advance(app, work_size);
+				if(work)
+				{
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job = (job_t *)work->payload;
+						job->type = JOB_TYPE_MODULE_ADD;
+						job->mod = mod;
+					_sp_worker_to_app_advance(app, work_size);
+				}
 
 				break;
 			}
@@ -926,7 +946,18 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 					: app->driver->seq_size; // capacity
 			}
 		}
+	}
+}
 
+// rt
+void
+sp_app_run_post(sp_app_t *app, uint32_t nsamples)
+{
+	// iterate over all modules
+	for(int m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+	
 		// multiplex multiple sources to single sink where needed
 		for(int i=0; i<mod->num_ports; i++)
 		{
@@ -964,6 +995,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 				else if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
+					//FIXME append to UI messages 
 					LV2_Atom_Forge *forge = &app->forge;
 					lv2_atom_forge_set_buffer(forge, port->buf, app->driver->seq_size);
 					LV2_Atom_Forge_Frame frame;
@@ -1014,17 +1046,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 				}
 			}
 		}
-	}
-}
-
-// rt
-void
-sp_app_run_post(sp_app_t *app, uint32_t nsamples)
-{
-	// iterate over all modules
-	for(int m=0; m<app->num_mods; m++)
-	{
-		mod_t *mod = app->mods[m];
 
 		// run plugin
 		lilv_instance_run(mod->inst, app->driver->period_size);
@@ -1051,8 +1072,11 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					size_t size = sizeof(transfer_float_t);
 					transfer_float_t *trans = _sp_app_to_ui_request(app, size);
-					_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, &val);
-					_sp_app_to_ui_advance(app, size);
+					if(trans)
+					{
+						_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, &val);
+						_sp_app_to_ui_advance(app, size);
+					}
 				}
 			}
 			else if(port->protocol == app->regs.port.peak_protocol.urid)
@@ -1088,8 +1112,12 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					size_t size = sizeof(transfer_peak_t);
 					transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
-					_sp_transfer_peak_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, &data);
-					_sp_app_to_ui_advance(app, size);
+					if(trans)
+					{
+						_sp_transfer_peak_fill(&app->regs, &app->forge, trans,
+							port->mod->uuid, port->index, &data);
+						_sp_app_to_ui_advance(app, size);
+					}
 				}
 			}
 			else if(port->protocol == app->regs.port.atom_transfer.urid)
@@ -1100,8 +1128,12 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		
 				size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
 				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-				_sp_transfer_atom_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, atom);
-				_sp_app_to_ui_advance(app, size);
+				if(trans)
+				{
+					_sp_transfer_atom_fill(&app->regs, &app->forge, trans,
+						port->mod->uuid, port->index, atom);
+					_sp_app_to_ui_advance(app, size);
+				}
 			}
 			else if(port->protocol == app->regs.port.event_transfer.urid)
 			{
@@ -1116,8 +1148,12 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
 					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-					_sp_transfer_event_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, atom);
-					_sp_app_to_ui_advance(app, size);
+					if(trans)
+					{
+						_sp_transfer_event_fill(&app->regs, &app->forge, trans,
+							port->mod->uuid, port->index, atom);
+						_sp_app_to_ui_advance(app, size);
+					}
 				}
 			}
 		}

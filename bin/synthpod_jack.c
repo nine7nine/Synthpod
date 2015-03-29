@@ -37,6 +37,9 @@
 
 #include <uv.h>
 
+#define CHUNK_SIZE 0x10000
+#define SEQ_SIZE 0x2000
+
 typedef struct _handle_t handle_t;
 
 struct _handle_t {
@@ -50,6 +53,11 @@ struct _handle_t {
 
 	LV2_Atom_Forge forge;
 	LV2_URID midi_MidiEvent;
+	LV2_URID log_entry;
+	LV2_URID log_error;
+	LV2_URID log_note;
+	LV2_URID log_trace;
+	LV2_URID log_warning;
 
 	jack_client_t *client;
 	jack_port_t *midi_in;
@@ -191,7 +199,7 @@ _process(jack_nframes_t nsamples, void *data)
 
 	LV2_Atom_Forge *forge = &handle->forge;
 	LV2_Atom_Forge_Frame frame;
-	lv2_atom_forge_set_buffer(forge, (void *)seq_in, 8192); //TODO
+	lv2_atom_forge_set_buffer(forge, (void *)seq_in, SEQ_SIZE);
 	lv2_atom_forge_sequence_head(forge, &frame, 0);
 	int n = jack_midi_get_event_count(midi_in_buf);	
 	for(int i=0; i<n; i++)
@@ -288,7 +296,12 @@ _worker_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return varchunk_write_request(handle->app_from_worker, size);
+	void *ptr;
+	do
+		ptr = varchunk_write_request(handle->app_from_worker, size);
+	while(!ptr); // wait until there is enough space
+
+	return ptr;
 }
 static void
 _worker_to_app_advance(size_t size, void *data)
@@ -304,7 +317,12 @@ _ui_to_app_request(size_t size, void *data)
 {
 	handle_t *handle = data;
 
-	return varchunk_write_request(handle->app_from_ui, size);
+	void *ptr;
+	do
+		ptr = varchunk_write_request(handle->app_from_ui, size);
+	while(!ptr); // wait until there is enough space
+
+	return ptr;
 }
 static void
 _ui_to_app_advance(size_t size, void *data)
@@ -314,16 +332,64 @@ _ui_to_app_advance(size_t size, void *data)
 	varchunk_write_advance(handle->app_from_ui, size);
 }
 
+// non-rt || rt with LV2_LOG__Trace
+static int
+_log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
+{
+	handle_t *handle = data;
+
+	if(type != handle->log_trace)
+	{
+		const char *type_str = NULL;
+		if(type == handle->log_entry)
+			type_str = "Entry";
+		else if(type == handle->log_error)
+			type_str = "Error";
+		else if(type == handle->log_note)
+			type_str = "Note";
+		else if(type == handle->log_trace)
+			type_str = "Trace";
+		else if(type == handle->log_warning)
+			type_str = "Warning";
+
+		//TODO send to UI?
+
+		fprintf(stderr, "[%s] ", type_str);
+		vfprintf(stderr, fmt, args);
+		fputc('\n', stderr);
+
+		return 0;
+	}
+	else
+		; //TODO send to worker or UI?
+
+	return -1;
+}
+
+// non-rt || rt with LV2_LOG__Trace
+static int
+_log_printf(void *data, LV2_URID type, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(data, type, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
 EAPI_MAIN int
 elm_main(int argc, char **argv)
 {
 	static handle_t handle;
 
 	// varchunk init
-	handle.app_to_ui = varchunk_new(8192);
-	handle.app_from_ui = varchunk_new(8192);
-	handle.app_to_worker = varchunk_new(8192);
-	handle.app_from_worker = varchunk_new(8192);
+	handle.app_to_ui = varchunk_new(CHUNK_SIZE);
+	handle.app_from_ui = varchunk_new(CHUNK_SIZE);
+	handle.app_to_worker = varchunk_new(CHUNK_SIZE);
+	handle.app_from_worker = varchunk_new(CHUNK_SIZE);
 
 	// ext_urid init
 	handle.ext_urid = ext_urid_new();
@@ -332,6 +398,11 @@ elm_main(int argc, char **argv)
 
 	lv2_atom_forge_init(&handle.forge, map);
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
+	handle.log_entry = map->map(map->handle, LV2_LOG__Entry);
+	handle.log_error = map->map(map->handle, LV2_LOG__Error);
+	handle.log_note = map->map(map->handle, LV2_LOG__Note);
+	handle.log_trace = map->map(map->handle, LV2_LOG__Trace);
+	handle.log_warning = map->map(map->handle, LV2_LOG__Warning);
 	
 	// jack init
 	handle.client = jack_client_open("Synthpod", JackNullOption, NULL);
@@ -351,11 +422,11 @@ elm_main(int argc, char **argv)
 	// synthpod init
 	handle.app_driver.sample_rate = jack_get_sample_rate(handle.client);
 	handle.app_driver.period_size = jack_get_buffer_size(handle.client);
-	handle.app_driver.seq_size = 8192; //TODO
+	handle.app_driver.seq_size = SEQ_SIZE; //TODO
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
-	handle.app_driver.schedule = NULL; //TODO
-	handle.app_driver.log = NULL; //TODO
+	handle.app_driver.log_printf = _log_printf;
+	handle.app_driver.log_vprintf = _log_vprintf;
 	handle.app_driver.to_ui_request = _app_to_ui_request;
 	handle.app_driver.to_ui_advance = _app_to_ui_advance;
 	handle.app_driver.to_worker_request = _app_to_worker_request;

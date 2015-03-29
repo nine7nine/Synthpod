@@ -287,9 +287,12 @@ _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
 
 	size_t size = sizeof(transmit_port_subscribed_t);
 	transmit_port_subscribed_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
-		mod->uuid, index, protocol, 1);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
+			mod->uuid, index, protocol, 1);
+		_sp_ui_to_app_advance(ui, size);
+	}
 
 	return 0;
 }
@@ -306,9 +309,12 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 
 	size_t size = sizeof(transmit_port_subscribed_t);
 	transmit_port_subscribed_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
-		mod->uuid, index, protocol, 0);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
+			mod->uuid, index, protocol, 0);
+		_sp_ui_to_app_advance(ui, size);
+	}
 
 	return 0;
 }
@@ -487,8 +493,11 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 
 	size_t size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
 	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, NULL, uri_str);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, NULL, uri_str);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -588,8 +597,11 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 	
 	size_t size = sizeof(transmit_module_del_t);
 	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uuid);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uuid);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -746,8 +758,11 @@ _ui_update_request(mod_t *mod, uint32_t index)
 
 	size_t size = sizeof(transmit_port_refresh_t);
 	transmit_port_refresh_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_refresh_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_refresh_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -774,24 +789,33 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 		const float *val = buffer;
 		size_t size = sizeof(transfer_float_t);
 		transfer_float_t *trans = _sp_ui_to_app_request(ui, size);
-		_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, val);
-		_sp_ui_to_app_advance(ui, size);
+		if(trans)
+		{
+			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, val);
+			_sp_ui_to_app_advance(ui, size);
+		}
 	}
 	else if(protocol == ui->regs.port.atom_transfer.urid)
 	{
 		const LV2_Atom *atom = buffer;
 		size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
-		_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
-		_sp_ui_to_app_advance(ui, size);
+		if(trans)
+		{
+			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
+			_sp_ui_to_app_advance(ui, size);
+		}
 	}
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
 		const LV2_Atom *atom = buffer;
 		size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
-		_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
-		_sp_ui_to_app_advance(ui, size);
+		if(trans)
+		{
+			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
+			_sp_ui_to_app_advance(ui, size);
+		}
 	}
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 		; // makes no sense
@@ -1056,8 +1080,8 @@ _modlist_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
-	
-	_patches_update(ui);
+
+	// nothing
 }
 
 static char *
@@ -1310,10 +1334,13 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 
 	size_t size = sizeof(transmit_port_connected_t);
 	transmit_port_connected_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
-		source_port->mod->uuid, source_port->index,
-		sink_port->mod->uuid, sink_port->index, 1);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
+			source_port->mod->uuid, source_port->index,
+			sink_port->mod->uuid, sink_port->index, 1);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -1334,10 +1361,13 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 
 	size_t size = sizeof(transmit_port_connected_t);
 	transmit_port_connected_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
-		source_port->mod->uuid, source_port->index,
-		sink_port->mod->uuid, sink_port->index, 0);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
+			source_port->mod->uuid, source_port->index,
+			sink_port->mod->uuid, sink_port->index, 0);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -1358,10 +1388,13 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 	
 	size_t size = sizeof(transmit_port_connected_t);
 	transmit_port_connected_t *trans = _sp_ui_to_app_request(ui, size);
-	_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
-		source_port->mod->uuid, source_port->index,
-		sink_port->mod->uuid, sink_port->index, -1);
-	_sp_ui_to_app_advance(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
+			source_port->mod->uuid, source_port->index,
+			sink_port->mod->uuid, sink_port->index, -1);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -1619,6 +1652,8 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		}
 		
 		_sp_ui_mod_del(ui, mod);
+	
+		_patches_update(ui);
 	}
 	else if(protocol == ui->regs.synthpod.port_connected.urid)
 	{
