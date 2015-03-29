@@ -6,7 +6,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
 set(DEST lib/lv2/synthpod.lv2)
 set(LIB_EXT ".so")
 
-options(BUILD_RTMIDI OFF)
+option(BUILD_RTMIDI OFF)
 if(BUILD_RTMIDI)
 # rtmidi
 	pkg_search_module(RTMIDI REQUIRED librtmidi>=2.1)

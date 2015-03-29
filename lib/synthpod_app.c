@@ -17,7 +17,6 @@
 
 #include <stdlib.h>
 #include <math.h>
-#include <uuid.h>
 
 #include <synthpod_app.h>
 #include <synthpod_private.h>
@@ -52,7 +51,7 @@ struct _work_t {
 
 struct _mod_t {
 	sp_app_t *app;
-	uuid_t uuid;
+	u_id_t uid;
 	
 	// worker
 	struct {
@@ -120,6 +119,8 @@ struct _sp_app_t {
 		mod_t *source;
 		mod_t *sink;
 	} system;
+
+	u_id_t uid;
 };
 
 // rt
@@ -178,9 +179,8 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	sp_app_t *app = mod->app;
 
 	char buf [1024]; //TODO how big?
-	uuid_unparse(mod->uuid, buf);
-	buf[37] = ' ';
-	vsprintf(&buf[38], fmt, args);
+	sprintf(buf, "%i ", mod->uid);
+	vsprintf(buf + strlen(buf), fmt, args);
 	
 	app->driver->log_printf(app->data, type, "s", buf);
 
@@ -314,7 +314,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->features[NUM_FEATURES] = NULL; // sentinel
 		
 	mod->app = app;
-	uuid_generate_random(mod->uuid);
+	mod->uid = app->uid++;
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
@@ -409,12 +409,12 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 }
 
 static inline mod_t *
-_sp_app_mod_get(sp_app_t *app, uuid_t uuid)
+_sp_app_mod_get(sp_app_t *app, u_id_t uid)
 {
 	for(int i=0; i<app->num_mods; i++)
 	{
 		mod_t *mod = app->mods[i];
-		if(!uuid_compare(mod->uuid, uuid))
+		if(mod->uid == uid)
 			return mod;
 	}
 
@@ -422,9 +422,9 @@ _sp_app_mod_get(sp_app_t *app, uuid_t uuid)
 }
 
 static inline port_t *
-_sp_app_port_get(sp_app_t *app, uuid_t uuid, uint32_t index)
+_sp_app_port_get(sp_app_t *app, u_id_t uid, uint32_t index)
 {
-	mod_t *mod = _sp_app_mod_get(app, uuid);
+	mod_t *mod = _sp_app_mod_get(app, uid);
 	if(mod && (index < mod->num_ports) )
 		return &mod->ports[index];
 	
@@ -524,6 +524,8 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	size_t size;
 	mod_t *mod;
 
+	app->uid = 1; //FIXME change this when load stuff from file
+
 	// inject source mod
 	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#source";
 	mod = _sp_app_mod_add(app, uri_str);
@@ -536,7 +538,7 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	if(trans)
 	{
 		_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-			mod->uuid, uri_str);
+			mod->uid, uri_str);
 		_sp_app_to_ui_advance(app, size);
 	}
 
@@ -552,7 +554,7 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	if(trans)
 	{
 		_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-			mod->uuid, uri_str);
+			mod->uid, uri_str);
 		_sp_app_to_ui_advance(app, size);
 	}
 	
@@ -570,9 +572,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	{
 		const transfer_float_t *trans = (const transfer_float_t *)atom;
 
-		uuid_t uuid;
-		uuid_parse(trans->transfer.str, uuid);
-		port_t *port = _sp_app_port_get(app, uuid, trans->transfer.port.body);
+		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
 		if(!port) // port not found
 			return;
 
@@ -587,9 +587,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	{
 		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
 
-		uuid_t uuid;
-		uuid_parse(trans->transfer.str, uuid);
-		port_t *port = _sp_app_port_get(app, uuid, trans->transfer.port.body);
+		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
 		if(!port) // port not found
 			return;
 
@@ -603,9 +601,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	{
 		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
 
-		uuid_t uuid;
-		uuid_parse(trans->transfer.str, uuid);
-		port_t *port = _sp_app_port_get(app, uuid, trans->transfer.port.body);
+		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
 		if(!port) // port not found
 			return;
 
@@ -659,9 +655,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		const transmit_module_del_t *module_del = (const transmit_module_del_t *)atom;
 
 		// search mod according to its UUID
-		uuid_t uuid;
-		uuid_parse(module_del->str, uuid);
-		mod_t *mod = _sp_app_mod_get(app, uuid);
+		mod_t *mod = _sp_app_mod_get(app, module_del->uid.body);
 		if(!mod) // mod not found
 			return;
 
@@ -707,7 +701,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		transmit_module_del_t *trans = _sp_app_to_ui_request(app, size);
 		if(trans)
 		{
-			_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uuid);
+			_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uid);
 			_sp_app_to_ui_advance(app, size);
 		}
 	}
@@ -715,12 +709,8 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	{
 		const transmit_port_connected_t *conn = (const transmit_port_connected_t *)atom;
 
-		uuid_t src_uuid;
-		uuid_t snk_uuid;
-		uuid_parse(conn->src_str, src_uuid);
-		uuid_parse(conn->snk_str, snk_uuid);
-		port_t *src_port = _sp_app_port_get(app, src_uuid, conn->src_port.body);
-		port_t *snk_port = _sp_app_port_get(app, snk_uuid, conn->snk_port.body);
+		port_t *src_port = _sp_app_port_get(app, conn->src_uid.body, conn->src_port.body);
+		port_t *snk_port = _sp_app_port_get(app, conn->snk_uid.body, conn->snk_port.body);
 		if(!src_port || !snk_port)
 			return;
 
@@ -758,8 +748,8 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(trans)
 		{
 			_sp_transmit_port_connected_fill(&app->regs, &app->forge, trans, size,
-				src_port->mod->uuid, src_port->index,
-				snk_port->mod->uuid, snk_port->index, state);
+				src_port->mod->uid, src_port->index,
+				snk_port->mod->uid, snk_port->index, state);
 			_sp_app_to_ui_advance(app, size);
 		}
 	}
@@ -767,9 +757,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	{
 		const transmit_port_subscribed_t *subscribe = (const transmit_port_subscribed_t *)atom;
 
-		uuid_t uuid;
-		uuid_parse(subscribe->str, uuid);
-		port_t *port = _sp_app_port_get(app, uuid, subscribe->port.body);
+		port_t *port = _sp_app_port_get(app, subscribe->uid.body, subscribe->port.body);
 		if(!port)
 			return;
 
@@ -788,9 +776,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	{
 		const transmit_port_refresh_t *refresh = (const transmit_port_refresh_t *)atom;
 
-		uuid_t uuid;
-		uuid_parse(refresh->str, uuid);
-		port_t *port = _sp_app_port_get(app, uuid, refresh->port.body);
+		port_t *port = _sp_app_port_get(app, refresh->uid.body, refresh->port.body);
 		if(!port)
 			return;
 
@@ -829,7 +815,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				if(trans)
 				{
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-						job->mod->uuid, uri_str);
+						job->mod->uid, uri_str);
 					_sp_app_to_ui_advance(app, size);
 				}
 
@@ -1086,7 +1072,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					transfer_float_t *trans = _sp_app_to_ui_request(app, size);
 					if(trans)
 					{
-						_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uuid, port->index, &val);
+						_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, &val);
 						_sp_app_to_ui_advance(app, size);
 					}
 				}
@@ -1127,7 +1113,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					if(trans)
 					{
 						_sp_transfer_peak_fill(&app->regs, &app->forge, trans,
-							port->mod->uuid, port->index, &data);
+							port->mod->uid, port->index, &data);
 						_sp_app_to_ui_advance(app, size);
 					}
 				}
@@ -1143,7 +1129,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				if(trans)
 				{
 					_sp_transfer_atom_fill(&app->regs, &app->forge, trans,
-						port->mod->uuid, port->index, atom);
+						port->mod->uid, port->index, atom);
 					_sp_app_to_ui_advance(app, size);
 				}
 			}
@@ -1163,7 +1149,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					if(trans)
 					{
 						_sp_transfer_event_fill(&app->regs, &app->forge, trans,
-							port->mod->uuid, port->index, atom);
+							port->mod->uid, port->index, atom);
 						_sp_app_to_ui_advance(app, size);
 					}
 				}

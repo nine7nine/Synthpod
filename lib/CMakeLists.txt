@@ -9,8 +9,7 @@ target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
 	${UV_LDFLAGS}
 	${LILV_LDFLAGS}
-	${LV2_LDFLAGS}
-	${UUID_LDFLAGS})
+	${LV2_LDFLAGS})
 set_target_properties(synthpod.lib PROPERTIES OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lib DESTINATION lib)
 
@@ -24,8 +23,7 @@ if(BUILD_UI)
 		${ELM_LDFLAGS}
 		${UV_LDFLAGS}
 		${LILV_LDFLAGS}
-		${LV2_LDFLAGS}
-		${UUID_LDFLAGS})
+		${LV2_LDFLAGS})
 	set_target_properties(synthpod_ui.lib PROPERTIES OUTPUT_NAME "synthpod_ui")
 	install(TARGETS synthpod_ui.lib DESTINATION lib)
 endif()

@@ -17,7 +17,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <uuid.h>
 
 #include <uv.h>
 
@@ -32,7 +31,7 @@ typedef struct _port_t port_t;
 
 struct _mod_t {
 	sp_ui_t *ui;
-	uuid_t uuid;
+	u_id_t uid;
 	int selected;
 	
 	// features
@@ -294,7 +293,7 @@ _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
 	if(trans)
 	{
 		_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
-			mod->uuid, index, protocol, 1);
+			mod->uid, index, protocol, 1);
 		_sp_ui_to_app_advance(ui, size);
 	}
 
@@ -316,7 +315,7 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	if(trans)
 	{
 		_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
-			mod->uuid, index, protocol, 0);
+			mod->uid, index, protocol, 0);
 		_sp_ui_to_app_advance(ui, size);
 	}
 
@@ -324,7 +323,7 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 }
 
 static mod_t *
-_sp_ui_mod_add(sp_ui_t *ui, const char *uri, uuid_t uuid)
+_sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 {
 	LilvNode *uri_node = lilv_new_uri(ui->world, uri);
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(ui->plugs, uri_node);
@@ -367,7 +366,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, uuid_t uuid)
 	mod->features[NUM_UI_FEATURES] = NULL; // sentinel
 
 	mod->ui = ui;
-	uuid_copy(mod->uuid, uuid);
+	mod->uid = uid;
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 
@@ -499,7 +498,7 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
-		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, NULL, uri_str);
+		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -603,7 +602,7 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
-		_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uuid);
+		_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uid);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -764,7 +763,7 @@ _ui_update_request(mod_t *mod, uint32_t index)
 	transmit_port_refresh_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
-		_sp_transmit_port_refresh_fill(&ui->regs, &ui->forge, trans, size, mod->uuid, index);
+		_sp_transmit_port_refresh_fill(&ui->regs, &ui->forge, trans, size, mod->uid, index);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -795,7 +794,7 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 		transfer_float_t *trans = _sp_ui_to_app_request(ui, size);
 		if(trans)
 		{
-			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, val);
+			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, val);
 			_sp_ui_to_app_advance(ui, size);
 		}
 	}
@@ -806,7 +805,7 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
 		if(trans)
 		{
-			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
+			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, atom);
 			_sp_ui_to_app_advance(ui, size);
 		}
 	}
@@ -817,7 +816,7 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
 		if(trans)
 		{
-			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uuid, tar->index, atom);
+			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, atom);
 			_sp_ui_to_app_advance(ui, size);
 		}
 	}
@@ -1341,8 +1340,8 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 	if(trans)
 	{
 		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
-			source_port->mod->uuid, source_port->index,
-			sink_port->mod->uuid, sink_port->index, 1);
+			source_port->mod->uid, source_port->index,
+			sink_port->mod->uid, sink_port->index, 1);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -1368,8 +1367,8 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 	if(trans)
 	{
 		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
-			source_port->mod->uuid, source_port->index,
-			sink_port->mod->uuid, sink_port->index, 0);
+			source_port->mod->uid, source_port->index,
+			sink_port->mod->uid, sink_port->index, 0);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -1395,8 +1394,8 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 	if(trans)
 	{
 		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
-			source_port->mod->uuid, source_port->index,
-			sink_port->mod->uuid, sink_port->index, -1);
+			source_port->mod->uid, source_port->index,
+			sink_port->mod->uid, sink_port->index, -1);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -1576,14 +1575,14 @@ sp_ui_widget_get(sp_ui_t *ui)
 }
 
 static inline mod_t *
-_sp_ui_mod_get(sp_ui_t *ui, uuid_t uuid)
+_sp_ui_mod_get(sp_ui_t *ui, u_id_t uid)
 {
 	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
 		itm != NULL;
 		itm = elm_genlist_item_next_get(itm))
 	{
 		mod_t *mod = elm_object_item_data_get(itm);
-		if(mod && !uuid_compare(mod->uuid, uuid))
+		if(mod && (mod->uid == uid))
 			return mod;
 	}
 
@@ -1591,9 +1590,9 @@ _sp_ui_mod_get(sp_ui_t *ui, uuid_t uuid)
 }
 
 static inline port_t *
-_sp_ui_port_get(sp_ui_t *ui, uuid_t uuid, uint32_t index)
+_sp_ui_port_get(sp_ui_t *ui, u_id_t uid, uint32_t index)
 {
-	mod_t *mod = _sp_ui_mod_get(ui, uuid);
+	mod_t *mod = _sp_ui_mod_get(ui, uid);
 	if(mod && (index < mod->num_ports) )
 		return &mod->ports[index];
 	
@@ -1609,10 +1608,8 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	if(protocol == ui->regs.synthpod.module_add.urid)
 	{
 		const transmit_module_add_t *trans = (const transmit_module_add_t *)atom;
-		uuid_t module_uuid;
-		uuid_parse(trans->uuid_str, module_uuid);
 
-		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, module_uuid);
+		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body);
 		if(mod)
 		{
 			if(mod->system.source || mod->system.sink)
@@ -1639,9 +1636,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	else if(protocol == ui->regs.synthpod.module_del.urid)
 	{
 		const transmit_module_del_t *trans = (const transmit_module_del_t *)atom;
-		uuid_t module_uuid;
-		uuid_parse(trans->str, module_uuid);
-		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
 
 		// remove StdUI list item
 		elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
@@ -1662,14 +1657,8 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	else if(protocol == ui->regs.synthpod.port_connected.urid)
 	{
 		const transmit_port_connected_t *trans = (const transmit_port_connected_t *)atom;
-		uuid_t src_uuid;
-		uuid_t snk_uuid;
-		uuid_parse(trans->src_str, src_uuid);
-		uuid_parse(trans->snk_str, snk_uuid);
-		uint32_t src_index = trans->src_port.body;
-		uint32_t snk_index = trans->snk_port.body;
-		port_t *src = _sp_ui_port_get(ui, src_uuid, src_index);
-		port_t *snk = _sp_ui_port_get(ui, snk_uuid, snk_index);
+		port_t *src = _sp_ui_port_get(ui, trans->src_uid.body, trans->src_port.body);
+		port_t *snk = _sp_ui_port_get(ui, trans->snk_uid.body, trans->snk_port.body);
 
 		Evas_Object *matrix = ui->matrix[src->type];
 		patcher_object_connected_set(matrix, src, snk,
@@ -1678,20 +1667,16 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	else if(protocol == ui->regs.port.float_protocol.urid)
 	{
 		const transfer_float_t *trans = (const transfer_float_t *)atom;
-		uuid_t module_uuid;
-		uuid_parse(trans->transfer.str, module_uuid);
 		uint32_t port_index = trans->transfer.port.body;
 		float value = trans->value.body;
 
-		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
 		_eo_port_event(mod, port_index, sizeof(float), protocol, &value);
 		_std_port_event(mod, port_index, sizeof(float), protocol, &value);
 	}
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 	{
 		const transfer_peak_t *trans = (const transfer_peak_t *)atom;
-		uuid_t module_uuid;
-		uuid_parse(trans->transfer.str, module_uuid);
 		uint32_t port_index = trans->transfer.port.body;
 		LV2UI_Peak_Data data = {
 			.period_start = trans->period_start.body,
@@ -1699,33 +1684,29 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 			.peak = trans->peak.body
 		};
 
-		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
 		_eo_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
 		_std_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
 	}
 	else if(protocol == ui->regs.port.atom_transfer.urid)
 	{
 		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
-		uuid_t module_uuid;
-		uuid_parse(trans->transfer.str, module_uuid);
 		uint32_t port_index = trans->transfer.port.body;
 		const LV2_Atom *atom = trans->atom;
 		uint32_t size = sizeof(LV2_Atom) + atom->size;
 
-		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
 		_eo_port_event(mod, port_index, size, protocol, atom);
 		_std_port_event(mod, port_index, size, protocol, &atom);
 	}
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
 		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
-		uuid_t module_uuid;
-		uuid_parse(trans->transfer.str, module_uuid);
 		uint32_t port_index = trans->transfer.port.body;
 		const LV2_Atom *atom = trans->atom;
 		uint32_t size = sizeof(LV2_Atom) + atom->size;
 
-		mod_t *mod = _sp_ui_mod_get(ui, module_uuid);
+		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
 		_eo_port_event(mod, port_index, size, protocol, atom);
 		_std_port_event(mod, port_index, size, protocol, &atom);
 	}

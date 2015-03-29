@@ -30,10 +30,6 @@ include_directories(${LILV_INCLUDE_DIRS})
 pkg_search_module(LV2 REQUIRED lv2>=1.10)
 include_directories(${LV2_INCLUDE_DIRS})
 
-# uuid
-pkg_search_module(UUID REQUIRED uuid>=2.25)
-include_directories(${UUID_INCLUDE_DIRS})
-
 option(BUILD_UI OFF)
 if(BUILD_UI)
 # elm
