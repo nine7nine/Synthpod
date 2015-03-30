@@ -24,6 +24,8 @@
 @prefix log:  <http://lv2plug.in/ns/ext/log#> .
 @prefix rsz:  <http://lv2plug.in/ns/ext/resize-port#> .
 @prefix midi: <http://lv2plug.in/ns/ext/midi#> .
+@prefix bufsz: <http://lv2plug.in/ns/ext/buf-size#> .
+@prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -43,6 +45,19 @@ proj:synthpod
 	doap:maintainer omk:me ;
 	doap:name "Synthpod Bundle" .
 
+# Audio groups
+synthpod:group_in
+	a pg:InputGroup ,
+		pg:StereoGroup ;
+	lv2:name "Input" ;
+	lv2:symbol "in" .
+
+synthpod:group_out
+	a pg:OutputGroup ,
+		pg:StereoGroup ;
+	lv2:name "Output" ;
+	lv2:symbol "out" .
+
 # Source Plugin
 synthpod:source
 	a lv2:Plugin ,
@@ -50,9 +65,7 @@ synthpod:source
 	doap:name "Synthpod Source" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:optionalFeature lv2:isLive ,
-		lv2:hardRTCapable ,
-		log:log ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 	
 	lv2:port [
 		# event in
@@ -69,6 +82,8 @@ synthpod:source
 		lv2:index 1 ;
 		lv2:symbol "audio_out_1" ;
 		lv2:name "Audio Out 1" ;
+		lv2:designation pg:left ;
+		pg:group synthpod:group_in ;
 	] , [
 		# audio in 2
 	  a lv2:InputPort ,
@@ -76,6 +91,8 @@ synthpod:source
 		lv2:index 2 ;
 		lv2:symbol "audio_out_2" ;
 		lv2:name "Audio Out 2" ;
+		lv2:designation pg:right ;
+		pg:group synthpod:group_in ;
 	] , [
 		# event out 
 	  a lv2:OutputPort ,
@@ -91,6 +108,8 @@ synthpod:source
 		lv2:index 4 ;
 		lv2:symbol "audio_in_1" ;
 		lv2:name "Audio In 1" ;
+		lv2:designation pg:left ;
+		pg:group synthpod:group_out ;
 	] , [
 		# audio out 2
 	  a lv2:OutputPort ,
@@ -98,6 +117,8 @@ synthpod:source
 		lv2:index 5 ;
 		lv2:symbol "audio_in_2" ;
 		lv2:name "Audio In 2" ;
+		lv2:designation pg:right ;
+		pg:group synthpod:group_out ;
 	] .
 
 # Sink Plugin
@@ -107,9 +128,7 @@ synthpod:sink
 	doap:name "Synthpod Sink" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:optionalFeature lv2:isLive ,
-		lv2:hardRTCapable ,
-		log:log ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 	
 	lv2:port [
 		# event in 
@@ -126,6 +145,8 @@ synthpod:sink
 		lv2:index 1 ;
 		lv2:symbol "audio_out_1" ;
 		lv2:name "Audio Out 1" ;
+		lv2:designation pg:left ;
+		pg:group synthpod:group_in ;
 	] , [
 		# audio in 2
 	  a lv2:InputPort ,
@@ -133,6 +154,8 @@ synthpod:sink
 		lv2:index 2 ;
 		lv2:symbol "audio_out_2" ;
 		lv2:name "Audio Out 2" ;
+		lv2:designation pg:right ;
+		pg:group synthpod:group_in ;
 	] , [
 		# event out 
 	  a lv2:OutputPort ,
@@ -148,6 +171,8 @@ synthpod:sink
 		lv2:index 4 ;
 		lv2:symbol "audio_in_1" ;
 		lv2:name "Audio In 1" ;
+		lv2:designation pg:left ;
+		pg:group synthpod:group_out ;
 	] , [
 		# audio out 2
 	  a lv2:OutputPort ,
@@ -155,6 +180,8 @@ synthpod:sink
 		lv2:index 5 ;
 		lv2:symbol "audio_in_2" ;
 		lv2:name "Audio In 2" ;
+		lv2:designation pg:right ;
+		pg:group synthpod:group_out ;
 	] .
 
 # Common X11UI
@@ -185,12 +212,9 @@ synthpod:stereo
 	doap:name "Synthpod Stereo" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:extensionData work:interface ,
-		state:interface ;
-	lv2:requiredFeature work:schedule ;
-	lv2:optionalFeature lv2:isLive ,
-		lv2:hardRTCapable ,
-		log:log ;
+	lv2:extensionData work:interface , state:interface ;
+	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log ;
 
 	lv2:port [
 		# control event port
@@ -218,6 +242,8 @@ synthpod:stereo
 		lv2:index 2 ;
 		lv2:symbol "audio_in_1" ;
 		lv2:name "Audio In 1" ;
+		lv2:designation pg:left ;
+		pg:group synthpod:group_in ;
 	] , [
 		# audio in 2
 	  a lv2:InputPort ,
@@ -225,6 +251,8 @@ synthpod:stereo
 		lv2:index 3 ;
 		lv2:symbol "audio_in_2" ;
 		lv2:name "Audio In 2" ;
+		lv2:designation pg:right ;
+		pg:group synthpod:group_in ;
 	] , [
 		# notify event port
 	  a lv2:OutputPort ,
@@ -251,6 +279,8 @@ synthpod:stereo
 		lv2:index 6 ;
 		lv2:symbol "audio_out_1" ;
 		lv2:name "Audio Out 1" ;
+		lv2:designation pg:left ;
+		pg:group synthpod:group_out ;
 	] , [
 		# audio out 2
 	  a lv2:OutputPort ,
@@ -258,4 +288,6 @@ synthpod:stereo
 		lv2:index 7 ;
 		lv2:symbol "audio_out_2" ;
 		lv2:name "Audio Out 2" ;
+		lv2:designation pg:right ;
+		pg:group synthpod:group_out ;
 	] .

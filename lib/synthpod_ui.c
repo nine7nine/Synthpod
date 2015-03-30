@@ -24,7 +24,7 @@
 #include <synthpod_private.h>
 #include <patcher.h>
 
-#define NUM_UI_FEATURES 5
+#define NUM_UI_FEATURES 7
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -37,6 +37,9 @@ struct _mod_t {
 	// features
 	LV2_Feature feature_list [NUM_UI_FEATURES];
 	const LV2_Feature *features [NUM_UI_FEATURES + 1];
+
+	// extension data
+	LV2_Extension_Data_Feature ext_data;
 	
 	// self
 	const LilvPlugin *plug;
@@ -322,6 +325,12 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	return 0;
 }
 
+static const void *
+_data_access(const char *uri)
+{
+	return NULL; //FIXME this should call the plugins extension data function
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 {
@@ -346,6 +355,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod->eo.port_subscribe.subscribe = _port_subscribe;
 	mod->eo.port_subscribe.unsubscribe = _port_unsubscribe;
 
+	// populate extension_data
+	mod->ext_data.data_access = _data_access;
+
 	// populate port_event for StdUI
 	mod->std.descriptor.port_event = _std_port_event;
 
@@ -360,6 +372,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod->feature_list[3].data = &mod->eo.port_map;
 	mod->feature_list[4].URI = LV2_UI__portSubscribe;
 	mod->feature_list[4].data = &mod->eo.port_subscribe;
+	mod->feature_list[5].URI = LV2_DATA_ACCESS_URI;
+	mod->feature_list[5].data = &mod->ext_data;
+	mod->feature_list[6].URI = LV2_INSTANCE_ACCESS_URI;
+	mod->feature_list[6].data = NULL; //FIXME fill in plugin's LV2_Handle 
 	
 	for(int i=0; i<NUM_UI_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];

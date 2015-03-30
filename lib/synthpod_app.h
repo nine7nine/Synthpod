@@ -24,6 +24,8 @@
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/options/options.h>
+#include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 
 typedef struct _sp_app_t sp_app_t;
 typedef struct _sp_app_driver_t sp_app_driver_t;

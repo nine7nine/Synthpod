@@ -28,6 +28,7 @@
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 typedef enum _port_type_t port_type_t;
@@ -125,6 +126,12 @@ struct _reg_t {
 	} ui;
 
 	struct {
+		reg_item_t max_block_length;
+		reg_item_t min_block_length;
+		reg_item_t sequence_size;
+	} bufsz;
+
+	struct {
 		reg_item_t event;
 
 		reg_item_t module_list;
@@ -212,6 +219,10 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->log.warning.urid = map->map(map->handle, LV2_LOG__Warning);
 	
 	regs->ui.eo.urid = map->map(map->handle, LV2_UI__EoUI);
+	
+	regs->bufsz.max_block_length.urid = map->map(map->handle, LV2_BUF_SIZE__maxBlockLength);
+	regs->bufsz.min_block_length.urid = map->map(map->handle, LV2_BUF_SIZE__minBlockLength);
+	regs->bufsz.sequence_size.urid = map->map(map->handle, LV2_BUF_SIZE__sequenceSize);
 		
 	regs->synthpod.event.urid = map->map(map->handle, SYNTHPOD_PREFIX"event");
 	regs->synthpod.module_list.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleList");

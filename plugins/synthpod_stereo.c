@@ -29,6 +29,8 @@
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
+#include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
+#include <lv2/lv2plug.in/ns/ext/options/options.h>
 
 #include <Eina.h>
 
@@ -40,6 +42,7 @@ struct _plughandle_t {
 
 	LV2_Worker_Schedule *schedule;
 	LV2_Log_Log *log;
+	LV2_Options_Option *opts;
 
 	volatile int working;
 
@@ -51,6 +54,11 @@ struct _plughandle_t {
 			LV2_URID trace;
 			LV2_URID warning;
 		} log;
+		struct {
+			LV2_URID max_block_length;
+			LV2_URID min_block_length;
+			LV2_URID sequence_size;
+		} bufsz;
 		struct {
 			LV2_URID event;
 		} synthpod;
@@ -291,7 +299,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 
 	handle->driver.sample_rate = rate;
-	handle->driver.period_size = 64; //TODO
+	handle->driver.period_size = 64;
 	handle->driver.seq_size = SEQ_SIZE;
 	handle->driver.log_printf = _log_printf;
 	handle->driver.log_vprintf = _log_vprintf;
@@ -305,6 +313,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->log = (LV2_Log_Log *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
 			handle->schedule = (LV2_Worker_Schedule *)features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
+			handle->opts = (LV2_Options_Option *)features[i]->data;
 
 	if(!handle->driver.map)
 	{
@@ -321,6 +331,48 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			descriptor->URI);
 		free(handle);
 		return NULL;
+	}
+	
+	if(!handle->opts)
+	{
+		_log_printf(handle, handle->uri.log.error,
+			"%s: Host does not support options:option\n",
+			descriptor->URI);
+		free(handle);
+		return NULL;
+	}
+
+	// map URIs
+	handle->uri.log.entry = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Entry);
+	handle->uri.log.error = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Error);
+	handle->uri.log.note = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Note);
+	handle->uri.log.trace = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Trace);
+	handle->uri.log.warning = handle->driver.map->map(handle->driver.map->handle,
+		LV2_LOG__Warning);
+			
+	handle->uri.bufsz.max_block_length = handle->driver.map->map(handle->driver.map->handle,
+		LV2_BUF_SIZE__maxBlockLength);
+	handle->uri.bufsz.min_block_length = handle->driver.map->map(handle->driver.map->handle,
+		LV2_BUF_SIZE__minBlockLength);
+	handle->uri.bufsz.sequence_size = handle->driver.map->map(handle->driver.map->handle,
+		LV2_BUF_SIZE__sequenceSize);
+
+	handle->uri.synthpod.event = handle->driver.map->map(handle->driver.map->handle,
+		SYNTHPOD_EVENT_URI);
+
+	for(LV2_Options_Option *opt = handle->opts;
+		(opt->key != 0) && (opt->value != NULL);
+		opt++)
+	{
+		if(opt->key == handle->uri.bufsz.max_block_length)
+			handle->driver.period_size = *(int32_t *)opt->value;
+		else if(opt->key == handle->uri.bufsz.sequence_size)
+			handle->driver.seq_size = *(int32_t *)opt->value;
+		//TODO handle more options
 	}
 
 	handle->driver.to_ui_request = _to_ui_request;
@@ -339,20 +391,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
-
-	handle->uri.log.entry = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Entry);
-	handle->uri.log.error = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Error);
-	handle->uri.log.note = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Note);
-	handle->uri.log.trace = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Trace);
-	handle->uri.log.warning = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Warning);
-
-	handle->uri.synthpod.event = handle->driver.map->map(handle->driver.map->handle,
-		SYNTHPOD_EVENT_URI);
 
 	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
 	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);

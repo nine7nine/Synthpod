@@ -21,7 +21,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 4
+#define NUM_FEATURES 5
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -61,6 +61,12 @@ struct _mod_t {
 
 	// log
 	LV2_Log_Log log;
+
+	// opts
+	struct {
+		LV2_Options_Option options [4];
+		const LV2_Options_Interface *iface;
+	} opts;
 
 	// features
 	LV2_Feature feature_list [NUM_FEATURES];
@@ -297,6 +303,31 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->log.handle = mod;
 	mod->log.printf = _log_printf;
 	mod->log.vprintf = _log_vprintf;
+		
+	// populate options
+	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[0].subject = 0;
+	mod->opts.options[0].key = app->regs.bufsz.max_block_length.urid;
+	mod->opts.options[0].size = sizeof(int32_t);
+	mod->opts.options[0].type = app->forge.Int;
+	mod->opts.options[0].value = &app->driver->period_size;
+	
+	mod->opts.options[1].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[1].subject = 0;
+	mod->opts.options[1].key = app->regs.bufsz.min_block_length.urid;
+	mod->opts.options[1].size = sizeof(int32_t);
+	mod->opts.options[1].type = app->forge.Int;
+	mod->opts.options[1].value = &app->driver->period_size;
+	
+	mod->opts.options[2].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[2].subject = 0;
+	mod->opts.options[2].key = app->regs.bufsz.sequence_size.urid;
+	mod->opts.options[2].size = sizeof(int32_t);
+	mod->opts.options[2].type = app->forge.Int;
+	mod->opts.options[2].value = &app->driver->seq_size;
+	
+	mod->opts.options[3].key = 0; // sentinel
+	mod->opts.options[3].value = NULL; // sentinel
 
 	// populate feature list
 	mod->feature_list[0].URI = LV2_URID__map;
@@ -307,6 +338,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->feature_list[2].data = &mod->worker.schedule;
 	mod->feature_list[3].URI = LV2_LOG__log;
 	mod->feature_list[3].data = &mod->log;
+	mod->feature_list[4].URI = LV2_OPTIONS__options;
+	mod->feature_list[4].data = mod->opts.options;
 
 	for(int i=0; i<NUM_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];
@@ -320,6 +353,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->handle = lilv_instance_get_handle(mod->inst),
 	mod->worker.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_WORKER__interface);
+	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
+		LV2_OPTIONS__interface); //TODO actually use this for something?
 	lilv_instance_activate(mod->inst);
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
