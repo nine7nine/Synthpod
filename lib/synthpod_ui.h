@@ -24,7 +24,23 @@
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
+// magic to resolve naming issues with EFL on WIN32
+#if defined(_WIN32)
+// needed for eldbus and mingw32-w64
+#	pragma push_macro("interface")
+#	undef interface
+
+// needed for evil and mingw32-w64
+#	pragma push_macro("__MINGW32__")
+# undef __MINGW32__
+#endif
+
 #include <Elementary.h>
+
+#if defined(_WIN32)
+#	pragma pop_macro("interface")
+#	pragma pop_macro("__MINGW32__")
+#endif
 
 typedef enum _port_widget_t port_widget_t;
 

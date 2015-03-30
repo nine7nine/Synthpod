@@ -34,8 +34,7 @@
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 
-#include <jack/jack.h>
-#include <jack/midiport.h>
+#include <portaudio.h>
 
 #include <uv.h>
 
@@ -75,11 +74,7 @@ struct _handle_t {
 	LV2_URID log_trace;
 	LV2_URID log_warning;
 
-	jack_client_t *client;
-	jack_port_t *midi_in;
-	jack_port_t *audio_in[2];
-	jack_port_t *midi_out;
-	jack_port_t *audio_out[2];
+	PaStream *stream;
 
 	uv_loop_t *loop;
 	uv_signal_t quit;
@@ -179,13 +174,20 @@ _ui_animator(void *data)
 
 // rt
 static int
-_process(jack_nframes_t nsamples, void *data)
+_process(const void *inputs, void *outputs, unsigned long nsamples,
+	const PaStreamCallbackTimeInfo *time_info,
+	PaStreamCallbackFlags status_flags,
+	void *data)
 {
 	handle_t *handle = data;
 	sp_app_t *app = handle->app;
 
+	float *const *audio_in_buf = inputs;
+	float **audio_out_buf = outputs;
+
+	/*
 	void *midi_in_buf = jack_port_get_buffer(handle->midi_in, nsamples);
-	const float *audio_in_buf[2] = {
+	float *audio_in_buf[2] = {
 		jack_port_get_buffer(handle->audio_in[0], nsamples),
 		jack_port_get_buffer(handle->audio_in[1], nsamples)
 	};
@@ -194,6 +196,7 @@ _process(jack_nframes_t nsamples, void *data)
 		jack_port_get_buffer(handle->audio_out[0], nsamples),
 		jack_port_get_buffer(handle->audio_out[1], nsamples)
 	};
+	*/
 
 	LV2_Atom_Sequence *seq_in = sp_app_get_system_source(app, 0);
 	sp_app_set_system_source(app, 1, audio_in_buf[0]);
@@ -202,12 +205,11 @@ _process(jack_nframes_t nsamples, void *data)
 	sp_app_set_system_sink(app, 1, audio_out_buf[0]);
 	sp_app_set_system_sink(app, 2, audio_out_buf[1]);
 
-	//printf("1: %p %p\n", seq_in, seq_out);
-
 	LV2_Atom_Forge *forge = &handle->forge;
 	LV2_Atom_Forge_Frame frame;
 	lv2_atom_forge_set_buffer(forge, (void *)seq_in, SEQ_SIZE);
 	lv2_atom_forge_sequence_head(forge, &frame, 0);
+	/*
 	int n = jack_midi_get_event_count(midi_in_buf);	
 	for(int i=0; i<n; i++)
 	{
@@ -220,6 +222,7 @@ _process(jack_nframes_t nsamples, void *data)
 		lv2_atom_forge_raw(forge, mev.buffer, mev.size);
 		lv2_atom_forge_pad(forge, mev.size);
 	}
+	*/
 	lv2_atom_forge_pop(forge, &frame);
 
 	// read events from worker
@@ -253,6 +256,7 @@ _process(jack_nframes_t nsamples, void *data)
 	sp_app_run_post(handle->app, nsamples);
 
 	// fill midi output buffer
+	/*
 	jack_midi_clear_buffer(midi_out_buf);
 	LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
 	{
@@ -261,6 +265,7 @@ _process(jack_nframes_t nsamples, void *data)
 		jack_midi_event_write(midi_out_buf, ev->time.frames,
 			LV2_ATOM_BODY_CONST(atom), atom->size);
 	}
+	*/
 
 	return 0;
 }
@@ -400,6 +405,8 @@ main(int argc, char **argv)
 #endif
 {
 	static handle_t handle;
+	uint32_t sample_rate = 48000;
+	uint32_t period_size = 64;
 
 	// varchunk init
 #if defined(BUILD_UI)
@@ -421,25 +428,10 @@ main(int argc, char **argv)
 	handle.log_note = map->map(map->handle, LV2_LOG__Note);
 	handle.log_trace = map->map(map->handle, LV2_LOG__Trace);
 	handle.log_warning = map->map(map->handle, LV2_LOG__Warning);
-	
-	// jack init
-	handle.client = jack_client_open("Synthpod", JackNullOption, NULL);
-	handle.midi_in = jack_port_register(handle.client, "midi_in",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	handle.audio_in[0] = jack_port_register(handle.client, "audio_in_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.audio_in[1] = jack_port_register(handle.client, "audio_in_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.midi_out = jack_port_register(handle.client, "midi_out",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[0] = jack_port_register(handle.client, "audio_out_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[1] = jack_port_register(handle.client, "audio_out_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
 	// synthpod init
-	handle.app_driver.sample_rate = jack_get_sample_rate(handle.client);
-	handle.app_driver.period_size = jack_get_buffer_size(handle.client);
+	handle.app_driver.sample_rate = sample_rate;
+	handle.app_driver.period_size = period_size;
 	handle.app_driver.seq_size = SEQ_SIZE; //TODO
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
@@ -466,9 +458,48 @@ main(int argc, char **argv)
 
 	handle.app = sp_app_new(&handle.app_driver, &handle);
 
-	// jack activate
-	jack_set_process_callback(handle.client, _process, &handle);
-	jack_activate(handle.client);
+	// portaudio init
+	if(Pa_Initialize() != paNoError)
+		fprintf(stderr, "Pa_Initialize failed\n");
+	for(int d=0; d<Pa_GetDeviceCount(); d++)
+	{
+		//TODO fill a device list with this
+		const PaDeviceInfo *info = Pa_GetDeviceInfo(d);
+		printf("device: %i\n", d);
+		printf("\tname: %s\n", info->name);
+		
+		PaStreamParameters input_params;
+		PaStreamParameters output_params;
+
+		input_params.device = d;
+		input_params.channelCount = 2;
+		input_params.sampleFormat = paFloat32 | paNonInterleaved;
+		input_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
+		input_params.hostApiSpecificStreamInfo = NULL;
+		
+		output_params.device = d;
+		output_params.channelCount = 2;
+		output_params.sampleFormat = paFloat32 | paNonInterleaved;
+		output_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
+		output_params.hostApiSpecificStreamInfo = NULL;
+
+		// open first device that supports 2xIn, 2xOut @sample_rate
+		if(Pa_IsFormatSupported(&input_params, &output_params, sample_rate)
+			== paFormatIsSupported)
+		{
+			printf("\tsupported: OK\n");
+
+			if(Pa_OpenStream(&handle.stream, &input_params, &output_params,
+					sample_rate, period_size, paNoFlag, _process, &handle) != paNoError)
+			{
+				fprintf(stderr, "Pa_OpenStream failed\n");
+			}
+			else
+				break;
+		}
+	}
+	if(Pa_StartStream(handle.stream) != paNoError)
+		fprintf(stderr, "Pa_StartStream failed\n");
 
 	// uv init
 	handle.loop = uv_default_loop();
@@ -508,25 +539,13 @@ main(int argc, char **argv)
 	uv_async_send(&handle.worker_quit);
 	uv_thread_join(&handle.worker_thread);
 
-	// jack deinit
-	if(handle.client)
-	{
-		if(handle.midi_in)
-			jack_port_unregister(handle.client, handle.midi_in);
-		if(handle.audio_in[0])
-			jack_port_unregister(handle.client, handle.audio_in[0]);
-		if(handle.audio_in[1])
-			jack_port_unregister(handle.client, handle.audio_in[1]);
-		if(handle.midi_out)
-			jack_port_unregister(handle.client, handle.midi_out);
-		if(handle.audio_out[0])
-			jack_port_unregister(handle.client, handle.audio_out[0]);
-		if(handle.audio_out[1])
-			jack_port_unregister(handle.client, handle.audio_out[1]);
-
-		jack_deactivate(handle.client);
-		jack_client_close(handle.client);
-	}
+	// portaudio deinit
+	if(Pa_StopStream(handle.stream) != paNoError)
+		fprintf(stderr, "Pa_StopStream failed\n");
+	if(Pa_CloseStream(handle.stream) != paNoError)
+		fprintf(stderr, "Pa_CloseStream failed\n");
+	if(Pa_Terminate() != paNoError)
+		fprintf(stderr, "Pa_Terminate failed\n");
 	
 	// synthpod deinit
 	sp_app_free(handle.app);

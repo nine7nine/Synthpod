@@ -269,6 +269,8 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 		work->size = size;
 		memcpy(work->payload, data, size);
 		_sp_app_to_worker_advance(app, work_size);
+		
+		return LV2_WORKER_SUCCESS;
 	}
 
 	return LV2_WORKER_ERR_NO_SPACE;
@@ -281,9 +283,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	LilvNode *uri_node = lilv_new_uri(app->world, uri);
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(app->plugs, uri_node);
 	lilv_node_free(uri_node);
-
-	const LilvNode *plugin_uri = lilv_plugin_get_uri(plug);
-	const char *plugin_string = lilv_node_as_string(plugin_uri);
 			
 	if(!plug || !lilv_plugin_verify(plug))
 		return NULL;
@@ -376,7 +375,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			; //TODO
 
 		// allocate 8-byte aligned buffer
-		posix_memalign(&tar->buf, 8, size); //TODO mlock
+#if defined(_WIN32)
+		tar->buf = _aligned_malloc(size, 8); //FIXME check
+#else
+		tar->buf = aligned_alloc(8, size); //FIXME check
+#endif
+		//TODO mlock
 		memset(tar->buf, 0x0, size);
 
 		// initialize control buffers to default value
@@ -532,8 +536,10 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	app->system.source = mod;
 	app->mods[app->num_mods] = mod;
 	app->num_mods += 1;
+
 	// signal to ui
-	size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+	/*
+	size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
 	transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 	if(trans)
 	{
@@ -541,6 +547,7 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 			mod->uid, uri_str);
 		_sp_app_to_ui_advance(app, size);
 	}
+	*/
 
 	// inject sink mod
 	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#sink";
@@ -548,8 +555,10 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	app->system.sink = mod;
 	app->mods[app->num_mods] = mod;
 	app->num_mods += 1;
+
 	// signal to ui
-	size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+	/*
+	size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
 	trans = _sp_app_to_ui_request(app, size);
 	if(trans)
 	{
@@ -557,6 +566,7 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 			mod->uid, uri_str);
 		_sp_app_to_ui_advance(app, size);
 	}
+	*/
 	
 	return app;
 }
@@ -566,7 +576,10 @@ void
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 {
 	const transmit_t *transmit = (const transmit_t *)atom;
-	LV2_URID protocol = transmit->protocol.body;
+	LV2_URID protocol = transmit->prop.key;
+
+	// check for corrent atom object type
+	assert(transmit->obj.body.otype == app->regs.synthpod.event.urid);
 
 	if(protocol == app->regs.port.float_protocol.urid)
 	{
@@ -632,6 +645,27 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		new_last->time.frames = last ? last->time.frames : 0;
 		memcpy(&new_last->body, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
 		seq->atom.size += sizeof(LV2_Atom_Event) + ((atom->size + 7U) & (~7U));
+	}
+	else if(protocol == app->regs.synthpod.module_list.urid)
+	{
+		// iterate over existing modules and send module_add_t
+		for(int m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+
+			const LilvNode *uri_node = lilv_plugin_get_uri(mod->plug);
+			const char *uri_str = lilv_node_as_string(uri_node);
+			
+			//signal to UI
+			size_t size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
+			transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+					mod->uid, uri_str);
+				_sp_app_to_ui_advance(app, size);
+			}
+		}
 	}
 	else if(protocol == app->regs.synthpod.module_add.urid)
 	{
@@ -810,7 +844,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				const char *uri_str = lilv_node_as_string(uri_node);
 				
 				//signal to UI
-				size_t size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+				size_t size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
@@ -852,9 +886,11 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 			work->size = size;
 			memcpy(work->payload, data, size);
 		_sp_worker_to_app_advance(app, work_size);
+		
+		return LV2_WORKER_SUCCESS;
 	}
 
-	return LV2_WORKER_SUCCESS;
+	return LV2_WORKER_ERR_NO_SPACE;
 }
 
 // non-rt worker thread

@@ -32,14 +32,16 @@
 
 #include <Eina.h>
 
-typedef struct _handle_t handle_t;
+typedef struct _plughandle_t plughandle_t;
 
-struct _handle_t {
+struct _plughandle_t {
 	sp_app_t *app;
 	sp_app_driver_t driver;
 
 	LV2_Worker_Schedule *schedule;
 	LV2_Log_Log *log;
+
+	volatile int working;
 
 	struct {
 		struct {
@@ -49,11 +51,15 @@ struct _handle_t {
 			LV2_URID trace;
 			LV2_URID warning;
 		} log;
+		struct {
+			LV2_URID event;
+		} synthpod;
 	} uri;
 
 	struct {
 		LV2_Atom_Forge event_out;
 		LV2_Atom_Forge notify;
+		LV2_Atom_Forge work;
 	} forge;
 
 	struct {
@@ -72,16 +78,17 @@ struct _handle_t {
 	} worker;
 
 	struct {
-		uint8_t ui [8192];
-		uint8_t worker [8192];
-		uint8_t app [8192];
+		uint8_t ui [CHUNK_SIZE] _ATOM_ALIGNED;
+		uint8_t worker [CHUNK_SIZE] _ATOM_ALIGNED;
+		uint8_t app [CHUNK_SIZE] _ATOM_ALIGNED;
+		uint8_t tmp [CHUNK_SIZE];
 	} buf;
 };
 
 static int
 _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
 	if(handle->log)
 	{
@@ -130,7 +137,7 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	handle_t *handle = instance;
+	//plughandle_t *handle = instance;
 
 	//TODO
 
@@ -142,7 +149,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	handle_t *handle = instance;
+	//plughandle_t *handle = instance;
 
 	//TODO
 
@@ -162,7 +169,9 @@ _work(LV2_Handle instance,
 	uint32_t size,
 	const void *body)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
+	
+	//printf("_work: %u\n", size);
 	
 	handle->worker.respond = respond;
 	handle->worker.target = target;
@@ -176,7 +185,9 @@ _work(LV2_Handle instance,
 static LV2_Worker_Status
 _work_response(LV2_Handle instance, uint32_t size, const void *body)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
+
+	//printf("_work_response: %u\n", size);
 
 	sp_app_from_worker(handle->app, size, body);
 
@@ -187,7 +198,9 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 static LV2_Worker_Status
 _end_run(LV2_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
+	
+	handle->working = 0;
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -202,33 +215,31 @@ static const LV2_Worker_Interface work_iface = {
 static void *
 _to_ui_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
 	return handle->buf.ui;
 }
 static void
 _to_ui_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
-	LV2_Atom_Forge *forge = &handle->forge.notify;
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge.work;
 
-	LV2_Atom *atom = (LV2_Atom *)handle->buf.ui;
-	printf("_to_ui_advance: %u\n", atom->size);
+	//printf("_to_ui_advance: %zu\n", size);
 
-	uint32_t eventsize = sizeof(LV2_Atom_Event) + atom->size;
-	if(forge->offset + eventsize > forge->size)
+	if(forge->offset + size > forge->size)
 		return; // buffer overflow
 
 	lv2_atom_forge_frame_time(forge, 0);
-	lv2_atom_forge_raw(forge, atom, eventsize);
-	lv2_atom_forge_pad(forge, eventsize);
+	lv2_atom_forge_raw(forge, handle->buf.ui, size);
+	lv2_atom_forge_pad(forge, size);
 }
 
 // rt-thread
 static void *
 _to_worker_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 	
 	//TODO test capacity
 
@@ -237,10 +248,11 @@ _to_worker_request(size_t size, void *data)
 static void
 _to_worker_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 	
-	printf("_to_worker_advance: %zu\n", size);
+	//printf("_to_worker_advance: %zu\n", size);
 	
+	handle->working = 1;
 	handle->schedule->schedule_work(handle->schedule->handle,
 		size, handle->buf.worker);
 	//TODO check return result
@@ -250,7 +262,7 @@ _to_worker_advance(size_t size, void *data)
 static void *
 _to_app_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
 	//TODO test capacity
 
@@ -259,11 +271,9 @@ _to_app_request(size_t size, void *data)
 static void
 _to_app_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
-	LV2_Atom *atom = (LV2_Atom *)handle->buf.app;
-
-	printf("_to_app_advance: %zu\n", size);
+	//printf("_to_app_advance: %zu\n", size);
 
 	handle->worker.respond(handle->worker.target, size, handle->buf.app);
 	//TODO check return result
@@ -276,13 +286,13 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	eina_init();
 
 	int i;
-	handle_t *handle = calloc(1, sizeof(handle_t));
+	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
 	handle->driver.sample_rate = rate;
-	handle->driver.period_size = 32; //TODO
-	handle->driver.seq_size = 0x2000; //TODO
+	handle->driver.period_size = 64; //TODO
+	handle->driver.seq_size = SEQ_SIZE;
 	handle->driver.log_printf = _log_printf;
 	handle->driver.log_vprintf = _log_vprintf;
 
@@ -341,6 +351,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->uri.log.warning = handle->driver.map->map(handle->driver.map->handle,
 		LV2_LOG__Warning);
 
+	handle->uri.synthpod.event = handle->driver.map->map(handle->driver.map->handle,
+		SYNTHPOD_EVENT_URI);
+
 	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
 	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);
 
@@ -350,7 +363,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 static void
 connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
 
 	switch(port)
@@ -393,15 +406,16 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 static void
 activate(LV2_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
+	lv2_atom_forge_set_buffer(&handle->forge.work, handle->buf.tmp, CHUNK_SIZE);
 	sp_app_activate(handle->app);
 }
 
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
 
 	struct {
@@ -415,8 +429,20 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_sequence_head(&handle->forge.event_out, &frame.event_out, 0);
 	
 	lv2_atom_forge_set_buffer(&handle->forge.notify,
-		(uint8_t *)handle->port.event_out, handle->port.notify->atom.size);
+		(uint8_t *)handle->port.notify, handle->port.notify->atom.size);
 	lv2_atom_forge_sequence_head(&handle->forge.notify, &frame.notify, 0);
+
+	if(!handle->working)
+	{
+		if(handle->forge.work.offset > 0)
+		{
+			// copy forge buffer
+			lv2_atom_forge_raw(&handle->forge.notify, handle->buf.tmp, handle->forge.work.offset);
+
+			// reset forge buffer
+			lv2_atom_forge_set_buffer(&handle->forge.work, handle->buf.tmp, CHUNK_SIZE);
+		}
+	}
 
 	// run app pre
 	sp_app_run_pre(app, nsamples);
@@ -425,8 +451,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 	LV2_ATOM_SEQUENCE_FOREACH(handle->port.control, ev)
 	{
 		const LV2_Atom *atom = &ev->body;
-		//TODO check atom type
-		sp_app_from_ui(app, atom);
+		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+
+		if(  (atom->type == handle->forge.notify.Object)
+			&& (obj->body.otype == handle->uri.synthpod.event) )
+		{
+			//printf("control: %u\n", atom->size);
+			sp_app_from_ui(app, atom);
+		}
 	}
 	
 	// run app post
@@ -440,7 +472,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 static void
 deactivate(LV2_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	sp_app_deactivate(handle->app);
 }
@@ -448,7 +480,7 @@ deactivate(LV2_Handle instance)
 static void
 cleanup(LV2_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	sp_app_free(handle->app);
 	free(handle);

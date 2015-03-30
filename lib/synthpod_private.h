@@ -18,7 +18,7 @@
 #ifndef _SYNTHPOD_PRIVATE_H
 #define _SYNTHPOD_PRIVATE_H
 
-#define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/synthpod#"
+#define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
 #define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
 #include <lilv/lilv.h>
@@ -125,6 +125,9 @@ struct _reg_t {
 	} ui;
 
 	struct {
+		reg_item_t event;
+
+		reg_item_t module_list;
 		reg_item_t module_add;
 		reg_item_t module_del;
 		reg_item_t port_refresh;
@@ -210,6 +213,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	
 	regs->ui.eo.urid = map->map(map->handle, LV2_UI__EoUI);
 		
+	regs->synthpod.event.urid = map->map(map->handle, SYNTHPOD_PREFIX"event");
+	regs->synthpod.module_list.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleList");
 	regs->synthpod.module_add.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleAdd");
 	regs->synthpod.module_del.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleDel");
 	regs->synthpod.port_refresh.urid = map->map(map->handle, SYNTHPOD_PREFIX"portRefresh");
@@ -260,6 +265,7 @@ sp_regs_deinit(reg_t *regs)
 
 // app <-> ui communication for module/port manipulations
 typedef struct _transmit_t transmit_t;
+typedef struct _transmit_module_list_t transmit_module_list_t;
 typedef struct _transmit_module_add_t transmit_module_add_t;
 typedef struct _transmit_module_del_t transmit_module_del_t;
 typedef struct _transmit_port_connected_t transmit_port_connected_t;
@@ -267,8 +273,12 @@ typedef struct _transmit_port_subscribed_t transmit_port_subscribed_t;
 typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
 
 struct _transmit_t {
-	LV2_Atom_Tuple tuple _ATOM_ALIGNED;
-	LV2_Atom_URID protocol _ATOM_ALIGNED;
+	LV2_Atom_Object obj _ATOM_ALIGNED;
+	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_module_list_t {
+	transmit_t transmit _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_module_add_t {
@@ -336,15 +346,25 @@ struct _transfer_atom_t {
 };
 
 static inline void
-_sp_transmit_fill(LV2_Atom_Forge *forge, transmit_t *trans, uint32_t size,
+_sp_transmit_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_t *trans, uint32_t size,
 	LV2_URID protocol)
 {
-	trans->tuple.atom.size = size - sizeof(LV2_Atom);
-	trans->tuple.atom.type = forge->Tuple;
+	trans->obj.atom.size = size - sizeof(LV2_Atom);
+	trans->obj.atom.type = forge->Object;
+	trans->obj.body.id = 0;
+	trans->obj.body.otype = regs->synthpod.event.urid;
 
-	trans->protocol.atom.size = sizeof(LV2_URID);
-	trans->protocol.atom.type = forge->URID;
-	trans->protocol.body = protocol;
+	trans->prop.key = protocol;
+	trans->prop.context = 0;
+	trans->prop.value.size = size - sizeof(transmit_t);
+	trans->prop.value.type = forge->Tuple;
+}
+
+static inline void
+_sp_transmit_module_list_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_list_t *trans, uint32_t size)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_list.urid);
 }
 
 static inline void
@@ -352,13 +372,12 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_add_t *trans, uint32_t size,
 	u_id_t module_uid, const char *module_uri)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.module_add.urid);
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_add.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
 
-	trans->uri.atom.type = forge->String;
 	if(module_uri)
 	{
 		trans->uri.atom.size = strlen(module_uri) + 1;
@@ -366,13 +385,14 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	}
 	else
 		trans->uri.atom.size = 0;
+	trans->uri.atom.type = forge->String;
 }
 
 static inline void
 _sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_del_t *trans, uint32_t size, u_id_t module_uid)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.module_del.urid);
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_del.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -384,7 +404,7 @@ _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_connected_t *trans, uint32_t size, u_id_t src_uid,
 	uint32_t src_port, u_id_t snk_uid, uint32_t snk_port, int32_t state)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_connected.urid);
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_connected.urid);
 
 	trans->src_uid.atom.size = sizeof(int32_t);
 	trans->src_uid.atom.type = forge->Int;
@@ -412,7 +432,7 @@ _sp_transmit_port_subscribed_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_subscribed_t *trans, uint32_t size,
 	u_id_t module_uid, uint32_t port_index, LV2_URID prot, int32_t state)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_subscribed.urid);
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_subscribed.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -436,7 +456,7 @@ _sp_transmit_port_refresh_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_refresh_t *trans, uint32_t size,
 	u_id_t module_uid, uint32_t port_index)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, regs->synthpod.port_refresh.urid);
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_refresh.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -448,10 +468,10 @@ _sp_transmit_port_refresh_fill(reg_t *regs, LV2_Atom_Forge *forge,
 }
 
 static inline void
-_sp_transfer_fill(LV2_Atom_Forge *forge, transfer_t *trans, uint32_t size,
+_sp_transfer_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_t *trans, uint32_t size,
 	LV2_URID protocol, u_id_t module_uid, uint32_t port_index)
 {
-	_sp_transmit_fill(forge, &trans->transmit, size, protocol);
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, protocol);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -466,7 +486,7 @@ static inline void
 _sp_transfer_float_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_float_t *trans,
 	u_id_t module_uid, uint32_t port_index, const float *value)
 {
-	_sp_transfer_fill(forge, &trans->transfer, sizeof(transfer_float_t),
+	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_float_t),
 		regs->port.float_protocol.urid, module_uid, port_index);
 	
 	trans->value.atom.size = sizeof(float);
@@ -478,7 +498,7 @@ static inline void
 _sp_transfer_peak_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_peak_t *trans,
 	u_id_t module_uid, uint32_t port_index, const LV2UI_Peak_Data *data)
 {
-	_sp_transfer_fill(forge, &trans->transfer, sizeof(transfer_peak_t),
+	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_peak_t),
 		regs->port.peak_protocol.urid, module_uid, port_index);
 	
 	trans->period_start.atom.size = sizeof(uint32_t);
@@ -500,7 +520,7 @@ _sp_transfer_atom_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *tran
 {
 	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
 
-	_sp_transfer_fill(forge, &trans->transfer, sizeof(transfer_atom_t) + atom_size,
+	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size),
 		regs->port.atom_transfer.urid, module_uid, port_index);
 
 	memcpy(trans->atom, atom, atom_size);
@@ -512,7 +532,7 @@ _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *tra
 {
 	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
 
-	_sp_transfer_fill(forge, &trans->transfer, sizeof(transfer_atom_t) + atom_size,
+	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size),
 		regs->port.event_transfer.urid, module_uid, port_index);
 
 	memcpy(trans->atom, atom, atom_size);

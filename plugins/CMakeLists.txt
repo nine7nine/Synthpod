@@ -1,7 +1,7 @@
-include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod.h
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
+include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
 set(DEST lib/lv2/synthpod.lv2)
 set(LIB_EXT ".so")
@@ -38,6 +38,9 @@ add_library(osc_io MODULE
 	osc_io.c
 	osc_io_io.c)
 target_link_libraries(osc_io ${UV_LDFLAGS})
+if(WIN32)
+	target_link_libraries(osc_io "-lws2_32")
+endif()
 set_target_properties(osc_io PROPERTIES PREFIX "")
 install(TARGETS osc_io DESTINATION ${DEST})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/osc_io.ttl DESTINATION ${DEST})
@@ -53,6 +56,11 @@ install(TARGETS synthpod.lv2 DESTINATION ${DEST})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${DEST})
 
 if(BUILD_UI)
+	CHECK_FUNCTION_EXISTS("elm_win_fake_add" ELM_HAS_FAKE)
+	if(ELM_HAS_FAKE)
+		add_definitions("-DELM_HAS_FAKE")
+	endif()
+
 # synthpod_ui
 	add_library(synthpod_ui.lv2 MODULE
 		synthpod_lv2_ui.c

@@ -20,11 +20,9 @@
 #include <synthpod_lv2.h>
 #include <synthpod_ui.h>
 
-#include <Elementary.h>
+typedef struct _plughandle_t plughandle_t;
 
-typedef struct _handle_t handle_t;
-
-struct _handle_t {
+struct _plughandle_t {
 	sp_ui_t *ui;
 	sp_ui_driver_t driver;
 
@@ -42,7 +40,7 @@ struct _handle_t {
 	Evas_Object *parent;
 
 	struct {
-		uint8_t app [8192];
+		uint8_t app [CHUNK_SIZE] _ATOM_ALIGNED;
 	} buf;
 };
 
@@ -50,7 +48,7 @@ struct _handle_t {
 static int
 idle_cb(LV2UI_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	sp_ui_iterate(handle->ui);
 	
@@ -65,7 +63,7 @@ static const LV2UI_Idle_Interface idle_ext = {
 static int
 _show_cb(LV2UI_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	if(handle && handle->ee)
 		ecore_evas_show(handle->ee);
@@ -76,7 +74,7 @@ _show_cb(LV2UI_Handle instance)
 static int
 _hide_cb(LV2UI_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	if(handle && handle->ee)
 		ecore_evas_hide(handle->ee);
@@ -93,7 +91,7 @@ static const LV2UI_Show_Interface show_ext = {
 static int
 resize_cb(LV2UI_Feature_Handle instance, int w, int h)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	if(!handle)
 		return -1;
@@ -116,7 +114,7 @@ resize_cb(LV2UI_Feature_Handle instance, int w, int h)
 static void
 _delete(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
 	sp_ui_free(handle->ui);
 }
@@ -124,20 +122,18 @@ _delete(void *data, Evas *e, Evas_Object *obj, void *event_info)
 static void *
 _to_app_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
 	return handle->buf.app;
 }
 static void
 _to_app_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
-
-	LV2_Atom *atom = (LV2_Atom *)handle->buf.app;
+	plughandle_t *handle = data;
 
 	uint32_t port_index = 0; // control port
 	handle->write_function(handle->controller, port_index,
-		sizeof(LV2_Atom) + atom->size, handle->uri.event_transfer, atom);
+		size, handle->uri.event_transfer, handle->buf.app);
 }
 
 static LV2UI_Handle
@@ -149,7 +145,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	if(strcmp(plugin_uri, SYNTHPOD_STEREO_URI))
 		return NULL;
 
-	handle_t *handle = calloc(1, sizeof(handle_t));
+	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
@@ -199,10 +195,15 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			return NULL;
 		}
 		ecore_evas_show(handle->ee);
-		
+	
+#if defined(ELM_HAS_FAKE)
 		handle->parent = elm_win_fake_add(handle->ee);
 		evas_object_resize(handle->parent, handle->w, handle->h);
 		evas_object_show(handle->parent);
+#else
+		Evas *e = ecore_evas_get(handle->ee);
+		handle->parent = evas_object_rectangle_add(e);
+#endif
 
 		handle->bg = elm_bg_add(handle->parent);
 		evas_object_resize(handle->bg, handle->w, handle->w);
@@ -229,8 +230,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	Evas_Object *widg = sp_ui_widget_get(handle->ui);
 	evas_object_event_callback_add(widg, EVAS_CALLBACK_DEL, _delete, handle);
 
-	//TODO check handle->ui
-
 	if(handle->ee) // X11 UI
 		*(Evas_Object **)widget = NULL;
 	else // Eo UI
@@ -242,7 +241,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 static void
 cleanup(LV2UI_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 	
 	if(handle)
 	{
@@ -265,9 +264,9 @@ static void
 port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 	uint32_t format, const void *buffer)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 	
-	printf("_to_ui: %u %u\n", port_index, size);
+	//printf("_to_ui: %u %u\n", port_index, size);
 
 	if(  ( port_index == 4) // notify port
 		&& (format == handle->uri.event_transfer) )

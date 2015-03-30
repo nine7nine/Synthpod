@@ -23,9 +23,9 @@
 
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 
-typedef struct _handle_t handle_t;
+typedef struct _plughandle_t plughandle_t;
 
-struct _handle_t {
+struct _plughandle_t {
 	const LV2_Atom_Sequence *event_out;
 	const float *audio_out[2];
 
@@ -37,7 +37,7 @@ static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
 {
-	handle_t *handle = calloc(1, sizeof(handle_t));
+	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
@@ -47,7 +47,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 static void
 connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	switch(port)
 	{
@@ -77,7 +77,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 static void
 activate(LV2_Handle instance)
 {
-	handle_t *handle = instance;
+	//plughandle_t *handle = instance;
 	
 	// nothing
 }
@@ -85,7 +85,7 @@ activate(LV2_Handle instance)
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	size_t audio_size = nsamples * sizeof(float);
 	memcpy(handle->audio_in[0], handle->audio_out[0], audio_size);
@@ -98,7 +98,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 static void
 deactivate(LV2_Handle instance)
 {
-	handle_t *handle = instance;
+	//plughandle_t *handle = instance;
 
 	// nothing
 }
@@ -106,7 +106,7 @@ deactivate(LV2_Handle instance)
 static void
 cleanup(LV2_Handle instance)
 {
-	handle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	free(handle);
 }

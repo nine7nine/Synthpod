@@ -494,7 +494,7 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	const LilvNode *uri_node = lilv_plugin_get_uri(plug);
 	const char *uri_str = lilv_node_as_string(uri_node);
 
-	size_t size = sizeof(transmit_module_add_t) + strlen(uri_str) + 1;
+	size_t size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
 	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
@@ -789,35 +789,35 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 
 	if(protocol == ui->regs.port.float_protocol.urid)
 	{
-		const float *val = buffer;
+		assert(size == sizeof(float));
 		size_t size = sizeof(transfer_float_t);
 		transfer_float_t *trans = _sp_ui_to_app_request(ui, size);
 		if(trans)
 		{
-			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, val);
+			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
 			_sp_ui_to_app_advance(ui, size);
 		}
 	}
 	else if(protocol == ui->regs.port.atom_transfer.urid)
 	{
-		const LV2_Atom *atom = buffer;
-		size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
-		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
+		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
+		size_t len = sizeof(transfer_atom_t) + size;
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
-			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, atom);
-			_sp_ui_to_app_advance(ui, size);
+			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
+			_sp_ui_to_app_advance(ui, len);
 		}
 	}
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
-		const LV2_Atom *atom = buffer;
-		size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
-		transfer_atom_t *trans = _sp_ui_to_app_request(ui, size);
+		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
+		size_t len = sizeof(transfer_atom_t) + size;
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
-			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, atom);
-			_sp_ui_to_app_advance(ui, size);
+			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
+			_sp_ui_to_app_advance(ui, len);
 		}
 	}
 	else if(protocol == ui->regs.port.peak_protocol.urid)
@@ -866,6 +866,7 @@ _check_changed(void *data, Evas_Object *obj, void *event)
 	sp_ui_t *ui = mod->ui;
 
 	float val = elm_check_state_get(obj);
+	val = floor(val);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
 		ui->regs.port.float_protocol.urid, &val);
@@ -880,6 +881,8 @@ _spinner_changed(void *data, Evas_Object *obj, void *event)
 	sp_ui_t *ui = mod->ui;
 
 	float val = elm_spinner_value_get(obj);
+	if(lilv_port_has_property(mod->plug, port->tar, ui->regs.port.integer.node))
+		val = floor(val);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
 		ui->regs.port.float_protocol.urid, &val);
@@ -893,9 +896,33 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 	sp_ui_t *ui = mod->ui;
 
 	float val = elm_slider_value_get(obj);
+	if(lilv_port_has_property(mod->plug, port->tar, ui->regs.port.integer.node))
+		val = floor(val);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
 		ui->regs.port.float_protocol.urid, &val);
+}
+			
+static char *
+_fmt_int(double val)
+{
+	char str [64];
+	sprintf(str, "%.0lf", floor(val));
+	return strdup(str);	
+}
+
+static char *
+_fmt_flt(double val)
+{
+	char str [64];
+	sprintf(str, "%.4lf", val);
+	return strdup(str);	
+}
+
+static void
+_fmt_free(char *str)
+{
+	free(str);
 }
 
 static Evas_Object * 
@@ -967,7 +994,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			Evas_Object *spin = elm_spinner_add(lay);
 			elm_spinner_min_max_set(spin, port->min, port->max);
 			elm_spinner_value_set(spin, val);
-			elm_spinner_step_set(spin, 1);
+			elm_spinner_step_set(spin, 1.f);
 			elm_spinner_editable_set(spin, EINA_FALSE);
 			elm_spinner_wrap_set(spin, EINA_FALSE);
 			elm_spinner_base_set(spin, 0);
@@ -990,7 +1017,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		{
 			Evas_Object *sldr = elm_slider_add(lay);
 			elm_slider_horizontal_set(sldr, EINA_TRUE);
-			elm_slider_unit_format_set(sldr, integer ? "%.0f" : "%.4f");
+			//elm_slider_unit_format_set(sldr, integer ? "%.0f" : "%.4f");
+			elm_slider_units_format_function_set(sldr, integer ? _fmt_int : _fmt_flt, _fmt_free);
 			elm_slider_min_max_set(sldr, port->min, port->max);
 			elm_slider_value_set(sldr, val);
 			elm_slider_step_set(sldr, step_val);
@@ -1565,6 +1593,15 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 	ui->griditc->func.state_get = NULL;
 	ui->griditc->func.del = _modgrid_del;
 
+	// request mod list
+	size_t size = sizeof(transmit_module_list_t);
+	transmit_module_list_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_list_fill(&ui->regs, &ui->forge, trans, size);
+		_sp_ui_to_app_advance(ui, size);
+	}
+
 	return ui;
 }
 
@@ -1603,7 +1640,7 @@ void
 sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 {
 	const transmit_t *transmit = (const transmit_t *)atom;
-	LV2_URID protocol = transmit->protocol.body;
+	LV2_URID protocol = transmit->prop.key;
 
 	if(protocol == ui->regs.synthpod.module_add.urid)
 	{

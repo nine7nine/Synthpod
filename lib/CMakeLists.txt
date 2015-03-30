@@ -1,10 +1,10 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cjson)
 
 # synthpod
 add_library(synthpod.lib SHARED
 	synthpod_app.c
-	${PROJECT_SOURCE_DIR}/ext_urid.c
-	${PROJECT_SOURCE_DIR}/varchunk.c)
+	ext_urid.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
 	${UV_LDFLAGS}
@@ -17,8 +17,7 @@ if(BUILD_UI)
 # synthpod_ui
 	add_library(synthpod_ui.lib SHARED
 		synthpod_ui.c
-		${PROJECT_SOURCE_DIR}/patcher.c
-		${PROJECT_SOURCE_DIR}/varchunk.c)
+		patcher.c)
 	target_link_libraries(synthpod_ui.lib
 		${ELM_LDFLAGS}
 		${UV_LDFLAGS}

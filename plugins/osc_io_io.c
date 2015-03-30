@@ -27,9 +27,9 @@
 
 #define BUF_SIZE 2048
 
-typedef struct _handle_t handle_t;
+typedef struct _plughandle_t plughandle_t;
 
-struct _handle_t {
+struct _plughandle_t {
 	LV2_URID_Map *map;
 	struct {
 		LV2_URID osc_OscEvent;
@@ -68,7 +68,7 @@ struct _handle_t {
 };
 
 static void
-lprintf(handle_t *handle, LV2_URID type, const char *fmt, ...)
+lprintf(plughandle_t *handle, LV2_URID type, const char *fmt, ...)
 {
 	if(handle->log)
 	{
@@ -99,7 +99,7 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	return store(
 		state,
@@ -115,7 +115,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	size_t size;
 	uint32_t type;
@@ -158,7 +158,7 @@ static const LV2_State_Interface state_iface = {
 static void
 _recv_cb(osc_stream_t *stream, osc_data_t *buf, size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
 	lprintf(handle, handle->uris.log_note,
 		"_recv_cb: %zu %s\n", size, buf);
@@ -169,7 +169,7 @@ _recv_cb(osc_stream_t *stream, osc_data_t *buf, size_t size, void *data)
 static void
 _send_cb(osc_stream_t *stream, size_t size, void *data)
 {
-	handle_t *handle = data;
+	plughandle_t *handle = data;
 
 	lprintf(handle, handle->uris.log_note,
 		"_send_cb: %zu %s\n", size, handle->tmp);
@@ -185,7 +185,7 @@ _work(LV2_Handle instance,
 	uint32_t size,
 	const void *body)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 	
 	const LV2_Atom *atom = body;
 
@@ -222,7 +222,7 @@ _work(LV2_Handle instance,
 static LV2_Worker_Status
 _work_response(LV2_Handle instance, uint32_t size, const void *body)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	/*
 	printf(handle, handle->uris.log_trace,
@@ -247,7 +247,7 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 static LV2_Worker_Status
 _end_run(LV2_Handle instance)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	//printf(handle, handle->uris.log_trace, "_end_run\n");
 		
@@ -267,7 +267,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
 {
 	int i;
-	handle_t *handle = calloc(1, sizeof(handle_t));
+	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
@@ -325,7 +325,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 static void
 connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	switch(port)
 	{
@@ -346,7 +346,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 static void
 activate(LV2_Handle instance)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	// reset forge buffer
 	lv2_atom_forge_set_buffer(&handle->work_forge, handle->buf, BUF_SIZE);
@@ -355,7 +355,7 @@ activate(LV2_Handle instance)
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	if(handle->dirty)
 	{
@@ -427,14 +427,13 @@ run(LV2_Handle instance, uint32_t nsamples)
 static void
 deactivate(LV2_Handle instance)
 {
-	handle_t *handle = (handle_t *)instance;
-	//nothing
+	//plughandle_t *handle = (plughandle_t *)instance;
 }
 
 static void
 cleanup(LV2_Handle instance)
 {
-	handle_t *handle = (handle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
 
 	osc_stream_deinit(&handle->stream);
 	uv_loop_close(&handle->loop);
