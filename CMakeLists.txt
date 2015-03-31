@@ -6,6 +6,7 @@ project(synthpod)
 find_package(PkgConfig REQUIRED)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
+include(CheckSymbolExists)
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})

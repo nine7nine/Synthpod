@@ -56,8 +56,7 @@ install(TARGETS synthpod.lv2 DESTINATION ${DEST})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${DEST})
 
 if(BUILD_UI)
-	CHECK_FUNCTION_EXISTS("elm_win_fake_add" ELM_HAS_FAKE)
-	if(ELM_HAS_FAKE)
+	if((${ELM_VERSION} VERSION_EQUAL "1.13.0") OR (${ELM_VERSION} VERSION_GREATER "1.13.0"))
 		add_definitions("-DELM_HAS_FAKE")
 	endif()
 

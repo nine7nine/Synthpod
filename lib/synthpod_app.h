@@ -24,6 +24,7 @@
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 
@@ -98,5 +99,13 @@ sp_app_deactivate(sp_app_t *app);
 
 void
 sp_app_free(sp_app_t *app);
+
+LV2_State_Status
+sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
+	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
+
+LV2_State_Status
+sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
 #endif // _SYNTHPOD_APP_H

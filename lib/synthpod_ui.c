@@ -1665,7 +1665,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body);
 		if(mod)
 		{
-			if(mod->system.source || mod->system.sink)
+			if(mod->system.source || mod->system.sink || !ui->sink_itm)
 			{
 				mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod,
 					NULL, ELM_GENLIST_ITEM_TREE, NULL, NULL);

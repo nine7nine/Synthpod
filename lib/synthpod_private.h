@@ -133,6 +133,7 @@ struct _reg_t {
 
 	struct {
 		reg_item_t event;
+		reg_item_t state;
 
 		reg_item_t module_list;
 		reg_item_t module_add;
@@ -225,6 +226,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->bufsz.sequence_size.urid = map->map(map->handle, LV2_BUF_SIZE__sequenceSize);
 		
 	regs->synthpod.event.urid = map->map(map->handle, SYNTHPOD_PREFIX"event");
+	regs->synthpod.state.urid = map->map(map->handle, SYNTHPOD_PREFIX"state");
 	regs->synthpod.module_list.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleList");
 	regs->synthpod.module_add.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleAdd");
 	regs->synthpod.module_del.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleDel");

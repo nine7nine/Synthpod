@@ -4,7 +4,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cjson)
 # synthpod
 add_library(synthpod.lib SHARED
 	synthpod_app.c
-	ext_urid.c)
+	ext_urid.c
+	cjson/cJSON.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
 	${UV_LDFLAGS}

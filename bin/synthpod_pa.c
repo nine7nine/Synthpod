@@ -135,6 +135,67 @@ _worker_thread(void *data)
 	uv_loop_close(loop);
 }
 
+// non-rt / rt
+static LV2_State_Status
+_state_store(LV2_State_Handle state, uint32_t key, const void *value,
+	size_t size, uint32_t type, uint32_t flags)
+{
+	handle_t *handle = state;
+
+	if(type != handle->forge.String)
+		return LV2_STATE_ERR_BAD_TYPE;
+
+	if(!(flags & LV2_STATE_IS_POD) || !(flags & LV2_STATE_IS_PORTABLE))
+		return LV2_STATE_ERR_BAD_FLAGS;
+
+	FILE *f = fopen("/home/hp/.local/share/synthpod/state.json", "wb");
+	if(f)
+	{
+		int written = fwrite(value, size, 1, f);
+		fflush(f);
+		fclose(f);
+
+		if(written == size)
+			return LV2_STATE_SUCCESS;
+	}
+
+	return LV2_STATE_ERR_UNKNOWN;
+}
+
+static const void*
+_state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
+	uint32_t *type, uint32_t *flags)
+{
+	handle_t *handle = state;
+	
+	*type = handle->forge.String;
+	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
+
+	FILE *f = fopen("/home/hp/.local/share/synthpod/state.json", "rb");
+	if(f)
+	{
+		fseek(f, 0, SEEK_END);
+		size_t fsize = ftell(f);
+		fseek(f, 0, SEEK_SET);
+				
+		char *value = malloc(fsize + 1);
+		if(value)
+		{
+			if(fread(value, fsize, 1, f) == 1)
+			{
+				value[fsize] = '\0';
+
+				*size = fsize + 1;
+				return value; //TODO needs to be freed
+			}
+		}
+		fclose(f);
+	}
+
+	*size = 0;
+	return NULL;
+}
+
 #if defined(BUILD_UI)
 // non-rt ui-thread
 static void
@@ -429,6 +490,16 @@ main(int argc, char **argv)
 	handle.log_trace = map->map(map->handle, LV2_LOG__Trace);
 	handle.log_warning = map->map(map->handle, LV2_LOG__Warning);
 
+	// uv init
+	handle.loop = uv_default_loop();
+
+	handle.quit.data = &handle;
+	uv_signal_init(handle.loop, &handle.quit);
+	uv_signal_start(&handle.quit, _quit, SIGINT);
+
+	// threads init
+	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
+
 	// synthpod init
 	handle.app_driver.sample_rate = sample_rate;
 	handle.app_driver.period_size = period_size;
@@ -456,7 +527,12 @@ main(int argc, char **argv)
 	handle.ui_driver.to_app_advance = _ui_to_app_advance;
 #endif
 
+	// app init
 	handle.app = sp_app_new(&handle.app_driver, &handle);
+
+	// restore state
+	sp_app_restore(handle.app, _state_retrieve, &handle,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 
 	// portaudio init
 	if(Pa_Initialize() != paNoError)
@@ -501,16 +577,6 @@ main(int argc, char **argv)
 	if(Pa_StartStream(handle.stream) != paNoError)
 		fprintf(stderr, "Pa_StartStream failed\n");
 
-	// uv init
-	handle.loop = uv_default_loop();
-
-	handle.quit.data = &handle;
-	uv_signal_init(handle.loop, &handle.quit);
-	uv_signal_start(&handle.quit, _quit, SIGINT);
-
-	// threads init
-	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
-
 #if defined(BUILD_UI)
 	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);
 	//handle.win = elm_win_add(NULL, "Synthpod", ELM_WIN_BASIC);
@@ -535,10 +601,6 @@ main(int argc, char **argv)
 	uv_run(handle.loop, UV_RUN_DEFAULT);
 #endif // BUILD_UI
 
-	// threads deinit
-	uv_async_send(&handle.worker_quit);
-	uv_thread_join(&handle.worker_thread);
-
 	// portaudio deinit
 	if(Pa_StopStream(handle.stream) != paNoError)
 		fprintf(stderr, "Pa_StopStream failed\n");
@@ -546,6 +608,14 @@ main(int argc, char **argv)
 		fprintf(stderr, "Pa_CloseStream failed\n");
 	if(Pa_Terminate() != paNoError)
 		fprintf(stderr, "Pa_Terminate failed\n");
+
+	// threads deinit
+	uv_async_send(&handle.worker_quit);
+	uv_thread_join(&handle.worker_thread);
+
+	// save state
+	sp_app_save(handle.app, _state_store, &handle,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 	
 	// synthpod deinit
 	sp_app_free(handle.app);

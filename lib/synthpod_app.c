@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <cJSON.h>
+
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
@@ -563,7 +565,7 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	size_t size;
 	mod_t *mod;
 
-	app->uid = 1; //FIXME change this when load stuff from file
+	app->uid = 1;
 
 	// inject source mod
 	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#source";
@@ -572,36 +574,12 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	app->mods[app->num_mods] = mod;
 	app->num_mods += 1;
 
-	// signal to ui
-	/*
-	size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
-	transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
-	if(trans)
-	{
-		_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-			mod->uid, uri_str);
-		_sp_app_to_ui_advance(app, size);
-	}
-	*/
-
 	// inject sink mod
 	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#sink";
 	mod = _sp_app_mod_add(app, uri_str);
 	app->system.sink = mod;
 	app->mods[app->num_mods] = mod;
 	app->num_mods += 1;
-
-	// signal to ui
-	/*
-	size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
-	trans = _sp_app_to_ui_request(app, size);
-	if(trans)
-	{
-		_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-			mod->uid, uri_str);
-		_sp_app_to_ui_advance(app, size);
-	}
-	*/
 	
 	return app;
 }
@@ -1252,4 +1230,269 @@ sp_app_free(sp_app_t *app)
 	lilv_world_free(app->world);
 
 	free(app);
+}
+
+// non-rt / rt
+static void
+_state_set_value(const char *symbol, void *data,
+	const void *value, uint32_t size, uint32_t type)
+{
+	mod_t *mod = data;
+	sp_app_t *app = mod->app;
+
+	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
+	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
+	lilv_node_free(symbol_uri);
+	uint32_t index = lilv_port_get_index(mod->plug, port);
+
+	float val = 0.f;
+
+	if(type == app->forge.Int)
+		val = *(const int32_t *)value;
+	else if(type == app->forge.Long)
+		val = *(const int64_t *)value;
+	else if(type == app->forge.Float)
+		val = *(const float *)value;
+	else if(type == app->forge.Double)
+		val = *(const double *)value;
+	else
+		return; //TODO warning
+
+	//printf("%u %f\n", index, val);
+	*(float *)mod->ports[index].buf = val;
+
+	// to rt-thread
+	//FIXME signal to UI
+	//_ui_write_function(mod, index, sizeof(float),
+	//	app->regs.port.float_protocol.urid, &val);
+}
+
+// non-rt / rt
+static const void *
+_state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
+{
+	mod_t *mod = data;
+	sp_app_t *app = mod->app;
+	
+	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
+	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
+	lilv_node_free(symbol_uri);
+	uint32_t index = lilv_port_get_index(mod->plug, port);
+
+	port_t *tar = &mod->ports[index];
+
+	if(  (tar->direction == PORT_DIRECTION_INPUT)
+		&& (tar->type == PORT_TYPE_CONTROL) )
+	{
+		*size = sizeof(float);
+		*type = app->forge.Float;
+		return tar->buf;
+	}
+	// TODO serialize handle non-seq atom ports
+
+	*size = 0;
+	*type = 0;
+	return NULL;
+}
+
+// non-rt / rt
+LV2_State_Status
+sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
+	LV2_State_Handle hndl, uint32_t flags, const LV2_Feature *const *features)
+{
+	// create json object
+	cJSON *root_json = cJSON_CreateObject();
+	cJSON *arr_json = cJSON_CreateArray();
+	cJSON_AddItemToObject(root_json, "items", arr_json);
+
+	for(int m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+			app->driver->map, NULL, NULL, NULL, NULL,
+			_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+		char *state_str = lilv_state_to_string(app->world,
+			app->driver->map, app->driver->unmap,
+			state, SYNTHPOD_PREFIX"state", NULL);
+		
+		const LilvNode *uri_node = lilv_state_get_plugin_uri(state);
+		const char *uri_str = lilv_node_as_string(uri_node);
+
+		// fill mod json object
+		cJSON *mod_json = cJSON_CreateObject();
+		cJSON *mod_uid_json = cJSON_CreateNumber(mod->uid);
+		cJSON *mod_uri_json = cJSON_CreateString(uri_str);
+		cJSON *mod_state_json = cJSON_CreateString(state_str);
+		//cJSON *mod_selected_json = cJSON_CreateBool(mod->selected); //FIXME
+		cJSON *mod_ports_json = cJSON_CreateArray();
+
+		if(m > 1) // skip system source
+			for(int i=0; i<mod->num_ports; i++)
+			{
+				port_t *port = &mod->ports[i];
+				if(!port->num_sources)
+					continue;
+
+				cJSON *port_json = cJSON_CreateObject();
+				cJSON *port_symbol_json = cJSON_CreateString(
+					lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar)));
+				//cJSON *port_selected_json = cJSON_CreateBool(port->selected);
+				cJSON *port_sources_json = cJSON_CreateArray();
+				for(int j=0; j<port->num_sources; j++)
+				{
+					port_t *source = port->sources[j];
+
+					cJSON *conn_json = cJSON_CreateObject();
+
+					cJSON *source_uid_json = cJSON_CreateNumber(source->mod->uid);
+					cJSON *source_symbol_json = cJSON_CreateString(
+						lilv_node_as_string(lilv_port_get_symbol(source->mod->plug, source->tar)));
+					cJSON_AddItemToObject(conn_json, "uid", source_uid_json);
+					cJSON_AddItemToObject(conn_json, "symbol", source_symbol_json);
+
+					cJSON_AddItemToArray(port_sources_json, conn_json);
+				}
+				cJSON_AddItemToObject(port_json, "symbol", port_symbol_json);
+				//cJSON_AddItemToObject(port_json, "selected", port_selected_json);
+				cJSON_AddItemToObject(port_json, "sources", port_sources_json);
+				cJSON_AddItemToArray(mod_ports_json, port_json);
+			}
+		cJSON_AddItemToObject(mod_json, "uid", mod_uid_json);
+		cJSON_AddItemToObject(mod_json, "uri", mod_uri_json);
+		cJSON_AddItemToObject(mod_json, "state", mod_state_json);
+		//cJSON_AddItemToObject(mod_json, "selected", mod_selected_json);
+		cJSON_AddItemToObject(mod_json, "ports", mod_ports_json);
+		cJSON_AddItemToArray(arr_json, mod_json);
+
+		free(state_str);
+		lilv_state_free(state);
+	}
+
+	// serialize json object
+	char *root_str = cJSON_Print(root_json);	
+	cJSON_Delete(root_json);
+
+	store(hndl, app->regs.synthpod.state.urid,
+		root_str, strlen(root_str) + 1, app->forge.String,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+	free(root_str);
+
+	return LV2_STATE_SUCCESS;
+}
+
+// non-rt / rt
+LV2_State_Status
+sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle hndl, uint32_t flags, const LV2_Feature *const *features)
+{
+	size_t size;
+	uint32_t _flags;
+	uint32_t type;
+	const char *root_str = retrieve(hndl, app->regs.synthpod.state.urid,
+		&size, &type, &_flags);
+
+	if(!root_str)
+		return LV2_STATE_ERR_UNKNOWN;
+
+	if(type != app->forge.String)
+		return LV2_STATE_ERR_BAD_TYPE;
+
+	if(!(_flags & LV2_STATE_IS_POD) || !(flags & LV2_STATE_IS_PORTABLE))
+		return LV2_STATE_ERR_BAD_FLAGS;
+
+	// remove existing modules
+	for(int m=0; m<app->num_mods; m++)
+		_sp_app_mod_del(app, app->mods[m]);
+	app->num_mods = 0;
+
+	cJSON *root_json = cJSON_Parse(root_str);
+	// iterate over mods, create and apply states
+	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;
+		mod_json;
+		mod_json = mod_json->next)
+	{
+		const char *mod_uri_str = cJSON_GetObjectItem(mod_json, "uri")->valuestring;
+		u_id_t mod_uid = cJSON_GetObjectItem(mod_json, "uid")->valueint;
+		//mod->selected = cJSON_GetObjectItem(mod_json, "selected")->type == cJSON_True; //TODO
+
+		mod_t *mod = _sp_app_mod_add(app, mod_uri_str);
+		if(!mod)
+			continue;
+
+		if(mod_uid == 1)
+			app->system.source = mod;
+		else if(mod_uid == 2)
+			app->system.sink = mod;
+
+		//TODO not rt-safe
+		// inject module into module graph
+		app->mods[app->num_mods] = mod;
+		app->num_mods += 1;
+
+		mod->uid = mod_uid;
+		if(mod->uid > app->uid)
+			app->uid = mod->uid;
+
+		const char *state_str = cJSON_GetObjectItem(mod_json, "state")->valuestring;
+		LilvState *state = lilv_state_new_from_string(app->world,
+			app->driver->map, state_str);
+		lilv_state_restore(state, mod->inst, _state_set_value, mod,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		lilv_state_free(state);
+
+		// iterate over ports
+		for(cJSON *port_json = cJSON_GetObjectItem(mod_json, "ports")->child;
+			port_json;
+			port_json = port_json->next)
+		{
+			const char *port_symbol_str = cJSON_GetObjectItem(port_json, "symbol")->valuestring;
+
+			for(int i=0; i<mod->num_ports; i++)
+			{
+				port_t *port = &mod->ports[i];
+				const LilvNode *port_symbol_node = lilv_port_get_symbol(mod->plug, port->tar);
+
+				// search for matching port symbol
+				if(strcmp(port_symbol_str, lilv_node_as_string(port_symbol_node)))
+					continue;
+
+				//port->selected = cJSON_GetObjectItem(port_json, "selected")->valueint; //TODO
+
+				// TODO cannot handle recursive connections
+				for(cJSON *source_json = cJSON_GetObjectItem(port_json, "sources")->child;
+					source_json;
+					source_json = source_json->next)
+				{
+					uint32_t source_uid = cJSON_GetObjectItem(source_json, "uid")->valueint;
+					const char *source_symbol_str = cJSON_GetObjectItem(source_json, "symbol")->valuestring;
+
+					mod_t *source = _sp_app_mod_get(app, source_uid);
+					if(!source)
+						continue;
+				
+					for(int j=0; j<source->num_ports; j++)
+					{
+						port_t *tar = &source->ports[j];
+						const LilvNode *source_symbol_node = lilv_port_get_symbol(source->plug, tar->tar);
+
+						if(strcmp(source_symbol_str, lilv_node_as_string(source_symbol_node)))
+							continue;
+
+						_sp_app_port_connect(app, tar, port);
+
+						break;
+					}
+				}
+
+				break;
+			}
+		}
+	}
+	cJSON_Delete(root_json);
+
+	//TODO signal to UI?
+
+	return LV2_STATE_SUCCESS;
 }

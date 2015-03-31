@@ -145,11 +145,10 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	//plughandle_t *handle = instance;
+	plughandle_t *handle = instance;
+	sp_app_t *app = handle->app;
 
-	//TODO
-
-	return LV2_STATE_SUCCESS;
+	return sp_app_save(app, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -157,11 +156,10 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	//plughandle_t *handle = instance;
+	plughandle_t *handle = instance;
+	sp_app_t *app = handle->app;
 
-	//TODO
-
-	return LV2_STATE_SUCCESS;
+	return sp_app_restore(app, retrieve, state, flags, features);
 }
 	
 static const LV2_State_Interface state_iface = {
