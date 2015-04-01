@@ -78,6 +78,7 @@ struct _mod_t {
 	const LilvPlugin *plug;
 	LilvInstance *inst;
 	LV2_Handle handle;
+	LilvNodes *presets;
 
 	// ports
 	uint32_t num_ports;
@@ -130,6 +131,10 @@ struct _sp_app_t {
 
 	u_id_t uid;
 };
+
+static void
+_state_set_value(const char *symbol, void *data,
+	const void *value, uint32_t size, uint32_t type);
 
 // rt
 static inline void *
@@ -428,6 +433,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		lilv_instance_connect_port(mod->inst, i, tar->buf);
 	}
 
+	// load presets
+	mod->presets = lilv_plugin_get_related(mod->plug, app->regs.pset.preset.node);
+
 	return mod;
 }
 
@@ -436,6 +444,7 @@ static inline void
 _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 {
 	// deinit instance
+	lilv_nodes_free(mod->presets);
 	lilv_instance_deactivate(mod->inst);
 	lilv_instance_free(mod->inst);
 
@@ -751,6 +760,36 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uid);
 			_sp_app_to_ui_advance(app, size);
 		}
+	}
+	else if(protocol == app->regs.synthpod.module_preset.urid)
+	{
+		const transmit_module_preset_t *pset = (const transmit_module_preset_t *)atom;
+
+		mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
+		if(!mod)
+			return;
+
+		const LilvNode *preset = NULL;
+		LILV_FOREACH(nodes, i, mod->presets)
+		{
+			const LilvNode* pres = lilv_nodes_get(mod->presets, i);
+			const char *label = _preset_label_get(app->world, &app->regs, pres);
+
+			// test for matching preset label
+			if(strcmp(label, pset->label_str))
+				continue;
+
+			preset = pres;
+		}
+		if(!preset)
+			return;
+		
+		// load preset
+		LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
+			preset);
+		lilv_state_restore(state, mod->inst, _state_set_value, mod,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		lilv_state_free(state);
 	}
 	else if(protocol == app->regs.synthpod.port_connected.urid)
 	{
@@ -1258,8 +1297,11 @@ _state_set_value(const char *symbol, void *data,
 	else
 		return; //TODO warning
 
+	port_t *tar = &mod->ports[index];
+
 	//printf("%u %f\n", index, val);
-	*(float *)mod->ports[index].buf = val;
+	*(float *)tar->buf = val;
+	tar->last = val - 0.1; // triggers notification
 
 	// to rt-thread
 	//FIXME signal to UI

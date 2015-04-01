@@ -29,6 +29,7 @@
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
+#include <lv2/lv2plug.in/ns/ext/presets/presets.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 typedef enum _port_type_t port_type_t;
@@ -126,6 +127,11 @@ struct _reg_t {
 	} ui;
 
 	struct {
+		reg_item_t preset;
+		reg_item_t rdfs_label;
+	} pset;
+
+	struct {
 		reg_item_t max_block_length;
 		reg_item_t min_block_length;
 		reg_item_t sequence_size;
@@ -138,6 +144,7 @@ struct _reg_t {
 		reg_item_t module_list;
 		reg_item_t module_add;
 		reg_item_t module_del;
+		reg_item_t module_preset;
 		reg_item_t port_refresh;
 		reg_item_t port_connected;
 		reg_item_t port_subscribed;
@@ -183,6 +190,9 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->log.warning.node = lilv_new_uri(world, LV2_LOG__Warning);
 
 	regs->ui.eo.node = lilv_new_uri(world, LV2_UI__EoUI);
+	
+	regs->pset.preset.node = lilv_new_uri(world, LV2_PRESETS__Preset);
+	regs->pset.rdfs_label.node = lilv_new_uri(world, LILV_NS_RDFS"label");
 
 	// init URIDs
 	regs->port.input.urid = map->map(map->handle, LV2_CORE__InputPort);
@@ -221,6 +231,9 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	
 	regs->ui.eo.urid = map->map(map->handle, LV2_UI__EoUI);
 	
+	regs->pset.preset.urid = map->map(map->handle, LV2_PRESETS__Preset);
+	regs->pset.rdfs_label.urid = map->map(map->handle, LILV_NS_RDFS"label");
+	
 	regs->bufsz.max_block_length.urid = map->map(map->handle, LV2_BUF_SIZE__maxBlockLength);
 	regs->bufsz.min_block_length.urid = map->map(map->handle, LV2_BUF_SIZE__minBlockLength);
 	regs->bufsz.sequence_size.urid = map->map(map->handle, LV2_BUF_SIZE__sequenceSize);
@@ -230,6 +243,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->synthpod.module_list.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleList");
 	regs->synthpod.module_add.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleAdd");
 	regs->synthpod.module_del.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleDel");
+	regs->synthpod.module_preset.urid = map->map(map->handle, SYNTHPOD_PREFIX"modulePreset");
 	regs->synthpod.port_refresh.urid = map->map(map->handle, SYNTHPOD_PREFIX"portRefresh");
 	regs->synthpod.port_connected.urid = map->map(map->handle, SYNTHPOD_PREFIX"portConnect");
 	regs->synthpod.port_subscribed.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSubscribe");
@@ -272,6 +286,10 @@ sp_regs_deinit(reg_t *regs)
 	lilv_node_free(regs->log.warning.node);
 
 	lilv_node_free(regs->ui.eo.node);
+	
+	lilv_node_free(regs->pset.preset.node);
+	lilv_node_free(regs->pset.rdfs_label.node);
+
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))
@@ -281,6 +299,7 @@ typedef struct _transmit_t transmit_t;
 typedef struct _transmit_module_list_t transmit_module_list_t;
 typedef struct _transmit_module_add_t transmit_module_add_t;
 typedef struct _transmit_module_del_t transmit_module_del_t;
+typedef struct _transmit_module_preset_t transmit_module_preset_t;
 typedef struct _transmit_port_connected_t transmit_port_connected_t;
 typedef struct _transmit_port_subscribed_t transmit_port_subscribed_t;
 typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
@@ -304,6 +323,13 @@ struct _transmit_module_add_t {
 struct _transmit_module_del_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_module_preset_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_String label _ATOM_ALIGNED;
+		char label_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_port_connected_t {
@@ -410,6 +436,21 @@ _sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
+}
+
+static inline void
+_sp_transmit_module_preset_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_preset_t *trans, uint32_t size, u_id_t module_uid, const char *label)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_preset.urid);
+
+	trans->uid.atom.size = sizeof(int32_t);
+	trans->uid.atom.type = forge->Int;
+	trans->uid.body = module_uid;
+
+	trans->label.atom.size = strlen(label) + 1;
+	trans->label.atom.type = forge->String;
+	strcpy(trans->label_str, label);
 }
 
 static inline void
@@ -549,6 +590,24 @@ _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *tra
 		regs->port.event_transfer.urid, module_uid, port_index);
 
 	memcpy(trans->atom, atom, atom_size);
+}
+
+static const char *
+_preset_label_get(LilvWorld *world, reg_t *regs, const LilvNode *preset)
+{
+	lilv_world_load_resource(world, preset);
+	LilvNodes* labels = lilv_world_find_nodes(world, preset,
+		regs->pset.rdfs_label.node, NULL);
+	if(labels)
+	{
+		const LilvNode *label = lilv_nodes_get_first(labels);
+		const char *lbl = lilv_node_as_string(label);
+		lilv_nodes_free(labels);
+
+		return lbl;
+	}
+
+	return NULL;
 }
 
 #endif // _SYNTHPOD_PRIVATE_H

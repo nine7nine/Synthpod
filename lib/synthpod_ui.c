@@ -44,6 +44,7 @@ struct _mod_t {
 	// self
 	const LilvPlugin *plug;
 	LilvUIs *all_uis;
+	LilvNodes *presets;
 
 	// ports
 	uint32_t num_ports;
@@ -129,6 +130,8 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *plugitc;
 	Elm_Genlist_Item_Class *moditc;
 	Elm_Genlist_Item_Class *stditc;
+	Elm_Genlist_Item_Class *psetitc;
+	Elm_Genlist_Item_Class *psetitmitc;
 	Elm_Gengrid_Item_Class *griditc;
 		
 	Elm_Object_Item *sink_itm;
@@ -447,7 +450,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 			tar->selected = 0;
 	}
 		
-	//ui
+	// ui
 	mod->all_uis = lilv_plugin_get_uis(mod->plug);
 	LILV_FOREACH(uis, ptr, mod->all_uis)
 	{
@@ -463,6 +466,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 		mod->col = 0; // reserved color for system ports
 	else
 		mod->col = _next_color();
+
+	// load presets
+	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
 	
 	return mod;
 }
@@ -525,9 +531,9 @@ _list_expand_request(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
 
-	Eina_Bool selected = elm_genlist_item_selected_get(itm);
+	//Eina_Bool selected = elm_genlist_item_selected_get(itm);
 	elm_genlist_item_expanded_set(itm, EINA_TRUE);
-	elm_genlist_item_selected_set(itm, !selected); // preserve selection
+	//elm_genlist_item_selected_set(itm, !selected); // preserve selection
 }
 
 static void
@@ -536,9 +542,9 @@ _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
 
-	Eina_Bool selected = elm_genlist_item_selected_get(itm);
+	//Eina_Bool selected = elm_genlist_item_selected_get(itm);
 	elm_genlist_item_expanded_set(itm, EINA_FALSE);
-	elm_genlist_item_selected_set(itm, !selected); // preserve selection
+	//elm_genlist_item_selected_set(itm, !selected); // preserve selection
 }
 
 static void
@@ -547,29 +553,53 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *itm = event_info;
 	mod_t *mod = elm_object_item_data_get(itm);
 	sp_ui_t *ui = data;
+	Elm_Object_Item *elmnt;
 
-	for(int i=0; i<mod->num_ports; i++)
+	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
+
+	if(class == ui->moditc) // is parent module item
 	{
-		port_t *port = &mod->ports[i];
+		// port entries
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
 
-		// ignore dummy system ports
-		if(mod->system.source && (port->direction == PORT_DIRECTION_INPUT) )
-			continue;
-		if(mod->system.sink && (port->direction == PORT_DIRECTION_OUTPUT) )
-			continue;
+			// ignore dummy system ports
+			if(mod->system.source && (port->direction == PORT_DIRECTION_INPUT) )
+				continue;
+			if(mod->system.sink && (port->direction == PORT_DIRECTION_OUTPUT) )
+				continue;
 
-		// only add control, audio, cv ports
-		Elm_Object_Item *elmnt;
-		elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
+			// only add control, audio, cv ports
+			elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
+				ELM_GENLIST_ITEM_NONE, NULL, NULL);
+			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+		}
+
+		// presets
+		if(lilv_nodes_size(mod->presets))
+		{
+			elmnt = elm_genlist_item_append(ui->modlist, ui->psetitc, mod, itm,
+				ELM_GENLIST_ITEM_TREE, NULL, NULL);
+			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
+		}
+
+		// separator
+		elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, NULL, itm,
 			ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 	}
+	else if(class == ui->psetitc) // is presets item
+	{
+		LILV_FOREACH(nodes, i, mod->presets)
+		{
+			const LilvNode* preset = lilv_nodes_get(mod->presets, i);
 
-	// separator
-	Elm_Object_Item *elmnt;
-	elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, NULL, itm,
-		ELM_GENLIST_ITEM_NONE, NULL, NULL);
-	elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			elmnt = elm_genlist_item_append(ui->modlist, ui->psetitmitc, preset, itm,
+			ELM_GENLIST_ITEM_NONE, NULL, NULL);
+			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
+		}
+	}
 }
 
 static void
@@ -581,6 +611,40 @@ _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 
 	// clear items
 	elm_genlist_item_subitems_clear(itm);
+}
+
+static void
+_modlist_activated(void *data, Evas_Object *obj, void *event_info)
+{
+	Elm_Object_Item *itm = event_info;
+	sp_ui_t *ui = data;
+	
+	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
+
+	if(class == ui->psetitmitc) // is presets item
+	{
+		// get parent item
+		Elm_Object_Item *parent = elm_genlist_item_parent_get(itm);
+		if(!parent)
+			return;
+
+		mod_t *mod = elm_object_item_data_get(parent);
+
+		const LilvNode* preset = elm_object_item_data_get(itm);
+		const char *label = _preset_label_get(ui->world, &ui->regs, preset);
+
+		// signal app
+		size_t size = sizeof(transmit_module_preset_t) + lv2_atom_pad_size(strlen(label) + 1);
+		transmit_module_preset_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_module_preset_fill(&ui->regs, &ui->forge, trans, size, mod->uid, label);
+			_sp_ui_to_app_advance(ui, size);
+		}
+
+		// contract parent list item
+		evas_object_smart_callback_call(obj, "contract,request", parent);
+	}
 }
 
 static char * 
@@ -1122,6 +1186,31 @@ _modlist_std_del(void *data, Evas_Object *obj)
 	}
 }
 
+static char * 
+_modlist_psets_label_get(void *data, Evas_Object *obj, const char *part)
+{
+	mod_t *mod = data;
+
+	if(!strcmp(part, "elm.text"))
+	{
+		return strdup("Presets");
+	}
+	else
+		return NULL;
+}
+
+static char * 
+_modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
+{
+	const LilvNode* preset = data;
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+
+	if(!strcmp(part, "elm.text"))
+		return strdup(_preset_label_get(ui->world, &ui->regs, preset));
+	else
+		return NULL;
+}
+
 static void
 _modlist_del(void *data, Evas_Object *obj)
 {
@@ -1488,6 +1577,7 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 	evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _resize, ui);
 
 	ui->pluglist = elm_genlist_add(ui->plugpane);
+	elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
 	evas_object_smart_callback_add(ui->pluglist, "activated",
 		_pluglist_activated, ui);
 	evas_object_smart_callback_add(ui->pluglist, "expand,request",
@@ -1561,7 +1651,9 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 	}
 
 	ui->modlist = elm_genlist_add(ui->modpane);
-	elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
+	elm_genlist_homogeneous_set(ui->modlist, EINA_TRUE); // needef for lazy-loading
+	elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
+	//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
 	//elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
 	evas_object_smart_callback_add(ui->modlist, "expand,request",
 		_list_expand_request, ui);
@@ -1571,6 +1663,8 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 		_modlist_expanded, ui);
 	evas_object_smart_callback_add(ui->modlist, "contracted",
 		_modlist_contracted, ui);
+	evas_object_smart_callback_add(ui->modlist, "activated",
+		_modlist_activated, ui);
 	evas_object_data_set(ui->modlist, "ui", ui);
 	evas_object_size_hint_weight_set(ui->modlist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->modlist, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -1591,6 +1685,20 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 	ui->stditc->func.content_get = _modlist_std_content_get;
 	ui->stditc->func.state_get = NULL;
 	ui->stditc->func.del = _modlist_std_del;
+
+	ui->psetitc = elm_genlist_item_class_new();
+	ui->psetitc->item_style = "default";
+	ui->psetitc->func.text_get = _modlist_psets_label_get;
+	ui->psetitc->func.content_get = NULL;
+	ui->psetitc->func.state_get = NULL;
+	ui->psetitc->func.del = NULL;
+
+	ui->psetitmitc = elm_genlist_item_class_new();
+	ui->psetitmitc->item_style = "default";
+	ui->psetitmitc->func.text_get = _modlist_pset_label_get;
+	ui->psetitmitc->func.content_get = NULL;
+	ui->psetitmitc->func.state_get = NULL;
+	ui->psetitmitc->func.del = NULL;
 
 	ui->modgrid = elm_gengrid_add(ui->patchpane);
 	elm_gengrid_select_mode_set(ui->modgrid, ELM_OBJECT_SELECT_MODE_NONE);
@@ -1810,6 +1918,8 @@ sp_ui_free(sp_ui_t *ui)
 	elm_gengrid_item_class_free(ui->griditc);
 	elm_genlist_item_class_free(ui->moditc);
 	elm_genlist_item_class_free(ui->stditc);
+	elm_genlist_item_class_free(ui->psetitc);
+	elm_genlist_item_class_free(ui->psetitmitc);
 	
 	sp_regs_deinit(&ui->regs);
 
