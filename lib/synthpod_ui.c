@@ -334,6 +334,33 @@ _data_access(const char *uri)
 	return NULL; //FIXME this should call the plugins extension data function
 }
 
+static inline void
+_ui_mod_selected_request(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+
+	size_t size = sizeof(transmit_module_selected_t);
+	transmit_module_selected_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, -1);
+		_sp_ui_to_app_advance(ui, size);
+	}
+
+	for(int i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		size_t size = sizeof(transmit_port_selected_t);
+		transmit_port_selected_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_port_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, -1);
+			_sp_ui_to_app_advance(ui, size);
+		}
+	}
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 {
@@ -411,12 +438,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 		if(lilv_port_is_a(plug, port, ui->regs.port.audio.node))
 		{
 			tar->type =  PORT_TYPE_AUDIO;
-			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, ui->regs.port.cv.node))
 		{
 			tar->type = PORT_TYPE_CV;
-			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, ui->regs.port.control.node))
 		{
@@ -440,14 +465,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 			//tar->buffer_type = lilv_port_is_a(plug, port, ui->regs.port.sequence.node)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
 			//	: PORT_BUFFER_TYPE_NONE; //TODO
-			tar->selected = 1;
 		}
-
-		// ignore dummy system ports
-		if(mod->system.source && (tar->direction == PORT_DIRECTION_INPUT) )
-			tar->selected = 0;
-		if(mod->system.sink && (tar->direction == PORT_DIRECTION_OUTPUT) )
-			tar->selected = 0;
 	}
 		
 	// ui
@@ -469,6 +487,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
+
+	// request selected state
+	_ui_mod_selected_request(mod);
 	
 	return mod;
 }
@@ -787,6 +808,15 @@ _modlist_check_changed(void *data, Evas_Object *obj, void *event_info)
 
 	mod->selected = elm_check_state_get(obj);
 	_patches_update(ui);
+
+	// signal app
+	size_t size = sizeof(transmit_module_selected_t);
+	transmit_module_selected_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, mod->selected);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static Evas_Object *
@@ -834,8 +864,8 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	return lay;
 }
 
-static void
-_ui_update_request(mod_t *mod, uint32_t index)
+static inline void
+_ui_port_update_request(mod_t *mod, uint32_t index)
 {
 	sp_ui_t *ui = mod->ui;
 
@@ -936,6 +966,14 @@ _patched_changed(void *data, Evas_Object *obj, void *event)
 
 	port->selected = elm_check_state_get(obj);
 	_patches_update(ui);
+
+	size_t size = sizeof(transmit_port_selected_t);
+	transmit_port_selected_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, port->selected);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -1152,7 +1190,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			_port_subscribe(mod, i, ui->regs.port.atom_transfer.urid, NULL);
 	}
 	*/
-	_ui_update_request(mod, port->index);
+	_ui_port_update_request(mod, port->index);
 
 	port->std.widget = child;
 	return lay;
@@ -1317,7 +1355,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 						// initialize EoUI
 						float val = port->dflt;
 						_eo_port_event(mod, i, sizeof(float), ui->regs.port.float_protocol.urid, &val);
-						_ui_update_request(mod, port->index);
+						_ui_port_update_request(mod, port->index);
 					}
 					else if(port->type == PORT_TYPE_AUDIO)
 						_port_subscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
@@ -1771,33 +1809,35 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		const transmit_module_add_t *trans = (const transmit_module_add_t *)atom;
 
 		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body);
-		if(mod)
-		{
-			if(mod->system.source || mod->system.sink || !ui->sink_itm)
-			{
-				mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod,
-					NULL, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+		if(!mod)
+			return;
 
-				if(mod->system.sink)
-					ui->sink_itm = mod->std.itm;
-			}
-			else
-			{
-				mod->std.itm = elm_genlist_item_insert_before(ui->modlist, ui->moditc, mod,
-					NULL, ui->sink_itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
-			}
-		
-			if(mod->eo.ui) // has EoUI
-			{
-				mod->eo.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-					NULL, NULL);
-			}
+		if(mod->system.source || mod->system.sink || !ui->sink_itm)
+		{
+			mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod,
+				NULL, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+
+			if(mod->system.sink)
+				ui->sink_itm = mod->std.itm;
+		}
+		else
+		{
+			mod->std.itm = elm_genlist_item_insert_before(ui->modlist, ui->moditc, mod,
+				NULL, ui->sink_itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+		}
+	
+		if(mod->eo.ui) // has EoUI
+		{
+			mod->eo.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+				NULL, NULL);
 		}
 	}
 	else if(protocol == ui->regs.synthpod.module_del.urid)
 	{
 		const transmit_module_del_t *trans = (const transmit_module_del_t *)atom;
 		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+		if(!mod)
+			return;
 
 		// remove StdUI list item
 		elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
@@ -1814,6 +1854,21 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		_sp_ui_mod_del(ui, mod);
 	
 		_patches_update(ui);
+	}
+	else if(protocol == ui->regs.synthpod.module_selected.urid)
+	{
+		const transmit_module_selected_t *trans = (const transmit_module_selected_t *)atom;
+		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+
+		if(!mod)
+			return;
+		if(mod->selected != trans->state.body)
+		{
+			mod->selected = trans->state.body;
+			if(mod->std.itm)
+				elm_genlist_item_update(mod->std.itm);
+			_patches_update(ui);
+		}
 	}
 	else if(protocol == ui->regs.synthpod.port_connected.urid)
 	{
@@ -1832,6 +1887,8 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		float value = trans->value.body;
 
 		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
+		if(!mod)
+			return;
 		_eo_port_event(mod, port_index, sizeof(float), protocol, &value);
 		_std_port_event(mod, port_index, sizeof(float), protocol, &value);
 	}
@@ -1846,6 +1903,8 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		};
 
 		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
+		if(!mod)
+			return;
 		_eo_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
 		_std_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
 	}
@@ -1857,6 +1916,8 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		uint32_t size = sizeof(LV2_Atom) + atom->size;
 
 		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
+		if(!mod)
+			return;
 		_eo_port_event(mod, port_index, size, protocol, atom);
 		_std_port_event(mod, port_index, size, protocol, &atom);
 	}
@@ -1868,8 +1929,24 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		uint32_t size = sizeof(LV2_Atom) + atom->size;
 
 		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
+		if(!mod)
+			return;
 		_eo_port_event(mod, port_index, size, protocol, atom);
 		_std_port_event(mod, port_index, size, protocol, &atom);
+	}
+	else if(protocol == ui->regs.synthpod.port_selected.urid)
+	{
+		const transmit_port_selected_t *trans = (const transmit_port_selected_t *)atom;
+
+		port_t *port = _sp_ui_port_get(ui, trans->uid.body, trans->port.body);
+		if(!port)
+			return;
+		if(port->selected != trans->state.body)
+		{
+			port->selected = trans->state.body;
+			//TODO update modlist item?
+			_patches_update(ui);
+		}
 	}
 }
 

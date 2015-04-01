@@ -54,6 +54,7 @@ struct _work_t {
 struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
+	int selected;
 	
 	// worker
 	struct {
@@ -87,6 +88,7 @@ struct _mod_t {
 
 struct _port_t {
 	mod_t *mod;
+	int selected;
 	
 	const LilvPort *tar;
 	uint32_t index;
@@ -364,6 +366,13 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		LV2_OPTIONS__interface); //TODO actually use this for something?
 	lilv_instance_activate(mod->inst);
 
+	int system_source = 0;
+	int system_sink = 0;
+	if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#source"))
+		system_source = 1;
+	else if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#sink"))
+		system_sink = 1;
+
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
 	for(uint32_t i=0; i<mod->num_ports; i++)
 	{
@@ -382,16 +391,19 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		{
 			size = app->driver->period_size * sizeof(float);
 			tar->type =  PORT_TYPE_AUDIO;
+			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
 			size = app->driver->period_size * sizeof(float);
 			tar->type = PORT_TYPE_CV;
+			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.control.node))
 		{
 			size = sizeof(float);
 			tar->type = PORT_TYPE_CONTROL;
+			tar->selected = 0;
 		
 			LilvNode *dflt_node;
 			LilvNode *min_node;
@@ -409,12 +421,18 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			size = app->driver->seq_size;
 			tar->type = PORT_TYPE_ATOM;
 			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
+			tar->selected = 1;
 			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
 			//	: PORT_BUFFER_TYPE_NONE; //TODO discriminate properly
 		}
 		else
 			; //TODO
+		
+		if(system_source && (tar->direction == PORT_DIRECTION_INPUT) )
+			tar->selected = 0;
+		if(system_sink && (tar->direction == PORT_DIRECTION_OUTPUT) )
+			tar->selected = 0;
 
 		// allocate 8-byte aligned buffer
 #if defined(_WIN32)
@@ -435,6 +453,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, app->regs.pset.preset.node);
+	
+	// selection
+	mod->selected = 0;
 
 	return mod;
 }
@@ -791,6 +812,37 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 		lilv_state_free(state);
 	}
+	else if(protocol == app->regs.synthpod.module_selected.urid)
+	{
+		const transmit_module_selected_t *select = (const transmit_module_selected_t *)atom;
+
+		mod_t *mod = _sp_app_mod_get(app, select->uid.body);
+		if(!mod)
+			return;
+
+		switch(select->state.body)
+		{
+			case -1: // query
+			{
+				// signal ui
+				size_t size = sizeof(transmit_module_selected_t);
+				transmit_module_selected_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transmit_module_selected_fill(&app->regs, &app->forge, trans, size,
+						mod->uid, mod->selected);
+					_sp_app_to_ui_advance(app, size);
+				}
+				break;
+			}
+			case 0: // deselect
+				mod->selected = 0;
+				break;
+			case 1: // select
+				mod->selected = 1;
+				break;
+		}
+	}
 	else if(protocol == app->regs.synthpod.port_connected.urid)
 	{
 		const transmit_port_connected_t *conn = (const transmit_port_connected_t *)atom;
@@ -867,6 +919,37 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return;
 
 		port->last = *(float *)port->buf - 0.1; // will force notification
+	}
+	else if(protocol == app->regs.synthpod.port_selected.urid)
+	{
+		const transmit_port_selected_t *select = (const transmit_port_selected_t *)atom;
+
+		port_t *port = _sp_app_port_get(app, select->uid.body, select->port.body);
+		if(!port)
+			return;
+
+		switch(select->state.body)
+		{
+			case -1: // query
+			{
+				// signal ui
+				size_t size = sizeof(transmit_port_selected_t);
+				transmit_port_selected_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transmit_port_selected_fill(&app->regs, &app->forge, trans, size,
+						port->mod->uid, port->index, port->selected);
+					_sp_app_to_ui_advance(app, size);
+				}
+				break;
+			}
+			case 0: // deselect
+				port->selected = 0;
+				break;
+			case 1: // select
+				port->selected = 1;
+				break;
+		}
 	}
 }
 
@@ -1367,21 +1450,19 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		cJSON *mod_uid_json = cJSON_CreateNumber(mod->uid);
 		cJSON *mod_uri_json = cJSON_CreateString(uri_str);
 		cJSON *mod_state_json = cJSON_CreateString(state_str);
-		//cJSON *mod_selected_json = cJSON_CreateBool(mod->selected); //FIXME
+		cJSON *mod_selected_json = cJSON_CreateBool(mod->selected);
 		cJSON *mod_ports_json = cJSON_CreateArray();
 
-		if(m > 1) // skip system source
-			for(int i=0; i<mod->num_ports; i++)
-			{
-				port_t *port = &mod->ports[i];
-				if(!port->num_sources)
-					continue;
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
 
-				cJSON *port_json = cJSON_CreateObject();
-				cJSON *port_symbol_json = cJSON_CreateString(
-					lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar)));
-				//cJSON *port_selected_json = cJSON_CreateBool(port->selected);
-				cJSON *port_sources_json = cJSON_CreateArray();
+			cJSON *port_json = cJSON_CreateObject();
+			cJSON *port_symbol_json = cJSON_CreateString(
+				lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar)));
+			cJSON *port_selected_json = cJSON_CreateBool(port->selected);
+			cJSON *port_sources_json = cJSON_CreateArray();
+			if(mod->uid != 1) // skip system source
 				for(int j=0; j<port->num_sources; j++)
 				{
 					port_t *source = port->sources[j];
@@ -1396,15 +1477,15 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 
 					cJSON_AddItemToArray(port_sources_json, conn_json);
 				}
-				cJSON_AddItemToObject(port_json, "symbol", port_symbol_json);
-				//cJSON_AddItemToObject(port_json, "selected", port_selected_json);
-				cJSON_AddItemToObject(port_json, "sources", port_sources_json);
-				cJSON_AddItemToArray(mod_ports_json, port_json);
-			}
+			cJSON_AddItemToObject(port_json, "symbol", port_symbol_json);
+			cJSON_AddItemToObject(port_json, "selected", port_selected_json);
+			cJSON_AddItemToObject(port_json, "sources", port_sources_json);
+			cJSON_AddItemToArray(mod_ports_json, port_json);
+		}
 		cJSON_AddItemToObject(mod_json, "uid", mod_uid_json);
 		cJSON_AddItemToObject(mod_json, "uri", mod_uri_json);
 		cJSON_AddItemToObject(mod_json, "state", mod_state_json);
-		//cJSON_AddItemToObject(mod_json, "selected", mod_selected_json);
+		cJSON_AddItemToObject(mod_json, "selected", mod_selected_json);
 		cJSON_AddItemToObject(mod_json, "ports", mod_ports_json);
 		cJSON_AddItemToArray(arr_json, mod_json);
 
@@ -1457,7 +1538,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	{
 		const char *mod_uri_str = cJSON_GetObjectItem(mod_json, "uri")->valuestring;
 		u_id_t mod_uid = cJSON_GetObjectItem(mod_json, "uid")->valueint;
-		//mod->selected = cJSON_GetObjectItem(mod_json, "selected")->type == cJSON_True; //TODO
 
 		mod_t *mod = _sp_app_mod_add(app, mod_uri_str);
 		if(!mod)
@@ -1473,7 +1553,9 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 
+		mod->selected = cJSON_GetObjectItem(mod_json, "selected")->type == cJSON_True;
 		mod->uid = mod_uid;
+
 		if(mod->uid > app->uid)
 			app->uid = mod->uid;
 
@@ -1500,7 +1582,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 				if(strcmp(port_symbol_str, lilv_node_as_string(port_symbol_node)))
 					continue;
 
-				//port->selected = cJSON_GetObjectItem(port_json, "selected")->valueint; //TODO
+				port->selected = cJSON_GetObjectItem(port_json, "selected")->type == cJSON_True;
 
 				// TODO cannot handle recursive connections
 				for(cJSON *source_json = cJSON_GetObjectItem(port_json, "sources")->child;

@@ -145,9 +145,11 @@ struct _reg_t {
 		reg_item_t module_add;
 		reg_item_t module_del;
 		reg_item_t module_preset;
+		reg_item_t module_selected;
 		reg_item_t port_refresh;
 		reg_item_t port_connected;
 		reg_item_t port_subscribed;
+		reg_item_t port_selected;
 	} synthpod;
 };
 
@@ -244,9 +246,11 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->synthpod.module_add.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleAdd");
 	regs->synthpod.module_del.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleDel");
 	regs->synthpod.module_preset.urid = map->map(map->handle, SYNTHPOD_PREFIX"modulePreset");
+	regs->synthpod.module_selected.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleSelect");
 	regs->synthpod.port_refresh.urid = map->map(map->handle, SYNTHPOD_PREFIX"portRefresh");
 	regs->synthpod.port_connected.urid = map->map(map->handle, SYNTHPOD_PREFIX"portConnect");
 	regs->synthpod.port_subscribed.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSubscribe");
+	regs->synthpod.port_selected.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSelect");
 }
 
 static inline void
@@ -300,9 +304,11 @@ typedef struct _transmit_module_list_t transmit_module_list_t;
 typedef struct _transmit_module_add_t transmit_module_add_t;
 typedef struct _transmit_module_del_t transmit_module_del_t;
 typedef struct _transmit_module_preset_t transmit_module_preset_t;
+typedef struct _transmit_module_selected_t transmit_module_selected_t;
 typedef struct _transmit_port_connected_t transmit_port_connected_t;
 typedef struct _transmit_port_subscribed_t transmit_port_subscribed_t;
 typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
+typedef struct _transmit_port_selected_t transmit_port_selected_t;
 
 struct _transmit_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
@@ -332,6 +338,12 @@ struct _transmit_module_preset_t {
 		char label_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
+struct _transmit_module_selected_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_Int state _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
 struct _transmit_port_connected_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int src_uid _ATOM_ALIGNED;
@@ -353,6 +365,13 @@ struct _transmit_port_refresh_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
 	LV2_Atom_Int port _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_port_selected_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_Int port _ATOM_ALIGNED;
+	LV2_Atom_Int state _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 // app <-> ui communication for port notifications
@@ -454,6 +473,21 @@ _sp_transmit_module_preset_fill(reg_t *regs, LV2_Atom_Forge *forge,
 }
 
 static inline void
+_sp_transmit_module_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_selected_t *trans, uint32_t size, u_id_t module_uid, int state)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_selected.urid);
+
+	trans->uid.atom.size = sizeof(int32_t);
+	trans->uid.atom.type = forge->Int;
+	trans->uid.body = module_uid;
+
+	trans->state.atom.size = sizeof(int32_t);
+	trans->state.atom.type = forge->Int;
+	trans->state.body = state;
+}
+
+static inline void
 _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_connected_t *trans, uint32_t size, u_id_t src_uid,
 	uint32_t src_port, u_id_t snk_uid, uint32_t snk_port, int32_t state)
@@ -519,6 +553,26 @@ _sp_transmit_port_refresh_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->port.atom.size = sizeof(int32_t);
 	trans->port.atom.type = forge->Int;
 	trans->port.body = port_index;
+}
+
+static inline void
+_sp_transmit_port_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_port_selected_t *trans, uint32_t size,
+	u_id_t module_uid, uint32_t port_index, int32_t state)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_selected.urid);
+
+	trans->uid.atom.size = sizeof(int32_t);
+	trans->uid.atom.type = forge->Int;
+	trans->uid.body = module_uid;
+
+	trans->port.atom.size = sizeof(int32_t);
+	trans->port.atom.type = forge->Int;
+	trans->port.body = port_index;
+	
+	trans->state.atom.size = sizeof(int32_t);
+	trans->state.atom.type = forge->Int;
+	trans->state.body = state;
 }
 
 static inline void
