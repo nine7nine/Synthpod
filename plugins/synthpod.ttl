@@ -291,3 +291,44 @@ synthpod:stereo
 		lv2:designation pg:right ;
 		pg:group synthpod:group_out ;
 	] .
+
+# Keyboard X11UI
+synthpod:keyboard_ui
+	a ui:X11UI ;
+	lv2:requiredFeature ui:idleInterface ;
+  lv2:extensionData ui:idleInterface,
+		ui:showInterface .
+
+# Common EoUI
+synthpod:keyboard_eo
+	a ui:EoUI .
+
+# Stereo Plugin
+synthpod:keyboard
+	a lv2:Plugin ,
+		lv2:InstrumentPlugin ;
+	doap:name "Synthpod Keyboard" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+		# event_in
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
+		lv2:designation lv2:control ;
+	] , [
+		# event in
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 1 ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Out" ;
+	] .

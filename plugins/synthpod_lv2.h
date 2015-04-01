@@ -33,16 +33,24 @@
 #define SYNTHPOD_STEREO_URI			SYNTHPOD_URI"#stereo"
 #define SYNTHPOD_SOURCE_URI			SYNTHPOD_URI"#source"
 #define SYNTHPOD_SINK_URI				SYNTHPOD_URI"#sink"
+#define SYNTHPOD_KEYBOARD_URI		SYNTHPOD_URI"#keyboard"
 
 // UI uris
 #define SYNTHPOD_COMMON_UI_URI	SYNTHPOD_URI"#common_ui"
 #define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_eo"
 
+#define SYNTHPOD_KEYBOARD_UI_URI	SYNTHPOD_URI"#keyboard_ui"
+#define SYNTHPOD_KEYBOARD_EO_URI	SYNTHPOD_URI"#keyboard_eo"
+
 extern const LV2_Descriptor synthpod_stereo;
 extern const LV2_Descriptor synthpod_source;
 extern const LV2_Descriptor synthpod_sink;
+extern const LV2_Descriptor synthpod_keyboard;
 
 extern const LV2UI_Descriptor synthpod_common_ui;
 extern const LV2UI_Descriptor synthpod_common_eo;
+
+extern const LV2UI_Descriptor synthpod_keyboard_ui;
+extern const LV2UI_Descriptor synthpod_keyboard_eo;
 
 #endif // _SYNTHPOD_LV2_H

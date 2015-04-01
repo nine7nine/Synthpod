@@ -881,7 +881,7 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	else if(protocol == ui->regs.port.atom_transfer.urid)
 	{
 		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
-		size_t len = sizeof(transfer_atom_t) + size;
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
@@ -892,7 +892,7 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
 		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
-		size_t len = sizeof(transfer_atom_t) + size;
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{

@@ -49,7 +49,8 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/osc_io.ttl DESTINATION ${DEST})
 add_library(synthpod.lv2 MODULE
 	synthpod_lv2.c
 	synthpod_stereo.c
-	synthpod_sinksource.c)
+	synthpod_sinksource.c
+	synthpod_keyboard.c)
 target_link_libraries(synthpod.lv2 synthpod.lib)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lv2 DESTINATION ${DEST})
@@ -63,7 +64,8 @@ if(BUILD_UI)
 # synthpod_ui
 	add_library(synthpod_ui.lv2 MODULE
 		synthpod_lv2_ui.c
-		synthpod_common_ui.c)
+		synthpod_common_ui.c
+		synthpod_keyboard_ui.c)
 	target_link_libraries(synthpod_ui.lv2 synthpod_ui.lib)
 	set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
 	install(TARGETS synthpod_ui.lv2 DESTINATION ${DEST})

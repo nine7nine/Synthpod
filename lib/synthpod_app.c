@@ -656,17 +656,17 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(last)
 		{
 			ptr = last;
-			ptr += sizeof(LV2_Atom_Event) + last->body.size;
+			ptr += sizeof(LV2_Atom_Event) + lv2_atom_pad_size(last->body.size);
 		}
 		else
 			ptr = LV2_ATOM_CONTENTS(LV2_Atom_Sequence, seq);
-
+					
 		// append event at end of sequence
 		// TODO check for buffer overflow
 		LV2_Atom_Event *new_last = ptr;
 		new_last->time.frames = last ? last->time.frames : 0;
 		memcpy(&new_last->body, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
-		seq->atom.size += sizeof(LV2_Atom_Event) + ((atom->size + 7U) & (~7U));
+		seq->atom.size += sizeof(LV2_Atom_Event) + lv2_atom_pad_size(trans->atom->size);
 	}
 	else if(protocol == app->regs.synthpod.module_list.urid)
 	{

@@ -28,6 +28,11 @@ lv2ui_descriptor(uint32_t index)
 			return &synthpod_common_ui;
 		case 1:
 			return &synthpod_common_eo;
+
+		case 2:
+			return &synthpod_keyboard_ui;
+		case 3:
+			return &synthpod_keyboard_eo;
 		default:
 			return NULL;
 	}
