@@ -322,6 +322,7 @@ struct _transmit_module_list_t {
 struct _transmit_module_add_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_Long inst _ATOM_ALIGNED;
 	LV2_Atom_String uri _ATOM_ALIGNED;
 		char uri_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
@@ -428,13 +429,17 @@ _sp_transmit_module_list_fill(reg_t *regs, LV2_Atom_Forge *forge,
 static inline void
 _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_add_t *trans, uint32_t size,
-	u_id_t module_uid, const char *module_uri)
+	u_id_t module_uid, const char *module_uri, const void *inst)
 {
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_add.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
+	
+	trans->inst.atom.size = sizeof(int64_t);
+	trans->inst.atom.type = forge->Long;
+	trans->inst.body = (uintptr_t)inst;
 
 	if(module_uri)
 	{

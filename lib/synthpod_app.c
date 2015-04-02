@@ -705,7 +705,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			if(trans)
 			{
 				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-					mod->uid, uri_str);
+					mod->uid, uri_str, mod->handle);
 				_sp_app_to_ui_advance(app, size);
 			}
 		}
@@ -984,7 +984,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				if(trans)
 				{
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-						job->mod->uid, uri_str);
+						job->mod->uid, uri_str, job->mod->handle);
 					_sp_app_to_ui_advance(app, size);
 				}
 

@@ -365,12 +365,6 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	return 0;
 }
 
-static const void *
-_data_access(const char *uri)
-{
-	return NULL; //FIXME this should call the plugins extension data function
-}
-
 static inline void
 _ui_mod_selected_request(mod_t *mod)
 {
@@ -708,6 +702,7 @@ _ext_ui_cleanup(mod_t *mod)
 	if(mod->external.descriptor && mod->external.descriptor->cleanup && mod->external.handle)
 		mod->external.descriptor->cleanup(mod->external.handle);
 	mod->external.handle = NULL;
+	mod->external.widget = NULL;
 
 	// close shared module
 	uv_dlclose(&mod->external.lib);
@@ -737,8 +732,14 @@ _ext_ui_closed(LV2UI_Controller controller)
 	_ext_ui_cleanup(mod);
 }
 
+static const void *
+_data_access(const char *uri)
+{
+	return NULL; //FIXME this should call the plugins extension data function
+}
+
 static mod_t *
-_sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
+_sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 {
 	LilvNode *uri_node = lilv_new_uri(ui->world, uri);
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(ui->plugs, uri_node);
@@ -763,7 +764,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 
 	// populate external_ui_host
 	mod->external_ui_host.ui_closed = _ext_ui_closed;
-	mod->external_ui_host.plugin_human_id = NULL; //TODO provide something here?
+	mod->external_ui_host.plugin_human_id = "Synthpod"; //TODO provide something here?
 
 	// populate extension_data
 	mod->ext_data.data_access = _data_access;
@@ -783,9 +784,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod->feature_list[4].URI = LV2_UI__portSubscribe;
 	mod->feature_list[4].data = &mod->port_subscribe;
 	mod->feature_list[5].URI = LV2_DATA_ACCESS_URI;
-	mod->feature_list[5].data = &mod->ext_data; //FIXME
+	mod->feature_list[5].data = &mod->ext_data;
 	mod->feature_list[6].URI = LV2_INSTANCE_ACCESS_URI;
-	mod->feature_list[6].data = NULL; //FIXME fill in plugin's LV2_Handle 
+	mod->feature_list[6].data = inst;
 	mod->feature_list[7].URI = LV2_UI__idleInterface; // signal support for idleInterface
 	mod->feature_list[7].data = NULL;
 	mod->feature_list[8].URI = LV2_EXTERNAL_UI__Host;
@@ -936,9 +937,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
-	if(mod->external.ui && mod->external.descriptor)
-		_ext_ui_hide(mod);
-
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
 
@@ -983,7 +981,7 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
-		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str);
+		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str, NULL);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -1140,6 +1138,10 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
+
+	// close external ui
+	if(mod->external.ui && mod->external.descriptor)
+		_ext_ui_hide(mod);
 	
 	size_t size = sizeof(transmit_module_del_t);
 	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
@@ -1586,6 +1588,10 @@ _modlist_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
+
+	// close external ui
+	if(mod->external.ui && mod->external.descriptor)
+		_ext_ui_hide(mod);
 
 	_sp_ui_mod_del(ui, mod);
 }
@@ -2060,7 +2066,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	{
 		const transmit_module_add_t *trans = (const transmit_module_add_t *)atom;
 
-		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body);
+		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body, (void *)trans->inst.body);
 		if(!mod)
 			return;
 
