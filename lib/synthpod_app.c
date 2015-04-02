@@ -1266,7 +1266,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 				if(  (peak != port->last) //TODO make below two configurable
 					&& (fabs(peak - port->last) > 0.001) // ignore smaller changes
-					&& ((port->period_cnt & 0x3ff) == 0x00) ) // only update every 32 samples
+					&& ((port->period_cnt & 0x1ff) == 0x00) ) // only update every 512th period
 				{
 					//printf("peak different: %i %i\n", port->last == 0.f, peak == 0.f);
 
@@ -1295,7 +1295,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				if(atom->size == 0) // empty atom
 					continue;
 		
-				size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
+				size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size);
 				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
@@ -1315,7 +1315,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				{
 					const LV2_Atom *atom = &ev->body;
 
-					size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + atom->size;
+					size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size);
 					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
 					if(trans)
 					{

@@ -23,8 +23,9 @@
 #include <synthpod_ui.h>
 #include <synthpod_private.h>
 #include <patcher.h>
+#include <lv2_external_ui.h> // kxstudio external-ui extension
 
-#define NUM_UI_FEATURES 7
+#define NUM_UI_FEATURES 9
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -49,8 +50,18 @@ struct _mod_t {
 	// ports
 	uint32_t num_ports;
 	port_t *ports;
-		
+
+	// UI color
 	int col;
+
+	// LV2UI_Port_Map extention
+	LV2UI_Port_Map port_map;
+
+	// LV2UI_Port_Subscribe extension
+	LV2UI_Port_Subscribe port_subscribe;
+
+	// for kxstudio external-ui
+	LV2_External_UI_Host external_ui_host;
 
 	// Eo UI
 	struct {
@@ -59,18 +70,41 @@ struct _mod_t {
 
 		const LV2UI_Descriptor *descriptor;
 		LV2UI_Handle handle;
+
 		Elm_Object_Item *itm;
 		Evas_Object *widget;
-
-		// LV2UI_Port_Map extention
-		LV2UI_Port_Map port_map;
-	
-		// LV2UI_Port_Subscribe extension
-		LV2UI_Port_Subscribe port_subscribe;
-		
-		// LV2UI_Idle_Interface extension
-		const LV2UI_Idle_Interface *idle_interface;
 	} eo;
+
+	// custom UIs via the LV2UI_{Show,Idle}_Interface extensions
+	struct {
+		const LilvUI *ui;
+		uv_lib_t lib; //TODO use
+
+		const LV2UI_Descriptor *descriptor; //TODO use
+		LV2UI_Handle handle; //TODO use
+
+		const LV2UI_Idle_Interface *idle_iface; //TODO use
+		const LV2UI_Show_Interface *show_iface; //TODO use
+
+		Ecore_Animator *anim;
+	} custom;
+
+	struct {
+		const LilvUI *ui;
+		uv_lib_t lib;
+
+		const LV2UI_Descriptor *descriptor;
+		LV2UI_Handle handle;
+		LV2_External_UI_Widget *widget;
+
+		Ecore_Animator *anim;
+	} external;
+
+	// TODO kxstudio external-ui
+	// TODO MOD UI
+	// TODO GtkUI
+	// TODO Qt4UI
+	// TODO Qt5UI
 
 	// standard "automatic" UI
 	struct {
@@ -87,6 +121,7 @@ struct _mod_t {
 struct _port_t {
 	mod_t *mod;
 	int selected;
+	int subscriptions;
 
 	const LilvPort *tar;
 	uint32_t index;
@@ -136,19 +171,6 @@ struct _sp_ui_t {
 		
 	Elm_Object_Item *sink_itm;
 };
-
-typedef struct _ui_write_t ui_write_t;
-
-struct _ui_write_t {
-	uint32_t size;
-	uint32_t protocol;
-	uint32_t port;
-};
-
-#define JOB_SIZE ( sizeof(job_t) )
-
-#define UI_WRITE_SIZE ( sizeof(ui_write_t) )
-#define UI_WRITE_PADDED ( (UI_WRITE_SIZE + 7U) & (~7U) )
 
 #define COLORS_MAX 20 // FIXME read from theme
 static uint8_t color_cnt = 1;
@@ -284,13 +306,25 @@ _port_index(LV2UI_Feature_Handle handle, const char *symbol)
 		: LV2UI_INVALID_PORT_INDEX;
 }
 
-static uint32_t
-_port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
-	const LV2_Feature *const *features)
+static inline void
+_ui_port_update_request(mod_t *mod, uint32_t index)
 {
-	mod_t *mod = handle;
 	sp_ui_t *ui = mod->ui;
-			
+
+	size_t size = sizeof(transmit_port_refresh_t);
+	transmit_port_refresh_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_port_refresh_fill(&ui->regs, &ui->forge, trans, size, mod->uid, index);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static inline void
+_port_subscription_set(mod_t *mod, uint32_t index, uint32_t protocol, int state)
+{
+	sp_ui_t *ui = mod->ui;
+
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
 
@@ -299,9 +333,22 @@ _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
 	if(trans)
 	{
 		_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
-			mod->uid, index, protocol, 1);
+			mod->uid, index, protocol, state);
 		_sp_ui_to_app_advance(ui, size);
 	}
+
+	if(state == 1)
+		_ui_port_update_request(mod, index);
+}
+
+static uint32_t
+_port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
+	const LV2_Feature *const *features)
+{
+	mod_t *mod = handle;
+	sp_ui_t *ui = mod->ui;
+
+	_port_subscription_set(mod, index, protocol, 1);
 
 	return 0;
 }
@@ -313,17 +360,7 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	mod_t *mod = handle;
 	sp_ui_t *ui = mod->ui;
 
-	if(protocol == 0)
-		protocol = ui->regs.port.float_protocol.urid;
-
-	size_t size = sizeof(transmit_port_subscribed_t);
-	transmit_port_subscribed_t *trans = _sp_ui_to_app_request(ui, size);
-	if(trans)
-	{
-		_sp_transmit_port_subscribed_fill(&ui->regs, &ui->forge, trans, size,
-			mod->uid, index, protocol, 0);
-		_sp_ui_to_app_advance(ui, size);
-	}
+	_port_subscription_set(mod, index, protocol, 0);
 
 	return 0;
 }
@@ -361,6 +398,345 @@ _ui_mod_selected_request(mod_t *mod)
 	}
 }
 
+static void
+_ui_write_function(LV2UI_Controller controller, uint32_t port,
+	uint32_t size, uint32_t protocol, const void *buffer)
+{
+	mod_t *mod = controller;
+	sp_ui_t *ui = mod->ui;
+	port_t *tar = &mod->ports[port];
+
+	// ignore output ports
+	if(tar->direction != PORT_DIRECTION_INPUT)
+	{
+		fprintf(stderr, "_ui_write_function: UI can only write to input port\n");
+		return;
+	}
+
+	// handle special meaning of protocol=0
+	if(protocol == 0)
+		protocol = ui->regs.port.float_protocol.urid;
+
+	if(protocol == ui->regs.port.float_protocol.urid)
+	{
+		assert(size == sizeof(float));
+		size_t size = sizeof(transfer_float_t);
+		transfer_float_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
+			_sp_ui_to_app_advance(ui, size);
+		}
+	}
+	else if(protocol == ui->regs.port.atom_transfer.urid)
+	{
+		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
+			_sp_ui_to_app_advance(ui, len);
+		}
+	}
+	else if(protocol == ui->regs.port.event_transfer.urid)
+	{
+		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
+			_sp_ui_to_app_advance(ui, len);
+		}
+	}
+	else if(protocol == ui->regs.port.peak_protocol.urid)
+		; // makes no sense
+}
+
+static inline void
+_ext_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf)
+{
+	mod_t *mod = handle;
+	sp_ui_t *ui = mod->ui;
+
+	//printf("_ext_port_event: %u %u %u\n", index, size, protocol);
+
+	if(  mod->external.ui
+		&& mod->external.descriptor
+		&& mod->external.descriptor->port_event
+		&& mod->external.handle)
+	{
+		mod->external.descriptor->port_event(mod->external.handle,
+			index, size, protocol, buf);
+		if(protocol == ui->regs.port.float_protocol.urid)
+		{
+			// send it twice for plugins that expect "0" instead of float_protocol URID
+			mod->external.descriptor->port_event(mod->external.handle,
+				index, size, 0, buf);
+		}
+	}
+}
+
+static void
+_eo_ui_write_function(LV2UI_Controller controller, uint32_t port,
+	uint32_t size, uint32_t protocol, const void *buffer)
+{
+	// to rt-thread
+	_ui_write_function(controller, port, size, protocol, buffer);
+
+	// to StdUI
+	_std_port_event(controller, port, size, protocol, buffer);
+}
+
+static void
+_ext_ui_write_function(LV2UI_Controller controller, uint32_t port,
+	uint32_t size, uint32_t protocol, const void *buffer)
+{
+	// to rt-thread
+	_ui_write_function(controller, port, size, protocol, buffer);
+
+	// to EoUI
+	_std_port_event(controller, port, size, protocol, buffer);
+}
+
+static void
+_std_ui_write_function(LV2UI_Controller controller, uint32_t port,
+	uint32_t size, uint32_t protocol, const void *buffer)
+{
+	mod_t *mod = controller;
+
+	// to rt-thread
+	_ui_write_function(controller, port, size, protocol, buffer);
+
+	// to EoUI
+	if(mod->eo.ui)
+		_eo_port_event(controller, port, size, protocol, buffer);
+
+	if(mod->external.ui)
+		_ext_port_event(controller, port, size, protocol, buffer);
+}
+
+static void
+_mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
+{
+	sp_ui_t *ui = mod->ui;	
+
+	// subscribe manually for port notifications
+	const LilvNode *plug_uri_node = lilv_plugin_get_uri(mod->plug);
+	LilvNode *lv2_symbol = lilv_new_uri(ui->world, LV2_CORE__symbol);
+	LilvNode *lv2_index = lilv_new_uri(ui->world, LV2_CORE__index);
+	LilvNode *ui_plugin = lilv_new_uri(ui->world, LV2_UI__plugin);
+	LilvNode *ui_prot = lilv_new_uri(ui->world, LV2_UI_PREFIX"protocol");
+
+	LilvNodes *notifs = lilv_world_find_nodes(ui->world,
+		lilv_ui_get_uri(ui_ui), ui->regs.port.notification.node, NULL);
+	LILV_FOREACH(nodes, n, notifs)
+	{
+		const LilvNode *notif = lilv_nodes_get(notifs, n);
+		const LilvNode *sym = lilv_world_get(ui->world, notif, lv2_symbol, NULL);
+		const LilvNode *ind = lilv_world_get(ui->world, notif, lv2_index, NULL);
+		const LilvNode *plug = lilv_world_get(ui->world, notif, ui_plugin, NULL);
+		const LilvNode *prot = lilv_world_get(ui->world, notif, ui_prot, NULL);
+
+		if(plug && !lilv_node_equals(plug, plug_uri_node))
+			continue; // notification not for this plugin 
+
+		uint32_t index = LV2UI_INVALID_PORT_INDEX;
+		if(ind)
+		{
+			index = lilv_node_as_int(ind);
+		}
+		else if(sym)
+		{
+			const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, sym);
+			index = lilv_port_get_index(mod->plug, port);
+		}
+
+		if(index != LV2UI_INVALID_PORT_INDEX)
+		{
+			port_t *port = &mod->ports[index];
+
+			// protocol specified
+			if(lilv_node_equals(prot, ui->regs.port.float_protocol.node))
+				_port_subscription_set(mod, index, ui->regs.port.float_protocol.urid, state);
+			else if(lilv_node_equals(prot, ui->regs.port.peak_protocol.node))
+				_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
+			else if(lilv_node_equals(prot, ui->regs.port.atom_transfer.node))
+				_port_subscription_set(mod, index, ui->regs.port.atom_transfer.urid, state);
+			else if(lilv_node_equals(prot, ui->regs.port.event_transfer.node))
+				_port_subscription_set(mod, index, ui->regs.port.event_transfer.urid, state);
+
+			// no protocol specified, we have to guess according to port type
+			else if(port->type == PORT_TYPE_CONTROL)
+				_port_subscription_set(mod, index, ui->regs.port.float_protocol.urid, state);
+			else if(port->type == PORT_TYPE_AUDIO)
+				_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
+			else if(port->type == PORT_TYPE_CV)
+				_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
+			else if(port->type == PORT_TYPE_ATOM)
+			{
+				if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+					_port_subscription_set(mod, index, ui->regs.port.event_transfer.urid, state);
+				else
+					_port_subscription_set(mod, index, ui->regs.port.atom_transfer.urid, state);
+			}
+
+			printf("port has notification for: %s %s %u %u %u\n",
+				lilv_node_as_string(sym),
+				lilv_node_as_uri(prot),
+				index,
+				ui->regs.port.atom_transfer.urid,
+				ui->regs.port.event_transfer.urid);
+		}
+	}
+	lilv_nodes_free(notifs);
+	lilv_node_free(lv2_symbol);
+	lilv_node_free(lv2_index);
+	lilv_node_free(ui_plugin);
+	lilv_node_free(ui_prot);
+}
+
+static Eina_Bool
+_ext_ui_animator(void *data)
+{
+	mod_t *mod = data;
+
+	LV2_EXTERNAL_UI_RUN(mod->external.widget);
+
+	return EINA_TRUE; // retrigger animator
+}
+
+static void
+_ext_ui_show(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+
+	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
+	const char *plugin_string = lilv_node_as_string(plugin_uri);
+
+	const LilvNode *ui_uri = lilv_ui_get_uri(mod->external.ui);
+	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->external.ui);
+	const LilvNode *binary_uri = lilv_ui_get_binary_uri(mod->external.ui);
+
+	const char *ui_string = lilv_node_as_string(ui_uri);
+	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
+	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
+
+	// open shared module
+	uv_dlopen(binary_path, &mod->external.lib); //TODO check
+	
+	LV2UI_DescriptorFunction ui_descfunc = NULL;
+	uv_dlsym(&mod->external.lib, "lv2ui_descriptor", (void **)&ui_descfunc);
+
+	if(!ui_descfunc)
+		return;
+
+	mod->external.descriptor = NULL;
+	for(int i=0; 1; i++)
+	{
+		const LV2UI_Descriptor *ui_desc = ui_descfunc(i);
+		if(!ui_desc) // end
+			break;
+		else if(!strcmp(ui_desc->URI, ui_string))
+		{
+			mod->external.descriptor = ui_desc;
+			break;
+		}
+	}
+
+	if(!mod->external.descriptor)
+		return;
+
+	// instantiate UI
+	mod->external.handle = mod->external.descriptor->instantiate(
+		mod->external.descriptor,
+		plugin_string,
+		bundle_path,
+		_ext_ui_write_function,
+		mod,
+		(void **)&mod->external.widget,
+		mod->features);
+
+	if(!mod->external.handle)
+		return;
+
+	// show UI
+	LV2_EXTERNAL_UI_SHOW(mod->external.widget);
+
+	// subscribe to ports
+	for(int i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+		if(port->type == PORT_TYPE_CONTROL)
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
+	}
+
+	// subscribe to notifications
+	_mod_subscription_set(mod, mod->external.ui, 1);
+
+	// start animator
+	mod->external.anim = ecore_animator_add(_ext_ui_animator, mod);
+}
+
+static void
+_ext_ui_cleanup(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+
+	// stop animator
+	if(mod->external.anim)
+	{
+		ecore_animator_del(mod->external.anim);
+		mod->external.anim = NULL;
+	}
+
+	// unsubscribe all ports
+	for(int i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		if(port->type == PORT_TYPE_CONTROL)
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
+	}
+	
+	// unsubscribe from notifications
+	_mod_subscription_set(mod, mod->external.ui, 0);
+
+	// call cleanup 
+	if(mod->external.descriptor && mod->external.descriptor->cleanup && mod->external.handle)
+		mod->external.descriptor->cleanup(mod->external.handle);
+	mod->external.handle = NULL;
+
+	// close shared module
+	uv_dlclose(&mod->external.lib);
+	mod->external.descriptor = NULL;
+}
+
+static void
+_ext_ui_hide(mod_t *mod)
+{
+	// hide UI
+	LV2_EXTERNAL_UI_HIDE(mod->external.widget);
+
+	// cleanup
+	_ext_ui_cleanup(mod);
+}
+ 
+// plugin ui has been closed manually
+static void
+_ext_ui_closed(LV2UI_Controller controller)
+{
+	mod_t *mod = controller;
+
+	if(!mod || !mod->external.ui)
+		return;
+
+	// call cleanup
+	_ext_ui_cleanup(mod);
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 {
@@ -377,13 +753,17 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod_t *mod = calloc(1, sizeof(mod_t));
 
 	// populate port_map
-	mod->eo.port_map.handle = mod;
-	mod->eo.port_map.port_index = _port_index;
+	mod->port_map.handle = mod;
+	mod->port_map.port_index = _port_index;
 
 	// populate port_subscribe
-	mod->eo.port_subscribe.handle = mod;
-	mod->eo.port_subscribe.subscribe = _port_subscribe;
-	mod->eo.port_subscribe.unsubscribe = _port_unsubscribe;
+	mod->port_subscribe.handle = mod;
+	mod->port_subscribe.subscribe = _port_subscribe;
+	mod->port_subscribe.unsubscribe = _port_unsubscribe;
+
+	// populate external_ui_host
+	mod->external_ui_host.ui_closed = _ext_ui_closed;
+	mod->external_ui_host.plugin_human_id = NULL; //TODO provide something here?
 
 	// populate extension_data
 	mod->ext_data.data_access = _data_access;
@@ -399,13 +779,17 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod->feature_list[2].URI = LV2_UI__parent;
 	mod->feature_list[2].data = ui->pluglist;
 	mod->feature_list[3].URI = LV2_UI__portMap;
-	mod->feature_list[3].data = &mod->eo.port_map;
+	mod->feature_list[3].data = &mod->port_map;
 	mod->feature_list[4].URI = LV2_UI__portSubscribe;
-	mod->feature_list[4].data = &mod->eo.port_subscribe;
+	mod->feature_list[4].data = &mod->port_subscribe;
 	mod->feature_list[5].URI = LV2_DATA_ACCESS_URI;
-	mod->feature_list[5].data = &mod->ext_data;
+	mod->feature_list[5].data = &mod->ext_data; //FIXME
 	mod->feature_list[6].URI = LV2_INSTANCE_ACCESS_URI;
 	mod->feature_list[6].data = NULL; //FIXME fill in plugin's LV2_Handle 
+	mod->feature_list[7].URI = LV2_UI__idleInterface; // signal support for idleInterface
+	mod->feature_list[7].data = NULL;
+	mod->feature_list[8].URI = LV2_EXTERNAL_UI__Host;
+	mod->feature_list[8].data = &mod->external_ui_host;
 	
 	for(int i=0; i<NUM_UI_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];
@@ -473,12 +857,64 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	LILV_FOREACH(uis, ptr, mod->all_uis)
 	{
 		const LilvUI *lui = lilv_uis_get(mod->all_uis, ptr);
-		if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
+		const LilvNode *ui_uri_node = lilv_ui_get_uri(lui);
+
+		// test for EoUI
 		{
-			mod->eo.ui = lui;
-			break;
+			if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
+			{
+				printf("has EoUI\n");
+				mod->eo.ui = lui;
+			}
+		}
+
+		// test for custom UI
+		{
+			LilvNode *extension_data = lilv_new_uri(ui->world, LV2_CORE__extensionData);
+			//LilvNode *required_feature = lilv_new_uri(ui->world, LV2_CORE__requiredFeature);
+			LilvNode *show_interface = lilv_new_uri(ui->world, LV2_UI__showInterface);
+			LilvNode *idle_interface = lilv_new_uri(ui->world, LV2_UI__idleInterface);
+			
+			LilvNodes* has_idle_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
+				extension_data, show_interface);
+			LilvNodes* has_show_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
+				extension_data, idle_interface);
+
+			if(lilv_nodes_size(has_show_iface) && lilv_nodes_size(has_idle_iface))
+			{
+				mod->custom.ui = lui;
+				printf("has custom UI\n");
+			}
+
+			lilv_nodes_free(has_show_iface);
+			lilv_nodes_free(has_idle_iface);
+
+			lilv_node_free(extension_data);
+			//lilv_node_free(required_feature);
+			lilv_node_free(show_interface);
+			lilv_node_free(idle_interface);
+		}
+
+		// test for kxstudio external_ui
+		{
+			LilvNode *external_ui = lilv_new_uri(ui->world, LV2_EXTERNAL_UI__Widget);
+			if(lilv_ui_is_a(lui, external_ui))
+			{
+				printf("has external-ui\n");
+				mod->external.ui = lui;
+			}
+			lilv_node_free(external_ui);
 		}
 	}
+	
+	/* TODO FIXME XXX
+	// get UI extension data
+	if(mod->eo.descriptor && mod->eo.descriptor->extension_data)
+	{
+		mod->eo.idle_interface = mod->eo.descriptor->extension_data(
+			LV2_UI__idleInterface);
+	}
+	*/
 	
 	if(mod->system.source || mod->system.sink)
 		mod->col = 0; // reserved color for system ports
@@ -490,6 +926,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 
 	// request selected state
 	_ui_mod_selected_request(mod);
+
+	if(!mod->eo.ui && mod->external.ui)
+		_ext_ui_show(mod);
 	
 	return mod;
 }
@@ -497,6 +936,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
+	if(mod->external.ui && mod->external.descriptor)
+		_ext_ui_hide(mod);
+
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
 
@@ -864,99 +1306,6 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	return lay;
 }
 
-static inline void
-_ui_port_update_request(mod_t *mod, uint32_t index)
-{
-	sp_ui_t *ui = mod->ui;
-
-	size_t size = sizeof(transmit_port_refresh_t);
-	transmit_port_refresh_t *trans = _sp_ui_to_app_request(ui, size);
-	if(trans)
-	{
-		_sp_transmit_port_refresh_fill(&ui->regs, &ui->forge, trans, size, mod->uid, index);
-		_sp_ui_to_app_advance(ui, size);
-	}
-}
-
-static void
-_ui_write_function(LV2UI_Controller controller, uint32_t port,
-	uint32_t size, uint32_t protocol, const void *buffer)
-{
-	mod_t *mod = controller;
-	sp_ui_t *ui = mod->ui;
-	port_t *tar = &mod->ports[port];
-
-	// ignore output ports
-	if(tar->direction != PORT_DIRECTION_INPUT)
-	{
-		fprintf(stderr, "_ui_write_function: UI can only write to input port\n");
-		return;
-	}
-
-	// handle special meaning of protocol=0
-	if(protocol == 0)
-		protocol = ui->regs.port.float_protocol.urid;
-
-	if(protocol == ui->regs.port.float_protocol.urid)
-	{
-		assert(size == sizeof(float));
-		size_t size = sizeof(transfer_float_t);
-		transfer_float_t *trans = _sp_ui_to_app_request(ui, size);
-		if(trans)
-		{
-			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
-			_sp_ui_to_app_advance(ui, size);
-		}
-	}
-	else if(protocol == ui->regs.port.atom_transfer.urid)
-	{
-		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
-		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
-		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
-		if(trans)
-		{
-			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
-			_sp_ui_to_app_advance(ui, len);
-		}
-	}
-	else if(protocol == ui->regs.port.event_transfer.urid)
-	{
-		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
-		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
-		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
-		if(trans)
-		{
-			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
-			_sp_ui_to_app_advance(ui, len);
-		}
-	}
-	else if(protocol == ui->regs.port.peak_protocol.urid)
-		; // makes no sense
-}
-
-static void
-_eo_ui_write_function(LV2UI_Controller controller, uint32_t port,
-	uint32_t size, uint32_t protocol, const void *buffer)
-{
-	// to rt-thread
-	_ui_write_function(controller, port, size, protocol, buffer);
-
-	// to StdUI
-	_std_port_event(controller, port, size, protocol, buffer);
-}
-
-static void
-_std_ui_write_function(LV2UI_Controller controller, uint32_t port,
-	uint32_t size, uint32_t protocol, const void *buffer)
-{
-	// to rt-thread
-	_ui_write_function(controller, port, size, protocol, buffer);
-
-	// to EoUI
-	_eo_port_event(controller, port, size, protocol, buffer);
-}
-
-
 static void
 _patched_changed(void *data, Evas_Object *obj, void *event)
 {
@@ -1176,21 +1525,11 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	// subscribe to port
 	const uint32_t i = port->index;
 	if(port->type == PORT_TYPE_CONTROL)
-		_port_subscribe(mod, i, ui->regs.port.float_protocol.urid, NULL);
+		_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
 	else if(port->type == PORT_TYPE_AUDIO)
-		_port_subscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
+		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 1);
 	else if(port->type == PORT_TYPE_CV)
-		_port_subscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
-	/*
-	else if(port->type == PORT_TYPE_ATOM)
-	{
-		if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-			_port_subscribe(mod, i, ui->regs.port.event_transfer.urid, NULL);
-		else
-			_port_subscribe(mod, i, ui->regs.port.atom_transfer.urid, NULL);
-	}
-	*/
-	_ui_port_update_request(mod, port->index);
+		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 1);
 
 	port->std.widget = child;
 	return lay;
@@ -1210,18 +1549,11 @@ _modlist_std_del(void *data, Evas_Object *obj)
 	// unsubscribe from port
 	const uint32_t i = port->index;
 	if(port->type == PORT_TYPE_CONTROL)
-		_port_unsubscribe(mod, i, ui->regs.port.float_protocol.urid, NULL);
+		_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
 	else if(port->type == PORT_TYPE_AUDIO)
-		_port_unsubscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
+		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
 	else if(port->type == PORT_TYPE_CV)
-		_port_unsubscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
-	else if(port->type == PORT_TYPE_ATOM)
-	{
-		if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-			_port_unsubscribe(mod, i, ui->regs.port.event_transfer.urid, NULL);
-		else
-			_port_unsubscribe(mod, i, ui->regs.port.atom_transfer.urid, NULL);
-	}
+		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
 }
 
 static char * 
@@ -1255,7 +1587,7 @@ _modlist_del(void *data, Evas_Object *obj)
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	// nothing
+	_sp_ui_mod_del(ui, mod);
 }
 
 static char *
@@ -1323,13 +1655,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 						break;
 					}
 				}
-			
-				// get UI extension data
-				if(mod->eo.descriptor && mod->eo.descriptor->extension_data)
-				{
-					mod->eo.idle_interface = mod->eo.descriptor->extension_data(
-						LV2_UI__idleInterface);
-				}
 
 				// instantiate UI
 				if(mod->eo.descriptor && mod->eo.descriptor->instantiate)
@@ -1350,76 +1675,11 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					port_t *port = &mod->ports[i];
 
 					if(port->type == PORT_TYPE_CONTROL)
-					{
-						_port_subscribe(mod, i, ui->regs.port.float_protocol.urid, NULL);
-						// initialize EoUI
-						float val = port->dflt;
-						_eo_port_event(mod, i, sizeof(float), ui->regs.port.float_protocol.urid, &val);
-						_ui_port_update_request(mod, port->index);
-					}
-					else if(port->type == PORT_TYPE_AUDIO)
-						_port_subscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
-					else if(port->type == PORT_TYPE_CV)
-						_port_subscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
+						_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
 				}
 
-				// subscribe manually for port notifications
-				const LilvNode *plug_uri_node = lilv_plugin_get_uri(mod->plug);
-				LilvNode *lv2_symbol = lilv_new_uri(ui->world, LV2_CORE__symbol);
-				LilvNode *lv2_index = lilv_new_uri(ui->world, LV2_CORE__index);
-				LilvNode *ui_plugin = lilv_new_uri(ui->world, LV2_UI__plugin);
-				LilvNode *ui_prot = lilv_new_uri(ui->world, LV2_UI_PREFIX"protocol");
-
-				LilvNodes *notifs = lilv_world_find_nodes(ui->world,
-					lilv_ui_get_uri(mod->eo.ui), ui->regs.port.notification.node, NULL);
-				LILV_FOREACH(nodes, n, notifs)
-				{
-					const LilvNode *notif = lilv_nodes_get(notifs, n);
-					const LilvNode *sym = lilv_world_get(ui->world, notif, lv2_symbol, NULL);
-					const LilvNode *ind = lilv_world_get(ui->world, notif, lv2_index, NULL);
-					const LilvNode *plug = lilv_world_get(ui->world, notif, ui_plugin, NULL);
-					const LilvNode *prot = lilv_world_get(ui->world, notif, ui_prot, NULL);
-
-					if(plug && !lilv_node_equals(plug, plug_uri_node))
-						continue; // notification not for this plugin 
-
-					uint32_t index = LV2UI_INVALID_PORT_INDEX;
-					if(ind)
-					{
-						index = lilv_node_as_int(ind);
-					}
-					else if(sym)
-					{
-						const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, sym);
-						index = lilv_port_get_index(mod->plug, port);
-					}
-
-					if(index != LV2UI_INVALID_PORT_INDEX)
-					{
-						if(lilv_node_equals(prot, ui->regs.port.float_protocol.node))
-							_port_subscribe(mod, index, ui->regs.port.float_protocol.urid, NULL);
-						else if(lilv_node_equals(prot, ui->regs.port.peak_protocol.node))
-							_port_subscribe(mod, index, ui->regs.port.peak_protocol.urid, NULL);
-						else if(lilv_node_equals(prot, ui->regs.port.atom_transfer.node))
-							_port_subscribe(mod, index, ui->regs.port.atom_transfer.urid, NULL);
-						else if(lilv_node_equals(prot, ui->regs.port.event_transfer.node))
-							_port_subscribe(mod, index, ui->regs.port.event_transfer.urid, NULL);
-						else
-							; //TODO protocol not supported
-
-						printf("port has notification for: %s %s %u %u %u\n",
-							lilv_node_as_string(sym),
-							lilv_node_as_uri(prot),
-							index,
-							ui->regs.port.atom_transfer.urid,
-							ui->regs.port.event_transfer.urid);
-					}
-				}
-				lilv_nodes_free(notifs);
-				lilv_node_free(lv2_symbol);
-				lilv_node_free(lv2_index);
-				lilv_node_free(ui_plugin);
-				lilv_node_free(ui_prot);
+				// set subscriptions for notifications
+				_mod_subscription_set(mod, mod->eo.ui, 1);
 
 				return mod->eo.widget;
 			}
@@ -1450,6 +1710,9 @@ _modgrid_del(void *data, Evas_Object *obj)
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
+	if(!mod->eo.ui)
+		return;
+
 	//TODO this is futile, as module has already been removed in app
 	// unsubscribe from all ports
 	for(int i=0; i<mod->num_ports; i++)
@@ -1457,32 +1720,21 @@ _modgrid_del(void *data, Evas_Object *obj)
 		port_t *port = &mod->ports[i];
 
 		if(port->type == PORT_TYPE_CONTROL)
-			_port_unsubscribe(mod, i, ui->regs.port.float_protocol.urid, NULL);
-		else if(port->type == PORT_TYPE_AUDIO)
-			_port_unsubscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
-		else if(port->type == PORT_TYPE_CV)
-			_port_unsubscribe(mod, i, ui->regs.port.peak_protocol.urid, NULL);
-		else if(port->type == PORT_TYPE_ATOM)
-		{
-			if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) 
-				_port_unsubscribe(mod, i, ui->regs.port.event_transfer.urid, NULL);
-			else
-				_port_unsubscribe(mod, i, ui->regs.port.atom_transfer.urid, NULL);
-		}
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
 	}
+
+	// unsubscribe from all notifications
+	_mod_subscription_set(mod, mod->eo.ui, 0);
 
 	// cleanup EoUI
-	if(mod->eo.ui)
+	if(  mod->eo.descriptor
+		&& mod->eo.descriptor->cleanup
+		&& mod->eo.handle)
 	{
-		if(  mod->eo.descriptor
-			&& mod->eo.descriptor->cleanup
-			&& mod->eo.handle)
-		{
-			mod->eo.descriptor->cleanup(mod->eo.handle);
-		}
-
-		uv_dlclose(&mod->eo.lib);
+		mod->eo.descriptor->cleanup(mod->eo.handle);
 	}
+
+	uv_dlclose(&mod->eo.lib);
 	
 	// clear parameters
 	mod->eo.descriptor = NULL;
@@ -1839,19 +2091,17 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		if(!mod)
 			return;
 
-		// remove StdUI list item
-		elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
-		elm_object_item_del(mod->std.itm);
-		mod->std.itm = NULL;
-
 		// remove EoUI grid item, if present
 		if(mod->eo.itm)
 		{
 			elm_object_item_del(mod->eo.itm);
 			mod->eo.itm = NULL;
 		}
-		
-		_sp_ui_mod_del(ui, mod);
+
+		// remove StdUI list item
+		elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
+		elm_object_item_del(mod->std.itm);
+		mod->std.itm = NULL;
 	
 		_patches_update(ui);
 	}
@@ -1891,6 +2141,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 			return;
 		_eo_port_event(mod, port_index, sizeof(float), protocol, &value);
 		_std_port_event(mod, port_index, sizeof(float), protocol, &value);
+		_ext_port_event(mod, port_index, sizeof(float), protocol, &value);
 	}
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 	{
@@ -1907,32 +2158,35 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 			return;
 		_eo_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
 		_std_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
+		_ext_port_event(mod, port_index, sizeof(LV2UI_Peak_Data), protocol, &data);
 	}
 	else if(protocol == ui->regs.port.atom_transfer.urid)
 	{
 		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
 		uint32_t port_index = trans->transfer.port.body;
-		const LV2_Atom *atom = trans->atom;
-		uint32_t size = sizeof(LV2_Atom) + atom->size;
+		const LV2_Atom *subatom = trans->atom;
+		uint32_t size = sizeof(LV2_Atom) + subatom->size;
 
 		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
 		if(!mod)
 			return;
-		_eo_port_event(mod, port_index, size, protocol, atom);
-		_std_port_event(mod, port_index, size, protocol, &atom);
+		_eo_port_event(mod, port_index, size, protocol, subatom);
+		_std_port_event(mod, port_index, size, protocol, subatom);
+		_ext_port_event(mod, port_index, size, protocol, subatom);
 	}
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
 		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
 		uint32_t port_index = trans->transfer.port.body;
-		const LV2_Atom *atom = trans->atom;
-		uint32_t size = sizeof(LV2_Atom) + atom->size;
+		const LV2_Atom *subatom = trans->atom;
+		uint32_t size = sizeof(LV2_Atom) + subatom->size;
 
 		mod_t *mod = _sp_ui_mod_get(ui, trans->transfer.uid.body);
 		if(!mod)
 			return;
-		_eo_port_event(mod, port_index, size, protocol, atom);
-		_std_port_event(mod, port_index, size, protocol, &atom);
+		_eo_port_event(mod, port_index, size, protocol, subatom);
+		_std_port_event(mod, port_index, size, protocol, subatom);
+		_ext_port_event(mod, port_index, size, protocol, subatom);
 	}
 	else if(protocol == ui->regs.synthpod.port_selected.urid)
 	{
