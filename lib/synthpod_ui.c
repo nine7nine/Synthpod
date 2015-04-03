@@ -254,8 +254,14 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	if(protocol == ui->regs.port.float_protocol.urid)
 	{
-		const float val = *(float *)buf;
+		float val = *(float *)buf;
 		int toggled = lilv_port_has_property(mod->plug, port->tar, ui->regs.port.toggled.node);
+
+		// we should set a value lower/higher than min/max for widgets
+		if(val < port->min)
+			val = port->min;
+		if(val > port->max)
+			val = port->max;
 
 		if(toggled)
 			elm_check_state_set(port->std.widget, val > 0.f ? EINA_TRUE : EINA_FALSE);
