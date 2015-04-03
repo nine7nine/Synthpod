@@ -67,12 +67,18 @@ struct _mod_t {
 	struct {
 		const LilvUI *ui;
 		uv_lib_t lib;
-
 		const LV2UI_Descriptor *descriptor;
-		LV2UI_Handle handle;
 
-		Elm_Object_Item *itm;
+		LV2UI_Handle handle;
 		Evas_Object *widget;
+
+		struct {
+			Elm_Object_Item *itm;
+		} embedded;
+
+		struct {
+			Evas_Object *win;
+		} full;
 	} eo;
 
 	// custom UIs via the LV2UI_{Show,Idle}_Interface extensions
@@ -291,11 +297,12 @@ _eo_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	if(  mod->eo.ui
 		&& mod->eo.descriptor
-		&& mod->eo.descriptor->port_event
-		&& mod->eo.handle)
+		&& mod->eo.descriptor->port_event)
 	{
-		mod->eo.descriptor->port_event(mod->eo.handle,
-			index, size, protocol, buf);
+		if(mod->eo.full.win)
+			mod->eo.descriptor->port_event(mod->eo.handle, index, size, protocol, buf);
+		else if(mod->eo.embedded.itm)
+			mod->eo.descriptor->port_event(mod->eo.handle, index, size, protocol, buf);
 	}
 }
 
@@ -616,35 +623,8 @@ _ext_ui_show(mod_t *mod)
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 
-	const LilvNode *ui_uri = lilv_ui_get_uri(mod->external.ui);
 	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->external.ui);
-	const LilvNode *binary_uri = lilv_ui_get_binary_uri(mod->external.ui);
-
-	const char *ui_string = lilv_node_as_string(ui_uri);
 	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
-	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
-
-	// open shared module
-	uv_dlopen(binary_path, &mod->external.lib); //TODO check
-	
-	LV2UI_DescriptorFunction ui_descfunc = NULL;
-	uv_dlsym(&mod->external.lib, "lv2ui_descriptor", (void **)&ui_descfunc);
-
-	if(!ui_descfunc)
-		return;
-
-	mod->external.descriptor = NULL;
-	for(int i=0; 1; i++)
-	{
-		const LV2UI_Descriptor *ui_desc = ui_descfunc(i);
-		if(!ui_desc) // end
-			break;
-		else if(!strcmp(ui_desc->URI, ui_string))
-		{
-			mod->external.descriptor = ui_desc;
-			break;
-		}
-	}
 
 	if(!mod->external.descriptor)
 		return;
@@ -711,7 +691,6 @@ _ext_ui_cleanup(mod_t *mod)
 	mod->external.widget = NULL;
 
 	// close shared module
-	uv_dlclose(&mod->external.lib);
 	mod->external.descriptor = NULL;
 }
 
@@ -719,7 +698,8 @@ static void
 _ext_ui_hide(mod_t *mod)
 {
 	// hide UI
-	LV2_EXTERNAL_UI_HIDE(mod->external.widget);
+	if(mod->external.anim) // UI is running
+		LV2_EXTERNAL_UI_HIDE(mod->external.widget);
 
 	// cleanup
 	_ext_ui_cleanup(mod);
@@ -742,6 +722,38 @@ static const void *
 _data_access(const char *uri)
 {
 	return NULL; //FIXME this should call the plugins extension data function
+}
+		
+static const LV2UI_Descriptor *
+_ui_dlopen(const LilvUI *ui, uv_lib_t *lib)
+{
+	const LilvNode *ui_uri = lilv_ui_get_uri(ui);
+	const LilvNode *binary_uri = lilv_ui_get_binary_uri(ui);
+
+	const char *ui_string = lilv_node_as_string(ui_uri);
+	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
+
+	if(uv_dlopen(binary_path, lib))
+		return NULL;
+	
+	LV2UI_DescriptorFunction ui_descfunc = NULL;
+	uv_dlsym(lib, "lv2ui_descriptor", (void **)&ui_descfunc);
+
+	if(!ui_descfunc)
+		return NULL;
+
+	// search for a matching UI
+	for(int i=0; 1; i++)
+	{
+		const LV2UI_Descriptor *ui_desc = ui_descfunc(i);
+
+		if(!ui_desc) // end of UI list
+			break;
+		else if(!strcmp(ui_desc->URI, ui_string))
+			return ui_desc; // matching UI found
+	}
+
+	return NULL;
 }
 
 static mod_t *
@@ -784,7 +796,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 	mod->feature_list[1].URI = LV2_URID__unmap;
 	mod->feature_list[1].data = ui->driver->unmap;
 	mod->feature_list[2].URI = LV2_UI__parent;
-	mod->feature_list[2].data = ui->pluglist;
+	mod->feature_list[2].data = NULL; // will be filled in before instantiation
 	mod->feature_list[3].URI = LV2_UI__portMap;
 	mod->feature_list[3].data = &mod->port_map;
 	mod->feature_list[4].URI = LV2_UI__portSubscribe;
@@ -913,6 +925,13 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 			lilv_node_free(external_ui);
 		}
 	}
+
+	if(mod->eo.ui)
+		mod->eo.descriptor = _ui_dlopen(mod->eo.ui, &mod->eo.lib);
+	else if(mod->custom.ui)
+		mod->custom.descriptor = _ui_dlopen(mod->custom.ui, &mod->custom.lib);
+	else if(mod->external.ui)
+		mod->external.descriptor = _ui_dlopen(mod->external.ui, &mod->external.lib);
 	
 	/* TODO FIXME XXX
 	// get UI extension data
@@ -946,6 +965,10 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
+
+	uv_dlclose(&mod->eo.lib);
+	uv_dlclose(&mod->custom.lib);
+	uv_dlclose(&mod->external.lib);
 
 	free(mod);
 }
@@ -1159,19 +1182,130 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 	}
 }
 
+static inline Evas_Object *
+_eo_widget_create(Evas_Object *parent, mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+
+	if(!mod->eo.ui || !mod->eo.descriptor)
+		return NULL;
+
+	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
+	const char *plugin_string = lilv_node_as_string(plugin_uri);
+
+	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->eo.ui);
+	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
+
+	mod->eo.widget = NULL;
+	
+	// instantiate UI
+	if(mod->eo.descriptor->instantiate)
+	{
+		mod->feature_list[2].data = parent;
+
+		mod->eo.handle = mod->eo.descriptor->instantiate(
+			mod->eo.descriptor,
+			plugin_string,
+			bundle_path,
+			_eo_ui_write_function,
+			mod,
+			(void **)&(mod->eo.widget),
+			mod->features);
+		
+		mod->feature_list[2].data = NULL;
+	}
+
+	if(!mod->eo.handle || !mod->eo.widget)
+		return NULL;
+
+	// subscribe automatically to all non-atom ports by default
+	for(int i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		if(port->type == PORT_TYPE_CONTROL)
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
+	}
+
+	// set subscriptions for notifications
+	_mod_subscription_set(mod, mod->eo.ui, 1);
+
+	return mod->eo.widget;
+}
+
+static void
+_full_delete_request(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
+
+	evas_object_del(mod->eo.full.win);
+	mod->eo.handle = NULL;
+	mod->eo.widget = NULL;
+	mod->eo.full.win = NULL;
+
+	// add EoUI to midgrid
+	mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+		NULL, NULL);
+}
+
 static void
 _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	if(!mod->external.ui)
-		return;
+	if(mod->external.ui)
+	{
+		if(mod->external.widget)
+			_ext_ui_hide(mod);
+		else
+			_ext_ui_show(mod);
+	}
+	else if(mod->eo.ui)
+	{
+		if(mod->eo.full.win)
+		{
+			// remove fullscreen EoUI
+			evas_object_del(mod->eo.full.win);
+			mod->eo.handle = NULL;
+			mod->eo.widget = NULL;
+			mod->eo.full.win = NULL;
 
-	if(mod->external.widget)
-		_ext_ui_hide(mod);
-	else
-		_ext_ui_show(mod);
+			// add EoUI to midgrid
+			mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+				NULL, NULL);
+		}
+		else if(mod->eo.embedded.itm)
+		{
+			// remove EoUI from modgrid
+			elm_object_item_del(mod->eo.embedded.itm);
+	
+			const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
+			const char *plugin_string = lilv_node_as_string(plugin_uri);
+
+			// add fullscreen EoUI
+			Evas_Object *win = elm_win_add(ui->win, plugin_string, ELM_WIN_BASIC);
+			elm_win_title_set(win, plugin_string);
+			evas_object_smart_callback_add(win, "delete,request", _full_delete_request, mod);
+			evas_object_resize(win, 800, 450);
+			evas_object_show(win);
+			mod->eo.full.win = win;
+
+			Evas_Object *bg = elm_bg_add(win);	
+			elm_bg_color_set(bg, 64, 64, 64);
+			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(bg);
+			elm_win_resize_object_add(win, bg);
+
+			Evas_Object *widget = _eo_widget_create(win, mod);
+			//evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			//evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(widget);
+			elm_win_resize_object_add(win, widget);
+		}
+	}
 }
 
 static void
@@ -1327,7 +1461,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	else
 		; // system mods cannot be removed
 
-	if(mod->external.ui)
+	if(mod->external.ui || mod->eo.ui)
 	{
 		Evas_Object *icon = elm_icon_add(lay);
 		elm_icon_standard_set(icon, "arrow_up");
@@ -1653,89 +1787,11 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 
 	if(!strcmp(part, "elm.swallow.icon"))
 	{
-		if(mod->eo.ui)
-		{
-			const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
-			const char *plugin_string = lilv_node_as_string(plugin_uri);
-
-			//printf("has Eo UI\n");
-			const LilvNode *ui_uri = lilv_ui_get_uri(mod->eo.ui);
-			const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->eo.ui);
-			const LilvNode *binary_uri = lilv_ui_get_binary_uri(mod->eo.ui);
-
-			const char *ui_string = lilv_node_as_string(ui_uri);
-			const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
-			const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
-
-			//printf("ui_string: %s\n", ui_string);
-			//printf("bundle_path: %s\n", bundle_path);
-			//printf("binary_path: %s\n", binary_path);
-
-			uv_dlopen(binary_path, &mod->eo.lib); //TODO check
-			
-			LV2UI_DescriptorFunction ui_descfunc = NULL;
-			uv_dlsym(&mod->eo.lib, "lv2ui_descriptor", (void **)&ui_descfunc);
-
-			if(ui_descfunc)
-			{
-				mod->eo.descriptor = NULL;
-				mod->eo.widget = NULL;
-
-				for(int i=0; 1; i++)
-				{
-					const LV2UI_Descriptor *ui_desc = ui_descfunc(i);
-					if(!ui_desc) // end
-						break;
-					else if(!strcmp(ui_desc->URI, ui_string))
-					{
-						mod->eo.descriptor = ui_desc;
-						break;
-					}
-				}
-
-				// instantiate UI
-				if(mod->eo.descriptor && mod->eo.descriptor->instantiate)
-				{
-					mod->eo.handle = mod->eo.descriptor->instantiate(
-						mod->eo.descriptor,
-						plugin_string,
-						bundle_path,
-						_eo_ui_write_function,
-						mod,
-						(void **)&(mod->eo.widget),
-						mod->features);
-				}
-
-				// subscribe automatically to all non-atom ports by default
-				for(int i=0; i<mod->num_ports; i++)
-				{
-					port_t *port = &mod->ports[i];
-
-					if(port->type == PORT_TYPE_CONTROL)
-						_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
-				}
-
-				// set subscriptions for notifications
-				_mod_subscription_set(mod, mod->eo.ui, 1);
-
-				return mod->eo.widget;
-			}
-		}
+		return _eo_widget_create(ui->modgrid, mod);
 	}
 	else if(!strcmp(part, "elm.swallow.end"))
 	{
-		/* FIXME
-		Evas_Object *bg = elm_bg_add(obj);
-		elm_bg_color_set(bg, mod->col[0], mod->col[1], mod->col[2]);
-		evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(bg, 1.f, EVAS_HINT_FILL);
-		evas_object_size_hint_min_set(bg, 8, 64);
-		evas_object_size_hint_max_set(bg, 8, 64);
-		evas_object_show(bg);
-
-		return bg;
-		*/
-		return NULL;
+		// what?
 	}
 	
 	return NULL;
@@ -1750,7 +1806,6 @@ _modgrid_del(void *data, Evas_Object *obj)
 	if(!mod->eo.ui)
 		return;
 
-	//TODO this is futile, as module has already been removed in app
 	// unsubscribe from all ports
 	for(int i=0; i<mod->num_ports; i++)
 	{
@@ -1770,13 +1825,11 @@ _modgrid_del(void *data, Evas_Object *obj)
 	{
 		mod->eo.descriptor->cleanup(mod->eo.handle);
 	}
-
-	uv_dlclose(&mod->eo.lib);
 	
 	// clear parameters
-	mod->eo.descriptor = NULL;
 	mod->eo.handle = NULL;
 	mod->eo.widget = NULL;
+	mod->eo.embedded.itm = NULL;
 }
 
 static void
@@ -2117,7 +2170,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	
 		if(mod->eo.ui) // has EoUI
 		{
-			mod->eo.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+			mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
 				NULL, NULL);
 		}
 	}
@@ -2128,11 +2181,18 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		if(!mod)
 			return;
 
-		// remove EoUI grid item, if present
-		if(mod->eo.itm)
+		if(mod->eo.full.win)
 		{
-			elm_object_item_del(mod->eo.itm);
-			mod->eo.itm = NULL;
+			// remove full EoI if present
+			evas_object_del(mod->eo.full.win);
+			mod->eo.handle = NULL;
+			mod->eo.widget = NULL;
+			mod->eo.full.win = NULL;
+		}
+		else if(mod->eo.embedded.itm)
+		{
+			// remove EoUI grid item, if present
+			elm_object_item_del(mod->eo.embedded.itm);
 		}
 
 		// remove StdUI list item
