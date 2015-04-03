@@ -928,8 +928,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 	// request selected state
 	_ui_mod_selected_request(mod);
 
-	if(!mod->eo.ui && mod->external.ui)
-		_ext_ui_show(mod);
+	//TODO save visibility in synthpod state?
+	//if(!mod->eo.ui && mod->external.ui)
+	//	_ext_ui_show(mod);
 	
 	return mod;
 }
@@ -1153,6 +1154,21 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
+_modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
+
+	if(!mod->external.ui)
+		return;
+
+	if(mod->external.widget)
+		_ext_ui_hide(mod);
+	else
+		_ext_ui_show(mod);
+}
+
+static void
 _patches_update(sp_ui_t *ui)
 {
 	int count [PORT_DIRECTION_NUM][PORT_TYPE_NUM];
@@ -1304,6 +1320,15 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	}
 	else
 		; // system mods cannot be removed
+
+	if(mod->external.ui)
+	{
+		Evas_Object *icon = elm_icon_add(lay);
+		elm_icon_standard_set(icon, "arrow_up");
+		evas_object_smart_callback_add(icon, "clicked", _modlist_toggle_clicked, mod);
+		evas_object_show(icon);
+		elm_layout_content_set(lay, "elm.swallow.preend", icon);
+	}
 
 	return lay;
 }
@@ -1873,7 +1898,7 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 	evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _resize, ui);
 
 	ui->pluglist = elm_genlist_add(ui->plugpane);
-	elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
+	//elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
 	evas_object_smart_callback_add(ui->pluglist, "activated",
 		_pluglist_activated, ui);
 	evas_object_smart_callback_add(ui->pluglist, "expand,request",

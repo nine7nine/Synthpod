@@ -85,7 +85,7 @@ group {
 				rel1.relative: 0 0;
 				rel1.offset: 16 0;
 				rel2.relative: 1 1;
-				rel2.offset: -16 0;
+				rel2.offset: -32 0;
 				text {
 					text: "";
 					font: "default";
@@ -104,6 +104,19 @@ group {
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
 				rel2.offset: 16 0;
+			}
+		}
+		part {
+			name: "elm.swallow.preend";
+			type: SWALLOW;
+			mouse_events: 1;
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				rel1.relative: 1 0;
+				rel1.offset: -32 0;
+				rel2.relative: 1 1;
+				rel2.offset: -16 0;
 			}
 		}
 		part {
