@@ -18,7 +18,8 @@ if(BUILD_UI)
 # synthpod_ui
 	add_library(synthpod_ui.lib SHARED
 		synthpod_ui.c
-		patcher.c)
+		patcher.c
+		meter.c)
 	target_link_libraries(synthpod_ui.lib
 		${ELM_LDFLAGS}
 		${UV_LDFLAGS}
