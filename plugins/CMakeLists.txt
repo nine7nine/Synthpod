@@ -1,6 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
+include_directories(${PROJECT_SOURCE_DIR}/ext) # eoui.h
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
 set(DEST lib/lv2/synthpod.lv2)

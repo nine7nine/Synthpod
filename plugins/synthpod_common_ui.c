@@ -20,9 +20,13 @@
 #include <synthpod_lv2.h>
 #include <synthpod_ui.h>
 
+#include <eoui.h>
+
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
+	eo_ui_t eoui;
+
 	sp_ui_t *ui;
 	sp_ui_driver_t driver;
 
@@ -34,85 +38,13 @@ struct _plughandle_t {
 	LV2UI_Write_Function write_function;
 	LV2UI_Controller controller;
 
-	int w, h;
-	Ecore_Evas *ee;
-	Evas_Object *bg;
-	Evas_Object *parent;
-
 	struct {
 		uint8_t app [CHUNK_SIZE] _ATOM_ALIGNED;
 	} buf;
 };
 
-// Idle interface
-static int
-idle_cb(LV2UI_Handle instance)
-{
-	plughandle_t *handle = instance;
-
-	sp_ui_iterate(handle->ui);
-	
-	return 0;
-}
-
-static const LV2UI_Idle_Interface idle_ext = {
-	.idle = idle_cb
-};
-
-// Show Interface
-static int
-_show_cb(LV2UI_Handle instance)
-{
-	plughandle_t *handle = instance;
-
-	if(handle && handle->ee)
-		ecore_evas_show(handle->ee);
-
-	return 0;
-}
-
-static int
-_hide_cb(LV2UI_Handle instance)
-{
-	plughandle_t *handle = instance;
-
-	if(handle && handle->ee)
-		ecore_evas_hide(handle->ee);
-
-	return 0;
-}
-
-static const LV2UI_Show_Interface show_ext = {
-	.show = _show_cb,
-	.hide = _hide_cb
-};
-
-// Resize Interface
-static int
-resize_cb(LV2UI_Feature_Handle instance, int w, int h)
-{
-	plughandle_t *handle = instance;
-
-	if(!handle)
-		return -1;
-
-	handle->w = w;
-	handle->h = h;
-
-	if(handle->ee)
-	{
-		ecore_evas_resize(handle->ee, handle->w, handle->h);
-		//evas_object_resize(handle->parent, handle->w, handle->h);
-		evas_object_resize(handle->bg, handle->w, handle->h);
-	}
-
-	sp_ui_resize(handle->ui, handle->w, handle->h);
-  
-  return 0;
-}
-
 static void
-_delete(void *data, Evas *e, Evas_Object *obj, void *event_info)
+_content_free(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	plughandle_t *handle = data;
 
@@ -136,6 +68,21 @@ _to_app_advance(size_t size, void *data)
 		size, handle->uri.event_transfer, handle->buf.app);
 }
 
+static Evas_Object *
+_content_get(eo_ui_t *eoui)
+{
+	plughandle_t *handle = (void *)eoui - offsetof(plughandle_t, eoui);
+	
+	handle->ui = sp_ui_new(eoui->win, &handle->driver, handle);
+	if(!handle->ui)
+		return NULL;
+
+	Evas_Object *widg = sp_ui_widget_get(handle->ui);
+	evas_object_event_callback_add(widg, EVAS_CALLBACK_FREE, _content_free, handle);
+
+	return widg;
+}
+
 static LV2UI_Handle
 instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	const char *bundle_path, LV2UI_Write_Function write_function,
@@ -145,31 +92,40 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	if(strcmp(plugin_uri, SYNTHPOD_STEREO_URI))
 		return NULL;
 
+	eo_ui_driver_t driver;
+	if(descriptor == &synthpod_common_eo)
+		driver = EO_UI_DRIVER_EO;
+	else if(descriptor == &synthpod_common_ui)
+		driver = EO_UI_DRIVER_UI;
+	else if(descriptor == &synthpod_common_x11)
+		driver = EO_UI_DRIVER_X11;
+	else if(descriptor == &synthpod_common_kx)
+		driver = EO_UI_DRIVER_KX;
+	else
+		return NULL;
+
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
-	handle->w = 800;
-	handle->h = 450;
+	eo_ui_t *eoui = &handle->eoui;
+	eoui->driver = driver;
+	eoui->content_get = _content_get;
+	eoui->w = 1280,
+	eoui->h = 720;
+
 	handle->write_function = write_function;
 	handle->controller = controller;
 
-	void *parent = NULL;
-	LV2UI_Resize *resize = NULL;
-	
 	for(int i=0; features[i]; i++)
 	{
-		if(!strcmp(features[i]->URI, LV2_UI__parent))
-			parent = features[i]->data;
-		else if(!strcmp(features[i]->URI, LV2_UI__resize))
-			resize = (LV2UI_Resize *)features[i]->data;
-		else if(!strcmp(features[i]->URI, LV2_URID__map))
+		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
   }
 
-	if(!parent || !handle->driver.map || !handle->driver.unmap)
+	if(!handle->driver.map || !handle->driver.unmap)
 	{
 		free(handle);
 		return NULL;
@@ -180,60 +136,15 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->uri.event_transfer = handle->driver.map->map(handle->driver.map->handle,
 		LV2_ATOM__eventTransfer);
 
-	if(descriptor == &synthpod_common_ui)
-	{
-		_elm_startup_time = ecore_time_unix_get();
-		elm_init(0, NULL);
-
-		Ecore_X_Window xwin = (Ecore_X_Window)parent;
-		handle->ee = ecore_evas_gl_x11_new(NULL, xwin, 0, 0, handle->w, handle->h);
-		if(!handle->ee)
-			handle->ee = ecore_evas_software_x11_new(NULL, xwin, 0, 0, handle->w, handle->h);
-		if(!handle->ee)
-		{
-			free(handle);
-			return NULL;
-		}
-		ecore_evas_show(handle->ee);
-	
-#if defined(ELM_HAS_FAKE)
-		handle->parent = elm_win_fake_add(handle->ee);
-		evas_object_resize(handle->parent, handle->w, handle->h);
-		evas_object_show(handle->parent);
-#else
-		Evas *e = ecore_evas_get(handle->ee);
-		handle->parent = evas_object_rectangle_add(e);
-#endif
-
-		handle->bg = elm_bg_add(handle->parent);
-		evas_object_resize(handle->bg, handle->w, handle->w);
-		evas_object_show(handle->bg);
-	}
-	else if(descriptor == &synthpod_common_eo)
-	{
-		handle->ee = NULL;
-		handle->parent = (Evas_Object *)parent;
-	}
-
-	if(resize)
-    resize->ui_resize(resize->handle, handle->w, handle->h);
-
 	handle->driver.to_app_request = _to_app_request;
 	handle->driver.to_app_advance = _to_app_advance;
-	handle->ui = sp_ui_new(handle->parent, &handle->driver, handle);
-	if(!handle->ui)
+
+	if(eoui_instantiate(eoui, descriptor, plugin_uri, bundle_path, write_function,
+		controller, widget, features))
 	{
 		free(handle);
 		return NULL;
 	}
-
-	Evas_Object *widg = sp_ui_widget_get(handle->ui);
-	evas_object_event_callback_add(widg, EVAS_CALLBACK_DEL, _delete, handle);
-
-	if(handle->ee) // X11 UI
-		*(Evas_Object **)widget = NULL;
-	else // Eo UI
-		*(Evas_Object **)widget = widg;
 
 	return handle;
 }
@@ -242,22 +153,9 @@ static void
 cleanup(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
-	
-	if(handle)
-	{
-		if(handle->ee)
-		{
-			ecore_evas_hide(handle->ee);
 
-			evas_object_del(handle->bg);
-			evas_object_del(handle->parent);
-
-			//ecore_evas_free(handle->ee);
-			//elm_shutdown();
-		}
-		
-		free(handle);
-	}
+	eoui_cleanup(&handle->eoui);
+	free(handle);
 }
 
 static void
@@ -279,29 +177,34 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 		; //TODO subscribe to audio/event ports?
 }
 
-static const void *
-extension_data(const char *uri)
-{
-	if(!strcmp(uri, LV2_UI__idleInterface))
-		return &idle_ext;
-	else if(!strcmp(uri, LV2_UI__showInterface))
-		return &show_ext;
-		
-	return NULL;
-}
+const LV2UI_Descriptor synthpod_common_eo = {
+	.URI						= SYNTHPOD_COMMON_EO_URI,
+	.instantiate		= instantiate,
+	.cleanup				= cleanup,
+	.port_event			= port_event,
+	.extension_data	= eoui_eo_extension_data
+};
 
 const LV2UI_Descriptor synthpod_common_ui = {
 	.URI						= SYNTHPOD_COMMON_UI_URI,
 	.instantiate		= instantiate,
 	.cleanup				= cleanup,
 	.port_event			= port_event,
-	.extension_data	= extension_data
+	.extension_data	= eoui_ui_extension_data
 };
 
-const LV2UI_Descriptor synthpod_common_eo = {
-	.URI						= SYNTHPOD_COMMON_EO_URI,
+const LV2UI_Descriptor synthpod_common_x11 = {
+	.URI						= SYNTHPOD_COMMON_X11_URI,
 	.instantiate		= instantiate,
 	.cleanup				= cleanup,
 	.port_event			= port_event,
-	.extension_data	= NULL
+	.extension_data	= eoui_x11_extension_data
+};
+
+const LV2UI_Descriptor synthpod_common_kx = {
+	.URI						= SYNTHPOD_COMMON_KX_URI,
+	.instantiate		= instantiate,
+	.cleanup				= cleanup,
+	.port_event			= port_event,
+	.extension_data	= eoui_kx_extension_data
 };

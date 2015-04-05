@@ -22,7 +22,7 @@ ui:EoUI
 		owl:Class ;
 	rdfs:subClassOf ui:UI ;
 	rdfs:comment """
-A UI where the LV2_Widget is a pointer to a Evas/Elementary compatible Object
+A UI where the LV2_Widget is a pointer to an Evas/Elementary compatible Object
 (e.g. an "Evas_Object *" or "Eo *"), and the host guarantees that the
 Ecore_Evas or Elementary library has been initialised and the Ecore or
-Elementary main loop is running before a UI of this type is instantiated.""" .
+Elementary main loop is running before an UI of this type is instantiated.""" .

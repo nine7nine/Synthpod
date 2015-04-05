@@ -25,17 +25,17 @@
 
 typedef enum _eo_ui_driver_t eo_ui_driver_t;
 typedef struct _eo_ui_t eo_ui_t;
+typedef Evas_Object *(*eo_ui_content_get)(eo_ui_t *eoui);
 
 enum _eo_ui_driver_t {
-	EO_UI_DRIVER_UNKONWN	= 0,
-	EO_UI_DRIVER_EO				= 1,
-	EO_UI_DRIVER_X11			= 2,
-	EO_UI_DRIVER_SHOW			= 4,
-	EO_UI_DRIVER_EXTERNAL	= 8
+	EO_UI_DRIVER_NONE	= 0,
+	EO_UI_DRIVER_EO,
+	EO_UI_DRIVER_X11,
+	EO_UI_DRIVER_UI,
+	EO_UI_DRIVER_KX
 };
 
 struct _eo_ui_t {
-	Evas_Object *parent;
 	eo_ui_driver_t driver;
   LV2UI_Controller controller;
 	int w, h;
@@ -43,26 +43,38 @@ struct _eo_ui_t {
 	Evas_Object *win; // main window
 	Evas_Object *bg; // background
 
-	// X11 iface
-	struct {
-		Ecore_Evas *ee;
-		Evas *e;
+	Evas_Object *content;
+	eo_ui_content_get content_get;
+
+	union {
+		// eo iface
+		struct {
+			Evas_Object *parent;
+		} eo;
+
+		// show iface
+		struct {
+			volatile int done;
+		} ui;
+
+		// X11 iface
+		struct {
+			Ecore_X_Window parent;
+			LV2UI_Resize *resize;
+
+			Ecore_Evas *ee;
+		} x11;
+
+		// external-ui iface
+		struct {
+			LV2_External_UI_Widget widget;
+			const LV2_External_UI_Host *host;
+		} kx;
 	};
-
-	// show iface
-	struct {
-		volatile int done;
-	} show;
-
-	// external-ui iface
-	struct {
-		LV2_External_UI_Widget widget;
-		const LV2_External_UI_Host *host;
-	} external;
 };
 
 // Idle interface
-static int
+static inline int
 _idle_cb(LV2UI_Handle instance)
 {
 	eo_ui_t *eoui = instance;
@@ -71,14 +83,14 @@ _idle_cb(LV2UI_Handle instance)
 
 	ecore_main_loop_iterate();
 
-	return eoui->show.done;
+	return eoui->ui.done;
 }
 
 static const LV2UI_Idle_Interface idle_ext = {
 	.idle = _idle_cb
 };
 
-static void
+static inline void
 _show_delete_request(void *data, Evas_Object *obj, void *event_info)
 {
 	eo_ui_t *eoui = data;
@@ -86,48 +98,62 @@ _show_delete_request(void *data, Evas_Object *obj, void *event_info)
 		return;
 
 	// set done flag, host will then call _hide_cb
-	eoui->show.done = 1;
+	eoui->ui.done = 1;
 }
 
 // Show Interface
-static int
+static inline int
 _show_cb(LV2UI_Handle instance)
 {
 	eo_ui_t *eoui = instance;
 	if(!eoui)
 		return -1;
 
-	// initialize elementary library
-	elm_init(0, NULL);
-
 	// create main window
-	eoui->win = elm_win_util_add("EoUI", "EoUI");
+	eoui->win = elm_win_add(NULL, "EoUI", ELM_WIN_BASIC);
 	if(!eoui->win)
 		return -1;
-	evas_object_smart_callback_add(win, "delete,request",
+	evas_object_smart_callback_add(eoui->win, "delete,request",
 		_show_delete_request, eoui);
 	evas_object_resize(eoui->win, eoui->w, eoui->h);
 	evas_object_show(eoui->win);
 
+	eoui->bg = elm_bg_add(eoui->win);
+	elm_bg_color_set(eoui->bg, 64, 64, 64);
+	evas_object_size_hint_weight_set(eoui->bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(eoui->bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(eoui->bg);
+	elm_win_resize_object_add(eoui->win, eoui->bg);
+
+	eoui->content = eoui->content_get(eoui);
+	evas_object_size_hint_weight_set(eoui->content, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(eoui->content, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(eoui->content);
+	elm_win_resize_object_add(eoui->win, eoui->content);
+
 	return 0;
 }
 
-static int
+static inline int
 _hide_cb(LV2UI_Handle instance)
 {
 	eo_ui_t *eoui = instance;
 	if(!eoui)
 		return -1;
 
-	// hide & delete main window
-	evas_object_hide(eoui->win);
+	// hide & delete bg&main window
+	elm_win_resize_object_del(eoui->win, eoui->bg);
+	elm_win_resize_object_del(eoui->win, eoui->content);
+	evas_object_del(eoui->content);
+	evas_object_del(eoui->bg);
 	evas_object_del(eoui->win);
 
-	// deinitialize elementary library
-	elm_shutdown();
+	eoui->content = NULL;
+	eoui->bg = NULL;
+	eoui->win = NULL;
 
 	// reset done flag
-	eoui->show.done = 0;
+	eoui->ui.done = 0;
 
 	return 0;
 }
@@ -138,72 +164,86 @@ static const LV2UI_Show_Interface show_ext = {
 };
 
 // External-UI Interface
-static void
-_external_run(LV2_External_UI_Widget *widget)
+static inline void
+_kx_run(LV2_External_UI_Widget *widget)
 {
 	eo_ui_t *eoui = widget
-		? (void *)widget - offsetof(eo_ui_t, external.widget)
+		? (void *)widget - offsetof(eo_ui_t, kx.widget)
 		: NULL;
-	if(!eoui);
+	if(!eoui)
 		return;
 
 	ecore_main_loop_iterate();
 }
 
-static void
-_external_hide(LV2_External_UI_Widget *widget)
+static inline void
+_kx_hide(LV2_External_UI_Widget *widget)
 {
 	eo_ui_t *eoui = widget
-		? (void *)widget - offsetof(eo_ui_t, external.widget)
+		? (void *)widget - offsetof(eo_ui_t, kx.widget)
 		: NULL;
-	if(!eoui);
+	if(!eoui)
 		return;
 
-	// hide & delete main window
-	evas_object_hide(eoui->win);
-	evas_object_del(eoui->win);
-
-	// deinitialize elementary library
-	elm_shutdown();
+	// hide & delete bg & main window
+	elm_win_resize_object_del(eoui->win, eoui->bg);
+	elm_win_resize_object_del(eoui->win, eoui->content);
+	evas_object_del(eoui->content);
+	evas_object_del(eoui->bg);
+	evas_object_del(eoui->win); // will call _kx_free
 }
 
-static void
-_external_delete_request(void *data, Evas_Object *obj, void *event_info)
+static inline void
+_kx_free(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	eo_ui_t *eoui = data;
 	if(!eoui)
 		return;
 
-	_external_hide(&eoui->external.widget);
-	if(eoui->external.host.ui_closed && eoui->controller)
-		eoui->external.host.ui_closed(eoui->controller);
+	eoui->content = NULL;
+	eoui->bg = NULL;
+	eoui->win = NULL;
+	if(eoui->kx.host->ui_closed && eoui->controller)
+		eoui->kx.host->ui_closed(eoui->controller);
 }
 
-static void
-_external_show(LV2_External_UI_Widget *widget)
+static inline void
+_kx_show(LV2_External_UI_Widget *widget)
 {
 	eo_ui_t *eoui = widget
-		? (void *)widget - offsetof(eo_ui_t, external.widget)
+		? (void *)widget - offsetof(eo_ui_t, kx.widget)
 		: NULL;
-	if(!eoui);
+	if(!eoui || eoui->win)
 		return;
-
-	// initialize elementary library
-	elm_init(0, NULL);
 
 	// create main window
-	const char *title = eoui->external.host.plugin_human_id || "EoUI";
-	eoui->win = elm_win_util_add(title, title);
+	const char *title = eoui->kx.host->plugin_human_id
+		? eoui->kx.host->plugin_human_id
+		: "EoUI";
+	eoui->win = elm_win_add(NULL, title, ELM_WIN_BASIC);
 	if(!eoui->win)
 		return;
-	evas_object_smart_callback_add(win, "delete,request",
-		_external_delete_request, eoui);
+	elm_win_autodel_set(eoui->win, EINA_TRUE);
+	evas_object_event_callback_add(eoui->win, EVAS_CALLBACK_FREE, _kx_free, eoui);
 	evas_object_resize(eoui->win, eoui->w, eoui->h);
 	evas_object_show(eoui->win);
+
+	eoui->bg = elm_bg_add(eoui->win);
+	elm_bg_color_set(eoui->bg, 64, 64, 64);
+	evas_object_size_hint_weight_set(eoui->bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(eoui->bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(eoui->bg);
+	elm_win_resize_object_add(eoui->win, eoui->bg);
+
+	eoui->content = eoui->content_get(eoui);
+	evas_object_size_hint_weight_set(eoui->content, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(eoui->content, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(eoui->content);
+	elm_win_resize_object_add(eoui->win, eoui->content);
 }
 
 // Resize Interface
-static int
+static inline int
 _ui_resize_cb(LV2UI_Feature_Handle instance, int w, int h)
 {
 	eo_ui_t *eoui = instance;
@@ -219,7 +259,9 @@ _ui_resize_cb(LV2UI_Feature_Handle instance, int w, int h)
 	eoui->h = h;
 
 	// resize main window
-	evas_object_resize(eoui->win, eoui->w, eoui->h);
+	evas_object_resize(eoui->win, eoui->w, eoui->h); // resizes bg & content, too
+	evas_object_resize(eoui->bg, eoui->w, eoui->h); // resizes bg & content, too
+	evas_object_resize(eoui->content, eoui->w, eoui->h); // resizes bg & content, too
   
   return 0;
 }
@@ -229,39 +271,248 @@ static const LV2UI_Resize resize_ext = {
 	.ui_resize = _ui_resize_cb
 };
 
-int
-eoui_init(eo_ui_t *eoui, Evas_Object *parent, eo_ui_driver_t driver,
-	LV2_UI_Controller controller, int w, int h)
+static inline int
+eoui_instantiate(eo_ui_t *eoui, const LV2UI_Descriptor *descriptor,
+	const char *plugin_uri, const char *bundle_path,
+	LV2UI_Write_Function write_function, LV2UI_Controller controller,
+	LV2UI_Widget *widget, const LV2_Feature *const *features)
 {
-	// clear eoui
-	memset(eoui, 0, sizeof(eo_ui_t));
-
-	eoui->parent = parent;
-	eoui->driver = driver;
+	//eoui->driver = NULL; set by ui plugin
 	eoui->controller = controller;
-	eoui->w = w;
-	eoui->h = h;
+	eoui->w = eoui->w > 0 ? eoui->w : 400; // fall-back if w == 0
+	eoui->h = eoui->h > 0 ? eoui->h : 400; // fall-back if h == 0
+
+	switch(eoui->driver)
+	{
+		case EO_UI_DRIVER_EO:
+		{
+			eoui->eo.parent = NULL; // mandatory
+			for(int i=0; features[i]; i++)
+			{
+				if(!strcmp(features[i]->URI, LV2_UI__parent))
+					eoui->eo.parent = features[i]->data;
+			}
+			if(!eoui->eo.parent)
+				return -1;
+
+			eoui->win = eoui->eo.parent;
+
+			eoui->content = eoui->content_get(eoui);
+			evas_object_size_hint_min_set(eoui->content, eoui->w, eoui->h);
+
+			*(Evas_Object **)widget = eoui->content;
+
+			break;
+		}
+
+		case EO_UI_DRIVER_UI:
+		{
+			// according to the LV2 spec, the host MUST signal availability of
+			// idle interface via features, thus we test for it here
+			int host_provides_idle_iface = 0; // mandatory
+			for(int i=0; features[i]; i++)
+			{
+				if(!strcmp(features[i]->URI, LV2_UI__idleInterface))
+					host_provides_idle_iface = 1;
+			}
+			if(!host_provides_idle_iface)
+				return -1;
+
+			// initialize elementary library
+			_elm_startup_time = ecore_time_unix_get();
+			elm_init(0, NULL);
+
+			*widget = NULL;
+
+			break;
+		}
+
+		case EO_UI_DRIVER_X11:
+		{
+			eoui->x11.parent = 0; // mandatory
+			eoui->x11.resize = NULL; // optional
+			int host_provides_idle_iface = 0; // mandatory
+			for(int i=0; features[i]; i++)
+			{
+				if(!strcmp(features[i]->URI, LV2_UI__parent))
+					eoui->x11.parent = (Ecore_X_Window)features[i]->data;
+				else if(!strcmp(features[i]->URI, LV2_UI__resize))
+					eoui->x11.resize = (LV2UI_Resize *)features[i]->data;
+				else if(!strcmp(features[i]->URI, LV2_UI__idleInterface))
+					host_provides_idle_iface = 1;
+			}
+			if(!eoui->x11.parent || !host_provides_idle_iface)
+				return -1;
+
+			// initialize elementary library
+			_elm_startup_time = ecore_time_unix_get();
+			elm_init(0, NULL);
+
+			eoui->x11.ee = ecore_evas_gl_x11_new(NULL, eoui->x11.parent, 0, 0,
+				eoui->w, eoui->h);
+			if(!eoui->x11.ee)
+				eoui->x11.ee = ecore_evas_software_x11_new(NULL, eoui->x11.parent, 0, 0,
+					eoui->w, eoui->h);
+			if(!eoui->x11.ee)
+			{
+				//elm_shutdown();
+				return -1;
+			}
+			ecore_evas_show(eoui->x11.ee);
+	
+#if defined(ELM_HAS_FAKE)
+			eoui->win = elm_win_fake_add(eoui->x11.ee);
+			evas_object_resize(eoui->win, eoui->w, eoui->h);
+			evas_object_show(eoui->win);
+#else
+			eoui->win = evas_object_rectangle_add(ecore_evas_get(eoui->x11.ee));
+#endif
+
+			eoui->bg = elm_bg_add(eoui->win);
+			elm_bg_color_set(eoui->bg, 64, 64, 64);
+			evas_object_size_hint_weight_set(eoui->bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(eoui->bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_resize(eoui->bg, eoui->w, eoui->h);
+			evas_object_show(eoui->bg);
+
+			eoui->content = eoui->content_get(eoui);
+			evas_object_size_hint_weight_set(eoui->content, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(eoui->content, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_resize(eoui->content, eoui->w, eoui->h);
+			evas_object_show(eoui->content);
+
+			if(eoui->x11.resize)
+				eoui->x11.resize->ui_resize(eoui->x11.resize->handle, eoui->w, eoui->h);
+
+			*widget = NULL;
+
+			break;
+		}
+
+		case EO_UI_DRIVER_KX:
+		{
+			eoui->kx.host = NULL; // mandatory
+			for(int i=0; features[i]; i++)
+			{
+				if(!strcmp(features[i]->URI, LV2_EXTERNAL_UI__Host))
+					eoui->kx.host = features[i]->data;
+			}
+			if(!eoui->kx.host)
+				return -1;
+
+			// initialize elementary library
+			_elm_startup_time = ecore_time_unix_get();
+			elm_init(0, NULL);
+
+			eoui->kx.widget.run = _kx_run;
+			eoui->kx.widget.show = _kx_show;
+			eoui->kx.widget.hide = _kx_hide;
+
+			*(LV2_External_UI_Widget **)widget = &eoui->kx.widget;
+
+			break;
+		}
+
+		default:
+			break;
+	}
 
 	return 0;
 }
 
-int
-eoui_deinit(eo_ui_t *eoui)
+static inline void
+eoui_cleanup(eo_ui_t *eoui)
 {
+	switch(eoui->driver)
+	{
+		case EO_UI_DRIVER_EO:
+		{
+			eoui->content = NULL;
+
+			break;
+		}
+
+		case EO_UI_DRIVER_UI:
+		{
+			//elm_shutdown();
+			break;
+		}
+
+		case EO_UI_DRIVER_X11:
+		{
+			if(eoui->content)
+			{
+				elm_win_resize_object_del(eoui->win, eoui->content);
+				evas_object_del(eoui->content);
+			}
+			if(eoui->bg)
+			{
+				elm_win_resize_object_del(eoui->win, eoui->bg);
+				evas_object_del(eoui->bg);
+			}
+			if(eoui->win)
+				evas_object_del(eoui->win);
+#if !defined(ELM_HAS_FAKE)
+			if(eoui->x11.ee)
+				ecore_evas_free(eoui->x11.ee);
+#endif
+			eoui->content = NULL;
+			eoui->bg = NULL;
+			eoui->win = NULL;
+			eoui->x11.ee = NULL;
+			//elm_shutdown();
+			break;
+		}
+
+		case EO_UI_DRIVER_KX:
+		{
+			//elm_shutdown();
+			break;
+		}
+
+		default:
+			break;
+	}
+
 	// clear eoui
 	memset(eoui, 0, sizeof(eo_ui_t));
 }
 
-const void *
-eoui_extension_data(const char *uri)
+// extension data callback for EoUI
+static inline const void *
+eoui_eo_extension_data(const char *uri)
+{
+	return NULL;
+}
+
+// extension data callback for show interface UI
+static inline const void *
+eoui_ui_extension_data(const char *uri)
 {
 	if(!strcmp(uri, LV2_UI__idleInterface))
 		return &idle_ext;
 	else if(!strcmp(uri, LV2_UI__showInterface))
 		return &show_ext;
-	else if(!strcmp(uri, LV2_UI__resizeInterface))
+		
+	return NULL;
+}
+
+// extension data callback for X11UI
+static inline const void *
+eoui_x11_extension_data(const char *uri)
+{
+	if(!strcmp(uri, LV2_UI__idleInterface))
+		return &idle_ext;
+	else if(!strcmp(uri, LV2_UI__resize))
 		return &resize_ext;
 		
+	return NULL;
+}
+
+// extension data callback for external-ui
+static inline const void *
+eoui_kx_extension_data(const char *uri)
+{
 	return NULL;
 }
 

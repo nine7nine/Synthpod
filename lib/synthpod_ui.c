@@ -1255,14 +1255,7 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	if(mod->external.ui)
-	{
-		if(mod->external.widget)
-			_ext_ui_hide(mod);
-		else
-			_ext_ui_show(mod);
-	}
-	else if(mod->eo.ui)
+	if(mod->eo.ui)
 	{
 		if(mod->eo.full.win)
 		{
@@ -1300,11 +1293,22 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 			elm_win_resize_object_add(win, bg);
 
 			Evas_Object *widget = _eo_widget_create(win, mod);
-			//evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			//evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(widget);
 			elm_win_resize_object_add(win, widget);
 		}
+	}
+	else if(mod->custom.ui)
+	{
+		//TODO
+	}
+	else if(mod->external.ui)
+	{
+		if(mod->external.widget)
+			_ext_ui_hide(mod);
+		else
+			_ext_ui_show(mod);
 	}
 }
 
@@ -1787,7 +1791,11 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 
 	if(!strcmp(part, "elm.swallow.icon"))
 	{
-		return _eo_widget_create(ui->modgrid, mod);
+		Evas_Object *widget = _eo_widget_create(ui->modgrid, mod);
+		evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(widget);
+		return widget;
 	}
 	else if(!strcmp(part, "elm.swallow.end"))
 	{

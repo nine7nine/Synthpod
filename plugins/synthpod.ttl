@@ -26,6 +26,7 @@
 @prefix midi: <http://lv2plug.in/ns/ext/midi#> .
 @prefix bufsz: <http://lv2plug.in/ns/ext/buf-size#> .
 @prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
+@prefix kx:				<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -184,19 +185,7 @@ synthpod:sink
 		pg:group synthpod:group_out ;
 	] .
 
-# Common X11UI
-synthpod:common_ui
-	a ui:X11UI ;
-	ui:portNotification [
-		ui:plugin synthpod:stereo ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	lv2:requiredFeature ui:idleInterface ;
-  lv2:extensionData ui:idleInterface,
-		ui:showInterface .
-
-# Common EoUI
+# Common UIs
 synthpod:common_eo
 	a ui:EoUI ;
 	ui:portNotification [
@@ -204,6 +193,33 @@ synthpod:common_eo
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] .
+synthpod:common_ui
+	a ui:UI ;
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:requiredFeature ui:idleInterface ;
+  lv2:extensionData ui:idleInterface, ui:showInterface .
+synthpod:common_x11
+	a ui:X11UI ;
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:requiredFeature ui:idleInterface ;
+	lv2:optionalFeature ui:resize ;
+  lv2:extensionData ui:idleInterface .
+synthpod:common_kx
+	a kx:Widget ;
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:requiredFeature kx:Host .
 
 # Stereo Plugin
 synthpod:stereo
@@ -292,18 +308,23 @@ synthpod:stereo
 		pg:group synthpod:group_out ;
 	] .
 
-# Keyboard X11UI
-synthpod:keyboard_ui
-	a ui:X11UI ;
-	lv2:requiredFeature ui:idleInterface ;
-  lv2:extensionData ui:idleInterface,
-		ui:showInterface .
-
-# Common EoUI
+# Keybaord UIs
 synthpod:keyboard_eo
 	a ui:EoUI .
+synthpod:keyboard_ui
+	a ui:UI ;
+	lv2:requiredFeature ui:idleInterface ;
+  lv2:extensionData ui:idleInterface, ui:showInterface .
+synthpod:keyboard_x11
+	a ui:X11UI ;
+	lv2:requiredFeature ui:idleInterface ;
+	lv2:optionalFeature ui:resize ;
+  lv2:extensionData ui:idleInterface .
+synthpod:keyboard_kx
+	a kx:Widget ;
+	lv2:requiredFeature kx:Host .
 
-# Stereo Plugin
+# Keyboard Plugin
 synthpod:keyboard
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
@@ -323,12 +344,23 @@ synthpod:keyboard
 		lv2:name "Event In" ;
 		lv2:designation lv2:control ;
 	] , [
+		# event_in
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "octave" ;
+		lv2:name "Octave" ;
+		lv2:default 3 ;
+		lv2:minimum 0 ;
+		lv2:maximum 6 ;
+		lv2:portProperty lv2:integer ;
+	] , [
 		# event in
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
-		lv2:index 1 ;
+		lv2:index 2 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
 	] .

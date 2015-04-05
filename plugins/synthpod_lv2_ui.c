@@ -25,14 +25,22 @@ lv2ui_descriptor(uint32_t index)
 	switch(index)
 	{
 		case 0:
-			return &synthpod_common_ui;
-		case 1:
 			return &synthpod_common_eo;
-
+		case 1:
+			return &synthpod_common_ui;
 		case 2:
-			return &synthpod_keyboard_ui;
+			return &synthpod_common_x11;
 		case 3:
+			return &synthpod_common_kx;
+
+		case 4:
 			return &synthpod_keyboard_eo;
+		case 5:
+			return &synthpod_keyboard_ui;
+		case 6:
+			return &synthpod_keyboard_x11;
+		case 7:
+			return &synthpod_keyboard_kx;
 		default:
 			return NULL;
 	}
