@@ -24,6 +24,9 @@
 @prefix synthpod: <http://open-music-kontrollers.ch/lv2/synthpod#> .
 
 # to please sord_validate
+ui:EoUI
+	a rdfs:Class, owl:Class ;
+	rdfs:subClassOf ui:UI .
 kx:Widget
 	a rdfs:Class, owl:Class ;
 	rdfs:subClassOf ui:UI .

@@ -20,7 +20,7 @@
 #include <synthpod_lv2.h>
 #include <synthpod_ui.h>
 
-#include <eoui.h>
+#include <lv2_eo_ui.h>
 
 typedef struct _plughandle_t plughandle_t;
 

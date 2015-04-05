@@ -4,3 +4,6 @@
 [submodule "plugins/libosc_stream"]
 	path = plugins/libosc_stream
 	url = https://github.com/OpenMusicKontrollers/libosc_stream.git
+[submodule "eo_ui.lv2"]
+	path = eo_ui.lv2
+	url = https://github.com/OpenMusicKontrollers/eo_ui.lv2.git

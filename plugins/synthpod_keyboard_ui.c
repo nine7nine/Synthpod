@@ -25,7 +25,7 @@
 
 #include <Elementary.h>
 
-#include <eoui.h>
+#include <lv2_eo_ui.h>
 
 typedef struct _midi_atom_t midi_atom_t;
 typedef struct _plughandle_t plughandle_t;
