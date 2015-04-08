@@ -18,7 +18,9 @@ if(BUILD_UI)
 			${PROJECT_BINARY_DIR}/synthpod.edj
 		DEPENDS
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod.edc
-			${CMAKE_CURRENT_SOURCE_DIR}/patcher.edc)
+			${CMAKE_CURRENT_SOURCE_DIR}/modlist.edc
+			${CMAKE_CURRENT_SOURCE_DIR}/patcher.edc
+			${CMAKE_CURRENT_SOURCE_DIR}/slider.edc)
 	add_custom_target(THEME ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod.edj)
 	install(FILES ${PROJECT_BINARY_DIR}/synthpod.edj DESTINATION ${APP_DIR})
 endif()

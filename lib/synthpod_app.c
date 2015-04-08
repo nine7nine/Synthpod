@@ -1265,8 +1265,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				//printf("%u %f\n", port->period_cnt, peak);
 
 				if(  (peak != port->last) //TODO make below two configurable
-					&& (fabs(peak - port->last) > 0.001) // ignore smaller changes
-					&& ((port->period_cnt & 0x1ff) == 0x00) ) // only update every 512th period
+					&& ((port->period_cnt & 0x3f) == 0x00) ) // only update every 512th period
 				{
 					//printf("peak different: %i %i\n", port->last == 0.f, peak == 0.f);
 

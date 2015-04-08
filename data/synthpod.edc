@@ -24,5 +24,29 @@ collections {
 		//font: "DejaVuSansMono-Bold.ttf" "default";
 	}
 
-#	include <patcher.edc>
+#define COL00    0    0    0  255 // Black
+#define COL01  255  179    0  255 // Vivid Yellow
+#define COL02  128   62  117  255 // Strong Purple
+#define COL03  255  104    0  255 // Vivid Orange
+#define COL04  166  189  215  255 // Very Light Blue
+#define COL05  193    0   32  255 // Vivid Red
+#define COL06  206  162   98  255 // Grayish Yellow
+#define COL07  129  112  102  255 // Medium Gray
+#define COL08    0  125   52  255 // Vivid Green
+#define COL09  246  118  142  255 // Strong Purplish Pink
+#define COL10    0   83  138  255 // Strong Blue
+#define COL11  255  122   92  255 // Strong Yellowish Pink
+#define COL12   83   55  122  255 // Strong Violet
+#define COL13  255  142    0  255 // Vivid Orange Yellow
+#define COL14  179   40   81  255 // Strong Purplish Red
+#define COL15  244  200    0  255 // Vivid Greenish Yellow
+#define COL16  127   24   13  255 // Strong Reddish Brown
+#define COL17  147  170    0  255 // Vivid Yellowish Green
+#define COL18   89   51   21  255 // Deep Yellowish Brown
+#define COL19  241   58   19  255 // Vivid Reddish Orange
+#define COL20   35   44   22  255 // Dark Olive Green
+
+#include <modlist.edc>
+#include <patcher.edc>
+#include <slider.edc>
 }

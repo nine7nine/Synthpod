@@ -26,6 +26,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 #define NUM_UI_FEATURES 10
+#define MODLIST_UI "/synthpod/modlist/ui"
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -155,6 +156,8 @@ struct _port_t {
 	float dflt;
 	float min;
 	float max;
+
+	float peak;
 			
 	struct {
 		Evas_Object *widget;
@@ -293,8 +296,12 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 	{
 		const LV2UI_Peak_Data *peak_data = buf;
-		//printf("peak: %f\n", peak_data->peak);
-		elm_progressbar_value_set(port->std.widget, peak_data->peak);
+		if(peak_data->peak > port->peak)
+			port->peak = peak_data->peak;
+		else
+			port->peak *= 0.8;
+		if(port->peak > 0.f)
+			elm_slider_value_set(port->std.widget, port->peak);
 	}
 	else
 		; //TODO atom, sequence
@@ -311,7 +318,8 @@ _eo_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	if(  mod->eo.ui
 		&& mod->eo.descriptor
-		&& mod->eo.descriptor->port_event)
+		&& mod->eo.descriptor->port_event
+		&& mod->eo.handle)
 	{
 		if(mod->eo.full.win)
 			mod->eo.descriptor->port_event(mod->eo.handle, index, size, protocol, buf);
@@ -645,12 +653,14 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 					_port_subscription_set(mod, index, ui->regs.port.atom_transfer.urid, state);
 			}
 
+			/*	
 			printf("port has notification for: %s %s %u %u %u\n",
 				lilv_node_as_string(sym),
 				lilv_node_as_uri(prot),
 				index,
 				ui->regs.port.atom_transfer.urid,
 				ui->regs.port.event_transfer.urid);
+			*/
 		}
 	}
 	lilv_nodes_free(notifs);
@@ -856,7 +866,7 @@ _x11_ui_show(mod_t *mod)
 	mod->x11.xwin = elm_win_xwindow_get(mod->x11.win);
 
 	void *dummy;
-	mod->feature_list[2].data = (void *)mod->x11.xwin;
+	mod->feature_list[2].data = (void *)((uintptr_t)mod->x11.xwin);
 
 	// instantiate UI
 	mod->x11.handle = mod->x11.descriptor->instantiate(
@@ -1063,7 +1073,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 		{
 			if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
 			{
-				printf("has EoUI\n");
+				//printf("has EoUI\n");
 				mod->eo.ui = lui;
 			}
 		}
@@ -1083,7 +1093,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 			if(lilv_nodes_size(has_show_iface) && lilv_nodes_size(has_idle_iface))
 			{
 				mod->custom.ui = lui;
-				printf("has custom UI\n");
+				//printf("has custom UI\n");
 			}
 
 			lilv_nodes_free(has_show_iface);
@@ -1100,7 +1110,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 			LilvNode *kx_ui = lilv_new_uri(ui->world, LV2_EXTERNAL_UI__Widget);
 			if(lilv_ui_is_a(lui, kx_ui))
 			{
-				printf("has kx-ui\n");
+				//printf("has kx-ui\n");
 				mod->kx.ui = lui;
 			}
 			lilv_node_free(kx_ui);
@@ -1111,7 +1121,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 			LilvNode *x11_ui = lilv_new_uri(ui->world, LV2_UI__X11UI);
 			if(lilv_ui_is_a(lui, x11_ui))
 			{
-				printf("has x11-ui\n");
+				//printf("has x11-ui\n");
 				mod->x11.ui = lui;
 			}
 			lilv_node_free(x11_ui);
@@ -1655,7 +1665,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	
 	char col [7];
 	sprintf(col, "col,%02i", mod->col);
-	elm_layout_signal_emit(lay, col, PATCHER_UI);
+	elm_layout_signal_emit(lay, col, MODLIST_UI);
 
 	Evas_Object *check = elm_check_add(lay);
 	elm_check_state_set(check, mod->selected);
@@ -1865,7 +1875,11 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		{
 			Evas_Object *sldr = elm_slider_add(lay);
 			elm_slider_horizontal_set(sldr, EINA_TRUE);
-			//elm_slider_unit_format_set(sldr, integer ? "%.0f" : "%.4f");
+			elm_object_style_set(sldr, "omk_slider");
+			char col[7];
+			sprintf(col, "col,%02i", mod->col);
+			elm_layout_signal_emit(sldr, col, "elm");
+			elm_slider_indicator_show_set(sldr, EINA_FALSE);
 			elm_slider_units_format_function_set(sldr, integer ? _fmt_int : _fmt_flt, _fmt_free);
 			elm_slider_min_max_set(sldr, port->min, port->max);
 			elm_slider_value_set(sldr, val);
@@ -1878,12 +1892,19 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	else if(port->type == PORT_TYPE_AUDIO
 		|| port->type == PORT_TYPE_CV)
 	{
-		Evas_Object *prog = elm_progressbar_add(lay);
-		elm_progressbar_horizontal_set(prog, EINA_TRUE);
-		elm_progressbar_unit_format_set(prog, NULL);
-		elm_progressbar_value_set(prog, 0.f);
+		Evas_Object *sldr = elm_slider_add(lay);
+		elm_slider_horizontal_set(sldr, EINA_TRUE);
+		elm_object_style_set(sldr, "omk_meter");
+		char col[7];
+		sprintf(col, "col,%02i", mod->col);
+		elm_layout_signal_emit(sldr, col, "elm");
+		elm_slider_indicator_show_set(sldr, EINA_FALSE);
+		elm_slider_unit_format_set(sldr, NULL);
+		elm_slider_min_max_set(sldr, 0.f, 1.f);
+		elm_slider_value_set(sldr, 0.f);
+		elm_slider_step_set(sldr, 0.01);
 
-		child = prog;
+		child = sldr;
 	}
 	else if(port->type == PORT_TYPE_ATOM)
 	{
@@ -1895,7 +1916,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 	if(child)
 	{
-		elm_object_disabled_set(child, port->direction == PORT_DIRECTION_OUTPUT);
+		elm_object_disabled_set(child,
+			(port->direction == PORT_DIRECTION_OUTPUT) || (port->type == PORT_TYPE_AUDIO));
 		evas_object_show(child);
 		elm_layout_content_set(lay, "elm.swallow.content", child);
 	}
@@ -2150,6 +2172,9 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 {
 	if(!driver || !data)
 		return NULL;
+	
+	elm_theme_extension_add(NULL, "/usr/local/share/synthpod/synthpod.edj");
+	elm_theme_flush(NULL);
 
 	sp_ui_t *ui = calloc(1, sizeof(sp_ui_t));
 	if(!ui)
