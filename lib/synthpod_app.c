@@ -438,7 +438,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 #if defined(_WIN32)
 		tar->buf = _aligned_malloc(size, 8); //FIXME check
 #else
-		tar->buf = aligned_alloc(8, size); //FIXME check
+		posix_memalign(&tar->buf, 8, size); //FIXME check
 #endif
 		//TODO mlock
 		memset(tar->buf, 0x0, size);

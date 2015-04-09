@@ -57,7 +57,7 @@ varchunk_new(size_t minimum)
 #if defined(_WIN32)
 	varchunk->buf = _aligned_malloc(varchunk->size, sizeof(varchunk_elmnt_t));
 #else
-	varchunk->buf = aligned_alloc(sizeof(varchunk_elmnt_t), varchunk->size);
+	posix_memalign(&varchunk->buf, sizeof(varchunk_elmnt_t), varchunk->size);
 #endif
 	if(!varchunk->buf)
 	{
