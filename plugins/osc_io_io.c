@@ -24,8 +24,9 @@
 #include <osc_stream.h>
 
 #include <osc_io.h>
+#include <varchunk.h>
 
-#define BUF_SIZE 2048
+#define BUF_SIZE 4096
 
 typedef struct _plughandle_t plughandle_t;
 
@@ -60,10 +61,15 @@ struct _plughandle_t {
 	LV2_Worker_Respond_Function respond;
 	LV2_Worker_Respond_Handle target;
 
+	varchunk_t *recv_buf;
+	varchunk_t *send_buf;
+
 	uv_loop_t loop;
+	osc_stream_driver_t driver;
 	osc_stream_t stream;
-	uint8_t buf [BUF_SIZE];
 	void *tmp;
+
+	uint8_t work_buf [BUF_SIZE];
 	LV2_Atom_Forge work_forge;
 };
 
@@ -144,7 +150,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 		if(handle->osc_url)
 			free(handle->osc_url);
 		handle->osc_url = strdup(osc_url);
-		handle->dirty = 1; // atomic instruction
+		//handle->dirty = 1; // atomic instruction //FIXME
 	}
 
 	return LV2_STATE_SUCCESS;
@@ -154,28 +160,6 @@ static const LV2_State_Interface state_iface = {
 	.save = _state_save,
 	.restore = _state_restore
 };
-
-static void
-_recv_cb(osc_stream_t *stream, osc_data_t *buf, size_t size, void *data)
-{
-	plughandle_t *handle = data;
-
-	lprintf(handle, handle->uris.log_note,
-		"_recv_cb: %zu %s\n", size, buf);
-
-	handle->respond(handle->target, size, buf);
-}
-
-static void
-_send_cb(osc_stream_t *stream, size_t size, void *data)
-{
-	plughandle_t *handle = data;
-
-	lprintf(handle, handle->uris.log_note,
-		"_send_cb: %zu %s\n", size, handle->tmp);
-
-	free(handle->tmp);
-}
 
 // non-rt thread
 static LV2_Worker_Status
@@ -191,30 +175,42 @@ _work(LV2_Handle instance,
 
 	if(atom->type == handle->uris.osc_OscEvent)
 	{
-		//TODO do without alloc, if possible
-		handle->tmp = malloc(atom->size);
-		memcpy(handle->tmp, LV2_ATOM_BODY_CONST(atom), atom->size);
+		// add data to send queue
+		osc_data_t *ptr = varchunk_write_request(handle->send_buf, atom->size);
+		if(ptr)
+		{
+			memcpy(ptr, LV2_ATOM_BODY_CONST(atom), atom->size);
+			varchunk_write_advance(handle->send_buf, atom->size);
 
-		lprintf(handle, handle->uris.log_note,
-			"osc_stream_send: %u %s\n", atom->size, handle->tmp);
-		osc_stream_send(&handle->stream, handle->tmp, atom->size);
+			osc_stream_flush(&handle->stream);
+		}
 	}
 	else if(atom->type == handle->uris.osc_io_dirty)
 	{
+		printf("_dirty: %s\n", handle->osc_url);
+
 		// reinitialize OSC stream
 		osc_stream_deinit(&handle->stream);
 		osc_stream_init(&handle->loop, &handle->stream, handle->osc_url,
-			_recv_cb, _send_cb, handle);
+			&handle->driver, handle);
 	}
-	else if(atom->type == handle->uris.osc_io_trig)
-	{
-		// run main loop
-		handle->respond = respond;
-		handle->target = target;
-	}
-		
+	
+	// run main loop
+	handle->respond = respond;
+	handle->target = target;
 	uv_run(&handle->loop, UV_RUN_NOWAIT);
-
+	
+	// reply received data to worker host
+	{
+		const osc_data_t *ptr;
+		size_t toread;
+		while((ptr = varchunk_read_request(handle->recv_buf, &toread)))
+		{
+			handle->respond(handle->target, toread, ptr);
+			varchunk_read_advance(handle->recv_buf);
+		}
+	}
+	
 	return LV2_WORKER_SUCCESS;
 }
 
@@ -224,17 +220,14 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 {
 	plughandle_t *handle = (plughandle_t *)instance;
 
-	/*
-	printf(handle, handle->uris.log_trace,
-		"_work_response: %u %p\n", size, body);
-	*/
+	//printf("_work_response: %u %s\n", size, body);
 
 	if(!strcmp(body, "/stream/connect"))
 		*handle->connected = 1.f;
 	else if(!strcmp(body, "/stream/disconnect"))
 		*handle->connected = 0.f;
 
-	LV2_Atom_Forge * forge = &handle->work_forge;
+	LV2_Atom_Forge *forge = &handle->work_forge;
 	lv2_atom_forge_frame_time(forge, 0);
 	lv2_atom_forge_atom(forge, size, handle->uris.osc_OscEvent);
 	lv2_atom_forge_raw(forge, body, size);
@@ -261,6 +254,42 @@ static const LV2_Worker_Interface work_iface = {
 	.work_response = _work_response,
 	.end_run = _end_run
 };
+
+static void *
+_recv_req(size_t size, void *data)
+{
+	plughandle_t *handle = data;
+
+	printf("_recv_req: %zu\n", size);
+	return varchunk_write_request(handle->recv_buf, size);
+}
+
+static void
+_recv_adv(size_t written, void *data)
+{
+	plughandle_t *handle = data;
+
+	printf("_recv_adv: %zu\n", written);
+	varchunk_write_advance(handle->recv_buf, written);
+}
+
+static const void *
+_send_req(size_t *len, void *data)
+{
+	plughandle_t *handle = data;
+
+	printf("_send_req\n");
+	return varchunk_read_request(handle->send_buf, len);
+}
+
+static void
+_send_adv(const void *buf, size_t len, void *data)
+{
+	plughandle_t *handle = data;
+
+	printf("_send_adv: %zu\n", len);
+	return varchunk_read_advance(handle->send_buf);
+}
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
@@ -315,9 +344,25 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
 	uv_loop_init(&handle->loop);
-	handle->osc_url = strdup("osc.tcp4://:3333");
+
+	//handle->osc_url = strdup("osc.tcp4://:3333");
+	handle->osc_url = strdup("osc.udp4://:3333");
+
+	handle->recv_buf = varchunk_new(0x10000);
+	handle->send_buf = varchunk_new(0x10000);
+	if(!handle->recv_buf || !handle->send_buf)
+	{
+		free(handle);
+		return NULL;
+	}
+
+	handle->driver.recv_req = _recv_req;
+	handle->driver.recv_adv = _recv_adv;
+	handle->driver.send_req = _send_req;
+	handle->driver.send_adv = _send_adv;
+
 	osc_stream_init(&handle->loop, &handle->stream, handle->osc_url,
-		_recv_cb, _send_cb, handle);
+		&handle->driver, handle);
 
 	return handle;
 }
@@ -349,7 +394,7 @@ activate(LV2_Handle instance)
 	plughandle_t *handle = (plughandle_t *)instance;
 
 	// reset forge buffer
-	lv2_atom_forge_set_buffer(&handle->work_forge, handle->buf, BUF_SIZE);
+	lv2_atom_forge_set_buffer(&handle->work_forge, handle->work_buf, BUF_SIZE);
 }
 
 static void
@@ -383,10 +428,10 @@ run(LV2_Handle instance, uint32_t nsamples)
 		if(handle->work_forge.offset > 0)
 		{
 			// copy forge buffer
-			lv2_atom_forge_raw(forge, handle->buf, handle->work_forge.offset);
+			lv2_atom_forge_raw(forge, handle->work_buf, handle->work_forge.offset);
 
 			// reset forge buffer
-			lv2_atom_forge_set_buffer(&handle->work_forge, handle->buf, BUF_SIZE);
+			lv2_atom_forge_set_buffer(&handle->work_forge, handle->work_buf, BUF_SIZE);
 		}
 		
 		LV2_Atom atom = {
@@ -403,7 +448,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	}
 
 	// send sinked messages to worker
-	if(*handle->connected == 1.f)
+	//if(*handle->connected == 1.f)
 	{
 		LV2_ATOM_SEQUENCE_FOREACH(handle->osc_sink, ev)
 		{
@@ -437,6 +482,8 @@ cleanup(LV2_Handle instance)
 
 	osc_stream_deinit(&handle->stream);
 	uv_loop_close(&handle->loop);
+	varchunk_free(handle->recv_buf);
+	varchunk_free(handle->send_buf);
 	free(handle);
 }
 

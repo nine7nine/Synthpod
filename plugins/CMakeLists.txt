@@ -1,6 +1,8 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../bin)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
+#include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream2)
 include_directories(${PROJECT_SOURCE_DIR}/eo_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
@@ -31,11 +33,12 @@ endif()
 # OSC
 add_library(osc_io MODULE
 	libosc/osc.c
-	libosc_stream/osc_stream.c
-	libosc_stream/osc_stream_udp.c
-	libosc_stream/osc_stream_tcp.c
-	libosc_stream/osc_stream_pipe.c
-	libosc_stream/osc_stream_slip.c
+	libosc_stream2/osc_stream.c
+	libosc_stream2/osc_stream_udp.c
+	libosc_stream2/osc_stream_tcp.c
+	libosc_stream2/osc_stream_pipe.c
+	libosc_stream2/osc_stream_slip.c
+	../bin/varchunk.c
 	osc_io.c
 	osc_io_io.c)
 target_link_libraries(osc_io ${UV_LDFLAGS})
