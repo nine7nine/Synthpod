@@ -66,7 +66,7 @@ struct _plughandle_t {
 
 	uv_loop_t loop;
 	osc_stream_driver_t driver;
-	osc_stream_t stream;
+	osc_stream_t *stream;
 	void *tmp;
 
 	uint8_t work_buf [BUF_SIZE];
@@ -182,7 +182,7 @@ _work(LV2_Handle instance,
 			memcpy(ptr, LV2_ATOM_BODY_CONST(atom), atom->size);
 			varchunk_write_advance(handle->send_buf, atom->size);
 
-			osc_stream_flush(&handle->stream);
+			osc_stream_flush(handle->stream);
 		}
 	}
 	else if(atom->type == handle->uris.osc_io_dirty)
@@ -190,8 +190,8 @@ _work(LV2_Handle instance,
 		printf("_dirty: %s\n", handle->osc_url);
 
 		// reinitialize OSC stream
-		osc_stream_deinit(&handle->stream);
-		osc_stream_init(&handle->loop, &handle->stream, handle->osc_url,
+		osc_stream_free(handle->stream);
+		handle->stream = osc_stream_new(&handle->loop, handle->osc_url,
 			&handle->driver, handle);
 	}
 	
@@ -283,11 +283,11 @@ _send_req(size_t *len, void *data)
 }
 
 static void
-_send_adv(const void *buf, size_t len, void *data)
+_send_adv(void *data)
 {
 	plughandle_t *handle = data;
 
-	printf("_send_adv: %zu\n", len);
+	printf("_send_adv\n");
 	return varchunk_read_advance(handle->send_buf);
 }
 
@@ -345,8 +345,12 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	uv_loop_init(&handle->loop);
 
-	//handle->osc_url = strdup("osc.tcp4://:3333");
-	handle->osc_url = strdup("osc.udp4://:3333");
+	//handle->osc_url = strdup("osc.udp4://:3333");
+	//handle->osc_url = strdup("osc.udp6://:3333");
+	handle->osc_url = strdup("osc.tcp4://:3333");
+	//handle->osc_url = strdup("osc.tcp6://:3333");
+	//handle->osc_url = strdup("osc.slip.tcp4://:3333");
+	//handle->osc_url = strdup("osc.slip.tcp6://:3333");
 
 	handle->recv_buf = varchunk_new(0x10000);
 	handle->send_buf = varchunk_new(0x10000);
@@ -361,7 +365,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.send_req = _send_req;
 	handle->driver.send_adv = _send_adv;
 
-	osc_stream_init(&handle->loop, &handle->stream, handle->osc_url,
+	handle->stream = osc_stream_new(&handle->loop, handle->osc_url,
 		&handle->driver, handle);
 
 	return handle;
@@ -480,7 +484,7 @@ cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = (plughandle_t *)instance;
 
-	osc_stream_deinit(&handle->stream);
+	osc_stream_free(handle->stream);
 	uv_loop_close(&handle->loop);
 	varchunk_free(handle->recv_buf);
 	varchunk_free(handle->send_buf);
