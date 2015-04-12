@@ -19,6 +19,7 @@
 #define _SYNTHPOD_PRIVATE_H
 
 #define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
+#define SYNTHPOD_WORLD				SYNTHPOD_PREFIX"world"
 #define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
 #include <lilv/lilv.h>

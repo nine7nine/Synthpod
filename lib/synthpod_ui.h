@@ -26,6 +26,8 @@
 #include <lv2/lv2plug.in/ns/ext/instance-access/instance-access.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
+#include <lilv/lilv.h>
+
 // magic to resolve naming issues with EFL on WIN32
 #if defined(_WIN32)
 // needed for eldbus and mingw32-w64
@@ -72,7 +74,7 @@ struct _sp_ui_driver_t {
 };
 
 sp_ui_t *
-sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data);
+sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void *data);
 
 Evas_Object *
 sp_ui_widget_get(sp_ui_t *ui);

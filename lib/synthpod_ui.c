@@ -25,7 +25,7 @@
 #include <patcher.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
-#define NUM_UI_FEATURES 10
+#define NUM_UI_FEATURES 11
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -165,6 +165,7 @@ struct _sp_ui_t {
 	sp_ui_driver_t *driver;
 	void *data;
 
+	int embedded;
 	LilvWorld *world;
 	const LilvPlugins *plugs;
 
@@ -990,6 +991,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 	mod->feature_list[8].data = &mod->kx.host;
 	mod->feature_list[9].URI = LV2_UI__resize;
 	mod->feature_list[9].data = &mod->x11.resize;
+	mod->feature_list[10].URI = SYNTHPOD_WORLD;
+	mod->feature_list[10].data = ui->world;
 	
 	for(int i=0; i<NUM_UI_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];
@@ -2146,7 +2149,7 @@ _resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 }
 
 sp_ui_t *
-sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
+sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void *data)
 {
 	if(!driver || !data)
 		return NULL;
@@ -2161,8 +2164,16 @@ sp_ui_new(Evas_Object *win, sp_ui_driver_t *driver, void *data)
 	
 	lv2_atom_forge_init(&ui->forge, ui->driver->map);
 
-	ui->world = lilv_world_new();
-	lilv_world_load_all(ui->world);
+	if(world)
+	{
+		ui->world = (LilvWorld *)world;
+		ui->embedded = 1;
+	}
+	else
+	{
+		ui->world = lilv_world_new();
+		lilv_world_load_all(ui->world);
+	}
 	ui->plugs = lilv_world_get_all_plugins(ui->world);
 
 	sp_regs_init(&ui->regs, ui->world, driver->map);
@@ -2576,7 +2587,8 @@ sp_ui_free(sp_ui_t *ui)
 	
 	sp_regs_deinit(&ui->regs);
 
-	lilv_world_free(ui->world);
+	if(!ui->embedded)
+		lilv_world_free(ui->world);
 
 	free(ui);
 }

@@ -27,6 +27,7 @@ typedef struct _plughandle_t plughandle_t;
 struct _plughandle_t {
 	eo_ui_t eoui;
 
+	const LilvWorld *world;
 	sp_ui_t *ui;
 	sp_ui_driver_t driver;
 
@@ -73,7 +74,7 @@ _content_get(eo_ui_t *eoui)
 {
 	plughandle_t *handle = (void *)eoui - offsetof(plughandle_t, eoui);
 	
-	handle->ui = sp_ui_new(eoui->win, &handle->driver, handle);
+	handle->ui = sp_ui_new(eoui->win, handle->world, &handle->driver, handle);
 	if(!handle->ui)
 		return NULL;
 
@@ -116,6 +117,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->write_function = write_function;
 	handle->controller = controller;
+	
+	handle->world = NULL;
 
 	for(int i=0; features[i]; i++)
 	{
@@ -123,6 +126,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
+		else if(!strcmp(features[i]->URI, "http://open-music-kontrollers.ch/lv2/synthpod#world"))
+			handle->world = (const LilvWorld *)features[i]->data;
   }
 
 	if(!handle->driver.map || !handle->driver.unmap)

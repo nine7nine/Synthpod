@@ -23,7 +23,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 5
+#define NUM_FEATURES 6
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -117,6 +117,7 @@ struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
 
+	int embedded;
 	LilvWorld *world;
 	const LilvPlugins *plugs;
 	
@@ -349,6 +350,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->feature_list[3].data = &mod->log;
 	mod->feature_list[4].URI = LV2_OPTIONS__options;
 	mod->feature_list[4].data = mod->opts.options;
+	mod->feature_list[5].URI = SYNTHPOD_WORLD;
+	mod->feature_list[5].data = app->world;
 
 	for(int i=0; i<NUM_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];
@@ -572,7 +575,7 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 
 // non-rt
 sp_app_t *
-sp_app_new(sp_app_driver_t *driver, void *data)
+sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 {
 	if(!driver || !data)
 		return NULL;
@@ -584,8 +587,16 @@ sp_app_new(sp_app_driver_t *driver, void *data)
 	app->driver = driver;
 	app->data = data;
 
-	app->world = lilv_world_new();
-	lilv_world_load_all(app->world);
+	if(world)
+	{
+		app->world = (LilvWorld *)world;
+		app->embedded = 1;
+	}
+	else
+	{
+		app->world = lilv_world_new();
+		lilv_world_load_all(app->world);
+	}
 	app->plugs = lilv_world_get_all_plugins(app->world);
 
 	lv2_atom_forge_init(&app->forge, app->driver->map);
@@ -1349,7 +1360,8 @@ sp_app_free(sp_app_t *app)
 	
 	sp_regs_deinit(&app->regs);
 
-	lilv_world_free(app->world);
+	if(!app->embedded)
+		lilv_world_free(app->world);
 
 	free(app);
 }

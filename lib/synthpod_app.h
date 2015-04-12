@@ -28,6 +28,8 @@
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 
+#include <lilv/lilv.h>
+
 typedef struct _sp_app_t sp_app_t;
 typedef struct _sp_app_driver_t sp_app_driver_t;
 
@@ -62,7 +64,7 @@ struct _sp_app_driver_t {
 };
 
 sp_app_t *
-sp_app_new(sp_app_driver_t *driver, void *data);
+sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data);
 
 void
 sp_app_activate(sp_app_t *app);
