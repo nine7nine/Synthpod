@@ -302,6 +302,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.log_printf = _log_printf;
 	handle->driver.log_vprintf = _log_vprintf;
 
+	const LilvWorld *world = NULL;
+
 	for(i=0; features[i]; i++)
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
@@ -313,6 +315,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->schedule = (LV2_Worker_Schedule *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
 			handle->opts = (LV2_Options_Option *)features[i]->data;
+		else if(!strcmp(features[i]->URI, "http://open-music-kontrollers.ch/lv2/synthpod#world"))
+			world = (const LilvWorld *)features[i]->data;
 
 	if(!handle->driver.map)
 	{
@@ -380,7 +384,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.to_app_request = _to_app_request;
 	handle->driver.to_app_advance = _to_app_advance;
 
-	handle->app = sp_app_new(&handle->driver, handle);
+	handle->app = sp_app_new(world, &handle->driver, handle);
 	if(!handle->app)
 	{
 		_log_printf(handle, handle->uri.log.error,

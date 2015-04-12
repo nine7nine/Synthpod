@@ -528,7 +528,7 @@ main(int argc, char **argv)
 #endif
 
 	// app init
-	handle.app = sp_app_new(&handle.app_driver, &handle);
+	handle.app = sp_app_new(NULL, &handle.app_driver, &handle);
 
 	// restore state
 	sp_app_restore(handle.app, _state_retrieve, &handle,
@@ -586,7 +586,7 @@ main(int argc, char **argv)
 	evas_object_show(handle.win);
 
 	// ui init
-	handle.ui = sp_ui_new(handle.win, &handle.ui_driver, &handle);
+	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle);
 
 	// main loop
 	elm_run();
