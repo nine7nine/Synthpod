@@ -47,6 +47,7 @@ collections {
 #define COL20   35   44   22  255 // Dark Olive Green
 
 #include <modlist.edc>
+#include <modgrid.edc>
 #include <patcher.edc>
 #include <slider.edc>
 }

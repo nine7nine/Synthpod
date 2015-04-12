@@ -48,34 +48,39 @@ group {
 			description { state: "default" 0.20; fixed: 1 1; color: COL20; }
 		}
 		part {
-			name: "elm.text";
-			type: TEXT;
-			mouse_events: 0;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0 0;
-				rel1.offset: 16 0;
-				rel2.relative: 1 1;
-				rel2.offset: -32 0;
-				text {
-					text: "";
-					font: "default";
-					size: 11;
-					align: 0.0 0.5;
-				};
-			}
-		}
-		part {
 			name: "elm.swallow.icon";
 			type: SWALLOW;
 			mouse_events: 1;
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
+				align: 0.0 0.5;
+				aspect: 1.0 1.0;
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
-				rel2.offset: 16 0;
+				min: 16 16;
+			}
+		}
+		part {
+			name: "elm.text";
+			type: TEXT;
+			effect: OUTLINE;
+			mouse_events: 0;
+			scale: 1;
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				rel1.to_x: "elm.swallow.icon";
+				rel1.relative: 1 0;
+				rel2.to_x: "elm.swallow.preend";
+				rel2.relative: 0 1;
+				text {
+					text: "";
+					size: 10;
+					align: 0.0 0.5;
+				};
+				color: 255 255 255 255;
+				color2: 255 255 255 96;
 			}
 		}
 		part {
@@ -85,10 +90,13 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.relative: 1 0;
-				rel1.offset: -32 0;
-				rel2.relative: 1 1;
-				rel2.offset: -16 0;
+				align: 1.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.to_x: "elm.swallow.end";
+				rel1.relative: -1 0;
+				rel2.to_x: "elm.swallow.end";
+				rel2.relative: 0 1;
+				min: 16 16;
 			}
 		}
 		part {
@@ -98,9 +106,11 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
+				align: 1.0 0.5;
+				aspect: 1.0 1.0;
 				rel1.relative: 1 0;
-				rel1.offset: -16 0;
 				rel2.relative: 1 1;
+				min: 16 16;
 			}
 		}
 	}
@@ -135,19 +145,49 @@ group {
 
 	parts {
 		part {
-			name: "elm.text";
-			type: TEXT;
+			name: "elm.swallow.icon";
+			type: SWALLOW;
+			mouse_events: 1;
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				align: 0.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.relative: 0 0;
+				rel2.relative: 0 1;
+				min: 16 16;
+			}
+		}
+		part {
+			name: "elm.swallow.sink";
+			type: SWALLOW;
 			mouse_events: 0;
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.relative: 0 0;
-				rel1.offset: 32 0;
-				rel2.relative: 0.3 1;
+				align: 0.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.to_x: "elm.swallow.icon";
+				rel1.relative: 1 0;
+				rel2.to_x: "elm.swallow.icon";
+				rel2.relative: 1 1;
+				min: 16 16;
+			}
+		}
+		part {
+			name: "elm.text";
+			type: TEXT;
+			mouse_events: 0;
+			scale: 1;
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				rel1.to_x: "elm.swallow.sink";
+				rel1.relative: 1 0;
+				rel2.relative: 0.4 1;
 				text {
 					text: "";
-					font: "default";
-					size: 11;
+					size: 10;
 					align: 0.0 0.5;
 				};
 			}
@@ -159,34 +199,9 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.relative: 0.3 0;
-				rel2.relative: 1 1;
-				rel2.offset: -16 0;
-			}
-		}
-		part {
-			name: "elm.swallow.icon";
-			type: SWALLOW;
-			mouse_events: 1;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0 0;
+				rel1.relative: 0.4 0;
+				rel2.to_x: "elm.swallow.source";
 				rel2.relative: 0 1;
-				rel2.offset: 16 0;
-			}
-		}
-		part {
-			name: "elm.swallow.sink";
-			type: SWALLOW;
-			mouse_events: 0;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0 0.5;
-				rel1.offset: 16 -8;
-				rel2.relative: 0 0.5;
-				rel2.offset: 32 8;
 			}
 		}
 		part {
@@ -196,10 +211,11 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.relative: 1 0.5;
-				rel1.offset: -16 -8;
-				rel2.relative: 1 0.5;
-				rel2.offset: 0 8;
+				align: 1.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.relative: 1 0;
+				rel2.relative: 1 1;
+				min: 16 16;
 			}
 		}
 	}

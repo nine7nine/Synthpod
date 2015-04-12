@@ -27,6 +27,7 @@
 
 #define NUM_UI_FEATURES 11
 #define MODLIST_UI "/synthpod/modlist/ui"
+#define MODGRID_UI "/synthpod/modgrid/ui"
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -1507,12 +1508,23 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(bg);
 			elm_win_resize_object_add(win, bg);
+			
+			Evas_Object *container = elm_layout_add(win);
+			elm_layout_file_set(container, "/usr/local/share/synthpod/synthpod.edj",
+				"/synthpod/modgrid/container");
+			char col [7];
+			sprintf(col, "col,%02i", mod->col);
+			elm_layout_signal_emit(container, col, MODGRID_UI);
+			evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(container);
+			elm_win_resize_object_add(win, container);
 
-			Evas_Object *widget = _eo_widget_create(win, mod);
+			Evas_Object *widget = _eo_widget_create(container, mod);
 			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(widget);
-			elm_win_resize_object_add(win, widget);
+			elm_layout_content_set(container, "elm.swallow.content", widget);
 		}
 	}
 	else if(mod->custom.ui)
@@ -2029,11 +2041,23 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 
 	if(!strcmp(part, "elm.swallow.icon"))
 	{
-		Evas_Object *widget = _eo_widget_create(ui->modgrid, mod);
+		Evas_Object *container = elm_layout_add(ui->modgrid);
+		elm_layout_file_set(container, "/usr/local/share/synthpod/synthpod.edj",
+			"/synthpod/modgrid/container");
+		char col [7];
+		sprintf(col, "col,%02i", mod->col);
+		elm_layout_signal_emit(container, col, MODGRID_UI);
+		evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(container);
+
+		Evas_Object *widget = _eo_widget_create(container, mod);
 		evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(widget);
-		return widget;
+		elm_layout_content_set(container, "elm.swallow.content", widget);
+
+		return container;
 	}
 	else if(!strcmp(part, "elm.swallow.end"))
 	{
@@ -2248,7 +2272,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 
 	ui->modpane = elm_panes_add(ui->plugpane);
 	elm_panes_horizontal_set(ui->modpane, EINA_FALSE);
-	elm_panes_content_left_size_set(ui->modpane, 0.3);
+	elm_panes_content_left_size_set(ui->modpane, 0.4);
 	evas_object_size_hint_weight_set(ui->modpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->modpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->modpane);
