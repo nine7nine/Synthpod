@@ -25,10 +25,21 @@ _udp_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 	uv_udp_t *socket = (uv_udp_t *)handle;
 	osc_stream_udp_t *udp = (void *)socket - offsetof(osc_stream_udp_t, socket);
 	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
-	buf->base = cb->buf;
-	buf->len = OSC_STREAM_BUF_SIZE;
+	if(suggested_size > OSC_STREAM_BUF_SIZE)
+		suggested_size = OSC_STREAM_BUF_SIZE;
+
+	if(driver->recv_req)
+	{
+		buf->base = (char *)driver->recv_req(suggested_size, stream->data);
+		buf->len = suggested_size;
+	}
+	else
+	{
+		buf->base = NULL;
+		buf->len = 0;
+	}
 }
 
 static void
@@ -37,15 +48,24 @@ _udp_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct 
 	uv_udp_t *socket = (uv_udp_t *)handle;
 	osc_stream_udp_t *udp = (void *)socket - offsetof(osc_stream_udp_t, socket);
 	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
 	if(nread > 0)
 	{
+		if(udp->server)
+		{
+			// store client IP for potential replies
+			if(addr->sa_family == PF_INET)
+				memcpy(&udp->tx.addr.ip4, addr, sizeof(struct sockaddr_in));
+			else if(addr->sa_family == PF_INET6)
+				memcpy(&udp->tx.addr.ip6, addr, sizeof(struct sockaddr_in6));
+		}
+
 		if(osc_check_packet((osc_data_t *)buf->base, buf->len))
 			fprintf(stderr, "_udp_recv_cb: wrongly formatted OSC packet\n");
 		else
-			if(cb->recv)
-				cb->recv(stream, (osc_data_t *)buf->base, nread, cb->data);
+			if(driver->recv_adv)
+				driver->recv_adv(nread, stream->data);
 	}
 	else if (nread < 0)
 	{
@@ -61,7 +81,7 @@ getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	osc_stream_udp_t *udp = (void *)req - offsetof(osc_stream_udp_t, req);
 	osc_stream_udp_tx_t *tx = &udp->tx;
 	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
 	if(status >= 0)
 	{
@@ -149,13 +169,11 @@ getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 			return;
 		}
 
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
+		instant_recv(stream, resolve_msg, sizeof(resolve_msg));
 	}
 	else
 	{
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
+		instant_recv(stream, timeout_msg, sizeof(timeout_msg));
 	}
 
 	uv_freeaddrinfo(res);
@@ -167,9 +185,9 @@ getaddrinfo_udp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	uv_loop_t *loop = req->loop;
 	osc_stream_udp_t *udp = (void *)req - offsetof(osc_stream_udp_t, req);
 	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
-	if(status >= 0)
+	if( (status >= 0) && res)
 	{
 		osc_stream_addr_t src;
 		unsigned int flags = 0;
@@ -219,16 +237,15 @@ getaddrinfo_udp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 			return;
 		}
 
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
+		instant_recv(stream, resolve_msg, sizeof(resolve_msg));
 	}
 	else
 	{
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
+		instant_recv(stream, timeout_msg, sizeof(timeout_msg));
 	}
 
-	uv_freeaddrinfo(res);
+	if(res)
+		uv_freeaddrinfo(res);
 }
 
 static void
@@ -237,46 +254,45 @@ _udp_send_cb(uv_udp_send_t *req, int status)
 	osc_stream_udp_tx_t *tx = (void *)req - offsetof(osc_stream_udp_tx_t, req);
 	osc_stream_udp_t *udp = (void *)tx - offsetof(osc_stream_udp_t, tx);
 	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
 	if(!status)
 	{
-		if(cb->send)
-			cb->send(stream, tx->len, cb->data);
+		if(driver->send_adv)
+			driver->send_adv(stream->data);
+		
+		stream->flushing = 0; // reset flushing flag
+		osc_stream_udp_flush(stream); // look for more data to flush
 	}
 	else
 		fprintf(stderr, "_udp_send_cb: %s\n", uv_err_name(status));
 }
 
 void
-osc_stream_udp_send(osc_stream_t *stream, const osc_data_t *buf, size_t len)
+osc_stream_udp_flush(osc_stream_t *stream)
 {
 	osc_stream_udp_t *udp = &stream->payload.udp;
-	udp->tx.len = len;
-	
-	uv_buf_t msg [1] = {
-		[0] = {
-			.base = (char *)buf,
-			.len = len
+	osc_stream_driver_t *driver = stream->driver;
+
+	if(stream->flushing) // already flushing?
+		return;
+
+	uv_buf_t *msg = &udp->tx.msg;
+	msg->base = NULL;
+	msg->len = 0;
+
+	if(driver->send_req)
+		msg->base = (char *)driver->send_req(&msg->len, stream->data);
+
+	if(msg->base && (msg->len > 0))
+	{
+		stream->flushing = 1; // set flushing flag
+
+		int err;
+		if((err = uv_udp_send(&udp->tx.req, &udp->socket, msg, 1, &udp->tx.addr.ip, _udp_send_cb)))
+		{
+			fprintf(stderr, "uv_udp_send: %s\n", uv_err_name(err));
+			stream->flushing = 0;
 		}
-	};
-
-	int err;
-	if((err = uv_udp_send(&udp->tx.req, &udp->socket, &msg[0], 1, &udp->tx.addr.ip, _udp_send_cb)))
-		fprintf(stderr, "uv_udp_send: %s\n", uv_err_name(err));
-}
-
-void
-osc_stream_udp_send2(osc_stream_t *stream, const uv_buf_t *bufs, size_t bufn)
-{
-	osc_stream_udp_t *udp = &stream->payload.udp;
-	udp->tx.len = 0;
-
-	int i;
-	for(i=0; i<bufn; i++)
-		udp->tx.len += bufs[i].len;
-
-	int err;
-	if((err = uv_udp_send(&udp->tx.req, &udp->socket, bufs, bufn, &udp->tx.addr.ip, _udp_send_cb)))
-		fprintf(stderr, "uv_udp_send: %s\n", uv_err_name(err));
+	}
 }

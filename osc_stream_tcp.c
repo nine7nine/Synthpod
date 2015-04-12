@@ -26,10 +26,26 @@ _tcp_prefix_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 	uv_tcp_t *socket = (uv_tcp_t *)handle;
 	osc_stream_tcp_t *tcp = socket->data;
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
-	buf->base = cb->buf;
-	buf->len = tcp->nchunk < OSC_STREAM_BUF_SIZE ? tcp->nchunk : OSC_STREAM_BUF_SIZE;
+	if(suggested_size > OSC_STREAM_BUF_SIZE)
+		suggested_size = OSC_STREAM_BUF_SIZE;
+
+	if(tcp->nchunk == sizeof(int32_t))
+	{
+		buf->base = (char *)&tcp->prefix;
+		buf->len = tcp->nchunk;
+	}
+	else if(driver->recv_req)
+	{
+		buf->base = (char *)driver->recv_req(suggested_size, stream->data);
+		buf->len = suggested_size;
+	}
+	else
+	{
+		buf->base = NULL;
+		buf->len = 0;
+	}
 }
 
 static void
@@ -37,17 +53,19 @@ _tcp_prefix_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 {
 	osc_stream_tcp_t *tcp = socket->data;
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 	osc_stream_tcp_tx_t *tx = (void *)socket - offsetof(osc_stream_tcp_tx_t, socket);
 
 	if(nread > 0)
 	{
 		if(nread == sizeof(int32_t))
+		{
 			tcp->nchunk = ntohl(*(int32_t *)buf->base);
+		}
 		else if(nread == tcp->nchunk)
 		{
-			if(cb->recv)
-				cb->recv(stream, (osc_data_t *)buf->base, nread, cb->data);
+			if(driver->recv_adv)
+				driver->recv_adv(nread, stream->data);
 			tcp->nchunk = sizeof(int32_t);
 		}
 		else // nread != sizeof(int32_t) && nread != nchunk
@@ -60,10 +78,7 @@ _tcp_prefix_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 	else if (nread < 0)
 	{
 		if( (nread == UV_EOF) || (nread == UV_ETIMEDOUT) )
-		{
-			if(cb->recv)
-				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->data);
-		}
+			instant_recv(stream, disconnect_msg, sizeof(disconnect_msg));
 		else
 			fprintf(stderr, "_tcp_prefix_recv_cb: %s\n", uv_err_name(nread));
 
@@ -88,9 +103,9 @@ _tcp_slip_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 	uv_tcp_t *socket = (uv_tcp_t *)handle;
 	osc_stream_tcp_t *tcp = socket->data;
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
-	buf->base = cb->buf;
+	buf->base = tcp->buf_rx;
 	buf->base += tcp->nchunk; // is there remaining chunk from last call?
 	buf->len = OSC_STREAM_BUF_SIZE - tcp->nchunk;
 }
@@ -100,25 +115,29 @@ _tcp_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 {
 	osc_stream_tcp_t *tcp = socket->data;
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 	osc_stream_tcp_tx_t *tx = (void *)socket - offsetof(osc_stream_tcp_tx_t, socket);
 	
 	if(nread > 0)
 	{
-		char *ptr = cb->buf;
+		char *ptr = tcp->buf_rx;
 		nread += tcp->nchunk; // is there remaining chunk from last call?
 		size_t size;
 		size_t parsed;
 		while( (parsed = slip_decode(ptr, nread, &size)) && (nread > 0) )
 		{
-			if(cb->recv)
-				cb->recv(stream, (osc_data_t *)ptr, size, cb->data);
+			void *tar;
+			if((tar = driver->recv_req(size, stream->data)))
+			{
+				memcpy(tar, ptr, size);
+				driver->recv_adv(size, stream->data);
+			}
 			ptr += parsed;
 			nread -= parsed;
 		}
 		if(nread > 0) // is there remaining chunk for next call?
 		{
-			memmove(cb->buf, ptr, nread);
+			memmove(tcp->buf_rx, ptr, nread);
 			tcp->nchunk = nread;
 		}
 		else
@@ -127,10 +146,7 @@ _tcp_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 	else if (nread < 0)
 	{
 		if( (nread == UV_EOF) || (nread == UV_ETIMEDOUT) )
-		{
-			if(cb->recv)
-				cb->recv(stream, (osc_data_t *)disconnect_msg, sizeof(disconnect_msg), cb->data);
-		}
+			instant_recv(stream, disconnect_msg, sizeof(disconnect_msg));
 		else
 			fprintf(stderr, "_tcp_slip_recv_cb: %s\n", uv_err_name(nread));
 
@@ -156,7 +172,7 @@ _sender_connect(uv_connect_t *conn, int status)
 	osc_stream_tcp_t *tcp = socket->data;
 
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 	osc_stream_tcp_tx_t *tx = INLIST_CONTAINER_GET(tcp->tx, osc_stream_tcp_tx_t);
 
 	if(status)
@@ -165,8 +181,7 @@ _sender_connect(uv_connect_t *conn, int status)
 		return; //TODO
 	}
 	
-	if(cb->recv)
-		cb->recv(stream, (osc_data_t *)connect_msg, sizeof(connect_msg), cb->data);
+	instant_recv(stream, connect_msg, sizeof(connect_msg));
 
 	int err;
 	if(!tcp->slip)
@@ -195,7 +210,7 @@ getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	uv_loop_t *loop = req->loop;
 	osc_stream_tcp_t *tcp = (void *)req - offsetof(osc_stream_tcp_t, req);
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
 	if(status >= 0)
 	{
@@ -287,14 +302,10 @@ getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 			return;
 		}
 
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
+		instant_recv(stream, resolve_msg, sizeof(resolve_msg));
 	}
 	else
-	{
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
-	}
+		instant_recv(stream, timeout_msg, sizeof(timeout_msg));
 
 	uv_freeaddrinfo(res);
 }
@@ -305,7 +316,7 @@ _responder_connect(uv_stream_t *socket, int status)
 	uv_loop_t *loop = socket->loop;
 	osc_stream_tcp_t *tcp = (void *)socket - offsetof(osc_stream_tcp_t, socket);
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
 	if(status)
 	{
@@ -313,8 +324,7 @@ _responder_connect(uv_stream_t *socket, int status)
 		return;
 	}
 
-	if(cb->recv)
-		cb->recv(stream, (osc_data_t *)connect_msg, sizeof(connect_msg), cb->data);
+	instant_recv(stream, connect_msg, sizeof(connect_msg));
 
 	osc_stream_tcp_tx_t *tx = calloc(1, sizeof(osc_stream_tcp_tx_t));
 	tx->socket.data = tcp;
@@ -371,7 +381,7 @@ getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	uv_loop_t *loop = req->loop;
 	osc_stream_tcp_t *tcp = (void *)req - offsetof(osc_stream_tcp_t, req);
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
 	if(status >= 0)
 	{
@@ -436,14 +446,10 @@ getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 			return;
 		}
 
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)resolve_msg, sizeof(resolve_msg), cb->data);
+		instant_recv(stream, resolve_msg, sizeof(resolve_msg));
 	}
 	else
-	{
-		if(cb->recv)
-			cb->recv(stream, (osc_data_t *)timeout_msg, sizeof(timeout_msg), cb->data);
-	}
+		instant_recv(stream, timeout_msg, sizeof(timeout_msg));
 
 	uv_freeaddrinfo(res);
 }
@@ -451,100 +457,66 @@ getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 static void
 _tcp_send_cb(uv_write_t *req, int status)
 {
-	osc_stream_udp_tx_t *tx = (void *)req - offsetof(osc_stream_udp_tx_t, req);
 	osc_stream_tcp_t *tcp = req->data;
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
-	osc_stream_cb_t *cb = &stream->cb;
+	osc_stream_driver_t *driver = stream->driver;
 
 	tcp->count--;
 
 	if(!status)
 	{
-		if(!tcp->count && cb->send)
-			cb->send(stream, tcp->len, cb->data);
+		if(!tcp->count) // sent to all clients?
+		{
+			if(driver->send_adv)
+				driver->send_adv(stream->data);
+
+			stream->flushing = 0; // reset flushing flag
+			osc_stream_tcp_flush(stream); // look for more data to flush
+		}
 	}
 	else
 		fprintf(stderr, "_tcp_send_cb: %s\n", uv_err_name(status));
 }
 
 void
-osc_stream_tcp_send(osc_stream_t *stream, const osc_data_t *buf, size_t len)
+osc_stream_tcp_flush(osc_stream_t *stream)
 {
 	osc_stream_tcp_t *tcp = &stream->payload.tcp;
+	osc_stream_driver_t *driver = stream->driver;
 
-	static int32_t prefix; //FIXME
-	prefix = htobe32(len);
+	if(stream->flushing) // already flushing?
+		return;
 
-	uv_buf_t msg [2] = {
-		[0] = {
-			.base = (char *)&prefix,
-			.len = sizeof(int32_t)
-		},
-		[1] = {
-			.base = (char *)buf,
-			.len = len
+	uv_buf_t *msg = tcp->msg;
+
+	if(driver->send_req)
+		msg[1].base = (char *)driver->send_req(&msg[1].len, stream->data);
+
+	if(msg[1].base && (msg[1].len > 0) )
+	{
+		tcp->prefix = htobe32(msg[1].len);
+		msg[0].base = (char *)&tcp->prefix;
+		msg[0].len = sizeof(int32_t);
+
+		if(tcp->slip)
+		{
+			msg[1].len = slip_encode(tcp->buf_tx, &msg[1], 1); // discard prefix size
+			msg[1].base = tcp->buf_tx;
 		}
-	};
 
-	if(tcp->slip)
-	{
-		static char bb [OSC_STREAM_BUF_SIZE]; //FIXME
-		msg[1].len = slip_encode(bb, &msg[1], 1); // discard prefix size (int32_t)
-		msg[1].base = bb;
-	}
-	
-	int err;
-	tcp->count = inlist_count(tcp->tx);
-	tcp->len = len;
+		int err;
+		tcp->count = inlist_count(tcp->tx);
+		if(tcp->count)
+			stream->flushing = 1; // set flushing flag
 
-	osc_stream_tcp_tx_t *tx;
-	INLIST_FOREACH(tcp->tx, tx)
-	{
-		if((err =	uv_write(&tx->req, (uv_stream_t *)&tx->socket, &msg[tcp->slip], 2-tcp->slip, _tcp_send_cb)))
-			fprintf(stderr, "uv_write: %s\n", uv_err_name(err));
-	}
-}
-
-void
-osc_stream_tcp_send2(osc_stream_t *stream, const uv_buf_t *bufs, size_t bufn)
-{
-	osc_stream_tcp_t *tcp = &stream->payload.tcp;
-	tcp->len = 0;
-
-	int i;
-	for(i=0; i<bufn; i++)
-		tcp->len += bufs[i].len;
-
-	static int32_t prefix; //FIXME
-	prefix = htobe32(tcp->len);
-
-	uv_buf_t msg [3] = {
-		[0] = {
-			.base = (char *)&prefix,
-			.len = sizeof(int32_t)
+		osc_stream_tcp_tx_t *tx;
+		INLIST_FOREACH(tcp->tx, tx)
+		{
+			if((err = uv_write(&tx->req, (uv_stream_t *)&tx->socket, &msg[tcp->slip], 2-tcp->slip, _tcp_send_cb)))
+			{
+				fprintf(stderr, "uv_write: %s\n", uv_err_name(err));
+				stream->flushing = 0;
+			}
 		}
-	};
-
-	for(i=0; i<bufn; i++)
-	{
-		msg[i+1].base = bufs[i].base;
-		msg[i+1].len = bufs[i].len;
-	}
-
-	if(tcp->slip)
-	{
-		static char bb [OSC_STREAM_BUF_SIZE]; //FIXME
-		msg[1].len = slip_encode(bb, &msg[1], bufn); // discard prefix size (int32_t)
-		msg[1].base = bb;
-	}
-
-	int err;
-	tcp->count = inlist_count(tcp->tx);
-
-	osc_stream_tcp_tx_t *tx;
-	INLIST_FOREACH(tcp->tx, tx)
-	{
-		if((err =	uv_write(&tx->req, (uv_stream_t *)&tx->socket, &msg[tcp->slip], bufn+1-tcp->slip, _tcp_send_cb)))
-			fprintf(stderr, "uv_write: %s\n", uv_err_name(err));
 	}
 }

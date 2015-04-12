@@ -261,31 +261,35 @@ _osc_stream_parse_url(uv_loop_t *loop, osc_stream_t *stream, const char *url)
 	return 0;
 }
 
-int
-osc_stream_init(uv_loop_t *loop, osc_stream_t *stream, const char *addr, osc_stream_recv_cb_t recv_cb, osc_stream_send_cb_t send_cb, void *data)
+osc_stream_t *
+osc_stream_new(uv_loop_t *loop, const char *addr, 
+	osc_stream_driver_t *driver, void *data)
 {
+	osc_stream_t *stream = calloc(1, sizeof(osc_stream_t));
+	if(!stream)
+		return NULL;
+
 	const char *url = NULL;
 	if(_osc_stream_parse_protocol(stream, addr, &url))
 	{
 		fprintf(stderr, "unsupported protocol in address %s\n", addr);
-		return -1;
+		return NULL;
 	}
 
 	if(_osc_stream_parse_url(loop, stream, url))
 	{
 		fprintf(stderr, "unsupported url in address %s\n", url);
-		return -1;
+		return NULL;
 	}
 
-	stream->cb.recv = recv_cb;
-	stream->cb.send = send_cb;
-	stream->cb.data = data;
+	stream->driver = driver;
+	stream->data = data;
 
-	return 0;
+	return stream;
 }
 
 void
-osc_stream_deinit(osc_stream_t *stream)
+osc_stream_free(osc_stream_t *stream)
 {
 	int err;
 
@@ -294,6 +298,9 @@ osc_stream_deinit(osc_stream_t *stream)
 		case OSC_STREAM_TYPE_UDP:
 		{
 			osc_stream_udp_t *udp = &stream->payload.udp;
+
+			// cancel resolve
+			uv_cancel((uv_req_t *)&udp->req);
 
 			if(uv_is_active((uv_handle_t *)&udp->socket))
 			{
@@ -307,6 +314,9 @@ osc_stream_deinit(osc_stream_t *stream)
 		case OSC_STREAM_TYPE_TCP:
 		{
 			osc_stream_tcp_t *tcp = &stream->payload.tcp;
+		
+			// cancel resolve
+			uv_cancel((uv_req_t *)&tcp->req);
 
 			// close clients
 			osc_stream_tcp_tx_t *tx;
@@ -357,53 +367,44 @@ osc_stream_deinit(osc_stream_t *stream)
 		}
 	}
 
-	stream->cb.recv = NULL;
-	stream->cb.send = NULL;
-	stream->cb.data = NULL;
+	free(stream);
 }
 
 void
-osc_stream_send(osc_stream_t *stream, const osc_data_t *buf, size_t len)
+osc_stream_flush(osc_stream_t *stream)
 {
 	switch(stream->type)
 	{
 		case OSC_STREAM_TYPE_UDP:
 		{
-			osc_stream_udp_send(stream, buf, len);
+			osc_stream_udp_flush(stream);
 			break;
 		}
 		case OSC_STREAM_TYPE_TCP:
 		{
-			osc_stream_tcp_send(stream, buf, len);
+			osc_stream_tcp_flush(stream);
 			break;
 		}
 		case OSC_STREAM_TYPE_PIPE:
 		{
-			osc_stream_pipe_send(stream, buf, len);
+			osc_stream_pipe_flush(stream);
 			break;
 		}
 	}
 }
 
 void
-osc_stream_send2(osc_stream_t *stream, const uv_buf_t *bufs, size_t bufn)
+instant_recv(osc_stream_t *stream, const void *buf, size_t size)
 {
-	switch(stream->type)
+	osc_stream_driver_t *driver = stream->driver;
+
+	if(!driver || !driver->recv_req || !driver->recv_adv)
+		return;
+
+	void *tar = driver->recv_req(size, stream->data);
+	if(buf)
 	{
-		case OSC_STREAM_TYPE_UDP:
-		{
-			osc_stream_udp_send2(stream, bufs, bufn);
-			break;
-		}
-		case OSC_STREAM_TYPE_TCP:
-		{
-			osc_stream_tcp_send2(stream, bufs, bufn);
-			break;
-		}
-		case OSC_STREAM_TYPE_PIPE:
-		{
-			osc_stream_pipe_send2(stream, bufs, bufn);
-			break;
-		}
+		memcpy(tar, buf, size);
+		driver->recv_adv(size, stream->data);
 	}
 }
