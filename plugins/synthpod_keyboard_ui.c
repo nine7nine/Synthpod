@@ -41,6 +41,9 @@ struct _plughandle_t {
 	LV2_URID_Map *map;
 	LV2UI_Write_Function write_function;
 	LV2UI_Controller controller;
+
+	uint8_t *key;
+	Evas_Object *obj;
 };
 
 struct _midi_atom_t {
@@ -59,55 +62,125 @@ static const uint8_t keys [25] = {
 };
 
 static void
-_mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
+_note_on(plughandle_t *handle)
 {
-	plughandle_t *handle = data;
-	Evas_Event_Mouse_Down *ev = event_info;
-	uint8_t *key = evas_object_data_get(obj, "key");
+	if(!handle->obj || !handle->key)
+		return;
+
+	int r, g, b, a;
+	evas_object_color_get(handle->obj, &r, &g, &b, &a);
+	if(r == 0xff)
+		evas_object_color_set(handle->obj, 0x7f, 0x7f, 0x7f, 0xff);
+	else
+		evas_object_color_set(handle->obj, 0x80, 0x80, 0x80, 0xff);
 
 	midi_atom_t midi_atom = {
 		.atom.size = 3,
 		.atom.type = handle->uri.midi_event,
 		.midi[0] = 0x90,
-		.midi[1] = *key,
+		.midi[1] = *handle->key,
 		.midi[2] = 0x7f
 	};
-
-	int r, g, b, a;
-	evas_object_color_get(obj, &r, &g, &b, &a);
-	if(r == 0xff)
-		evas_object_color_set(obj, 0x7f, 0x7f, 0x7f, 0xff);
-	else
-		evas_object_color_set(obj, 0x80, 0x80, 0x80, 0xff);
 
 	handle->write_function(handle->controller, 0, sizeof(LV2_Atom) + 3,
 		handle->uri.event_transfer, &midi_atom);
 }
 
 static void
-_mouse_up(void *data, Evas *e, Evas_Object *obj, void *event_info)
+_note_off(plughandle_t *handle)
 {
-	plughandle_t *handle = data;
-	Evas_Event_Mouse_Up *ev = event_info;
-	uint8_t *key = evas_object_data_get(obj, "key");
+	if(!handle->obj || !handle->key)
+		return;
+
+	int r, g, b, a;
+	evas_object_color_get(handle->obj, &r, &g, &b, &a);
+	if(r == 0x7f)
+		evas_object_color_set(handle->obj, 0xff, 0xff, 0xff, 0xff);
+	else
+		evas_object_color_set(handle->obj, 0x00, 0x00, 0x00, 0xff);
 
 	midi_atom_t midi_atom = {
 		.atom.size = 3,
 		.atom.type = handle->uri.midi_event,
 		.midi[0] = 0x80,
-		.midi[1] = *key,
+		.midi[1] = *handle->key,
 		.midi[2] = 0x7f
 	};
-	
-	int r, g, b, a;
-	evas_object_color_get(obj, &r, &g, &b, &a);
-	if(r == 0x7f)
-		evas_object_color_set(obj, 0xff, 0xff, 0xff, 0xff);
-	else
-		evas_object_color_set(obj, 0x00, 0x00, 0x00, 0xff);
 
 	handle->write_function(handle->controller, 0, sizeof(LV2_Atom) + 3,
 		handle->uri.event_transfer, &midi_atom);
+}
+
+static void
+_mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	plughandle_t *handle = data;
+	//Evas_Event_Mouse_Down *ev = event_info;
+
+	_note_on(handle);
+}
+
+static void
+_mouse_up(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	plughandle_t *handle = data;
+	//Evas_Event_Mouse_Up *ev = event_info;
+
+	_note_off(handle);
+}
+
+static void
+_mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	plughandle_t *handle = data;
+	//Evas_Event_Mouse_In *ev = event_info;
+
+	handle->key = evas_object_data_get(obj, "key");
+	handle->obj = obj;
+}
+
+static void
+_mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	plughandle_t *handle = data;
+	//Evas_Event_Mouse_Out *ev = event_info;
+
+	handle->key = NULL;
+	handle->obj = NULL;
+}
+
+static void
+_mouse_move(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	plughandle_t *handle = data;
+	Evas_Event_Mouse_Move *ev = event_info;
+
+	if(ev->buttons == 0)
+		return;
+
+	Evas_Coord x = ev->cur.canvas.x;
+	Evas_Coord y = ev->cur.canvas.y;
+
+	Eina_List *objs = evas_tree_objects_at_xy_get(e, NULL, x, y);
+	Eina_List *l;
+	Evas_Object *itm;
+	EINA_LIST_FOREACH(objs, l, itm)
+	{
+		uint8_t *key = evas_object_data_get(itm, "key");
+		if(!key)
+			continue;
+
+		if(key != handle->key && itm != handle->obj)
+		{
+			_note_off(handle);
+			handle->key = key;
+			handle->obj = itm;
+			_note_on(handle);
+		}
+
+		break;
+	}
+	eina_list_free(objs);
 }
 
 static Evas_Object *
@@ -118,6 +191,7 @@ _content_get(eo_ui_t *eoui)
 	Evas_Object *widg = elm_table_add(eoui->win);
 	elm_table_homogeneous_set(widg, EINA_TRUE);
 	elm_table_padding_set(widg, 1, 1);
+	evas_object_pointer_mode_set(widg, EVAS_OBJECT_POINTER_MODE_NOGRAB);
 
 	// preserve aspect
 	evas_object_size_hint_aspect_set(widg, EVAS_ASPECT_CONTROL_BOTH,
@@ -131,8 +205,12 @@ _content_get(eo_ui_t *eoui)
 			evas_object_data_set(key, "key", &keys[i]);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_UP, _mouse_up, handle);
+			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_IN, _mouse_in, handle);
+			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_OUT, _mouse_out, handle);
+			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_MOVE, _mouse_move, handle);
 			evas_object_size_hint_weight_set(key, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(key, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_pointer_mode_set(key, EVAS_OBJECT_POINTER_MODE_NOGRAB);
 			evas_object_show(key);
 
 			evas_object_color_set(key, 0xff, 0xff, 0xff, 0xff);
@@ -154,8 +232,12 @@ _content_get(eo_ui_t *eoui)
 			evas_object_data_set(key, "key", &keys[i]);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_UP, _mouse_up, handle);
+			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_IN, _mouse_in, handle);
+			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_OUT, _mouse_out, handle);
+			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_MOVE, _mouse_move, handle);
 			evas_object_size_hint_weight_set(key, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(key, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_pointer_mode_set(key, EVAS_OBJECT_POINTER_MODE_NOGRAB);
 			evas_object_show(key);
 
 			evas_object_color_set(key, 0x00, 0x00, 0x00, 0xff);
