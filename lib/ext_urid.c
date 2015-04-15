@@ -55,22 +55,29 @@ _urid_map(LV2_URID_Map_Handle handle, const char *uri)
 
 	// duplicate uri
 	char *uri_dup = strdup(uri);
-	
+	if(!uri_dup)
+		return 0;
+
 	// create new urid for uri
 	urid = malloc(sizeof(LV2_URID));
+	if(!urid)
+	{
+		free(uri_dup);
+		return 0;
+	}
 
-	if(urid && eina_hash_add(uri_hash->uris, uri_dup, urid))
+	if(eina_hash_add(uri_hash->uris, uri_dup, urid))
 	{
 		*urid = uri_hash->cnt++;
 
 		if(eina_hash_add(uri_hash->urids, urid, uri_dup))
 			return *urid;
 		else
-		{
 			eina_hash_del(uri_hash->uris, uri_dup, urid);
-			free(uri_dup);
-		}
 	}
+
+	free(urid);
+	free(uri_dup);
 
 	return 0;
 }
