@@ -42,9 +42,9 @@
 #define CHUNK_SIZE 0x10000
 #define SEQ_SIZE 0x2000
 
-typedef struct _handle_t handle_t;
+typedef struct _prog_t prog_t;
 
-struct _handle_t {
+struct _prog_t {
 	ext_urid_t *ext_urid;
 
 	sp_app_t *app;
@@ -100,7 +100,7 @@ _quit(uv_signal_t *quit, int signal)
 static void
 _worker_quit(uv_async_t *quit)
 {
-	handle_t *handle = quit->data;
+	prog_t *handle = quit->data;
 
 	uv_close((uv_handle_t *)&handle->worker_quit, NULL);
 	uv_close((uv_handle_t *)&handle->worker_wake, NULL);
@@ -110,7 +110,7 @@ _worker_quit(uv_async_t *quit)
 static void
 _worker_wake(uv_async_t *quit)
 {
-	handle_t *handle = quit->data;
+	prog_t *handle = quit->data;
 
 	size_t size;
 	const void *body;
@@ -125,7 +125,7 @@ _worker_wake(uv_async_t *quit)
 static void
 _worker_thread(void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	uv_loop_t *loop = uv_loop_new();
 
@@ -145,7 +145,7 @@ static LV2_State_Status
 _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	size_t size, uint32_t type, uint32_t flags)
 {
-	handle_t *handle = state;
+	prog_t *handle = state;
 
 	if(type != handle->forge.String)
 		return LV2_STATE_ERR_BAD_TYPE;
@@ -171,7 +171,7 @@ static const void*
 _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	uint32_t *type, uint32_t *flags)
 {
-	handle_t *handle = state;
+	prog_t *handle = state;
 	
 	*type = handle->forge.String;
 	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
@@ -206,7 +206,7 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 static void
 _ui_delete_request(void *data, Evas_Object *obj, void *event)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	elm_exit();
 }
@@ -215,7 +215,7 @@ _ui_delete_request(void *data, Evas_Object *obj, void *event)
 static void
 _ui_quit(void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	elm_exit();
 }
@@ -224,7 +224,7 @@ _ui_quit(void *data)
 static Eina_Bool
 _ui_animator(void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	size_t size;
 	const LV2_Atom *atom;
@@ -242,7 +242,7 @@ _ui_animator(void *data)
 static int
 _process(jack_nframes_t nsamples, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 	sp_app_t *app = handle->app;
 
 	void *midi_in_buf = jack_port_get_buffer(handle->midi_in, nsamples);
@@ -331,14 +331,14 @@ _process(jack_nframes_t nsamples, void *data)
 static void *
 _app_to_ui_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	return varchunk_write_request(handle->app_to_ui, size);
 }
 static void
 _app_to_ui_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	varchunk_write_advance(handle->app_to_ui, size);
 }
@@ -347,7 +347,7 @@ _app_to_ui_advance(size_t size, void *data)
 static void *
 _ui_to_app_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	void *ptr;
 	do
@@ -359,7 +359,7 @@ _ui_to_app_request(size_t size, void *data)
 static void
 _ui_to_app_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	varchunk_write_advance(handle->app_from_ui, size);
 }
@@ -369,14 +369,14 @@ _ui_to_app_advance(size_t size, void *data)
 static void *
 _app_to_worker_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	return varchunk_write_request(handle->app_to_worker, size);
 }
 static void
 _app_to_worker_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	varchunk_write_advance(handle->app_to_worker, size);
 	uv_async_send(&handle->worker_wake); // wake up worker thread
@@ -387,7 +387,7 @@ _app_to_worker_advance(size_t size, void *data)
 static void *
 _worker_to_app_request(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	void *ptr;
 	do
@@ -399,7 +399,7 @@ _worker_to_app_request(size_t size, void *data)
 static void
 _worker_to_app_advance(size_t size, void *data)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	varchunk_write_advance(handle->app_from_worker, size);
 }
@@ -408,7 +408,7 @@ _worker_to_app_advance(size_t size, void *data)
 static int
 _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
-	handle_t *handle = data;
+	prog_t *handle = data;
 
 	if(type != handle->log_trace)
 	{
@@ -460,7 +460,7 @@ int
 main(int argc, char **argv)
 #endif
 {
-	static handle_t handle;
+	static prog_t handle;
 
 	// varchunk init
 #if defined(BUILD_UI)
