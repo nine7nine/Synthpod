@@ -1253,6 +1253,98 @@ _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
+_patches_update(sp_ui_t *ui)
+{
+	int count [PORT_DIRECTION_NUM][PORT_TYPE_NUM];
+	// clear counters
+	memset(&count, 0, PORT_DIRECTION_NUM*PORT_TYPE_NUM*sizeof(int));
+
+	// count input|output ports per type
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
+	{
+		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
+		if(itc != ui->moditc)
+			continue; // ignore port items
+
+		mod_t *mod = elm_object_item_data_get(itm);
+		if(!mod->selected)
+			continue; // ignore unselected mods
+
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+			if(!port->selected)
+				continue; // ignore unselected ports
+
+			count[port->direction][port->type] += 1;
+		}
+	}
+
+	// set dimension of patchers
+	for(int t=0; t<PORT_TYPE_NUM; t++)
+	{
+		patcher_object_dimension_set(ui->matrix[t], 
+			count[PORT_DIRECTION_OUTPUT][t], // sources
+			count[PORT_DIRECTION_INPUT][t]); // sinks
+	}
+
+	// clear counters
+	memset(&count, 0, PORT_DIRECTION_NUM*PORT_TYPE_NUM*sizeof(int));
+
+	// populate patchers
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
+	{
+		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
+		if(itc != ui->moditc)
+			continue; // ignore port items
+
+		mod_t *mod = elm_object_item_data_get(itm);
+		if(!mod->selected)
+			continue; // ignore unselected mods
+
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+			if(!port->selected)
+				continue; // ignore unselected ports
+
+			LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
+			const char *name_str = lilv_node_as_string(name_node);
+			
+			if(port->direction == PORT_DIRECTION_OUTPUT) // source
+			{
+				patcher_object_source_data_set(ui->matrix[port->type],
+					count[port->direction][port->type], port);
+				patcher_object_source_color_set(ui->matrix[port->type],
+					count[port->direction][port->type], mod->col);
+				patcher_object_source_label_set(ui->matrix[port->type],
+					count[port->direction][port->type], name_str);
+			}
+			else // sink
+			{
+				patcher_object_sink_data_set(ui->matrix[port->type],
+					count[port->direction][port->type], port);
+				patcher_object_sink_color_set(ui->matrix[port->type],
+					count[port->direction][port->type], mod->col);
+				patcher_object_sink_label_set(ui->matrix[port->type],
+					count[port->direction][port->type], name_str);
+			}
+			
+			lilv_node_free(name_node);
+		
+			count[port->direction][port->type] += 1;
+		}
+	}
+
+	for(int t=0; t<PORT_TYPE_NUM; t++)
+		patcher_object_realize(ui->matrix[t]);
+}
+
+static void
 _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
@@ -1349,6 +1441,49 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 
 		// contract parent list item
 		evas_object_smart_callback_call(obj, "contract,request", parent);
+	}
+}
+
+// only called upon user interaction
+static void
+_modlist_moved(void *data, Evas_Object *obj, void *event_info)
+{
+	Elm_Object_Item *itm = event_info;
+	sp_ui_t *ui = data;
+
+	Elm_Object_Item *first = elm_genlist_first_item_get(obj);
+	Elm_Object_Item *last = elm_genlist_last_item_get(obj);
+
+	// we must not move mod to top or end of list
+	if(itm == first)
+	{
+		// promote system source to top of list
+		Elm_Object_Item *source = elm_genlist_item_next_get(itm);
+		elm_genlist_item_promote(source); // does not call _modlist_moved
+	}
+	else if(itm == last)
+	{
+		// demote system sink to end of list
+		Elm_Object_Item *sink = elm_genlist_item_prev_get(itm);
+		elm_genlist_item_demote(sink); // does not call _modlist_moved
+	}
+
+	// get previous item
+	Elm_Object_Item *prev = elm_genlist_item_prev_get(itm);
+		
+	mod_t *itm_mod = elm_object_item_data_get(itm);
+	mod_t *prev_mod = elm_object_item_data_get(prev);
+	
+	_patches_update(ui);
+		
+	// signal app
+	size_t size = sizeof(transmit_module_move_t);
+	transmit_module_move_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_move_fill(&ui->regs, &ui->forge, trans, size,
+			itm_mod->uid, prev_mod->uid);
+		_sp_ui_to_app_advance(ui, size);
 	}
 }
 
@@ -1545,98 +1680,6 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 		else
 			_x11_ui_show(mod);
 	}
-}
-
-static void
-_patches_update(sp_ui_t *ui)
-{
-	int count [PORT_DIRECTION_NUM][PORT_TYPE_NUM];
-	// clear counters
-	memset(&count, 0, PORT_DIRECTION_NUM*PORT_TYPE_NUM*sizeof(int));
-
-	// count input|output ports per type
-	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
-		itm != NULL;
-		itm = elm_genlist_item_next_get(itm))
-	{
-		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
-		if(itc != ui->moditc)
-			continue; // ignore port items
-
-		mod_t *mod = elm_object_item_data_get(itm);
-		if(!mod->selected)
-			continue; // ignore unselected mods
-
-		for(int i=0; i<mod->num_ports; i++)
-		{
-			port_t *port = &mod->ports[i];
-			if(!port->selected)
-				continue; // ignore unselected ports
-
-			count[port->direction][port->type] += 1;
-		}
-	}
-
-	// set dimension of patchers
-	for(int t=0; t<PORT_TYPE_NUM; t++)
-	{
-		patcher_object_dimension_set(ui->matrix[t], 
-			count[PORT_DIRECTION_OUTPUT][t], // sources
-			count[PORT_DIRECTION_INPUT][t]); // sinks
-	}
-
-	// clear counters
-	memset(&count, 0, PORT_DIRECTION_NUM*PORT_TYPE_NUM*sizeof(int));
-
-	// populate patchers
-	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
-		itm != NULL;
-		itm = elm_genlist_item_next_get(itm))
-	{
-		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
-		if(itc != ui->moditc)
-			continue; // ignore port items
-
-		mod_t *mod = elm_object_item_data_get(itm);
-		if(!mod->selected)
-			continue; // ignore unselected mods
-
-		for(int i=0; i<mod->num_ports; i++)
-		{
-			port_t *port = &mod->ports[i];
-			if(!port->selected)
-				continue; // ignore unselected ports
-
-			LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
-			const char *name_str = lilv_node_as_string(name_node);
-			
-			if(port->direction == PORT_DIRECTION_OUTPUT) // source
-			{
-				patcher_object_source_data_set(ui->matrix[port->type],
-					count[port->direction][port->type], port);
-				patcher_object_source_color_set(ui->matrix[port->type],
-					count[port->direction][port->type], mod->col);
-				patcher_object_source_label_set(ui->matrix[port->type],
-					count[port->direction][port->type], name_str);
-			}
-			else // sink
-			{
-				patcher_object_sink_data_set(ui->matrix[port->type],
-					count[port->direction][port->type], port);
-				patcher_object_sink_color_set(ui->matrix[port->type],
-					count[port->direction][port->type], mod->col);
-				patcher_object_sink_label_set(ui->matrix[port->type],
-					count[port->direction][port->type], name_str);
-			}
-			
-			lilv_node_free(name_node);
-		
-			count[port->direction][port->type] += 1;
-		}
-	}
-
-	for(int t=0; t<PORT_TYPE_NUM; t++)
-		patcher_object_realize(ui->matrix[t]);
 }
 
 static void
@@ -2315,7 +2358,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	elm_genlist_homogeneous_set(ui->modlist, EINA_TRUE); // needef for lazy-loading
 	elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
 	//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
-	//elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
+	elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
 	evas_object_smart_callback_add(ui->modlist, "expand,request",
 		_list_expand_request, ui);
 	evas_object_smart_callback_add(ui->modlist, "contract,request",
@@ -2326,6 +2369,8 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 		_modlist_contracted, ui);
 	evas_object_smart_callback_add(ui->modlist, "activated",
 		_modlist_activated, ui);
+	evas_object_smart_callback_add(ui->modlist, "moved",
+		_modlist_moved, ui);
 	evas_object_data_set(ui->modlist, "ui", ui);
 	evas_object_size_hint_weight_set(ui->modlist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->modlist, EVAS_HINT_FILL, EVAS_HINT_FILL);

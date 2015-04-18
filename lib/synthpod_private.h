@@ -145,6 +145,7 @@ struct _reg_t {
 		reg_item_t module_list;
 		reg_item_t module_add;
 		reg_item_t module_del;
+		reg_item_t module_move;
 		reg_item_t module_preset;
 		reg_item_t module_selected;
 		reg_item_t port_refresh;
@@ -246,6 +247,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->synthpod.module_list.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleList");
 	regs->synthpod.module_add.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleAdd");
 	regs->synthpod.module_del.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleDel");
+	regs->synthpod.module_move.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleMove");
 	regs->synthpod.module_preset.urid = map->map(map->handle, SYNTHPOD_PREFIX"modulePreset");
 	regs->synthpod.module_selected.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleSelect");
 	regs->synthpod.port_refresh.urid = map->map(map->handle, SYNTHPOD_PREFIX"portRefresh");
@@ -304,6 +306,7 @@ typedef struct _transmit_t transmit_t;
 typedef struct _transmit_module_list_t transmit_module_list_t;
 typedef struct _transmit_module_add_t transmit_module_add_t;
 typedef struct _transmit_module_del_t transmit_module_del_t;
+typedef struct _transmit_module_move_t transmit_module_move_t;
 typedef struct _transmit_module_preset_t transmit_module_preset_t;
 typedef struct _transmit_module_selected_t transmit_module_selected_t;
 typedef struct _transmit_port_connected_t transmit_port_connected_t;
@@ -331,6 +334,12 @@ struct _transmit_module_add_t {
 struct _transmit_module_del_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_module_move_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_Int prev _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_module_preset_t {
@@ -461,6 +470,21 @@ _sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
+}
+
+static inline void
+_sp_transmit_module_move_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_move_t *trans, uint32_t size, u_id_t module_uid, u_id_t prev_uid)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_move.urid);
+
+	trans->uid.atom.size = sizeof(int32_t);
+	trans->uid.atom.type = forge->Int;
+	trans->uid.body = module_uid;
+
+	trans->prev.atom.size = sizeof(int32_t);
+	trans->prev.atom.type = forge->Int;
+	trans->prev.body = prev_uid;
 }
 
 static inline void

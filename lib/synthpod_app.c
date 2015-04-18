@@ -793,6 +793,55 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			_sp_app_to_ui_advance(app, size);
 		}
 	}
+	else if(protocol == app->regs.synthpod.module_move.urid)
+	{
+		const transmit_module_move_t *move = (const transmit_module_move_t *)atom;
+
+		mod_t *mod = _sp_app_mod_get(app, move->uid.body);
+		mod_t *prev = _sp_app_mod_get(app, move->prev.body);
+		if(!mod || !prev)
+			return;
+
+		int mod_idx;
+		for(mod_idx=0; mod_idx<app->num_mods; mod_idx++)
+			if(app->mods[mod_idx] == mod)
+				break;
+
+		int prev_idx;
+		for(prev_idx=0; prev_idx<app->num_mods; prev_idx++)
+			if(app->mods[prev_idx] == prev)
+				break;
+
+		if(mod_idx < prev_idx)
+		{
+			// forward loop
+			for(int i=mod_idx, j=i; i<app->num_mods; i++)
+			{
+				if(app->mods[i] == mod)
+					continue;
+
+				app->mods[j++] = app->mods[i];
+
+				if(app->mods[i] == prev)
+					app->mods[j++] = mod;
+			}
+		}
+		else // mod_idx > prev_idx
+		{
+			// reverse loop
+			for(int i=app->num_mods-1, j=i; i>=0; i--)
+			{
+				if(app->mods[i] == mod)
+					continue;
+				else if(app->mods[i] == prev)
+					app->mods[j--] = mod;
+
+				app->mods[j--] = app->mods[i];
+			}
+		}
+
+		//TODO signal to ui
+	}
 	else if(protocol == app->regs.synthpod.module_preset.urid)
 	{
 		const transmit_module_preset_t *pset = (const transmit_module_preset_t *)atom;
