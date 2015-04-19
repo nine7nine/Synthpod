@@ -1,0 +1,83 @@
+/*
+ * Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+ *
+ * This is free software: you can redistribute it and/or modify
+ * it under the terms of the Artistic License 2.0 as published by
+ * The Perl Foundation.
+ *
+ * This source is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Artistic License 2.0 for more details.
+ *
+ * You should have received a copy of the Artistic License 2.0
+ * along the source as a COPYING file. If not, obtain it from
+ * http://www.perlfoundation.org/artistic_license_2_0.
+ */
+
+fonts {
+	font: "Rase-GPL.otf" "logofont";
+}
+
+group {
+	name: "/synthpod/theme";
+
+	parts {
+		part {
+			name: "clip";
+			type: RECT;
+			mouse_events: 0;
+			description {
+				state: "default" 0.0;
+				color: 255 255 255 255;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 4;
+			}
+		}
+
+		part {
+			name: "label";
+			type: TEXT;
+			mouse_events: 0;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				rel1.relative: 0.1 0.1;
+				rel2.relative: 0.9 0.9;
+				fixed: 1 1;
+				map {
+					on: 1;
+					rotation.z: -15;
+				}
+				text {
+					text: "Synth Pod";
+					font: "logofont";
+					size: 10;
+					fit: 1 1;
+					ellipsis: -1;
+					align: 0.5 0.5;
+				}
+			}
+		}
+
+		part {
+			name: "elm.swallow.content";
+			type: SWALLOW;
+			description {
+				state: "default" 0.0;
+			}
+		}
+	}
+
+	programs {
+		program {
+			signal: "show";
+			action: STATE_SET "default" 1.0;
+			transition: SINUSOIDAL 2.0;
+			target: "clip";
+		}
+	}
+}

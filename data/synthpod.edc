@@ -20,10 +20,6 @@ collections {
 		image: "omk_logo_256x256.png" COMP;
 	}
 
-	fonts {
-		//font: "DejaVuSansMono-Bold.ttf" "default";
-	}
-
 #define COL00    0    0    0  255 // Black
 #define COL01  255  179    0  255 // Vivid Yellow
 #define COL02  128   62  117  255 // Strong Purple
@@ -46,6 +42,7 @@ collections {
 #define COL19  241   58   19  255 // Vivid Reddish Orange
 #define COL20   35   44   22  255 // Dark Olive Green
 
+#include <theme.edc>
 #include <modlist.edc>
 #include <modgrid.edc>
 #include <patcher.edc>

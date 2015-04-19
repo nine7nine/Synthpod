@@ -18,6 +18,7 @@ if(BUILD_UI)
 			${PROJECT_BINARY_DIR}/synthpod.edj
 		DEPENDS
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod.edc
+			${CMAKE_CURRENT_SOURCE_DIR}/theme.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/modlist.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/modgrid.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/patcher.edc

@@ -526,6 +526,16 @@ main(int argc, char **argv)
 	handle.ui_driver.unmap = unmap;
 	handle.ui_driver.to_app_request = _ui_to_app_request;
 	handle.ui_driver.to_app_advance = _ui_to_app_advance;
+
+	// create main window
+	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);
+	handle.win = elm_win_util_standard_add("synthpod", "Synthpod");
+	evas_object_smart_callback_add(handle.win, "delete,request", _ui_delete_request, &handle);
+	evas_object_resize(handle.win, 1280, 720);
+	evas_object_show(handle.win);
+
+	// ui init
+	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle);
 #endif
 
 	// app init
@@ -579,16 +589,6 @@ main(int argc, char **argv)
 		fprintf(stderr, "Pa_StartStream failed\n");
 
 #if defined(BUILD_UI)
-	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);
-	//handle.win = elm_win_add(NULL, "Synthpod", ELM_WIN_BASIC);
-	handle.win = elm_win_util_standard_add("synthpod", "Synthpod");
-	evas_object_smart_callback_add(handle.win, "delete,request", _ui_delete_request, &handle);
-	evas_object_resize(handle.win, 1280, 720);
-	evas_object_show(handle.win);
-
-	// ui init
-	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle);
-
 	// main loop
 	elm_run();
 

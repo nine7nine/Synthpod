@@ -177,6 +177,7 @@ struct _sp_ui_t {
 	LV2_Atom_Forge forge;
 
 	Evas_Object *win;
+	Evas_Object *theme;
 	Evas_Object *plugpane;
 	Evas_Object *modpane;
 	Evas_Object *patchpane;
@@ -2234,7 +2235,36 @@ _resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	Evas_Coord w, h;
 	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
 
-	evas_object_resize(ui->plugpane, w, h);
+	evas_object_resize(ui->theme, w, h);
+}
+
+static void
+_background_loading(void *data)
+{
+	sp_ui_t *ui = data;
+
+	// walk plugin directories
+	ui->plugs = lilv_world_get_all_plugins(ui->world);
+
+	// initialzie registry
+	sp_regs_init(&ui->regs, ui->world, ui->driver->map);
+
+	// fill pluglist
+	LILV_FOREACH(plugins, itr, ui->plugs)
+	{
+		const LilvPlugin *plug = lilv_plugins_get(ui->plugs, itr);
+		elm_genlist_item_append(ui->pluglist, ui->plugitc, plug, NULL,
+			ELM_GENLIST_ITEM_NONE, NULL, NULL);
+	}
+
+	// request mod list
+	size_t size = sizeof(transmit_module_list_t);
+	transmit_module_list_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_list_fill(&ui->regs, &ui->forge, trans, size);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 sp_ui_t *
@@ -2266,19 +2296,27 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 		ui->world = lilv_world_new();
 		lilv_world_load_all(ui->world);
 	}
-	ui->plugs = lilv_world_get_all_plugins(ui->world);
 
-	sp_regs_init(&ui->regs, ui->world, driver->map);
+	ui->theme = elm_layout_add(win);
+	elm_layout_file_set(ui->theme, "/usr/local/share/synthpod/synthpod.edj",
+		"/synthpod/theme");
+	evas_object_size_hint_weight_set(ui->theme, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(ui->theme, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(ui->theme);
+
+	_resize(ui, NULL, ui->win, NULL);
+	evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _resize, ui);
+
+	for(int i=0; i<10; i++)
+		ecore_main_loop_iterate(); // show theme
 	
-	ui->plugpane = elm_panes_add(ui->win);
+	ui->plugpane = elm_panes_add(ui->theme);
 	elm_panes_horizontal_set(ui->plugpane, EINA_FALSE);
 	elm_panes_content_right_size_set(ui->plugpane, 0.25);
 	evas_object_size_hint_weight_set(ui->plugpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->plugpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->plugpane);
-
-	_resize(ui, NULL, ui->win, NULL);
-	evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _resize, ui);
+	elm_layout_content_set(ui->theme, "elm.swallow.content", ui->plugpane);
 
 	ui->pluglist = elm_genlist_add(ui->plugpane);
 	//elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
@@ -2305,13 +2343,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	ui->plugitc->func.content_get = NULL;
 	ui->plugitc->func.state_get = NULL;
 	ui->plugitc->func.del = NULL;
-
-	LILV_FOREACH(plugins, itr, ui->plugs)
-	{
-		const LilvPlugin *plug = lilv_plugins_get(ui->plugs, itr);
-		elm_genlist_item_append(ui->pluglist, ui->plugitc, plug, NULL,
-			ELM_GENLIST_ITEM_NONE, NULL, NULL);
-	}
 
 	ui->modpane = elm_panes_add(ui->plugpane);
 	elm_panes_horizontal_set(ui->modpane, EINA_FALSE);
@@ -2423,14 +2454,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	ui->griditc->func.state_get = NULL;
 	ui->griditc->func.del = _modgrid_del;
 
-	// request mod list
-	size_t size = sizeof(transmit_module_list_t);
-	transmit_module_list_t *trans = _sp_ui_to_app_request(ui, size);
-	if(trans)
-	{
-		_sp_transmit_module_list_fill(&ui->regs, &ui->forge, trans, size);
-		_sp_ui_to_app_advance(ui, size);
-	}
+	ecore_job_add(_background_loading, ui);
 
 	return ui;
 }
@@ -2438,7 +2462,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 Evas_Object *
 sp_ui_widget_get(sp_ui_t *ui)
 {
-	return ui->plugpane;
+	return ui->theme;
 }
 
 static inline mod_t *
@@ -2634,7 +2658,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 void
 sp_ui_resize(sp_ui_t *ui, int w, int h)
 {
-	evas_object_resize(ui->plugpane, w, h);
+	evas_object_resize(ui->theme, w, h);
 }
 
 void
@@ -2671,6 +2695,7 @@ sp_ui_free(sp_ui_t *ui)
 	evas_object_del(ui->modpane);
 	evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _resize);
 	evas_object_del(ui->plugpane);
+	evas_object_del(ui->theme);
 	
 	elm_genlist_item_class_free(ui->plugitc);
 	elm_gengrid_item_class_free(ui->griditc);
