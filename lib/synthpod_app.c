@@ -320,14 +320,14 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->opts.options[0].key = app->regs.bufsz.max_block_length.urid;
 	mod->opts.options[0].size = sizeof(int32_t);
 	mod->opts.options[0].type = app->forge.Int;
-	mod->opts.options[0].value = &app->driver->period_size;
+	mod->opts.options[0].value = &app->driver->max_block_size;
 	
 	mod->opts.options[1].context = LV2_OPTIONS_INSTANCE;
 	mod->opts.options[1].subject = 0;
 	mod->opts.options[1].key = app->regs.bufsz.min_block_length.urid;
 	mod->opts.options[1].size = sizeof(int32_t);
 	mod->opts.options[1].type = app->forge.Int;
-	mod->opts.options[1].value = &app->driver->period_size;
+	mod->opts.options[1].value = &app->driver->min_block_size;
 	
 	mod->opts.options[2].context = LV2_OPTIONS_INSTANCE;
 	mod->opts.options[2].subject = 0;
@@ -392,13 +392,13 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 
 		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
-			size = app->driver->period_size * sizeof(float);
+			size = app->driver->max_block_size * sizeof(float);
 			tar->type =  PORT_TYPE_AUDIO;
 			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
-			size = app->driver->period_size * sizeof(float);
+			size = app->driver->max_block_size * sizeof(float);
 			tar->type = PORT_TYPE_CV;
 			tar->selected = 1;
 		}
@@ -1211,11 +1211,11 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 							|| (port->type == PORT_TYPE_CV) )
 				{
 					float *val = port->buf;
-					memset(val, 0, app->driver->period_size * sizeof(float)); // init
+					memset(val, 0, nsamples * sizeof(float)); // init
 					for(int i=0; i<port->num_sources; i++)
 					{
 						float *src = port->sources[i]->buf;
-						for(int j=0; j<app->driver->period_size; j++)
+						for(int j=0; j<nsamples; j++)
 						{
 							val[j] += src[j];
 						}
@@ -1241,7 +1241,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					while(1)
 					{
 						int nxt = -1;
-						int64_t frames = app->driver->period_size;
+						int64_t frames = nsamples;
 
 						// search for next event in timeline accross source ports
 						for(i=0; i<port->num_sources; i++)
@@ -1277,7 +1277,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		}
 
 		// run plugin
-		lilv_instance_run(mod->inst, app->driver->period_size);
+		lilv_instance_run(mod->inst, nsamples);
 		
 		// handle ui post
 		for(int i=0; i<mod->num_ports; i++)
@@ -1314,7 +1314,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 				// find peak value in current period
 				float peak = 0.f;
-				for(int j=0; j<app->driver->period_size; j++)
+				for(int j=0; j<nsamples; j++)
 				{
 					float val = fabs(vec[j]);
 					if(val > peak)
@@ -1334,7 +1334,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					LV2UI_Peak_Data data = {
 						.period_start = port->period_cnt,
-						.period_size = app->driver->period_size,
+						.period_size = nsamples,
 						.peak = peak
 					};
 

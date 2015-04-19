@@ -467,7 +467,7 @@ main(int argc, char **argv)
 {
 	static prog_t handle;
 	uint32_t sample_rate = 48000;
-	uint32_t period_size = 64;
+	uint32_t block_size = 64;
 
 	// varchunk init
 #if defined(BUILD_UI)
@@ -502,7 +502,8 @@ main(int argc, char **argv)
 
 	// synthpod init
 	handle.app_driver.sample_rate = sample_rate;
-	handle.app_driver.period_size = period_size;
+	handle.app_driver.max_block_size = block_size;
+	handle.app_driver.min_block_size = block_size;
 	handle.app_driver.seq_size = SEQ_SIZE; //TODO
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
@@ -566,7 +567,7 @@ main(int argc, char **argv)
 			printf("\tsupported: OK\n");
 
 			if(Pa_OpenStream(&handle.stream, &input_params, &output_params,
-					sample_rate, period_size, paNoFlag, _process, &handle) != paNoError)
+					sample_rate, block_size, paNoFlag, _process, &handle) != paNoError)
 			{
 				fprintf(stderr, "Pa_OpenStream failed\n");
 			}

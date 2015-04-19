@@ -297,7 +297,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 
 	handle->driver.sample_rate = rate;
-	handle->driver.period_size = 64;
 	handle->driver.seq_size = SEQ_SIZE;
 	handle->driver.log_printf = _log_printf;
 	handle->driver.log_vprintf = _log_vprintf;
@@ -371,9 +370,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		opt++)
 	{
 		if(opt->key == handle->uri.bufsz.max_block_length)
-			handle->driver.period_size = *(int32_t *)opt->value;
+			handle->driver.max_block_size = *(int32_t *)opt->value;
 		else if(opt->key == handle->uri.bufsz.sequence_size)
-			handle->driver.seq_size = *(int32_t *)opt->value;
+			handle->driver.min_block_size = *(int32_t *)opt->value;
 		//TODO handle more options
 	}
 

@@ -41,7 +41,8 @@ typedef int (*sp_vprintf)(void *data, LV2_URID type, const char *fmt, va_list ar
 
 struct _sp_app_driver_t {
 	uint32_t sample_rate;
-	uint32_t period_size;
+	uint32_t min_block_size;
+	uint32_t max_block_size;
 	uint32_t seq_size;
 
 	LV2_URID_Map *map;

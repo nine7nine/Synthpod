@@ -510,7 +510,8 @@ main(int argc, char **argv)
 
 	// synthpod init
 	handle.app_driver.sample_rate = jack_get_sample_rate(handle.client);
-	handle.app_driver.period_size = jack_get_buffer_size(handle.client);
+	handle.app_driver.max_block_size = jack_get_buffer_size(handle.client);
+	handle.app_driver.min_block_size = jack_get_buffer_size(handle.client);
 	handle.app_driver.seq_size = SEQ_SIZE; //TODO
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
