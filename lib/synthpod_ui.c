@@ -182,7 +182,10 @@ struct _sp_ui_t {
 	Evas_Object *modpane;
 	Evas_Object *patchpane;
 
+	Evas_Object *plugbox;
+	Evas_Object *plugentry;
 	Evas_Object *pluglist;
+
 	Evas_Object *modlist;
 	Evas_Object *modgrid;
 	Evas_Object *patchbox;
@@ -2239,6 +2242,25 @@ _resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 }
 
 static void
+_pluglist_populate(sp_ui_t *ui, const char *match)
+{
+	LILV_FOREACH(plugins, itr, ui->plugs)
+	{
+		const LilvPlugin *plug = lilv_plugins_get(ui->plugs, itr);
+		LilvNode *name_node = lilv_plugin_get_name(plug);
+		const char *name_str = lilv_node_as_string(name_node);
+
+		if(strcasestr(name_str, match))
+		{
+			elm_genlist_item_append(ui->pluglist, ui->plugitc, plug, NULL,
+				ELM_GENLIST_ITEM_NONE, NULL, NULL);
+		}
+		
+		lilv_node_free(name_node);
+	}
+}
+
+static void
 _background_loading(void *data)
 {
 	sp_ui_t *ui = data;
@@ -2250,12 +2272,7 @@ _background_loading(void *data)
 	sp_regs_init(&ui->regs, ui->world, ui->driver->map);
 
 	// fill pluglist
-	LILV_FOREACH(plugins, itr, ui->plugs)
-	{
-		const LilvPlugin *plug = lilv_plugins_get(ui->plugs, itr);
-		elm_genlist_item_append(ui->pluglist, ui->plugitc, plug, NULL,
-			ELM_GENLIST_ITEM_NONE, NULL, NULL);
-	}
+	_pluglist_populate(ui, ""); // populate with everything
 
 	// request mod list
 	size_t size = sizeof(transmit_module_list_t);
@@ -2265,6 +2282,19 @@ _background_loading(void *data)
 		_sp_transmit_module_list_fill(&ui->regs, &ui->forge, trans, size);
 		_sp_ui_to_app_advance(ui, size);
 	}
+}
+
+static void
+_plugentry_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+	
+	const char *chunk = elm_entry_entry_get(obj);
+	char *match = elm_entry_markup_to_utf8(chunk);
+
+	elm_genlist_clear(ui->pluglist);
+	_pluglist_populate(ui, match); // populate with matching plugins
+	free(match);
 }
 
 sp_ui_t *
@@ -2318,7 +2348,28 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	evas_object_show(ui->plugpane);
 	elm_layout_content_set(ui->theme, "elm.swallow.content", ui->plugpane);
 
-	ui->pluglist = elm_genlist_add(ui->plugpane);
+	ui->plugbox = elm_box_add(ui->plugpane);
+	elm_box_horizontal_set(ui->plugbox, EINA_FALSE);
+	elm_box_homogeneous_set(ui->plugbox, EINA_FALSE);
+	evas_object_data_set(ui->plugbox, "ui", ui);
+	evas_object_size_hint_weight_set(ui->plugbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(ui->plugbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(ui->plugbox);
+	elm_object_part_content_set(ui->plugpane, "right", ui->plugbox);
+	
+	ui->plugentry = elm_entry_add(ui->plugbox);
+	elm_entry_entry_set(ui->plugentry, "");
+	elm_entry_editable_set(ui->plugentry, EINA_TRUE);
+	elm_entry_single_line_set(ui->plugentry, EINA_TRUE);
+	elm_entry_scrollable_set(ui->plugentry, EINA_TRUE);
+	evas_object_smart_callback_add(ui->plugentry, "changed,user", _plugentry_changed, ui);
+	evas_object_data_set(ui->plugentry, "ui", ui);
+	//evas_object_size_hint_weight_set(ui->plugentry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(ui->plugentry, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(ui->plugentry);
+	elm_box_pack_end(ui->plugbox, ui->plugentry);
+
+	ui->pluglist = elm_genlist_add(ui->plugbox);
 	//elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
 	evas_object_smart_callback_add(ui->pluglist, "activated",
 		_pluglist_activated, ui);
@@ -2334,7 +2385,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	evas_object_size_hint_weight_set(ui->pluglist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->pluglist, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->pluglist);
-	elm_object_part_content_set(ui->plugpane, "right", ui->pluglist);
+	elm_box_pack_end(ui->plugbox, ui->pluglist);
 
 	ui->plugitc = elm_genlist_item_class_new();
 	//ui->plugitc->item_style = "double_label";
@@ -2687,6 +2738,9 @@ sp_ui_free(sp_ui_t *ui)
 
 	elm_genlist_clear(ui->pluglist);
 	evas_object_del(ui->pluglist);
+
+	evas_object_del(ui->plugentry);
+	evas_object_del(ui->plugbox);
 
 	elm_box_clear(ui->patchbox);
 	evas_object_del(ui->patchbox);
