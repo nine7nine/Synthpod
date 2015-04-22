@@ -1,6 +1,10 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
+set(SYNTHPOD_BIN_DIR "bin")
+set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
+set(SYNTHPOD_DESKTOP_DIR "share/applications")
+
 if(APPLE)
 	find_library(CORE_AUDIO CoreAudio)
 	find_library(AUDIO_TOOLBOX AudioToolbox)
@@ -9,6 +13,12 @@ if(APPLE)
 	
 	find_library(CORE_SERVICES CoreServices)
 endif(APPLE)
+
+if(BUILD_JACK OR BUILD_PORTAUDIO)
+# icon
+	install(FILES ${PROJECT_SOURCE_DIR}/data/pix/synthpod.png DESTINATION
+		${SYNTHPOD_ICON_DIR})
+endif()
 
 if(BUILD_JACK)
 # jack
@@ -35,6 +45,12 @@ if(BUILD_JACK)
 	endif()
 	set_target_properties(synthpod.jack PROPERTIES OUTPUT_NAME "synthpod_jack")
 	install(TARGETS synthpod.jack DESTINATION bin)
+
+# desktop  file
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_jack.desktop.in
+		${PROJECT_BINARY_DIR}/bin/synthpod_jack.desktop @ONLY)
+	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_jack.desktop DESTINATION
+		${SYNTHPOD_DESKTOP_DIR})
 endif()
 
 if(BUILD_PORTAUDIO)
@@ -62,6 +78,12 @@ if(BUILD_PORTAUDIO)
 	endif()
 	set_target_properties(synthpod.pa PROPERTIES OUTPUT_NAME "synthpod_pa")
 	install(TARGETS synthpod.pa DESTINATION bin)
+
+# desktop  file
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_pa.desktop.in
+		${PROJECT_BINARY_DIR}/bin/synthpod_pa.desktop @ONLY)
+	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_pa.desktop DESTINATION
+		${SYNTHPOD_DESKTOP_DIR})
 endif()
 
 if(BUILD_TEST)
