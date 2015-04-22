@@ -1659,6 +1659,9 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 			evas_object_show(container);
 			elm_win_resize_object_add(win, container);
 
+			for(int i=0; i<10; i++)
+				ecore_main_loop_iterate(); // manually update windows
+
 			Evas_Object *widget = _eo_widget_create(container, mod);
 			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -2097,6 +2100,9 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(container);
+
+		for(int i=0; i<10; i++)
+			ecore_main_loop_iterate(); // manually update windows
 
 		Evas_Object *widget = _eo_widget_create(container, mod);
 		evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
