@@ -1600,7 +1600,7 @@ _full_delete_request(void *data, Evas_Object *obj, void *event_info)
 	mod->eo.widget = NULL;
 	mod->eo.full.win = NULL;
 
-	// add EoUI to midgrid
+	// add EoUI to modgrid
 	mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
 		NULL, NULL);
 }
@@ -1660,7 +1660,7 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 			elm_win_resize_object_add(win, container);
 
 			for(int i=0; i<10; i++)
-				ecore_main_loop_iterate(); // manually update windows
+				ecore_main_loop_iterate(); // refresh window
 
 			Evas_Object *widget = _eo_widget_create(container, mod);
 			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
@@ -1825,6 +1825,18 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 	_std_ui_write_function(mod, port->index, sizeof(float),
 		ui->regs.port.float_protocol.urid, &val);
 }
+
+static void
+_sldr_drag_stop(void *data, Evas_Object *obj, void *event)
+{
+	port_t *port = data;
+	mod_t *mod = port->mod;
+	sp_ui_t *ui = mod->ui;
+
+	float val = elm_slider_value_get(obj);
+	val = floor(val);
+	elm_slider_value_set(obj, val);
+}
 			
 static char *
 _fmt_int(double val)
@@ -1900,7 +1912,9 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	{
 		int integer = lilv_port_has_property(mod->plug, port->tar, ui->regs.port.integer.node);
 		int toggled = lilv_port_has_property(mod->plug, port->tar, ui->regs.port.toggled.node);
-		float step_val = integer ? 1.f : (port->max - port->min) / 1000;
+		float step_val = integer
+			? 1.f / (port->max - port->min)
+			: 0.001; // use 1000 steps for continuous values
 		float val = port->dflt;
 
 		if(toggled)
@@ -1950,6 +1964,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_slider_value_set(sldr, val);
 			elm_slider_step_set(sldr, step_val);
 			evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
+			if(integer)
+				evas_object_smart_callback_add(sldr, "slider,drag,stop", _sldr_drag_stop, port);
 
 			child = sldr;
 		}
@@ -2100,9 +2116,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(container);
-
-		for(int i=0; i<10; i++)
-			ecore_main_loop_iterate(); // manually update windows
 
 		Evas_Object *widget = _eo_widget_create(container, mod);
 		evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
@@ -2344,7 +2357,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _resize, ui);
 
 	for(int i=0; i<10; i++)
-		ecore_main_loop_iterate(); // show theme
+		ecore_main_loop_iterate();
 	
 	ui->plugpane = elm_panes_add(ui->theme);
 	elm_panes_horizontal_set(ui->plugpane, EINA_FALSE);
