@@ -188,7 +188,7 @@ struct _sp_ui_t {
 
 	Evas_Object *modlist;
 	Evas_Object *modgrid;
-	Evas_Object *patchbox;
+	Evas_Object *patchgrid;
 	Evas_Object *matrix[PORT_TYPE_NUM];
 
 	Elm_Genlist_Item_Class *plugitc;
@@ -197,6 +197,7 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *psetitc;
 	Elm_Genlist_Item_Class *psetitmitc;
 	Elm_Gengrid_Item_Class *griditc;
+	Elm_Genlist_Item_Class *patchitc;
 		
 	Elm_Object_Item *sink_itm;
 };
@@ -1289,6 +1290,9 @@ _patches_update(sp_ui_t *ui)
 	// set dimension of patchers
 	for(int t=0; t<PORT_TYPE_NUM; t++)
 	{
+		if(!ui->matrix[t])
+			continue;
+
 		patcher_object_dimension_set(ui->matrix[t], 
 			count[PORT_DIRECTION_OUTPUT][t], // sources
 			count[PORT_DIRECTION_INPUT][t]); // sinks
@@ -1321,21 +1325,27 @@ _patches_update(sp_ui_t *ui)
 			
 			if(port->direction == PORT_DIRECTION_OUTPUT) // source
 			{
-				patcher_object_source_data_set(ui->matrix[port->type],
-					count[port->direction][port->type], port);
-				patcher_object_source_color_set(ui->matrix[port->type],
-					count[port->direction][port->type], mod->col);
-				patcher_object_source_label_set(ui->matrix[port->type],
-					count[port->direction][port->type], name_str);
+				if(ui->matrix[port->type])
+				{
+					patcher_object_source_data_set(ui->matrix[port->type],
+						count[port->direction][port->type], port);
+					patcher_object_source_color_set(ui->matrix[port->type],
+						count[port->direction][port->type], mod->col);
+					patcher_object_source_label_set(ui->matrix[port->type],
+						count[port->direction][port->type], name_str);
+				}
 			}
 			else // sink
 			{
-				patcher_object_sink_data_set(ui->matrix[port->type],
-					count[port->direction][port->type], port);
-				patcher_object_sink_color_set(ui->matrix[port->type],
-					count[port->direction][port->type], mod->col);
-				patcher_object_sink_label_set(ui->matrix[port->type],
-					count[port->direction][port->type], name_str);
+				if(ui->matrix[port->type])
+				{
+					patcher_object_sink_data_set(ui->matrix[port->type],
+						count[port->direction][port->type], port);
+					patcher_object_sink_color_set(ui->matrix[port->type],
+						count[port->direction][port->type], mod->col);
+					patcher_object_sink_label_set(ui->matrix[port->type],
+						count[port->direction][port->type], name_str);
+				}
 			}
 			
 			lilv_node_free(name_node);
@@ -1345,7 +1355,12 @@ _patches_update(sp_ui_t *ui)
 	}
 
 	for(int t=0; t<PORT_TYPE_NUM; t++)
+	{
+		if(!ui->matrix[t])
+			continue;
+
 		patcher_object_realize(ui->matrix[t]);
+	}
 }
 
 static void
@@ -2249,6 +2264,73 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 	}
 }
 
+static char *
+_patchgrid_label_get(void *data, Evas_Object *obj, const char *part)
+{
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+	Evas_Object **matrix = data;
+	port_type_t type = matrix - ui->matrix;
+
+	if(!strcmp(part, "elm.text"))
+	{
+		switch(type)
+		{
+			case PORT_TYPE_AUDIO:
+				return strdup("Audio Ports");
+			case PORT_TYPE_ATOM:
+				return strdup("Atom Ports");
+			case PORT_TYPE_CONTROL:
+				return strdup("Control Ports");
+			case PORT_TYPE_CV:
+				return strdup("CV Ports");
+			default:
+				break;
+		}
+	}
+
+	return NULL;
+}
+
+static Evas_Object *
+_patchgrid_content_get(void *data, Evas_Object *obj, const char *part)
+{
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+	Evas_Object **matrix = data;
+
+	if(!strcmp(part, "elm.swallow.icon"))
+	{
+		*matrix = patcher_object_add(ui->patchgrid);
+		evas_object_smart_callback_add(*matrix, "connect,request",
+			_matrix_connect_request, ui);
+		evas_object_smart_callback_add(*matrix, "disconnect,request",
+			_matrix_disconnect_request, ui);
+		evas_object_smart_callback_add(*matrix, "realize,request",
+			_matrix_realize_request, ui);
+		evas_object_size_hint_weight_set(*matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(*matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(*matrix);
+
+		_patches_update(ui);
+
+		return *matrix;
+	}
+	else if(!strcmp(part, "elm.swallow.end"))
+	{
+		// what?
+	}
+	
+	return NULL;
+}
+
+static void
+_patchgrid_del(void *data, Evas_Object *obj)
+{
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+	Evas_Object **matrix = data;
+
+	*matrix = NULL;
+}
+
 static void
 _resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
@@ -2430,29 +2512,28 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	evas_object_show(ui->patchpane);
 	elm_object_part_content_set(ui->modpane, "right", ui->patchpane);
 
-	ui->patchbox = elm_box_add(ui->patchpane);
-	elm_box_horizontal_set(ui->patchbox, EINA_TRUE);
-	elm_box_homogeneous_set(ui->patchbox, EINA_FALSE);
-	elm_box_padding_set(ui->patchbox, 10, 10);
-	evas_object_size_hint_weight_set(ui->patchbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(ui->patchbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(ui->patchbox);
-	elm_object_part_content_set(ui->patchpane, "right", ui->patchbox);
+	ui->patchgrid = elm_gengrid_add(ui->patchpane);
+	elm_gengrid_horizontal_set(ui->patchgrid, EINA_TRUE);
+	elm_gengrid_select_mode_set(ui->patchgrid, ELM_OBJECT_SELECT_MODE_NONE);
+	elm_gengrid_reorder_mode_set(ui->patchgrid, EINA_TRUE);
+	elm_gengrid_item_size_set(ui->patchgrid, 256, 256);
+	evas_object_data_set(ui->patchgrid, "ui", ui);
+	evas_object_size_hint_weight_set(ui->patchgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(ui->patchgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(ui->patchgrid);
+	elm_object_part_content_set(ui->patchpane, "right", ui->patchgrid);
+
+	ui->patchitc = elm_gengrid_item_class_new();
+	ui->patchitc->item_style = "default";
+	ui->patchitc->func.text_get = _patchgrid_label_get;
+	ui->patchitc->func.content_get = _patchgrid_content_get;
+	ui->patchitc->func.state_get = NULL;
+	ui->patchitc->func.del = _patchgrid_del;
 
 	for(int t=0; t<PORT_TYPE_NUM; t++)
 	{
-		Evas_Object *matrix = patcher_object_add(ui->patchbox);
-		evas_object_smart_callback_add(matrix, "connect,request",
-			_matrix_connect_request, ui);
-		evas_object_smart_callback_add(matrix, "disconnect,request",
-			_matrix_disconnect_request, ui);
-		evas_object_smart_callback_add(matrix, "realize,request",
-			_matrix_realize_request, ui);
-		evas_object_size_hint_weight_set(matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_show(matrix);
-		elm_box_pack_end(ui->patchbox, matrix);
-		ui->matrix[t] = matrix;
+		Elm_Object_Item *itm = elm_gengrid_item_append(ui->patchgrid, ui->patchitc,
+			&ui->matrix[t], NULL, NULL);
 	}
 
 	ui->modlist = elm_genlist_add(ui->modpane);
@@ -2644,8 +2725,11 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		port_t *snk = _sp_ui_port_get(ui, trans->snk_uid.body, trans->snk_port.body);
 
 		Evas_Object *matrix = ui->matrix[src->type];
-		patcher_object_connected_set(matrix, src, snk,
-			trans->state.body ? EINA_TRUE : EINA_FALSE);
+		if(matrix)
+		{
+			patcher_object_connected_set(matrix, src, snk,
+				trans->state.body ? EINA_TRUE : EINA_FALSE);
+		}
 	}
 	else if(protocol == ui->regs.port.float_protocol.urid)
 	{
@@ -2761,8 +2845,8 @@ sp_ui_free(sp_ui_t *ui)
 	evas_object_del(ui->plugentry);
 	evas_object_del(ui->plugbox);
 
-	elm_box_clear(ui->patchbox);
-	evas_object_del(ui->patchbox);
+	elm_gengrid_clear(ui->patchgrid);
+	evas_object_del(ui->patchgrid);
 
 	evas_object_del(ui->patchpane);
 	evas_object_del(ui->modpane);
@@ -2776,6 +2860,7 @@ sp_ui_free(sp_ui_t *ui)
 	elm_genlist_item_class_free(ui->stditc);
 	elm_genlist_item_class_free(ui->psetitc);
 	elm_genlist_item_class_free(ui->psetitmitc);
+	elm_gengrid_item_class_free(ui->patchitc);
 	
 	sp_regs_deinit(&ui->regs);
 

@@ -39,10 +39,10 @@ typedef enum _port_direction_t port_direction_t;
 typedef enum _port_protocol_t port_protocol_t;
 
 enum _port_type_t {
-	PORT_TYPE_CONTROL,
 	PORT_TYPE_AUDIO,
-	PORT_TYPE_CV,
 	PORT_TYPE_ATOM,
+	PORT_TYPE_CONTROL,
+	PORT_TYPE_CV,
 
 	PORT_TYPE_NUM
 };
