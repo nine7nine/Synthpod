@@ -32,6 +32,26 @@
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
 
+typedef enum _plug_info_type_t plug_info_type_t;
+typedef struct _plug_info_t plug_info_t;
+
+enum _plug_info_type_t {
+	PLUG_INFO_TYPE_NAME								= 0,
+	PLUG_INFO_TYPE_URI								= 1,
+	PLUG_INFO_TYPE_PROJECT						= 2,
+	PLUG_INFO_TYPE_BUNDLE_URI					= 3,
+	PLUG_INFO_TYPE_AUTHOR_NAME				= 4,
+	PLUG_INFO_TYPE_AUTHOR_EMAIL				= 5,
+	PLUG_INFO_TYPE_AUTHOR_HOMEPAGE		= 6	,
+
+	PLUG_INFO_TYPE_MAX								= 7
+};
+
+struct _plug_info_t {
+	plug_info_type_t type;
+	const LilvPlugin *plug;
+};
+
 struct _mod_t {
 	sp_ui_t *ui;
 	u_id_t uid;
@@ -1198,25 +1218,102 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 static char * 
 _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 {
-	const LilvPlugin *plug = data;
+	const plug_info_t *info = data;
 
-	if(!strcmp(part, "elm.text"))
+	switch(info->type)
 	{
-		LilvNode *name_node = lilv_plugin_get_name(plug);
-		const char *name_str = lilv_node_as_string(name_node);
-		lilv_node_free(name_node);
+		case PLUG_INFO_TYPE_NAME:
+		{
+			LilvNode *node = lilv_plugin_get_name(info->plug);
+			if(node)
+			{
+				char *str = strdup(lilv_node_as_string(node));
+				lilv_node_free(node);
 
-		return strdup(name_str);
-	}
-	else if(!strcmp(part, "elm.text.sub"))
-	{
-		const LilvNode *uri_node = lilv_plugin_get_uri(plug);
-		const char *uri_str = lilv_node_as_string(uri_node);
+				return str;
+			}
+			else
+				return NULL;
+		}
+		case PLUG_INFO_TYPE_URI:
+		{
+			const LilvNode *node = lilv_plugin_get_uri(info->plug);
+			if(node)
+				return strdup(lilv_node_as_uri(node));
+			else
+				return NULL;
+		}
+		case PLUG_INFO_TYPE_BUNDLE_URI:
+		{
+			const LilvNode *node = lilv_plugin_get_bundle_uri(info->plug);
+			if(node)
+				return strdup(lilv_node_as_uri(node));
+			else
+				return NULL;
+		}
+		case PLUG_INFO_TYPE_PROJECT:
+		{
+			LilvNode *node = lilv_plugin_get_project(info->plug);
+			if(node)
+			{
+				char *str = strdup(lilv_node_as_string(node));
+				lilv_node_free(node);
 
-		return strdup(uri_str);
+				return str;
+			}
+			else
+				return NULL;
+		}
+		case PLUG_INFO_TYPE_AUTHOR_NAME:
+		{
+			LilvNode *node = lilv_plugin_get_author_name(info->plug);
+			if(node)
+			{
+				char *str = strdup(lilv_node_as_string(node));
+				lilv_node_free(node);
+
+				return str;
+			}
+			else
+				return NULL;
+		}
+		case PLUG_INFO_TYPE_AUTHOR_EMAIL:
+		{
+			LilvNode *node = lilv_plugin_get_author_email(info->plug);
+			if(node)
+			{
+				char *str = strdup(lilv_node_as_string(node));
+				lilv_node_free(node);
+
+				return str;
+			}
+			else
+				return NULL;
+		}
+		case PLUG_INFO_TYPE_AUTHOR_HOMEPAGE:
+		{
+			LilvNode *node = lilv_plugin_get_author_homepage(info->plug);
+			if(node)
+			{
+				char *str = strdup(lilv_node_as_string(node));
+				lilv_node_free(node);
+
+				return str;
+			}
+			else
+				return NULL;
+		}
+		default:
+			return NULL;
 	}
-	else
-		return NULL;
+}
+
+static void
+_pluglist_del(void *data, Evas_Object *obj)
+{
+	plug_info_t *info = data;
+
+	free(info);
 }
 
 static void
@@ -1224,9 +1321,9 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
-	const LilvPlugin *plug = elm_object_item_data_get(itm);;
+	plug_info_t *info = elm_object_item_data_get(itm);
 		
-	const LilvNode *uri_node = lilv_plugin_get_uri(plug);
+	const LilvNode *uri_node = lilv_plugin_get_uri(info->plug);
 	const char *uri_str = lilv_node_as_string(uri_node);
 
 	size_t size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
@@ -1236,6 +1333,36 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str, NULL);
 		_sp_ui_to_app_advance(ui, size);
 	}
+}
+
+static void
+_pluglist_expanded(void *data, Evas_Object *obj, void *event_info)
+{
+	Elm_Object_Item *itm = event_info;
+	sp_ui_t *ui = data;
+	plug_info_t *info = elm_object_item_data_get(itm);
+
+	plug_info_t *child;
+	Elm_Object_Item *elmnt;
+
+	for(int t=1; t<PLUG_INFO_TYPE_MAX; t++)
+	{
+		child = calloc(1, sizeof(plug_info_t));
+		child->type = t;
+		child->plug = info->plug;
+		elmnt = elm_genlist_item_append(ui->pluglist, ui->plugitc,
+			child, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+	}
+}
+
+static void
+_pluglist_contracted(void *data, Evas_Object *obj, void *event_info)
+{
+	Elm_Object_Item *itm = event_info;
+
+	// clear items
+	elm_genlist_item_subitems_clear(itm);
 }
 
 static void
@@ -2353,8 +2480,11 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 
 		if(strcasestr(name_str, match))
 		{
-			elm_genlist_item_append(ui->pluglist, ui->plugitc, plug, NULL,
-				ELM_GENLIST_ITEM_NONE, NULL, NULL);
+			plug_info_t *info = calloc(1, sizeof(plug_info_t));
+			info->type = PLUG_INFO_TYPE_NAME;
+			info->plug = plug;
+			elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
+				ELM_GENLIST_ITEM_TREE, NULL, NULL);
 		}
 		
 		lilv_node_free(name_node);
@@ -2494,10 +2624,10 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 		_list_expand_request, ui);
 	evas_object_smart_callback_add(ui->pluglist, "contract,request",
 		_list_contract_request, ui);
-	//evas_object_smart_callback_add(ui->pluglist, "expanded",
-	//	_pluglist_expanded, ui);
-	//evas_object_smart_callback_add(ui->pluglist, "contracted",
-	//	_pluglist_contracted, ui);
+	evas_object_smart_callback_add(ui->pluglist, "expanded",
+		_pluglist_expanded, ui);
+	evas_object_smart_callback_add(ui->pluglist, "contracted",
+		_pluglist_contracted, ui);
 	evas_object_data_set(ui->pluglist, "ui", ui);
 	evas_object_size_hint_weight_set(ui->pluglist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->pluglist, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -2505,12 +2635,11 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	elm_box_pack_end(ui->plugbox, ui->pluglist);
 
 	ui->plugitc = elm_genlist_item_class_new();
-	//ui->plugitc->item_style = "double_label";
 	ui->plugitc->item_style = "default";
 	ui->plugitc->func.text_get = _pluglist_label_get;
 	ui->plugitc->func.content_get = NULL;
 	ui->plugitc->func.state_get = NULL;
-	ui->plugitc->func.del = NULL;
+	ui->plugitc->func.del = _pluglist_del;
 
 	ui->patchgrid = elm_gengrid_add(ui->plugpane);
 	elm_gengrid_horizontal_set(ui->patchgrid, EINA_FALSE);
