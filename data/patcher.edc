@@ -403,6 +403,26 @@ group {
 				}
 				color: 128 128 128 255;
 			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
+			}
+		}
+	}
+
+	programs {
+		program {
+			signal: "on";
+			source: PATCHER_UI;
+			action: STATE_SET "default" 1.0;
+			target: "default";
+		}
+		program {
+			signal: "off";
+			source: PATCHER_UI;
+			action: STATE_SET "default" 0.0;
+			target: "default";
 		}
 	}
 }
@@ -441,6 +461,26 @@ group {
 				}
 				color: 128 128 128 255;
 			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
+			}
+		}
+	}
+
+	programs {
+		program {
+			signal: "on";
+			source: PATCHER_UI;
+			action: STATE_SET "default" 1.0;
+			target: "default";
+		}
+		program {
+			signal: "off";
+			source: PATCHER_UI;
+			action: STATE_SET "default" 0.0;
+			target: "default";
 		}
 	}
 }

@@ -86,28 +86,33 @@ _node_in(void *data, Evas_Object *edj, const char *emission, const char *source)
 	unsigned short src, snk;
 	evas_object_table_pack_get(priv->matrix, edj, &src, &snk, NULL, NULL);
 
+	Evas_Object *tar = NULL;
+
 	for(int j=snk+1; j<priv->max; j++)
 	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+		tar = evas_object_table_child_get(priv->matrix, src, j);
 		edje_object_signal_emit(tar, "vertical", PATCHER_UI);
 	}
 	for(int i=src+1; i<priv->max; i++)
 	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+		tar = evas_object_table_child_get(priv->matrix, i, snk);
 		edje_object_signal_emit(tar, "horizontal", PATCHER_UI);
 	}
-	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
-		edje_object_signal_emit(tar, "edge", PATCHER_UI);
-	}
-	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, priv->max);
-		edje_object_signal_emit(tar, "on", PATCHER_UI);
-	}
-	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
-		edje_object_signal_emit(tar, "on", PATCHER_UI);
-	}
+
+	tar = evas_object_table_child_get(priv->matrix, src, snk);
+	edje_object_signal_emit(tar, "edge", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, src, priv->max);
+	edje_object_signal_emit(tar, "on", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
+	edje_object_signal_emit(tar, "on", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, src, priv->max+1);
+	edje_object_signal_emit(tar, "on", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, priv->max+1, snk);
+	edje_object_signal_emit(tar, "on", PATCHER_UI);
 }
 
 static void
@@ -118,28 +123,33 @@ _node_out(void *data, Evas_Object *edj, const char *emission, const char *source
 	unsigned short src, snk;
 	evas_object_table_pack_get(priv->matrix, edj, &src, &snk, NULL, NULL);
 
+	Evas_Object *tar = NULL;
+
 	for(int j=snk+1; j<priv->max; j++)
 	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+		tar = evas_object_table_child_get(priv->matrix, src, j);
 		edje_object_signal_emit(tar, "clear", PATCHER_UI);
 	}
 	for(int i=src+1; i<priv->max; i++)
 	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+		tar = evas_object_table_child_get(priv->matrix, i, snk);
 		edje_object_signal_emit(tar, "clear", PATCHER_UI);
 	}
-	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
-		edje_object_signal_emit(tar, "clear", PATCHER_UI);
-	}
-	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, priv->max);
-		edje_object_signal_emit(tar, "off", PATCHER_UI);
-	}
-	{
-		Evas_Object *tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
-		edje_object_signal_emit(tar, "off", PATCHER_UI);
-	}
+
+	tar = evas_object_table_child_get(priv->matrix, src, snk);
+	edje_object_signal_emit(tar, "clear", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, src, priv->max);
+	edje_object_signal_emit(tar, "off", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
+	edje_object_signal_emit(tar, "off", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, src, priv->max+1);
+	edje_object_signal_emit(tar, "off", PATCHER_UI);
+
+	tar = evas_object_table_child_get(priv->matrix, priv->max+1, snk);
+	edje_object_signal_emit(tar, "off", PATCHER_UI);
 }
 
 static void
@@ -153,6 +163,9 @@ _source_in(void *data, Evas_Object *edj, const char *emission, const char *sourc
 	
 	edje_object_signal_emit(edj, "on", PATCHER_UI);
 
+	Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, priv->max+1);
+	edje_object_signal_emit(tar, "on", PATCHER_UI);
+
 	int first = 1;
 	for(int j=0; j<priv->sinks; j++)
 	{
@@ -161,11 +174,11 @@ _source_in(void *data, Evas_Object *edj, const char *emission, const char *sourc
 		{
 			for(int i=src+1; i<priv->max; i++)
 			{
-				Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+				tar = evas_object_table_child_get(priv->matrix, i, snk);
 				edje_object_signal_emit(tar, "horizontal", PATCHER_UI);
 			}
 
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			if(first)
 			{
 				edje_object_signal_emit(tar, "edge", PATCHER_UI);
@@ -176,10 +189,13 @@ _source_in(void *data, Evas_Object *edj, const char *emission, const char *sourc
 
 			tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
 			edje_object_signal_emit(tar, "on", PATCHER_UI);
+			
+			tar = evas_object_table_child_get(priv->matrix, priv->max+1, snk);
+			edje_object_signal_emit(tar, "on", PATCHER_UI);
 		}
 		else if(!first)
 		{
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			edje_object_signal_emit(tar, "vertical", PATCHER_UI);
 		}
 	}
@@ -195,6 +211,9 @@ _source_out(void *data, Evas_Object *edj, const char *emission, const char *sour
 	int src_index = src + priv->sources - priv->max;
 	
 	edje_object_signal_emit(edj, "off", PATCHER_UI);
+
+	Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, priv->max+1);
+	edje_object_signal_emit(tar, "off", PATCHER_UI);
 	
 	for(int j=0; j<priv->sinks; j++)
 	{
@@ -203,19 +222,22 @@ _source_out(void *data, Evas_Object *edj, const char *emission, const char *sour
 		{
 			for(int i=src+1; i<priv->max; i++)
 			{
-				Evas_Object *tar = evas_object_table_child_get(priv->matrix, i, snk);
+				tar = evas_object_table_child_get(priv->matrix, i, snk);
 				edje_object_signal_emit(tar, "clear", PATCHER_UI);
 			}
 
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			edje_object_signal_emit(tar, "clear", PATCHER_UI);
 			
 			tar = evas_object_table_child_get(priv->matrix, priv->max, snk);
 			edje_object_signal_emit(tar, "off", PATCHER_UI);
+			
+			tar = evas_object_table_child_get(priv->matrix, priv->max+1, snk);
+			edje_object_signal_emit(tar, "off", PATCHER_UI);
 		}
 		else
 		{
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			edje_object_signal_emit(tar, "clear", PATCHER_UI);
 		}
 	}
@@ -231,6 +253,9 @@ _sink_in(void *data, Evas_Object *edj, const char *emission, const char *source)
 	int snk_index = snk + priv->sinks - priv->max;
 	
 	edje_object_signal_emit(edj, "on", PATCHER_UI);
+
+	Evas_Object *tar = evas_object_table_child_get(priv->matrix, priv->max+1, snk);
+	edje_object_signal_emit(tar, "on", PATCHER_UI);
 	
 	int first = 1;
 	for(int i=0; i<priv->sources; i++)
@@ -240,11 +265,11 @@ _sink_in(void *data, Evas_Object *edj, const char *emission, const char *source)
 		{
 			for(int j=snk+1; j<priv->max; j++)
 			{
-				Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+				tar = evas_object_table_child_get(priv->matrix, src, j);
 				edje_object_signal_emit(tar, "vertical", PATCHER_UI);
 			}
 
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			if(first)
 			{
 				edje_object_signal_emit(tar, "edge", PATCHER_UI);
@@ -255,10 +280,13 @@ _sink_in(void *data, Evas_Object *edj, const char *emission, const char *source)
 
 			tar = evas_object_table_child_get(priv->matrix, src, priv->max);
 			edje_object_signal_emit(tar, "on", PATCHER_UI);
+			
+			tar = evas_object_table_child_get(priv->matrix, src, priv->max+1);
+			edje_object_signal_emit(tar, "on", PATCHER_UI);
 		}
 		else if(!first)
 		{
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			edje_object_signal_emit(tar, "horizontal", PATCHER_UI);
 		}
 	}
@@ -274,6 +302,9 @@ _sink_out(void *data, Evas_Object *edj, const char *emission, const char *source
 	int snk_index = snk + priv->sinks - priv->max;
 	
 	edje_object_signal_emit(edj, "off", PATCHER_UI);
+
+	Evas_Object *tar = evas_object_table_child_get(priv->matrix, priv->max+1, snk);
+	edje_object_signal_emit(tar, "off", PATCHER_UI);
 	
 	for(int i=0; i<priv->sources; i++)
 	{
@@ -282,19 +313,22 @@ _sink_out(void *data, Evas_Object *edj, const char *emission, const char *source
 		{
 			for(int j=snk+1; j<priv->max; j++)
 			{
-				Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, j);
+				tar = evas_object_table_child_get(priv->matrix, src, j);
 				edje_object_signal_emit(tar, "clear", PATCHER_UI);
 			}
 
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			edje_object_signal_emit(tar, "clear", PATCHER_UI);
 
 			tar = evas_object_table_child_get(priv->matrix, src, priv->max);
 			edje_object_signal_emit(tar, "off", PATCHER_UI);
+			
+			tar = evas_object_table_child_get(priv->matrix, src, priv->max+1);
+			edje_object_signal_emit(tar, "off", PATCHER_UI);
 		}
 		else
 		{
-			Evas_Object *tar = evas_object_table_child_get(priv->matrix, src, snk);
+			tar = evas_object_table_child_get(priv->matrix, src, snk);
 			edje_object_signal_emit(tar, "clear", PATCHER_UI);
 		}
 	}
