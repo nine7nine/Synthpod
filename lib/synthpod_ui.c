@@ -178,18 +178,21 @@ struct _sp_ui_t {
 
 	Evas_Object *win;
 	Evas_Object *theme;
+
+	Evas_Object *mainpane;
+	Evas_Object *leftpane;
 	Evas_Object *plugpane;
-	Evas_Object *modpane;
-	Evas_Object *patchpane;
 
 	Evas_Object *plugbox;
 	Evas_Object *plugentry;
 	Evas_Object *pluglist;
 
-	Evas_Object *modlist;
-	Evas_Object *modgrid;
 	Evas_Object *patchgrid;
 	Evas_Object *matrix[PORT_TYPE_NUM];
+
+	Evas_Object *modlist;
+
+	Evas_Object *modgrid;
 
 	Elm_Genlist_Item_Class *plugitc;
 	Elm_Genlist_Item_Class *moditc;
@@ -1898,7 +1901,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	evas_object_smart_callback_add(patched, "changed", _patched_changed, port);
 	evas_object_show(patched);
 	elm_layout_content_set(lay, "elm.swallow.icon", patched);
-	
+
 	Evas_Object *dir = edje_object_add(evas_object_evas_get(lay));
 	edje_object_file_set(dir, "/usr/local/share/synthpod/synthpod.edj",
 		"/synthpod/patcher/port");
@@ -2132,6 +2135,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(container);
 
+		//TODO add EVAS DEL callback
 		Evas_Object *widget = _eo_widget_create(container, mod);
 		evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -2291,6 +2295,14 @@ _patchgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	return NULL;
 }
 
+static void
+_patchgrid_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	Evas_Object **matrix = data;
+
+	*matrix = NULL;
+}
+
 static Evas_Object *
 _patchgrid_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -2306,6 +2318,7 @@ _patchgrid_content_get(void *data, Evas_Object *obj, const char *part)
 			_matrix_disconnect_request, ui);
 		evas_object_smart_callback_add(*matrix, "realize,request",
 			_matrix_realize_request, ui);
+		evas_object_event_callback_add(*matrix, EVAS_CALLBACK_DEL, _patchgrid_del, matrix);
 		evas_object_size_hint_weight_set(*matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(*matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(*matrix);
@@ -2314,21 +2327,8 @@ _patchgrid_content_get(void *data, Evas_Object *obj, const char *part)
 
 		return *matrix;
 	}
-	else if(!strcmp(part, "elm.swallow.end"))
-	{
-		// what?
-	}
 	
 	return NULL;
-}
-
-static void
-_patchgrid_del(void *data, Evas_Object *obj)
-{
-	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	Evas_Object **matrix = data;
-
-	*matrix = NULL;
 }
 
 static void
@@ -2441,13 +2441,29 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	for(int i=0; i<10; i++)
 		ecore_main_loop_iterate();
 	
-	ui->plugpane = elm_panes_add(ui->theme);
-	elm_panes_horizontal_set(ui->plugpane, EINA_FALSE);
-	elm_panes_content_right_size_set(ui->plugpane, 0.25);
+	ui->mainpane = elm_panes_add(ui->theme);
+	elm_panes_horizontal_set(ui->mainpane, EINA_FALSE);
+	elm_panes_content_left_size_set(ui->mainpane, 0.5);
+	evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(ui->mainpane);
+	elm_layout_content_set(ui->theme, "elm.swallow.content", ui->mainpane);
+	
+	ui->leftpane = elm_panes_add(ui->theme);
+	elm_panes_horizontal_set(ui->leftpane, EINA_FALSE);
+	elm_panes_content_left_size_set(ui->leftpane, 0.5);
+	evas_object_size_hint_weight_set(ui->leftpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(ui->leftpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
+	evas_object_show(ui->leftpane);
+	elm_object_part_content_set(ui->mainpane, "left", ui->leftpane);
+
+	ui->plugpane = elm_panes_add(ui->mainpane);
+	elm_panes_horizontal_set(ui->plugpane, EINA_TRUE);
+	elm_panes_content_left_size_set(ui->plugpane, 0.33);
 	evas_object_size_hint_weight_set(ui->plugpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->plugpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->plugpane);
-	elm_layout_content_set(ui->theme, "elm.swallow.content", ui->plugpane);
+	elm_object_part_content_set(ui->leftpane, "left", ui->plugpane);
 
 	ui->plugbox = elm_box_add(ui->plugpane);
 	elm_box_horizontal_set(ui->plugbox, EINA_FALSE);
@@ -2456,7 +2472,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	evas_object_size_hint_weight_set(ui->plugbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->plugbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->plugbox);
-	elm_object_part_content_set(ui->plugpane, "right", ui->plugbox);
+	elm_object_part_content_set(ui->plugpane, "left", ui->plugbox);
 	
 	ui->plugentry = elm_entry_add(ui->plugbox);
 	elm_entry_entry_set(ui->plugentry, "");
@@ -2496,39 +2512,23 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	ui->plugitc->func.state_get = NULL;
 	ui->plugitc->func.del = NULL;
 
-	ui->modpane = elm_panes_add(ui->plugpane);
-	elm_panes_horizontal_set(ui->modpane, EINA_FALSE);
-	elm_panes_content_left_size_set(ui->modpane, 0.4);
-	evas_object_size_hint_weight_set(ui->modpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(ui->modpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(ui->modpane);
-	elm_object_part_content_set(ui->plugpane, "left", ui->modpane);
-	
-	ui->patchpane = elm_panes_add(ui->modpane);
-	elm_panes_horizontal_set(ui->patchpane, EINA_TRUE);
-	elm_panes_content_left_size_set(ui->patchpane, 0.8);
-	evas_object_size_hint_weight_set(ui->patchpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(ui->patchpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
-	evas_object_show(ui->patchpane);
-	elm_object_part_content_set(ui->modpane, "right", ui->patchpane);
-
-	ui->patchgrid = elm_gengrid_add(ui->patchpane);
-	elm_gengrid_horizontal_set(ui->patchgrid, EINA_TRUE);
+	ui->patchgrid = elm_gengrid_add(ui->plugpane);
+	elm_gengrid_horizontal_set(ui->patchgrid, EINA_FALSE);
 	elm_gengrid_select_mode_set(ui->patchgrid, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_gengrid_reorder_mode_set(ui->patchgrid, EINA_TRUE);
-	elm_gengrid_item_size_set(ui->patchgrid, 256, 256);
+	elm_gengrid_item_size_set(ui->patchgrid, 400, 400);
 	evas_object_data_set(ui->patchgrid, "ui", ui);
 	evas_object_size_hint_weight_set(ui->patchgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->patchgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->patchgrid);
-	elm_object_part_content_set(ui->patchpane, "right", ui->patchgrid);
+	elm_object_part_content_set(ui->plugpane, "right", ui->patchgrid);
 
 	ui->patchitc = elm_gengrid_item_class_new();
 	ui->patchitc->item_style = "default";
 	ui->patchitc->func.text_get = _patchgrid_label_get;
 	ui->patchitc->func.content_get = _patchgrid_content_get;
 	ui->patchitc->func.state_get = NULL;
-	ui->patchitc->func.del = _patchgrid_del;
+	ui->patchitc->func.del = NULL;
 
 	for(int t=0; t<PORT_TYPE_NUM; t++)
 	{
@@ -2536,7 +2536,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 			&ui->matrix[t], NULL, NULL);
 	}
 
-	ui->modlist = elm_genlist_add(ui->modpane);
+	ui->modlist = elm_genlist_add(ui->leftpane);
 	elm_genlist_homogeneous_set(ui->modlist, EINA_TRUE); // needef for lazy-loading
 	elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
 	//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
@@ -2557,7 +2557,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	evas_object_size_hint_weight_set(ui->modlist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->modlist, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->modlist);
-	elm_object_part_content_set(ui->modpane, "left", ui->modlist);
+	elm_object_part_content_set(ui->leftpane, "right", ui->modlist);
 	
 	ui->moditc = elm_genlist_item_class_new();
 	//ui->moditc->item_style = "double_label";
@@ -2588,7 +2588,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	ui->psetitmitc->func.state_get = NULL;
 	ui->psetitmitc->func.del = NULL;
 
-	ui->modgrid = elm_gengrid_add(ui->patchpane);
+	ui->modgrid = elm_gengrid_add(ui->mainpane);
 	elm_gengrid_select_mode_set(ui->modgrid, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_gengrid_reorder_mode_set(ui->modgrid, EINA_TRUE);
 	elm_gengrid_item_size_set(ui->modgrid, 400, 400);
@@ -2596,7 +2596,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	evas_object_size_hint_weight_set(ui->modgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->modgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->modgrid);
-	elm_object_part_content_set(ui->patchpane, "left", ui->modgrid);
+	elm_object_part_content_set(ui->mainpane, "right", ui->modgrid);
 
 	ui->griditc = elm_gengrid_item_class_new();
 	ui->griditc->item_style = "default";
@@ -2848,11 +2848,11 @@ sp_ui_free(sp_ui_t *ui)
 	elm_gengrid_clear(ui->patchgrid);
 	evas_object_del(ui->patchgrid);
 
-	evas_object_del(ui->patchpane);
-	evas_object_del(ui->modpane);
-	evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _resize);
 	evas_object_del(ui->plugpane);
+	evas_object_del(ui->leftpane);
+	evas_object_del(ui->mainpane);
 	evas_object_del(ui->theme);
+	//evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _resize);
 	
 	elm_genlist_item_class_free(ui->plugitc);
 	elm_gengrid_item_class_free(ui->griditc);
