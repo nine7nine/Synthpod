@@ -1,5 +1,6 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
+include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 
 set(SYNTHPOD_BIN_DIR "bin")
 set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
@@ -34,7 +35,7 @@ if(BUILD_JACK)
 # synthpod
 	add_executable(synthpod.jack
 		synthpod_jack.c
-		varchunk.c)
+		../varchunk/varchunk.c)
 	target_link_libraries(synthpod.jack
 		${UV_LDFLAGS}
 		${JACK_LIBS}
@@ -67,7 +68,7 @@ if(BUILD_PORTAUDIO)
 # synthpod
 	add_executable(synthpod.pa
 		synthpod_pa.c
-		varchunk.c)
+		../varchunk/varchunk.c)
 	target_link_libraries(synthpod.pa
 		${UV_LDFLAGS}
 		${PORTAUDIO_LIBS}
@@ -84,12 +85,4 @@ if(BUILD_PORTAUDIO)
 		${PROJECT_BINARY_DIR}/bin/synthpod_pa.desktop @ONLY)
 	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_pa.desktop DESTINATION
 		${SYNTHPOD_DESKTOP_DIR})
-endif()
-
-if(BUILD_TEST)
-# varchunk test
-	add_executable(test_varchunk
-		test_varchunk.c
-		varchunk.c)
-	target_link_libraries(test_varchunk ${UV_LDFLAGS})
 endif()
