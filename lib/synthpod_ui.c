@@ -25,6 +25,7 @@
 #include <patcher.h>
 #include <smart_slider.h>
 #include <smart_meter.h>
+#include <smart_spinner.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 #define NUM_UI_FEATURES 11
@@ -321,7 +322,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		if(toggled)
 			elm_check_state_set(port->std.widget, val > 0.f ? EINA_TRUE : EINA_FALSE);
 		else if(port->points)
-			elm_spinner_value_set(port->std.widget, val);
+			smart_spinner_value_set(port->std.widget, val);
 		else // integer or float
 			smart_slider_value_set(port->std.widget, val);
 	}
@@ -1960,9 +1961,7 @@ _spinner_changed(void *data, Evas_Object *obj, void *event)
 	mod_t *mod = port->mod;
 	sp_ui_t *ui = mod->ui;
 
-	float val = elm_spinner_value_get(obj);
-	if(lilv_port_has_property(mod->plug, port->tar, ui->regs.port.integer.node))
-		val = floor(val);
+	float val = smart_spinner_value_get(obj);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
 		ui->regs.port.float_protocol.urid, &val);
@@ -2073,22 +2072,16 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		}
 		else if(port->points)
 		{
-			Evas_Object *spin = elm_spinner_add(lay);
-			elm_spinner_min_max_set(spin, port->min, port->max);
-			elm_spinner_value_set(spin, val);
-			elm_spinner_step_set(spin, 1.f);
-			elm_spinner_editable_set(spin, EINA_FALSE);
-			elm_spinner_wrap_set(spin, EINA_FALSE);
-			elm_spinner_base_set(spin, 0);
-			elm_spinner_round_set(spin, 1);
-			elm_object_style_set(spin, "vertical");
+			Evas_Object *spin = smart_spinner_add(evas_object_evas_get(lay));
+			smart_spinner_color_set(spin, mod->col);
+			smart_spinner_disabled_set(spin, port->direction == PORT_DIRECTION_OUTPUT);
 			LILV_FOREACH(scale_points, itr, port->points)
 			{
 				const LilvScalePoint *point = lilv_scale_points_get(port->points, itr);
 				const LilvNode *label_node = lilv_scale_point_get_label(point);
 				const LilvNode *val_node = lilv_scale_point_get_value(point);
 
-				elm_spinner_special_value_add(spin,
+				smart_spinner_value_add(spin,
 					lilv_node_as_float(val_node), lilv_node_as_string(label_node));
 			}
 			evas_object_smart_callback_add(spin, "changed", _spinner_changed, port);

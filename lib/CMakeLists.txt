@@ -21,7 +21,8 @@ if(BUILD_UI)
 		synthpod_ui.c
 		patcher.c
 		smart_slider.c
-		smart_meter.c)
+		smart_meter.c
+		smart_spinner.c)
 	target_link_libraries(synthpod_ui.lib
 		${ELM_LDFLAGS}
 		${UV_LDFLAGS}
