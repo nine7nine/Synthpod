@@ -23,6 +23,7 @@
 #include <synthpod_ui.h>
 #include <synthpod_private.h>
 #include <patcher.h>
+#include <smart_slider.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 #define NUM_UI_FEATURES 11
@@ -321,7 +322,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		else if(port->points)
 			elm_spinner_value_set(port->std.widget, val);
 		else // integer or float
-			elm_slider_value_set(port->std.widget, val);
+			smart_slider_value_set(port->std.widget, val);
 	}
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 	{
@@ -1963,7 +1964,7 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 	mod_t *mod = port->mod;
 	sp_ui_t *ui = mod->ui;
 
-	float val = elm_slider_value_get(obj);
+	float val = smart_slider_value_get(obj);
 	if(lilv_port_has_property(mod->plug, port->tar, ui->regs.port.integer.node))
 		val = floor(val);
 
@@ -1971,18 +1972,6 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 		ui->regs.port.float_protocol.urid, &val);
 }
 
-static void
-_sldr_drag_stop(void *data, Evas_Object *obj, void *event)
-{
-	port_t *port = data;
-	mod_t *mod = port->mod;
-	sp_ui_t *ui = mod->ui;
-
-	float val = elm_slider_value_get(obj);
-	val = floor(val);
-	elm_slider_value_set(obj, val);
-}
-			
 static char *
 _fmt_int(double val)
 {
@@ -2097,20 +2086,12 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		}
 		else // integer or float
 		{
-			Evas_Object *sldr = elm_slider_add(lay);
-			elm_slider_horizontal_set(sldr, EINA_TRUE);
-			elm_object_style_set(sldr, "omk_slider");
-			char col[7];
-			sprintf(col, "col,%02i", mod->col);
-			elm_layout_signal_emit(sldr, col, "elm");
-			elm_slider_indicator_show_set(sldr, EINA_FALSE);
-			elm_slider_units_format_function_set(sldr, integer ? _fmt_int : _fmt_flt, _fmt_free);
-			elm_slider_min_max_set(sldr, port->min, port->max);
-			elm_slider_value_set(sldr, val);
-			elm_slider_step_set(sldr, step_val);
+			Evas_Object *sldr = smart_slider_add(evas_object_evas_get(lay));
+			smart_slider_range_set(sldr, port->min, port->max, port->dflt);
+			smart_slider_color_set(sldr, mod->col);
+			smart_slider_integer_set(sldr, integer);
+			smart_slider_format_set(sldr, integer ? "%.0f" : "%.4f");
 			evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
-			if(integer)
-				evas_object_smart_callback_add(sldr, "slider,drag,stop", _sldr_drag_stop, port);
 
 			child = sldr;
 		}
