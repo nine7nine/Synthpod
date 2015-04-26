@@ -37,6 +37,7 @@ struct _smart_slider_t {
 	float drag;
 
 	int integer;
+	int disabled;
 	char format [64];
 
 	int grabbed;
@@ -118,6 +119,9 @@ _mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_slider_t *priv = data;
 	Evas_Event_Mouse_Down *ev = event_info;
+
+	if(priv->disabled)
+		return;
 	
 	priv->grabbed = 1;
 }
@@ -128,6 +132,9 @@ _mouse_up(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	smart_slider_t *priv = data;
 	Evas_Event_Mouse_Up *ev = event_info;
 
+	if(priv->disabled)
+		return;
+
 	if(priv->grabbed)
 		priv->grabbed = 0;
 }
@@ -137,6 +144,9 @@ _mouse_move(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_slider_t *priv = data;
 	Evas_Event_Mouse_Move *ev = event_info;
+
+	if(priv->disabled)
+		return;
 
 	if(priv->grabbed)
 	{
@@ -175,6 +185,9 @@ _mouse_wheel(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_slider_t *priv = data;
 	Evas_Event_Mouse_Wheel *ev = event_info;
+
+	if(priv->disabled)
+		return;
 
 	float scale;
 	if(priv->integer)
@@ -352,4 +365,17 @@ smart_slider_integer_set(Evas_Object *o, int integer)
 	priv->integer = integer ? 1 : 0;
 	
 	_smart_slider_value_flush(o);
+}
+
+void
+smart_slider_disabled_set(Evas_Object *o, int disabled)
+{
+	smart_slider_t *priv = evas_object_smart_data_get(o);
+
+	priv->disabled = disabled;
+
+	if(priv->disabled)
+		edje_object_signal_emit(priv->theme, "disabled", SMART_SLIDER_UI);
+	else
+		edje_object_signal_emit(priv->theme, "enabled", SMART_SLIDER_UI);
 }

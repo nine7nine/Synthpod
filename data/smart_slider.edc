@@ -77,6 +77,12 @@ group {
 			dragable.confine: "col.clip";
 			description {
 				state: "default" 0.0;
+				color: 255 255 255 128;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
 			}
 		}
 		
@@ -127,5 +133,8 @@ group {
 		program { signal: "col,18"; source: SMART_SLIDER_UI; action: STATE_SET "default" 0.18; target: "col.clip"; }
 		program { signal: "col,19"; source: SMART_SLIDER_UI; action: STATE_SET "default" 0.19; target: "col.clip"; }
 		program { signal: "col,20"; source: SMART_SLIDER_UI; action: STATE_SET "default" 0.20; target: "col.clip"; }
+		
+		program { signal: "enabled"; source: SMART_SLIDER_UI; action: STATE_SET "default" 1.0; target: "drag"; }
+		program { signal: "disabled"; source: SMART_SLIDER_UI; action: STATE_SET "default" 0.0; target: "drag"; }
 	}
 }

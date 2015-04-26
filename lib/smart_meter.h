@@ -15,36 +15,22 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#ifndef _SYNTHPOD_SMART_SLIDER_H
-#define _SYNTHPOD_SMART_SLIDER_H
+#ifndef _SYNTHPOD_SMART_METER_H
+#define _SYNTHPOD_SMART_METER_H
 
 #include <Evas.h>
 
-#define SMART_SLIDER_UI "/synthpod/smart_slider/ui"
+#define SMART_METER_UI "/synthpod/smart_meter/ui"
 
 Evas_Object *
-smart_slider_add(Evas *e);
+smart_meter_add(Evas *e);
 
 void
-smart_slider_range_set(Evas_Object *o, float min, float max, float dflt);
-void
-smart_slider_range_get(Evas_Object *o, float *min, float *max, float *dflt);
-
-void
-smart_slider_value_set(Evas_Object *o, float value);
+smart_meter_value_set(Evas_Object *o, float value);
 float
-smart_slider_value_get(Evas_Object *o);
+smart_meter_value_get(Evas_Object *o);
 
 void
-smart_slider_format_set(Evas_Object *o, const char *format);
+smart_meter_color_set(Evas_Object *o, int col);
 
-void
-smart_slider_color_set(Evas_Object *o, int col);
-
-void
-smart_slider_integer_set(Evas_Object *o, int integer);
-
-void
-smart_slider_disabled_set(Evas_Object *o, int disabled);
-
-#endif // _SYNTHPOD_SMART_SLIDER_H
+#endif // _SYNTHPOD_SMART_METER_H

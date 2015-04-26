@@ -24,6 +24,7 @@
 #include <synthpod_private.h>
 #include <patcher.h>
 #include <smart_slider.h>
+#include <smart_meter.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 #define NUM_UI_FEATURES 11
@@ -332,7 +333,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		else
 			port->peak *= 0.8;
 		if(port->peak > 0.f)
-			elm_slider_value_set(port->std.widget, port->peak);
+			smart_meter_value_set(port->std.widget, port->peak);
 	}
 	else
 		; //TODO atom, sequence
@@ -1084,6 +1085,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 			lilv_node_free(dflt_node);
 			lilv_node_free(min_node);
 			lilv_node_free(max_node);
+
+			tar->points = lilv_port_get_scale_points(plug, port);
 		}
 		else if(lilv_port_is_a(plug, port, ui->regs.port.atom.node)) 
 		{
@@ -1200,6 +1203,14 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
+	for(int p=0; p<mod->num_ports; p++)
+	{
+		port_t *port = &mod->ports[p];
+
+		if(port->points)
+			lilv_scale_points_free(port->points);
+	}
+
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
 
@@ -2091,6 +2102,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			smart_slider_color_set(sldr, mod->col);
 			smart_slider_integer_set(sldr, integer);
 			smart_slider_format_set(sldr, integer ? "%.0f" : "%.4f");
+			smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
 			evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
 
 			child = sldr;
@@ -2099,17 +2111,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	else if(port->type == PORT_TYPE_AUDIO
 		|| port->type == PORT_TYPE_CV)
 	{
-		Evas_Object *sldr = elm_slider_add(lay);
-		elm_slider_horizontal_set(sldr, EINA_TRUE);
-		elm_object_style_set(sldr, "omk_meter");
-		char col[7];
-		sprintf(col, "col,%02i", mod->col);
-		elm_layout_signal_emit(sldr, col, "elm");
-		elm_slider_indicator_show_set(sldr, EINA_FALSE);
-		elm_slider_unit_format_set(sldr, NULL);
-		elm_slider_min_max_set(sldr, 0.f, 1.f);
-		elm_slider_value_set(sldr, 0.f);
-		elm_slider_step_set(sldr, 0.01);
+		Evas_Object *sldr = smart_meter_add(evas_object_evas_get(lay));
+		smart_meter_color_set(sldr, mod->col);
 
 		child = sldr;
 	}
@@ -2123,8 +2126,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 	if(child)
 	{
-		elm_object_disabled_set(child,
-			(port->direction == PORT_DIRECTION_OUTPUT) || (port->type == PORT_TYPE_AUDIO));
 		evas_object_show(child);
 		elm_layout_content_set(lay, "elm.swallow.content", child);
 	}

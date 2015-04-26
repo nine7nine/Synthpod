@@ -46,6 +46,7 @@ collections {
 #include <modlist.edc>
 #include <modgrid.edc>
 #include <patcher.edc>
-#include <slider.edc>
 #include <smart_slider.edc>
+#include <smart_meter.edc>
+#include <smart_spinner.edc>
 }
