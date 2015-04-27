@@ -26,6 +26,7 @@
 #include <smart_slider.h>
 #include <smart_meter.h>
 #include <smart_spinner.h>
+#include <smart_toggle.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 #define NUM_UI_FEATURES 11
@@ -320,7 +321,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 			val = port->max;
 
 		if(toggled)
-			elm_check_state_set(port->std.widget, val > 0.f ? EINA_TRUE : EINA_FALSE);
+			smart_toggle_value_set(port->std.widget, val);
 		else if(port->points)
 			smart_spinner_value_set(port->std.widget, val);
 		else // integer or float
@@ -1946,8 +1947,7 @@ _check_changed(void *data, Evas_Object *obj, void *event)
 	mod_t *mod = port->mod;
 	sp_ui_t *ui = mod->ui;
 
-	float val = elm_check_state_get(obj);
-	val = floor(val);
+	float val = smart_toggle_value_get(obj);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
 		ui->regs.port.float_protocol.urid, &val);
@@ -2063,9 +2063,9 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 		if(toggled)
 		{
-			Evas_Object *check = elm_check_add(lay);
-			elm_check_state_set(check, val > 0.f ? EINA_TRUE : EINA_FALSE);
-			elm_object_style_set(check, "toggle");
+			Evas_Object *check = smart_toggle_add(evas_object_evas_get(lay));
+			smart_toggle_color_set(check, mod->col);
+			smart_toggle_disabled_set(check, port->direction == PORT_DIRECTION_OUTPUT);
 			evas_object_smart_callback_add(check, "changed", _check_changed, port);
 
 			child = check;

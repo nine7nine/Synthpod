@@ -24,6 +24,7 @@ if(BUILD_UI)
 			${CMAKE_CURRENT_SOURCE_DIR}/smart_slider.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/smart_meter.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/smart_spinner.edc
+			${CMAKE_CURRENT_SOURCE_DIR}/smart_toggle.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/theme.edc)
 	add_custom_target(THEME ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod.edj)
