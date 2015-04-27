@@ -569,7 +569,7 @@ patcher_object_dimension_set(Evas_Object *o, int sources, int sinks)
 
 	priv->sources = sources;
 	priv->sinks = sinks;
-	priv->max = priv->sinks > priv->sources ? priv->sinks : priv->sources;
+	priv->max = SPAN - 6;
 
 	_patcher_smart_init(o);
 }
@@ -594,9 +594,33 @@ _patcher_object_connected_index_set(Evas_Object *o, int source, int sink,
 	priv->state[source][sink] = state;
 }
 
+static inline void
+_patcher_object_indirected_index_set(Evas_Object *o, int source, int sink,
+	Eina_Bool indirect)
+{
+	patcher_t *priv = evas_object_smart_data_get(o);
+	int src = source + priv->max - priv->sources;
+	int snk = sink + priv->max - priv->sinks;
+	Evas_Object *edj = evas_object_table_child_get(priv->matrix, src, snk);
+
+	/* TODO
+	if(priv->indirect[source][sink] == indirect)
+		return; // no change, thus nothing to do
+	*/
+
+	if(indirect)
+		edje_object_signal_emit(edj, "indirect", PATCHER_UI);
+	else // disable node
+		edje_object_signal_emit(edj, "direct", PATCHER_UI);
+
+	/* TODO
+	priv->indirect[source][sink] = indirect;
+	*/
+}
+
 void
 patcher_object_connected_set(Evas_Object *o, void *source_data,
-	void *sink_data, Eina_Bool state)
+	void *sink_data, Eina_Bool state, Eina_Bool indirect)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 	int source = _patcher_object_source_index_get(o, source_data);
@@ -605,6 +629,7 @@ patcher_object_connected_set(Evas_Object *o, void *source_data,
 		return;
 
 	_patcher_object_connected_index_set(o, source, sink, state);
+	_patcher_object_indirected_index_set(o, source, sink, indirect);
 }
 
 void

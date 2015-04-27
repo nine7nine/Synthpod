@@ -362,6 +362,7 @@ struct _transmit_port_connected_t {
 	LV2_Atom_Int snk_uid _ATOM_ALIGNED;
 	LV2_Atom_Int snk_port _ATOM_ALIGNED;
 	LV2_Atom_Int state _ATOM_ALIGNED;
+	LV2_Atom_Int indirect _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_port_subscribed_t {
@@ -520,7 +521,7 @@ _sp_transmit_module_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 static inline void
 _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_connected_t *trans, uint32_t size, u_id_t src_uid,
-	uint32_t src_port, u_id_t snk_uid, uint32_t snk_port, int32_t state)
+	uint32_t src_port, u_id_t snk_uid, uint32_t snk_port, int32_t state, int32_t indirect)
 {
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_connected.urid);
 
@@ -543,6 +544,10 @@ _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->state.atom.size = sizeof(int32_t);
 	trans->state.atom.type = forge->Int;
 	trans->state.body = state; // -1 (query), 0 (disconnected), 1 (connected)
+
+	trans->indirect.atom.size = sizeof(int32_t);
+	trans->indirect.atom.type = forge->Int;
+	trans->indirect.body = indirect; // 0 (direct), 1 (indirect)
 }
 
 static inline void

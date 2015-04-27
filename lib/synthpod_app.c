@@ -940,6 +940,28 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			}
 		}
 
+		int32_t indirect = 0; // aka direct
+		if(src_port->mod == snk_port->mod)
+		{
+			indirect = 1;
+		}
+		else
+		{
+			for(int m=0; m<app->num_mods; m++)
+			{
+				if(app->mods[m] == src_port->mod)
+				{
+					indirect = 0;
+					break;
+				}
+				else if(app->mods[m] == snk_port->mod)
+				{
+					indirect = 1;
+					break;
+				}
+			}
+		}
+
 		// signal to ui
 		size_t size = sizeof(transmit_port_connected_t);
 		transmit_port_connected_t *trans = _sp_app_to_ui_request(app, size);
@@ -947,7 +969,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		{
 			_sp_transmit_port_connected_fill(&app->regs, &app->forge, trans, size,
 				src_port->mod->uid, src_port->index,
-				snk_port->mod->uid, snk_port->index, state);
+				snk_port->mod->uid, snk_port->index, state, indirect);
 			_sp_app_to_ui_advance(app, size);
 		}
 	}

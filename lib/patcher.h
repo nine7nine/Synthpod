@@ -37,7 +37,7 @@ patcher_object_dimension_set(Evas_Object *o, int sources, int sinks);
 
 void
 patcher_object_connected_set(Evas_Object *o, void *source_data, void *sink_data,
-	Eina_Bool state);
+	Eina_Bool state, Eina_Bool indirect);
 
 void
 patcher_object_source_data_set(Evas_Object *o, int source, void *data);
