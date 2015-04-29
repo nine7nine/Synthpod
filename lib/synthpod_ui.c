@@ -2066,7 +2066,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			Evas_Object *check = smart_toggle_add(evas_object_evas_get(lay));
 			smart_toggle_color_set(check, mod->col);
 			smart_toggle_disabled_set(check, port->direction == PORT_DIRECTION_OUTPUT);
-			evas_object_smart_callback_add(check, "changed", _check_changed, port);
+			if(port->direction == PORT_DIRECTION_INPUT)
+				evas_object_smart_callback_add(check, "changed", _check_changed, port);
 
 			child = check;
 		}
@@ -2084,7 +2085,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 				smart_spinner_value_add(spin,
 					lilv_node_as_float(val_node), lilv_node_as_string(label_node));
 			}
-			evas_object_smart_callback_add(spin, "changed", _spinner_changed, port);
+			if(port->direction == PORT_DIRECTION_INPUT)
+				evas_object_smart_callback_add(spin, "changed", _spinner_changed, port);
 
 			child = spin;
 		}
@@ -2096,7 +2098,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			smart_slider_integer_set(sldr, integer);
 			smart_slider_format_set(sldr, integer ? "%.0f" : "%.4f");
 			smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
-			evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
+			if(port->direction == PORT_DIRECTION_INPUT)
+				evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
 
 			child = sldr;
 		}
