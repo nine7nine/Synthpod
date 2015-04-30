@@ -1534,6 +1534,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); TODO
 		}
 
 		// presets
@@ -1605,6 +1606,7 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 		// contract parent list item
 		evas_object_smart_callback_call(obj, "contract,request", parent);
 	}
+	//TODO toggle checkboxes on modules and ports
 }
 
 // only called upon user interaction
@@ -2511,9 +2513,10 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 {
 	if(!driver || !data)
 		return NULL;
-	
-	elm_theme_extension_add(NULL, "/usr/local/share/synthpod/synthpod.edj");
-	elm_theme_flush(NULL);
+
+	elm_config_focus_autoscroll_mode_set(ELM_FOCUS_AUTOSCROLL_MODE_NONE);
+	elm_config_focus_move_policy_set(ELM_FOCUS_MOVE_POLICY_CLICK);
+	elm_config_first_item_focus_on_first_focusin_set(EINA_TRUE);
 
 	sp_ui_t *ui = calloc(1, sizeof(sp_ui_t));
 	if(!ui)
