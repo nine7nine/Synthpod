@@ -61,6 +61,15 @@ if(BUILD_UI)
 		add_definitions("-DELM_HAS_FAKE")
 	endif()
 
+	set(EO_UI_WRAP "")
+	set(UI_UI_WRAP "")
+	set(KX_UI_WRAP "")
+	if(${BUILD_X11_WRAPPER})
+		set(X11_UI_WRAP "")
+	else()
+		set(X11_UI_WRAP "#")
+	endif()
+
 # synthpod_ui
 	add_library(synthpod_ui.lv2 MODULE
 		synthpod_lv2_ui.c
@@ -69,6 +78,11 @@ if(BUILD_UI)
 	target_link_libraries(synthpod_ui.lv2 synthpod_ui.lib)
 	set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
 	install(TARGETS synthpod_ui.lv2 DESTINATION ${DEST})
+else()
+	set(EO_UI_WRAP "#")
+	set(UI_UI_WRAP "#")
+	set(KX_UI_WRAP "#")
+	set(X11_UI_WRAP "#")
 endif()
 
 # manifest

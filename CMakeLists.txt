@@ -46,6 +46,8 @@ if(BUILD_UI)
 	include_directories(${ELM_INCLUDE_DIRS})
 endif()
 
+option(BUILD_X11_WRAPPER OFF)
+
 add_subdirectory(lib)
 add_subdirectory(bin)
 add_subdirectory(plugins)
