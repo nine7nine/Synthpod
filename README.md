@@ -18,6 +18,17 @@
 * [RtMidi](http://www.music.mcgill.ca/~gary/rtmidi/) (Realtime cross-platform MIDI I/O)
 * [Elementary](http://docs.enlightenment.org/auto/elementary/) (EFL UI toolkit)
 
+### Build / install
+
+	git clone https://github.com/OpenMusicKontrollers/synthpod.git
+	cd synthpod 
+	git submodule update --init
+	mkdir build
+	cd build
+	cmake -DCMAKE_C_FLAGS="-std=gnu99" ..
+	make
+	sudo make install
+
 ### License
 
 Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
