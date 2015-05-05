@@ -1375,6 +1375,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				const LV2_Atom *atom = buf;
 				if(atom->size == 0) // empty atom
 					continue;
+				else if( (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) && (atom->size == sizeof(LV2_Atom_Sequence_Body)) ) // empty atom sequence
+					continue;
 		
 				size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size);
 				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
@@ -1388,7 +1390,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			else if(port->protocol == app->regs.port.event_transfer.urid)
 			{
 				const LV2_Atom_Sequence *seq = buf;
-				if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // empty seq
+				if(seq->atom.size == sizeof(LV2_Atom_Sequence_Body)) // empty seq
 					continue;
 
 				// transfer each atom of sequence separately

@@ -280,6 +280,8 @@ void
 smart_spinner_value_add(Evas_Object *o, float value, const char *label)
 {
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	elmnt_t *elmnt = calloc(1, sizeof(elmnt_t));
 	elmnt->value = value;
@@ -298,6 +300,8 @@ void
 smart_spinner_value_set(Evas_Object *o, float value)
 {
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 	
 	Eina_List *l;
 	elmnt_t *elmnt;
@@ -333,6 +337,8 @@ float
 smart_spinner_value_get(Evas_Object *o)
 {
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return 0.f;
 
 	elmnt_t *elmnt = eina_list_nth(priv->elmnts, priv->value);
 
@@ -343,6 +349,8 @@ void
 smart_spinner_color_set(Evas_Object *o, int col)
 {
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 	
 	char sig[7];
 	sprintf(sig, "col,%02i", col);
@@ -353,6 +361,8 @@ void
 smart_spinner_disabled_set(Evas_Object *o, int disabled)
 {
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	priv->disabled = disabled;
 

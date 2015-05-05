@@ -289,6 +289,8 @@ void
 smart_slider_range_set(Evas_Object *o, float min, float max, float dflt)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	priv->min = min;
 	priv->max = max;
@@ -301,6 +303,8 @@ void
 smart_slider_range_get(Evas_Object *o, float *min, float *max, float *dflt)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	if(min)
 		*min = priv->min;
@@ -314,6 +318,8 @@ void
 smart_slider_value_set(Evas_Object *o, float value)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	float new_value = value < priv->min
 		? priv->min
@@ -331,6 +337,8 @@ float
 smart_slider_value_get(Evas_Object *o)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return 0.f;
 
 	return priv->value;
 }
@@ -339,6 +347,8 @@ void
 smart_slider_format_set(Evas_Object *o, const char *format)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	if(!format)
 		return;
@@ -351,6 +361,8 @@ void
 smart_slider_color_set(Evas_Object *o, int col)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 	
 	char sig[7];
 	sprintf(sig, "col,%02i", col);
@@ -361,6 +373,8 @@ void
 smart_slider_integer_set(Evas_Object *o, int integer)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	priv->integer = integer ? 1 : 0;
 	
@@ -371,6 +385,8 @@ void
 smart_slider_disabled_set(Evas_Object *o, int disabled)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	priv->disabled = disabled;
 

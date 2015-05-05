@@ -138,6 +138,8 @@ void
 smart_meter_value_set(Evas_Object *o, float value)
 {
 	smart_meter_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	float new_value = value < 0.f
 		? 0.f
@@ -157,6 +159,8 @@ float
 smart_meter_value_get(Evas_Object *o)
 {
 	smart_meter_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return 0.f;
 
 	return priv->value;
 }
@@ -165,6 +169,8 @@ void
 smart_meter_color_set(Evas_Object *o, int col)
 {
 	smart_meter_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 	
 	char sig[7];
 	sprintf(sig, "col,%02i", col);

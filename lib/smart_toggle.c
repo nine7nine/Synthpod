@@ -180,6 +180,8 @@ void
 smart_toggle_value_set(Evas_Object *o, int value)
 {
 	smart_toggle_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 	
 	priv->value = value ? 1 : 0;
 
@@ -190,6 +192,8 @@ int
 smart_toggle_value_get(Evas_Object *o)
 {
 	smart_toggle_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return 0;
 
 	return priv->value;
 }
@@ -198,6 +202,8 @@ void
 smart_toggle_color_set(Evas_Object *o, int col)
 {
 	smart_toggle_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 	
 	char sig[7];
 	sprintf(sig, "col,%02i", col);
@@ -208,6 +214,8 @@ void
 smart_toggle_disabled_set(Evas_Object *o, int disabled)
 {
 	smart_toggle_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
 
 	priv->disabled = disabled;
 

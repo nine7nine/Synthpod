@@ -125,6 +125,7 @@ struct _reg_t {
 
 	struct {
 		reg_item_t eo;
+		reg_item_t window_title;
 	} ui;
 
 	struct {
@@ -234,6 +235,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->log.warning.urid = map->map(map->handle, LV2_LOG__Warning);
 	
 	regs->ui.eo.urid = map->map(map->handle, LV2_UI__EoUI);
+	regs->ui.window_title.urid = map->map(map->handle, LV2_UI__windowTitle);
 	
 	regs->pset.preset.urid = map->map(map->handle, LV2_PRESETS__Preset);
 	regs->pset.rdfs_label.urid = map->map(map->handle, LILV_NS_RDFS"label");
