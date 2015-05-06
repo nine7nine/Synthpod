@@ -715,6 +715,8 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 					_port_subscription_set(mod, index, ui->regs.port.atom_transfer.urid, state);
 			}
 
+			//TODO handle ui:notifyType
+
 			/*	
 			printf("port has notification for: %s %s %u %u %u\n",
 				lilv_node_as_string(sym),

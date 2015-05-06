@@ -424,10 +424,20 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			size = app->driver->seq_size;
 			tar->type = PORT_TYPE_ATOM;
 			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
-			tar->selected = 1;
 			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
 			//	: PORT_BUFFER_TYPE_NONE; //TODO discriminate properly
+
+			// check whether this is a control port
+			LilvNode *control_designation = lilv_new_uri(app->world, LV2_CORE__control);
+			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
+				tar->direction == PORT_DIRECTION_INPUT
+					? app->regs.port.input.node
+					: app->regs.port.output.node
+					, control_designation);
+			lilv_node_free(control_designation);
+
+			tar->selected = control_port == port; // only select control ports by default
 		}
 		else
 			; //TODO

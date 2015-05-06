@@ -76,6 +76,7 @@ synthpod:source
 		lv2:index 0 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio in 1
 	  a lv2:InputPort ,
@@ -102,6 +103,7 @@ synthpod:source
 		lv2:index 3 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio out 1
 	  a lv2:OutputPort ,
@@ -139,6 +141,7 @@ synthpod:sink
 		lv2:index 0 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio in 1
 	  a lv2:InputPort ,
@@ -165,6 +168,7 @@ synthpod:sink
 		lv2:index 3 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio out 1
 	  a lv2:OutputPort ,
@@ -240,7 +244,6 @@ synthpod:stereo
 		lv2:index 0 ;
 		lv2:symbol "control" ;
 		lv2:name "Control" ;
-		lv2:designation lv2:control ;
 		rsz:minimumSize 65536;
 	] , [
 		# event in
@@ -248,9 +251,11 @@ synthpod:stereo
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
+		atom:supports atom:Object ;
 		lv2:index 1 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio in 1
 	  a lv2:InputPort ,
@@ -277,7 +282,6 @@ synthpod:stereo
 		lv2:index 4 ;
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
-		lv2:designation lv2:control ;
 		rsz:minimumSize 65536;
 	] , [
 		# event out
@@ -285,9 +289,11 @@ synthpod:stereo
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
+		atom:supports atom:Object ;
 		lv2:index 5 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio out 1
 	  a lv2:OutputPort ,

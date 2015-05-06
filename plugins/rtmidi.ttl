@@ -58,10 +58,10 @@ rtmidi:out
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
-		lv2:designation lv2:control ;
 		lv2:index 0 ;
 		lv2:symbol "midi_out" ;
 		lv2:name "Midi Out" ;
+		lv2:designation lv2:control ;
 	] .
 
 # Input Plugin
@@ -81,8 +81,8 @@ rtmidi:in
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
-		lv2:designation lv2:control ;
 		lv2:index 0 ;
 		lv2:symbol "midi_in" ;
 		lv2:name "Midi In" ;
+		lv2:designation lv2:control ;
 	] .
