@@ -369,4 +369,5 @@ synthpod:keyboard
 		lv2:index 2 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
+		lv2:designation lv2:control ;
 	] .

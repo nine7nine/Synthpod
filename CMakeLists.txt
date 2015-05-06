@@ -17,10 +17,10 @@ if(WIN32)
 endif()
 
 # options
-option(BUILD_UI OFF)
-option(BUILD_TEST OFF)
-option(BUILD_JACK OFF)
-option(BUILD_PORTAUDIO OFF)
+option(BUILD_UI "Build user interface libraries" OFF)
+option(BUILD_JACK "Build JACK standalone host" OFF)
+option(BUILD_PORTAUDIO "Build PortAudio standalone host" OFF)
+option(BUILD_X11_WRAPPER "Build X11 UI wrapper" OFF)
 
 # eina
 pkg_search_module(EINA REQUIRED eina>=1.8)
@@ -45,8 +45,6 @@ if(BUILD_UI)
 	pkg_search_module(ELM REQUIRED elementary>=1.8)
 	include_directories(${ELM_INCLUDE_DIRS})
 endif()
-
-option(BUILD_X11_WRAPPER OFF)
 
 add_subdirectory(lib)
 add_subdirectory(bin)
