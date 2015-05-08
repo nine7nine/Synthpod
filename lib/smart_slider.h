@@ -39,6 +39,9 @@ void
 smart_slider_format_set(Evas_Object *o, const char *format);
 
 void
+smart_slider_unit_set(Evas_Object *o, const char *unit);
+
+void
 smart_slider_color_set(Evas_Object *o, int col);
 
 void

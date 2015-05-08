@@ -18,6 +18,7 @@
 @prefix doap:	<http://usefulinc.com/ns/doap#> .
 @prefix lv2:	<http://lv2plug.in/ns/lv2core#> .
 @prefix ui:		<http://lv2plug.in/ns/extensions/ui#> .
+@prefix units: <http://lv2plug.in/ns/extensions/units#> .
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
 @prefix work: <http://lv2plug.in/ns/ext/worker#> .
 @prefix state: <http://lv2plug.in/ns/ext/state#> .
@@ -26,7 +27,7 @@
 @prefix midi: <http://lv2plug.in/ns/ext/midi#> .
 @prefix bufsz: <http://lv2plug.in/ns/ext/buf-size#> .
 @prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
-@prefix kx:				<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
+@prefix kx:		<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -360,6 +361,7 @@ synthpod:keyboard
 		lv2:minimum 0 ;
 		lv2:maximum 6 ;
 		lv2:portProperty lv2:integer ;
+		units:unit units:oct ;
 	] , [
 		# event in
 	  a lv2:OutputPort ,

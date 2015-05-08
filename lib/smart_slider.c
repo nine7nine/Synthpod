@@ -38,7 +38,8 @@ struct _smart_slider_t {
 
 	int integer;
 	int disabled;
-	char format [64];
+	char format [32];
+	char unit [32];
 
 	int grabbed;
 };
@@ -67,7 +68,8 @@ _smart_slider_smart_init(Evas_Object *o)
 	priv->drag = 0.f;
 
 	priv->integer = 0;
-	strncpy(priv->format, "%.4f", 32);
+	strcpy(priv->format, "%.4f %s");
+	strcpy(priv->unit, "");
 
 	priv->grabbed = 0;
 	
@@ -107,7 +109,7 @@ _smart_slider_value_flush(Evas_Object *o)
 		edje_object_part_drag_size_set(priv->theme, "drag", drag_x, 1.f);
 
 		char label [64];
-		sprintf(label, priv->format, priv->value);
+		sprintf(label, priv->format, priv->value, priv->unit);
 		edje_object_part_text_set(priv->theme, "label", label);
 
 		evas_object_smart_callback_call(o, SMART_SLIDER_CHANGED, NULL);
@@ -354,6 +356,20 @@ smart_slider_format_set(Evas_Object *o, const char *format)
 		return;
 
 	strncpy(priv->format, format, 32);
+	_smart_slider_value_flush(o);
+}
+
+void
+smart_slider_unit_set(Evas_Object *o, const char *unit)
+{
+	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
+
+	if(!unit)
+		return;
+
+	strncpy(priv->unit, unit, 32);
 	_smart_slider_value_flush(o);
 }
 

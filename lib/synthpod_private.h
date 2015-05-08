@@ -33,6 +33,7 @@
 #include <lv2/lv2plug.in/ns/ext/resize-port/resize-port.h>
 #include <lv2/lv2plug.in/ns/ext/presets/presets.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
+#include <lv2/lv2plug.in/ns/extensions/units/units.h>
 
 typedef enum _port_type_t port_type_t;
 typedef enum _port_buffer_type_t port_buffer_type_t;
@@ -95,9 +96,6 @@ struct _reg_t {
 
 		// atom sequence event types
 		reg_item_t midi;
-		reg_item_t osc;
-		reg_item_t chim_event;
-		reg_item_t chim_dump;
 
 		// control port property
 		reg_item_t integer;
@@ -142,6 +140,41 @@ struct _reg_t {
 	} bufsz;
 
 	struct {
+		// properties
+		reg_item_t conversion;
+		reg_item_t prefixConversion;
+		reg_item_t render;
+		reg_item_t symbol;
+		reg_item_t unit;
+
+		// instances;
+		reg_item_t bar;
+		reg_item_t beat;
+		reg_item_t bpm;
+		reg_item_t cent;
+		reg_item_t cm;
+		reg_item_t coef;
+		reg_item_t db;
+		reg_item_t degree;
+		reg_item_t frame;
+		reg_item_t hz;
+		reg_item_t inch;
+		reg_item_t khz;
+		reg_item_t km;
+		reg_item_t m;
+		reg_item_t mhz;
+		reg_item_t midiNote;
+		reg_item_t mile;
+		reg_item_t min;
+		reg_item_t mm;
+		reg_item_t ms;
+		reg_item_t oct;
+		reg_item_t pc;
+		reg_item_t s;
+		reg_item_t semitone12TET;
+	} units;
+
+	struct {
 		reg_item_t event;
 		reg_item_t state;
 
@@ -159,154 +192,191 @@ struct _reg_t {
 };
 
 static inline void
+_register(reg_item_t *itm, LilvWorld *world, LV2_URID_Map *map, const char *uri)
+{
+	itm->node = lilv_new_uri(world, uri);
+	itm->urid = map->map(map->handle, uri);
+}
+
+static inline void
+_unregister(reg_item_t *itm)
+{
+	if(itm->node)
+		lilv_node_free(itm->node);
+}
+
+static inline void
 sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 {
-	// init nodes
-	regs->port.input.node = lilv_new_uri(world, LV2_CORE__InputPort);
-	regs->port.output.node = lilv_new_uri(world, LV2_CORE__OutputPort);
+	_register(&regs->port.input, world, map, LV2_CORE__InputPort);
+	_register(&regs->port.output, world, map, LV2_CORE__OutputPort);
 
-	regs->port.control.node = lilv_new_uri(world, LV2_CORE__ControlPort);
-	regs->port.audio.node = lilv_new_uri(world, LV2_CORE__AudioPort);
-	regs->port.cv.node = lilv_new_uri(world, LV2_CORE__CVPort);
-	regs->port.atom.node = lilv_new_uri(world, LV2_ATOM__AtomPort);
+	_register(&regs->port.control, world, map, LV2_CORE__ControlPort);
+	_register(&regs->port.audio, world, map, LV2_CORE__AudioPort);
+	_register(&regs->port.cv, world, map, LV2_CORE__CVPort);
+	_register(&regs->port.atom, world, map, LV2_ATOM__AtomPort);
 
-	regs->port.sequence.node = lilv_new_uri(world, LV2_ATOM__Sequence);
-	regs->port.midi.node = lilv_new_uri(world, LV2_MIDI__MidiEvent);
-	regs->port.osc.node = lilv_new_uri(world,
-		"http://opensoundcontrol.org#OscEvent");
-	regs->port.chim_event.node = lilv_new_uri(world,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Event");
-	regs->port.chim_dump.node = lilv_new_uri(world,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Dump");
+	_register(&regs->port.sequence, world, map, LV2_ATOM__Sequence);
+	_register(&regs->port.midi, world, map, LV2_MIDI__MidiEvent);
 
-	regs->port.integer.node = lilv_new_uri(world, LV2_CORE__integer);
-	regs->port.toggled.node = lilv_new_uri(world, LV2_CORE__toggled);
+	_register(&regs->port.integer, world, map, LV2_CORE__integer);
+	_register(&regs->port.toggled, world, map, LV2_CORE__toggled);
 
-	regs->port.float_protocol.node = lilv_new_uri(world, LV2_UI_PREFIX"floatProtocol");
-	regs->port.peak_protocol.node = lilv_new_uri(world, LV2_UI_PREFIX"peakProtocol");
-	regs->port.atom_transfer.node = lilv_new_uri(world, LV2_ATOM__atomTransfer);
-	regs->port.event_transfer.node = lilv_new_uri(world, LV2_ATOM__eventTransfer);
-	regs->port.notification.node = lilv_new_uri(world, LV2_UI__portNotification);
+	_register(&regs->port.float_protocol, world, map, LV2_UI_PREFIX"floatProtocol");
+	_register(&regs->port.peak_protocol, world, map, LV2_UI_PREFIX"peakProtocol");
+	_register(&regs->port.atom_transfer, world, map, LV2_ATOM__atomTransfer);
+	_register(&regs->port.event_transfer, world, map, LV2_ATOM__eventTransfer);
+	_register(&regs->port.notification, world, map, LV2_UI__portNotification);
 
-	regs->port.minimum_size.node = lilv_new_uri(world, LV2_RESIZE_PORT__minimumSize);
+	_register(&regs->port.minimum_size, world, map, LV2_RESIZE_PORT__minimumSize);
 
-	regs->work.schedule.node = lilv_new_uri(world, LV2_WORKER__schedule);
+	_register(&regs->work.schedule, world, map, LV2_WORKER__schedule);
 
-	regs->log.entry.node = lilv_new_uri(world, LV2_LOG__Entry);
-	regs->log.error.node = lilv_new_uri(world, LV2_LOG__Error);
-	regs->log.note.node = lilv_new_uri(world, LV2_LOG__Note);
-	regs->log.trace.node = lilv_new_uri(world, LV2_LOG__Trace);
-	regs->log.warning.node = lilv_new_uri(world, LV2_LOG__Warning);
+	_register(&regs->log.entry, world, map, LV2_LOG__Entry);
+	_register(&regs->log.error, world, map, LV2_LOG__Error);
+	_register(&regs->log.note, world, map, LV2_LOG__Note);
+	_register(&regs->log.trace, world, map, LV2_LOG__Trace);
+	_register(&regs->log.warning, world, map, LV2_LOG__Warning);
 
-	regs->ui.eo.node = lilv_new_uri(world, LV2_UI__EoUI);
+	_register(&regs->ui.eo, world, map, LV2_UI__EoUI);
+	_register(&regs->ui.window_title, world, map, LV2_UI__windowTitle);
+
+	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
+	_register(&regs->pset.rdfs_label, world, map, LILV_NS_RDFS"label");
+
+	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
+	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
+	_register(&regs->bufsz.sequence_size, world, map, LV2_BUF_SIZE__sequenceSize);
 	
-	regs->pset.preset.node = lilv_new_uri(world, LV2_PRESETS__Preset);
-	regs->pset.rdfs_label.node = lilv_new_uri(world, LILV_NS_RDFS"label");
+	_register(&regs->units.conversion, world, map, LV2_UNITS__conversion);
+	_register(&regs->units.prefixConversion, world, map, LV2_UNITS__prefixConversion);
+	_register(&regs->units.render, world, map, LV2_UNITS__render);
+	_register(&regs->units.symbol, world, map, LV2_UNITS__symbol);
+	_register(&regs->units.unit, world, map, LV2_UNITS__unit);
+	_register(&regs->units.bar, world, map, LV2_UNITS__bar);
+	_register(&regs->units.beat, world, map, LV2_UNITS__beat);
+	_register(&regs->units.bpm, world, map, LV2_UNITS__bpm);
+	_register(&regs->units.cent, world, map, LV2_UNITS__cent);
+	_register(&regs->units.cm, world, map, LV2_UNITS__cm);
+	_register(&regs->units.coef, world, map, LV2_UNITS__coef);
+	_register(&regs->units.db, world, map, LV2_UNITS__db);
+	_register(&regs->units.degree, world, map, LV2_UNITS__degree);
+	_register(&regs->units.frame, world, map, LV2_UNITS__frame);
+	_register(&regs->units.hz, world, map, LV2_UNITS__hz);
+	_register(&regs->units.inch, world, map, LV2_UNITS__inch);
+	_register(&regs->units.khz, world, map, LV2_UNITS__khz);
+	_register(&regs->units.km, world, map, LV2_UNITS__km);
+	_register(&regs->units.m, world, map, LV2_UNITS__m);
+	_register(&regs->units.mhz, world, map, LV2_UNITS__mhz);
+	_register(&regs->units.midiNote, world, map, LV2_UNITS__midiNote);
+	_register(&regs->units.mile, world, map, LV2_UNITS__mile);
+	_register(&regs->units.min, world, map, LV2_UNITS__min);
+	_register(&regs->units.mm, world, map, LV2_UNITS__mm);
+	_register(&regs->units.ms, world, map, LV2_UNITS__ms);
+	_register(&regs->units.oct, world, map, LV2_UNITS__oct);
+	_register(&regs->units.pc, world, map, LV2_UNITS__pc);
+	_register(&regs->units.s, world, map, LV2_UNITS__s);
+	_register(&regs->units.semitone12TET, world, map, LV2_UNITS__semitone12TET);
 
-	// init URIDs
-	regs->port.input.urid = map->map(map->handle, LV2_CORE__InputPort);
-	regs->port.output.urid = map->map(map->handle, LV2_CORE__OutputPort);
-
-	regs->port.control.urid = map->map(map->handle, LV2_CORE__ControlPort);
-	regs->port.audio.urid = map->map(map->handle, LV2_CORE__AudioPort);
-	regs->port.cv.urid = map->map(map->handle, LV2_CORE__CVPort);
-	regs->port.atom.urid = map->map(map->handle, LV2_ATOM__AtomPort);
-
-	regs->port.sequence.urid = map->map(map->handle, LV2_ATOM__Sequence);
-	regs->port.midi.urid = map->map(map->handle, LV2_MIDI__MidiEvent);
-	regs->port.osc.urid = map->map(map->handle,
-		"http://opensoundcontrol.org#OscEvent");
-	regs->port.chim_event.urid = map->map(map->handle,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Event");
-	regs->port.chim_dump.urid = map->map(map->handle,
-		"http://open-music-kontrollers.ch/lv2/chimaera#Dump");
-
-	regs->port.integer.urid = map->map(map->handle, LV2_CORE__integer);
-	regs->port.toggled.urid= map->map(map->handle, LV2_CORE__toggled);
-
-	regs->port.float_protocol.urid = map->map(map->handle, LV2_UI_PREFIX"floatProtocol");
-	regs->port.peak_protocol.urid = map->map(map->handle, LV2_UI_PREFIX"peakProtocol");
-	regs->port.atom_transfer.urid = map->map(map->handle, LV2_ATOM__atomTransfer);
-	regs->port.event_transfer.urid = map->map(map->handle, LV2_ATOM__eventTransfer);
-	regs->port.notification.urid = map->map(map->handle, LV2_UI__portNotification);
-	
-	regs->port.minimum_size.urid = map->map(map->handle, LV2_RESIZE_PORT__minimumSize);
-
-	regs->work.schedule.urid = map->map(map->handle, LV2_WORKER__schedule);
-
-	regs->log.entry.urid = map->map(map->handle, LV2_LOG__Entry);
-	regs->log.error.urid = map->map(map->handle, LV2_LOG__Error);
-	regs->log.note.urid = map->map(map->handle, LV2_LOG__Note);
-	regs->log.trace.urid = map->map(map->handle, LV2_LOG__Trace);
-	regs->log.warning.urid = map->map(map->handle, LV2_LOG__Warning);
-	
-	regs->ui.eo.urid = map->map(map->handle, LV2_UI__EoUI);
-	regs->ui.window_title.urid = map->map(map->handle, LV2_UI__windowTitle);
-	
-	regs->pset.preset.urid = map->map(map->handle, LV2_PRESETS__Preset);
-	regs->pset.rdfs_label.urid = map->map(map->handle, LILV_NS_RDFS"label");
-	
-	regs->bufsz.max_block_length.urid = map->map(map->handle, LV2_BUF_SIZE__maxBlockLength);
-	regs->bufsz.min_block_length.urid = map->map(map->handle, LV2_BUF_SIZE__minBlockLength);
-	regs->bufsz.sequence_size.urid = map->map(map->handle, LV2_BUF_SIZE__sequenceSize);
-		
-	regs->synthpod.event.urid = map->map(map->handle, SYNTHPOD_PREFIX"event");
-	regs->synthpod.state.urid = map->map(map->handle, SYNTHPOD_PREFIX"state");
-	regs->synthpod.module_list.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleList");
-	regs->synthpod.module_add.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleAdd");
-	regs->synthpod.module_del.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleDel");
-	regs->synthpod.module_move.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleMove");
-	regs->synthpod.module_preset.urid = map->map(map->handle, SYNTHPOD_PREFIX"modulePreset");
-	regs->synthpod.module_selected.urid = map->map(map->handle, SYNTHPOD_PREFIX"moduleSelect");
-	regs->synthpod.port_refresh.urid = map->map(map->handle, SYNTHPOD_PREFIX"portRefresh");
-	regs->synthpod.port_connected.urid = map->map(map->handle, SYNTHPOD_PREFIX"portConnect");
-	regs->synthpod.port_subscribed.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSubscribe");
-	regs->synthpod.port_selected.urid = map->map(map->handle, SYNTHPOD_PREFIX"portSelect");
+	_register(&regs->synthpod.event, world, map, SYNTHPOD_PREFIX"event");
+	_register(&regs->synthpod.state, world, map, SYNTHPOD_PREFIX"state");
+	_register(&regs->synthpod.module_list, world, map, SYNTHPOD_PREFIX"moduleList");
+	_register(&regs->synthpod.module_add, world, map, SYNTHPOD_PREFIX"moduleAdd");
+	_register(&regs->synthpod.module_del, world, map, SYNTHPOD_PREFIX"moduleDel");
+	_register(&regs->synthpod.module_move, world, map, SYNTHPOD_PREFIX"moduleMove");
+	_register(&regs->synthpod.module_preset, world, map, SYNTHPOD_PREFIX"modulePreset");
+	_register(&regs->synthpod.module_selected, world, map, SYNTHPOD_PREFIX"moduleSelect");
+	_register(&regs->synthpod.port_refresh, world, map, SYNTHPOD_PREFIX"portRefresh");
+	_register(&regs->synthpod.port_connected, world, map, SYNTHPOD_PREFIX"portConnect");
+	_register(&regs->synthpod.port_subscribed, world, map, SYNTHPOD_PREFIX"portSubscribe");
+	_register(&regs->synthpod.port_selected, world, map, SYNTHPOD_PREFIX"portSelect");
 }
 
 static inline void
 sp_regs_deinit(reg_t *regs)
 {
-	// deinit nodes
-	lilv_node_free(regs->port.input.node);
-	lilv_node_free(regs->port.output.node);
+	_unregister(&regs->port.input);
+	_unregister(&regs->port.output);
 
-	lilv_node_free(regs->port.control.node);
-	lilv_node_free(regs->port.audio.node);
-	lilv_node_free(regs->port.cv.node);
-	lilv_node_free(regs->port.atom.node);
+	_unregister(&regs->port.control);
+	_unregister(&regs->port.audio);
+	_unregister(&regs->port.cv);
+	_unregister(&regs->port.atom);
 
-	lilv_node_free(regs->port.sequence.node);
+	_unregister(&regs->port.sequence);
+	_unregister(&regs->port.midi);
 
-	lilv_node_free(regs->port.midi.node);
-	lilv_node_free(regs->port.osc.node);
-	lilv_node_free(regs->port.chim_event.node);
-	lilv_node_free(regs->port.chim_dump.node);
+	_unregister(&regs->port.integer);
+	_unregister(&regs->port.toggled);
 
-	lilv_node_free(regs->port.integer.node);
-	lilv_node_free(regs->port.toggled.node);
+	_unregister(&regs->port.float_protocol);
+	_unregister(&regs->port.peak_protocol);
+	_unregister(&regs->port.atom_transfer);
+	_unregister(&regs->port.event_transfer);
+	_unregister(&regs->port.notification);
 
-	lilv_node_free(regs->port.float_protocol.node);
-	lilv_node_free(regs->port.peak_protocol.node);
-	lilv_node_free(regs->port.atom_transfer.node);
-	lilv_node_free(regs->port.event_transfer.node);
-	lilv_node_free(regs->port.notification.node);
-	
-	lilv_node_free(regs->port.minimum_size.node);
+	_unregister(&regs->port.minimum_size);
 
-	lilv_node_free(regs->work.schedule.node);
+	_unregister(&regs->work.schedule);
 
-	lilv_node_free(regs->log.entry.node);
-	lilv_node_free(regs->log.error.node);
-	lilv_node_free(regs->log.note.node);
-	lilv_node_free(regs->log.trace.node);
-	lilv_node_free(regs->log.warning.node);
+	_unregister(&regs->log.entry);
+	_unregister(&regs->log.error);
+	_unregister(&regs->log.note);
+	_unregister(&regs->log.trace);
+	_unregister(&regs->log.warning);
 
-	lilv_node_free(regs->ui.eo.node);
-	
-	lilv_node_free(regs->pset.preset.node);
-	lilv_node_free(regs->pset.rdfs_label.node);
+	_unregister(&regs->ui.eo);
+	_unregister(&regs->ui.window_title);
 
+	_unregister(&regs->pset.preset);
+	_unregister(&regs->pset.rdfs_label);
+
+	_unregister(&regs->bufsz.max_block_length);
+	_unregister(&regs->bufsz.min_block_length);
+	_unregister(&regs->bufsz.sequence_size);
+
+	_unregister(&regs->units.conversion);
+	_unregister(&regs->units.prefixConversion);
+	_unregister(&regs->units.render);
+	_unregister(&regs->units.symbol);
+	_unregister(&regs->units.unit);
+	_unregister(&regs->units.bar);
+	_unregister(&regs->units.beat);
+	_unregister(&regs->units.bpm);
+	_unregister(&regs->units.cent);
+	_unregister(&regs->units.cm);
+	_unregister(&regs->units.coef);
+	_unregister(&regs->units.db);
+	_unregister(&regs->units.degree);
+	_unregister(&regs->units.frame);
+	_unregister(&regs->units.hz);
+	_unregister(&regs->units.inch);
+	_unregister(&regs->units.khz);
+	_unregister(&regs->units.km);
+	_unregister(&regs->units.m);
+	_unregister(&regs->units.mhz);
+	_unregister(&regs->units.midiNote);
+	_unregister(&regs->units.mile);
+	_unregister(&regs->units.min);
+	_unregister(&regs->units.mm);
+	_unregister(&regs->units.ms);
+	_unregister(&regs->units.oct);
+	_unregister(&regs->units.pc);
+	_unregister(&regs->units.s);
+	_unregister(&regs->units.semitone12TET);
+
+	_unregister(&regs->synthpod.event);
+	_unregister(&regs->synthpod.state);
+	_unregister(&regs->synthpod.module_list);
+	_unregister(&regs->synthpod.module_add);
+	_unregister(&regs->synthpod.module_del);
+	_unregister(&regs->synthpod.module_move);
+	_unregister(&regs->synthpod.module_preset);
+	_unregister(&regs->synthpod.module_selected);
+	_unregister(&regs->synthpod.port_refresh);
+	_unregister(&regs->synthpod.port_connected);
+	_unregister(&regs->synthpod.port_subscribed);
+	_unregister(&regs->synthpod.port_selected);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))

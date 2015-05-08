@@ -185,6 +185,7 @@ struct _port_t {
 	port_buffer_type_t buffer_type; // none, sequence
 
 	LilvScalePoints *points;
+	char *unit;
 
 	float dflt;
 	float min;
@@ -1273,6 +1274,20 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
 			//	: PORT_BUFFER_TYPE_NONE; //TODO
 		}
+
+		// get port unit
+		LilvNode *unit = lilv_port_get(mod->plug, tar->tar, ui->regs.units.unit.node);
+		if(unit)
+		{
+			LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+			if(symbol)
+			{
+				tar->unit = strdup(lilv_node_as_string(symbol));
+				lilv_node_free(symbol);
+			}
+
+			lilv_node_free(unit);
+		}
 	}
 		
 	// ui
@@ -1378,6 +1393,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 
 		if(port->points)
 			lilv_scale_points_free(port->points);
+
+		if(port->unit)
+			free(port->unit);
 	}
 
 	if(mod->all_uis)
@@ -2275,7 +2293,9 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			smart_slider_range_set(sldr, port->min, port->max, port->dflt);
 			smart_slider_color_set(sldr, mod->col);
 			smart_slider_integer_set(sldr, integer);
-			smart_slider_format_set(sldr, integer ? "%.0f" : "%.4f");
+			smart_slider_format_set(sldr, integer ? "%.0f %s" : "%.4f %s");
+			if(port->unit)
+				smart_slider_unit_set(sldr, port->unit);
 			smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
 			if(port->direction == PORT_DIRECTION_INPUT)
 				evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
