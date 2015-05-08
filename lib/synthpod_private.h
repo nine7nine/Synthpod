@@ -30,6 +30,7 @@
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
+#include <lv2/lv2plug.in/ns/ext/resize-port/resize-port.h>
 #include <lv2/lv2plug.in/ns/ext/presets/presets.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
@@ -109,6 +110,7 @@ struct _reg_t {
 		reg_item_t event_transfer;
 
 		reg_item_t notification;
+		reg_item_t minimum_size;
 	} port;
 
 	struct {
@@ -186,6 +188,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->port.event_transfer.node = lilv_new_uri(world, LV2_ATOM__eventTransfer);
 	regs->port.notification.node = lilv_new_uri(world, LV2_UI__portNotification);
 
+	regs->port.minimum_size.node = lilv_new_uri(world, LV2_RESIZE_PORT__minimumSize);
+
 	regs->work.schedule.node = lilv_new_uri(world, LV2_WORKER__schedule);
 
 	regs->log.entry.node = lilv_new_uri(world, LV2_LOG__Entry);
@@ -225,6 +229,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	regs->port.atom_transfer.urid = map->map(map->handle, LV2_ATOM__atomTransfer);
 	regs->port.event_transfer.urid = map->map(map->handle, LV2_ATOM__eventTransfer);
 	regs->port.notification.urid = map->map(map->handle, LV2_UI__portNotification);
+	
+	regs->port.minimum_size.urid = map->map(map->handle, LV2_RESIZE_PORT__minimumSize);
 
 	regs->work.schedule.urid = map->map(map->handle, LV2_WORKER__schedule);
 
@@ -285,6 +291,8 @@ sp_regs_deinit(reg_t *regs)
 	lilv_node_free(regs->port.atom_transfer.node);
 	lilv_node_free(regs->port.event_transfer.node);
 	lilv_node_free(regs->port.notification.node);
+	
+	lilv_node_free(regs->port.minimum_size.node);
 
 	lilv_node_free(regs->work.schedule.node);
 

@@ -447,6 +447,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		if(system_sink && (tar->direction == PORT_DIRECTION_OUTPUT) )
 			tar->selected = 0;
 
+		// get minimum port size if specified
+		LilvNode *minsize = lilv_port_get(plug, port, app->regs.port.minimum_size.node);
+		if(minsize)
+			size = lilv_node_as_int(minsize);
+		lilv_node_free(minsize);
+
 		// allocate 8-byte aligned buffer
 #if defined(_WIN32)
 		tar->buf = _aligned_malloc(size, 8); //FIXME check
