@@ -18,6 +18,10 @@
 #include <stdlib.h>
 #include <math.h>
 
+#if !defined(_WIN32)
+#	include <sys/mman.h> // mlock
+#endif
+
 #include <cJSON.h>
 
 #include <synthpod_app.h>
@@ -96,6 +100,7 @@ struct _port_t {
 	int num_sources;
 	port_t *sources [MAX_SOURCES];
 
+	size_t size;
 	void *buf;
 
 	port_direction_t direction; // input, output
@@ -380,9 +385,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	for(uint32_t i=0; i<mod->num_ports; i++)
 	{
 		port_t *tar = &mod->ports[i];
-		size_t size = 0;
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
 
+		tar->size = 0;
 		tar->mod = mod;
 		tar->tar = port;
 		tar->index = i;
@@ -392,19 +397,19 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 
 		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
-			size = app->driver->max_block_size * sizeof(float);
+			tar->size = app->driver->max_block_size * sizeof(float);
 			tar->type =  PORT_TYPE_AUDIO;
 			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
-			size = app->driver->max_block_size * sizeof(float);
+			tar->size = app->driver->max_block_size * sizeof(float);
 			tar->type = PORT_TYPE_CV;
 			tar->selected = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.control.node))
 		{
-			size = sizeof(float);
+			tar->size = sizeof(float);
 			tar->type = PORT_TYPE_CONTROL;
 			tar->selected = 0;
 		
@@ -421,7 +426,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.atom.node)) 
 		{
-			size = app->driver->seq_size;
+			tar->size = app->driver->seq_size;
 			tar->type = PORT_TYPE_ATOM;
 			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
 			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
@@ -450,17 +455,18 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		// get minimum port size if specified
 		LilvNode *minsize = lilv_port_get(plug, port, app->regs.port.minimum_size.node);
 		if(minsize)
-			size = lilv_node_as_int(minsize);
+			tar->size = lilv_node_as_int(minsize);
 		lilv_node_free(minsize);
 
 		// allocate 8-byte aligned buffer
 #if defined(_WIN32)
-		tar->buf = _aligned_malloc(size, 8); //FIXME check
+		tar->buf = _aligned_malloc(tar->size, 8); //FIXME check
 #else
-		posix_memalign(&tar->buf, 8, size); //FIXME check
+		posix_memalign(&tar->buf, 8, tar->size); //FIXME check
+		mlock(tar->buf, tar->size);
 #endif
 		//TODO mlock
-		memset(tar->buf, 0x0, size);
+		memset(tar->buf, 0x0, tar->size);
 
 		// initialize control buffers to default value
 		if(tar->type == PORT_TYPE_CONTROL)
@@ -492,6 +498,10 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	for(int i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
+
+#if !defined(_WIN32)
+		munlock(port->buf, port->size);
+#endif
 		free(port->buf);
 	}
 	free(mod->ports);
