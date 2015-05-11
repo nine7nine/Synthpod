@@ -200,10 +200,10 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	sp_app_t *app = mod->app;
 
 	char buf [1024]; //TODO how big?
-	sprintf(buf, "%i ", mod->uid);
+	sprintf(buf, "{%i} ", mod->uid);
 	vsprintf(buf + strlen(buf), fmt, args);
 	
-	app->driver->log_printf(app->data, type, "s", buf);
+	app->driver->log_printf(app->data, type, "%s", buf);
 
 	return 0;
 }

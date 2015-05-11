@@ -52,6 +52,8 @@ struct _prog_t {
 	varchunk_t *app_to_worker;
 	varchunk_t *app_from_worker;
 
+	varchunk_t *app_to_log;
+
 #if defined(BUILD_UI)
 	sp_ui_t *ui;
 	sp_ui_driver_t ui_driver;
@@ -64,6 +66,8 @@ struct _prog_t {
 
 	Ecore_Animator *ui_anim;
 	Evas_Object *win;
+#else
+	uv_async_t async;
 #endif
 
 	LV2_Atom_Forge forge;
@@ -88,7 +92,12 @@ struct _prog_t {
 static void
 _quit(uv_signal_t *quit, int signal)
 {
-	uv_signal_stop(quit);
+	prog_t *handle = quit->data;
+
+	uv_signal_stop(&handle->quit);
+#if !defined(BUILD_UI)
+	uv_close((uv_handle_t *)&handle->async, NULL);
+#endif
 }
 
 // non-rt worker-thread
@@ -196,6 +205,20 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	return NULL;
 }
 
+// non-rt ui-thread
+static void
+_trace(prog_t *handle)
+{
+	size_t size;
+	const char *trace;
+	while((trace = varchunk_read_request(handle->app_to_log, &size)))
+	{
+		fprintf(stderr, "[Trace] %s\n", trace);
+
+		varchunk_read_advance(handle->app_to_log);
+	}
+}
+
 #if defined(BUILD_UI)
 // non-rt ui-thread
 static void
@@ -229,7 +252,18 @@ _ui_animator(void *data)
 		varchunk_read_advance(handle->app_to_ui);
 	}
 
+	_trace(handle);
+
 	return EINA_TRUE; // continue animator
+}
+#else
+// non-rt ui-thread
+static void
+_async(uv_async_t *async)
+{
+	prog_t *handle = async->data;
+
+	_trace(handle);
 }
 #endif // BUILD_UI
 
@@ -415,7 +449,22 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
 	prog_t *handle = data;
 
-	if(type != handle->log_trace)
+	if(type == handle->log_trace)
+	{
+		char *trace;
+		if((trace = varchunk_write_request(handle->app_to_log, 1024)))
+		{
+			vsprintf(trace, fmt, args);
+
+			size_t written = strlen(trace) + 1;
+			varchunk_write_advance(handle->app_to_log, written);
+
+#if !defined(BUILD_UI)
+			uv_async_send(&handle->async);
+#endif
+		}
+	}
+	else // !log_trace
 	{
 		const char *type_str = NULL;
 		if(type == handle->log_entry)
@@ -424,8 +473,6 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 			type_str = "Error";
 		else if(type == handle->log_note)
 			type_str = "Note";
-		else if(type == handle->log_trace)
-			type_str = "Trace";
 		else if(type == handle->log_warning)
 			type_str = "Warning";
 
@@ -437,8 +484,6 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 
 		return 0;
 	}
-	else
-		; //TODO send to worker or UI?
 
 	return -1;
 }
@@ -476,6 +521,8 @@ main(int argc, char **argv)
 #endif
 	handle.app_to_worker = varchunk_new(CHUNK_SIZE);
 	handle.app_from_worker = varchunk_new(CHUNK_SIZE);
+
+	handle.app_to_log = varchunk_new(CHUNK_SIZE);
 
 	// ext_urid init
 	handle.ext_urid = ext_urid_new();
@@ -598,7 +645,9 @@ main(int argc, char **argv)
 	evas_object_del(handle.win);
 	ecore_animator_del(handle.ui_anim);
 #else
-	handle.loop = uv_default_loop();
+	handle.async.data = &handle;
+	uv_async_init(handle.loop, &handle.async, _async);
+
 	uv_run(handle.loop, UV_RUN_DEFAULT);
 #endif // BUILD_UI
 
@@ -629,6 +678,7 @@ main(int argc, char **argv)
 	varchunk_free(handle.app_to_ui);
 	varchunk_free(handle.app_from_ui);
 #endif
+	varchunk_free(handle.app_to_log);
 	varchunk_free(handle.app_to_worker);
 	varchunk_free(handle.app_from_worker);
 
