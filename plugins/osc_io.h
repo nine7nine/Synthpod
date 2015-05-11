@@ -30,8 +30,6 @@
 #include "lv2/lv2plug.in/ns/extensions/ui/ui.h"
 #include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 
-#define LV2_OSC__OscEvent							"http://opensoundcontrol.org#OscEvent"
-	
 #define OSC_IO_URI										"http://open-music-kontrollers.ch/lv2/osc_io"
 
 // state keys

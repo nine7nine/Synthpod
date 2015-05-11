@@ -20,7 +20,6 @@
 @prefix ui:		<http://lv2plug.in/ns/extensions/ui#> .
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
 @prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
-@prefix work: <http://lv2plug.in/ns/ext/worker#> .
 @prefix state: <http://lv2plug.in/ns/ext/state#> .
 @prefix log:  <http://lv2plug.in/ns/ext/log#> .
 
@@ -50,9 +49,7 @@ osc_io:io
 	doap:name "OSC In-Out" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:osc_io ;
-	lv2:extensionData work:interface ,
-		state:interface ;
-	lv2:requiredFeature work:schedule ;
+	lv2:extensionData state:interface ;
 	lv2:optionalFeature lv2:isLive ,
 		lv2:hardRTCapable ,
 		log:log ;

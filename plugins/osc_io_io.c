@@ -25,15 +25,20 @@
 
 #include <osc_io.h>
 #include <varchunk.h>
+#include <lv2_osc.h>
 
-#define BUF_SIZE 4096
+#if defined(_WIN32)
+#	include <avrt.h>
+#endif
+
+#define BUF_SIZE 0x10000
 
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
 	LV2_URID_Map *map;
 	struct {
-		LV2_URID osc_OscEvent;
+		LV2_URID osc_event;
 		LV2_URID state_default;
 		LV2_URID osc_io_url;
 		LV2_URID osc_io_trig;
@@ -43,13 +48,12 @@ struct _plughandle_t {
 		LV2_URID log_error;
 		LV2_URID log_trace;
 	} uris;
+
+	osc_forge_t oforge;
 	LV2_Atom_Forge forge;
 
 	char *osc_url;
 	volatile int dirty;
-
-	volatile int working;
-	LV2_Worker_Schedule *sched;
 
 	LV2_Log_Log *log;
 
@@ -57,20 +61,19 @@ struct _plughandle_t {
 	LV2_Atom_Sequence *osc_source;
 	float *connected;
 
-	// non-rt
-	LV2_Worker_Respond_Function respond;
-	LV2_Worker_Respond_Handle target;
-
-	varchunk_t *recv_buf;
-	varchunk_t *send_buf;
-
+	uv_thread_t thread;
 	uv_loop_t loop;
-	osc_stream_driver_t driver;
-	osc_stream_t *stream;
-	void *tmp;
+	uv_async_t quit;
+	uv_async_t flush;
 
-	uint8_t work_buf [BUF_SIZE];
-	LV2_Atom_Forge work_forge;
+	struct {
+		osc_stream_driver_t driver;
+		osc_stream_t *stream;
+		varchunk_t *from_worker;
+		varchunk_t *to_worker;
+		LV2_Atom_Forge_Frame obj_frame;
+		LV2_Atom_Forge_Frame tup_frame;
+	} data;
 };
 
 static void
@@ -161,135 +164,184 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
-// non-rt thread
-static LV2_Worker_Status
-_work(LV2_Handle instance,
-	LV2_Worker_Respond_Function respond,
-	LV2_Worker_Respond_Handle target,
-	uint32_t size,
-	const void *body)
-{
-	plughandle_t *handle = (plughandle_t *)instance;
-	
-	const LV2_Atom *atom = body;
-
-	if(atom->type == handle->uris.osc_OscEvent)
-	{
-		// add data to send queue
-		osc_data_t *ptr = varchunk_write_request(handle->send_buf, atom->size);
-		if(ptr)
-		{
-			memcpy(ptr, LV2_ATOM_BODY_CONST(atom), atom->size);
-			varchunk_write_advance(handle->send_buf, atom->size);
-
-			osc_stream_flush(handle->stream);
-		}
-	}
-	else if(atom->type == handle->uris.osc_io_dirty)
-	{
-		printf("_dirty: %s\n", handle->osc_url);
-
-		// reinitialize OSC stream
-		osc_stream_free(handle->stream);
-		handle->stream = osc_stream_new(&handle->loop, handle->osc_url,
-			&handle->driver, handle);
-	}
-	
-	// run main loop
-	handle->respond = respond;
-	handle->target = target;
-	uv_run(&handle->loop, UV_RUN_NOWAIT);
-	
-	// reply received data to worker host
-	{
-		const osc_data_t *ptr;
-		size_t toread;
-		while((ptr = varchunk_read_request(handle->recv_buf, &toread)))
-		{
-			handle->respond(handle->target, toread, ptr);
-			varchunk_read_advance(handle->recv_buf);
-		}
-	}
-	
-	return LV2_WORKER_SUCCESS;
-}
-
-// rt-thread
-static LV2_Worker_Status
-_work_response(LV2_Handle instance, uint32_t size, const void *body)
-{
-	plughandle_t *handle = (plughandle_t *)instance;
-
-	//printf("_work_response: %u %s\n", size, body);
-
-	if(!strcmp(body, "/stream/connect"))
-		*handle->connected = 1.f;
-	else if(!strcmp(body, "/stream/disconnect"))
-		*handle->connected = 0.f;
-
-	LV2_Atom_Forge *forge = &handle->work_forge;
-	lv2_atom_forge_frame_time(forge, 0);
-	lv2_atom_forge_atom(forge, size, handle->uris.osc_OscEvent);
-	lv2_atom_forge_raw(forge, body, size);
-	lv2_atom_forge_pad(forge, size);
-
-	return LV2_WORKER_SUCCESS;
-}
-
-// rt-thread
-static LV2_Worker_Status
-_end_run(LV2_Handle instance)
-{
-	plughandle_t *handle = (plughandle_t *)instance;
-
-	//printf(handle, handle->uris.log_trace, "_end_run\n");
-		
-	handle->working = 0;
-
-	return LV2_WORKER_SUCCESS;
-}
-
-static const LV2_Worker_Interface work_iface = {
-	.work = _work,
-	.work_response = _work_response,
-	.end_run = _end_run
-};
-
+// non-rt
 static void *
-_recv_req(size_t size, void *data)
+_data_recv_req(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 
-	printf("_recv_req: %zu\n", size);
-	return varchunk_write_request(handle->recv_buf, size);
+	void *ptr;
+	do ptr = varchunk_write_request(handle->data.from_worker, size);
+	while(!ptr);
+
+	return ptr;
 }
 
+// non-rt
 static void
-_recv_adv(size_t written, void *data)
+_data_recv_adv(size_t written, void *data)
 {
 	plughandle_t *handle = data;
 
-	printf("_recv_adv: %zu\n", written);
-	varchunk_write_advance(handle->recv_buf, written);
+	varchunk_write_advance(handle->data.from_worker, written);
 }
 
+// non-rt
 static const void *
-_send_req(size_t *len, void *data)
+_data_send_req(size_t *len, void *data)
 {
 	plughandle_t *handle = data;
 
-	printf("_send_req\n");
-	return varchunk_read_request(handle->send_buf, len);
+	return varchunk_read_request(handle->data.to_worker, len);
+}
+
+// non-rt
+static void
+_data_send_adv(void *data)
+{
+	plughandle_t *handle = data;
+
+	return varchunk_read_advance(handle->data.to_worker);
 }
 
 static void
-_send_adv(void *data)
+_bundle_in(osc_time_t timestamp, void *data)
 {
 	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+	LV2_Atom_Forge_Frame *obj_frame = &handle->data.obj_frame;
+	LV2_Atom_Forge_Frame *tup_frame = &handle->data.tup_frame;
 
-	printf("_send_adv\n");
-	return varchunk_read_advance(handle->send_buf);
+	osc_forge_bundle_push(&handle->oforge, forge, obj_frame, tup_frame, timestamp);
 }
+
+static void
+_bundle_out(osc_time_t timestamp, void *data)
+{
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+	LV2_Atom_Forge_Frame *obj_frame = &handle->data.obj_frame;
+	LV2_Atom_Forge_Frame *tup_frame = &handle->data.tup_frame;
+	
+	osc_forge_bundle_pop(&handle->oforge, forge, obj_frame, tup_frame);
+}
+
+static int
+_message(osc_time_t timestamp, const char *path, const char *fmt,
+	osc_data_t *buf, size_t size, void *data)
+{
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+	LV2_Atom_Forge_Frame obj_frame;
+	LV2_Atom_Forge_Frame tup_frame;
+
+	osc_data_t *ptr = buf;
+
+	osc_forge_message_push(&handle->oforge, forge, &obj_frame, &tup_frame,
+		path, fmt);
+
+	for(const char *type = fmt; *type; type++)
+		switch(*type)
+		{
+			case 'i':
+			{
+				int32_t i;
+				ptr = osc_get_int32(ptr, &i);
+				osc_forge_int32(&handle->oforge, forge, i);
+				break;
+			}
+			case 'f':
+			{
+				float f;
+				ptr = osc_get_float(ptr, &f);
+				osc_forge_float(&handle->oforge, forge, f);
+				break;
+			}
+			case 's':
+			case 'S':
+			{
+				const char *s;
+				ptr = osc_get_string(ptr, &s);
+				osc_forge_string(&handle->oforge, forge, s);
+				break;
+			}
+			case 'b':
+			{
+				osc_blob_t b;
+				ptr = osc_get_blob(ptr, &b);
+				osc_forge_blob(&handle->oforge, forge, b.size, b.payload);
+				break;
+			}
+
+			case 'h':
+			{
+				int64_t h;
+				ptr = osc_get_int64(ptr, &h);
+				osc_forge_int64(&handle->oforge, forge, h);
+				break;
+			}
+			case 'd':
+			{
+				double d;
+				ptr = osc_get_double(ptr, &d);
+				osc_forge_double(&handle->oforge, forge, d);
+				break;
+			}
+			case 't':
+			{
+				uint64_t t;
+				ptr = osc_get_timetag(ptr, &t);
+				osc_forge_timestamp(&handle->oforge, forge, t);
+				break;
+			}
+
+			case 'T':
+			{
+				osc_forge_true(&handle->oforge, forge);
+				break;
+			}
+			case 'F':
+			{
+				osc_forge_false(&handle->oforge, forge);
+				break;
+			}
+			case 'N':
+			{
+				osc_forge_nil(&handle->oforge, forge);
+				break;
+			}
+			case 'I':
+			{
+				osc_forge_bang(&handle->oforge, forge);
+				break;
+			}
+			
+			case 'c':
+			{
+				char c;
+				ptr = osc_get_char(ptr, &c);
+				osc_forge_char(&handle->oforge, forge, c);
+				break;
+			}
+			case 'm':
+			{
+				uint8_t *m;
+				ptr = osc_get_midi(ptr, &m);
+				osc_forge_midi(&handle->oforge, forge, m);
+				break;
+			}
+		}
+
+	osc_forge_message_pop(&handle->oforge, forge, &obj_frame, &tup_frame);
+
+	return 1;
+}
+
+static const osc_method_t methods [] = {
+	{NULL, NULL, _message},
+
+	{NULL, NULL, NULL}
+};
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
@@ -303,8 +355,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	for(i=0; features[i]; i++)
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = (LV2_URID_Map *)features[i]->data;
-		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
-			handle->sched = (LV2_Worker_Schedule *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->log = (LV2_Log_Log *)features[i]->data;
 
@@ -316,16 +366,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 	
-	if(!handle->sched)
-	{
-		lprintf(handle, handle->uris.log_error,
-			"%s: Host does not support worker:schedule\n",
-			descriptor->URI);
-		free(handle);
-		return NULL;
-	}
-
-	handle->uris.osc_OscEvent = handle->map->map(handle->map->handle,
+	handle->uris.osc_event = handle->map->map(handle->map->handle,
 		LV2_OSC__OscEvent);
 	handle->uris.state_default = handle->map->map(handle->map->handle,
 		LV2_STATE__loadDefaultState);
@@ -341,32 +382,30 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		LV2_LOG__Error);
 	handle->uris.log_trace = handle->map->map(handle->map->handle,
 		LV2_LOG__Trace);
+
+	osc_forge_init(&handle->oforge, handle->map);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
-	uv_loop_init(&handle->loop);
-
-	//handle->osc_url = strdup("osc.udp4://:3333");
-	//handle->osc_url = strdup("osc.udp6://:3333");
-	handle->osc_url = strdup("osc.tcp4://:3333");
-	//handle->osc_url = strdup("osc.tcp6://:3333");
-	//handle->osc_url = strdup("osc.slip.tcp4://:3333");
-	//handle->osc_url = strdup("osc.slip.tcp6://:3333");
-
-	handle->recv_buf = varchunk_new(0x10000);
-	handle->send_buf = varchunk_new(0x10000);
-	if(!handle->recv_buf || !handle->send_buf)
+	// init data
+	handle->data.from_worker = varchunk_new(BUF_SIZE);
+	handle->data.to_worker = varchunk_new(BUF_SIZE);
+	if(!handle->data.from_worker || !handle->data.to_worker)
 	{
 		free(handle);
 		return NULL;
 	}
 
-	handle->driver.recv_req = _recv_req;
-	handle->driver.recv_adv = _recv_adv;
-	handle->driver.send_req = _send_req;
-	handle->driver.send_adv = _send_adv;
+	handle->data.driver.recv_req = _data_recv_req;
+	handle->data.driver.recv_adv = _data_recv_adv;
+	handle->data.driver.send_req = _data_send_req;
+	handle->data.driver.send_adv = _data_send_adv;
 
-	handle->stream = osc_stream_new(&handle->loop, handle->osc_url,
-		&handle->driver, handle);
+	handle->osc_url = strdup("osc.udp4://:9999");
+	//handle->osc_url = strdup("osc.udp6://:999");
+	//handle->osc_url = strdup("osc.tcp4://:999");
+	//handle->osc_url = strdup("osc.tcp6://:999");
+	//handle->osc_url = strdup("osc.slip.tcp4://:999");
+	//handle->osc_url = strdup("osc.slip.tcp6://:999");
 
 	return handle;
 }
@@ -392,91 +431,198 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	}
 }
 
+// non-rt
+static void
+_quit(uv_async_t *quit)
+{
+	plughandle_t *handle = quit->data;
+
+	uv_close((uv_handle_t *)&handle->quit, NULL);
+	uv_close((uv_handle_t *)&handle->flush, NULL);
+	osc_stream_free(handle->data.stream);
+}
+
+// non-rt
+static void
+_flush(uv_async_t *quit)
+{
+	plughandle_t *handle = quit->data;
+
+	// flush sending queue
+	osc_stream_flush(handle->data.stream);
+}
+
+// non-rt
+static void
+_thread(void *data)
+{
+	plughandle_t *handle = data;
+
+	const int priority = 50;
+
+#if defined(_WIN32)
+	int mcss_sched_priority;
+	mcss_sched_priority = priority > 50 // TODO when to use CRITICAL?
+		? AVRT_PRIORITY_CRITICAL
+		: (priority > 0
+			? AVRT_PRIORITY_HIGH
+			: AVRT_PRIORITY_NORMAL);
+
+	// Multimedia Class Scheduler Service
+	DWORD dummy = 0;
+	HANDLE task = AvSetMmThreadCharacteristics("Pro Audio", &dummy);
+	if(!task)
+		fprintf(stderr, "AvSetMmThreadCharacteristics error: %d\n", GetLastError());
+	else if(!AvSetMmThreadPriority(task, mcss_sched_priority))
+		fprintf(stderr, "AvSetMmThreadPriority error: %d\n", GetLastError());
+
+#else
+	struct sched_param schedp;
+	memset(&schedp, 0, sizeof(struct sched_param));
+	schedp.sched_priority = priority;
+	
+	if(pthread_setschedparam(pthread_self(), SCHED_RR, &schedp))
+		fprintf(stderr, "pthread_setschedparam error\n");
+#endif
+
+	// main loop
+	uv_run(&handle->loop, UV_RUN_DEFAULT);
+}
+
 static void
 activate(LV2_Handle instance)
 {
 	plughandle_t *handle = (plughandle_t *)instance;
 
-	// reset forge buffer
-	lv2_atom_forge_set_buffer(&handle->work_forge, handle->work_buf, BUF_SIZE);
+	uv_loop_init(&handle->loop);
+
+	handle->quit.data = handle;
+	uv_async_init(&handle->loop, &handle->quit, _quit);
+	
+	handle->flush.data = handle;
+	uv_async_init(&handle->loop, &handle->flush, _flush);
+
+	handle->data.stream = osc_stream_new(&handle->loop, handle->osc_url,
+		&handle->data.driver, handle);
+
+	uv_thread_create(&handle->thread, _thread, handle);
+}
+
+// rt-thread
+static void
+_recv(uint64_t timestamp, const char *path, const char *fmt,
+	const LV2_Atom_Tuple *body, void *data)
+{
+	plughandle_t *handle = data;
+
+	size_t reserve = osc_strlen(path) + osc_strlen(fmt) + body->atom.size;
+
+	osc_data_t *buf;
+	if((buf = varchunk_write_request(handle->data.to_worker, reserve)))
+	{
+		osc_data_t *ptr = buf;
+		osc_data_t *end = buf + reserve;
+
+		ptr = osc_set_path(ptr, end, path);
+		ptr = osc_set_fmt(ptr, end, fmt);
+
+		const LV2_Atom *itr = lv2_atom_tuple_begin(body);
+		for(const char *type = fmt;
+			*type && !lv2_atom_tuple_is_end(LV2_ATOM_BODY(body), body->atom.size, itr);
+			type++, itr = lv2_atom_tuple_next(itr))
+		{
+			switch(*type)
+			{
+				case 'i':
+					ptr = osc_set_int32(ptr, end, ((const LV2_Atom_Int *)itr)->body);
+					break;
+				case 'f':
+					ptr = osc_set_float(ptr, end, ((const LV2_Atom_Float *)itr)->body);
+					break;
+				case 's':
+				case 'S':
+					ptr = osc_set_string(ptr, end, LV2_ATOM_BODY_CONST(itr));
+					break;
+				case 'b':
+					ptr = osc_set_blob(ptr, end, itr->size, LV2_ATOM_BODY(itr));
+					break;
+				
+				case 'h':
+					ptr = osc_set_int64(ptr, end, ((const LV2_Atom_Long *)itr)->body);
+					break;
+				case 'd':
+					ptr = osc_set_double(ptr, end, ((const LV2_Atom_Double *)itr)->body);
+					break;
+				case 't':
+					ptr = osc_set_timetag(ptr, end, ((const LV2_Atom_Long *)itr)->body);
+					break;
+				
+				case 'T':
+				case 'F':
+				case 'N':
+				case 'I':
+					break;
+				
+				case 'c':
+					ptr = osc_set_char(ptr, end, ((const LV2_Atom_Int *)itr)->body);
+					break;
+				case 'm':
+					ptr = osc_set_midi(ptr, end, LV2_ATOM_BODY(itr));
+					break;
+			}
+		}
+
+		size_t size = ptr ? ptr - buf : 0;
+
+		if(size)
+			varchunk_write_advance(handle->data.to_worker, size);
+	}
 }
 
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = (plughandle_t *)instance;
-
-	if(handle->dirty)
-	{
-		LV2_Atom atom = {
-			.type = handle->uris.osc_io_dirty,
-			.size = 0
-		};
-
-		if(handle->sched->schedule_work(handle->sched->handle,
-			sizeof(LV2_Atom), &atom) == LV2_WORKER_SUCCESS)
-		{
-			handle->dirty = 1;
-		}
-	}
-		
-	// prepare osc atom forge
-	const uint32_t capacity = handle->osc_source->atom.size;
-	LV2_Atom_Forge *forge = &handle->forge;
-	lv2_atom_forge_set_buffer(forge, (uint8_t *)handle->osc_source, capacity);
-	LV2_Atom_Forge_Frame frame;
-	lv2_atom_forge_sequence_head(forge, &frame, 0);
-		
-	if(!handle->working)
-	{
-		if(handle->work_forge.offset > 0)
-		{
-			// copy forge buffer
-			lv2_atom_forge_raw(forge, handle->work_buf, handle->work_forge.offset);
-
-			// reset forge buffer
-			lv2_atom_forge_set_buffer(&handle->work_forge, handle->work_buf, BUF_SIZE);
-		}
-		
-		LV2_Atom atom = {
-			.type = handle->uris.osc_io_trig,
-			.size = 0
-		};
 	
-		// schedule new work
-		if(handle->sched->schedule_work(handle->sched->handle,
-			sizeof(LV2_Atom), &atom) == LV2_WORKER_SUCCESS)
-		{
-			handle->working = 1;
-		}
-	}
-
-	// send sinked messages to worker
-	//if(*handle->connected == 1.f)
+	// write outgoing data
+	LV2_ATOM_SEQUENCE_FOREACH(handle->osc_sink, ev)
 	{
-		LV2_ATOM_SEQUENCE_FOREACH(handle->osc_sink, ev)
-		{
-			const LV2_Atom *atom = &ev->body;
-			if(atom->type == handle->uris.osc_OscEvent)
-			{
-				uint32_t size = sizeof(LV2_Atom) + atom->size;
-				if(handle->sched->schedule_work(handle->sched->handle,
-					size, atom) == LV2_WORKER_SUCCESS)
-				{
-					//TODO
-				}
-			}
-		}
+		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
+		osc_atom_unpack(&handle->oforge, obj, _recv, handle);
 	}
+	if(handle->osc_sink->atom.size > sizeof(LV2_Atom_Sequence_Body))
+		uv_async_send(&handle->flush);
 
-	// end sequence
+	// read incoming data
+	LV2_Atom_Forge *forge = &handle->forge;
+	LV2_Atom_Forge_Frame frame;
+	uint32_t capacity = handle->osc_source->atom.size;
+
+	lv2_atom_forge_set_buffer(forge, (uint8_t *)handle->osc_source, capacity);
+	lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+	const void *ptr;
+	size_t size;
+	while((ptr = varchunk_read_request(handle->data.from_worker, &size)))
+	{
+		lv2_atom_forge_frame_time(forge, 0); //TODO
+		printf("osc: %zu %s\n", size, ptr);
+		osc_dispatch_method(0, (osc_data_t *)ptr, size, (osc_method_t *)methods,
+			_bundle_in, _bundle_out, handle);
+
+		varchunk_read_advance(handle->data.from_worker);
+	}
 	lv2_atom_forge_pop(forge, &frame);
 }
 
 static void
 deactivate(LV2_Handle instance)
 {
-	//plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	uv_async_send(&handle->quit);
+	uv_thread_join(&handle->thread);
+	uv_loop_close(&handle->loop);
 }
 
 static void
@@ -484,22 +630,18 @@ cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = (plughandle_t *)instance;
 
-	osc_stream_free(handle->stream);
-	uv_loop_close(&handle->loop);
-	varchunk_free(handle->recv_buf);
-	varchunk_free(handle->send_buf);
+	varchunk_free(handle->data.from_worker);
+	varchunk_free(handle->data.to_worker);
 	free(handle);
 }
 
 static const void*
 extension_data(const char* uri)
 {
-	if(!strcmp(uri, LV2_WORKER__interface))
-		return &work_iface;
-	else if(!strcmp(uri, LV2_STATE__interface))
+	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
-	else
-		return NULL;
+		
+	return NULL;
 }
 
 const LV2_Descriptor osc_io_io = {
