@@ -33,7 +33,16 @@
 
 #define BUF_SIZE 0x10000
 
+typedef enum _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
+
+enum _plugstate_t {
+	STATE_NONE					= 0,
+	STATE_TIMEDOUT			= 1,
+	STATE_RESOLVED			= 2,
+	STATE_CONNECTED			= 3,
+	STATE_DISCONNECTED	= 4
+};
 
 struct _plughandle_t {
 	LV2_URID_Map *map;
@@ -59,7 +68,7 @@ struct _plughandle_t {
 
 	const LV2_Atom_Sequence *osc_sink;
 	LV2_Atom_Sequence *osc_source;
-	float *connected;
+	float *state;
 
 	uv_thread_t thread;
 	uv_loop_t loop;
@@ -204,6 +213,7 @@ _data_send_adv(void *data)
 	return varchunk_read_advance(handle->data.to_worker);
 }
 
+//FIXME this does not work with nested bundles
 static void
 _bundle_in(osc_time_t timestamp, void *data)
 {
@@ -215,6 +225,7 @@ _bundle_in(osc_time_t timestamp, void *data)
 	osc_forge_bundle_push(&handle->oforge, forge, obj_frame, tup_frame, timestamp);
 }
 
+//FIXME this does not work with nested bundles
 static void
 _bundle_out(osc_time_t timestamp, void *data)
 {
@@ -224,6 +235,54 @@ _bundle_out(osc_time_t timestamp, void *data)
 	LV2_Atom_Forge_Frame *tup_frame = &handle->data.tup_frame;
 	
 	osc_forge_bundle_pop(&handle->oforge, forge, obj_frame, tup_frame);
+}
+
+static int
+_resolve(osc_time_t timestamp, const char *path, const char *fmt,
+	osc_data_t *buf, size_t size, void *data)
+{
+	plughandle_t *handle = data;
+
+	//TODO
+	*handle->state = STATE_RESOLVED;
+
+	return 1;
+}
+
+static int
+_timeout(osc_time_t timestamp, const char *path, const char *fmt,
+	osc_data_t *buf, size_t size, void *data)
+{
+	plughandle_t *handle = data;
+
+	//TODO
+	*handle->state = STATE_TIMEDOUT;
+
+	return 1;
+}
+
+static int
+_connect(osc_time_t timestamp, const char *path, const char *fmt,
+	osc_data_t *buf, size_t size, void *data)
+{
+	plughandle_t *handle = data;
+
+	//TODO
+	*handle->state = STATE_CONNECTED;
+
+	return 1;
+}
+
+static int
+_disconnect(osc_time_t timestamp, const char *path, const char *fmt,
+	osc_data_t *buf, size_t size, void *data)
+{
+	plughandle_t *handle = data;
+
+	//TODO
+	*handle->state = STATE_DISCONNECTED;
+
+	return 1;
 }
 
 static int
@@ -338,6 +397,10 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 }
 
 static const osc_method_t methods [] = {
+	{"/stream/resolve", "", _resolve},
+	{"/stream/timeout", "", _timeout},
+	{"/stream/connect", "", _connect},
+	{"/stream/disconnect", "", _disconnect},
 	{NULL, NULL, _message},
 
 	{NULL, NULL, NULL}
@@ -400,12 +463,12 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->data.driver.send_req = _data_send_req;
 	handle->data.driver.send_adv = _data_send_adv;
 
-	handle->osc_url = strdup("osc.udp4://:9999");
-	//handle->osc_url = strdup("osc.udp6://:999");
-	//handle->osc_url = strdup("osc.tcp4://:999");
-	//handle->osc_url = strdup("osc.tcp6://:999");
-	//handle->osc_url = strdup("osc.slip.tcp4://:999");
-	//handle->osc_url = strdup("osc.slip.tcp6://:999");
+	//handle->osc_url = strdup("osc.udp4://:9999");
+	//handle->osc_url = strdup("osc.udp6://:9999");
+	//handle->osc_url = strdup("osc.tcp4://:9999");
+	handle->osc_url = strdup("osc.tcp6://:9999");
+	//handle->osc_url = strdup("osc.slip.tcp4://:9999");
+	//handle->osc_url = strdup("osc.slip.tcp6://:9999");
 
 	return handle;
 }
@@ -424,7 +487,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->osc_source = (LV2_Atom_Sequence *)data;
 			break;
 		case 2:
-			handle->connected = (float *)data;
+			handle->state = (float *)data;
 			break;
 		default:
 			break;
@@ -606,8 +669,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 	while((ptr = varchunk_read_request(handle->data.from_worker, &size)))
 	{
 		lv2_atom_forge_frame_time(forge, 0); //TODO
-		printf("osc: %zu %s\n", size, ptr);
-		osc_dispatch_method(0, (osc_data_t *)ptr, size, (osc_method_t *)methods,
+		//TODO unroll_partial?
+		osc_dispatch_method(OSC_IMMEDIATE, (osc_data_t *)ptr, size, (osc_method_t *)methods,
 			_bundle_in, _bundle_out, handle);
 
 		varchunk_read_advance(handle->data.from_worker);

@@ -16,6 +16,8 @@
 @prefix owl:	<http://www.w3.org/2002/07/owl#> .
 @prefix foaf:	<http://xmlns.com/foaf/0.1/> .
 @prefix doap:	<http://usefulinc.com/ns/doap#> .
+@prefix rdf:	<http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix lv2:	<http://lv2plug.in/ns/lv2core#> .
 @prefix ui:		<http://lv2plug.in/ns/extensions/ui#> .
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
@@ -79,10 +81,16 @@ osc_io:io
 	  a lv2:OutputPort ,
 			lv2:ControlPort ;
 		lv2:index 2 ;
-		lv2:symbol "connected" ;
-		lv2:name "Connected" ;
+		lv2:symbol "state" ;
+		lv2:name "State" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
-		lv2:maximum 1.0 ;
-		lv2:portProperty lv2:toggled ;
+		lv2:maximum 4.0 ;
+		lv2:portProperty lv2:integer ;
+		lv2:portProperty lv2:enumeration ;
+		lv2:scalePoint [ rdfs:label "None" ;					rdf:value 0 ] ;
+		lv2:scalePoint [ rdfs:label "Timedout" ;			rdf:value 1 ] ;
+		lv2:scalePoint [ rdfs:label "Resolved" ;			rdf:value 2 ] ;
+		lv2:scalePoint [ rdfs:label "Connected" ;			rdf:value 3 ] ;
+		lv2:scalePoint [ rdfs:label "Disconnected" ;	rdf:value 4 ] ;
 	] .
