@@ -213,7 +213,6 @@ _data_send_adv(void *data)
 	return varchunk_read_advance(handle->data.to_worker);
 }
 
-//FIXME this does not work with nested bundles
 static void
 _bundle_in(osc_time_t timestamp, void *data)
 {
@@ -225,7 +224,6 @@ _bundle_in(osc_time_t timestamp, void *data)
 	osc_forge_bundle_push(&handle->oforge, forge, obj_frame, tup_frame, timestamp);
 }
 
-//FIXME this does not work with nested bundles
 static void
 _bundle_out(osc_time_t timestamp, void *data)
 {
@@ -404,6 +402,42 @@ static const osc_method_t methods [] = {
 	{NULL, NULL, _message},
 
 	{NULL, NULL, NULL}
+};
+
+static void
+_unroll_stamp(osc_time_t tstmp, void *data)
+{
+	plughandle_t *handle = data;
+
+	//TODO
+}
+
+static void
+_unroll_message(osc_data_t *buf, size_t size, void *data)
+{
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+
+	lv2_atom_forge_frame_time(forge, 0); //TODO
+	osc_dispatch_method(OSC_IMMEDIATE, buf, size, (osc_method_t *)methods,
+		NULL, NULL, handle);
+}
+
+static void
+_unroll_bundle(osc_data_t *buf, size_t size, void *data)
+{
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+
+	lv2_atom_forge_frame_time(forge, 0); //TODO
+	osc_dispatch_method(OSC_IMMEDIATE, buf, size, (osc_method_t *)methods,
+		_bundle_in, _bundle_out, handle);
+}
+
+static const osc_unroll_inject_t inject = {
+	.stamp = _unroll_stamp,
+	.message = _unroll_message,
+	.bundle = _unroll_bundle
 };
 
 static LV2_Handle
@@ -668,10 +702,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 	size_t size;
 	while((ptr = varchunk_read_request(handle->data.from_worker, &size)))
 	{
-		lv2_atom_forge_frame_time(forge, 0); //TODO
-		//TODO unroll_partial?
-		osc_dispatch_method(OSC_IMMEDIATE, (osc_data_t *)ptr, size, (osc_method_t *)methods,
-			_bundle_in, _bundle_out, handle);
+		osc_unroll_packet((osc_data_t *)ptr, size, OSC_UNROLL_MODE_PARTIAL,
+			(osc_unroll_inject_t *)&inject, handle);
 
 		varchunk_read_advance(handle->data.from_worker);
 	}

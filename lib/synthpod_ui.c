@@ -2851,6 +2851,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
 	//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
+	//elm_scroller_movement_block_set(ui->modlist, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
+	elm_scroller_movement_block_set(ui->modlist,
+		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
 	evas_object_smart_callback_add(ui->modlist, "expand,request",
 		_list_expand_request, ui);
 	evas_object_smart_callback_add(ui->modlist, "contract,request",
@@ -2901,7 +2904,10 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	ui->modgrid = elm_gengrid_add(ui->mainpane);
 	elm_gengrid_select_mode_set(ui->modgrid, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_gengrid_reorder_mode_set(ui->modgrid, EINA_TRUE);
-	elm_gengrid_item_size_set(ui->modgrid, 400, 400);
+	elm_gengrid_item_size_set(ui->modgrid, 800, 400);
+	//elm_scroller_movement_block_set(ui->modgrid, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
+	elm_scroller_movement_block_set(ui->modgrid,
+		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
 	evas_object_data_set(ui->modgrid, "ui", ui);
 	evas_object_size_hint_weight_set(ui->modgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->modgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
