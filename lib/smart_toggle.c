@@ -22,6 +22,8 @@
 #define SMART_TOGGLE_TYPE "Smart Slider"
 
 #define SMART_TOGGLE_CHANGED "changed"
+#define SMART_TOGGLE_MOUSE_IN "mouse,in"
+#define SMART_TOGGLE_MOUSE_OUT "mouse,out"
 
 #define SMART_TOGGLE_MODIFIER "Control" //TODO make configurable
 
@@ -35,7 +37,9 @@ struct _smart_toggle_t {
 };
 
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
-	{SMART_TOGGLE_CHANGED, "f"},
+	{SMART_TOGGLE_CHANGED, NULL},
+	{SMART_TOGGLE_MOUSE_IN, NULL},
+	{SMART_TOGGLE_MOUSE_OUT, NULL},
 	{NULL, NULL}
 };
 
@@ -73,6 +77,22 @@ _smart_toggle_value_flush(Evas_Object *o)
 	edje_object_part_drag_size_set(priv->theme, "drag", size_x, 1.f);
 
 	evas_object_smart_callback_call(o, SMART_TOGGLE_CHANGED, NULL);
+}
+
+static void
+_mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	smart_toggle_t *priv = data;
+
+	evas_object_smart_callback_call(obj, SMART_TOGGLE_CHANGED, NULL);
+}
+
+static void
+_mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	smart_toggle_t *priv = data;
+
+	evas_object_smart_callback_call(obj, SMART_TOGGLE_CHANGED, NULL);
 }
 
 static void
@@ -116,6 +136,8 @@ _smart_toggle_smart_add(Evas_Object *o)
 	priv->theme = edje_object_add(e);
 	edje_object_file_set(priv->theme, "/usr/local/share/synthpod/synthpod.edj",
 		"/synthpod/smart_toggle/theme"); //TODO
+	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_IN, _mouse_in, priv);
+	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_OUT, _mouse_out, priv);
 	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, priv);
 	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_WHEEL, _mouse_wheel, priv);
 	evas_object_show(priv->theme);

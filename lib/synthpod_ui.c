@@ -2201,6 +2201,23 @@ _fmt_free(char *str)
 	free(str);
 }
 
+static void
+_smart_mouse_in(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	elm_scroller_movement_block_set(ui->modlist,
+		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
+}
+
+static void
+_smart_mouse_out(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	elm_scroller_movement_block_set(ui->modlist, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
+}
+
 static Evas_Object * 
 _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -2265,6 +2282,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			smart_toggle_disabled_set(check, port->direction == PORT_DIRECTION_OUTPUT);
 			if(port->direction == PORT_DIRECTION_INPUT)
 				evas_object_smart_callback_add(check, "changed", _check_changed, port);
+			evas_object_smart_callback_add(check, "mouse,in", _smart_mouse_in, ui);
+			evas_object_smart_callback_add(check, "mouse,out", _smart_mouse_out, ui);
 
 			child = check;
 		}
@@ -2284,6 +2303,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			}
 			if(port->direction == PORT_DIRECTION_INPUT)
 				evas_object_smart_callback_add(spin, "changed", _spinner_changed, port);
+			evas_object_smart_callback_add(spin, "mouse,in", _smart_mouse_in, ui);
+			evas_object_smart_callback_add(spin, "mouse,out", _smart_mouse_out, ui);
 
 			child = spin;
 		}
@@ -2299,6 +2320,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
 			if(port->direction == PORT_DIRECTION_INPUT)
 				evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
+			evas_object_smart_callback_add(sldr, "mouse,in", _smart_mouse_in, ui);
+			evas_object_smart_callback_add(sldr, "mouse,out", _smart_mouse_out, ui);
 
 			child = sldr;
 		}
@@ -2424,6 +2447,23 @@ _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	return NULL;
 }
 
+static void
+_modgrid_mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	elm_scroller_movement_block_set(ui->modgrid,
+		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
+}
+
+static void
+_modgrid_mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	elm_scroller_movement_block_set(ui->modgrid, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
+}
+
 static Evas_Object *
 _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -2438,6 +2478,8 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		char col [7];
 		sprintf(col, "col,%02i", mod->col);
 		elm_layout_signal_emit(container, col, MODGRID_UI);
+		evas_object_event_callback_add(container, EVAS_CALLBACK_MOUSE_IN, _modgrid_mouse_in, ui);
+		evas_object_event_callback_add(container, EVAS_CALLBACK_MOUSE_OUT, _modgrid_mouse_out, ui);
 		evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(container);
@@ -2851,9 +2893,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
 	//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
-	//elm_scroller_movement_block_set(ui->modlist, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
-	elm_scroller_movement_block_set(ui->modlist,
-		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
 	evas_object_smart_callback_add(ui->modlist, "expand,request",
 		_list_expand_request, ui);
 	evas_object_smart_callback_add(ui->modlist, "contract,request",
@@ -2905,9 +2944,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	elm_gengrid_select_mode_set(ui->modgrid, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_gengrid_reorder_mode_set(ui->modgrid, EINA_TRUE);
 	elm_gengrid_item_size_set(ui->modgrid, 800, 400);
-	//elm_scroller_movement_block_set(ui->modgrid, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
-	elm_scroller_movement_block_set(ui->modgrid,
-		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
 	evas_object_data_set(ui->modgrid, "ui", ui);
 	evas_object_size_hint_weight_set(ui->modgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->modgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);

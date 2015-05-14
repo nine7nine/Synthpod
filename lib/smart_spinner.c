@@ -22,6 +22,8 @@
 #define SMART_SPINNER_TYPE "Smart Slider"
 
 #define SMART_SPINNER_CHANGED "changed"
+#define SMART_SPINNER_MOUSE_IN "mouse,in"
+#define SMART_SPINNER_MOUSE_OUT "mouse,out"
 
 #define SMART_SPINNER_MODIFIER "Control" //TODO make configurable
 
@@ -46,7 +48,9 @@ struct _smart_spinner_t {
 };
 
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
-	{SMART_SPINNER_CHANGED, "f"},
+	{SMART_SPINNER_CHANGED, NULL},
+	{SMART_SPINNER_MOUSE_IN, NULL},
+	{SMART_SPINNER_MOUSE_OUT, NULL},
 	{NULL, NULL}
 };
 
@@ -110,6 +114,22 @@ _smart_spinner_value_flush(Evas_Object *o)
 			evas_object_smart_callback_call(o, SMART_SPINNER_CHANGED, NULL);
 		}
 	}
+}
+
+static void
+_mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	smart_spinner_t *priv = data;
+
+	evas_object_smart_callback_call(obj, SMART_SPINNER_CHANGED, NULL);
+}
+
+static void
+_mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	smart_spinner_t *priv = data;
+
+	evas_object_smart_callback_call(obj, SMART_SPINNER_CHANGED, NULL);
 }
 
 static void
@@ -201,6 +221,8 @@ _smart_spinner_smart_add(Evas_Object *o)
 	priv->theme = edje_object_add(e);
 	edje_object_file_set(priv->theme, "/usr/local/share/synthpod/synthpod.edj",
 		"/synthpod/smart_spinner/theme"); //TODO
+	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_IN, _mouse_in, priv);
+	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_OUT, _mouse_out, priv);
 	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, priv);
 	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_UP, _mouse_up, priv);
 	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_MOVE, _mouse_move, priv);
