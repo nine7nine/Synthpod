@@ -20,7 +20,6 @@ endif()
 option(BUILD_UI "Build user interface libraries" OFF)
 option(BUILD_JACK "Build JACK standalone host" OFF)
 option(BUILD_PORTAUDIO "Build PortAudio standalone host" OFF)
-option(BUILD_X11_WRAPPER "Build X11 UI wrapper" OFF)
 
 # eina
 pkg_search_module(EINA REQUIRED eina>=1.8)
@@ -44,6 +43,8 @@ if(BUILD_UI)
 # elm
 	pkg_search_module(ELM REQUIRED elementary>=1.8)
 	include_directories(${ELM_INCLUDE_DIRS})
+
+	pkg_search_module(ECORE_X OPTIONAL ecore-x)
 endif()
 
 add_subdirectory(lib)
