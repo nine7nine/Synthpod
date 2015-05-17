@@ -408,11 +408,12 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->port.control = (const LV2_Atom_Sequence *)data;
-			break;
-		case 1:
 			handle->port.event_in = (const LV2_Atom_Sequence *)data;
 			sp_app_set_system_source(app, 0, data);
+			break;
+		case 1:
+			handle->port.event_out = (LV2_Atom_Sequence *)data;
+			sp_app_set_system_sink(app, 0, data);
 			break;
 		case 2:
 			handle->port.audio_in[0] = (const float *)data;
@@ -423,19 +424,18 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			sp_app_set_system_source(app, 2, data);
 			break;
 		case 4:
-			handle->port.notify = (LV2_Atom_Sequence *)data;
-			break;
-		case 5:
-			handle->port.event_out = (LV2_Atom_Sequence *)data;
-			sp_app_set_system_sink(app, 0, data);
-			break;
-		case 6:
 			handle->port.audio_out[0] = (float *)data;
 			sp_app_set_system_sink(app, 1, data);
 			break;
-		case 7:
+		case 5:
 			handle->port.audio_out[1] = (float *)data;
 			sp_app_set_system_sink(app, 2, data);
+			break;
+		case 6:
+			handle->port.control = (const LV2_Atom_Sequence *)data;
+			break;
+		case 7:
+			handle->port.notify = (LV2_Atom_Sequence *)data;
 			break;
 		default:
 			break;

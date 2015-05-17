@@ -64,7 +64,7 @@ _to_app_advance(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 
-	uint32_t port_index = 0; // control port
+	uint32_t port_index = 6; // control port
 	handle->write_function(handle->controller, port_index,
 		size, handle->uri.event_transfer, handle->buf.app);
 }
