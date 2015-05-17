@@ -55,13 +55,13 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->event_out = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->event_in = (LV2_Atom_Sequence *)data;
-			break;
-		case 2:
 			handle->audio_out[0] = (const float *)data;
 			break;
-		case 3:
+		case 2:
 			handle->audio_out[1] = (const float *)data;
+			break;
+		case 3:
+			handle->event_in = (LV2_Atom_Sequence *)data;
 			break;
 		case 4:
 			handle->audio_in[0] = (float *)data;

@@ -83,22 +83,10 @@ synthpod:source
 		lv2:name "Event Out" ;
 		lv2:designation lv2:control ;
 	] , [
-		# event out 
-	  a lv2:OutputPort ,
-			atom:AtomPort ;
-		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
-		atom:supports atom:Object ;
-		atom:supports time:Position ;
-		lv2:index 1 ;
-		lv2:symbol "event_in" ;
-		lv2:name "Event In" ;
-		lv2:designation lv2:control ;
-	] , [
 		# audio in 1
 	  a lv2:InputPort ,
 			lv2:AudioPort ;
-		lv2:index 2 ;
+		lv2:index 1 ;
 		lv2:symbol "audio_out_1" ;
 		lv2:name "Audio Out 1" ;
 		lv2:designation pg:left ;
@@ -107,11 +95,23 @@ synthpod:source
 		# audio in 2
 	  a lv2:InputPort ,
 			lv2:AudioPort ;
-		lv2:index 3 ;
+		lv2:index 2 ;
 		lv2:symbol "audio_out_2" ;
 		lv2:name "Audio Out 2" ;
 		lv2:designation pg:right ;
 		pg:group synthpod:group_in ;
+	] , [
+		# event out 
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports atom:Object ;
+		atom:supports time:Position ;
+		lv2:index 3 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio out 1
 	  a lv2:OutputPort ,
@@ -154,22 +154,10 @@ synthpod:sink
 		lv2:name "Event Out" ;
 		lv2:designation lv2:control ;
 	] , [
-		# event out 
-	  a lv2:OutputPort ,
-			atom:AtomPort ;
-		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
-		atom:supports atom:Object ;
-		atom:supports time:Position ;
-		lv2:index 1 ;
-		lv2:symbol "event_in" ;
-		lv2:name "Event In" ;
-		lv2:designation lv2:control ;
-	] , [
 		# audio in 1
 	  a lv2:InputPort ,
 			lv2:AudioPort ;
-		lv2:index 2 ;
+		lv2:index 1 ;
 		lv2:symbol "audio_out_1" ;
 		lv2:name "Audio Out 1" ;
 		lv2:designation pg:left ;
@@ -178,11 +166,23 @@ synthpod:sink
 		# audio in 2
 	  a lv2:InputPort ,
 			lv2:AudioPort ;
-		lv2:index 3 ;
+		lv2:index 2 ;
 		lv2:symbol "audio_out_2" ;
 		lv2:name "Audio Out 2" ;
 		lv2:designation pg:right ;
 		pg:group synthpod:group_in ;
+	] , [
+		# event out 
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports atom:Object ;
+		atom:supports time:Position ;
+		lv2:index 3 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
+		lv2:designation lv2:control ;
 	] , [
 		# audio out 1
 	  a lv2:OutputPort ,
