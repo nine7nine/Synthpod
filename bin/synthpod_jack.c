@@ -26,6 +26,8 @@
 #include <ext_urid.h>
 #include <varchunk.h>
 
+#include <synthpod_nsm.h>
+
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
@@ -55,6 +57,10 @@ struct _prog_t {
 
 	varchunk_t *app_to_log;
 
+	char *path;
+	char *exe;
+	synthpod_nsm_t *nsm;
+
 #if defined(BUILD_UI)
 	sp_ui_t *ui;
 	sp_ui_driver_t ui_driver;
@@ -68,6 +74,9 @@ struct _prog_t {
 	Ecore_Animator *ui_anim;
 	Evas_Object *win;
 #else
+	uv_loop_t *loop;
+	uv_signal_t sigterm;
+	uv_signal_t sigint;
 	uv_async_t async;
 #endif
 
@@ -85,24 +94,54 @@ struct _prog_t {
 	jack_port_t *midi_out;
 	jack_port_t *audio_out[2];
 
-	uv_loop_t *loop;
-	uv_signal_t quit;
-
 	uv_thread_t worker_thread;
 	uv_async_t worker_quit;
 	uv_async_t worker_wake;
 };
 
-// non-rt main-thread
-static void
-_quit(uv_signal_t *quit, int signal)
-{
-	prog_t *handle = quit->data;
+static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
 
-	uv_signal_stop(&handle->quit);
-#if !defined(BUILD_UI)
-	uv_close((uv_handle_t *)&handle->async, NULL);
-#endif
+static int
+_jack_init(prog_t *handle, const char *id)
+{
+	handle->client = jack_client_open(id, JackNullOption, NULL);
+	handle->midi_in = jack_port_register(handle->client, "midi_in",
+		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	handle->audio_in[0] = jack_port_register(handle->client, "audio_in_1",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+	handle->audio_in[1] = jack_port_register(handle->client, "audio_in_2",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+	handle->midi_out = jack_port_register(handle->client, "midi_out",
+		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	handle->audio_out[0] = jack_port_register(handle->client, "audio_out_1",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+	handle->audio_out[1] = jack_port_register(handle->client, "audio_out_2",
+		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+
+	return 0; //TODO
+}
+
+static void
+_jack_deinit(prog_t *handle)
+{
+	if(handle->client)
+	{
+		if(handle->midi_in)
+			jack_port_unregister(handle->client, handle->midi_in);
+		if(handle->audio_in[0])
+			jack_port_unregister(handle->client, handle->audio_in[0]);
+		if(handle->audio_in[1])
+			jack_port_unregister(handle->client, handle->audio_in[1]);
+		if(handle->midi_out)
+			jack_port_unregister(handle->client, handle->midi_out);
+		if(handle->audio_out[0])
+			jack_port_unregister(handle->client, handle->audio_out[0]);
+		if(handle->audio_out[1])
+			jack_port_unregister(handle->client, handle->audio_out[1]);
+
+		jack_deactivate(handle->client);
+		jack_client_close(handle->client);
+	}
 }
 
 // non-rt worker-thread
@@ -113,6 +152,8 @@ _worker_quit(uv_async_t *quit)
 
 	uv_close((uv_handle_t *)&handle->worker_quit, NULL);
 	uv_close((uv_handle_t *)&handle->worker_wake, NULL);
+	if(handle->nsm)
+		synthpod_nsm_free(handle->nsm);
 }
 
 // non-rt worker-thread
@@ -136,17 +177,26 @@ _worker_thread(void *data)
 {
 	prog_t *handle = data;
 
-	uv_loop_t *loop = uv_loop_new();
+	uv_loop_t loop;
+	uv_loop_init(&loop);
 
 	handle->worker_quit.data = handle;
-	uv_async_init(loop, &handle->worker_quit, _worker_quit);
+	uv_async_init(&loop, &handle->worker_quit, _worker_quit);
 	
 	handle->worker_wake.data = handle;
-	uv_async_init(loop, &handle->worker_wake, _worker_wake);
+	uv_async_init(&loop, &handle->worker_wake, _worker_wake);
 
-	uv_run(loop, UV_RUN_DEFAULT);
+	handle->nsm = synthpod_nsm_new(&loop, handle->exe,
+		&nsm_driver, handle); //TODO check
 
-	uv_loop_close(loop);
+	uv_run(&loop, UV_RUN_DEFAULT);
+
+	uv_loop_close(&loop);
+
+	if(handle->path)
+		free(handle->path);
+
+	_jack_deinit(handle);
 }
 
 // non-rt / rt
@@ -162,7 +212,7 @@ _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	if(!(flags & LV2_STATE_IS_POD) || !(flags & LV2_STATE_IS_PORTABLE))
 		return LV2_STATE_ERR_BAD_FLAGS;
 
-	FILE *f = fopen("/home/hp/.local/share/synthpod/state.json", "wb");
+	FILE *f = fopen(handle->path, "wb");
 	if(f)
 	{
 		int written = fwrite(value, size, 1, f);
@@ -185,7 +235,7 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	*type = handle->forge.String;
 	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
 
-	FILE *f = fopen("/home/hp/.local/share/synthpod/state.json", "rb");
+	FILE *f = fopen(handle->path, "rb");
 	if(f)
 	{
 		fseek(f, 0, SEEK_END);
@@ -262,6 +312,17 @@ _ui_animator(void *data)
 	return EINA_TRUE; // continue animator
 }
 #else
+// non-rt main-thread
+static void
+_quit(uv_signal_t *quit, int signal)
+{
+	prog_t *handle = quit->data;
+
+	uv_signal_stop(&handle->sigterm);
+	uv_signal_stop(&handle->sigint);
+	uv_close((uv_handle_t *)&handle->async, NULL);
+}
+
 // non-rt ui-thread
 static void
 _async(uv_async_t *async)
@@ -497,6 +558,56 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
+static int 
+_open(const char *path, const char *name, const char *id, void *data)
+{
+	(void)name;
+	prog_t *handle = data;
+
+	if(handle->path)
+		free(handle->path);
+	handle->path = strdup(path);
+
+	// jack init
+	if(_jack_init(handle, id))
+		return -1;
+
+	// synthpod init
+	handle->app_driver.sample_rate = jack_get_sample_rate(handle->client);
+	handle->app_driver.max_block_size = jack_get_buffer_size(handle->client);
+	handle->app_driver.min_block_size = jack_get_buffer_size(handle->client);
+	handle->app_driver.seq_size = SEQ_SIZE; //TODO
+	
+	// app init
+	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
+
+	// restore state
+	sp_app_restore(handle->app, _state_retrieve, handle,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+	// jack activate
+	jack_set_process_callback(handle->client, _process, handle);
+	jack_activate(handle->client);
+
+	return 0; // success
+}
+
+static int
+_save(void *data)
+{
+	prog_t *handle = data;
+	
+	sp_app_save(handle->app, _state_store, handle,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+	return 0; // success
+}
+
+static const synthpod_nsm_driver_t nsm_driver = {
+	.open = _open,
+	.save = _save
+};
+
 #if defined(BUILD_UI)
 EAPI_MAIN int
 elm_main(int argc, char **argv)
@@ -529,37 +640,7 @@ main(int argc, char **argv)
 	handle.log_note = map->map(map->handle, LV2_LOG__Note);
 	handle.log_trace = map->map(map->handle, LV2_LOG__Trace);
 	handle.log_warning = map->map(map->handle, LV2_LOG__Warning);
-	
-	// jack init
-	handle.client = jack_client_open("Synthpod", JackNullOption, NULL);
-	handle.midi_in = jack_port_register(handle.client, "midi_in",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	handle.audio_in[0] = jack_port_register(handle.client, "audio_in_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.audio_in[1] = jack_port_register(handle.client, "audio_in_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle.midi_out = jack_port_register(handle.client, "midi_out",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[0] = jack_port_register(handle.client, "audio_out_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	handle.audio_out[1] = jack_port_register(handle.client, "audio_out_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
-	// uv init
-	handle.loop = uv_default_loop();
-
-	handle.quit.data = &handle;
-	uv_signal_init(handle.loop, &handle.quit);
-	uv_signal_start(&handle.quit, _quit, SIGINT);
-
-	// threads init
-	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
-
-	// synthpod init
-	handle.app_driver.sample_rate = jack_get_sample_rate(handle.client);
-	handle.app_driver.max_block_size = jack_get_buffer_size(handle.client);
-	handle.app_driver.min_block_size = jack_get_buffer_size(handle.client);
-	handle.app_driver.seq_size = SEQ_SIZE; //TODO
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
 	handle.app_driver.log_printf = _log_printf;
@@ -593,16 +674,9 @@ main(int argc, char **argv)
 	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle);
 #endif
 
-	// app init
-	handle.app = sp_app_new(NULL, &handle.app_driver, &handle);
-
-	// restore state
-	sp_app_restore(handle.app, _state_retrieve, &handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-
-	// jack activate
-	jack_set_process_callback(handle.client, _process, &handle);
-	jack_activate(handle.client);
+	// threads init
+	handle.exe = argv[0];
+	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
 
 #if defined(BUILD_UI)
 	// main loop
@@ -614,40 +688,27 @@ main(int argc, char **argv)
 	evas_object_del(handle.win);
 	ecore_animator_del(handle.ui_anim);
 #else
+	// uv init
+	handle.loop = uv_default_loop();
+
+	handle.sigterm.data = &handle;
+	uv_signal_init(handle.loop, &handle.sigterm);
+	uv_signal_start(&handle.sigterm, _quit, SIGTERM);
+
+	handle.sigint.data = &handle;
+	uv_signal_init(handle.loop, &handle.sigint);
+	uv_signal_start(&handle.sigint, _quit, SIGINT);
+
 	handle.async.data = &handle;
 	uv_async_init(handle.loop, &handle.async, _async);
 
 	uv_run(handle.loop, UV_RUN_DEFAULT);
 #endif // BUILD_UI
 
-	// jack deinit
-	if(handle.client)
-	{
-		if(handle.midi_in)
-			jack_port_unregister(handle.client, handle.midi_in);
-		if(handle.audio_in[0])
-			jack_port_unregister(handle.client, handle.audio_in[0]);
-		if(handle.audio_in[1])
-			jack_port_unregister(handle.client, handle.audio_in[1]);
-		if(handle.midi_out)
-			jack_port_unregister(handle.client, handle.midi_out);
-		if(handle.audio_out[0])
-			jack_port_unregister(handle.client, handle.audio_out[0]);
-		if(handle.audio_out[1])
-			jack_port_unregister(handle.client, handle.audio_out[1]);
-
-		jack_deactivate(handle.client);
-		jack_client_close(handle.client);
-	}
-
 	// threads deinit
 	uv_async_send(&handle.worker_quit);
 	uv_thread_join(&handle.worker_thread);
 
-	// save state
-	sp_app_save(handle.app, _state_store, &handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-	
 	// synthpod deinit
 	sp_app_free(handle.app);
 

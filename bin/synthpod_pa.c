@@ -26,6 +26,8 @@
 #include <ext_urid.h>
 #include <varchunk.h>
 
+#include <synthpod_nsm.h>
+
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
@@ -54,6 +56,10 @@ struct _prog_t {
 
 	varchunk_t *app_to_log;
 
+	char *path;
+	char *exe;
+	synthpod_nsm_t *nsm;
+
 #if defined(BUILD_UI)
 	sp_ui_t *ui;
 	sp_ui_driver_t ui_driver;
@@ -67,6 +73,9 @@ struct _prog_t {
 	Ecore_Animator *ui_anim;
 	Evas_Object *win;
 #else
+	uv_loop_t *loop;
+	uv_signal_t sigterm;
+	uv_signal_t sigint;
 	uv_async_t async;
 #endif
 
@@ -80,24 +89,81 @@ struct _prog_t {
 
 	PaStream *stream;
 
-	uv_loop_t *loop;
-	uv_signal_t quit;
-
 	uv_thread_t worker_thread;
 	uv_async_t worker_quit;
 	uv_async_t worker_wake;
 };
 
-// non-rt main-thread
-static void
-_quit(uv_signal_t *quit, int signal)
-{
-	prog_t *handle = quit->data;
+static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
 
-	uv_signal_stop(&handle->quit);
-#if !defined(BUILD_UI)
-	uv_close((uv_handle_t *)&handle->async, NULL);
-#endif
+static int
+_process(const void *inputs, void *outputs, unsigned long nsamples,
+	const PaStreamCallbackTimeInfo *time_info,
+	PaStreamCallbackFlags status_flags,
+	void *data); // forward-declaration
+
+static int
+_pa_init(prog_t *handle, const char *id)
+{
+	uint32_t sample_rate = handle->app_driver.sample_rate;
+	uint32_t block_size = handle->app_driver.min_block_size;
+
+	// portaudio init
+	if(Pa_Initialize() != paNoError)
+		fprintf(stderr, "Pa_Initialize failed\n");
+	for(int d=0; d<Pa_GetDeviceCount(); d++)
+	{
+		//TODO fill a device list with this
+		const PaDeviceInfo *info = Pa_GetDeviceInfo(d);
+		printf("device: %i\n", d);
+		printf("\tname: %s\n", info->name);
+		
+		PaStreamParameters input_params;
+		PaStreamParameters output_params;
+
+		input_params.device = d;
+		input_params.channelCount = 2;
+		input_params.sampleFormat = paFloat32 | paNonInterleaved;
+		input_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
+		input_params.hostApiSpecificStreamInfo = NULL;
+		
+		output_params.device = d;
+		output_params.channelCount = 2;
+		output_params.sampleFormat = paFloat32 | paNonInterleaved;
+		output_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
+		output_params.hostApiSpecificStreamInfo = NULL;
+
+		// open first device that supports 2xIn, 2xOut @sample_rate
+		if(Pa_IsFormatSupported(&input_params, &output_params, sample_rate)
+			== paFormatIsSupported)
+		{
+			printf("\tsupported: OK\n");
+
+			if(Pa_OpenStream(&handle->stream, &input_params, &output_params,
+					sample_rate, block_size, paNoFlag, _process, handle) != paNoError)
+			{
+				fprintf(stderr, "Pa_OpenStream failed\n");
+			}
+			else
+				break;
+		}
+	}
+	if(Pa_StartStream(handle->stream) != paNoError)
+		fprintf(stderr, "Pa_StartStream failed\n");
+
+	return 0; //TODO
+}
+
+static void
+_pa_deinit(prog_t *handle)
+{
+	// portaudio deinit
+	if(Pa_StopStream(handle->stream) != paNoError)
+		fprintf(stderr, "Pa_StopStream failed\n");
+	if(Pa_CloseStream(handle->stream) != paNoError)
+		fprintf(stderr, "Pa_CloseStream failed\n");
+	if(Pa_Terminate() != paNoError)
+		fprintf(stderr, "Pa_Terminate failed\n");
 }
 
 // non-rt worker-thread
@@ -108,6 +174,8 @@ _worker_quit(uv_async_t *quit)
 
 	uv_close((uv_handle_t *)&handle->worker_quit, NULL);
 	uv_close((uv_handle_t *)&handle->worker_wake, NULL);
+	if(handle->nsm)
+		synthpod_nsm_free(handle->nsm);
 }
 
 // non-rt worker-thread
@@ -131,17 +199,26 @@ _worker_thread(void *data)
 {
 	prog_t *handle = data;
 
-	uv_loop_t *loop = uv_loop_new();
+	uv_loop_t loop;
+	uv_loop_init(&loop);
 
 	handle->worker_quit.data = handle;
-	uv_async_init(loop, &handle->worker_quit, _worker_quit);
+	uv_async_init(&loop, &handle->worker_quit, _worker_quit);
 	
 	handle->worker_wake.data = handle;
-	uv_async_init(loop, &handle->worker_wake, _worker_wake);
+	uv_async_init(&loop, &handle->worker_wake, _worker_wake);
 
-	uv_run(loop, UV_RUN_DEFAULT);
+	handle->nsm = synthpod_nsm_new(&loop, handle->exe,
+		&nsm_driver, handle); //TODO check
 
-	uv_loop_close(loop);
+	uv_run(&loop, UV_RUN_DEFAULT);
+
+	uv_loop_close(&loop);
+
+	if(handle->path)
+		free(handle->path);
+
+	_pa_deinit(handle);
 }
 
 // non-rt / rt
@@ -157,7 +234,7 @@ _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	if(!(flags & LV2_STATE_IS_POD) || !(flags & LV2_STATE_IS_PORTABLE))
 		return LV2_STATE_ERR_BAD_FLAGS;
 
-	FILE *f = fopen("/home/hp/.local/share/synthpod/state.json", "wb");
+	FILE *f = fopen(handle->path, "wb");
 	if(f)
 	{
 		int written = fwrite(value, size, 1, f);
@@ -180,7 +257,7 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	*type = handle->forge.String;
 	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
 
-	FILE *f = fopen("/home/hp/.local/share/synthpod/state.json", "rb");
+	FILE *f = fopen(handle->path, "rb");
 	if(f)
 	{
 		fseek(f, 0, SEEK_END);
@@ -257,6 +334,17 @@ _ui_animator(void *data)
 	return EINA_TRUE; // continue animator
 }
 #else
+// non-rt main-thread
+static void
+_quit(uv_signal_t *quit, int signal)
+{
+	prog_t *handle = quit->data;
+
+	uv_signal_stop(&handle->sigterm);
+	uv_signal_stop(&handle->sigint);
+	uv_close((uv_handle_t *)&handle->async, NULL);
+}
+
 // non-rt ui-thread
 static void
 _async(uv_async_t *async)
@@ -502,6 +590,55 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
+static int 
+_open(const char *path, const char *name, const char *id, void *data)
+{
+	(void)name;
+	prog_t *handle = data;
+
+	if(handle->path)
+		free(handle->path);
+	handle->path = strdup(path);
+	
+	uint32_t sample_rate = 48000; //TODO
+	uint32_t block_size = 64; //TODO
+
+	// synthpod init
+	handle->app_driver.sample_rate = sample_rate;
+	handle->app_driver.max_block_size = block_size;
+	handle->app_driver.min_block_size = block_size;
+	handle->app_driver.seq_size = SEQ_SIZE; //TODO
+
+	// jack init
+	if(_pa_init(handle, id))
+		return -1;
+	
+	// app init
+	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
+
+	// restore state
+	sp_app_restore(handle->app, _state_retrieve, handle,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+	return 0; // success
+}
+
+static int
+_save(void *data)
+{
+	prog_t *handle = data;
+	
+	sp_app_save(handle->app, _state_store, handle,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+	return 0; // success
+}
+
+static const synthpod_nsm_driver_t nsm_driver = {
+	.open = _open,
+	.save = _save
+};
+
 #if defined(BUILD_UI)
 EAPI_MAIN int
 elm_main(int argc, char **argv)
@@ -511,8 +648,6 @@ main(int argc, char **argv)
 #endif
 {
 	static prog_t handle;
-	uint32_t sample_rate = 48000;
-	uint32_t block_size = 64;
 
 	// varchunk init
 #if defined(BUILD_UI)
@@ -537,21 +672,6 @@ main(int argc, char **argv)
 	handle.log_trace = map->map(map->handle, LV2_LOG__Trace);
 	handle.log_warning = map->map(map->handle, LV2_LOG__Warning);
 
-	// uv init
-	handle.loop = uv_default_loop();
-
-	handle.quit.data = &handle;
-	uv_signal_init(handle.loop, &handle.quit);
-	uv_signal_start(&handle.quit, _quit, SIGINT);
-
-	// threads init
-	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
-
-	// synthpod init
-	handle.app_driver.sample_rate = sample_rate;
-	handle.app_driver.max_block_size = block_size;
-	handle.app_driver.min_block_size = block_size;
-	handle.app_driver.seq_size = SEQ_SIZE; //TODO
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
 	handle.app_driver.log_printf = _log_printf;
@@ -585,55 +705,9 @@ main(int argc, char **argv)
 	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle);
 #endif
 
-	// app init
-	handle.app = sp_app_new(NULL, &handle.app_driver, &handle);
-
-	// restore state
-	sp_app_restore(handle.app, _state_retrieve, &handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-
-	// portaudio init
-	if(Pa_Initialize() != paNoError)
-		fprintf(stderr, "Pa_Initialize failed\n");
-	for(int d=0; d<Pa_GetDeviceCount(); d++)
-	{
-		//TODO fill a device list with this
-		const PaDeviceInfo *info = Pa_GetDeviceInfo(d);
-		printf("device: %i\n", d);
-		printf("\tname: %s\n", info->name);
-		
-		PaStreamParameters input_params;
-		PaStreamParameters output_params;
-
-		input_params.device = d;
-		input_params.channelCount = 2;
-		input_params.sampleFormat = paFloat32 | paNonInterleaved;
-		input_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
-		input_params.hostApiSpecificStreamInfo = NULL;
-		
-		output_params.device = d;
-		output_params.channelCount = 2;
-		output_params.sampleFormat = paFloat32 | paNonInterleaved;
-		output_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
-		output_params.hostApiSpecificStreamInfo = NULL;
-
-		// open first device that supports 2xIn, 2xOut @sample_rate
-		if(Pa_IsFormatSupported(&input_params, &output_params, sample_rate)
-			== paFormatIsSupported)
-		{
-			printf("\tsupported: OK\n");
-
-			if(Pa_OpenStream(&handle.stream, &input_params, &output_params,
-					sample_rate, block_size, paNoFlag, _process, &handle) != paNoError)
-			{
-				fprintf(stderr, "Pa_OpenStream failed\n");
-			}
-			else
-				break;
-		}
-	}
-	if(Pa_StartStream(handle.stream) != paNoError)
-		fprintf(stderr, "Pa_StartStream failed\n");
+	// threads init
+	handle.exe = argv[0];
+	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
 
 #if defined(BUILD_UI)
 	// main loop
@@ -645,28 +719,27 @@ main(int argc, char **argv)
 	evas_object_del(handle.win);
 	ecore_animator_del(handle.ui_anim);
 #else
+	// uv init
+	handle.loop = uv_default_loop();
+
+	handle.sigterm.data = &handle;
+	uv_signal_init(handle.loop, &handle.sigterm);
+	uv_signal_start(&handle.sigterm, _quit, SIGTERM);
+
+	handle.sigint.data = &handle;
+	uv_signal_init(handle.loop, &handle.sigint);
+	uv_signal_start(&handle.sigint, _quit, SIGINT);
+
 	handle.async.data = &handle;
 	uv_async_init(handle.loop, &handle.async, _async);
 
 	uv_run(handle.loop, UV_RUN_DEFAULT);
 #endif // BUILD_UI
 
-	// portaudio deinit
-	if(Pa_StopStream(handle.stream) != paNoError)
-		fprintf(stderr, "Pa_StopStream failed\n");
-	if(Pa_CloseStream(handle.stream) != paNoError)
-		fprintf(stderr, "Pa_CloseStream failed\n");
-	if(Pa_Terminate() != paNoError)
-		fprintf(stderr, "Pa_Terminate failed\n");
-
 	// threads deinit
 	uv_async_send(&handle.worker_quit);
 	uv_thread_join(&handle.worker_thread);
 
-	// save state
-	sp_app_save(handle.app, _state_store, &handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-	
 	// synthpod deinit
 	sp_app_free(handle.app);
 

@@ -210,7 +210,7 @@ _data_send_adv(void *data)
 {
 	plughandle_t *handle = data;
 
-	return varchunk_read_advance(handle->data.to_worker);
+	varchunk_read_advance(handle->data.to_worker);
 }
 
 static void

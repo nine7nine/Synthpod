@@ -1,5 +1,8 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
+include_directories(${PROJECT_SOURCE_DIR}/plugins) # inlist.h
+include_directories(${PROJECT_SOURCE_DIR}/plugins/libosc) # osc.h
+include_directories(${PROJECT_SOURCE_DIR}/plugins/libosc_stream) # osc_stream.h
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 
 set(SYNTHPOD_BIN_DIR "bin")
@@ -35,6 +38,13 @@ if(BUILD_JACK)
 # synthpod
 	add_executable(synthpod.jack
 		synthpod_jack.c
+		synthpod_nsm.c
+		../plugins/libosc/osc.c
+		../plugins/libosc_stream/osc_stream.c
+		../plugins/libosc_stream/osc_stream_udp.c
+		../plugins/libosc_stream/osc_stream_tcp.c
+		../plugins/libosc_stream/osc_stream_pipe.c
+		../plugins/libosc_stream/osc_stream_slip.c
 		../varchunk/varchunk.c)
 	target_link_libraries(synthpod.jack
 		${UV_LDFLAGS}
@@ -68,6 +78,13 @@ if(BUILD_PORTAUDIO)
 # synthpod
 	add_executable(synthpod.pa
 		synthpod_pa.c
+		synthpod_nsm.c
+		../plugins/libosc/osc.c
+		../plugins/libosc_stream/osc_stream.c
+		../plugins/libosc_stream/osc_stream_udp.c
+		../plugins/libosc_stream/osc_stream_tcp.c
+		../plugins/libosc_stream/osc_stream_pipe.c
+		../plugins/libosc_stream/osc_stream_slip.c
 		../varchunk/varchunk.c)
 	target_link_libraries(synthpod.pa
 		${UV_LDFLAGS}
