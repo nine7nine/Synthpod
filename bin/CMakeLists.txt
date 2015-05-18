@@ -1,9 +1,8 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc) # osc.h
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream) # osc_stream.h
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
-include_directories(${PROJECT_SOURCE_DIR}/plugins) # inlist.h
-include_directories(${PROJECT_SOURCE_DIR}/plugins/libosc) # osc.h
-include_directories(${PROJECT_SOURCE_DIR}/plugins/libosc_stream) # osc_stream.h
-include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 
 set(SYNTHPOD_BIN_DIR "bin")
 set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
@@ -39,13 +38,13 @@ if(BUILD_JACK)
 	add_executable(synthpod.jack
 		synthpod_jack.c
 		synthpod_nsm.c
-		../plugins/libosc/osc.c
-		../plugins/libosc_stream/osc_stream.c
-		../plugins/libosc_stream/osc_stream_udp.c
-		../plugins/libosc_stream/osc_stream_tcp.c
-		../plugins/libosc_stream/osc_stream_pipe.c
-		../plugins/libosc_stream/osc_stream_slip.c
-		../varchunk/varchunk.c)
+		libosc/osc.c
+		libosc_stream/osc_stream.c
+		libosc_stream/osc_stream_udp.c
+		libosc_stream/osc_stream_tcp.c
+		libosc_stream/osc_stream_pipe.c
+		libosc_stream/osc_stream_slip.c
+		varchunk/varchunk.c)
 	target_link_libraries(synthpod.jack
 		${UV_LDFLAGS}
 		${JACK_LIBS}
@@ -79,13 +78,13 @@ if(BUILD_PORTAUDIO)
 	add_executable(synthpod.pa
 		synthpod_pa.c
 		synthpod_nsm.c
-		../plugins/libosc/osc.c
-		../plugins/libosc_stream/osc_stream.c
-		../plugins/libosc_stream/osc_stream_udp.c
-		../plugins/libosc_stream/osc_stream_tcp.c
-		../plugins/libosc_stream/osc_stream_pipe.c
-		../plugins/libosc_stream/osc_stream_slip.c
-		../varchunk/varchunk.c)
+		libosc/osc.c
+		libosc_stream/osc_stream.c
+		libosc_stream/osc_stream_udp.c
+		libosc_stream/osc_stream_tcp.c
+		libosc_stream/osc_stream_pipe.c
+		libosc_stream/osc_stream_slip.c
+		varchunk/varchunk.c)
 	target_link_libraries(synthpod.pa
 		${UV_LDFLAGS}
 		${PORTAUDIO_LIBS}

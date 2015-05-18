@@ -20,7 +20,6 @@
 @prefix kx:				<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
 
 @prefix rtmidi:	  <http://open-music-kontrollers.ch/lv2/rtmidi#> .
-@prefix osc_io:	  <http://open-music-kontrollers.ch/lv2/osc_io#> .
 @prefix synthpod: <http://open-music-kontrollers.ch/lv2/synthpod#> .
 
 # to please sord_validate
@@ -43,12 +42,6 @@ rtmidi:in
 	a lv2:Plugin ;
 	lv2:binary <rtmidi@LIB_EXT@> ;
 	rdfs:seeAlso <rtmidi.ttl> .
-
-# OSC
-osc_io:io
-	a lv2:Plugin ;
-	lv2:binary <osc_io@LIB_EXT@> ;
-	rdfs:seeAlso <osc_io.ttl> .
 
 # Synthpod Source
 synthpod:source

@@ -1,11 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../bin)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/eo_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
-include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 
 set(DEST lib/lv2/synthpod.lv2)
 if(WIN32)
@@ -32,25 +28,6 @@ if(BUILD_RTMIDI)
 	install(TARGETS rtmidi DESTINATION ${DEST})
 	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/rtmidi.ttl DESTINATION ${DEST})
 endif()
-
-# OSC
-add_library(osc_io MODULE
-	libosc/osc.c
-	libosc_stream/osc_stream.c
-	libosc_stream/osc_stream_udp.c
-	libosc_stream/osc_stream_tcp.c
-	libosc_stream/osc_stream_pipe.c
-	libosc_stream/osc_stream_slip.c
-	../varchunk/varchunk.c
-	osc_io.c
-	osc_io_io.c)
-target_link_libraries(osc_io ${UV_LDFLAGS})
-if(WIN32)
-	target_link_libraries(osc_io "-lws2_32")
-endif()
-set_target_properties(osc_io PROPERTIES PREFIX "")
-install(TARGETS osc_io DESTINATION ${DEST})
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/osc_io.ttl DESTINATION ${DEST})
 
 # synthpod
 add_library(synthpod.lv2 MODULE
