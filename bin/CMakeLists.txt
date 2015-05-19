@@ -43,7 +43,6 @@ if(BUILD_JACK)
 		libosc_stream/osc_stream_udp.c
 		libosc_stream/osc_stream_tcp.c
 		libosc_stream/osc_stream_pipe.c
-		libosc_stream/osc_stream_slip.c
 		varchunk/varchunk.c)
 	target_link_libraries(synthpod.jack
 		${UV_LDFLAGS}
@@ -83,7 +82,6 @@ if(BUILD_PORTAUDIO)
 		libosc_stream/osc_stream_udp.c
 		libosc_stream/osc_stream_tcp.c
 		libosc_stream/osc_stream_pipe.c
-		libosc_stream/osc_stream_slip.c
 		varchunk/varchunk.c)
 	target_link_libraries(synthpod.pa
 		${UV_LDFLAGS}
