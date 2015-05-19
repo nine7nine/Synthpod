@@ -19,6 +19,17 @@
 #include <stdlib.h>
 
 #include <osc_stream_private.h>
+#include <osc_stream_slip.h>
+
+static void
+_close_done(uv_handle_t *handle)
+{
+	uv_stream_t *socket = (uv_stream_t *)handle;
+	osc_stream_tcp_tx_t *tx = (void *)socket - offsetof(osc_stream_tcp_tx_t, socket);
+	osc_stream_tcp_t *tcp = (void *)tx - offsetof(osc_stream_tcp_t, tx);
+
+	tcp->connected = 0;
+}
 
 static void
 _tcp_prefix_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
@@ -85,11 +96,8 @@ _tcp_prefix_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		int err;
 		if((err = uv_read_stop(socket)))
 			fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
-		uv_close((uv_handle_t *)socket, NULL);
+		uv_close((uv_handle_t *)socket, _close_done);
 		uv_cancel((uv_req_t *)&tx->req);
-
-		tcp->tx = inlist_remove(tcp->tx, INLIST_GET(tx));
-		free(tx);
 
 		//TODO try to reconnect?
 	}
@@ -153,11 +161,8 @@ _tcp_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		int err;
 		if((err = uv_read_stop(socket)))
 			fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
-		uv_close((uv_handle_t *)socket, NULL);
+		uv_close((uv_handle_t *)socket, _close_done);
 		uv_cancel((uv_req_t *)&tx->req);
-
-		tcp->tx = inlist_remove(tcp->tx, INLIST_GET(tx));
-		free(tx);
 
 		//TODO try to reconnect?
 	}
@@ -173,7 +178,7 @@ _sender_connect(uv_connect_t *conn, int status)
 
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
 	osc_stream_driver_t *driver = stream->driver;
-	osc_stream_tcp_tx_t *tx = INLIST_CONTAINER_GET(tcp->tx, osc_stream_tcp_tx_t);
+	osc_stream_tcp_tx_t *tx = &tcp->tx;
 
 	if(status)
 	{
@@ -202,9 +207,11 @@ _sender_connect(uv_connect_t *conn, int status)
 			return;
 		}
 	}
+
+	tcp->connected = 1;
 }
 
-void
+OSC_STREAM_API void
 getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 {
 	uv_loop_t *loop = req->loop;
@@ -214,10 +221,9 @@ getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 
 	if(status >= 0)
 	{
-		osc_stream_tcp_tx_t *tx = calloc(1, sizeof(osc_stream_tcp_tx_t));
+		osc_stream_tcp_tx_t *tx = &tcp->tx;
 		tx->socket.data = tcp;
 		tx->req.data = tcp;
-		tcp->tx = inlist_append(NULL, INLIST_GET(tx));
 
 		union {
 			const struct sockaddr *ip;
@@ -324,58 +330,66 @@ _responder_connect(uv_stream_t *socket, int status)
 		return;
 	}
 
-	instant_recv(stream, connect_msg, sizeof(connect_msg));
-
-	osc_stream_tcp_tx_t *tx = calloc(1, sizeof(osc_stream_tcp_tx_t));
-	tx->socket.data = tcp;
-	tx->req.data = tcp;
-	tcp->tx = inlist_append(tcp->tx, INLIST_GET(tx));
-
-	int err;
-	if((err = uv_tcp_init(loop, &tx->socket)))
+	if(tcp->connected)
 	{
-		fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
-		return;
+		fprintf(stderr, "_responder_connect: already connected\n");
 	}
-
-	if((err = uv_accept((uv_stream_t *)socket, (uv_stream_t *)&tx->socket)))
+	else
 	{
-		fprintf(stderr, "uv_accept: %s\n", uv_err_name(err));
-		return;
-	}
+		instant_recv(stream, connect_msg, sizeof(connect_msg));
 
-	if(!tcp->slip)
-	{
-		tcp->nchunk = sizeof(int32_t); // packet size as TCP preamble
-		if((err = uv_read_start((uv_stream_t *)&tx->socket, _tcp_prefix_alloc, _tcp_prefix_recv_cb)))
+		osc_stream_tcp_tx_t *tx = &tcp->tx;
+		tx->socket.data = tcp;
+		tx->req.data = tcp;
+
+		int err;
+		if((err = uv_tcp_init(loop, &tx->socket)))
 		{
-			fprintf(stderr, "uv_read_start: %s\n", uv_err_name(err));
+			fprintf(stderr, "uv_tcp_init: %s\n", uv_err_name(err));
 			return;
 		}
-	}
-	else // tcp->slip
-	{
-		tcp->nchunk = 0;
-		if((err = uv_read_start((uv_stream_t *)&tx->socket, _tcp_slip_alloc, _tcp_slip_recv_cb)))
+
+		if((err = uv_accept((uv_stream_t *)socket, (uv_stream_t *)&tx->socket)))
 		{
-			fprintf(stderr, "uv_read_start: %s\n", uv_err_name(err));
+			fprintf(stderr, "uv_accept: %s\n", uv_err_name(err));
 			return;
 		}
-	}
 
-	if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
-	{
-		fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
-		return;
-	}
-	if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
-	{
-		fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
-		return;
+		if(!tcp->slip)
+		{
+			tcp->nchunk = sizeof(int32_t); // packet size as TCP preamble
+			if((err = uv_read_start((uv_stream_t *)&tx->socket, _tcp_prefix_alloc, _tcp_prefix_recv_cb)))
+			{
+				fprintf(stderr, "uv_read_start: %s\n", uv_err_name(err));
+				return;
+			}
+		}
+		else // tcp->slip
+		{
+			tcp->nchunk = 0;
+			if((err = uv_read_start((uv_stream_t *)&tx->socket, _tcp_slip_alloc, _tcp_slip_recv_cb)))
+			{
+				fprintf(stderr, "uv_read_start: %s\n", uv_err_name(err));
+				return;
+			}
+		}
+
+		if((err = uv_tcp_nodelay(&tx->socket, 1))) // disable Nagle's algo
+		{
+			fprintf(stderr, "uv_tcp_nodelay: %s\n", uv_err_name(err));
+			return;
+		}
+		if((err = uv_tcp_keepalive(&tx->socket, 1, 5))) // keepalive after 5 seconds
+		{
+			fprintf(stderr, "uv_tcp_keepalive: %s\n", uv_err_name(err));
+			return;
+		}
+		
+		tcp->connected = 1;
 	}
 }
 
-void
+OSC_STREAM_API void
 getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 {
 	uv_loop_t *loop = req->loop;
@@ -389,8 +403,6 @@ getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 		osc_stream_addr_t addr;
 		char remote [128] = {'\0'};
 		unsigned int flags = 0;
-
-		tcp->tx = NULL;
 
 		if((err = uv_tcp_init(loop, &tcp->socket)))
 		{
@@ -461,24 +473,19 @@ _tcp_send_cb(uv_write_t *req, int status)
 	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
 	osc_stream_driver_t *driver = stream->driver;
 
-	tcp->count--;
-
 	if(!status)
 	{
-		if(!tcp->count) // sent to all clients?
-		{
-			if(driver->send_adv)
-				driver->send_adv(stream->data);
+		if(driver->send_adv)
+			driver->send_adv(stream->data);
 
-			stream->flushing = 0; // reset flushing flag
-			osc_stream_tcp_flush(stream); // look for more data to flush
-		}
+		stream->flushing = 0; // reset flushing flag
+		osc_stream_tcp_flush(stream); // look for more data to flush
 	}
 	else
 		fprintf(stderr, "_tcp_send_cb: %s\n", uv_err_name(status));
 }
 
-void
+OSC_STREAM_API void
 osc_stream_tcp_flush(osc_stream_t *stream)
 {
 	osc_stream_tcp_t *tcp = &stream->payload.tcp;
@@ -505,18 +512,13 @@ osc_stream_tcp_flush(osc_stream_t *stream)
 		}
 
 		int err;
-		tcp->count = inlist_count(tcp->tx);
-		if(tcp->count)
-			stream->flushing = 1; // set flushing flag
+		stream->flushing = 1; // set flushing flag
 
-		osc_stream_tcp_tx_t *tx;
-		INLIST_FOREACH(tcp->tx, tx)
+		osc_stream_tcp_tx_t *tx = &tcp->tx;
+		if((err = uv_write(&tx->req, (uv_stream_t *)&tx->socket, &msg[tcp->slip], 2-tcp->slip, _tcp_send_cb)))
 		{
-			if((err = uv_write(&tx->req, (uv_stream_t *)&tx->socket, &msg[tcp->slip], 2-tcp->slip, _tcp_send_cb)))
-			{
-				fprintf(stderr, "uv_write: %s\n", uv_err_name(err));
-				stream->flushing = 0;
-			}
+			fprintf(stderr, "uv_write: %s\n", uv_err_name(err));
+			stream->flushing = 0;
 		}
 	}
 }

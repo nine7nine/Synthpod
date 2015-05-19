@@ -261,7 +261,7 @@ _osc_stream_parse_url(uv_loop_t *loop, osc_stream_t *stream, const char *url)
 	return 0;
 }
 
-osc_stream_t *
+OSC_STREAM_API osc_stream_t *
 osc_stream_new(uv_loop_t *loop, const char *addr, 
 	osc_stream_driver_t *driver, void *data)
 {
@@ -288,7 +288,49 @@ osc_stream_new(uv_loop_t *loop, const char *addr,
 	return stream;
 }
 
-void
+static void
+_udp_close_cb(uv_handle_t *handle)
+{
+	uv_udp_t *socket = (uv_udp_t *)handle;
+	osc_stream_udp_t *udp = (void *)socket - offsetof(osc_stream_udp_t, socket);
+	osc_stream_t *stream = (void *)udp - offsetof(osc_stream_t, payload.udp);
+
+	free(stream);
+}
+
+static void
+_tcp_close_client_cb(uv_handle_t *handle)
+{
+	uv_stream_t *socket = (uv_stream_t *)handle;
+	osc_stream_tcp_tx_t *tx = (void *)socket - offsetof(osc_stream_tcp_tx_t, socket);
+	osc_stream_tcp_t *tcp = (void *)tx - offsetof(osc_stream_tcp_t, tx);
+	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
+
+	if(!tcp->server) // is client
+		free(stream);
+}
+
+static void
+_tcp_close_server_cb(uv_handle_t *handle)
+{
+	uv_stream_t *socket = (uv_stream_t *)handle;
+	osc_stream_tcp_t *tcp = (void *)socket - offsetof(osc_stream_tcp_t, socket);
+	osc_stream_t *stream = (void *)tcp - offsetof(osc_stream_t, payload.tcp);
+
+	free(stream);
+}
+
+static void
+_pipe_close_cb(uv_handle_t *handle)
+{
+	uv_stream_t *socket = (uv_stream_t *)handle;
+	osc_stream_pipe_t *pipe = (void *)socket - offsetof(osc_stream_pipe_t, socket);
+	osc_stream_t *stream = (void *)pipe - offsetof(osc_stream_t, payload.pipe);
+
+	free(stream);
+}
+
+OSC_STREAM_API void
 osc_stream_free(osc_stream_t *stream)
 {
 	int err;
@@ -306,8 +348,8 @@ osc_stream_free(osc_stream_t *stream)
 			{
 				if((err =	uv_udp_recv_stop(&udp->socket)))
 					fprintf(stderr, "uv_udp_recv_stop: %s\n", uv_err_name(err));
-				uv_close((uv_handle_t *)&udp->socket, NULL);
 			}
+			uv_close((uv_handle_t *)&udp->socket, _udp_close_cb);
 
 			break;
 		}
@@ -319,34 +361,35 @@ osc_stream_free(osc_stream_t *stream)
 			uv_cancel((uv_req_t *)&tcp->req);
 
 			// close clients
-			osc_stream_tcp_tx_t *tx;
-			Inlist *l;
-			INLIST_FOREACH_SAFE(tcp->tx, l, tx)
+			osc_stream_tcp_tx_t *tx = &stream->payload.tcp.tx;
+			if(uv_is_active((uv_handle_t *)&tx->req))
+				uv_cancel((uv_req_t *)&tx->req);
+
+			if(tcp->connected)	
 			{
 				if(uv_is_active((uv_handle_t *)&tx->socket))
 				{
 					if((err = uv_read_stop((uv_stream_t *)&tx->socket)))
 						fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
-					uv_close((uv_handle_t *)&tx->socket, NULL);
 				}
-
-				if(uv_is_active((uv_handle_t *)&tx->req))
-					uv_cancel((uv_req_t *)&tx->req);
-
-				tcp->tx = inlist_remove(tcp->tx, INLIST_GET(tx));
-				free(tx);
+				uv_close((uv_handle_t *)&tx->socket, _tcp_close_client_cb);
 			}
 
 			// close server
 			if(tcp->server)
 			{
 				if(uv_is_active((uv_handle_t *)&tcp->socket))
-					uv_close((uv_handle_t *)&tcp->socket, NULL);
+					uv_close((uv_handle_t *)&tcp->socket, _tcp_close_server_cb);
+				else
+					free(stream);
 			}
 			else
 			{
 				if(uv_is_active((uv_handle_t *)&tcp->conn))
 					uv_cancel((uv_req_t *)&tcp->conn);
+
+				if(!tcp->connected)
+					free(stream);
 			}
 
 			break;
@@ -359,18 +402,17 @@ osc_stream_free(osc_stream_t *stream)
 			{
 				if((err = uv_read_stop((uv_stream_t *)&pipe->socket)))
 					fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
-				uv_close((uv_handle_t *)&pipe->socket, NULL);
 			}
+			uv_close((uv_handle_t *)&pipe->socket, _pipe_close_cb);
+
 			//TODO close(pipe->fd)?
 
 			break;
 		}
 	}
-
-	free(stream);
 }
 
-void
+OSC_STREAM_API void
 osc_stream_flush(osc_stream_t *stream)
 {
 	switch(stream->type)
@@ -390,21 +432,5 @@ osc_stream_flush(osc_stream_t *stream)
 			osc_stream_pipe_flush(stream);
 			break;
 		}
-	}
-}
-
-void
-instant_recv(osc_stream_t *stream, const void *buf, size_t size)
-{
-	osc_stream_driver_t *driver = stream->driver;
-
-	if(!driver || !driver->recv_req || !driver->recv_adv)
-		return;
-
-	void *tar = driver->recv_req(size, stream->data);
-	if(buf)
-	{
-		memcpy(tar, buf, size);
-		driver->recv_adv(size, stream->data);
 	}
 }

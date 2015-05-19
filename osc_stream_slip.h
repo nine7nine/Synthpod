@@ -15,6 +15,9 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#ifndef _OSC_STREAM_SLIP_H
+#define _OSC_STREAM_SLIP_H
+
 #include <uv.h>
 
 #define SLIP_END					(char)0300	// indicates end of packet
@@ -23,7 +26,7 @@
 #define SLIP_ESC_REPLACE	(char)0335	// ESC ESC_ESC means ESC data byte
 
 // SLIP encoding
-size_t
+static inline size_t
 slip_encode(char *buf, uv_buf_t *bufs, int nbufs)
 {
 	char *dst = buf;
@@ -58,7 +61,7 @@ slip_encode(char *buf, uv_buf_t *bufs, int nbufs)
 }
 
 // inline SLIP decoding
-size_t
+static inline size_t
 slip_decode(char *buf, size_t len, size_t *size)
 {
 	char *src = buf;
@@ -95,3 +98,5 @@ slip_decode(char *buf, size_t len, size_t *size)
 	*size = 0;
 	return 0;
 }
+
+#endif // _OSC_STREAM_SLIP_H

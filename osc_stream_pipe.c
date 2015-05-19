@@ -18,6 +18,7 @@
 #include <stdio.h>
 
 #include <osc_stream_private.h>
+#include <osc_stream_slip.h>
 
 static void
 _pipe_slip_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
@@ -74,7 +75,7 @@ _pipe_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		int err;
 		if((err = uv_read_stop(socket)))
 			fprintf(stderr, "uv_read_stop: %s\n", uv_err_name(err));
-		uv_close((uv_handle_t *)socket, NULL);
+		//uv_close((uv_handle_t *)socket, NULL); //TODO
 
 		//TODO try to reconnect?
 	}
@@ -82,7 +83,7 @@ _pipe_slip_recv_cb(uv_stream_t *socket, ssize_t nread, const uv_buf_t *buf)
 		;
 }
 
-void
+OSC_STREAM_API void
 osc_stream_pipe_init(uv_loop_t *loop, osc_stream_t *stream, int fd)
 {
 	osc_stream_pipe_t *pipe = &stream->payload.pipe;
@@ -117,7 +118,7 @@ _pipe_send_cb(uv_write_t *req, int status)
 		fprintf(stderr, "_pipe_send_cb: %s\n", uv_err_name(status));
 }
 
-void
+OSC_STREAM_API void
 osc_stream_pipe_flush(osc_stream_t *stream)
 {
 	osc_stream_pipe_t *pipe = &stream->payload.pipe;

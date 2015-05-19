@@ -69,12 +69,12 @@ _udp_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct 
 	}
 	else if (nread < 0)
 	{
-		uv_close((uv_handle_t *)handle, NULL);
-		fprintf(stderr, "_udp_recv_cb_cb: %s\n", uv_err_name(nread));
+		//uv_close((uv_handle_t *)handle, NULL); //TODO
+		fprintf(stderr, "_udp_recv_cb: %s\n", uv_err_name(nread));
 	}
 }
 
-void
+OSC_STREAM_API void
 getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 {
 	uv_loop_t *loop = req->loop;
@@ -179,7 +179,7 @@ getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 	uv_freeaddrinfo(res);
 }
 
-void
+OSC_STREAM_API void
 getaddrinfo_udp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
 {
 	uv_loop_t *loop = req->loop;
@@ -268,7 +268,7 @@ _udp_send_cb(uv_udp_send_t *req, int status)
 		fprintf(stderr, "_udp_send_cb: %s\n", uv_err_name(status));
 }
 
-void
+OSC_STREAM_API void
 osc_stream_udp_flush(osc_stream_t *stream)
 {
 	osc_stream_udp_t *udp = &stream->payload.udp;

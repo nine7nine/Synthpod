@@ -40,14 +40,16 @@ struct _osc_stream_driver_t {
 	osc_stream_send_adv_t send_adv;
 };
 
-osc_stream_t *
+#define OSC_STREAM_API  __attribute__ ((visibility ("hidden")))
+
+OSC_STREAM_API osc_stream_t *
 osc_stream_new(uv_loop_t *loop, const char *addr, osc_stream_driver_t *driver,
 	void *data);
 
-void
+OSC_STREAM_API void
 osc_stream_free(osc_stream_t *stream);
 
-void
+OSC_STREAM_API void
 osc_stream_flush(osc_stream_t *stream);
 
 #ifdef __cplusplus

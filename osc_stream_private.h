@@ -15,9 +15,11 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#ifndef _OSC_STREAM_PRIVATE_H
+#define _OSC_STREAM_PRIVATE_H
+
 #include <osc_stream.h>
 
-#include <inlist.h>
 #include <osc.h>
 
 #ifndef OSC_STREAM_BUF_SIZE
@@ -67,7 +69,6 @@ struct _osc_stream_udp_t {
 };
 
 struct _osc_stream_tcp_tx_t {
-	INLIST;
 	uv_tcp_t socket;
 	uv_write_t req;
 };
@@ -77,9 +78,9 @@ struct _osc_stream_tcp_t {
 	int slip;
 	int server;
 	uv_getaddrinfo_t req;
-	
-	Inlist *tx;
-	int count;
+
+	int connected;
+	osc_stream_tcp_tx_t tx;
 	size_t nchunk;
 
 	// responder only
@@ -122,18 +123,31 @@ extern const char timeout_msg [20];
 extern const char connect_msg [20];
 extern const char disconnect_msg [24];
 
-void instant_recv(osc_stream_t *stream, const void *buf, size_t size);
+OSC_STREAM_API void getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
+OSC_STREAM_API void getaddrinfo_udp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
+OSC_STREAM_API void osc_stream_udp_flush(osc_stream_t *stream);
 
-void getaddrinfo_udp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
-void getaddrinfo_udp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
-void osc_stream_udp_flush(osc_stream_t *stream);
+OSC_STREAM_API void getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
+OSC_STREAM_API void getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
+OSC_STREAM_API void osc_stream_tcp_flush(osc_stream_t *stream);
 
-void getaddrinfo_tcp_tx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
-void getaddrinfo_tcp_rx_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
-void osc_stream_tcp_flush(osc_stream_t *stream);
+OSC_STREAM_API void osc_stream_pipe_init(uv_loop_t *loop, osc_stream_t *stream, int fd);
+OSC_STREAM_API void osc_stream_pipe_flush(osc_stream_t *stream);
 
-void osc_stream_pipe_init(uv_loop_t *loop, osc_stream_t *stream, int fd);
-void osc_stream_pipe_flush(osc_stream_t *stream);
+static inline void
+instant_recv(osc_stream_t *stream, const void *buf, size_t size)
+{
+	osc_stream_driver_t *driver = stream->driver;
 
-size_t slip_encode(char *buf, uv_buf_t *bufs, int nbufs);
-size_t slip_decode(char *buf, size_t len, size_t *size);
+	if(!driver || !driver->recv_req || !driver->recv_adv)
+		return;
+
+	void *tar = driver->recv_req(size, stream->data);
+	if(buf)
+	{
+		memcpy(tar, buf, size);
+		driver->recv_adv(size, stream->data);
+	}
+}
+
+#endif // _OSC_STREAM_PRIVATE_H
