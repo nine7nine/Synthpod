@@ -88,6 +88,11 @@ struct _prog_t {
 	LV2_URID log_warning;
 
 	PaStream *stream;
+	PaStreamParameters input_params;
+	PaStreamParameters output_params;
+	uint32_t sample_rate;
+	uint32_t min_block_size;
+	uint32_t max_block_size;
 
 	uv_thread_t worker_thread;
 	uv_async_t worker_quit;
@@ -105,8 +110,10 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 static int
 _pa_init(prog_t *handle, const char *id)
 {
-	uint32_t sample_rate = handle->app_driver.sample_rate;
-	uint32_t block_size = handle->app_driver.min_block_size;
+	int num_in = 2; //TODO
+	int num_out = 2; //TODO
+	uint32_t sample_rate = 48000; //TODO
+	uint32_t block_size = 64; //TODO
 
 	// portaudio init
 	if(Pa_Initialize() != paNoError)
@@ -117,41 +124,40 @@ _pa_init(prog_t *handle, const char *id)
 		const PaDeviceInfo *info = Pa_GetDeviceInfo(d);
 		printf("device: %i\n", d);
 		printf("\tname: %s\n", info->name);
-		
-		PaStreamParameters input_params;
-		PaStreamParameters output_params;
 
-		input_params.device = d;
-		input_params.channelCount = 2;
-		input_params.sampleFormat = paFloat32 | paNonInterleaved;
-		input_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
-		input_params.hostApiSpecificStreamInfo = NULL;
+		handle->input_params.device = d;
+		handle->input_params.channelCount = num_in;
+		handle->input_params.sampleFormat = paFloat32 | paNonInterleaved;
+		handle->input_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
+		handle->input_params.hostApiSpecificStreamInfo = NULL;
 		
-		output_params.device = d;
-		output_params.channelCount = 2;
-		output_params.sampleFormat = paFloat32 | paNonInterleaved;
-		output_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
-		output_params.hostApiSpecificStreamInfo = NULL;
+		handle->output_params.device = d;
+		handle->output_params.channelCount = num_out;
+		handle->output_params.sampleFormat = paFloat32 | paNonInterleaved;
+		handle->output_params.suggestedLatency = Pa_GetDeviceInfo(d)->defaultLowInputLatency ;
+		handle->output_params.hostApiSpecificStreamInfo = NULL;
 
-		// open first device that supports 2xIn, 2xOut @sample_rate
-		if(Pa_IsFormatSupported(&input_params, &output_params, sample_rate)
+		// open first device that supports num_in, num_out @sample_rate
+		if(Pa_IsFormatSupported(&handle->input_params, &handle->output_params, sample_rate)
 			== paFormatIsSupported)
 		{
 			printf("\tsupported: OK\n");
 
-			if(Pa_OpenStream(&handle->stream, &input_params, &output_params,
+			handle->sample_rate = sample_rate;
+			handle->min_block_size = block_size;
+			handle->max_block_size = block_size;
+
+			if(Pa_OpenStream(&handle->stream, &handle->input_params, &handle->output_params,
 					sample_rate, block_size, paNoFlag, _process, handle) != paNoError)
 			{
 				fprintf(stderr, "Pa_OpenStream failed\n");
 			}
 			else
-				break;
+				return 0;
 		}
 	}
-	if(Pa_StartStream(handle->stream) != paNoError)
-		fprintf(stderr, "Pa_StartStream failed\n");
 
-	return 0; //TODO
+	return -1;
 }
 
 static void
@@ -599,19 +605,16 @@ _open(const char *path, const char *name, const char *id, void *data)
 	if(handle->path)
 		free(handle->path);
 	handle->path = strdup(path);
-	
-	uint32_t sample_rate = 48000; //TODO
-	uint32_t block_size = 64; //TODO
-
-	// synthpod init
-	handle->app_driver.sample_rate = sample_rate;
-	handle->app_driver.max_block_size = block_size;
-	handle->app_driver.min_block_size = block_size;
-	handle->app_driver.seq_size = SEQ_SIZE; //TODO
 
 	// jack init
 	if(_pa_init(handle, id))
 		return -1;
+
+	// synthpod init
+	handle->app_driver.sample_rate = handle->sample_rate;
+	handle->app_driver.min_block_size = handle->min_block_size;
+	handle->app_driver.max_block_size = handle->max_block_size;
+	handle->app_driver.seq_size = SEQ_SIZE; //TODO
 	
 	// app init
 	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
@@ -619,6 +622,10 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// restore state
 	sp_app_restore(handle->app, _state_retrieve, handle,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+	
+	// pa activate
+	if(Pa_StartStream(handle->stream) != paNoError)
+		fprintf(stderr, "Pa_StartStream failed\n");
 
 	return 0; // success
 }

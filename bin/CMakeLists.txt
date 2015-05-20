@@ -37,13 +37,7 @@ if(BUILD_JACK)
 # synthpod
 	add_executable(synthpod.jack
 		synthpod_jack.c
-		synthpod_nsm.c
-		libosc/osc.c
-		libosc_stream/osc_stream.c
-		libosc_stream/osc_stream_udp.c
-		libosc_stream/osc_stream_tcp.c
-		libosc_stream/osc_stream_pipe.c
-		varchunk/varchunk.c)
+		synthpod_nsm.c)
 	target_link_libraries(synthpod.jack
 		${UV_LDFLAGS}
 		${JACK_LIBS}
@@ -76,13 +70,7 @@ if(BUILD_PORTAUDIO)
 # synthpod
 	add_executable(synthpod.pa
 		synthpod_pa.c
-		synthpod_nsm.c
-		libosc/osc.c
-		libosc_stream/osc_stream.c
-		libosc_stream/osc_stream_udp.c
-		libosc_stream/osc_stream_tcp.c
-		libosc_stream/osc_stream_pipe.c
-		varchunk/varchunk.c)
+		synthpod_nsm.c)
 	target_link_libraries(synthpod.pa
 		${UV_LDFLAGS}
 		${PORTAUDIO_LIBS}

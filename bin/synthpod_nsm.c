@@ -40,13 +40,14 @@ struct _synthpod_nsm_t {
 };
 
 static int
-_reply(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size_t size, void *data)
+_reply(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;	
 
 	const char *target;
 
-	osc_data_t *ptr = buf;
+	const osc_data_t *ptr = buf;
 	ptr = osc_get_string(ptr, &target);
 
 	//fprintf(stdout, "synthpod_nsm reply: %s\n", target);
@@ -68,7 +69,8 @@ _reply(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size
 }
 
 static int
-_error(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size_t size, void *data)
+_error(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;	
 
@@ -76,7 +78,7 @@ _error(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size
 	int32_t code;
 	const char *err;
 
-	osc_data_t *ptr = buf;
+	const osc_data_t *ptr = buf;
 	ptr = osc_get_string(ptr, &msg);
 	ptr = osc_get_int32(ptr, &code);
 	ptr = osc_get_string(ptr, &err);
@@ -87,7 +89,8 @@ _error(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size
 }
 
 static int
-_client_open(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size_t size, void *data)
+_client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;	
 	
@@ -95,7 +98,7 @@ _client_open(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf
 	const char *name;
 	const char *id;
 
-	osc_data_t *ptr = buf;
+	const osc_data_t *ptr = buf;
 	ptr = osc_get_string(ptr, &path);
 	ptr = osc_get_string(ptr, &name);
 	ptr = osc_get_string(ptr, &id);
@@ -128,10 +131,11 @@ _client_open(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf
 }
 
 static int
-_client_save(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size_t size, void *data)
+_client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;	
-	osc_data_t *ptr;
+	const osc_data_t *ptr;
 	
 	// save app
 	int ret = nsm->driver->save(nsm->data);
@@ -161,7 +165,8 @@ _client_save(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf
 }
 
 static int
-_resolve(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size_t size, void *data)
+_resolve(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;	
 
@@ -185,7 +190,8 @@ _resolve(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, si
 }
 
 static int
-_timeout(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, size_t size, void *data)
+_timeout(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;	
 
@@ -195,9 +201,28 @@ _timeout(osc_time_t time, const char *path, const char *fmt, osc_data_t *buf, si
 	return 1;
 }
 
+static int
+_err(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
+{
+	synthpod_nsm_t *nsm = data;	
+
+	const char *where;
+	const char *what;
+
+	const osc_data_t *ptr = buf;
+	ptr = osc_get_string(ptr, &where);
+	ptr = osc_get_string(ptr, &what);
+
+	printf("_error: %s (%s)\n", where, what);
+
+	return 1;
+}
+
 static const osc_method_t methods [] = {
 	{"/stream/resolve", "", _resolve},
 	{"/stream/timeout", "", _timeout},
+	{"/stream/error", "ss", _err},
 
 	{"/reply", NULL, _reply},
 	{"/error", "sis", _error},
@@ -209,7 +234,7 @@ static const osc_method_t methods [] = {
 };
 
 static void *
-_data_recv_req(size_t size, void *data)
+_recv_req(size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;
 	
@@ -221,7 +246,7 @@ _data_recv_req(size_t size, void *data)
 }
 
 static void
-_data_recv_adv(size_t written, void *data)
+_recv_adv(size_t written, void *data)
 {
 	synthpod_nsm_t *nsm = data;
 	
@@ -232,8 +257,10 @@ _data_recv_adv(size_t written, void *data)
 	size_t size;
 	while((ptr = varchunk_read_request(nsm->recv, &size)))
 	{
-		if(osc_check_packet((osc_data_t *)ptr, size))
-			osc_dispatch_method(0, (osc_data_t *)ptr, size, (osc_method_t *)methods, NULL, NULL, nsm);
+		if(osc_check_packet(ptr, size))
+			osc_dispatch_method(0, ptr, size, methods, NULL, NULL, nsm);
+		else
+			fprintf(stderr, "_recv_adv: malformed OSC packet\n");
 
 		varchunk_read_advance(nsm->recv);
 	}
@@ -242,7 +269,7 @@ _data_recv_adv(size_t written, void *data)
 }
 
 static const void *
-_data_send_req(size_t *len, void *data)
+_send_req(size_t *len, void *data)
 {
 	synthpod_nsm_t *nsm = data;
 
@@ -250,7 +277,7 @@ _data_send_req(size_t *len, void *data)
 }
 
 static void
-_data_send_adv(void *data)
+_send_adv(void *data)
 {
 	synthpod_nsm_t *nsm = data;
 	
@@ -258,10 +285,10 @@ _data_send_adv(void *data)
 }
 		
 static const osc_stream_driver_t osc_driver = {
-	.recv_req = _data_recv_req,
-	.recv_adv = _data_recv_adv,
-	.send_req = _data_send_req,
-	.send_adv = _data_send_adv
+	.recv_req = _recv_req,
+	.recv_adv = _recv_adv,
+	.send_req = _send_req,
+	.send_adv = _send_adv
 };
 
 synthpod_nsm_t *
@@ -291,15 +318,13 @@ synthpod_nsm_new(uv_loop_t *loop, const char *exe, const synthpod_nsm_driver_t *
 		if(nsm->url[url_len-1] == '/')
 			nsm->url[url_len-1] = '\0';
 
-		printf("NSM url: %s\n", nsm->url);
-
 		nsm->recv = varchunk_new(0x10000);
 		nsm->send = varchunk_new(0x10000);
 		if(!nsm->recv || !nsm->send)
 			return NULL;
 
 		nsm->stream = osc_stream_new(loop, nsm->url,
-			(osc_stream_driver_t *)&osc_driver, nsm);
+			&osc_driver, nsm);
 		if(!nsm->stream)
 			return NULL;
 	}
