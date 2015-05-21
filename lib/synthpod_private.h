@@ -501,8 +501,8 @@ _sp_transmit_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_t *trans, uint32_
 {
 	trans->obj.atom.size = size - sizeof(LV2_Atom);
 	trans->obj.atom.type = forge->Object;
-	trans->obj.body.id = 0;
-	trans->obj.body.otype = regs->synthpod.event.urid;
+	trans->obj.body.id = regs->synthpod.event.urid;
+	trans->obj.body.otype = protocol;
 
 	trans->prop.key = protocol;
 	trans->prop.context = 0;

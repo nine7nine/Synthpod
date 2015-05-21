@@ -656,10 +656,10 @@ void
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 {
 	const transmit_t *transmit = (const transmit_t *)atom;
-	LV2_URID protocol = transmit->prop.key;
 
 	// check for corrent atom object type
-	assert(transmit->obj.body.otype == app->regs.synthpod.event.urid);
+	assert(transmit->obj.body.id == app->regs.synthpod.event.urid);
+	LV2_URID protocol = transmit->obj.body.otype;
 
 	if(protocol == app->regs.port.float_protocol.urid)
 	{

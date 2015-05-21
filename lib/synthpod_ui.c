@@ -149,7 +149,8 @@ struct _mod_t {
 		LV2UI_Handle handle;
 		const LV2UI_Idle_Interface *idle_iface;
 
-		LV2UI_Resize resize;
+		LV2UI_Resize host_resize_iface;
+		const LV2UI_Resize *client_resize_iface;
 		Evas_Object *win;
 		Ecore_X_Window xwin;
 		Ecore_Animator *anim;
@@ -976,7 +977,7 @@ _kx_ui_closed(LV2UI_Controller controller)
 }
 
 static int
-_x11_ui_resize(LV2UI_Feature_Handle handle, int w, int h)
+_x11_ui_host_resize(LV2UI_Feature_Handle handle, int w, int h)
 {
 	mod_t *mod = handle;
 
@@ -1041,6 +1042,18 @@ _x11_delete_request(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
+_x11_ui_client_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+
+	int w, h;
+	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
+
+	printf("_x11_ui_client_resize: %i %i\n", w, h);
+	mod->x11.client_resize_iface->ui_resize(mod->x11.handle, w, h);
+}
+
+static void
 _x11_ui_show(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
@@ -1089,9 +1102,17 @@ _x11_ui_show(mod_t *mod)
 	if(!mod->x11.handle)
 		return;
 
-	// get idle iface if any
+	// get interfaces
 	if(mod->x11.descriptor->extension_data)
+	{
+		// get idle iface
 		mod->x11.idle_iface = mod->x11.descriptor->extension_data(LV2_UI__idleInterface);
+		
+		// get resize iface
+		mod->x11.client_resize_iface = mod->x11.descriptor->extension_data(LV2_UI__resize);
+		if(mod->x11.client_resize_iface)
+			evas_object_event_callback_add(mod->x11.win, EVAS_CALLBACK_RESIZE, _x11_ui_client_resize, mod);
+	}
 
 	// start animator
 	if(mod->x11.idle_iface)
@@ -1171,8 +1192,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 	mod->std.descriptor.port_event = _std_port_event;
 
 	// populate x11 resize
-	mod->x11.resize.ui_resize = _x11_ui_resize;
-	mod->x11.resize.handle = mod;
+	mod->x11.host_resize_iface.ui_resize = _x11_ui_host_resize;
+	mod->x11.host_resize_iface.handle = mod;
 
 	// populate options
 	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
@@ -1207,7 +1228,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 	mod->feature_list[8].URI = LV2_EXTERNAL_UI__Host;
 	mod->feature_list[8].data = &mod->kx.host;
 	mod->feature_list[9].URI = LV2_UI__resize;
-	mod->feature_list[9].data = &mod->x11.resize;
+	mod->feature_list[9].data = &mod->x11.host_resize_iface;
 	mod->feature_list[10].URI = SYNTHPOD_WORLD;
 	mod->feature_list[10].data = ui->world;
 	mod->feature_list[11].URI = LV2_OPTIONS__options;

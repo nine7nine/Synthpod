@@ -117,6 +117,8 @@ _mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	plughandle_t *handle = data;
 	//Evas_Event_Mouse_Down *ev = event_info;
 
+	handle->key = evas_object_data_get(obj, "key");
+	handle->obj = obj;
 	_note_on(handle);
 }
 
@@ -127,24 +129,6 @@ _mouse_up(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	//Evas_Event_Mouse_Up *ev = event_info;
 
 	_note_off(handle);
-}
-
-static void
-_mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	plughandle_t *handle = data;
-	//Evas_Event_Mouse_In *ev = event_info;
-
-	handle->key = evas_object_data_get(obj, "key");
-	handle->obj = obj;
-}
-
-static void
-_mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	plughandle_t *handle = data;
-	//Evas_Event_Mouse_Out *ev = event_info;
-
 	handle->key = NULL;
 	handle->obj = NULL;
 }
@@ -205,8 +189,6 @@ _content_get(eo_ui_t *eoui)
 			evas_object_data_set(key, "key", &keys[i]);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_UP, _mouse_up, handle);
-			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_IN, _mouse_in, handle);
-			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_OUT, _mouse_out, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_MOVE, _mouse_move, handle);
 			evas_object_size_hint_weight_set(key, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(key, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -232,8 +214,6 @@ _content_get(eo_ui_t *eoui)
 			evas_object_data_set(key, "key", &keys[i]);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_UP, _mouse_up, handle);
-			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_IN, _mouse_in, handle);
-			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_OUT, _mouse_out, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_MOVE, _mouse_move, handle);
 			evas_object_size_hint_weight_set(key, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(key, EVAS_HINT_FILL, EVAS_HINT_FILL);
