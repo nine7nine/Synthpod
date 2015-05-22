@@ -1,7 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc) # osc.h
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libosc_stream) # osc_stream.h
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/varchunk)
+include_directories(${PROJECT_SOURCE_DIR}/libosc) # osc.h
+include_directories(${PROJECT_SOURCE_DIR}/libosc_stream) # osc_stream.h
+include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
 set(SYNTHPOD_BIN_DIR "bin")
