@@ -1848,8 +1848,6 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 		
 	mod_t *itm_mod = elm_object_item_data_get(itm);
 	mod_t *prev_mod = elm_object_item_data_get(prev);
-	
-	_patches_update(ui);
 		
 	// signal app
 	size_t size = sizeof(transmit_module_move_t);
@@ -1860,6 +1858,8 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 			itm_mod->uid, prev_mod->uid);
 		_sp_ui_to_app_advance(ui, size);
 	}
+
+	_patches_update(ui);
 }
 
 static char * 
