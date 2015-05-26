@@ -12,9 +12,7 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
 
 set(APP_DIR share/synthpod)
-if(WIN32)
-	add_definitions("-std=gnu11")
-endif()
+set(CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
 
 # options
 option(BUILD_UI "Build user interface libraries" OFF)
