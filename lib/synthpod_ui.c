@@ -1871,10 +1871,15 @@ _modlist_label_get(void *data, Evas_Object *obj, const char *part)
 	if(!strcmp(part, "elm.text"))
 	{
 		LilvNode *name_node = lilv_plugin_get_name(plug);
-		const char *name_str = lilv_node_as_string(name_node);
-		lilv_node_free(name_node);
+		if(name_node)
+		{
+			const char *name_str = lilv_node_as_string(name_node);
+			lilv_node_free(name_node);
 
-		return strdup(name_str);
+			return strdup(name_str);
+		}
+		else
+			return NULL;
 	}
 	else if(!strcmp(part, "elm.text.sub"))
 	{
@@ -2101,9 +2106,12 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	evas_object_show(lay);
 
 	LilvNode *name_node = lilv_plugin_get_name(mod->plug);
-	const char *name_str = lilv_node_as_string(name_node);
-	lilv_node_free(name_node);
-	elm_layout_text_set(lay, "elm.text", name_str);
+	if(name_node)
+	{
+		const char *name_str = lilv_node_as_string(name_node);
+		lilv_node_free(name_node);
+		elm_layout_text_set(lay, "elm.text", name_str);
+	}
 	
 	char col [7];
 	sprintf(col, "col,%02i", mod->col);
@@ -2459,10 +2467,15 @@ _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	if(!strcmp(part, "elm.text"))
 	{
 		LilvNode *name_node = lilv_plugin_get_name(plug);
-		const char *name_str = lilv_node_as_string(name_node);
-		lilv_node_free(name_node);
+		if(name_node)
+		{
+			const char *name_str = lilv_node_as_string(name_node);
+			lilv_node_free(name_node);
 
-		return strdup(name_str);
+			return strdup(name_str);
+		}
+		else
+			return NULL;
 	}
 
 	return NULL;
@@ -2719,6 +2732,9 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 	{
 		const LilvPlugin *plug = lilv_plugins_get(ui->plugs, itr);
 		LilvNode *name_node = lilv_plugin_get_name(plug);
+		if(!name_node)
+			continue;
+
 		const char *name_str = lilv_node_as_string(name_node);
 
 		if(strcasestr(name_str, match))
