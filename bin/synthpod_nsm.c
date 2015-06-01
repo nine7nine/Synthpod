@@ -297,7 +297,7 @@ static const osc_stream_driver_t osc_driver = {
 	.recv_adv = _recv_adv,
 	.send_req = _send_req,
 	.send_adv = _send_adv,
-	.send_adv = _free,
+	.free = _free,
 };
 
 synthpod_nsm_t *
