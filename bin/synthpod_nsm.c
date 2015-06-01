@@ -283,12 +283,21 @@ _send_adv(void *data)
 	
 	varchunk_read_advance(nsm->send);
 }
+
+static void
+_free(void *data)
+{
+	synthpod_nsm_t *nsm = data;
+
+	// nothing
+}
 		
 static const osc_stream_driver_t osc_driver = {
 	.recv_req = _recv_req,
 	.recv_adv = _recv_adv,
 	.send_req = _send_req,
-	.send_adv = _send_adv
+	.send_adv = _send_adv,
+	.send_adv = _free,
 };
 
 synthpod_nsm_t *
