@@ -28,9 +28,11 @@ typedef struct _plughandle_t plughandle_t;
 struct _plughandle_t {
 	const LV2_Atom_Sequence *event_out;
 	const float *audio_out[2];
+	const float *output[4];
 
 	LV2_Atom_Sequence *event_in;
 	float *audio_in[2];
+	float *input[4];
 };
 
 static LV2_Handle
@@ -54,21 +56,51 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 		case 0:
 			handle->event_out = (const LV2_Atom_Sequence *)data;
 			break;
+
 		case 1:
 			handle->audio_out[0] = (const float *)data;
 			break;
 		case 2:
 			handle->audio_out[1] = (const float *)data;
 			break;
+
 		case 3:
-			handle->event_in = (LV2_Atom_Sequence *)data;
+			handle->output[0] = (const float *)data;
 			break;
 		case 4:
-			handle->audio_in[0] = (float *)data;
+			handle->output[1] = (const float *)data;
 			break;
 		case 5:
+			handle->output[2] = (const float *)data;
+			break;
+		case 6:
+			handle->output[3] = (const float *)data;
+			break;
+
+		case 7:
+			handle->event_in = (LV2_Atom_Sequence *)data;
+			break;
+
+		case 8:
+			handle->audio_in[0] = (float *)data;
+			break;
+		case 9:
 			handle->audio_in[1] = (float *)data;
 			break;
+
+		case 10:
+			handle->input[0] = (float *)data;
+			break;
+		case 11:
+			handle->input[1] = (float *)data;
+			break;
+		case 12:
+			handle->input[2] = (float *)data;
+			break;
+		case 13:
+			handle->input[3] = (float *)data;
+			break;
+
 		default:
 			break;
 	}
@@ -93,6 +125,11 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	size_t seq_size = sizeof(LV2_Atom) + handle->event_out->atom.size;
 	memcpy(handle->event_in, handle->event_out, seq_size);
+
+	*handle->input[0] = *handle->output[0];
+	*handle->input[1] = *handle->output[1];
+	*handle->input[2] = *handle->output[2];
+	*handle->input[3] = *handle->output[3];
 }
 
 static void

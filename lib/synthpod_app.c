@@ -247,7 +247,7 @@ sp_app_set_system_sink(sp_app_t *app, uint32_t index, void *buf)
 	// get last mod aka system sink
 	mod_t *mod = app->system.sink;
 
-	index += 3;
+	index += 7; //TODO make configurable
 	lilv_instance_connect_port(mod->inst, index, (void *)buf);
 }
 
@@ -270,7 +270,7 @@ sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 	// get last mod aka system sink
 	mod_t *mod = app->system.sink;
 
-	index += 3;
+	index += 7; //TODO make configurable
 	//lilv_instance_connect_port(mod->inst, index, mod->ports[index].buf);
 	return mod->ports[index].buf;
 }

@@ -71,7 +71,7 @@ synthpod:source
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 	
 	lv2:port [
-		# event in
+		# event in 
 	  a lv2:InputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
@@ -101,6 +101,35 @@ synthpod:source
 		lv2:designation pg:right ;
 		pg:group synthpod:group_in ;
 	] , [
+		# control inputs
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "output_1" ;
+		lv2:name "Output 1" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "output_2" ;
+		lv2:name "Output 2" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "output_3" ;
+		lv2:name "Output 3" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "output_4" ;
+		lv2:name "Output 4" ;
+		pg:group synthpod:group_in ;
+	] , [
 		# event out 
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
@@ -108,7 +137,7 @@ synthpod:source
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
-		lv2:index 3 ;
+		lv2:index 7 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
 		lv2:designation lv2:control ;
@@ -116,7 +145,7 @@ synthpod:source
 		# audio out 1
 	  a lv2:OutputPort ,
 			lv2:AudioPort ;
-		lv2:index 4 ;
+		lv2:index 8 ;
 		lv2:symbol "audio_in_1" ;
 		lv2:name "Audio In 1" ;
 		lv2:designation pg:left ;
@@ -125,10 +154,39 @@ synthpod:source
 		# audio out 2
 	  a lv2:OutputPort ,
 			lv2:AudioPort ;
-		lv2:index 5 ;
+		lv2:index 9 ;
 		lv2:symbol "audio_in_2" ;
 		lv2:name "Audio In 2" ;
 		lv2:designation pg:right ;
+		pg:group synthpod:group_out ;
+	] , [
+		# control outputs
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 10 ;
+		lv2:symbol "input_1" ;
+		lv2:name "Input 1" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 11 ;
+		lv2:symbol "input_2" ;
+		lv2:name "Input 2" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 12 ;
+		lv2:symbol "input_3" ;
+		lv2:name "Input 3" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 13 ;
+		lv2:symbol "input_4" ;
+		lv2:name "Input 4" ;
 		pg:group synthpod:group_out ;
 	] .
 
@@ -172,6 +230,35 @@ synthpod:sink
 		lv2:designation pg:right ;
 		pg:group synthpod:group_in ;
 	] , [
+		# control inputs
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "output_1" ;
+		lv2:name "Output 1" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "output_2" ;
+		lv2:name "Output 2" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "output_3" ;
+		lv2:name "Output 3" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "output_4" ;
+		lv2:name "Output 4" ;
+		pg:group synthpod:group_in ;
+	] , [
 		# event out 
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
@@ -179,7 +266,7 @@ synthpod:sink
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
-		lv2:index 3 ;
+		lv2:index 7 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
 		lv2:designation lv2:control ;
@@ -187,7 +274,7 @@ synthpod:sink
 		# audio out 1
 	  a lv2:OutputPort ,
 			lv2:AudioPort ;
-		lv2:index 4 ;
+		lv2:index 8 ;
 		lv2:symbol "audio_in_1" ;
 		lv2:name "Audio In 1" ;
 		lv2:designation pg:left ;
@@ -196,10 +283,39 @@ synthpod:sink
 		# audio out 2
 	  a lv2:OutputPort ,
 			lv2:AudioPort ;
-		lv2:index 5 ;
+		lv2:index 9 ;
 		lv2:symbol "audio_in_2" ;
 		lv2:name "Audio In 2" ;
 		lv2:designation pg:right ;
+		pg:group synthpod:group_out ;
+	] , [
+		# control outputs
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 10 ;
+		lv2:symbol "input_1" ;
+		lv2:name "Input 1" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 11 ;
+		lv2:symbol "input_2" ;
+		lv2:name "Input 2" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 12 ;
+		lv2:symbol "input_3" ;
+		lv2:name "Input 3" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 13 ;
+		lv2:symbol "input_4" ;
+		lv2:name "Input 4" ;
 		pg:group synthpod:group_out ;
 	] .
 
@@ -210,7 +326,8 @@ synthpod:common_eo
 		ui:plugin synthpod:stereo ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
-	] .
+	] ;
+	lv2:requiredFeature ui:portMap .
 synthpod:common_ui
 	a ui:UI ;
 	ui:portNotification [
@@ -218,7 +335,7 @@ synthpod:common_ui
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:requiredFeature ui:idleInterface ;
+	lv2:requiredFeature ui:idleInterface, ui:portMap ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
 synthpod:common_x11
 	a ui:X11UI ;
@@ -227,7 +344,7 @@ synthpod:common_x11
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:requiredFeature ui:idleInterface ;
+	lv2:requiredFeature ui:idleInterface, ui:portMap ;
 	lv2:optionalFeature ui:resize ;
   lv2:extensionData ui:idleInterface .
 synthpod:common_kx
@@ -237,7 +354,7 @@ synthpod:common_kx
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:requiredFeature kx:Host .
+	lv2:requiredFeature kx:Host, ui:portMap .
 
 # Stereo Plugin
 synthpod:stereo
@@ -311,12 +428,70 @@ synthpod:stereo
 		lv2:designation pg:right ;
 		pg:group synthpod:group_out ;
 	] , [
+		# control in
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "control_in_1" ;
+		lv2:name "Input 1" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 7 ;
+		lv2:symbol "control_in_2" ;
+		lv2:name "Input 2" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 8 ;
+		lv2:symbol "control_in_3" ;
+		lv2:name "Input 3" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 9 ;
+		lv2:symbol "control_in_4" ;
+		lv2:name "Input 4" ;
+		pg:group synthpod:group_in ;
+	] , [
+		# control out
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 10 ;
+		lv2:symbol "control_out_1" ;
+		lv2:name "Output 1" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 11 ;
+		lv2:symbol "control_out_2" ;
+		lv2:name "Output 2" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 12 ;
+		lv2:symbol "control_out_3" ;
+		lv2:name "Output 3" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 13 ;
+		lv2:symbol "control_out_4" ;
+		lv2:name "Output 4" ;
+		pg:group synthpod:group_out ;
+	] , [
 		# control event port
 	  a lv2:InputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
-		lv2:index 6 ;
+		lv2:index 14 ;
 		lv2:symbol "control" ;
 		lv2:name "Control" ;
 		rsz:minimumSize 65536;
@@ -326,7 +501,7 @@ synthpod:stereo
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
-		lv2:index 7 ;
+		lv2:index 15 ;
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		rsz:minimumSize 65536;

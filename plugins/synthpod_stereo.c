@@ -72,11 +72,16 @@ struct _plughandle_t {
 
 	struct {
 		const LV2_Atom_Sequence *event_in;
-		const LV2_Atom_Sequence *control;
-		const float *audio_in[2];
 		LV2_Atom_Sequence *event_out;
-		LV2_Atom_Sequence *notify;
+
+		const float *audio_in[2];
 		float *audio_out[2];
+
+		const float *input[4];
+		float *output[4];
+
+		const LV2_Atom_Sequence *control;
+		LV2_Atom_Sequence *notify;
 	} port;
 
 	// non-rt worker-thread
@@ -415,6 +420,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->port.event_out = (LV2_Atom_Sequence *)data;
 			sp_app_set_system_sink(app, 0, data);
 			break;
+
 		case 2:
 			handle->port.audio_in[0] = (const float *)data;
 			sp_app_set_system_source(app, 1, data);
@@ -423,6 +429,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->port.audio_in[1] = (const float *)data;
 			sp_app_set_system_source(app, 2, data);
 			break;
+
 		case 4:
 			handle->port.audio_out[0] = (float *)data;
 			sp_app_set_system_sink(app, 1, data);
@@ -431,12 +438,48 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->port.audio_out[1] = (float *)data;
 			sp_app_set_system_sink(app, 2, data);
 			break;
+		
 		case 6:
-			handle->port.control = (const LV2_Atom_Sequence *)data;
+			handle->port.input[0] = (const float *)data;
+			sp_app_set_system_source(app, 3, data);
 			break;
 		case 7:
+			handle->port.input[1] = (const float *)data;
+			sp_app_set_system_source(app, 4, data);
+			break;
+		case 8:
+			handle->port.input[2] = (const float *)data;
+			sp_app_set_system_source(app, 5, data);
+			break;
+		case 9:
+			handle->port.input[3] = (const float *)data;
+			sp_app_set_system_source(app, 6, data);
+			break;
+		
+		case 10:
+			handle->port.output[0] = (float *)data;
+			sp_app_set_system_sink(app, 3, data);
+			break;
+		case 11:
+			handle->port.output[1] = (float *)data;
+			sp_app_set_system_sink(app, 4, data);
+			break;
+		case 12:
+			handle->port.output[2] = (float *)data;
+			sp_app_set_system_sink(app, 5, data);
+			break;
+		case 13:
+			handle->port.output[3] = (float *)data;
+			sp_app_set_system_sink(app, 6, data);
+			break;
+
+		case 14:
+			handle->port.control = (const LV2_Atom_Sequence *)data;
+			break;
+		case 15:
 			handle->port.notify = (LV2_Atom_Sequence *)data;
 			break;
+
 		default:
 			break;
 	}
@@ -493,7 +536,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
 
 		if(  (atom->type == handle->forge.notify.Object)
-			&& (obj->body.otype == handle->uri.synthpod.event) )
+			&& (obj->body.id == handle->uri.synthpod.event) )
 		{
 			//printf("control: %u\n", atom->size);
 			sp_app_from_ui(app, atom);

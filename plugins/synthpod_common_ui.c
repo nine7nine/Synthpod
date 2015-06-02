@@ -39,6 +39,10 @@ struct _plughandle_t {
 	LV2UI_Write_Function write_function;
 	LV2UI_Controller controller;
 
+	LV2UI_Port_Map *port_map;
+	uint32_t control_port;
+	uint32_t notify_port;
+
 	struct {
 		uint8_t app [CHUNK_SIZE] _ATOM_ALIGNED;
 	} buf;
@@ -63,9 +67,8 @@ static void
 _to_app_advance(size_t size, void *data)
 {
 	plughandle_t *handle = data;
-
-	uint32_t port_index = 6; // control port
-	handle->write_function(handle->controller, port_index,
+	
+	handle->write_function(handle->controller, handle->control_port,
 		size, handle->uri.event_transfer, handle->buf.app);
 }
 
@@ -79,7 +82,8 @@ _content_get(eo_ui_t *eoui)
 		return NULL;
 
 	Evas_Object *widg = sp_ui_widget_get(handle->ui);
-	evas_object_event_callback_add(widg, EVAS_CALLBACK_FREE, _content_free, handle);
+	//evas_object_event_callback_add(widg, EVAS_CALLBACK_FREE, _content_free, handle);
+	evas_object_event_callback_add(widg, EVAS_CALLBACK_DEL, _content_free, handle);
 
 	return widg;
 }
@@ -128,13 +132,19 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
 		else if(!strcmp(features[i]->URI, "http://open-music-kontrollers.ch/lv2/synthpod#world"))
 			handle->world = (const LilvWorld *)features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_UI__portMap))
+			handle->port_map = (LV2UI_Port_Map *)features[i]->data;
   }
 
-	if(!handle->driver.map || !handle->driver.unmap)
+	if(!handle->driver.map || !handle->driver.unmap || !handle->port_map)
 	{
 		free(handle);
 		return NULL;
 	}
+	
+	// query port indeces of "control" and "notify" ports
+	handle->control_port = handle->port_map->port_index(handle->port_map->handle, "control");
+	handle->notify_port = handle->port_map->port_index(handle->port_map->handle, "notify");
 
 	handle->uri.float_protocol = handle->driver.map->map(handle->driver.map->handle,
 		LV2_UI_PREFIX"floatProtocol");
@@ -169,17 +179,13 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 {
 	plughandle_t *handle = instance;
 	
-	//printf("_to_ui: %u %u\n", port_index, size);
-
-	if(  ( port_index == 4) // notify port
+	if(  ( port_index == handle->notify_port)
 		&& (format == handle->uri.event_transfer) )
 	{
 		const LV2_Atom *atom = buffer;
 		assert(size == sizeof(LV2_Atom) + atom->size);
 		sp_ui_from_app(handle->ui, atom);
 	}
-	else
-		; //TODO subscribe to audio/event ports?
 }
 
 const LV2UI_Descriptor synthpod_common_eo = {

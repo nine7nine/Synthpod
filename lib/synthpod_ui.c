@@ -1431,11 +1431,6 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	else if(mod->x11.ui && mod->x11.descriptor)
 		uv_dlclose(&mod->x11.lib);
 
-	mod->eo.descriptor = NULL;
-	mod->show.descriptor = NULL;
-	mod->kx.descriptor = NULL;
-	mod->x11.descriptor = NULL;
-
 	free(mod);
 }
 
@@ -2038,9 +2033,6 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 			evas_object_show(container);
 			elm_win_resize_object_add(win, container);
 
-			for(int i=0; i<10; i++)
-				ecore_main_loop_iterate(); // refresh window
-
 			Evas_Object *widget = _eo_widget_create(container, mod);
 			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -2454,6 +2446,8 @@ _modlist_del(void *data, Evas_Object *obj)
 	// close x11 ui
 	else if(mod->x11.ui && mod->x11.descriptor)
 		_x11_ui_hide(mod);
+	else if(mod->eo.ui && mod->eo.full.win && mod->eo.descriptor)
+		evas_object_del(mod->eo.full.win);
 
 	_sp_ui_mod_del(ui, mod);
 }
@@ -2828,9 +2822,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	_resize(ui, NULL, ui->win, NULL);
 	evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _resize, ui);
 
-	for(int i=0; i<10; i++)
-		ecore_main_loop_iterate();
-	
 	ui->mainpane = elm_panes_add(ui->theme);
 	elm_panes_horizontal_set(ui->mainpane, EINA_FALSE);
 	elm_panes_content_left_size_set(ui->mainpane, 0.5);
