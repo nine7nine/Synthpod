@@ -18,8 +18,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <uv.h>
-
 #include <synthpod_ui.h>
 #include <synthpod_private.h>
 #include <patcher.h>

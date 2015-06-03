@@ -23,6 +23,7 @@
 #endif
 
 #include <cJSON.h>
+#include <Eina.h>
 
 #include <synthpod_app.h>
 #include <synthpod_private.h>
@@ -32,6 +33,7 @@
 #define MAX_MODS 512 // TODO how many?
 
 typedef enum _job_type_t job_type_t;
+typedef enum _bypass_state_t bypass_state_t;
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -40,7 +42,15 @@ typedef struct _job_t job_t;
 
 enum _job_type_t {
 	JOB_TYPE_MODULE_ADD,
-	JOB_TYPE_MODULE_DEL
+	JOB_TYPE_MODULE_DEL,
+	JOB_TYPE_PRESET_LOAD,
+	JOB_TYPE_PRESET_SAVE
+};
+
+enum _bypass_state_t {
+	BYPASS_STATE_OFF	= 0,
+	BYPASS_STATE_REQUEST,
+	BYPASS_STATE_ON
 };
 
 struct _job_t {
@@ -59,6 +69,9 @@ struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
 	int selected;
+
+	volatile bypass_state_t bypass_state;
+	Eina_Semaphore bypass_sem;
 	
 	// worker
 	struct {
@@ -325,6 +338,11 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		return NULL;
 
 	mod_t *mod = calloc(1, sizeof(mod_t));
+	if(!mod)
+		return NULL;
+
+	mod->bypass_state = BYPASS_STATE_OFF;
+	eina_semaphore_new(&mod->bypass_sem, 0);
 
 	// populate worker schedule
 	mod->worker.schedule.handle = mod;
@@ -521,6 +539,9 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 		free(port->buf);
 	}
 	free(mod->ports);
+
+	eina_semaphore_free(&mod->bypass_sem);
+
 	free(mod);
 }
 
@@ -892,28 +913,21 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(!mod)
 			return;
 
-		const LilvNode *preset = NULL;
-		LILV_FOREACH(nodes, i, mod->presets)
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
 		{
-			const LilvNode* pres = lilv_nodes_get(mod->presets, i);
-			const char *label = _preset_label_get(app->world, &app->regs, pres);
-
-			// test for matching preset label
-			if(strcmp(label, pset->label_str))
-				continue;
-
-			preset = pres;
+				work->target = app;
+				work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+				job->type = JOB_TYPE_PRESET_LOAD;
+				job->mod = mod;
+				memcpy(job->uri, pset->label_str, pset->label.atom.size);
+			_sp_app_to_worker_advance(app, size);
 		}
-		if(!preset)
-			return;
-		
-		// load preset
-		LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
-			preset);
-		lilv_state_restore(state, mod->inst, _state_set_value, mod,
-			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-		lilv_state_free(state);
 	}
+	//TODO preset save
 	else if(protocol == app->regs.synthpod.module_selected.urid)
 	{
 		const transmit_module_selected_t *select = (const transmit_module_selected_t *)atom;
@@ -1188,6 +1202,57 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 
 				break;
 			}
+			case JOB_TYPE_PRESET_LOAD:
+			{
+				mod_t *mod = job->mod;
+
+				//enable bypass
+				mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
+				eina_semaphore_lock(&mod->bypass_sem);
+				
+				const LilvNode *preset = NULL;
+				LILV_FOREACH(nodes, i, mod->presets)
+				{
+					const LilvNode* pres = lilv_nodes_get(mod->presets, i);
+					const char *label = _preset_label_get(app->world, &app->regs, pres);
+
+					// test for matching preset label
+					if(strcmp(label, job->uri))
+						continue;
+
+					preset = pres;
+				}
+
+				if(preset)
+				{
+					// load preset
+					LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
+						preset);
+					lilv_state_restore(state, mod->inst, _state_set_value, mod,
+						LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+					lilv_state_free(state);
+				}
+			
+				// disable bypass
+				mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
+
+				break;
+			}
+			case JOB_TYPE_PRESET_SAVE:
+			{
+				mod_t *mod = job->mod;
+
+				// enable bypass
+				mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
+				eina_semaphore_lock(&mod->bypass_sem);
+				
+				//TODO
+			
+				// disable bypass
+				mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
+
+				break;
+			}
 		}
 	}
 	else // work is for module
@@ -1250,6 +1315,19 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	for(int m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
+
+		switch(mod->bypass_state)
+		{
+			case BYPASS_STATE_OFF:
+				// do nothing
+				break;
+			case BYPASS_STATE_REQUEST:
+				mod->bypass_state = BYPASS_STATE_ON;
+				eina_semaphore_release(&mod->bypass_sem, 1);
+				// fall-through
+			case BYPASS_STATE_ON:
+				continue; // skip this module
+		}
 	
 		// multiplex multiple sources to single sink where needed
 		for(int i=0; i<mod->num_ports; i++)

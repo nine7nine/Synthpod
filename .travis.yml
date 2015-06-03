@@ -9,7 +9,6 @@ before_install:
  - wget http://download.drobilla.net/sord-0.12.2.tar.bz2
  - wget http://download.drobilla.net/sratom-0.4.6.tar.bz2
  - wget http://download.drobilla.net/lilv-0.20.0.tar.bz2
- - tar xzf v1.4.2.tar.gz
  - tar xjf lv2-1.12.0.tar.bz2 
  - tar xjf serd-0.20.0.tar.bz2
  - tar xjf sord-0.12.2.tar.bz2
