@@ -195,9 +195,9 @@ _con_add(void *data, int type, void *info)
 	synthpod_nsm_t *nsm = data;
 	Ecore_Con_Event_Client_Add *ev = info;
 
-	assert(type == ECORE_CON_EVENT_CLIENT_ADD);
+	assert(type == ECORE_CON_EVENT_SERVER_ADD);
 
-	printf("_client_add\n");
+	//printf("_client_add\n");
 	//TODO
 			
 	_announce(nsm);
@@ -211,9 +211,9 @@ _con_del(void *data, int type, void *info)
 	synthpod_nsm_t *nsm = data;
 	Ecore_Con_Event_Client_Del *ev = info;
 
-	assert(type == ECORE_CON_EVENT_CLIENT_DEL);
+	assert(type == ECORE_CON_EVENT_SERVER_DEL);
 	
-	printf("_client_del\n");
+	//printf("_client_del\n");
 	//TODO
 
 	return EINA_TRUE;
@@ -225,9 +225,9 @@ _con_dat(void *data, int type, void *info)
 	synthpod_nsm_t *nsm = data;
 	Ecore_Con_Event_Client_Data *ev = info;
 
-	assert(type == ECORE_CON_EVENT_CLIENT_DATA);
+	assert(type == ECORE_CON_EVENT_SERVER_DATA);
 	
-	printf("_client_data\n");
+	//printf("_client_data\n");
 
 	if(osc_check_packet(ev->data, ev->size))
 		osc_dispatch_method(0, ev->data, ev->size, methods, NULL, NULL, nsm);
@@ -260,7 +260,7 @@ synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *nsm_driver, void 
 		if(!nsm->url)
 			return NULL;
 		
-		printf("url: %s\n", nsm->url);
+		//printf("url: %s\n", nsm->url);
 
 		Ecore_Con_Type type;
 		if(!strncmp(nsm->url, "osc.udp", 7))
@@ -287,8 +287,7 @@ synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *nsm_driver, void 
 		printf("addr: %s, dst: %hu\n", addr, port);
 
 		nsm->serv = ecore_con_server_connect(type,
-			//addr, port, nsm);
-			"localhost", port, nsm); //FIXME
+			addr, port, nsm);
 		if(!nsm->serv)
 			goto fail;
 
