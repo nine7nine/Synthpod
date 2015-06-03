@@ -22,6 +22,10 @@ option(BUILD_PORTAUDIO "Build PortAudio standalone host" OFF)
 # eina
 pkg_search_module(EINA REQUIRED eina>=1.8)
 include_directories(${EINA_INCLUDE_DIRS})
+
+# ecore-con
+pkg_search_module(ECORE_CON REQUIRED ecore-con>=1.8)
+include_directories(${ECORE_CON_INCLUDE_DIRS})
 	
 # libuv
 pkg_search_module(UV REQUIRED libuv>=1.0)

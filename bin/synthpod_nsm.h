@@ -15,8 +15,6 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#include <uv.h>
-
 typedef struct _synthpod_nsm_t synthpod_nsm_t;
 typedef struct _synthpod_nsm_driver_t synthpod_nsm_driver_t;
 	
@@ -30,7 +28,7 @@ struct _synthpod_nsm_driver_t {
 };
 
 synthpod_nsm_t *
-synthpod_nsm_new(uv_loop_t *loop, const char *exe, const synthpod_nsm_driver_t *driver, void *data);
+synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *driver, void *data);
 
 void
 synthpod_nsm_free(synthpod_nsm_t *nsm);

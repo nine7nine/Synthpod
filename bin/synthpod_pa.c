@@ -214,7 +214,7 @@ _worker_thread(void *data)
 	handle->worker_wake.data = handle;
 	uv_async_init(&loop, &handle->worker_wake, _worker_wake);
 
-	handle->nsm = synthpod_nsm_new(&loop, handle->exe,
+	handle->nsm = synthpod_nsm_new(handle->exe,
 		&nsm_driver, handle); //TODO check
 
 	uv_run(&loop, UV_RUN_DEFAULT);

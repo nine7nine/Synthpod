@@ -18,12 +18,12 @@
 #include <stdlib.h>
 #include <unistd.h> // getpid
 
-#include <synthpod_app.h>
+#include <Ecore.h>
+#include <Ecore_Con.h>
 
-#include <osc_stream.h>
 #include <osc.h>
-#include <varchunk.h>
 
+#include <synthpod_app.h>
 #include <synthpod_nsm.h>
 
 struct _synthpod_nsm_t {
@@ -34,9 +34,13 @@ struct _synthpod_nsm_t {
 	const synthpod_nsm_driver_t *driver;
 	void *data;
 
-	osc_stream_t *stream;
-	varchunk_t *send;
-	varchunk_t *recv;
+	Ecore_Con_Server *serv;
+	Ecore_Event_Handler *add;
+	Ecore_Event_Handler *del;
+	Ecore_Event_Handler *dat;
+
+	osc_data_t send [0x10000];
+	osc_data_t recv [0x10000];
 };
 
 static int
@@ -106,26 +110,23 @@ _client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	// open/create app
 	int ret = nsm->driver->open(path, name, id, nsm->data);
 	
-	osc_data_t *buf0;
-	if((buf0 = varchunk_write_request(nsm->send, 256)))
+	osc_data_t *buf0 = nsm->send;
+	if(ret == 0)
 	{
-		if(ret == 0)
-		{
-			ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
-				"/nsm/client/open", "opened");
-		}
-		else
-		{
-			ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
-				"/nsm/client/open", 2, "opening failed");
-		}
-
-		size_t written = ptr ? ptr - buf0 : 0;
-		if(written)
-			varchunk_write_advance(nsm->send, written);
-		else
-			; //TODO
+		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
+			"/nsm/client/open", "opened");
 	}
+	else
+	{
+		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
+			"/nsm/client/open", 2, "opening failed");
+	}
+
+	size_t written = ptr ? ptr - buf0 : 0;
+	if(written)
+		ecore_con_server_send(nsm->serv, nsm->send, written);
+	else
+		; //TODO
 
 	return 1;
 }
@@ -140,90 +141,45 @@ _client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	// save app
 	int ret = nsm->driver->save(nsm->data);
 	
-	osc_data_t *buf0;
-	if((buf0 = varchunk_write_request(nsm->send, 256)))
+	osc_data_t *buf0 = nsm->send;
+	if(ret == 0)
 	{
-		if(ret == 0)
-		{
-			ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
-				"/nsm/client/save", "saved");
-		}
-		else
-		{
-			ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
-				"/nsm/client/save", 1, "save failed");
-		}
-
-		size_t written = ptr ? ptr - buf0 : 0;
-		if(written)
-			varchunk_write_advance(nsm->send, written);
-		else
-			; //TODO
+		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
+			"/nsm/client/save", "saved");
 	}
+	else
+	{
+		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
+			"/nsm/client/save", 1, "save failed");
+	}
+
+	size_t written = ptr ? ptr - buf0 : 0;
+	if(written)
+		ecore_con_server_send(nsm->serv, nsm->send, written);
+	else
+		; //TODO
 
 	return 1;
 }
 
-static int
-_resolve(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
+static void
+_announce(synthpod_nsm_t *nsm)
 {
-	synthpod_nsm_t *nsm = data;	
-
 	// send announce message
 	pid_t pid = getpid();
 
-	osc_data_t *buf0;
-	if((buf0 = varchunk_write_request(nsm->send, 512)))
-	{
-		osc_data_t *ptr = osc_set_vararg(buf0, buf0+512, "/nsm/server/announce", "sssiii",
-			nsm->call, ":message:", nsm->exe, 1, 2, pid);
+	osc_data_t *buf0 = nsm->send;
+	osc_data_t *ptr = osc_set_vararg(buf0, buf0+512, "/nsm/server/announce", "sssiii",
+		nsm->call, ":message:", nsm->exe, 1, 2, pid);
 
-		size_t written = ptr ? ptr - buf0 : 0;
-		if(written)
-			varchunk_write_advance(nsm->send, written);
-		else
-			; //TODO
-	}
-
-	return 1;
-}
-
-static int
-_timeout(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
-{
-	synthpod_nsm_t *nsm = data;	
-
-	printf("_timeout\n");
-	//TODO
-
-	return 1;
-}
-
-static int
-_err(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
-{
-	synthpod_nsm_t *nsm = data;	
-
-	const char *where;
-	const char *what;
-
-	const osc_data_t *ptr = buf;
-	ptr = osc_get_string(ptr, &where);
-	ptr = osc_get_string(ptr, &what);
-
-	printf("_error: %s (%s)\n", where, what);
-
-	return 1;
+	size_t written = ptr ? ptr - buf0 : 0;
+	if(written)
+		ecore_con_server_send(nsm->serv, nsm->send, written);
+	else
+		; //TODO
 }
 
 static const osc_method_t methods [] = {
-	{"/stream/resolve", "", _resolve},
-	{"/stream/timeout", "", _timeout},
-	{"/stream/error", "ss", _err},
-
 	{"/reply", NULL, _reply},
 	{"/error", "sis", _error},
 	
@@ -233,75 +189,56 @@ static const osc_method_t methods [] = {
 	{NULL, NULL, NULL}
 };
 
-static void *
-_recv_req(size_t size, void *data)
+static Eina_Bool
+_con_add(void *data, int type, void *info)
 {
 	synthpod_nsm_t *nsm = data;
-	
-	void *ptr;
-	do ptr = varchunk_write_request(nsm->recv, size);
-	while(!ptr);
-	
-	return ptr;
+	Ecore_Con_Event_Client_Add *ev = info;
+
+	assert(type == ECORE_CON_EVENT_CLIENT_ADD);
+
+	printf("_client_add\n");
+	//TODO
+			
+	_announce(nsm);
+
+	return EINA_TRUE;
 }
 
-static void
-_recv_adv(size_t written, void *data)
+static Eina_Bool
+_con_del(void *data, int type, void *info)
 {
 	synthpod_nsm_t *nsm = data;
-	
-	varchunk_write_advance(nsm->recv, written);
+	Ecore_Con_Event_Client_Del *ev = info;
 
-	// process incoming data
-	const void *ptr;
-	size_t size;
-	while((ptr = varchunk_read_request(nsm->recv, &size)))
-	{
-		if(osc_check_packet(ptr, size))
-			osc_dispatch_method(0, ptr, size, methods, NULL, NULL, nsm);
-		else
-			fprintf(stderr, "_recv_adv: malformed OSC packet\n");
-
-		varchunk_read_advance(nsm->recv);
-	}
+	assert(type == ECORE_CON_EVENT_CLIENT_DEL);
 	
-	osc_stream_flush(nsm->stream);
+	printf("_client_del\n");
+	//TODO
+
+	return EINA_TRUE;
 }
 
-static const void *
-_send_req(size_t *len, void *data)
+static Eina_Bool
+_con_dat(void *data, int type, void *info)
 {
 	synthpod_nsm_t *nsm = data;
+	Ecore_Con_Event_Client_Data *ev = info;
 
-	return varchunk_read_request(nsm->send, len);
-}
-
-static void
-_send_adv(void *data)
-{
-	synthpod_nsm_t *nsm = data;
+	assert(type == ECORE_CON_EVENT_CLIENT_DATA);
 	
-	varchunk_read_advance(nsm->send);
-}
+	printf("_client_data\n");
 
-static void
-_free(void *data)
-{
-	synthpod_nsm_t *nsm = data;
+	if(osc_check_packet(ev->data, ev->size))
+		osc_dispatch_method(0, ev->data, ev->size, methods, NULL, NULL, nsm);
+	else
+		fprintf(stderr, "_client_dat: malformed OSC packet\n");
 
-	// nothing
+	return EINA_TRUE;
 }
-		
-static const osc_stream_driver_t osc_driver = {
-	.recv_req = _recv_req,
-	.recv_adv = _recv_adv,
-	.send_req = _send_req,
-	.send_adv = _send_adv,
-	.free = _free,
-};
 
 synthpod_nsm_t *
-synthpod_nsm_new(uv_loop_t *loop, const char *exe, const synthpod_nsm_driver_t *nsm_driver, void *data)
+synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *nsm_driver, void *data)
 {
 	if(!nsm_driver)
 		return NULL;
@@ -323,19 +260,44 @@ synthpod_nsm_new(uv_loop_t *loop, const char *exe, const synthpod_nsm_driver_t *
 		if(!nsm->url)
 			return NULL;
 		
-		size_t url_len = strlen(nsm->url);
-		if(nsm->url[url_len-1] == '/')
-			nsm->url[url_len-1] = '\0';
+		printf("url: %s\n", nsm->url);
 
-		nsm->recv = varchunk_new(0x10000);
-		nsm->send = varchunk_new(0x10000);
-		if(!nsm->recv || !nsm->send)
-			return NULL;
+		Ecore_Con_Type type;
+		if(!strncmp(nsm->url, "osc.udp", 7))
+			type = ECORE_CON_REMOTE_UDP;
+		else if(!strncmp(nsm->url, "osc.tcp", 7))
+			type = ECORE_CON_REMOTE_TCP;
+		else
+			goto fail;
 
-		nsm->stream = osc_stream_new(loop, nsm->url,
-			&osc_driver, nsm);
-		if(!nsm->stream)
-			return NULL;
+		char *addr = strstr(nsm->url, "://");
+		if(!addr)
+			goto fail;
+		addr += 3; // skip "://"
+
+		char *dst = strchr(addr, ':');
+		if(!dst)
+			goto fail;
+		*dst++ = '\0';
+
+		uint16_t port;
+		if(sscanf(dst, "%hu", &port) != 1)
+			goto fail;
+		
+		printf("addr: %s, dst: %hu\n", addr, port);
+
+		nsm->serv = ecore_con_server_connect(type,
+			//addr, port, nsm);
+			"localhost", port, nsm); //FIXME
+		if(!nsm->serv)
+			goto fail;
+
+		nsm->add = ecore_event_handler_add(ECORE_CON_EVENT_SERVER_ADD, _con_add, nsm);
+		nsm->del = ecore_event_handler_add(ECORE_CON_EVENT_SERVER_DEL, _con_del, nsm);
+		nsm->dat = ecore_event_handler_add(ECORE_CON_EVENT_SERVER_DATA, _con_dat, nsm);
+
+		if(type == ECORE_CON_REMOTE_UDP)
+			_announce(nsm);
 	}
 	else
 	{
@@ -345,6 +307,12 @@ synthpod_nsm_new(uv_loop_t *loop, const char *exe, const synthpod_nsm_driver_t *
 	}
 
 	return nsm;
+
+fail:
+	if(nsm->url)
+		free(nsm->url);
+
+	return NULL;
 }
 
 void
@@ -359,13 +327,14 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 
 		if(nsm->url)
 		{
-			if(nsm->stream)
-				osc_stream_free(nsm->stream);
-
-			if(nsm->recv)
-				varchunk_free(nsm->recv);
-			if(nsm->send)
-				varchunk_free(nsm->send);
+			if(nsm->add)
+				ecore_event_handler_del(nsm->add);
+			if(nsm->del)
+				ecore_event_handler_del(nsm->del);
+			if(nsm->dat)
+				ecore_event_handler_del(nsm->dat);
+			if(nsm->serv)
+				ecore_con_server_del(nsm->serv);
 
 			free(nsm->url);
 		}
