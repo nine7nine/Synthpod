@@ -27,10 +27,6 @@ include_directories(${EINA_INCLUDE_DIRS})
 pkg_search_module(ECORE_CON REQUIRED ecore-con>=1.8)
 include_directories(${ECORE_CON_INCLUDE_DIRS})
 	
-# libuv
-pkg_search_module(UV REQUIRED libuv>=1.0)
-include_directories(${UV_INCLUDE_DIRS})
-
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
 include_directories(${LILV_INCLUDE_DIRS})

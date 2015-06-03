@@ -39,7 +39,7 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 
-#include <uv.h>
+#include <Eina.h>
 
 #define CHUNK_SIZE 0x10000
 #define SEQ_SIZE 0x2000
@@ -58,7 +58,6 @@ struct _prog_t {
 	varchunk_t *app_to_log;
 
 	char *path;
-	char *exe;
 	synthpod_nsm_t *nsm;
 
 #if defined(BUILD_UI)
@@ -73,11 +72,6 @@ struct _prog_t {
 
 	Ecore_Animator *ui_anim;
 	Evas_Object *win;
-#else
-	uv_loop_t *loop;
-	uv_signal_t sigterm;
-	uv_signal_t sigint;
-	uv_async_t async;
 #endif
 
 	LV2_Atom_Forge forge;
@@ -94,9 +88,9 @@ struct _prog_t {
 	jack_port_t *midi_out;
 	jack_port_t *audio_out[2];
 
-	uv_thread_t worker_thread;
-	uv_async_t worker_quit;
-	uv_async_t worker_wake;
+	volatile int worker_dead;
+	Eina_Thread worker_thread;
+	Eina_Semaphore worker_sem;
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
@@ -145,58 +139,38 @@ _jack_deinit(prog_t *handle)
 }
 
 // non-rt worker-thread
-static void
-_worker_quit(uv_async_t *quit)
-{
-	prog_t *handle = quit->data;
-
-	uv_close((uv_handle_t *)&handle->worker_quit, NULL);
-	uv_close((uv_handle_t *)&handle->worker_wake, NULL);
-	if(handle->nsm)
-		synthpod_nsm_free(handle->nsm);
-}
-
-// non-rt worker-thread
-static void
-_worker_wake(uv_async_t *quit)
-{
-	prog_t *handle = quit->data;
-
-	size_t size;
-	const void *body;
-	while((body = varchunk_read_request(handle->app_to_worker, &size)))
-	{
-		sp_worker_from_app(handle->app, size, body);
-		varchunk_read_advance(handle->app_to_worker);
-	}
-}
-
-// non-rt worker-thread
-static void
-_worker_thread(void *data)
+static void *
+_worker_thread(void *data, Eina_Thread thread)
 {
 	prog_t *handle = data;
 
-	uv_loop_t loop;
-	uv_loop_init(&loop);
+	while(!handle->worker_dead)
+	{
+		eina_semaphore_lock(&handle->worker_sem);
 
-	handle->worker_quit.data = handle;
-	uv_async_init(&loop, &handle->worker_quit, _worker_quit);
-	
-	handle->worker_wake.data = handle;
-	uv_async_init(&loop, &handle->worker_wake, _worker_wake);
+		size_t size;
+		const void *body;
+		while((body = varchunk_read_request(handle->app_to_worker, &size)))
+		{
+			sp_worker_from_app(handle->app, size, body);
+			varchunk_read_advance(handle->app_to_worker);
+		}
 
-	handle->nsm = synthpod_nsm_new(handle->exe,
-		&nsm_driver, handle); //TODO check
+		const char *trace;
+		while((trace = varchunk_read_request(handle->app_to_log, &size)))
+		{
+			fprintf(stderr, "[Trace] %s\n", trace);
 
-	uv_run(&loop, UV_RUN_DEFAULT);
-
-	uv_loop_close(&loop);
+			varchunk_read_advance(handle->app_to_log);
+		}
+	}
 
 	if(handle->path)
 		free(handle->path);
 
 	_jack_deinit(handle);
+
+	return NULL;
 }
 
 // non-rt / rt
@@ -260,20 +234,6 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	return NULL;
 }
 
-// non-rt ui-thread
-static void
-_trace(prog_t *handle)
-{
-	size_t size;
-	const char *trace;
-	while((trace = varchunk_read_request(handle->app_to_log, &size)))
-	{
-		fprintf(stderr, "[Trace] %s\n", trace);
-
-		varchunk_read_advance(handle->app_to_log);
-	}
-}
-
 #if defined(BUILD_UI)
 // non-rt ui-thread
 static void
@@ -307,29 +267,7 @@ _ui_animator(void *data)
 		varchunk_read_advance(handle->app_to_ui);
 	}
 
-	_trace(handle);
-
 	return EINA_TRUE; // continue animator
-}
-#else
-// non-rt main-thread
-static void
-_quit(uv_signal_t *quit, int signal)
-{
-	prog_t *handle = quit->data;
-
-	uv_signal_stop(&handle->sigterm);
-	uv_signal_stop(&handle->sigint);
-	uv_close((uv_handle_t *)&handle->async, NULL);
-}
-
-// non-rt ui-thread
-static void
-_async(uv_async_t *async)
-{
-	prog_t *handle = async->data;
-
-	_trace(handle);
 }
 #endif // BUILD_UI
 
@@ -474,8 +412,7 @@ _app_to_worker_advance(size_t size, void *data)
 	prog_t *handle = data;
 
 	varchunk_write_advance(handle->app_to_worker, size);
-	uv_async_send(&handle->worker_wake); // wake up worker thread
-	//TODO only do once at end of sp_app_run_post ?
+	eina_semaphore_release(&handle->worker_sem, 1);
 }
 
 // non-rt worker-thread
@@ -514,10 +451,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 
 			size_t written = strlen(trace) + 1;
 			varchunk_write_advance(handle->app_to_log, written);
-
-#if !defined(BUILD_UI)
-			uv_async_send(&handle->async);
-#endif
+			eina_semaphore_release(&handle->worker_sem, 1);
 		}
 	}
 	else // !log_trace
@@ -674,9 +608,14 @@ main(int argc, char **argv)
 	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle);
 #endif
 
+	// NSM init
+	handle.nsm = synthpod_nsm_new(argv[0],
+		&nsm_driver, &handle); //TODO check
+
 	// threads init
-	handle.exe = argv[0];
-	uv_thread_create(&handle.worker_thread, _worker_thread, &handle);
+	Eina_Bool status = eina_thread_create(&handle.worker_thread,
+		EINA_THREAD_URGENT, -1, _worker_thread, &handle);
+	//TODO check status
 
 #if defined(BUILD_UI)
 	// main loop
@@ -688,26 +627,16 @@ main(int argc, char **argv)
 	evas_object_del(handle.win);
 	ecore_animator_del(handle.ui_anim);
 #else
-	// uv init
-	handle.loop = uv_default_loop();
-
-	handle.sigterm.data = &handle;
-	uv_signal_init(handle.loop, &handle.sigterm);
-	uv_signal_start(&handle.sigterm, _quit, SIGTERM);
-
-	handle.sigint.data = &handle;
-	uv_signal_init(handle.loop, &handle.sigint);
-	uv_signal_start(&handle.sigint, _quit, SIGINT);
-
-	handle.async.data = &handle;
-	uv_async_init(handle.loop, &handle.async, _async);
-
-	uv_run(handle.loop, UV_RUN_DEFAULT);
+	ecore_main_loop_begin();
 #endif // BUILD_UI
 
 	// threads deinit
-	uv_async_send(&handle.worker_quit);
-	uv_thread_join(&handle.worker_thread);
+	handle.worker_dead = 1; // atomic operation
+	eina_semaphore_release(&handle.worker_sem, 1);
+	eina_thread_join(handle.worker_thread);
+
+	// NSM deinit
+	synthpod_nsm_free(handle.nsm);
 
 	// synthpod deinit
 	sp_app_free(handle.app);

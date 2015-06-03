@@ -38,7 +38,6 @@ if(BUILD_JACK)
 		synthpod_jack.c
 		synthpod_nsm.c)
 	target_link_libraries(synthpod.jack
-		${UV_LDFLAGS}
 		${ECORE_CON_LDFLAGS}
 		${JACK_LIBS}
 		synthpod.lib)
@@ -72,7 +71,6 @@ if(BUILD_PORTAUDIO)
 		synthpod_pa.c
 		synthpod_nsm.c)
 	target_link_libraries(synthpod.pa
-		${UV_LDFLAGS}
 		${ECORE_CON_LDFLAGS}
 		${PORTAUDIO_LIBS}
 		synthpod.lib)
