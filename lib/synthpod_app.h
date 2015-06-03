@@ -70,10 +70,10 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data);
 void
 sp_app_activate(sp_app_t *app);
 
-void
+int
 sp_app_set_system_source(sp_app_t *app, uint32_t index, const void *buf);
 
-void
+int
 sp_app_set_system_sink(sp_app_t *app, uint32_t index, void *buf);
 
 void *

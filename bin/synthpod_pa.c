@@ -43,6 +43,14 @@
 #define CHUNK_SIZE 0x10000
 #define SEQ_SIZE 0x2000
 
+typedef enum _prog_state_t prog_state_t;
+
+enum _prog_state_t {
+	PROG_STATE_PAUSED	= 0,
+	PROG_STATE_RUNNING,
+	PROG_STATE_PAUSE_REQUESTED
+};
+
 typedef struct _prog_t prog_t;
 
 struct _prog_t {
@@ -91,6 +99,9 @@ struct _prog_t {
 	volatile int worker_dead;
 	Eina_Thread worker_thread;
 	Eina_Semaphore worker_sem;
+
+	volatile prog_state_t prog_state;
+	Eina_Semaphore prog_sem;
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
@@ -192,11 +203,6 @@ _worker_thread(void *data, Eina_Thread thread)
 			varchunk_read_advance(handle->app_to_log);
 		}
 	}
-
-	if(handle->path)
-		free(handle->path);
-
-	_pa_deinit(handle);
 
 	return NULL;
 }
@@ -309,48 +315,53 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 	prog_t *handle = data;
 	sp_app_t *app = handle->app;
 
+	const void *midi_in_buf = NULL;
 	float *const *audio_in_buf = inputs;
+	void *midi_out_buf = NULL;
 	float **audio_out_buf = outputs;
 
-	/*
-	void *midi_in_buf = jack_port_get_buffer(handle->midi_in, nsamples);
-	float *audio_in_buf[2] = {
-		jack_port_get_buffer(handle->audio_in[0], nsamples),
-		jack_port_get_buffer(handle->audio_in[1], nsamples)
-	};
-	void *midi_out_buf = jack_port_get_buffer(handle->midi_out, nsamples);
-	float *audio_out_buf[2] = {
-		jack_port_get_buffer(handle->audio_out[0], nsamples),
-		jack_port_get_buffer(handle->audio_out[1], nsamples)
-	};
-	*/
+	switch(handle->prog_state)
+	{
+		case PROG_STATE_RUNNING:
+		{
+			// do nothing
+			break;
+		}
+		case PROG_STATE_PAUSE_REQUESTED:
+		{
+			handle->prog_state = PROG_STATE_PAUSED; // atomic instruction
+			eina_semaphore_release(&handle->prog_sem, 1);
+			// fall-through
+		}
+		case PROG_STATE_PAUSED:
+		{
+			// clear output buffers
+			memset(audio_out_buf[0], 0x0, sizeof(float) * nsamples);
+			memset(audio_out_buf[1], 0x0, sizeof(float) * nsamples);
+			//TODO midi
+
+			return 0; // skip running of graph
+		}
+	}
 
 	LV2_Atom_Sequence *seq_in = sp_app_get_system_source(app, 0);
 	sp_app_set_system_source(app, 1, audio_in_buf[0]);
 	sp_app_set_system_source(app, 2, audio_in_buf[1]);
 	const LV2_Atom_Sequence *seq_out = sp_app_get_system_sink(app, 0);
-	sp_app_set_system_sink(app, 1, audio_out_buf[0]);
-	sp_app_set_system_sink(app, 2, audio_out_buf[1]);
+	if(sp_app_set_system_sink(app, 1, audio_out_buf[0]))
+		memset(audio_out_buf[0], 0x0, sizeof(float) * nsamples);
+	if(sp_app_set_system_sink(app, 2, audio_out_buf[1]))
+		memset(audio_out_buf[1], 0x0, sizeof(float) * nsamples);
 
-	LV2_Atom_Forge *forge = &handle->forge;
-	LV2_Atom_Forge_Frame frame;
-	lv2_atom_forge_set_buffer(forge, (void *)seq_in, SEQ_SIZE);
-	lv2_atom_forge_sequence_head(forge, &frame, 0);
-	/*
-	int n = jack_midi_get_event_count(midi_in_buf);	
-	for(int i=0; i<n; i++)
+	if(seq_in)
 	{
-		jack_midi_event_t mev;
-		jack_midi_event_get(&mev, midi_in_buf, i);
-
-		//add jack midi event to seq_in
-		lv2_atom_forge_frame_time(forge, mev.time);
-		lv2_atom_forge_atom(forge, mev.size, handle->midi_MidiEvent);
-		lv2_atom_forge_raw(forge, mev.buffer, mev.size);
-		lv2_atom_forge_pad(forge, mev.size);
+		LV2_Atom_Forge *forge = &handle->forge;
+		LV2_Atom_Forge_Frame frame;
+		lv2_atom_forge_set_buffer(forge, (void *)seq_in, SEQ_SIZE);
+		lv2_atom_forge_sequence_head(forge, &frame, 0);
+		//TODO
+		lv2_atom_forge_pop(forge, &frame);
 	}
-	*/
-	lv2_atom_forge_pop(forge, &frame);
 
 	// read events from worker
 	{
@@ -383,16 +394,7 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 	sp_app_run_post(handle->app, nsamples);
 
 	// fill midi output buffer
-	/*
-	jack_midi_clear_buffer(midi_out_buf);
-	LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
-	{
-		const LV2_Atom *atom = &ev->body;
-
-		jack_midi_event_write(midi_out_buf, ev->time.frames,
-			LV2_ATOM_BODY_CONST(atom), atom->size);
-	}
-	*/
+	//TODO
 
 	return 0;
 }
@@ -553,13 +555,21 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// app init
 	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
 
+	// pa activate
+	handle->prog_state = PROG_STATE_RUNNING;
+	if(Pa_StartStream(handle->stream) != paNoError)
+		fprintf(stderr, "Pa_StartStream failed\n");
+
+	// pause rt-thread
+	handle->prog_state = PROG_STATE_PAUSE_REQUESTED; // atomic instruction
+	eina_semaphore_lock(&handle->prog_sem);
+
 	// restore state
 	sp_app_restore(handle->app, _state_retrieve, handle,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 
-	// pa activate
-	if(Pa_StartStream(handle->stream) != paNoError)
-		fprintf(stderr, "Pa_StartStream failed\n");
+	// resume rt-thread
+	handle->prog_state = PROG_STATE_RUNNING; // atomic instruction
 
 	return 0; // success
 }
@@ -568,9 +578,17 @@ static int
 _save(void *data)
 {
 	prog_t *handle = data;
-	
+
+	// pause rt-thread
+	handle->prog_state = PROG_STATE_PAUSE_REQUESTED; // atomic instruction
+	eina_semaphore_lock(&handle->prog_sem);
+
+	// store state
 	sp_app_save(handle->app, _state_store, handle,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+	// resume rt-thread
+	handle->prog_state = PROG_STATE_RUNNING; // atomic instruction
 
 	return 0; // success
 }
@@ -650,6 +668,10 @@ main(int argc, char **argv)
 	handle.nsm = synthpod_nsm_new(argv[0],
 		&nsm_driver, &handle); //TODO check
 
+	// init semaphores
+	eina_semaphore_new(&handle.worker_sem, 0);
+	eina_semaphore_new(&handle.prog_sem, 0);
+
 	// threads init
 	Eina_Bool status = eina_thread_create(&handle.worker_thread,
 		EINA_THREAD_URGENT, -1, _worker_thread, &handle);
@@ -673,8 +695,18 @@ main(int argc, char **argv)
 	eina_semaphore_release(&handle.worker_sem, 1);
 	eina_thread_join(handle.worker_thread);
 
+	// deinit semaphores
+	eina_semaphore_free(&handle.worker_sem);
+	eina_semaphore_free(&handle.prog_sem);
+
 	// NSM deinit
 	synthpod_nsm_free(handle.nsm);
+
+	if(handle.path)
+		free(handle.path);
+
+	// deinit PA
+	_pa_deinit(&handle);
 
 	// synthpod deinit
 	sp_app_free(handle.app);

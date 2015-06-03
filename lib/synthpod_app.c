@@ -230,31 +230,44 @@ sp_app_activate(sp_app_t *app)
 }
 
 // rt
-void
+int
 sp_app_set_system_source(sp_app_t *app, uint32_t index, const void *buf)
 {
+	if(!app->system.source)
+		return -1;
+
 	// get first mod aka system source
 	mod_t *mod = app->system.source;
 
 	mod->ports[index].num_sources = 1;
 	lilv_instance_connect_port(mod->inst, index, (void *)buf);
+
+	return 0;
 }
 
 // rt
-void
+int
 sp_app_set_system_sink(sp_app_t *app, uint32_t index, void *buf)
 {
+	if(!app->system.sink)
+		return -1;
+
 	// get last mod aka system sink
 	mod_t *mod = app->system.sink;
 
 	index += 7; //TODO make configurable
 	lilv_instance_connect_port(mod->inst, index, (void *)buf);
+
+	return 0;
 }
 
 // rt
 void *
 sp_app_get_system_source(sp_app_t *app, uint32_t index)
 {
+	if(!app->system.source)
+		return NULL;
+
 	// get last mod aka system source
 	mod_t *mod = app->system.source;
 
@@ -267,6 +280,9 @@ sp_app_get_system_source(sp_app_t *app, uint32_t index)
 const void *
 sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 {
+	if(!app->system.sink)
+		return NULL;
+
 	// get last mod aka system sink
 	mod_t *mod = app->system.sink;
 
