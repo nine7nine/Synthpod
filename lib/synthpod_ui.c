@@ -94,7 +94,7 @@ struct _mod_t {
 	// Eo UI
 	struct {
 		const LilvUI *ui;
-		uv_lib_t lib;
+		Eina_Module *lib;
 		const LV2UI_Descriptor *descriptor;
 
 		LV2UI_Handle handle;
@@ -112,7 +112,7 @@ struct _mod_t {
 	// custom UIs via the LV2UI_{Show,Idle}_Interface extensions
 	struct {
 		const LilvUI *ui;
-		uv_lib_t lib;
+		Eina_Module *lib;
 
 		const LV2UI_Descriptor *descriptor;
 		LV2UI_Handle handle;
@@ -128,7 +128,7 @@ struct _mod_t {
 	// kx external-ui
 	struct {
 		const LilvUI *ui;
-		uv_lib_t lib;
+		Eina_Module *lib;
 
 		int dead;
 		const LV2UI_Descriptor *descriptor;
@@ -143,7 +143,7 @@ struct _mod_t {
 	// X11 UI
 	struct {
 		const LilvUI *ui;
-		uv_lib_t lib;
+		Eina_Module *lib;
 
 		const LV2UI_Descriptor *descriptor;
 		LV2UI_Handle handle;
@@ -1126,7 +1126,7 @@ _data_access(const char *uri)
 }
 		
 static const LV2UI_Descriptor *
-_ui_dlopen(const LilvUI *ui, uv_lib_t *lib)
+_ui_dlopen(const LilvUI *ui, Eina_Module **lib)
 {
 	const LilvNode *ui_uri = lilv_ui_get_uri(ui);
 	const LilvNode *binary_uri = lilv_ui_get_binary_uri(ui);
@@ -1134,14 +1134,23 @@ _ui_dlopen(const LilvUI *ui, uv_lib_t *lib)
 	const char *ui_string = lilv_node_as_string(ui_uri);
 	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
 
-	if(uv_dlopen(binary_path, lib))
+	*lib = eina_module_new(binary_path);
+	if(!*lib)
 		return NULL;
+
+	if(!eina_module_load(*lib))
+	{
+		eina_module_free(*lib);
+		*lib = NULL;
+
+		return NULL;
+	}
 	
 	LV2UI_DescriptorFunction ui_descfunc = NULL;
-	uv_dlsym(lib, "lv2ui_descriptor", (void **)&ui_descfunc);
+	ui_descfunc = eina_module_symbol_get(*lib, "lv2ui_descriptor");
 
 	if(!ui_descfunc)
-		return NULL;
+		goto fail;
 
 	// search for a matching UI
 	for(int i=0; 1; i++)
@@ -1153,6 +1162,11 @@ _ui_dlopen(const LilvUI *ui, uv_lib_t *lib)
 		else if(!strcmp(ui_desc->URI, ui_string))
 			return ui_desc; // matching UI found
 	}
+
+fail:
+	eina_module_unload(*lib);
+	eina_module_free(*lib);
+	*lib = NULL;
 
 	return NULL;
 }
@@ -1423,13 +1437,25 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 		lilv_uis_free(mod->all_uis);
 
 	if(mod->eo.ui && mod->eo.descriptor)
-		uv_dlclose(&mod->eo.lib);
+	{
+		eina_module_unload(mod->eo.lib);
+		eina_module_free(mod->eo.lib);
+	}
 	else if(mod->show.ui && mod->show.descriptor)
-		uv_dlclose(&mod->show.lib);
+	{
+		eina_module_unload(mod->show.lib);
+		eina_module_free(mod->show.lib);
+	}
 	else if(mod->kx.ui && mod->kx.descriptor)
-		uv_dlclose(&mod->kx.lib);
+	{
+		eina_module_unload(mod->kx.lib);
+		eina_module_free(mod->kx.lib);
+	}
 	else if(mod->x11.ui && mod->x11.descriptor)
-		uv_dlclose(&mod->x11.lib);
+	{
+		eina_module_unload(mod->x11.lib);
+		eina_module_free(mod->x11.lib);
+	}
 
 	free(mod);
 }

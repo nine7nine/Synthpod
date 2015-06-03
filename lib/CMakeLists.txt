@@ -9,7 +9,6 @@ add_library(synthpod.lib SHARED
 	cjson/cJSON.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
-	${UV_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS})
 set_target_properties(synthpod.lib PROPERTIES OUTPUT_NAME "synthpod")
@@ -26,7 +25,6 @@ if(BUILD_UI)
 		smart_toggle.c)
 	target_link_libraries(synthpod_ui.lib
 		${ELM_LDFLAGS}
-		${UV_LDFLAGS}
 		${LILV_LDFLAGS}
 		${LV2_LDFLAGS})
 	set_target_properties(synthpod_ui.lib PROPERTIES OUTPUT_NAME "synthpod_ui")
