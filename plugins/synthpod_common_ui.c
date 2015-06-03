@@ -136,8 +136,21 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->port_map = (LV2UI_Port_Map *)features[i]->data;
   }
 
-	if(!handle->driver.map || !handle->driver.unmap || !handle->port_map)
+	if(!handle->driver.map)
 	{
+		fprintf(stderr, "%s: Host does not support urid:map\n", descriptor->URI);
+		free(handle);
+		return NULL;
+	}
+	if(!handle->driver.unmap)
+	{
+		fprintf(stderr, "%s: Host does not support urid:unmap\n", descriptor->URI);
+		free(handle);
+		return NULL;
+	}
+	if(!handle->port_map)
+	{
+		fprintf(stderr, "%s: Host does not support ui:portMap\n", descriptor->URI);
 		free(handle);
 		return NULL;
 	}
