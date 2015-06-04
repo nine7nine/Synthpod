@@ -3,6 +3,8 @@ include_directories(${PROJECT_SOURCE_DIR}/libosc) # osc.h
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
+add_definitions("-D_GNU_SOURCE=1") # asprintf
+
 set(SYNTHPOD_BIN_DIR "bin")
 set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
 set(SYNTHPOD_DESKTOP_DIR "share/applications")

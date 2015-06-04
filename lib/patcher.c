@@ -388,7 +388,7 @@ _patcher_smart_init(Evas_Object *o)
 		for(int snk=priv->max - priv->sinks; snk<priv->max; snk++)
 		{
 			elmnt = edje_object_add(e);
-			edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+			edje_object_file_set(elmnt, SYNTHPOD_DATA_DIR"/synthpod.edj",
 				"/synthpod/patcher/node"); //TODO
 			edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _node_in, o);
 			edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _node_out, o);
@@ -404,7 +404,7 @@ _patcher_smart_init(Evas_Object *o)
 	for(int src=priv->max - priv->sources; src<priv->max; src++)
 	{
 		elmnt = edje_object_add(e);
-		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+		edje_object_file_set(elmnt, SYNTHPOD_DATA_DIR"/synthpod.edj",
 			"/synthpod/patcher/port");
 		edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _source_in, o);
 		edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _source_out, o);
@@ -415,7 +415,7 @@ _patcher_smart_init(Evas_Object *o)
 		evas_object_table_pack(priv->matrix, elmnt, src, priv->max, 1, 1);
 
 		elmnt = edje_object_add(e);
-		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+		edje_object_file_set(elmnt, SYNTHPOD_DATA_DIR"/synthpod.edj",
 			"/synthpod/patcher/label/vertical");
 		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -427,7 +427,7 @@ _patcher_smart_init(Evas_Object *o)
 	for(int snk=priv->max - priv->sinks; snk<priv->max; snk++)
 	{
 		elmnt = edje_object_add(e);
-		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+		edje_object_file_set(elmnt, SYNTHPOD_DATA_DIR"/synthpod.edj",
 			"/synthpod/patcher/port");
 		edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _sink_in, o);
 		edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _sink_out, o);
@@ -438,7 +438,7 @@ _patcher_smart_init(Evas_Object *o)
 		evas_object_table_pack(priv->matrix, elmnt, priv->max, snk, 1, 1);
 		
 		elmnt = edje_object_add(e);
-		edje_object_file_set(elmnt, "/usr/local/share/synthpod/synthpod.edj",
+		edje_object_file_set(elmnt, SYNTHPOD_DATA_DIR"/synthpod.edj",
 			"/synthpod/patcher/label/horizontal");
 		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);

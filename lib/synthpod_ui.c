@@ -58,6 +58,8 @@ struct _mod_t {
 	sp_ui_t *ui;
 	u_id_t uid;
 	int selected;
+
+	char *pset_label;
 	
 	// features
 	LV2_Feature feature_list [NUM_UI_FEATURES];
@@ -231,6 +233,7 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *stditc;
 	Elm_Genlist_Item_Class *psetitc;
 	Elm_Genlist_Item_Class *psetitmitc;
+	Elm_Genlist_Item_Class *psetsaveitc;
 	Elm_Gengrid_Item_Class *griditc;
 	Elm_Genlist_Item_Class *patchitc;
 		
@@ -1184,6 +1187,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 
 	mod_t *mod = calloc(1, sizeof(mod_t));
 
+	mod->pset_label = strdup("unnamed");
+
 	// populate port_map
 	mod->port_map.handle = mod;
 	mod->port_map.port_index = _port_index;
@@ -1351,7 +1356,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 			LilvNodes* has_show_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
 				extension_data, show_interface);
 
-			//if(lilv_nodes_size(has_show_iface) && lilv_nodes_size(has_idle_iface))
 			if(lilv_nodes_size(has_show_iface)) // idle_iface is implicitely included
 			{
 				mod->show.ui = lui;
@@ -1454,6 +1458,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 		eina_module_unload(mod->x11.lib);
 		eina_module_free(mod->x11.lib);
 	}
+
+	if(mod->pset_label)
+		free(mod->pset_label);
 
 	free(mod);
 }
@@ -1767,12 +1774,9 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		}
 
 		// presets
-		if(lilv_nodes_size(mod->presets))
-		{
-			elmnt = elm_genlist_item_append(ui->modlist, ui->psetitc, mod, itm,
-				ELM_GENLIST_ITEM_TREE, NULL, NULL);
-			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
-		}
+		elmnt = elm_genlist_item_append(ui->modlist, ui->psetitc, mod, itm,
+			ELM_GENLIST_ITEM_TREE, NULL, NULL);
+		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 
 		// separator
 		elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, NULL, itm,
@@ -1786,9 +1790,13 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			const LilvNode* preset = lilv_nodes_get(mod->presets, i);
 
 			elmnt = elm_genlist_item_append(ui->modlist, ui->psetitmitc, preset, itm,
-			ELM_GENLIST_ITEM_NONE, NULL, NULL);
+				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 		}
+
+		elmnt = elm_genlist_item_append(ui->modlist, ui->psetsaveitc, mod, itm,
+			ELM_GENLIST_ITEM_NONE, NULL, NULL);
+		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 	}
 }
 
@@ -1824,17 +1832,18 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 		const char *label = _preset_label_get(ui->world, &ui->regs, preset);
 
 		// signal app
-		size_t size = sizeof(transmit_module_preset_t) + lv2_atom_pad_size(strlen(label) + 1);
-		transmit_module_preset_t *trans = _sp_ui_to_app_request(ui, size);
+		size_t size = sizeof(transmit_module_preset_load_t) + lv2_atom_pad_size(strlen(label) + 1);
+		transmit_module_preset_load_t *trans = _sp_ui_to_app_request(ui, size);
 		if(trans)
 		{
-			_sp_transmit_module_preset_fill(&ui->regs, &ui->forge, trans, size, mod->uid, label);
+			_sp_transmit_module_preset_load_fill(&ui->regs, &ui->forge, trans, size, mod->uid, label);
 			_sp_ui_to_app_advance(ui, size);
 		}
 
 		// contract parent list item
 		evas_object_smart_callback_call(obj, "contract,request", parent);
 	}
+
 	//TODO toggle checkboxes on modules and ports
 }
 
@@ -2047,7 +2056,7 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 			elm_win_resize_object_add(win, bg);
 			
 			Evas_Object *container = elm_layout_add(win);
-			elm_layout_file_set(container, "/usr/local/share/synthpod/synthpod.edj",
+			elm_layout_file_set(container, SYNTHPOD_DATA_DIR"/synthpod.edj",
 				"/synthpod/modgrid/container");
 			char col [7];
 			sprintf(col, "col,%02i", mod->col);
@@ -2115,7 +2124,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		return NULL;
 
 	Evas_Object *lay = elm_layout_add(obj);
-	elm_layout_file_set(lay, "/usr/local/share/synthpod/synthpod.edj",
+	elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
 		"/synthpod/modlist/module");
 	evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -2276,7 +2285,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		return NULL;
 	
 	Evas_Object *lay = elm_layout_add(obj);
-	elm_layout_file_set(lay, "/usr/local/share/synthpod/synthpod.edj",
+	elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
 		"/synthpod/modlist/port");
 	evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -2288,7 +2297,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	elm_layout_content_set(lay, "elm.swallow.icon", patched);
 
 	Evas_Object *dir = edje_object_add(evas_object_evas_get(lay));
-	edje_object_file_set(dir, "/usr/local/share/synthpod/synthpod.edj",
+	edje_object_file_set(dir, SYNTHPOD_DATA_DIR"/synthpod.edj",
 		"/synthpod/patcher/port");
 	char col [7];
 	sprintf(col, "col,%02i", mod->col);
@@ -2456,6 +2465,115 @@ _modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
 }
 
 static void
+_pset_markup(void *data, Evas_Object *obj, char **txt)
+{
+	mod_t *mod = data;
+
+	//printf("_markup: %s\n", *txt);
+
+	// intercept enter
+	if(!strcmp(*txt, "<tab/>") || !strcmp(*txt, " "))
+	{
+		free(*txt);
+		*txt = strdup("_");
+	}
+}
+
+static void
+_pset_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+	
+	const char *chunk = elm_entry_entry_get(obj);
+	char *utf8 = elm_entry_markup_to_utf8(chunk);
+
+	if(mod->pset_label)
+		free(mod->pset_label);
+
+	mod->pset_label = strdup(utf8);
+	free(utf8);
+}
+
+static void
+_pset_clicked(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
+
+	//printf("save preset: %s\n", mod->pset_label);
+
+	if(!mod->pset_label)
+		return;
+
+	// signal app
+	size_t size = sizeof(transmit_module_preset_save_t) + lv2_atom_pad_size(strlen(mod->pset_label) + 1);
+	transmit_module_preset_save_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_preset_save_fill(&ui->regs, &ui->forge, trans, size, mod->uid, mod->pset_label);
+		_sp_ui_to_app_advance(ui, size);
+	}
+
+	// reset pset_label
+	free(mod->pset_label);
+	mod->pset_label = strdup("unknown");
+
+	// contract parent list item TODO is there a more elegant way?
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
+	{
+		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
+		if(itc != ui->psetitc) // is not a parent preset item
+			continue; // skip 
+
+		if(elm_object_item_data_get(itm) != mod) // does not belong to this module
+			continue; // skip
+
+		evas_object_smart_callback_call(ui->modlist, "contract,request", itm);
+		break;
+	}
+}
+
+static Evas_Object * 
+_modlist_pset_content_get(void *data, Evas_Object *obj, const char *part)
+{
+	mod_t *mod = data;
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+
+	if(!strcmp(part, "elm.swallow.content"))
+	{
+		Evas_Object *hbox = elm_box_add(obj);
+		elm_box_horizontal_set(hbox, EINA_TRUE);
+		elm_box_homogeneous_set(hbox, EINA_FALSE);
+		elm_box_padding_set(hbox, 5, 0);
+		evas_object_show(hbox);
+
+		Evas_Object *entry = elm_entry_add(hbox);
+		elm_entry_single_line_set(entry, EINA_TRUE);
+		elm_entry_entry_set(entry, mod->pset_label);
+		elm_entry_editable_set(entry, EINA_TRUE);
+		elm_entry_markup_filter_append(entry, _pset_markup, mod);
+		evas_object_smart_callback_add(entry, "changed,user", _pset_changed, mod);
+		evas_object_size_hint_weight_set(entry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(entry, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(entry);
+		elm_box_pack_end(hbox, entry);
+
+		Evas_Object *but = elm_button_add(hbox);
+		elm_object_text_set(but, "+");
+		evas_object_smart_callback_add(but, "clicked", _pset_clicked, mod);
+		evas_object_size_hint_align_set(but, 0.f, EVAS_HINT_FILL);
+		evas_object_show(but);
+		elm_box_pack_start(hbox, but);
+		
+		return hbox;
+	}
+
+	return NULL;
+}
+
+static void
 _modlist_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
@@ -2525,7 +2643,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	if(!strcmp(part, "elm.swallow.icon"))
 	{
 		Evas_Object *container = elm_layout_add(ui->modgrid);
-		elm_layout_file_set(container, "/usr/local/share/synthpod/synthpod.edj",
+		elm_layout_file_set(container, SYNTHPOD_DATA_DIR"/synthpod.edj",
 			"/synthpod/modgrid/container");
 		char col [7];
 		sprintf(col, "col,%02i", mod->col);
@@ -2837,7 +2955,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	}
 
 	ui->theme = elm_layout_add(win);
-	elm_layout_file_set(ui->theme, "/usr/local/share/synthpod/synthpod.edj",
+	elm_layout_file_set(ui->theme, SYNTHPOD_DATA_DIR"/synthpod.edj",
 		"/synthpod/theme");
 	evas_object_size_hint_weight_set(ui->theme, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->theme, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -2992,6 +3110,13 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	ui->psetitmitc->func.state_get = NULL;
 	ui->psetitmitc->func.del = NULL;
 
+	ui->psetsaveitc = elm_genlist_item_class_new();
+	ui->psetsaveitc->item_style = "full";
+	ui->psetsaveitc->func.text_get = NULL;
+	ui->psetsaveitc->func.content_get = _modlist_pset_content_get;
+	ui->psetsaveitc->func.state_get = NULL;
+	ui->psetsaveitc->func.del = NULL;
+
 	ui->modgrid = elm_gengrid_add(ui->mainpane);
 	elm_gengrid_select_mode_set(ui->modgrid, ELM_OBJECT_SELECT_MODE_NONE);
 	elm_gengrid_reorder_mode_set(ui->modgrid, EINA_TRUE);
@@ -3106,6 +3231,18 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		mod->std.itm = NULL;
 	
 		_patches_update(ui);
+	}
+	else if(protocol == ui->regs.synthpod.module_preset_save.urid)
+	{
+		const transmit_module_preset_save_t *trans = (const transmit_module_preset_save_t *)atom;
+		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+
+		if(!mod)
+			return;
+
+		// reload presets for this module
+		mod->presets = _preset_reload(ui->world, &ui->regs, mod->plug, mod->presets,
+			trans->label_str);
 	}
 	else if(protocol == ui->regs.synthpod.module_selected.urid)
 	{
@@ -3253,6 +3390,7 @@ sp_ui_free(sp_ui_t *ui)
 	elm_genlist_item_class_free(ui->stditc);
 	elm_genlist_item_class_free(ui->psetitc);
 	elm_genlist_item_class_free(ui->psetitmitc);
+	elm_genlist_item_class_free(ui->psetsaveitc);
 	elm_gengrid_item_class_free(ui->patchitc);
 	
 	sp_regs_deinit(&ui->regs);

@@ -74,7 +74,7 @@ _smart_meter_smart_add(Evas_Object *o)
 	_smart_meter_parent_sc->add(o);
 
 	priv->theme = edje_object_add(e);
-	edje_object_file_set(priv->theme, "/usr/local/share/synthpod/synthpod.edj",
+	edje_object_file_set(priv->theme, SYNTHPOD_DATA_DIR"/synthpod.edj",
 		"/synthpod/smart_meter/theme"); //TODO
 	evas_object_show(priv->theme);
 	evas_object_smart_member_add(priv->theme, o);

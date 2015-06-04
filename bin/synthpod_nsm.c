@@ -15,11 +15,14 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h> // getpid
 
 #include <Ecore.h>
 #include <Ecore_Con.h>
+#include <Ecore_File.h>
+#include <Efreet.h>
 
 #include <osc.h>
 
@@ -240,6 +243,8 @@ _con_dat(void *data, int type, void *info)
 synthpod_nsm_t *
 synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *nsm_driver, void *data)
 {
+	efreet_init();
+
 	if(!nsm_driver)
 		return NULL;
 
@@ -300,9 +305,27 @@ synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *nsm_driver, void 
 	}
 	else
 	{
-		// directly call open callback
-		nsm->driver->open("/home/hp/.local/share/synthpod/state.json", //FIXME
-			nsm->call, nsm->exe, nsm->data);
+		const char *data_dir = efreet_data_home_get();
+
+		char *synthpod_dir = NULL;
+		asprintf(&synthpod_dir, "%s/synthpod", data_dir);
+		if(synthpod_dir)
+		{
+			ecore_file_mkpath(synthpod_dir);
+
+			char *filename = NULL;
+			asprintf(&filename, "%s/state.json", synthpod_dir);
+			if(filename)
+			{
+				// directly call open callback
+				nsm->driver->open(filename,
+					nsm->call, nsm->exe, nsm->data);
+
+				free(filename);
+			}
+
+			free(synthpod_dir);
+		}
 	}
 
 	return nsm;
@@ -345,4 +368,6 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 
 		free(nsm);
 	}
+
+	efreet_shutdown();
 }

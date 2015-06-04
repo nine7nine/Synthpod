@@ -1,6 +1,8 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/eo_ui.lv2)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cjson)
+		
+add_definitions("-D_GNU_SOURCE=1") # asprintf
 
 # synthpod
 add_library(synthpod.lib SHARED
@@ -9,12 +11,16 @@ add_library(synthpod.lib SHARED
 	cjson/cJSON.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
+	${ECORE_CON_LDFLAGS}
+	${EFREET_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS})
 set_target_properties(synthpod.lib PROPERTIES OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lib DESTINATION lib)
 
 if(BUILD_UI)
+	add_definitions("-DSYNTHPOD_DATA_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_DATA_DIR}\"")
+
 # synthpod_ui
 	add_library(synthpod_ui.lib SHARED
 		synthpod_ui.c

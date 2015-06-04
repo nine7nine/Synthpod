@@ -15,15 +15,21 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h> // isspace
 #include <math.h>
 
 #if !defined(_WIN32)
 #	include <sys/mman.h> // mlock
+#else
+#	include <Evil.h>
 #endif
 
 #include <cJSON.h>
 #include <Eina.h>
+#include <Efreet.h>
+#include <Ecore_File.h>
 
 #include <synthpod_app.h>
 #include <synthpod_private.h>
@@ -135,6 +141,12 @@ struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
 
+	struct {
+		const char *home;
+		const char *data;
+		const char *config;
+	} dir;
+
 	int embedded;
 	LilvWorld *world;
 	const LilvPlugins *plugs;
@@ -156,6 +168,9 @@ struct _sp_app_t {
 static void
 _state_set_value(const char *symbol, void *data,
 	const void *value, uint32_t size, uint32_t type);
+
+static const void *
+_state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type);
 
 // rt
 static inline void *
@@ -640,12 +655,25 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 sp_app_t *
 sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 {
+	efreet_init();
+	ecore_file_init();
+
 	if(!driver || !data)
 		return NULL;
 
 	sp_app_t *app = calloc(1, sizeof(sp_app_t));
 	if(!app)
 		return NULL;
+
+#if !defined(_WIN32)
+	app->dir.home = getenv("HOME");
+#else
+	app->dir.home = evil_homedir_get();
+#endif
+	app->dir.config = efreet_config_home_get();
+	app->dir.data = efreet_data_home_get();
+
+	//printf("%s %s %s\n", app->dir.home, app->dir.config, app->dir.data);
 
 	app->driver = driver;
 	app->data = data;
@@ -905,9 +933,9 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		//TODO signal to ui
 	}
-	else if(protocol == app->regs.synthpod.module_preset.urid)
+	else if(protocol == app->regs.synthpod.module_preset_load.urid)
 	{
-		const transmit_module_preset_t *pset = (const transmit_module_preset_t *)atom;
+		const transmit_module_preset_load_t *pset = (const transmit_module_preset_load_t *)atom;
 
 		mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
 		if(!mod)
@@ -927,7 +955,28 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
-	//TODO preset save
+	else if(protocol == app->regs.synthpod.module_preset_save.urid)
+	{
+		const transmit_module_preset_save_t *pset = (const transmit_module_preset_save_t *)atom;
+
+		mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
+		if(!mod)
+			return;
+
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+				work->target = app;
+				work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+				job->type = JOB_TYPE_PRESET_SAVE;
+				job->mod = mod;
+				memcpy(job->uri, pset->label_str, pset->label.atom.size);
+			_sp_app_to_worker_advance(app, size);
+		}
+	}
 	else if(protocol == app->regs.synthpod.module_selected.urid)
 	{
 		const transmit_module_selected_t *select = (const transmit_module_selected_t *)atom;
@@ -1166,6 +1215,26 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
+const LilvNode *
+_mod_preset_get(mod_t *mod, const char *label)
+{
+	sp_app_t *app = mod->app;
+
+	LILV_FOREACH(nodes, i, mod->presets)
+	{
+		const LilvNode* preset = lilv_nodes_get(mod->presets, i);
+		const char *lab = _preset_label_get(app->world, &app->regs, preset);
+
+		// test for matching preset label
+		if(!lab || strcmp(lab, label))
+			continue;
+
+		return preset;
+	}
+
+	return NULL;
+}
+
 // non-rt worker thread
 void
 sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
@@ -1205,51 +1274,120 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			case JOB_TYPE_PRESET_LOAD:
 			{
 				mod_t *mod = job->mod;
+				const LilvNode *preset = _mod_preset_get(mod, job->uri);
 
-				//enable bypass
-				mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
-				eina_semaphore_lock(&mod->bypass_sem);
-				
-				const LilvNode *preset = NULL;
-				LILV_FOREACH(nodes, i, mod->presets)
-				{
-					const LilvNode* pres = lilv_nodes_get(mod->presets, i);
-					const char *label = _preset_label_get(app->world, &app->regs, pres);
-
-					// test for matching preset label
-					if(strcmp(label, job->uri))
-						continue;
-
-					preset = pres;
-				}
-
-				if(preset)
+				if(preset) // preset existing
 				{
 					// load preset
 					LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
 						preset);
+
+					//enable bypass
+					mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
+					eina_semaphore_lock(&mod->bypass_sem);
+
 					lilv_state_restore(state, mod->inst, _state_set_value, mod,
 						LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+				
+					// disable bypass
+					mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
+
+
 					lilv_state_free(state);
 				}
-			
-				// disable bypass
-				mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
 
 				break;
 			}
 			case JOB_TYPE_PRESET_SAVE:
 			{
 				mod_t *mod = job->mod;
+				const LilvNode *preset = _mod_preset_get(mod, job->uri);
 
-				// enable bypass
-				mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
-				eina_semaphore_lock(&mod->bypass_sem);
+				if(!preset) // preset not existing
+				{
+					const LilvNode *uri_node = lilv_plugin_get_uri(mod->plug);
+					const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
+					if(!uri_node || !name_node)
+						break;
+
+					const char *uri = lilv_node_as_string(uri_node);
+					const char *name = lilv_node_as_string(name_node);
+					char *dir = NULL;
+					char *filename = NULL;
+					char *bndl = NULL;
+
+					// create bundle path
+					asprintf(&dir, "%s/.lv2/%s_%s.lv2", app->dir.home, name, job->uri);
+					if(!dir)
+						break;
+
+					// replace spaces with underscore
+					for(int i=0; i<strlen(dir); i++)
+						if(isspace(dir[i]))
+							dir[i] = '_';
+					ecore_file_mkpath(dir); // create path if not existent already
+
+					// create plugin state file name
+					asprintf(&filename, "%s.ttl", job->uri);
+					if(!filename)
+					{
+						free(dir);
+						break;
+					}
+					
+					// create bundle path URI
+					asprintf(&bndl, "file://%s/", dir);
+					if(!bndl)
+					{
+						free(dir);
+						free(filename);
+						break;
+					}
+					
+					//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
+
+					// enable bypass
+					mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
+					eina_semaphore_lock(&mod->bypass_sem);
+					
+					LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+						app->driver->map, NULL, NULL, NULL, NULL,
+						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 				
-				//TODO
-			
-				// disable bypass
-				mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
+					// disable bypass
+					mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
+
+					// actually save the state to disk
+					lilv_state_set_label(state, job->uri);
+					lilv_state_save(app->world, app->driver->map, app->driver->unmap,
+						state, NULL, dir, filename);
+					lilv_state_free(state);
+
+					// reload presets for this module
+					mod->presets = _preset_reload(app->world, &app->regs, mod->plug,
+						mod->presets, bndl);
+
+					// signal ui to reload its presets, too
+					size_t size = sizeof(transmit_module_preset_save_t)
+											+ lv2_atom_pad_size(strlen(bndl) + 1);
+					transmit_module_preset_save_t *trans = _sp_app_to_ui_request(app, size);
+					if(trans)
+					{
+						_sp_transmit_module_preset_save_fill(&app->regs, &app->forge, trans,
+							size, mod->uid, bndl);
+						_sp_app_to_ui_advance(app, size);
+					}
+					
+					// cleanup
+					if(dir)
+						free(dir);
+					if(filename)
+						free(filename);
+					if(bndl)
+						free(bndl);
+				}
+				else
+					; //TODO overwrite preset?
 
 				break;
 			}
@@ -1556,6 +1694,9 @@ sp_app_free(sp_app_t *app)
 		lilv_world_free(app->world);
 
 	free(app);
+
+	ecore_file_shutdown();
+	efreet_shutdown();
 }
 
 // non-rt / rt

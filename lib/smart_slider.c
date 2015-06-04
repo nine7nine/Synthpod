@@ -243,7 +243,7 @@ _smart_slider_smart_add(Evas_Object *o)
 	_smart_slider_parent_sc->add(o);
 
 	priv->theme = edje_object_add(e);
-	edje_object_file_set(priv->theme, "/usr/local/share/synthpod/synthpod.edj",
+	edje_object_file_set(priv->theme, SYNTHPOD_DATA_DIR"/synthpod.edj",
 		"/synthpod/smart_slider/theme"); //TODO
 	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_IN, _mouse_in, priv);
 	evas_object_event_callback_add(o, EVAS_CALLBACK_MOUSE_OUT, _mouse_out, priv);

@@ -11,7 +11,8 @@ include(CheckSymbolExists)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
 
-set(APP_DIR share/synthpod)
+set(SYNTHPOD_DATA_DIR "share/synthpod")
+
 set(CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
 
 # options
@@ -23,9 +24,17 @@ option(BUILD_PORTAUDIO "Build PortAudio standalone host" OFF)
 pkg_search_module(EINA REQUIRED eina>=1.8)
 include_directories(${EINA_INCLUDE_DIRS})
 
+# efreet
+pkg_search_module(EFREET REQUIRED efreet>=1.8)
+include_directories(${EFREET_INCLUDE_DIRS})
+
 # ecore-con
 pkg_search_module(ECORE_CON REQUIRED ecore-con>=1.8)
 include_directories(${ECORE_CON_INCLUDE_DIRS})
+
+# ecore-file
+pkg_search_module(ECORE_FILE REQUIRED ecore-file>=1.8)
+include_directories(${ECORE_FILE_INCLUDE_DIRS})
 	
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
