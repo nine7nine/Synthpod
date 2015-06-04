@@ -35,9 +35,11 @@
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
+#include <lv2/lv2plug.in/ns/ext/time/time.h>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
+#include <jack/transport.h>
 
 #include <Eina.h>
 
@@ -84,11 +86,23 @@ struct _prog_t {
 
 	LV2_Atom_Forge forge;
 	LV2_URID midi_MidiEvent;
+
 	LV2_URID log_entry;
 	LV2_URID log_error;
 	LV2_URID log_note;
 	LV2_URID log_trace;
 	LV2_URID log_warning;
+
+	LV2_URID time_position;
+	LV2_URID time_barBeat;
+	LV2_URID time_bar;
+	LV2_URID time_beat;
+	LV2_URID time_beatUnit;
+	LV2_URID time_beatsPerBar;
+	LV2_URID time_beatsPerMinute;
+	LV2_URID time_frame;
+	LV2_URID time_framesPerSecond;
+	LV2_URID time_speed;
 
 	jack_client_t *client;
 	jack_port_t *midi_in;
@@ -102,6 +116,12 @@ struct _prog_t {
 
 	volatile prog_state_t prog_state;
 	Eina_Semaphore prog_sem;
+
+	struct {
+		jack_transport_state_t rolling;
+		jack_nframes_t frame;
+		double bpm;
+	} trans;
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
@@ -277,6 +297,42 @@ _ui_animator(void *data)
 }
 #endif // BUILD_UI
 
+static void
+_trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t *pos)
+{
+	LV2_Atom_Forge_Frame frame;
+
+	lv2_atom_forge_frame_time(forge, 0);
+	lv2_atom_forge_object(forge, &frame, 0, prog->time_position);
+	{
+		lv2_atom_forge_key(forge, prog->time_frame);
+		lv2_atom_forge_long(forge, pos->frame);
+
+		lv2_atom_forge_key(forge, prog->time_speed);
+		lv2_atom_forge_float(forge, rolling ? 1.0 : 0.0);
+
+		if(pos->valid & JackPositionBBT)
+		{
+			lv2_atom_forge_key(forge, prog->time_barBeat);
+			lv2_atom_forge_float(forge,
+				pos->beat - 1 + (pos->tick / pos->ticks_per_beat));
+
+			lv2_atom_forge_key(forge, prog->time_bar);
+			lv2_atom_forge_long(forge, pos->bar - 1);
+
+			lv2_atom_forge_key(forge, prog->time_beatUnit);
+			lv2_atom_forge_int(forge, pos->beat_type);
+
+			lv2_atom_forge_key(forge, prog->time_beatsPerBar);
+			lv2_atom_forge_float(forge, pos->beats_per_bar);
+
+			lv2_atom_forge_key(forge, prog->time_beatsPerMinute);
+			lv2_atom_forge_float(forge, pos->beats_per_minute);
+		}
+	}
+	lv2_atom_forge_pop(forge, &frame);
+}
+
 // rt
 static int
 _process(jack_nframes_t nsamples, void *data)
@@ -284,6 +340,14 @@ _process(jack_nframes_t nsamples, void *data)
 	prog_t *handle = data;
 	sp_app_t *app = handle->app;
 
+	// get transport position
+	jack_position_t pos;
+	int rolling = jack_transport_query(handle->client, &pos) == JackTransportRolling;
+	int trans_changed = (rolling != handle->trans.rolling)
+		|| (pos.frame != handle->trans.frame)
+		|| (pos.beats_per_minute != handle->trans.bpm);
+
+	// get buffers
 	void *midi_in_buf = jack_port_get_buffer(handle->midi_in, nsamples);
 	const float *audio_in_buf[2] = {
 		jack_port_get_buffer(handle->audio_in[0], nsamples),
@@ -334,6 +398,10 @@ _process(jack_nframes_t nsamples, void *data)
 		LV2_Atom_Forge_Frame frame;
 		lv2_atom_forge_set_buffer(forge, (void *)seq_in, SEQ_SIZE);
 		lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+		if(trans_changed)
+			_trans_event(handle, forge, rolling, &pos);
+
 		int n = jack_midi_get_event_count(midi_in_buf);	
 		for(int i=0; i<n; i++)
 		{
@@ -348,6 +416,14 @@ _process(jack_nframes_t nsamples, void *data)
 		}
 		lv2_atom_forge_pop(forge, &frame);
 	}
+
+	// update transport state
+	handle->trans.frame = rolling
+		? pos.frame + nsamples
+		: pos.frame;
+	handle->trans.bpm = pos.beats_per_minute;
+	handle->trans.rolling = rolling;
+
 
 	// read events from worker
 	{
@@ -620,12 +696,25 @@ main(int argc, char **argv)
 	LV2_URID_Unmap *unmap = ext_urid_unmap_get(handle.ext_urid);
 
 	lv2_atom_forge_init(&handle.forge, map);
+
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
+
 	handle.log_entry = map->map(map->handle, LV2_LOG__Entry);
 	handle.log_error = map->map(map->handle, LV2_LOG__Error);
 	handle.log_note = map->map(map->handle, LV2_LOG__Note);
 	handle.log_trace = map->map(map->handle, LV2_LOG__Trace);
 	handle.log_warning = map->map(map->handle, LV2_LOG__Warning);
+
+	handle.time_position = map->map(map->handle, LV2_TIME__Position);
+	handle.time_barBeat = map->map(map->handle, LV2_TIME__barBeat);
+	handle.time_bar = map->map(map->handle, LV2_TIME__bar);
+	handle.time_beat = map->map(map->handle, LV2_TIME__beat);
+	handle.time_beatUnit = map->map(map->handle, LV2_TIME__beatUnit);
+	handle.time_beatsPerBar = map->map(map->handle, LV2_TIME__beatsPerBar);
+	handle.time_beatsPerMinute = map->map(map->handle, LV2_TIME__beatsPerMinute);
+	handle.time_frame = map->map(map->handle, LV2_TIME__frame);
+	handle.time_framesPerSecond = map->map(map->handle, LV2_TIME__framesPerSecond);
+	handle.time_speed = map->map(map->handle, LV2_TIME__speed);
 
 	handle.app_driver.map = map;
 	handle.app_driver.unmap = unmap;
