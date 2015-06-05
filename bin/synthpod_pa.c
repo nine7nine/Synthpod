@@ -652,6 +652,7 @@ main(int argc, char **argv)
 	handle.ui_driver.unmap = unmap;
 	handle.ui_driver.to_app_request = _ui_to_app_request;
 	handle.ui_driver.to_app_advance = _ui_to_app_advance;
+	handle.ui_driver.instance_access = 1; // enabled
 
 	// create main window
 	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);

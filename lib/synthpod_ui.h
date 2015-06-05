@@ -68,6 +68,7 @@ typedef void (*sp_to_advance_t)(size_t size, void *data);
 struct _sp_ui_driver_t {
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
+	int instance_access;
 
 	// from ui
 	sp_to_request_t to_app_request;

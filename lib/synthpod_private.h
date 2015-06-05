@@ -411,6 +411,7 @@ struct _transmit_module_add_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
 	LV2_Atom_Long inst _ATOM_ALIGNED;
+	LV2_Atom_Long data _ATOM_ALIGNED;
 	LV2_Atom_String uri _ATOM_ALIGNED;
 		char uri_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
@@ -527,11 +528,14 @@ _sp_transmit_module_list_fill(reg_t *regs, LV2_Atom_Forge *forge,
 {
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_list.urid);
 }
+					
+typedef const void *(*data_access_t)(const char * uri);
 
 static inline void
 _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_add_t *trans, uint32_t size,
-	u_id_t module_uid, const char *module_uri, const void *inst)
+	u_id_t module_uid, const char *module_uri, const LV2_Handle *inst,
+	data_access_t data_access)
 {
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_add.urid);
 
@@ -542,6 +546,10 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->inst.atom.size = sizeof(int64_t);
 	trans->inst.atom.type = forge->Long;
 	trans->inst.body = (uintptr_t)inst;
+	
+	trans->data.atom.size = sizeof(int64_t);
+	trans->data.atom.type = forge->Long;
+	trans->data.body = (uintptr_t)data_access;
 
 	if(module_uri)
 	{

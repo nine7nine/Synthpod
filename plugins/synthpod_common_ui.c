@@ -130,6 +130,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_INSTANCE_ACCESS_URI))
+			handle->driver.instance_access = features[i]->data != NULL;
 		else if(!strcmp(features[i]->URI, "http://open-music-kontrollers.ch/lv2/synthpod#world"))
 			handle->world = (const LilvWorld *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_UI__portMap))

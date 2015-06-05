@@ -1120,12 +1120,6 @@ _x11_ui_show(mod_t *mod)
 		mod->x11.anim = ecore_animator_add(_x11_ui_animator, mod);
 }
 
-static const void *
-_data_access(const char *uri)
-{
-	return NULL; //FIXME this should call the plugins extension data function
-}
-		
 static const LV2UI_Descriptor *
 _ui_dlopen(const LilvUI *ui, Eina_Module **lib)
 {
@@ -1173,7 +1167,8 @@ fail:
 }
 
 static mod_t *
-_sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
+_sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
+	data_access_t data_access)
 {
 	LilvNode *uri_node = lilv_new_uri(ui->world, uri);
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(ui->plugs, uri_node);
@@ -1203,7 +1198,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 	mod->kx.host.plugin_human_id = "Synthpod"; //TODO provide something here?
 
 	// populate extension_data
-	mod->ext_data.data_access = _data_access;
+	mod->ext_data.data_access = data_access;
 
 	// populate port_event for StdUI
 	mod->std.descriptor.port_event = _std_port_event;
@@ -1226,34 +1221,52 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, void *inst)
 	mod->opts.options[1].value = NULL; // sentinel
 
 	// populate UI feature list
-	mod->feature_list[0].URI = LV2_URID__map;
-	mod->feature_list[0].data = ui->driver->map;
-	mod->feature_list[1].URI = LV2_URID__unmap;
-	mod->feature_list[1].data = ui->driver->unmap;
-	mod->feature_list[2].URI = LV2_UI__parent;
-	mod->feature_list[2].data = NULL; // will be filled in before instantiation
-	mod->feature_list[3].URI = LV2_UI__portMap;
-	mod->feature_list[3].data = &mod->port_map;
-	mod->feature_list[4].URI = LV2_UI__portSubscribe;
-	mod->feature_list[4].data = &mod->port_subscribe;
-	mod->feature_list[5].URI = LV2_DATA_ACCESS_URI;
-	mod->feature_list[5].data = &mod->ext_data;
-	mod->feature_list[6].URI = LV2_INSTANCE_ACCESS_URI;
-	mod->feature_list[6].data = inst;
-	mod->feature_list[7].URI = LV2_UI__idleInterface; // signal support for idleInterface
-	mod->feature_list[7].data = NULL;
-	mod->feature_list[8].URI = LV2_EXTERNAL_UI__Host;
-	mod->feature_list[8].data = &mod->kx.host;
-	mod->feature_list[9].URI = LV2_UI__resize;
-	mod->feature_list[9].data = &mod->x11.host_resize_iface;
-	mod->feature_list[10].URI = SYNTHPOD_WORLD;
-	mod->feature_list[10].data = ui->world;
-	mod->feature_list[11].URI = LV2_OPTIONS__options;
-	mod->feature_list[11].data = mod->opts.options;
+	int nfeatures = 0;
+	mod->feature_list[nfeatures].URI = LV2_URID__map;
+	mod->feature_list[nfeatures++].data = ui->driver->map;
+
+	mod->feature_list[nfeatures].URI = LV2_URID__unmap;
+	mod->feature_list[nfeatures++].data = ui->driver->unmap;
+
+	mod->feature_list[nfeatures].URI = LV2_UI__parent;
+	mod->feature_list[nfeatures++].data = NULL; // will be filled in before instantiation
+
+	mod->feature_list[nfeatures].URI = LV2_UI__portMap;
+	mod->feature_list[nfeatures++].data = &mod->port_map;
+
+	mod->feature_list[nfeatures].URI = LV2_UI__portSubscribe;
+	mod->feature_list[nfeatures++].data = &mod->port_subscribe;
+
+	mod->feature_list[nfeatures].URI = LV2_UI__idleInterface; // signal support for idleInterface
+	mod->feature_list[nfeatures++].data = NULL;
+
+	mod->feature_list[nfeatures].URI = LV2_EXTERNAL_UI__Host;
+	mod->feature_list[nfeatures++].data = &mod->kx.host;
+
+	mod->feature_list[nfeatures].URI = LV2_UI__resize;
+	mod->feature_list[nfeatures++].data = &mod->x11.host_resize_iface;
+
+	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
+	mod->feature_list[nfeatures++].data = ui->world;
+
+	mod->feature_list[nfeatures].URI = LV2_OPTIONS__options;
+	mod->feature_list[nfeatures++].data = mod->opts.options;
+
+	if(data_access)
+	{
+		mod->feature_list[nfeatures].URI = LV2_DATA_ACCESS_URI;
+		mod->feature_list[nfeatures++].data = &mod->ext_data;
+	}
+
+	if(ui->driver->instance_access && inst)
+	{
+		mod->feature_list[nfeatures].URI = LV2_INSTANCE_ACCESS_URI;
+		mod->feature_list[nfeatures++].data = inst;
+	}
 	
-	for(int i=0; i<NUM_UI_FEATURES; i++)
+	for(int i=0; i<nfeatures; i++)
 		mod->features[i] = &mod->feature_list[i];
-	mod->features[NUM_UI_FEATURES] = NULL; // sentinel
+	mod->features[nfeatures] = NULL; // sentinel
 
 	mod->ui = ui;
 	mod->uid = uid;
@@ -1580,7 +1593,8 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
-		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str, NULL);
+		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str,
+			NULL, NULL);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -3180,7 +3194,8 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	{
 		const transmit_module_add_t *trans = (const transmit_module_add_t *)atom;
 
-		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body, (void *)trans->inst.body);
+		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body,
+			(void *)trans->inst.body, (data_access_t)trans->data.body);
 		if(!mod)
 			return;
 

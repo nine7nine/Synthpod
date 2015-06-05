@@ -29,6 +29,7 @@
 @prefix bufsz: <http://lv2plug.in/ns/ext/buf-size#> .
 @prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix kx:		<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
+@prefix inst:	<http://lv2plug.in/ns/ext/instance-access> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -327,6 +328,7 @@ synthpod:common_eo
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
+	lv2:optionalFeature inst: ;
 	lv2:requiredFeature ui:portMap .
 synthpod:common_ui
 	a ui:UI ;
@@ -335,6 +337,7 @@ synthpod:common_ui
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
+	lv2:optionalFeature inst: ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
 synthpod:common_x11
@@ -344,8 +347,8 @@ synthpod:common_x11
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
+	lv2:optionalFeature ui:resize, inst: ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap ;
-	lv2:optionalFeature ui:resize ;
   lv2:extensionData ui:idleInterface .
 synthpod:common_kx
 	a kx:Widget ;
@@ -354,6 +357,7 @@ synthpod:common_kx
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
+	lv2:optionalFeature inst: ;
 	lv2:requiredFeature kx:Host, ui:portMap .
 
 # Stereo Plugin

@@ -806,8 +806,12 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 			if(trans)
 			{
+				const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
+				data_access_t data_access = descriptor
+					? descriptor->extension_data
+					: NULL;
 				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-					mod->uid, uri_str, mod->handle);
+					mod->uid, uri_str, mod->handle, data_access);
 				_sp_app_to_ui_advance(app, size);
 			}
 		}
@@ -1170,8 +1174,12 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
+					const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(job->mod->inst);
+					data_access_t data_access = descriptor
+						? descriptor->extension_data
+						: NULL;
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-						job->mod->uid, uri_str, job->mod->handle);
+						job->mod->uid, uri_str, job->mod->handle, data_access);
 					_sp_app_to_ui_advance(app, size);
 				}
 
