@@ -19,8 +19,6 @@ set_target_properties(synthpod.lib PROPERTIES OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lib DESTINATION lib)
 
 if(BUILD_UI)
-	add_definitions("-DSYNTHPOD_DATA_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_DATA_DIR}\"")
-
 # synthpod_ui
 	add_library(synthpod_ui.lib SHARED
 		synthpod_ui.c

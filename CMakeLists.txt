@@ -12,6 +12,7 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
 
 set(SYNTHPOD_DATA_DIR "share/synthpod")
+add_definitions("-DSYNTHPOD_DATA_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_DATA_DIR}\"")
 
 set(CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
 
@@ -58,3 +59,4 @@ add_subdirectory(lib)
 add_subdirectory(bin)
 add_subdirectory(plugins)
 add_subdirectory(data)
+add_subdirectory(bundle)

@@ -85,6 +85,8 @@ struct _prog_t {
 #endif
 
 	LV2_Atom_Forge forge;
+
+	LV2_URID synthpod_json;
 	LV2_URID midi_MidiEvent;
 
 	LV2_URID log_entry;
@@ -205,24 +207,43 @@ _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	size_t size, uint32_t type, uint32_t flags)
 {
 	prog_t *handle = state;
+	
+	if(key != handle->synthpod_json)
+		return LV2_STATE_ERR_NO_PROPERTY;
 
-	if(type != handle->forge.String)
+	if(type != handle->forge.Path)
 		return LV2_STATE_ERR_BAD_TYPE;
-
-	if(!(flags & LV2_STATE_IS_POD) || !(flags & LV2_STATE_IS_PORTABLE))
+	
+	if(!(flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
 		return LV2_STATE_ERR_BAD_FLAGS;
+	
+	if(strcmp(value, "state.json"))
+		return LV2_STATE_ERR_UNKNOWN;
 
-	FILE *f = fopen(handle->path, "wb");
-	if(f)
+	char *manifest_dst = NULL;
+	char *state_dst = NULL;
+
+	asprintf(&manifest_dst, "%s/manifest.ttl", handle->path);
+	asprintf(&state_dst, "%s/state.ttl", handle->path);
+
+	if(manifest_dst && state_dst)
 	{
-		int written = fwrite(value, size, 1, f);
-		fflush(f);
-		fclose(f);
+		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/manifest.ttl", manifest_dst) == EINA_FALSE)
+			fprintf(stderr, "_state_store: could not save manifest.ttl\n");
+		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/state.ttl", state_dst) == EINA_FALSE)
+			fprintf(stderr, "_state_store: could not save state.ttl\n");
 
-		if(written == size)
-			return LV2_STATE_SUCCESS;
+		free(manifest_dst);
+		free(state_dst);
+
+		return LV2_STATE_SUCCESS;
 	}
-
+	
+	if(manifest_dst)
+		free(manifest_dst);
+	if(state_dst)
+		free(state_dst);
+		
 	return LV2_STATE_ERR_UNKNOWN;
 }
 
@@ -231,7 +252,7 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	uint32_t *type, uint32_t *flags)
 {
 	prog_t *handle = state;
-	
+
 	*type = handle->forge.String;
 	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
 
@@ -254,6 +275,7 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 			}
 		}
 		fclose(f);
+
 	}
 
 	*size = 0;
@@ -423,7 +445,6 @@ _process(jack_nframes_t nsamples, void *data)
 		: pos.frame;
 	handle->trans.bpm = pos.beats_per_minute;
 	handle->trans.rolling = rolling;
-
 
 	// read events from worker
 	{
@@ -604,6 +625,39 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
+static char *
+_abstract_path(LV2_State_Map_Path_Handle instance, const char *absolute_path)
+{
+	prog_t *handle = instance;
+
+	const char *offset = absolute_path + strlen(handle->path) + 1; // + 'file://' '/'
+
+	return strdup(offset);
+}
+
+static char *
+_absolute_path(LV2_State_Map_Path_Handle instance, const char *abstract_path)
+{
+	prog_t *handle = instance;
+	
+	char *absolute_path = NULL;
+	asprintf(&absolute_path, "%s/%s", handle->path, abstract_path);
+
+	return absolute_path;
+}
+
+static char *
+_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
+{
+	prog_t *handle = instance;
+
+	char *absolute_path = _absolute_path(handle, abstract_path);
+	if(absolute_path)
+		ecore_file_mkpath(absolute_path);
+
+	return absolute_path;
+}
+
 static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
@@ -632,13 +686,39 @@ _open(const char *path, const char *name, const char *id, void *data)
 	jack_set_process_callback(handle->client, _process, handle);
 	jack_activate(handle->client);
 
+	// construct LV2 state features
+	LV2_State_Make_Path make_path = {
+		.handle = handle,
+		.path = _make_path
+	};
+	LV2_State_Map_Path map_path = {
+		.handle = handle,
+		.abstract_path = _abstract_path,
+		.absolute_path = _absolute_path
+	};
+	const LV2_Feature feature_list [2] = {
+		[0] = {
+			.URI = LV2_STATE__makePath,
+			.data = &make_path
+		},
+		[1] = {
+			.URI = LV2_STATE__mapPath,
+			.data = &map_path
+		}
+	};
+	const LV2_Feature *const features [2 + 1] = {
+		[0] = &feature_list[0],
+		[1] = &feature_list[1],
+		[2] = NULL
+	};
+
 	// pause rt-thread
 	handle->prog_state = PROG_STATE_PAUSE_REQUESTED; // atomic instruction
 	eina_semaphore_lock(&handle->prog_sem);
 
 	// restore state
 	sp_app_restore(handle->app, _state_retrieve, handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
 
 	// resume rt-thread
 	handle->prog_state = PROG_STATE_RUNNING; // atomic instruction
@@ -651,13 +731,39 @@ _save(void *data)
 {
 	prog_t *handle = data;
 
+	// construct LV2 state features
+	LV2_State_Make_Path make_path = {
+		.handle = handle,
+		.path = _make_path
+	};
+	LV2_State_Map_Path map_path = {
+		.handle = handle,
+		.abstract_path = _abstract_path,
+		.absolute_path = _absolute_path
+	};
+	const LV2_Feature feature_list [2] = {
+		[0] = {
+			.URI = LV2_STATE__makePath,
+			.data = &make_path
+		},
+		[1] = {
+			.URI = LV2_STATE__mapPath,
+			.data = &map_path
+		}
+	};
+	const LV2_Feature *const features [2 + 1] = {
+		[0] = &feature_list[0],
+		[1] = &feature_list[1],
+		[2] = NULL
+	};
+
 	// pause rt-thread
 	handle->prog_state = PROG_STATE_PAUSE_REQUESTED; // atomic instruction
 	eina_semaphore_lock(&handle->prog_sem);
 
 	// store state
 	sp_app_save(handle->app, _state_store, handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
 
 	// resume rt-thread
 	handle->prog_state = PROG_STATE_RUNNING; // atomic instruction
@@ -696,6 +802,8 @@ main(int argc, char **argv)
 	LV2_URID_Unmap *unmap = ext_urid_unmap_get(handle.ext_urid);
 
 	lv2_atom_forge_init(&handle.forge, map);
+	
+	handle.synthpod_json = map->map(map->handle, SYNTHPOD_PREFIX"json");
 
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 
@@ -751,7 +859,7 @@ main(int argc, char **argv)
 #endif
 
 	// NSM init
-	handle.nsm = synthpod_nsm_new(argv[0],
+	handle.nsm = synthpod_nsm_new(argv[0], argc > 1 ? argv[1] : NULL,
 		&nsm_driver, &handle); //TODO check
 
 	// init semaphores

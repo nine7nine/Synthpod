@@ -1274,9 +1274,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 
 	// discover system modules
-	if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#source"))
+	if(!strcmp(uri, SYNTHPOD_PREFIX"source"))
 		mod->system.source = 1;
-	else if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#sink"))
+	else if(!strcmp(uri, SYNTHPOD_PREFIX"sink"))
 		mod->system.sink = 1;
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));

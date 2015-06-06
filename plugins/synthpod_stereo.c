@@ -45,6 +45,7 @@ struct _plughandle_t {
 	LV2_Options_Option *opts;
 
 	volatile int working;
+	volatile int dirty_in;
 
 	struct {
 		struct {
@@ -163,6 +164,8 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 {
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
+
+	handle->dirty_in = 1;
 
 	return sp_app_restore(app, retrieve, state, flags, features);
 }
@@ -296,7 +299,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 {
 	eina_init();
 
-	int i;
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
@@ -308,7 +310,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	const LilvWorld *world = NULL;
 
-	for(i=0; features[i]; i++)
+	for(int i=0; features[i]; i++)
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
@@ -319,7 +321,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->schedule = (LV2_Worker_Schedule *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
 			handle->opts = (LV2_Options_Option *)features[i]->data;
-		else if(!strcmp(features[i]->URI, "http://open-music-kontrollers.ch/lv2/synthpod#world"))
+		else if(!strcmp(features[i]->URI, SYNTHPOD_PREFIX"world"))
 			world = (const LilvWorld *)features[i]->data;
 
 	if(!handle->driver.map)
@@ -499,6 +501,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
+
+	if(handle->dirty_in)
+	{
+		printf("dirty\n");
+		//TODO refresh UI
+
+		handle->dirty_in = 0;
+	}
 
 	struct {
 		LV2_Atom_Forge_Frame event_out;

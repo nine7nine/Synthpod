@@ -425,9 +425,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 
 	int system_source = 0;
 	int system_sink = 0;
-	if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#source"))
+	if(!strcmp(uri, SYNTHPOD_PREFIX"source"))
 		system_source = 1;
-	else if(!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#sink"))
+	else if(!strcmp(uri, SYNTHPOD_PREFIX"sink"))
 		system_sink = 1;
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
@@ -700,14 +700,14 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	app->uid = 1;
 
 	// inject source mod
-	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#source";
+	uri_str = SYNTHPOD_PREFIX"source";
 	mod = _sp_app_mod_add(app, uri_str);
 	app->system.source = mod;
 	app->mods[app->num_mods] = mod;
 	app->num_mods += 1;
 
 	// inject sink mod
-	uri_str = "http://open-music-kontrollers.ch/lv2/synthpod#sink";
+	uri_str = SYNTHPOD_PREFIX"sink";
 	mod = _sp_app_mod_add(app, uri_str);
 	app->system.sink = mod;
 	app->mods[app->num_mods] = mod;
@@ -1243,6 +1243,37 @@ _mod_preset_get(mod_t *mod, const char *label)
 	return NULL;
 }
 
+static char *
+_abstract_path(LV2_State_Map_Path_Handle instance, const char *absolute_path)
+{
+	const char *prefix_path = instance;
+
+	const char *offset = absolute_path + strlen(prefix_path) + 1; // + 'file://' '/'
+
+	return strdup(offset);
+}
+
+static char *
+_absolute_path(LV2_State_Map_Path_Handle instance, const char *abstract_path)
+{
+	const char *prefix_path = instance;
+	
+	char *absolute_path = NULL;
+	asprintf(&absolute_path, "%s/%s", prefix_path, abstract_path);
+
+	return absolute_path;
+}
+
+static char *
+_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
+{
+	char *absolute_path = _absolute_path(instance, abstract_path);
+	if(absolute_path)
+		ecore_file_mkpath(absolute_path);
+
+	return absolute_path;
+}
+
 // non-rt worker thread
 void
 sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
@@ -1289,6 +1320,51 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 					// load preset
 					LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
 						preset);
+					
+					const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
+					if(!name_node)
+						break;
+
+					const char *name = lilv_node_as_string(name_node);
+
+					/*
+					// create bundle path
+					char *dir = NULL;
+					asprintf(&dir, "%s/.lv2/%s_%s.lv2", app->dir.home, name, job->uri);
+					if(!dir)
+						break;
+
+					// replace spaces with underscore
+					for(int i=0; i<strlen(dir); i++)
+						if(isspace(dir[i]))
+							dir[i] = '_';
+
+					// construct LV2 state features
+					LV2_State_Make_Path make_path = {
+						.handle = dir,
+						.path = _make_path
+					};
+					LV2_State_Map_Path map_path = {
+						.handle = dir,
+						.abstract_path = _abstract_path,
+						.absolute_path = _absolute_path
+					};
+					const LV2_Feature feature_list [2] = {
+						[0] = {
+							.URI = LV2_STATE__makePath,
+							.data = &make_path
+						},
+						[1] = {
+							.URI = LV2_STATE__mapPath,
+							.data = &map_path
+						}
+					};
+					const LV2_Feature *const features [2 + 1] = {
+						[0] = &feature_list[0],
+						[1] = &feature_list[1],
+						[2] = NULL
+					};
+					*/
 
 					//enable bypass
 					mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
@@ -1300,7 +1376,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 					// disable bypass
 					mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
 
-
+					//free(dir);
 					lilv_state_free(state);
 				}
 
@@ -1344,7 +1420,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 					}
 					
 					// create bundle path URI
-					asprintf(&bndl, "file://%s/", dir);
+					asprintf(&bndl, "%s/", dir);
 					if(!bndl)
 					{
 						free(dir);
@@ -1352,15 +1428,41 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 						break;
 					}
 					
-					//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
+					printf("preset save: %s, %s, %s\n", dir, filename, bndl);
+
+					// construct LV2 state features
+					LV2_State_Make_Path make_path = {
+						.handle = dir,
+						.path = _make_path
+					};
+					LV2_State_Map_Path map_path = {
+						.handle = dir,
+						.abstract_path = _abstract_path,
+						.absolute_path = _absolute_path
+					};
+					const LV2_Feature feature_list [2] = {
+						[0] = {
+							.URI = LV2_STATE__makePath,
+							.data = &make_path
+						},
+						[1] = {
+							.URI = LV2_STATE__mapPath,
+							.data = &map_path
+						}
+					};
+					const LV2_Feature *const features [2 + 1] = {
+						[0] = &feature_list[0],
+						[1] = &feature_list[1],
+						[2] = NULL
+					};
 
 					// enable bypass
 					mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
 					eina_semaphore_lock(&mod->bypass_sem);
 					
 					LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-						app->driver->map, NULL, NULL, NULL, NULL,
-						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+						app->driver->map, NULL, NULL, NULL, dir,
+						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
 				
 					// disable bypass
 					mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
@@ -1716,33 +1818,37 @@ _state_set_value(const char *symbol, void *data,
 	sp_app_t *app = mod->app;
 
 	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
+	if(!symbol_uri)
+		return;
+
 	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
 	lilv_node_free(symbol_uri);
+	if(!port)
+		return;
+
 	uint32_t index = lilv_port_get_index(mod->plug, port);
-
-	float val = 0.f;
-
-	if(type == app->forge.Int)
-		val = *(const int32_t *)value;
-	else if(type == app->forge.Long)
-		val = *(const int64_t *)value;
-	else if(type == app->forge.Float)
-		val = *(const float *)value;
-	else if(type == app->forge.Double)
-		val = *(const double *)value;
-	else
-		return; //TODO warning
-
 	port_t *tar = &mod->ports[index];
 
-	//printf("%u %f\n", index, val);
-	*(float *)tar->buf = val;
-	tar->last = val - 0.1; // triggers notification
+	if(tar->type == PORT_TYPE_CONTROL)
+	{
+		float val = 0.f;
 
-	// to rt-thread
-	//FIXME signal to UI
-	//_ui_write_function(mod, index, sizeof(float),
-	//	app->regs.port.float_protocol.urid, &val);
+		if(type == app->forge.Int)
+			val = *(const int32_t *)value;
+		else if(type == app->forge.Long)
+			val = *(const int64_t *)value;
+		else if(type == app->forge.Float)
+			val = *(const float *)value;
+		else if(type == app->forge.Double)
+			val = *(const double *)value;
+		else
+			return; //TODO warning
+
+		//printf("%u %f\n", index, val);
+		*(float *)tar->buf = val;
+		tar->last = val - 0.1; // triggers notification
+	}
+	// TODO handle non-seq atom ports, e.g. string, path, ...
 }
 
 // non-rt / rt
@@ -1753,47 +1859,84 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 	sp_app_t *app = mod->app;
 	
 	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
+	if(!symbol_uri)
+		goto fail;
+
 	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
 	lilv_node_free(symbol_uri);
-	uint32_t index = lilv_port_get_index(mod->plug, port);
+	if(!port)
+		goto fail;
 
+	uint32_t index = lilv_port_get_index(mod->plug, port);
 	port_t *tar = &mod->ports[index];
 
-	if(  (tar->direction == PORT_DIRECTION_INPUT)
-		&& (tar->type == PORT_TYPE_CONTROL) )
+	if(tar->direction == PORT_DIRECTION_INPUT)
 	{
-		*size = sizeof(float);
-		*type = app->forge.Float;
-		return tar->buf;
+		if(tar->type == PORT_TYPE_CONTROL)
+		{
+			*size = sizeof(float);
+			*type = app->forge.Float;
+			return tar->buf;
+		}
+		// TODO handle non-seq atom ports, e.g. string, path, ...
 	}
-	// TODO serialize handle non-seq atom ports
 
+fail:
 	*size = 0;
 	*type = 0;
 	return NULL;
 }
 
-// non-rt / rt
+// non-rt
 LV2_State_Status
 sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	LV2_State_Handle hndl, uint32_t flags, const LV2_Feature *const *features)
 {
+	const LV2_State_Make_Path *make_path = NULL;
+	const LV2_State_Map_Path *map_path = NULL;
+
+	for(int i=0; features[i]; i++)
+		if(!strcmp(features[i]->URI, LV2_STATE__makePath))
+			make_path = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_STATE__mapPath))
+			map_path = features[i]->data;
+
+	if(!make_path)
+	{
+		fprintf(stderr, "sp_app_save: LV2_STATE__makePath not supported.");
+		return LV2_STATE_ERR_UNKNOWN;
+	}
+	if(!map_path)
+	{
+		fprintf(stderr, "sp_app_save: LV2_STATE__mapPath not supported.");
+		return LV2_STATE_ERR_UNKNOWN;
+	}
+
 	// create json object
 	cJSON *root_json = cJSON_CreateObject();
 	cJSON *arr_json = cJSON_CreateArray();
 	cJSON_AddItemToObject(root_json, "items", arr_json);
-
+	
 	for(int m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
-		LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-			app->driver->map, NULL, NULL, NULL, NULL,
-			_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		char uid [32];
+		sprintf(uid, "%u/", mod->uid);
+		char *path = make_path->path(make_path->handle, uid);
+		if(!path)
+			continue;
 
-		char *state_str = lilv_state_to_string(app->world,
-			app->driver->map, app->driver->unmap,
-			state, SYNTHPOD_PREFIX"state", NULL);
+		//printf("made path: %s\n", path);
+
+		LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+			app->driver->map, NULL, NULL, NULL, path,
+			_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
+
+		lilv_state_save(app->world, app->driver->map, app->driver->unmap,
+			state, NULL, path, "state.ttl");
+
+		free(path);
 		
 		const LilvNode *uri_node = lilv_state_get_plugin_uri(state);
 		const char *uri_str = lilv_node_as_string(uri_node);
@@ -1802,7 +1945,6 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		cJSON *mod_json = cJSON_CreateObject();
 		cJSON *mod_uid_json = cJSON_CreateNumber(mod->uid);
 		cJSON *mod_uri_json = cJSON_CreateString(uri_str);
-		cJSON *mod_state_json = cJSON_CreateString(state_str);
 		cJSON *mod_selected_json = cJSON_CreateBool(mod->selected);
 		cJSON *mod_ports_json = cJSON_CreateArray();
 
@@ -1837,53 +1979,128 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		}
 		cJSON_AddItemToObject(mod_json, "uid", mod_uid_json);
 		cJSON_AddItemToObject(mod_json, "uri", mod_uri_json);
-		cJSON_AddItemToObject(mod_json, "state", mod_state_json);
 		cJSON_AddItemToObject(mod_json, "selected", mod_selected_json);
 		cJSON_AddItemToObject(mod_json, "ports", mod_ports_json);
 		cJSON_AddItemToArray(arr_json, mod_json);
 
-		free(state_str);
 		lilv_state_free(state);
 	}
 
 	// serialize json object
 	char *root_str = cJSON_Print(root_json);	
 	cJSON_Delete(root_json);
+	
+	if(!root_str)
+		return LV2_STATE_ERR_UNKNOWN;
 
-	store(hndl, app->regs.synthpod.state.urid,
-		root_str, strlen(root_str) + 1, app->forge.String,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+	char *absolute = map_path->absolute_path(map_path->handle, "state.json");
+	if(!absolute)
+		return LV2_STATE_ERR_UNKNOWN;
+
+	char *abstract = map_path->abstract_path(map_path->handle, absolute);
+	if(!abstract)
+		return LV2_STATE_ERR_UNKNOWN;
+
+	FILE *f = fopen(absolute, "wb");
+	if(f)
+	{
+		size_t written = fwrite(root_str, strlen(root_str), 1, f);
+		fflush(f);
+		fclose(f);
+
+		if(written != 1)
+			fprintf(stderr, "error writing to JSON file\n");
+	}
+	else
+		fprintf(stderr, "error opening JSON file\n");
+
 	free(root_str);
+
+	//printf("abstract: %s (%zu)\n", abstract, strlen(abstract));
+	store(hndl, app->regs.synthpod.json.urid,
+		abstract, strlen(abstract) + 1, app->forge.Path,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+	free(abstract);
+	free(absolute);
 
 	return LV2_STATE_SUCCESS;
 }
 
-// non-rt / rt
+// non-rt
 LV2_State_Status
 sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle hndl, uint32_t flags, const LV2_Feature *const *features)
 {
+	const LV2_State_Map_Path *map_path = NULL;
+
+	for(int i=0; features[i]; i++)
+		if(!strcmp(features[i]->URI, LV2_STATE__mapPath))
+			map_path = features[i]->data;
+
+	if(!map_path)
+	{
+		fprintf(stderr, "sp_app_save: LV2_STATE__mapPath not supported.");
+		return LV2_STATE_ERR_UNKNOWN;
+	}
+
 	size_t size;
 	uint32_t _flags;
 	uint32_t type;
-	const char *root_str = retrieve(hndl, app->regs.synthpod.state.urid,
+	
+	const char *absolute = retrieve(hndl, app->regs.synthpod.json.urid,
 		&size, &type, &_flags);
+
+	if(!absolute)
+		return LV2_STATE_ERR_UNKNOWN;
+
+	if(type != app->forge.Path)
+		return LV2_STATE_ERR_BAD_TYPE;
+
+	if(!(_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
+		return LV2_STATE_ERR_BAD_FLAGS;
+
+	//printf("absolute: %s\n", absolute);
+
+	char *root_str = NULL;
+	FILE *f = fopen(absolute, "rb");
+	if(f)
+	{
+		fseek(f, 0, SEEK_END);
+		const size_t fsize = ftell(f);
+		fseek(f, 0, SEEK_SET);
+				
+		root_str = malloc(fsize + 1);
+		if(root_str)
+		{
+			if(fread(root_str, fsize, 1, f) == 1)
+			{
+				root_str[fsize] = '\0';
+				size = fsize + 1;
+			}
+			else // read failed
+			{
+				free(root_str);
+				root_str = NULL;
+			}
+		}
+		fclose(f);
+	}
 
 	if(!root_str)
 		return LV2_STATE_ERR_UNKNOWN;
 
-	if(type != app->forge.String)
-		return LV2_STATE_ERR_BAD_TYPE;
+	cJSON *root_json = cJSON_Parse(root_str);
+	free(root_str);
 
-	if(!(_flags & LV2_STATE_IS_POD) || !(flags & LV2_STATE_IS_PORTABLE))
-		return LV2_STATE_ERR_BAD_FLAGS;
+	if(!root_json)
+		return LV2_STATE_ERR_UNKNOWN;
 
 	// remove existing modules
 	for(int m=0; m<app->num_mods; m++)
 		_sp_app_mod_del(app, app->mods[m]);
 	app->num_mods = 0;
 
-	cJSON *root_json = cJSON_Parse(root_str);
 	// iterate over mods, create and apply states
 	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;
 		mod_json;
@@ -1901,7 +2118,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		else if(mod_uid == 2)
 			app->system.sink = mod;
 
-		//TODO not rt-safe
 		// inject module into module graph
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
@@ -1912,12 +2128,32 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		if(mod->uid > app->uid)
 			app->uid = mod->uid;
 
-		const char *state_str = cJSON_GetObjectItem(mod_json, "state")->valuestring;
-		LilvState *state = lilv_state_new_from_string(app->world,
-			app->driver->map, state_str);
-		lilv_state_restore(state, mod->inst, _state_set_value, mod,
-			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		char uid [64];
+		sprintf(uid, "%u/state.ttl", mod_uid);
+		char *path = map_path->absolute_path(map_path->handle, uid);
+		if(!path)
+			continue;
+
+		//printf("mapped path: %s\n", path);
+
+		// strip 'file://'
+		const char *tmp = !strncmp(path, "file://", 7)
+			? path + 7
+			: path;
+
+		LilvState *state = lilv_state_new_from_file(app->world,
+			app->driver->map, NULL, tmp);
+
+		if(state)
+		{
+			lilv_state_restore(state, mod->inst, _state_set_value, mod,
+				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
+		}
+		else
+			; //TODO
+
 		lilv_state_free(state);
+		free(path);
 
 		// iterate over ports
 		for(cJSON *port_json = cJSON_GetObjectItem(mod_json, "ports")->child;
@@ -1937,7 +2173,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 				port->selected = cJSON_GetObjectItem(port_json, "selected")->type == cJSON_True;
 
-				// TODO cannot handle recursive connections
+				// TODO cannot handle recursive connections, needs a second loop
 				for(cJSON *source_json = cJSON_GetObjectItem(port_json, "sources")->child;
 					source_json;
 					source_json = source_json->next)

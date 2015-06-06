@@ -177,6 +177,7 @@ struct _reg_t {
 	struct {
 		reg_item_t event;
 		reg_item_t state;
+		reg_item_t json;
 
 		reg_item_t module_list;
 		reg_item_t module_add;
@@ -281,6 +282,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->synthpod.event, world, map, SYNTHPOD_PREFIX"event");
 	_register(&regs->synthpod.state, world, map, SYNTHPOD_PREFIX"state");
+	_register(&regs->synthpod.json, world, map, SYNTHPOD_PREFIX"json");
 	_register(&regs->synthpod.module_list, world, map, SYNTHPOD_PREFIX"moduleList");
 	_register(&regs->synthpod.module_add, world, map, SYNTHPOD_PREFIX"moduleAdd");
 	_register(&regs->synthpod.module_del, world, map, SYNTHPOD_PREFIX"moduleDel");
@@ -369,6 +371,7 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->synthpod.event);
 	_unregister(&regs->synthpod.state);
+	_unregister(&regs->synthpod.json);
 	_unregister(&regs->synthpod.module_list);
 	_unregister(&regs->synthpod.module_add);
 	_unregister(&regs->synthpod.module_del);

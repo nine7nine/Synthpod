@@ -28,7 +28,8 @@ struct _synthpod_nsm_driver_t {
 };
 
 synthpod_nsm_t *
-synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *driver, void *data);
+synthpod_nsm_new(const char *exe, const char *path,
+	const synthpod_nsm_driver_t *driver, void *data);
 
 void
 synthpod_nsm_free(synthpod_nsm_t *nsm);

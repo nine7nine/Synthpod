@@ -241,7 +241,8 @@ _con_dat(void *data, int type, void *info)
 }
 
 synthpod_nsm_t *
-synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *nsm_driver, void *data)
+synthpod_nsm_new(const char *exe, const char *path,
+	const synthpod_nsm_driver_t *nsm_driver, void *data)
 {
 	efreet_init();
 
@@ -307,24 +308,24 @@ synthpod_nsm_new(const char *exe, const synthpod_nsm_driver_t *nsm_driver, void 
 	{
 		const char *data_dir = efreet_data_home_get();
 
-		char *synthpod_dir = NULL;
-		asprintf(&synthpod_dir, "%s/synthpod", data_dir);
-		if(synthpod_dir)
+		if(path)
 		{
-			ecore_file_mkpath(synthpod_dir);
-
-			char *filename = NULL;
-			asprintf(&filename, "%s/state.json", synthpod_dir);
-			if(filename)
+			nsm->driver->open(path,
+				nsm->call, nsm->exe, nsm->data);
+		}
+		else
+		{
+			char *synthpod_dir = NULL;
+			asprintf(&synthpod_dir, "%s/synthpod", data_dir);
+			if(synthpod_dir)
 			{
-				// directly call open callback
-				nsm->driver->open(filename,
+				ecore_file_mkpath(synthpod_dir);
+
+				nsm->driver->open(synthpod_dir,
 					nsm->call, nsm->exe, nsm->data);
 
-				free(filename);
+				free(synthpod_dir);
 			}
-
-			free(synthpod_dir);
 		}
 	}
 

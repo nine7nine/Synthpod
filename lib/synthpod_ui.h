@@ -29,6 +29,8 @@
 
 #include <lilv/lilv.h>
 
+#define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
+
 // magic to resolve naming issues with EFL on WIN32
 #if defined(_WIN32)
 // needed for eldbus and mingw32-w64
