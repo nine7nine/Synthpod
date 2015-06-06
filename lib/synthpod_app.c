@@ -1327,45 +1327,6 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 
 					const char *name = lilv_node_as_string(name_node);
 
-					/*
-					// create bundle path
-					char *dir = NULL;
-					asprintf(&dir, "%s/.lv2/%s_%s.lv2", app->dir.home, name, job->uri);
-					if(!dir)
-						break;
-
-					// replace spaces with underscore
-					for(int i=0; i<strlen(dir); i++)
-						if(isspace(dir[i]))
-							dir[i] = '_';
-
-					// construct LV2 state features
-					LV2_State_Make_Path make_path = {
-						.handle = dir,
-						.path = _make_path
-					};
-					LV2_State_Map_Path map_path = {
-						.handle = dir,
-						.abstract_path = _abstract_path,
-						.absolute_path = _absolute_path
-					};
-					const LV2_Feature feature_list [2] = {
-						[0] = {
-							.URI = LV2_STATE__makePath,
-							.data = &make_path
-						},
-						[1] = {
-							.URI = LV2_STATE__mapPath,
-							.data = &map_path
-						}
-					};
-					const LV2_Feature *const features [2 + 1] = {
-						[0] = &feature_list[0],
-						[1] = &feature_list[1],
-						[2] = NULL
-					};
-					*/
-
 					//enable bypass
 					mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
 					eina_semaphore_lock(&mod->bypass_sem);
@@ -1406,9 +1367,9 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 						break;
 
 					// replace spaces with underscore
-					for(int i=0; i<strlen(dir); i++)
-						if(isspace(dir[i]))
-							dir[i] = '_';
+					for(char *c = strstr(dir, ".lv2"); *c; c++)
+						if(isspace(*c))
+							*c = '_';
 					ecore_file_mkpath(dir); // create path if not existent already
 
 					// create plugin state file name
@@ -2060,7 +2021,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	if(!(_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
 		return LV2_STATE_ERR_BAD_FLAGS;
 
-	//printf("absolute: %s\n", absolute);
+	printf("absolute: %s\n", absolute);
 
 	char *root_str = NULL;
 	FILE *f = fopen(absolute, "rb");
@@ -2134,7 +2095,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		if(!path)
 			continue;
 
-		//printf("mapped path: %s\n", path);
+		printf("mapped path: %s\n", path);
 
 		// strip 'file://'
 		const char *tmp = !strncmp(path, "file://", 7)

@@ -65,6 +65,7 @@ struct _prog_t {
 	varchunk_t *app_to_log;
 
 	char *path;
+	char *filename;
 	synthpod_nsm_t *nsm;
 
 #if defined(BUILD_UI)
@@ -262,29 +263,18 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 {
 	prog_t *handle = state;
 
-	*type = handle->forge.String;
-	*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
-
-	FILE *f = fopen(handle->path, "rb");
-	if(f)
+	if(key == handle->synthpod_json)
 	{
-		fseek(f, 0, SEEK_END);
-		size_t fsize = ftell(f);
-		fseek(f, 0, SEEK_SET);
-				
-		char *value = malloc(fsize + 1);
-		if(value)
-		{
-			if(fread(value, fsize, 1, f) == 1)
-			{
-				value[fsize] = '\0';
+		*type = handle->forge.Path;
+		*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
 
-				*size = fsize + 1;
-				return value; //TODO needs to be freed
-			}
-		}
-		fclose(f);
+		if(handle->filename)
+			free(handle->filename);
 
+		asprintf(&handle->filename, "%s/state.json", handle->path);
+
+		*size = strlen(handle->filename) + 1;
+		return handle->filename;
 	}
 
 	*size = 0;
