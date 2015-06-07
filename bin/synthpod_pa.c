@@ -22,6 +22,9 @@
 #include <synthpod_app.h>
 #if defined(BUILD_UI)
 #	include <synthpod_ui.h>
+#else
+# include <Ecore.h>
+# include <Ecore_File.h>
 #endif
 #include <ext_urid.h>
 #include <varchunk.h>

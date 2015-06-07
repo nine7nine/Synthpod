@@ -11,7 +11,9 @@ add_library(synthpod.lib SHARED
 	cjson/cJSON.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
+	${ECORE_LDFLAGS}
 	${ECORE_CON_LDFLAGS}
+	${ECORE_FILE_LDFLAGS}
 	${EFREET_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS})

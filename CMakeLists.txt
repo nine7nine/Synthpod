@@ -29,6 +29,10 @@ include_directories(${EINA_INCLUDE_DIRS})
 pkg_search_module(EFREET REQUIRED efreet>=1.8)
 include_directories(${EFREET_INCLUDE_DIRS})
 
+# ecore
+pkg_search_module(ECORE REQUIRED ecore>=1.8)
+include_directories(${ECORE_INCLUDE_DIRS})
+
 # ecore-con
 pkg_search_module(ECORE_CON REQUIRED ecore-con>=1.8)
 include_directories(${ECORE_CON_INCLUDE_DIRS})
