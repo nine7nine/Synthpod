@@ -19,7 +19,7 @@ set(CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
 # options
 option(BUILD_UI "Build user interface libraries" OFF)
 option(BUILD_JACK "Build JACK standalone host" OFF)
-option(BUILD_PORTAUDIO "Build PortAudio standalone host" OFF)
+option(BUILD_PORTAUDIO "Build PortAudio standalone host (experimental)" OFF)
 
 # eina
 pkg_search_module(EINA REQUIRED eina>=1.8)

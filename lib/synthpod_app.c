@@ -1894,6 +1894,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			app->driver->map, NULL, NULL, NULL, path,
 			_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
 
+		lilv_state_set_label(state, "state"); //TODO use path prefix?
 		lilv_state_save(app->world, app->driver->map, app->driver->unmap,
 			state, NULL, path, "state.ttl");
 
@@ -2058,9 +2059,14 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		return LV2_STATE_ERR_UNKNOWN;
 
 	// remove existing modules
-	for(int m=0; m<app->num_mods; m++)
-		_sp_app_mod_del(app, app->mods[m]);
+	int num_mods = app->num_mods;
+
 	app->num_mods = 0;
+	app->system.source = NULL; // if host should call port_connect()
+	app->system.sink = NULL; // if host should call port_connect()
+
+	for(int m=0; m<num_mods; m++)
+		_sp_app_mod_del(app, app->mods[m]);
 
 	// iterate over mods, create and apply states
 	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;

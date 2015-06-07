@@ -9,6 +9,7 @@
 <>
 	a pset:Preset ;
 	lv2:appliesTo <http://open-music-kontrollers.ch/lv2/synthpod#stereo> ;
+	rdfs:label "state" ;
 	lv2:port [
 		lv2:symbol "control_in_1" ;
 		pset:value 0.0
