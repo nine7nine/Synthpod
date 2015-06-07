@@ -213,6 +213,8 @@ struct _sp_ui_t {
 	Evas_Object *win;
 	Evas_Object *theme;
 
+	int colors_max;
+
 	Evas_Object *mainpane;
 	Evas_Object *leftpane;
 	Evas_Object *plugpane;
@@ -239,18 +241,6 @@ struct _sp_ui_t {
 		
 	Elm_Object_Item *sink_itm;
 };
-
-#define COLORS_MAX 20 // FIXME read from theme
-static uint8_t color_cnt = 1;
-
-static inline int
-_next_color()
-{
-	int col = color_cnt++;
-	if(color_cnt >= COLORS_MAX)
-		color_cnt = 1;
-	return col;
-}
 
 static inline void *
 _sp_ui_to_app_request(sp_ui_t *ui, size_t size)
@@ -1419,7 +1409,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	if(mod->system.source || mod->system.sink)
 		mod->col = 0; // reserved color for system ports
 	else
-		mod->col = _next_color();
+		mod->col = ( (mod->uid - 3) % ui->colors_max + 1);
 
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
@@ -2971,6 +2961,8 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 	ui->theme = elm_layout_add(win);
 	elm_layout_file_set(ui->theme, SYNTHPOD_DATA_DIR"/synthpod.edj",
 		"/synthpod/theme");
+	const char *colors_max = elm_layout_data_get(ui->theme, "colors_max");
+	ui->colors_max = colors_max ? atoi(colors_max) : 20;
 	evas_object_size_hint_weight_set(ui->theme, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(ui->theme, EVAS_HINT_FILL, EVAS_HINT_FILL);
 	evas_object_show(ui->theme);

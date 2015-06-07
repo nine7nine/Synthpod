@@ -2021,7 +2021,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	if(!(_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
 		return LV2_STATE_ERR_BAD_FLAGS;
 
-	printf("absolute: %s\n", absolute);
+	//printf("absolute: %s\n", absolute);
 
 	char *root_str = NULL;
 	FILE *f = fopen(absolute, "rb");
@@ -2095,7 +2095,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		if(!path)
 			continue;
 
-		printf("mapped path: %s\n", path);
+		//printf("mapped path: %s\n", path);
 
 		// strip 'file://'
 		const char *tmp = !strncmp(path, "file://", 7)

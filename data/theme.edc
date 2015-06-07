@@ -22,6 +22,10 @@ fonts {
 group {
 	name: "/synthpod/theme";
 
+	data {
+		item: "colors_max" COLORS_MAX;
+	}
+
 	parts {
 		part {
 			name: "clip";

@@ -306,8 +306,6 @@ synthpod_nsm_new(const char *exe, const char *path,
 	}
 	else
 	{
-		const char *data_dir = efreet_data_home_get();
-
 		if(path)
 		{
 			nsm->driver->open(path,
@@ -315,6 +313,8 @@ synthpod_nsm_new(const char *exe, const char *path,
 		}
 		else
 		{
+			const char *data_dir = efreet_data_home_get();
+
 			char *synthpod_dir = NULL;
 			asprintf(&synthpod_dir, "%s/synthpod", data_dir);
 			if(synthpod_dir)
