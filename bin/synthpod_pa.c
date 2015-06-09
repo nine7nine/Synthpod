@@ -46,14 +46,6 @@
 #define CHUNK_SIZE 0x10000
 #define SEQ_SIZE 0x2000
 
-typedef enum _prog_state_t prog_state_t;
-
-enum _prog_state_t {
-	PROG_STATE_PAUSED	= 0,
-	PROG_STATE_RUNNING,
-	PROG_STATE_PAUSE_REQUESTED
-};
-
 typedef struct _prog_t prog_t;
 
 struct _prog_t {
@@ -68,7 +60,6 @@ struct _prog_t {
 	varchunk_t *app_to_log;
 
 	char *path;
-	char *filename;
 	synthpod_nsm_t *nsm;
 
 #if defined(BUILD_UI)
@@ -83,6 +74,8 @@ struct _prog_t {
 
 	Ecore_Animator *ui_anim;
 	Evas_Object *win;
+#else
+	Ecore_Event_Handler *sig;
 #endif
 
 	LV2_Atom_Forge forge;
@@ -102,13 +95,11 @@ struct _prog_t {
 	uint32_t sample_rate;
 	uint32_t min_block_size;
 	uint32_t max_block_size;
+	volatile int kill;
 
 	volatile int worker_dead;
 	Eina_Thread worker_thread;
 	Eina_Semaphore worker_sem;
-
-	volatile prog_state_t prog_state;
-	Eina_Semaphore prog_sem;
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
@@ -214,76 +205,6 @@ _worker_thread(void *data, Eina_Thread thread)
 	return NULL;
 }
 
-// non-rt / rt
-static LV2_State_Status
-_state_store(LV2_State_Handle state, uint32_t key, const void *value,
-	size_t size, uint32_t type, uint32_t flags)
-{
-	prog_t *handle = state;
-	
-	if(key != handle->synthpod_json)
-		return LV2_STATE_ERR_NO_PROPERTY;
-
-	if(type != handle->forge.Path)
-		return LV2_STATE_ERR_BAD_TYPE;
-	
-	if(!(flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
-		return LV2_STATE_ERR_BAD_FLAGS;
-	
-	if(strcmp(value, "state.json"))
-		return LV2_STATE_ERR_UNKNOWN;
-
-	char *manifest_dst = NULL;
-	char *state_dst = NULL;
-
-	asprintf(&manifest_dst, "%s/manifest.ttl", handle->path);
-	asprintf(&state_dst, "%s/state.ttl", handle->path);
-
-	if(manifest_dst && state_dst)
-	{
-		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/manifest.ttl", manifest_dst) == EINA_FALSE)
-			fprintf(stderr, "_state_store: could not save manifest.ttl\n");
-		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/state.ttl", state_dst) == EINA_FALSE)
-			fprintf(stderr, "_state_store: could not save state.ttl\n");
-
-		free(manifest_dst);
-		free(state_dst);
-
-		return LV2_STATE_SUCCESS;
-	}
-	
-	if(manifest_dst)
-		free(manifest_dst);
-	if(state_dst)
-		free(state_dst);
-		
-	return LV2_STATE_ERR_UNKNOWN;
-}
-
-static const void*
-_state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
-	uint32_t *type, uint32_t *flags)
-{
-	prog_t *handle = state;
-
-	if(key == handle->synthpod_json)
-	{
-		*type = handle->forge.Path;
-		*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
-
-		if(handle->filename)
-			free(handle->filename);
-
-		asprintf(&handle->filename, "%s/state.json", handle->path);
-
-		*size = strlen(handle->filename) + 1;
-		return handle->filename;
-	}
-
-	*size = 0;
-	return NULL;
-}
-
 #if defined(BUILD_UI)
 // non-rt ui-thread
 static void
@@ -291,16 +212,8 @@ _ui_delete_request(void *data, Evas_Object *obj, void *event)
 {
 	prog_t *handle = data;
 
-	elm_exit();
-}
-
-// non-rt ui-thread
-static void
-_ui_quit(void *data)
-{
-	prog_t *handle = data;
-
-	elm_exit();
+	handle->kill = 1; // exit after save
+	sp_ui_bundle_save(handle->ui, handle->path);
 }
 
 // non-rt ui-thread
@@ -319,6 +232,20 @@ _ui_animator(void *data)
 
 	return EINA_TRUE; // continue animator
 }
+#else
+static Eina_Bool
+_quit(void *data, int type, void *info)
+{
+	prog_t *handle = data;
+
+	handle->kill = 1; // exit after save
+#if defined(BUILD_UI) //FIXME
+	sp_ui_bundle_save(handle->ui, handle->path);
+#endif
+	ecore_main_loop_quit(); //FIXME
+
+	return EINA_TRUE;
+}
 #endif // BUILD_UI
 
 // rt
@@ -336,28 +263,14 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 	void *midi_out_buf = NULL;
 	float **audio_out_buf = outputs;
 
-	switch(handle->prog_state)
+	if(sp_app_paused(app))
 	{
-		case PROG_STATE_RUNNING:
-		{
-			// do nothing
-			break;
-		}
-		case PROG_STATE_PAUSE_REQUESTED:
-		{
-			handle->prog_state = PROG_STATE_PAUSED; // atomic instruction
-			eina_semaphore_release(&handle->prog_sem, 1);
-			// fall-through
-		}
-		case PROG_STATE_PAUSED:
-		{
-			// clear output buffers
-			memset(audio_out_buf[0], 0x0, sizeof(float) * nsamples);
-			memset(audio_out_buf[1], 0x0, sizeof(float) * nsamples);
-			//TODO midi
+		// clear output buffers
+		memset(audio_out_buf[0], 0x0, sizeof(float) * nsamples);
+		memset(audio_out_buf[1], 0x0, sizeof(float) * nsamples);
+		//TODO midi
 
-			return 0; // skip running of graph
-		}
+		return 0;
 	}
 
 	LV2_Atom_Sequence *seq_in = sp_app_get_system_source(app, 0);
@@ -451,6 +364,26 @@ _ui_to_app_advance(size_t size, void *data)
 	prog_t *handle = data;
 
 	varchunk_write_advance(handle->app_from_ui, size);
+}
+
+static void
+_ui_opened(void *data, int status)
+{
+	prog_t *handle = data;
+
+	//printf("_ui_opened: %i\n", status);
+	synthpod_nsm_opened(handle->nsm, status);
+}
+static void
+_ui_saved(void *data, int status)
+{
+	prog_t *handle = data;
+
+	//printf("_ui_saved: %i\n", status);
+	synthpod_nsm_saved(handle->nsm, status);
+
+	if(handle->kill)
+		elm_exit();
 }
 #endif // BUILD_UI
 
@@ -548,39 +481,6 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
-static char *
-_abstract_path(LV2_State_Map_Path_Handle instance, const char *absolute_path)
-{
-	prog_t *handle = instance;
-
-	const char *offset = absolute_path + strlen(handle->path) + 1; // + 'file://' '/'
-
-	return strdup(offset);
-}
-
-static char *
-_absolute_path(LV2_State_Map_Path_Handle instance, const char *abstract_path)
-{
-	prog_t *handle = instance;
-	
-	char *absolute_path = NULL;
-	asprintf(&absolute_path, "%s/%s", handle->path, abstract_path);
-
-	return absolute_path;
-}
-
-static char *
-_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
-{
-	prog_t *handle = instance;
-
-	char *absolute_path = _absolute_path(handle, abstract_path);
-	if(absolute_path)
-		ecore_file_mkpath(absolute_path);
-
-	return absolute_path;
-}
-
 static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
@@ -602,49 +502,19 @@ _open(const char *path, const char *name, const char *id, void *data)
 	handle->app_driver.seq_size = SEQ_SIZE; //TODO
 	
 	// app init
+#if defined(BUILD_UI)
 	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
+#else //FIXME
+	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
+#endif
 
 	// pa activate
-	handle->prog_state = PROG_STATE_RUNNING;
 	if(Pa_StartStream(handle->stream) != paNoError)
 		fprintf(stderr, "Pa_StartStream failed\n");
 
-	// construct LV2 state features
-	LV2_State_Make_Path make_path = {
-		.handle = handle,
-		.path = _make_path
-	};
-	LV2_State_Map_Path map_path = {
-		.handle = handle,
-		.abstract_path = _abstract_path,
-		.absolute_path = _absolute_path
-	};
-	const LV2_Feature feature_list [2] = {
-		[0] = {
-			.URI = LV2_STATE__makePath,
-			.data = &make_path
-		},
-		[1] = {
-			.URI = LV2_STATE__mapPath,
-			.data = &map_path
-		}
-	};
-	const LV2_Feature *const features [2 + 1] = {
-		[0] = &feature_list[0],
-		[1] = &feature_list[1],
-		[2] = NULL
-	};
-
-	// pause rt-thread
-	handle->prog_state = PROG_STATE_PAUSE_REQUESTED; // atomic instruction
-	eina_semaphore_lock(&handle->prog_sem);
-
-	// restore state
-	sp_app_restore(handle->app, _state_retrieve, handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
-
-	// resume rt-thread
-	handle->prog_state = PROG_STATE_RUNNING; // atomic instruction
+#if defined(BUILD_UI) //FIXME
+	sp_ui_bundle_load(handle->ui, handle->path);
+#endif
 
 	return 0; // success
 }
@@ -654,42 +524,9 @@ _save(void *data)
 {
 	prog_t *handle = data;
 
-	// construct LV2 state features
-	LV2_State_Make_Path make_path = {
-		.handle = handle,
-		.path = _make_path
-	};
-	LV2_State_Map_Path map_path = {
-		.handle = handle,
-		.abstract_path = _abstract_path,
-		.absolute_path = _absolute_path
-	};
-	const LV2_Feature feature_list [2] = {
-		[0] = {
-			.URI = LV2_STATE__makePath,
-			.data = &make_path
-		},
-		[1] = {
-			.URI = LV2_STATE__mapPath,
-			.data = &map_path
-		}
-	};
-	const LV2_Feature *const features [2 + 1] = {
-		[0] = &feature_list[0],
-		[1] = &feature_list[1],
-		[2] = NULL
-	};
-
-	// pause rt-thread
-	handle->prog_state = PROG_STATE_PAUSE_REQUESTED; // atomic instruction
-	eina_semaphore_lock(&handle->prog_sem);
-
-	// store state
-	sp_app_save(handle->app, _state_store, handle,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
-
-	// resume rt-thread
-	handle->prog_state = PROG_STATE_RUNNING; // atomic instruction
+#if defined(BUILD_UI) //FIXME
+	sp_ui_bundle_save(handle->ui, handle->path);
+#endif
 
 	return 0; // success
 }
@@ -757,6 +594,8 @@ main(int argc, char **argv)
 	handle.ui_driver.unmap = unmap;
 	handle.ui_driver.to_app_request = _ui_to_app_request;
 	handle.ui_driver.to_app_advance = _ui_to_app_advance;
+	handle.ui_driver.opened = _ui_opened;
+	handle.ui_driver.saved = _ui_saved;
 	handle.ui_driver.instance_access = 1; // enabled
 
 	// create main window
@@ -767,7 +606,7 @@ main(int argc, char **argv)
 	evas_object_show(handle.win);
 
 	// ui init
-	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle);
+	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle, 1);
 #endif
 
 	// NSM init
@@ -776,12 +615,10 @@ main(int argc, char **argv)
 
 	// init semaphores
 	eina_semaphore_new(&handle.worker_sem, 0);
-	eina_semaphore_new(&handle.prog_sem, 0);
 
 	// threads init
 	Eina_Bool status = eina_thread_create(&handle.worker_thread,
-		EINA_THREAD_URGENT, -1, _worker_thread, &handle);
-	//TODO check status
+		EINA_THREAD_URGENT, -1, _worker_thread, &handle); //TODO
 
 #if defined(BUILD_UI)
 	// main loop
@@ -793,7 +630,11 @@ main(int argc, char **argv)
 	evas_object_del(handle.win);
 	ecore_animator_del(handle.ui_anim);
 #else
+	handle.sig = ecore_event_handler_add(ECORE_EVENT_SIGNAL_EXIT, _quit, &handle);
+
 	ecore_main_loop_begin();
+
+	ecore_event_handler_del(handle.sig);
 #endif // BUILD_UI
 
 	// threads deinit
@@ -801,12 +642,11 @@ main(int argc, char **argv)
 	eina_semaphore_release(&handle.worker_sem, 1);
 	eina_thread_join(handle.worker_thread);
 
-	// deinit semaphores
-	eina_semaphore_free(&handle.worker_sem);
-	eina_semaphore_free(&handle.prog_sem);
-
 	// NSM deinit
 	synthpod_nsm_free(handle.nsm);
+
+	// deinit semaphores
+	eina_semaphore_free(&handle.worker_sem);
 
 	if(handle.path)
 		free(handle.path);

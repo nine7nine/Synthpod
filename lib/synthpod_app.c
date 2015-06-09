@@ -46,22 +46,27 @@ typedef struct _port_t port_t;
 typedef struct _work_t work_t;
 typedef struct _job_t job_t;
 
+enum _bypass_state_t {
+	BYPASS_STATE_PAUSED	= 0,
+	BYPASS_STATE_RUNNING,
+	BYPASS_STATE_PAUSE_REQUESTED
+};
+
 enum _job_type_t {
 	JOB_TYPE_MODULE_ADD,
 	JOB_TYPE_MODULE_DEL,
 	JOB_TYPE_PRESET_LOAD,
-	JOB_TYPE_PRESET_SAVE
-};
-
-enum _bypass_state_t {
-	BYPASS_STATE_OFF	= 0,
-	BYPASS_STATE_REQUEST,
-	BYPASS_STATE_ON
+	JOB_TYPE_PRESET_SAVE,
+	JOB_TYPE_BUNDLE_LOAD,
+	JOB_TYPE_BUNDLE_SAVE
 };
 
 struct _job_t {
 	job_type_t type;
-	mod_t *mod;
+	union {
+		mod_t *mod;
+		int32_t status;
+	};
 	char uri [0];
 };
 
@@ -141,6 +146,10 @@ struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
 
+	volatile bypass_state_t bypass_state;
+	Eina_Semaphore bypass_sem;
+	volatile int dirty;
+
 	struct {
 		const char *home;
 		const char *data;
@@ -163,6 +172,14 @@ struct _sp_app_t {
 	} system;
 
 	u_id_t uid;
+	
+	LV2_State_Make_Path make_path;
+	LV2_State_Map_Path map_path;
+	LV2_Feature state_feature_list [2];
+	LV2_Feature *state_features [3];
+
+	char *bundle_path;
+	char *bundle_filename;
 };
 
 static void
@@ -356,7 +373,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	if(!mod)
 		return NULL;
 
-	mod->bypass_state = BYPASS_STATE_OFF;
+	mod->bypass_state = BYPASS_STATE_RUNNING;
 	eina_semaphore_new(&mod->bypass_sem, 0);
 
 	// populate worker schedule
@@ -664,6 +681,9 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	sp_app_t *app = calloc(1, sizeof(sp_app_t));
 	if(!app)
 		return NULL;
+	
+	app->bypass_state = BYPASS_STATE_RUNNING;
+	eina_semaphore_new(&app->bypass_sem, 0);
 
 #if !defined(_WIN32)
 	app->dir.home = getenv("HOME");
@@ -722,8 +742,10 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 {
 	const transmit_t *transmit = (const transmit_t *)atom;
 
-	// check for corrent atom object type
-	assert(transmit->obj.body.id == app->regs.synthpod.event.urid);
+	// check for correct atom object type
+	assert( (transmit->obj.atom.type == app->forge.Object)
+		&& (transmit->obj.body.id == app->regs.synthpod.event.urid) );
+
 	LV2_URID protocol = transmit->obj.body.otype;
 
 	if(protocol == app->regs.port.float_protocol.urid)
@@ -802,7 +824,8 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			const char *uri_str = lilv_node_as_string(uri_node);
 			
 			//signal to UI
-			size_t size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
+			size_t size = sizeof(transmit_module_add_t)
+				+ lv2_atom_pad_size(strlen(uri_str) + 1);
 			transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 			if(trans)
 			{
@@ -1142,6 +1165,46 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 				break;
 		}
 	}
+	else if(protocol == app->regs.synthpod.bundle_load.urid)
+	{
+		const transmit_bundle_load_t *load = (const transmit_bundle_load_t *)atom;
+		if(!load->path.atom.size)
+			return;
+
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + load->path.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+				work->target = app;
+				work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+				job->type = JOB_TYPE_BUNDLE_LOAD;
+				job->status = load->status.body;
+				memcpy(job->uri, load->path_str, load->path.atom.size);
+			_sp_app_to_worker_advance(app, size);
+		}
+	}
+	else if(protocol == app->regs.synthpod.bundle_save.urid)
+	{
+		const transmit_bundle_save_t *save = (const transmit_bundle_save_t *)atom;
+		if(!save->path.atom.size)
+			return;
+		
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + save->path.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+				work->target = app;
+				work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+				job->type = JOB_TYPE_BUNDLE_SAVE;
+				job->status = save->status.body;
+				memcpy(job->uri, save->path_str, save->path.atom.size);
+			_sp_app_to_worker_advance(app, size);
+		}
+	}
 }
 
 // rt
@@ -1170,7 +1233,8 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				const char *uri_str = lilv_node_as_string(uri_node);
 				
 				//signal to UI
-				size_t size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
+				size_t size = sizeof(transmit_module_add_t)
+					+ lv2_atom_pad_size(strlen(uri_str) + 1);
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
@@ -1180,6 +1244,38 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 						: NULL;
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
 						job->mod->uid, uri_str, job->mod->handle, data_access);
+					_sp_app_to_ui_advance(app, size);
+				}
+
+				break;
+			}
+			case JOB_TYPE_BUNDLE_LOAD:
+			{
+				//printf("app: bundle loaded\n");
+
+				// signal to app
+				size_t size = sizeof(transmit_bundle_load_t);
+				transmit_bundle_load_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transmit_bundle_load_fill(&app->regs, &app->forge, trans, size,
+						job->status, NULL);
+					_sp_app_to_ui_advance(app, size);
+				}
+
+				break;
+			}
+			case JOB_TYPE_BUNDLE_SAVE:
+			{
+				//printf("app: bundle saved\n");
+
+				// signal to app
+				size_t size = sizeof(transmit_bundle_save_t);
+				transmit_bundle_save_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transmit_bundle_save_fill(&app->regs, &app->forge, trans, size,
+						job->status, NULL);
 					_sp_app_to_ui_advance(app, size);
 				}
 
@@ -1274,7 +1370,274 @@ _make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 	return absolute_path;
 }
 
-// non-rt worker thread
+static const LV2_Feature *const *
+_state_features(sp_app_t *app, void *data)
+{
+	// construct LV2 state features
+	app->make_path.handle = data;
+	app->make_path.path = _make_path;
+
+	app->map_path.handle = data;
+	app->map_path.abstract_path = _abstract_path;
+	app->map_path.absolute_path = _absolute_path;
+
+	app->state_feature_list[0].URI = LV2_STATE__makePath;
+	app->state_feature_list[0].data = &app->make_path;
+	
+	app->state_feature_list[1].URI = LV2_STATE__mapPath;
+	app->state_feature_list[1].data = &app->map_path;
+
+	app->state_features[0] = &app->state_feature_list[0];
+	app->state_features[1] = &app->state_feature_list[1];
+	app->state_features[2] = NULL;
+
+	return (const LV2_Feature *const *)app->state_features;
+}
+
+// non-rt
+static inline void
+_preset_load(sp_app_t *app, mod_t *mod, const char *target)
+{
+	const LilvNode *preset = _mod_preset_get(mod, target);
+
+	if(!preset) // preset not existing
+		return;
+
+	// load preset
+	LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
+		preset);
+	if(!state)
+		return;
+
+	//enable bypass
+	mod->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	eina_semaphore_lock(&mod->bypass_sem);
+
+	lilv_state_restore(state, mod->inst, _state_set_value, mod,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+
+	// disable bypass
+	mod->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+
+	lilv_state_free(state);
+}
+
+// non-rt
+static inline void
+_preset_save(sp_app_t *app, mod_t *mod, const char *target)
+{
+	const LilvNode *preset = _mod_preset_get(mod, target);
+
+	if(preset) // exists already TODO overwrite?
+		return;
+
+	const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
+	if(!name_node)
+		return;
+
+	const char *name = lilv_node_as_string(name_node);
+	char *dir = NULL;
+	char *filename = NULL;
+	char *bndl = NULL;
+
+	// create bundle path
+	asprintf(&dir, "%s/.lv2/%s_%s.lv2", app->dir.home, name, target);
+	if(!dir)
+		return;
+
+	// replace spaces with underscore
+	for(char *c = strstr(dir, ".lv2"); *c; c++)
+		if(isspace(*c))
+			*c = '_';
+	ecore_file_mkpath(dir); // create path if not existent already
+
+	// create plugin state file name
+	asprintf(&filename, "%s.ttl", target);
+	if(!filename)
+	{
+		free(dir);
+		return;
+	}
+	
+	// create bundle path URI
+	asprintf(&bndl, "%s/", dir);
+	if(!bndl)
+	{
+		free(dir);
+		free(filename);
+		return;
+	}
+	
+	//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
+
+	// enable bypass
+	mod->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	eina_semaphore_lock(&mod->bypass_sem);
+	
+	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+		app->driver->map, NULL, NULL, NULL, dir,
+		_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
+		_state_features(app, dir));
+
+	// disable bypass
+	mod->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+
+	if(state)
+	{
+		// actually save the state to disk
+		lilv_state_set_label(state, target);
+		lilv_state_save(app->world, app->driver->map, app->driver->unmap,
+			state, NULL, dir, filename);
+		lilv_state_free(state);
+
+		// reload presets for this module
+		mod->presets = _preset_reload(app->world, &app->regs, mod->plug,
+			mod->presets, bndl);
+
+		// signal ui to reload its presets, too
+		size_t size = sizeof(transmit_module_preset_save_t)
+								+ lv2_atom_pad_size(strlen(bndl) + 1);
+		transmit_module_preset_save_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
+		{
+			_sp_transmit_module_preset_save_fill(&app->regs, &app->forge, trans,
+				size, mod->uid, bndl);
+			_sp_app_to_ui_advance(app, size);
+		}
+	}
+	
+	// cleanup
+	free(dir);
+	free(filename);
+	free(bndl);
+}
+
+// non-rt / rt
+static LV2_State_Status
+_state_store(LV2_State_Handle state, uint32_t key, const void *value,
+	size_t size, uint32_t type, uint32_t flags)
+{
+	sp_app_t *app = state;
+	
+	if(key != app->regs.synthpod.json.urid)
+		return LV2_STATE_ERR_NO_PROPERTY;
+
+	if(type != app->forge.Path)
+		return LV2_STATE_ERR_BAD_TYPE;
+	
+	if(!(flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
+		return LV2_STATE_ERR_BAD_FLAGS;
+	
+	if(strcmp(value, "state.json"))
+		return LV2_STATE_ERR_UNKNOWN;
+
+	char *manifest_dst = NULL;
+	char *state_dst = NULL;
+
+	asprintf(&manifest_dst, "%s/manifest.ttl", app->bundle_path);
+	asprintf(&state_dst, "%s/state.ttl", app->bundle_path);
+
+	if(manifest_dst && state_dst)
+	{
+		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/manifest.ttl", manifest_dst) == EINA_FALSE)
+			fprintf(stderr, "_state_store: could not save manifest.ttl\n");
+		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/state.ttl", state_dst) == EINA_FALSE)
+			fprintf(stderr, "_state_store: could not save state.ttl\n");
+
+		free(manifest_dst);
+		free(state_dst);
+
+		return LV2_STATE_SUCCESS;
+	}
+	
+	if(manifest_dst)
+		free(manifest_dst);
+	if(state_dst)
+		free(state_dst);
+		
+	return LV2_STATE_ERR_UNKNOWN;
+}
+
+static const void*
+_state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
+	uint32_t *type, uint32_t *flags)
+{
+	sp_app_t *app = state;
+
+	if(key == app->regs.synthpod.json.urid)
+	{
+		*type = app->forge.Path;
+		*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
+
+		if(app->bundle_filename)
+			free(app->bundle_filename);
+
+		asprintf(&app->bundle_filename, "%s/state.json", app->bundle_path);
+
+		*size = strlen(app->bundle_filename) + 1;
+		return app->bundle_filename;
+	}
+
+	*size = 0;
+	return NULL;
+}
+
+// non-rt
+static inline int
+_bundle_load(sp_app_t *app, const char *bundle_path)
+{
+	//printf("_bundle_load: %s\n", bundle_path);
+
+	if(app->bundle_path)
+		free(app->bundle_path);
+
+	app->bundle_path = strdup(bundle_path);
+	if(!app->bundle_path)
+		return -1;
+
+	// pause rt-thread
+	app->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	eina_semaphore_lock(&app->bypass_sem);
+
+	// restore state
+	sp_app_restore(app, _state_retrieve, app,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
+		_state_features(app, app->bundle_path));
+
+	// resume rt-thread
+	app->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+
+	return 0; // success
+}
+
+static inline int
+_bundle_save(sp_app_t *app, const char *bundle_path)
+{
+	//printf("_bundle_save: %s\n", bundle_path);
+
+	if(app->bundle_path)
+		free(app->bundle_path);
+
+	app->bundle_path = strdup(bundle_path);
+	if(!app->bundle_path)
+		return -1;
+
+	// pause rt-thread
+	app->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	eina_semaphore_lock(&app->bypass_sem);
+
+	// store state
+	sp_app_save(app, _state_store, app,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
+		_state_features(app, app->bundle_path));
+
+	// resume rt-thread
+	app->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+
+	return 0; // success
+}
+
+// non-rt
 void
 sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 {
@@ -1290,6 +1653,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			{
 				mod_t *mod = _sp_app_mod_add(app, job->uri);
 
+				// signal to ui
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
 				if(work)
@@ -1308,157 +1672,57 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			{
 				_sp_app_mod_del(app, job->mod);
 
+				//TODO signal to ui?
+
 				break;
 			}
 			case JOB_TYPE_PRESET_LOAD:
 			{
-				mod_t *mod = job->mod;
-				const LilvNode *preset = _mod_preset_get(mod, job->uri);
-
-				if(preset) // preset existing
-				{
-					// load preset
-					LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
-						preset);
-					
-					const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
-					if(!name_node)
-						break;
-
-					const char *name = lilv_node_as_string(name_node);
-
-					//enable bypass
-					mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
-					eina_semaphore_lock(&mod->bypass_sem);
-
-					lilv_state_restore(state, mod->inst, _state_set_value, mod,
-						LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-				
-					// disable bypass
-					mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
-
-					//free(dir);
-					lilv_state_free(state);
-				}
+				_preset_load(app, job->mod, job->uri);
 
 				break;
 			}
 			case JOB_TYPE_PRESET_SAVE:
 			{
-				mod_t *mod = job->mod;
-				const LilvNode *preset = _mod_preset_get(mod, job->uri);
+				_preset_save(app, job->mod, job->uri);
 
-				if(!preset) // preset not existing
+				break;
+			}
+			case JOB_TYPE_BUNDLE_LOAD:
+			{
+				int status = _bundle_load(app, job->uri);
+
+				// signal to ui
+				size_t work_size = sizeof(work_t) + sizeof(job_t);
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+				if(work)
 				{
-					const LilvNode *uri_node = lilv_plugin_get_uri(mod->plug);
-					const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
-					if(!uri_node || !name_node)
-						break;
-
-					const char *uri = lilv_node_as_string(uri_node);
-					const char *name = lilv_node_as_string(name_node);
-					char *dir = NULL;
-					char *filename = NULL;
-					char *bndl = NULL;
-
-					// create bundle path
-					asprintf(&dir, "%s/.lv2/%s_%s.lv2", app->dir.home, name, job->uri);
-					if(!dir)
-						break;
-
-					// replace spaces with underscore
-					for(char *c = strstr(dir, ".lv2"); *c; c++)
-						if(isspace(*c))
-							*c = '_';
-					ecore_file_mkpath(dir); // create path if not existent already
-
-					// create plugin state file name
-					asprintf(&filename, "%s.ttl", job->uri);
-					if(!filename)
-					{
-						free(dir);
-						break;
-					}
-					
-					// create bundle path URI
-					asprintf(&bndl, "%s/", dir);
-					if(!bndl)
-					{
-						free(dir);
-						free(filename);
-						break;
-					}
-					
-					printf("preset save: %s, %s, %s\n", dir, filename, bndl);
-
-					// construct LV2 state features
-					LV2_State_Make_Path make_path = {
-						.handle = dir,
-						.path = _make_path
-					};
-					LV2_State_Map_Path map_path = {
-						.handle = dir,
-						.abstract_path = _abstract_path,
-						.absolute_path = _absolute_path
-					};
-					const LV2_Feature feature_list [2] = {
-						[0] = {
-							.URI = LV2_STATE__makePath,
-							.data = &make_path
-						},
-						[1] = {
-							.URI = LV2_STATE__mapPath,
-							.data = &map_path
-						}
-					};
-					const LV2_Feature *const features [2 + 1] = {
-						[0] = &feature_list[0],
-						[1] = &feature_list[1],
-						[2] = NULL
-					};
-
-					// enable bypass
-					mod->bypass_state = BYPASS_STATE_REQUEST; // atomic instruction
-					eina_semaphore_lock(&mod->bypass_sem);
-					
-					LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-						app->driver->map, NULL, NULL, NULL, dir,
-						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
-				
-					// disable bypass
-					mod->bypass_state = BYPASS_STATE_OFF; // atomic instruction
-
-					// actually save the state to disk
-					lilv_state_set_label(state, job->uri);
-					lilv_state_save(app->world, app->driver->map, app->driver->unmap,
-						state, NULL, dir, filename);
-					lilv_state_free(state);
-
-					// reload presets for this module
-					mod->presets = _preset_reload(app->world, &app->regs, mod->plug,
-						mod->presets, bndl);
-
-					// signal ui to reload its presets, too
-					size_t size = sizeof(transmit_module_preset_save_t)
-											+ lv2_atom_pad_size(strlen(bndl) + 1);
-					transmit_module_preset_save_t *trans = _sp_app_to_ui_request(app, size);
-					if(trans)
-					{
-						_sp_transmit_module_preset_save_fill(&app->regs, &app->forge, trans,
-							size, mod->uid, bndl);
-						_sp_app_to_ui_advance(app, size);
-					}
-					
-					// cleanup
-					if(dir)
-						free(dir);
-					if(filename)
-						free(filename);
-					if(bndl)
-						free(bndl);
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job = (job_t *)work->payload;
+						job->type = JOB_TYPE_BUNDLE_LOAD;
+						job->status = status;
+					_sp_worker_to_app_advance(app, work_size);
 				}
-				else
-					; //TODO overwrite preset?
+
+				break;
+			}
+			case JOB_TYPE_BUNDLE_SAVE:
+			{
+				int status = _bundle_save(app, job->uri);
+
+				// signal to ui
+				size_t work_size = sizeof(work_t) + sizeof(job_t);
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+				if(work)
+				{
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job = (job_t *)work->payload;
+						job->type = JOB_TYPE_BUNDLE_SAVE;
+						job->status = status;
+					_sp_worker_to_app_advance(app, work_size);
+				}
 
 				break;
 			}
@@ -1527,14 +1791,14 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 		switch(mod->bypass_state)
 		{
-			case BYPASS_STATE_OFF:
+			case BYPASS_STATE_RUNNING:
 				// do nothing
 				break;
-			case BYPASS_STATE_REQUEST:
-				mod->bypass_state = BYPASS_STATE_ON;
+			case BYPASS_STATE_PAUSE_REQUESTED:
+				mod->bypass_state = BYPASS_STATE_PAUSED;
 				eina_semaphore_release(&mod->bypass_sem, 1);
 				// fall-through
-			case BYPASS_STATE_ON:
+			case BYPASS_STATE_PAUSED:
 				continue; // skip this module
 		}
 	
@@ -1630,7 +1894,22 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		// run plugin
 		lilv_instance_run(mod->inst, nsamples);
 		
-		// handle ui post
+		// handle app ui post
+		if(app->dirty)
+		{
+			// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
+			app->dirty = 0; // reset
+
+			size_t size = sizeof(transmit_module_list_t);
+			transmit_module_list_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_list_fill(&app->regs, &app->forge, trans, size);
+				_sp_app_to_ui_advance(app, size);
+			}
+		}
+
+		// handle mod ui post
 		for(int i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
@@ -1763,6 +2042,8 @@ sp_app_free(sp_app_t *app)
 
 	if(!app->embedded)
 		lilv_world_free(app->world);
+
+	eina_semaphore_free(&app->bypass_sem);
 
 	free(app);
 
@@ -2172,7 +2453,24 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	}
 	cJSON_Delete(root_json);
 
-	//TODO signal to UI?
+	// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
+	app->dirty = 1;
 
 	return LV2_STATE_SUCCESS;
+}
+
+int
+sp_app_paused(sp_app_t *app)
+{
+	switch(app->bypass_state)
+	{
+		case BYPASS_STATE_RUNNING:
+			return 0;
+		case BYPASS_STATE_PAUSE_REQUESTED:
+			app->bypass_state = BYPASS_STATE_PAUSED;
+			eina_semaphore_release(&app->bypass_sem, 1);
+			// fall-through
+		case BYPASS_STATE_PAUSED:
+			return 1;
+	}
 }

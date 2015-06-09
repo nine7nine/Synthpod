@@ -241,12 +241,14 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *patchitc;
 		
 	Elm_Object_Item *sink_itm;
+
+	volatile int dirty;
 };
 
 static inline void *
 _sp_ui_to_app_request(sp_ui_t *ui, size_t size)
 {
-	if(ui->driver->to_app_request)
+	if(ui->driver->to_app_request && !ui->dirty)
 		return ui->driver->to_app_request(size, ui->data);
 	else
 		return NULL;
@@ -254,7 +256,7 @@ _sp_ui_to_app_request(sp_ui_t *ui, size_t size)
 static inline void
 _sp_ui_to_app_advance(sp_ui_t *ui, size_t size)
 {
-	if(ui->driver->to_app_advance)
+	if(ui->driver->to_app_advance && !ui->dirty)
 		ui->driver->to_app_advance(size, ui->data);
 }
 
@@ -1604,7 +1606,8 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 		return;
 	const char *uri_str = lilv_node_as_string(uri_node);
 
-	size_t size = sizeof(transmit_module_add_t) + lv2_atom_pad_size(strlen(uri_str) + 1);
+	size_t size = sizeof(transmit_module_add_t)
+		+ lv2_atom_pad_size(strlen(uri_str) + 1);
 	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
@@ -1877,7 +1880,8 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 			return;
 
 		// signal app
-		size_t size = sizeof(transmit_module_preset_load_t) + lv2_atom_pad_size(strlen(label) + 1);
+		size_t size = sizeof(transmit_module_preset_load_t)
+			+ lv2_atom_pad_size(strlen(label) + 1);
 		transmit_module_preset_load_t *trans = _sp_ui_to_app_request(ui, size);
 		if(trans)
 		{
@@ -2593,7 +2597,8 @@ _pset_clicked(void *data, Evas_Object *obj, void *event_info)
 		return;
 
 	// signal app
-	size_t size = sizeof(transmit_module_preset_save_t) + lv2_atom_pad_size(strlen(mod->pset_label) + 1);
+	size_t size = sizeof(transmit_module_preset_save_t)
+		+ lv2_atom_pad_size(strlen(mod->pset_label) + 1);
 	transmit_module_preset_save_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
@@ -3012,20 +3017,8 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 }
 
 static void
-_background_loading(void *data)
+_modlist_refresh(sp_ui_t *ui)
 {
-	sp_ui_t *ui = data;
-
-	// walk plugin directories
-	ui->plugs = lilv_world_get_all_plugins(ui->world);
-
-	// initialzie registry
-	sp_regs_init(&ui->regs, ui->world, ui->driver->map);
-
-	// fill pluglist
-	_pluglist_populate(ui, ""); // populate with everything
-
-	// request mod list
 	size_t size = sizeof(transmit_module_list_t);
 	transmit_module_list_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
@@ -3033,6 +3026,20 @@ _background_loading(void *data)
 		_sp_transmit_module_list_fill(&ui->regs, &ui->forge, trans, size);
 		_sp_ui_to_app_advance(ui, size);
 	}
+}
+
+static void
+_background_loading(void *data)
+{
+	sp_ui_t *ui = data;
+
+	// walk plugin directories
+	ui->plugs = lilv_world_get_all_plugins(ui->world);
+
+	// fill pluglist
+	_pluglist_populate(ui, ""); // populate with everything
+
+	// request mod list
 }
 
 static void
@@ -3049,7 +3056,8 @@ _plugentry_changed(void *data, Evas_Object *obj, void *event_info)
 }
 
 sp_ui_t *
-sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void *data)
+sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
+	void *data, int show_splash)
 {
 	if(!win || !driver || !data)
 		return NULL;
@@ -3213,8 +3221,8 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 			if(ui->popup)
 			{
 				elm_popup_allow_events_set(ui->popup, EINA_TRUE);
-				elm_popup_timeout_set(ui->popup, 4.f);
-				evas_object_show(ui->popup);
+				if(show_splash)
+					evas_object_show(ui->popup);
 
 				Evas_Object *hbox = elm_box_add(ui->popup);
 				if(hbox)
@@ -3390,6 +3398,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 			} // modgrid
 		} // mainpane
 	} // theme
+
+	// initialzie registry
+	sp_regs_init(&ui->regs, ui->world, ui->driver->map);
 
 	ecore_job_add(_background_loading, ui);
 
@@ -3607,6 +3618,37 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 			_patches_update(ui);
 		}
 	}
+	else if(protocol == ui->regs.synthpod.module_list.urid)
+	{
+		if(ui->modlist)
+		{
+			ui->dirty = 1; // disable ui -> app communication
+			elm_genlist_clear(ui->modlist);
+			ui->dirty = 0; // enable ui -> app communication
+
+			_modlist_refresh(ui);
+		}
+	}
+	else if(protocol == ui->regs.synthpod.bundle_load.urid)
+	{
+		const transmit_bundle_load_t *trans = (const transmit_bundle_load_t *)atom;
+
+		if(ui->driver->opened)
+			ui->driver->opened(ui->data, trans->status.body);
+	
+		if(ui->popup && evas_object_visible_get(ui->popup))
+		{
+			elm_popup_timeout_set(ui->popup, 1.f);
+			evas_object_show(ui->popup);
+		}
+	}
+	else if(protocol == ui->regs.synthpod.bundle_save.urid)
+	{
+		const transmit_bundle_save_t *trans = (const transmit_bundle_save_t *)atom;
+
+		if(ui->driver->saved)
+			ui->driver->saved(ui->data, trans->status.body);
+	}
 }
 
 void
@@ -3622,6 +3664,21 @@ void
 sp_ui_iterate(sp_ui_t *ui)
 {
 	ecore_main_loop_iterate();
+}
+
+void
+sp_ui_refresh(sp_ui_t *ui)
+{
+	if(!ui)
+		return;
+
+	/*
+	ui->dirty = 1; // disable ui -> app communication
+	elm_genlist_clear(ui->modlist);
+	ui->dirty = 0; // enable ui -> app communication
+	*/
+
+	_modlist_refresh(ui);	
 }
 
 void
@@ -3705,4 +3762,40 @@ sp_ui_free(sp_ui_t *ui)
 		lilv_world_free(ui->world);
 
 	free(ui);
+}
+
+void
+sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path)
+{
+	if(!ui || !bundle_path)
+		return;
+
+	// signal to app
+	size_t size = sizeof(transmit_bundle_load_t)
+		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
+	transmit_bundle_load_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_bundle_load_fill(&ui->regs, &ui->forge, trans, size,
+			-1, bundle_path);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+void
+sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path)
+{
+	if(!ui || !bundle_path)
+		return;
+	
+	// signal to app
+	size_t size = sizeof(transmit_bundle_save_t)
+		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
+	transmit_bundle_save_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_bundle_save_fill(&ui->regs, &ui->forge, trans, size,
+			-1, bundle_path);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }

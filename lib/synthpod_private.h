@@ -190,6 +190,8 @@ struct _reg_t {
 		reg_item_t port_connected;
 		reg_item_t port_subscribed;
 		reg_item_t port_selected;
+		reg_item_t bundle_load;
+		reg_item_t bundle_save;
 	} synthpod;
 };
 
@@ -294,6 +296,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.port_connected, world, map, SYNTHPOD_PREFIX"portConnect");
 	_register(&regs->synthpod.port_subscribed, world, map, SYNTHPOD_PREFIX"portSubscribe");
 	_register(&regs->synthpod.port_selected, world, map, SYNTHPOD_PREFIX"portSelect");
+	_register(&regs->synthpod.bundle_load, world, map, SYNTHPOD_PREFIX"bundleLoad");
+	_register(&regs->synthpod.bundle_save, world, map, SYNTHPOD_PREFIX"bundleSave");
 }
 
 static inline void
@@ -383,6 +387,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.port_connected);
 	_unregister(&regs->synthpod.port_subscribed);
 	_unregister(&regs->synthpod.port_selected);
+	_unregister(&regs->synthpod.bundle_load);
+	_unregister(&regs->synthpod.bundle_save);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))
@@ -400,6 +406,8 @@ typedef struct _transmit_port_connected_t transmit_port_connected_t;
 typedef struct _transmit_port_subscribed_t transmit_port_subscribed_t;
 typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
 typedef struct _transmit_port_selected_t transmit_port_selected_t;
+typedef struct _transmit_bundle_load_t transmit_bundle_load_t;
+typedef struct _transmit_bundle_save_t transmit_bundle_save_t;
 
 struct _transmit_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
@@ -479,6 +487,20 @@ struct _transmit_port_selected_t {
 	LV2_Atom_Int uid _ATOM_ALIGNED;
 	LV2_Atom_Int port _ATOM_ALIGNED;
 	LV2_Atom_Int state _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_bundle_load_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_String path _ATOM_ALIGNED;
+	LV2_Atom_Int status _ATOM_ALIGNED;
+		char path_str [0] _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_bundle_save_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_String path _ATOM_ALIGNED;
+	LV2_Atom_Int status _ATOM_ALIGNED;
+		char path_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 // app <-> ui communication for port notifications
@@ -600,9 +622,13 @@ _sp_transmit_module_preset_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
 
-	trans->label.atom.size = strlen(label) + 1;
+	trans->label.atom.size = label
+		? strlen(label) + 1
+		: 0;
 	trans->label.atom.type = forge->String;
-	strcpy(trans->label_str, label);
+
+	if(label)
+		strcpy(trans->label_str, label);
 }
 
 static inline void
@@ -615,9 +641,13 @@ _sp_transmit_module_preset_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
 
-	trans->label.atom.size = strlen(label) + 1;
+	trans->label.atom.size = label
+		? strlen(label) + 1
+		: 0;
 	trans->label.atom.type = forge->String;
-	strcpy(trans->label_str, label);
+
+	if(label)
+		strcpy(trans->label_str, label);
 }
 
 static inline void
@@ -728,6 +758,46 @@ _sp_transmit_port_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 }
 
 static inline void
+_sp_transmit_bundle_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_bundle_load_t *trans, uint32_t size,
+	int32_t status, const char *bundle_path)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.bundle_load.urid);
+	
+	trans->status.atom.size = sizeof(int32_t);
+	trans->status.atom.type = forge->Int;
+	trans->status.body = status;
+
+	trans->path.atom.size = bundle_path
+		? strlen(bundle_path) + 1
+		: 0;
+	trans->path.atom.type = forge->String;
+
+	if(bundle_path)
+		strcpy(trans->path_str, bundle_path);
+}
+
+static inline void
+_sp_transmit_bundle_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_bundle_save_t *trans, uint32_t size,
+	int32_t status, const char *bundle_path)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.bundle_save.urid);
+	
+	trans->status.atom.size = sizeof(int32_t);
+	trans->status.atom.type = forge->Int;
+	trans->status.body = status;
+
+	trans->path.atom.size = bundle_path
+		? strlen(bundle_path) + 1
+		: 0;
+	trans->path.atom.type = forge->String;
+
+	if(bundle_path)
+		strcpy(trans->path_str, bundle_path);
+}
+
+static inline void
 _sp_transfer_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_t *trans, uint32_t size,
 	LV2_URID protocol, u_id_t module_uid, uint32_t port_index)
 {
@@ -816,6 +886,7 @@ _preset_label_get(LilvWorld *world, reg_t *regs, const LilvNode *preset)
 	return NULL;
 }
 
+// non-rt
 static LilvNodes *
 _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 	LilvNodes *presets, const char *bndl)
@@ -831,14 +902,21 @@ _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 		lilv_nodes_free(presets);
 	}
 
-	LilvNode *bndl_node = lilv_new_uri(world, bndl);
-	if(bndl_node)
+	char *bndl_path;
+	asprintf(&bndl_path, "file://%s", bndl); // convert absolute path to proper URI
+	if(bndl_path)
 	{
-		lilv_world_unload_bundle(world, bndl_node);
+		LilvNode *bndl_node = lilv_new_uri(world, bndl_path);
+		if(bndl_node)
+		{
+			lilv_world_unload_bundle(world, bndl_node);
 
-		//reload presets for this module
-		lilv_world_load_bundle(world, bndl_node);
-		lilv_node_free(bndl_node);
+			//reload presets for this module
+			lilv_world_load_bundle(world, bndl_node);
+			lilv_node_free(bndl_node);
+		}
+		
+		free(bndl_path);
 	}
 
 	return lilv_plugin_get_related(plugin, regs->pset.preset.node);

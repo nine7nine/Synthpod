@@ -113,4 +113,7 @@ LV2_State_Status
 sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
+int
+sp_app_paused(sp_app_t *app);
+
 #endif // _SYNTHPOD_APP_H

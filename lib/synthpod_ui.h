@@ -67,6 +67,9 @@ typedef struct _sp_ui_driver_t sp_ui_driver_t;
 typedef void *(*sp_to_request_t)(size_t size, void *data);
 typedef void (*sp_to_advance_t)(size_t size, void *data);
 
+typedef void (*sp_opened_t)(void *data, int status);
+typedef void (*sp_saved_t)(void *data, int status);
+
 struct _sp_ui_driver_t {
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
@@ -75,16 +78,29 @@ struct _sp_ui_driver_t {
 	// from ui
 	sp_to_request_t to_app_request;
 	sp_to_advance_t to_app_advance;
+	
+	sp_opened_t opened;
+	sp_saved_t saved;
 };
 
 sp_ui_t *
-sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void *data);
+sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
+	void *data, int show_splash);
 
 Evas_Object *
 sp_ui_widget_get(sp_ui_t *ui);
 
 void
+sp_ui_refresh(sp_ui_t *ui);
+
+void
 sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom);
+
+void
+sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path);
+
+void
+sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path);
 
 void
 sp_ui_resize(sp_ui_t *ui, int w, int h);

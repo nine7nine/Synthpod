@@ -535,26 +535,39 @@ run(LV2_Handle instance, uint32_t nsamples)
 			lv2_atom_forge_set_buffer(&handle->forge.work, handle->buf.tmp, CHUNK_SIZE);
 		}
 	}
-
-	// run app pre
-	sp_app_run_pre(app, nsamples);
-
-	// handle events from UI
-	LV2_ATOM_SEQUENCE_FOREACH(handle->port.control, ev)
-	{
-		const LV2_Atom *atom = &ev->body;
-		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
-
-		if(  (atom->type == handle->forge.notify.Object)
-			&& (obj->body.id == handle->uri.synthpod.event) )
-		{
-			//printf("control: %u\n", atom->size);
-			sp_app_from_ui(app, atom);
-		}
-	}
 	
-	// run app post
-	sp_app_run_post(app, nsamples);
+	if(sp_app_paused(app))
+	{
+		memset(handle->port.audio_out[0], 0x0, nsamples*sizeof(float));
+		memset(handle->port.audio_out[1], 0x0, nsamples*sizeof(float));
+		
+		*handle->port.output[0] = 0.f;
+		*handle->port.output[1] = 0.f;
+		*handle->port.output[2] = 0.f;
+		*handle->port.output[3] = 0.f;
+	}
+	else
+	{
+		// run app pre
+		sp_app_run_pre(app, nsamples);
+
+		// handle events from UI
+		LV2_ATOM_SEQUENCE_FOREACH(handle->port.control, ev)
+		{
+			const LV2_Atom *atom = &ev->body;
+			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+
+			if(  (atom->type == handle->forge.notify.Object)
+				&& (obj->body.id == handle->uri.synthpod.event) )
+			{
+				//printf("control: %u\n", atom->size);
+				sp_app_from_ui(app, atom);
+			}
+		}
+		
+		// run app post
+		sp_app_run_post(app, nsamples);
+	}
 		
 	// end sequence(s)
 	lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);

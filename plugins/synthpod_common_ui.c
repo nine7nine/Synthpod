@@ -77,9 +77,11 @@ _content_get(eo_ui_t *eoui)
 {
 	plughandle_t *handle = (void *)eoui - offsetof(plughandle_t, eoui);
 	
-	handle->ui = sp_ui_new(eoui->win, handle->world, &handle->driver, handle);
+	handle->ui = sp_ui_new(eoui->win, handle->world, &handle->driver, handle, 0);
 	if(!handle->ui)
 		return NULL;
+
+	sp_ui_refresh(handle->ui); // get everything from app
 
 	Evas_Object *widg = sp_ui_widget_get(handle->ui);
 	//evas_object_event_callback_add(widg, EVAS_CALLBACK_FREE, _content_free, handle);
@@ -168,6 +170,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->driver.to_app_request = _to_app_request;
 	handle->driver.to_app_advance = _to_app_advance;
+	handle->driver.opened = NULL; //TODO
+	handle->driver.saved = NULL; //TODO
 
 	if(eoui_instantiate(eoui, descriptor, plugin_uri, bundle_path, write_function,
 		controller, widget, features))

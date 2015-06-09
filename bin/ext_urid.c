@@ -64,18 +64,25 @@ _urid_map(LV2_URID_Map_Handle handle, const char *uri)
 			return *urid;
 	}
 	else
+	{
+		fprintf(stderr, "_urid_map: lock failed\n");
 		return 0;
+	}
 
 	// duplicate uri
 	char *uri_dup = strdup(uri);
 	if(!uri_dup)
+	{
+		fprintf(stderr, "_urid_map: out-of-memory\n");
 		return 0;
+	}
 
 	// create new urid for uri
 	urid = malloc(sizeof(LV2_URID));
 	if(!urid)
 	{
 		free(uri_dup);
+		fprintf(stderr, "_urid_map: out-of-memory\n");
 		return 0;
 	}
 	
@@ -100,6 +107,7 @@ _urid_map(LV2_URID_Map_Handle handle, const char *uri)
 
 		eina_lock_release(&uri_hash->mutex);
 	}
+	fprintf(stderr, "_urid_map: lock failed\n");
 
 	free(urid);
 	free(uri_dup);
@@ -115,7 +123,10 @@ _urid_unmap(LV2_URID_Map_Handle handle, LV2_URID urid)
 	Eina_Lock_Result res = eina_lock_take(&uri_hash->mutex);
 
 	if(res != EINA_LOCK_SUCCEED)
+	{
+		fprintf(stderr, "_urid_map: lock failed\n");
 		return NULL;
+	}
 
 	const char *uri = eina_hash_find(uri_hash->urids, &urid);
 	eina_lock_release(&uri_hash->mutex);

@@ -111,25 +111,7 @@ _client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	ptr = osc_get_string(ptr, &id);
 
 	// open/create app
-	int ret = nsm->driver->open(path, name, id, nsm->data);
-	
-	osc_data_t *buf0 = nsm->send;
-	if(ret == 0)
-	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
-			"/nsm/client/open", "opened");
-	}
-	else
-	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
-			"/nsm/client/open", 2, "opening failed");
-	}
-
-	size_t written = ptr ? ptr - buf0 : 0;
-	if(written)
-		ecore_con_server_send(nsm->serv, nsm->send, written);
-	else
-		; //TODO
+	int ret = nsm->driver->open(path, name, id, nsm->data); //TODO check
 
 	return 1;
 }
@@ -142,25 +124,7 @@ _client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	const osc_data_t *ptr;
 	
 	// save app
-	int ret = nsm->driver->save(nsm->data);
-	
-	osc_data_t *buf0 = nsm->send;
-	if(ret == 0)
-	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
-			"/nsm/client/save", "saved");
-	}
-	else
-	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
-			"/nsm/client/save", 1, "save failed");
-	}
-
-	size_t written = ptr ? ptr - buf0 : 0;
-	if(written)
-		ecore_con_server_send(nsm->serv, nsm->send, written);
-	else
-		; //TODO
+	int ret = nsm->driver->save(nsm->data); //TODO check
 
 	return 1;
 }
@@ -361,14 +325,63 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 
 			free(nsm->url);
 		}
-		else
-		{
-			// directly call save callback
-			nsm->driver->save(nsm->data);
-		}
 
 		free(nsm);
 	}
 
 	efreet_shutdown();
+}
+
+void
+synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
+{
+	if(!nsm)
+		return;
+
+	const osc_data_t *ptr;
+	osc_data_t *buf0 = nsm->send;
+
+	if(status == 0)
+	{
+		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
+			"/nsm/client/open", "opened");
+	}
+	else
+	{
+		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
+			"/nsm/client/open", 2, "opening failed");
+	}
+
+	size_t written = ptr ? ptr - buf0 : 0;
+	if(written)
+		ecore_con_server_send(nsm->serv, nsm->send, written);
+	else
+		; //TODO
+}
+
+void
+synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
+{
+	if(!nsm)
+		return;
+
+	const osc_data_t *ptr;
+	osc_data_t *buf0 = nsm->send;
+
+	if(status == 0)
+	{
+		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
+			"/nsm/client/save", "saved");
+	}
+	else
+	{
+		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
+			"/nsm/client/save", 1, "save failed");
+	}
+
+	size_t written = ptr ? ptr - buf0 : 0;
+	if(written)
+		ecore_con_server_send(nsm->serv, nsm->send, written);
+	else
+		; //TODO
 }

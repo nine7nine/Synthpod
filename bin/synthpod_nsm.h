@@ -33,3 +33,9 @@ synthpod_nsm_new(const char *exe, const char *path,
 
 void
 synthpod_nsm_free(synthpod_nsm_t *nsm);
+
+void
+synthpod_nsm_opened(synthpod_nsm_t *nsm, int status);
+
+void
+synthpod_nsm_saved(synthpod_nsm_t *nsm, int status);
