@@ -7,7 +7,6 @@ add_definitions("-D_GNU_SOURCE=1") # asprintf
 # synthpod
 add_library(synthpod.lib SHARED
 	synthpod_app.c
-	ext_urid.c
 	cjson/cJSON.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}

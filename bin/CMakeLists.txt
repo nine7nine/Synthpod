@@ -38,7 +38,8 @@ if(BUILD_JACK)
 # synthpod
 	add_executable(synthpod.jack
 		synthpod_jack.c
-		synthpod_nsm.c)
+		synthpod_nsm.c
+		ext_urid.c)
 	target_link_libraries(synthpod.jack
 		${ECORE_CON_LDFLAGS}
 		${JACK_LIBS}
@@ -71,7 +72,8 @@ if(BUILD_PORTAUDIO)
 # synthpod
 	add_executable(synthpod.pa
 		synthpod_pa.c
-		synthpod_nsm.c)
+		synthpod_nsm.c
+		ext_urid.c)
 	target_link_libraries(synthpod.pa
 		${ECORE_CON_LDFLAGS}
 		${PORTAUDIO_LIBS}
