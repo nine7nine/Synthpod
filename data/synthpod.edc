@@ -15,11 +15,6 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-collections {
-	images {
-		image: "omk_logo_256x256.png" COMP;
-	}
-
 #define COLORS_MAX "20"
 #define COL00    0    0    0  255 // Black
 #define COL01  255  179    0  255 // Vivid Yellow
@@ -43,7 +38,9 @@ collections {
 #define COL19  241   58   19  255 // Vivid Reddish Orange
 #define COL20   35   44   22  255 // Dark Olive Green
 
+collections {
 #include <theme.edc>
+#include <omk_logo.edc>
 #include <modlist.edc>
 #include <modgrid.edc>
 #include <patcher.edc>

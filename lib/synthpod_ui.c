@@ -211,7 +211,8 @@ struct _sp_ui_t {
 	LV2_Atom_Forge forge;
 
 	Evas_Object *win;
-	Evas_Object *theme;
+	Evas_Object *table;
+	Evas_Object *popup;
 
 	int colors_max;
 
@@ -2972,8 +2973,8 @@ _theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	Evas_Coord w, h;
 	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
 
-	if(ui->theme)
-		evas_object_resize(ui->theme, w, h);
+	if(ui->table)
+		evas_object_resize(ui->table, w, h);
 }
 
 static void
@@ -3167,21 +3168,36 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 		ui->griditc->func.del = _modgrid_del;
 	}
 
-	ui->theme = elm_layout_add(ui->win);
-	if(ui->theme)
+	ui->table = elm_table_add(ui->win);
+	if(ui->table)
 	{
-		elm_layout_file_set(ui->theme, SYNTHPOD_DATA_DIR"/synthpod.edj",
-			"/synthpod/theme");
-		const char *colors_max = elm_layout_data_get(ui->theme, "colors_max");
-		ui->colors_max = colors_max ? atoi(colors_max) : 20;
-		evas_object_size_hint_weight_set(ui->theme, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(ui->theme, EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_show(ui->theme);
+		elm_table_homogeneous_set(ui->table, EINA_FALSE);
+		elm_table_padding_set(ui->table, 0, 0);
+		evas_object_size_hint_weight_set(ui->table, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(ui->table, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(ui->table);
+
+		// get theme data items
+		Evas_Object *theme = elm_layout_add(ui->table);
+		if(theme)
+		{
+			elm_layout_file_set(theme, SYNTHPOD_DATA_DIR"/synthpod.edj",
+				"/synthpod/theme");
+
+			const char *colors_max = elm_layout_data_get(theme, "colors_max");
+			ui->colors_max = colors_max ? atoi(colors_max) : 20;
+
+			evas_object_del(theme);
+		}
+		else
+		{
+			ui->colors_max = 20;
+		}
 
 		_theme_resize(ui, NULL, ui->win, NULL);
 		evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
 
-		ui->mainpane = elm_panes_add(ui->theme);
+		ui->mainpane = elm_panes_add(ui->table);
 		if(ui->mainpane)
 		{
 			elm_panes_horizontal_set(ui->mainpane, EINA_FALSE);
@@ -3189,9 +3205,62 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 			evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(ui->mainpane);
-			elm_layout_content_set(ui->theme, "elm.swallow.content", ui->mainpane);
+			elm_table_pack(ui->table, ui->mainpane, 0, 0, 1, 1); //TODO
+
+			//TODO add status bar + info button
+
+			ui->popup = elm_popup_add(ui->table);
+			if(ui->popup)
+			{
+				elm_popup_allow_events_set(ui->popup, EINA_TRUE);
+				elm_popup_timeout_set(ui->popup, 4.f);
+				evas_object_show(ui->popup);
+
+				Evas_Object *hbox = elm_box_add(ui->popup);
+				if(hbox)
+				{
+					elm_box_horizontal_set(hbox, EINA_TRUE);
+					elm_box_homogeneous_set(hbox, EINA_FALSE);
+					elm_box_padding_set(hbox, 10, 0);
+					evas_object_show(hbox);
+					elm_object_content_set(ui->popup, hbox);
+
+					Evas_Object *icon = elm_icon_add(hbox);
+					if(icon)
+					{
+						elm_layout_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
+							"/omk/logo");
+						evas_object_size_hint_min_set(icon, 128, 128);
+						evas_object_size_hint_max_set(icon, 256, 256);
+						evas_object_size_hint_aspect_set(icon, EVAS_ASPECT_CONTROL_BOTH, 1, 1);
+						evas_object_show(icon);
+						elm_box_pack_end(hbox, icon);
+					}
+
+					Evas_Object *label = elm_label_add(hbox);
+					if(label)
+					{
+						elm_object_text_set(label,
+							"<color=#b00 shadow_color=#fff font_size=20>"
+							"Synthpod - Plugin Container"
+							"</color></br><align=left>"
+							"Version "SYNTHPOD_VERSION"</br></br>"
+							"Copyright (c) 2015 Hanspeter Portner</br></br>"
+							"This is free and libre software</br>"
+							"Released under Artistic License 2.0</br>"
+							"By Open Music Kontrollers</br></br>"
+							"<color=#bbb>"
+							"http://open-music-kontrollers.ch/lv2/synthpod</br>"
+							"dev@open-music-kontrollers.ch"
+							"</color></align>");
+
+						evas_object_show(label);
+						elm_box_pack_end(hbox, label);
+					}
+				}
+			}
 		
-			ui->leftpane = elm_panes_add(ui->theme);
+			ui->leftpane = elm_panes_add(ui->mainpane);
 			if(ui->leftpane)
 			{
 				elm_panes_horizontal_set(ui->leftpane, EINA_FALSE);
@@ -3321,7 +3390,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 			} // modgrid
 		} // mainpane
 	} // theme
-		
+
 	ecore_job_add(_background_loading, ui);
 
 	return ui;
@@ -3330,7 +3399,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver, void
 Evas_Object *
 sp_ui_widget_get(sp_ui_t *ui)
 {
-	return ui->theme;
+	return ui->table;
 }
 
 static inline mod_t *
@@ -3543,10 +3612,10 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 void
 sp_ui_resize(sp_ui_t *ui, int w, int h)
 {
-	if(!ui || !ui->theme)
+	if(!ui || !ui->table)
 		return;
 
-	evas_object_resize(ui->theme, w, h);
+	evas_object_resize(ui->table, w, h);
 }
 
 void
@@ -3603,8 +3672,13 @@ sp_ui_free(sp_ui_t *ui)
 		evas_object_del(ui->leftpane);
 	if(ui->mainpane)
 		evas_object_del(ui->mainpane);
-	if(ui->theme)
-		evas_object_del(ui->theme);
+	if(ui->popup)
+		evas_object_del(ui->popup);
+	if(ui->table)
+	{
+		elm_table_clear(ui->table, EINA_FALSE); //TODO
+		evas_object_del(ui->table);
+	}
 
 	//evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _resize);
 
