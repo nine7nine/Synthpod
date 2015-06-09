@@ -1,6 +1,6 @@
 # Synthpod
 
-## Lightweight cross-platform LV2 host and meta plugin 
+## Lightweight Nonlinear LV2 Plugin Container
 
 ### Build status
 
@@ -12,20 +12,16 @@
 
 * [lv2](http://lv2plug.in) (LV2 plugin specification)
 * [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
-* [libuv](http://docs.libuv.org/) (Lightweight event library)
 * [JACK](http://jackaudio.org/) (JACK audio connection kit)
-* [PortAudio](http://portaudio.com/) (Portable cross-platform audio I/O)
-* [RtMidi](http://www.music.mcgill.ca/~gary/rtmidi/) (Realtime cross-platform MIDI I/O)
 * [Elementary](http://docs.enlightenment.org/auto/elementary/) (EFL UI toolkit)
 
 ### Build / install
 
 	git clone https://github.com/OpenMusicKontrollers/synthpod.git
 	cd synthpod 
-	git submodule update --init
 	mkdir build
 	cd build
-	cmake -DCMAKE_C_FLAGS="-std=gnu99" ..
+	cmake ..
 	make
 	sudo make install
 
