@@ -26,8 +26,9 @@
 #include <smart_spinner.h>
 #include <smart_toggle.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
+#include <zero_writer.h>
 
-#define NUM_UI_FEATURES 12
+#define NUM_UI_FEATURES 13
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -85,6 +86,9 @@ struct _mod_t {
 
 	// LV2UI_Port_Subscribe extension
 	LV2UI_Port_Subscribe port_subscribe;
+
+	// zero copy writer extension
+	Zero_Writer_Schedule zero_writer;
 
 	// opts
 	struct {
@@ -465,7 +469,7 @@ _ui_mod_selected_request(mod_t *mod)
 	}
 }
 
-static void
+static void //XXX check with _zero_writer_request/advance
 _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
 {
@@ -487,38 +491,37 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	if(protocol == ui->regs.port.float_protocol.urid)
 	{
 		assert(size == sizeof(float));
-		size_t size = sizeof(transfer_float_t);
-		transfer_float_t *trans = _sp_ui_to_app_request(ui, size);
+		size_t len = sizeof(transfer_float_t);
+		transfer_float_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
-			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
-			_sp_ui_to_app_advance(ui, size);
+			_sp_transfer_float_fill(&ui->regs, &ui->forge, trans, mod->uid,
+				tar->index, buffer);
+			_sp_ui_to_app_advance(ui, len);
 		}
 	}
 	else if(protocol == ui->regs.port.atom_transfer.urid)
 	{
-		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
 		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
-			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
+			_sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index,
+				size, buffer);
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
-		assert(size == sizeof(LV2_Atom) + ((LV2_Atom *)buffer)->size);
 		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
-			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index, buffer);
+			_sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid, tar->index,
+				size, buffer);
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
-	else if(protocol == ui->regs.port.peak_protocol.urid)
-		; // makes no sense
 }
 
 static inline void
@@ -623,7 +626,7 @@ _ext_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	// to rt-thread
 	_ui_write_function(controller, port, size, protocol, buffer);
 
-	// to StdUI
+	// to StdUI FIXME is this necessary?
 	_std_port_event(controller, port, size, protocol, buffer);
 }
 
@@ -1165,6 +1168,63 @@ fail:
 	return NULL;
 }
 
+static void * //XXX check with _ui_write_function
+_zero_writer_request(Zero_Writer_Handle handle, uint32_t port, uint32_t size,
+	uint32_t protocol)
+{
+	mod_t *mod = handle;
+	sp_ui_t *ui = mod->ui;
+	port_t *tar = &mod->ports[port];
+
+	//printf("_zero_writer_request: %u\n", size);
+	
+	// ignore output ports
+	if(tar->direction != PORT_DIRECTION_INPUT)
+	{
+		fprintf(stderr, "_zero_writer_request: UI can only write to input port\n");
+		return NULL;
+	}
+
+	// float protocol not supported by zero_writer
+	assert( (protocol == ui->regs.port.atom_transfer.urid)
+		|| (protocol == ui->regs.port.event_transfer.urid) );
+
+	if(protocol == ui->regs.port.atom_transfer.urid)
+	{
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			return _sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid,
+				tar->index, size, NULL);
+		}
+	}
+	else if(protocol == ui->regs.port.event_transfer.urid)
+	{
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			return _sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid,
+				tar->index, size, NULL);
+		}
+	}
+
+	return NULL; // protocol not supported 
+}
+
+static void // XXX check with _ui_write_function
+_zero_writer_advance(Zero_Writer_Handle handle, uint32_t written)
+{
+	mod_t *mod = handle;
+	sp_ui_t *ui = mod->ui;
+
+	//printf("_zero_writer_advance: %u\n", written);
+
+	size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(written);
+	_sp_ui_to_app_advance(ui, len);
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	data_access_t data_access)
@@ -1200,6 +1260,11 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->port_subscribe.handle = mod;
 	mod->port_subscribe.subscribe = _port_subscribe;
 	mod->port_subscribe.unsubscribe = _port_unsubscribe;
+
+	// populate zero-writer
+	mod->zero_writer.handle = mod;
+	mod->zero_writer.request = _zero_writer_request;
+	mod->zero_writer.advance = _zero_writer_advance;
 
 	// populate external_ui_host
 	mod->kx.host.ui_closed = _kx_ui_closed;
@@ -1244,6 +1309,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = LV2_UI__portSubscribe;
 	mod->feature_list[nfeatures++].data = &mod->port_subscribe;
+	
+	mod->feature_list[nfeatures].URI = ZERO_WRITER__schedule;
+	mod->feature_list[nfeatures++].data = &mod->zero_writer;
 
 	mod->feature_list[nfeatures].URI = LV2_UI__idleInterface; // signal support for idleInterface
 	mod->feature_list[nfeatures++].data = NULL;

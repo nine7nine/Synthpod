@@ -21,6 +21,7 @@
 #include <synthpod_ui.h>
 
 #include <lv2_eo_ui.h>
+#include <zero_writer.h>
 
 typedef struct _plughandle_t plughandle_t;
 
@@ -36,6 +37,7 @@ struct _plughandle_t {
 		LV2_URID event_transfer;
 	} uri;
 
+	Zero_Writer_Schedule *zero_writer;
 	LV2UI_Write_Function write_function;
 	LV2UI_Controller controller;
 
@@ -61,12 +63,28 @@ _to_app_request(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 
-	return handle->buf.app;
+	// use zero-writer if available
+	if(handle->zero_writer)
+	{
+		return handle->zero_writer->request(handle->zero_writer->handle,
+			handle->control_port, size, handle->uri.event_transfer);
+	}
+
+	return size <= CHUNK_SIZE
+		? handle->buf.app
+		: NULL;
 }
 static void
 _to_app_advance(size_t size, void *data)
 {
 	plughandle_t *handle = data;
+
+	// use zero writer if available
+	if(handle->zero_writer)
+	{
+		handle->zero_writer->advance(handle->zero_writer->handle, size);
+		return;
+	}
 	
 	handle->write_function(handle->controller, handle->control_port,
 		size, handle->uri.event_transfer, handle->buf.app);
@@ -138,6 +156,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->world = (const LilvWorld *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_UI__portMap))
 			handle->port_map = (LV2UI_Port_Map *)features[i]->data;
+		else if(!strcmp(features[i]->URI, ZERO_WRITER__schedule))
+			handle->zero_writer = (Zero_Writer_Schedule *)features[i]->data;
   }
 
 	if(!handle->driver.map)
@@ -157,6 +177,10 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		fprintf(stderr, "%s: Host does not support ui:portMap\n", descriptor->URI);
 		free(handle);
 		return NULL;
+	}
+	if(handle->zero_writer)
+	{
+		fprintf(stderr, "%s: Host supports zero-writer:schedule\n", descriptor->URI);
 	}
 	
 	// query port indeces of "control" and "notify" ports

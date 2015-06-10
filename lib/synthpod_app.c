@@ -2082,13 +2082,14 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					continue;
 				else if( (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) && (atom->size == sizeof(LV2_Atom_Sequence_Body)) ) // empty atom sequence
 					continue;
-		
-				size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size);
+
+				uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
+				size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
 				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
 					_sp_transfer_atom_fill(&app->regs, &app->forge, trans,
-						port->mod->uid, port->index, atom);
+						port->mod->uid, port->index, atom_size, atom);
 					_sp_app_to_ui_advance(app, size);
 				}
 			}
@@ -2103,12 +2104,13 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				{
 					const LV2_Atom *atom = &ev->body;
 
-					size_t size = sizeof(transfer_atom_t) + sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size);
+					uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
+					size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
 					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
 					if(trans)
 					{
 						_sp_transfer_event_fill(&app->regs, &app->forge, trans,
-							port->mod->uid, port->index, atom);
+							port->mod->uid, port->index, atom_size, atom);
 						_sp_app_to_ui_advance(app, size);
 					}
 				}

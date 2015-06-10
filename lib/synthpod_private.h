@@ -819,7 +819,7 @@ _sp_transfer_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_t *trans, uint32_
 	trans->port.body = port_index;
 }
 
-static inline void
+static inline void 
 _sp_transfer_float_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_float_t *trans,
 	u_id_t module_uid, uint32_t port_index, const float *value)
 {
@@ -851,28 +851,32 @@ _sp_transfer_peak_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_peak_t *tran
 	trans->peak.body = data->peak;
 }
 
-static inline void
+static inline LV2_Atom *
 _sp_transfer_atom_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *trans,
-	u_id_t module_uid, uint32_t port_index, const LV2_Atom *atom)
+	u_id_t module_uid, uint32_t port_index, uint32_t atom_size, const LV2_Atom *atom)
 {
-	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-
-	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size),
+	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t)
+		+ lv2_atom_pad_size(atom_size),
 		regs->port.atom_transfer.urid, module_uid, port_index);
 
-	memcpy(trans->atom, atom, atom_size);
+	if(atom)
+		memcpy(trans->atom, atom, atom_size);
+
+	return trans->atom;
 }
 
-static inline void
+static inline LV2_Atom *
 _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *trans,
-	u_id_t module_uid, uint32_t port_index, const LV2_Atom *atom)
+	u_id_t module_uid, uint32_t port_index, uint32_t atom_size, const LV2_Atom *atom)
 {
-	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-
-	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size),
+	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t)
+		+ lv2_atom_pad_size(atom_size),
 		regs->port.event_transfer.urid, module_uid, port_index);
 
-	memcpy(trans->atom, atom, atom_size);
+	if(atom)
+		memcpy(trans->atom, atom, atom_size);
+
+	return trans->atom;
 }
 
 static const char *

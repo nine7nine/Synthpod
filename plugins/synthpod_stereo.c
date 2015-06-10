@@ -421,7 +421,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 	
-	if(!handle->schedule)
+	if(!handle->schedule && !handle->zero_sched)
 	{
 		_log_printf(handle, handle->uri.log.error,
 			"%s: Host does not support worker:schedule\n",
@@ -433,7 +433,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	if(handle->zero_sched)
 	{
 		_log_printf(handle, handle->uri.log.note,
-			"%s: Host supports zero:schedule\n",
+			"%s: Host supports zero-worker:schedule\n",
 			descriptor->URI);
 	}
 	
@@ -600,7 +600,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	if(handle->dirty_in)
 	{
-		printf("dirty\n");
+		//printf("dirty\n");
 		//TODO refresh UI
 
 		handle->dirty_in = 0;
