@@ -31,6 +31,7 @@
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
+#include <zero_worker.h>
 
 #include <Eina.h>
 
@@ -41,6 +42,7 @@ struct _plughandle_t {
 	sp_app_driver_t driver;
 
 	LV2_Worker_Schedule *schedule;
+	Zero_Worker_Schedule *zero_sched;
 	LV2_Log_Log *log;
 	LV2_Options_Option *opts;
 
@@ -90,6 +92,13 @@ struct _plughandle_t {
 		LV2_Worker_Respond_Function respond;
 		LV2_Worker_Respond_Handle target;
 	} worker;
+
+	// non-rt zero_worker-thread
+	struct {
+		Zero_Worker_Request_Function request;
+		Zero_Worker_Advance_Function advance;
+		Zero_Worker_Handle target;
+	} zero_worker;
 
 	struct {
 		uint8_t ui [CHUNK_SIZE] _ATOM_ALIGNED;
@@ -192,6 +201,9 @@ _work(LV2_Handle instance,
 
 	sp_worker_from_app(handle->app, size, body);
 
+	handle->worker.respond = NULL;
+	handle->worker.target = NULL;
+
 	return LV2_WORKER_SUCCESS;
 }
 
@@ -202,7 +214,6 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 	plughandle_t *handle = instance;
 
 	//printf("_work_response: %u\n", size);
-
 	sp_app_from_worker(handle->app, size, body);
 
 	return LV2_WORKER_SUCCESS;
@@ -223,6 +234,59 @@ static const LV2_Worker_Interface work_iface = {
 	.work = _work,
 	.work_response = _work_response,
 	.end_run = _end_run
+};
+
+// non-rt
+static Zero_Worker_Status 
+_zero_work(LV2_Handle instance, Zero_Worker_Request_Function request,
+	Zero_Worker_Advance_Function advance, Zero_Worker_Handle target,
+	int64_t frames, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+	(void)frames; //TODO
+	
+	//printf("_zero_work: %u\n", size);
+	handle->zero_worker.request = request;
+	handle->zero_worker.advance = advance;
+	handle->zero_worker.target = target;
+
+	sp_worker_from_app(handle->app, size, body);
+	
+	handle->zero_worker.request = NULL;
+	handle->zero_worker.advance = NULL;
+	handle->zero_worker.target = NULL;
+
+	return ZERO_WORKER_SUCCESS;
+}
+
+// rt-thread
+static Zero_Worker_Status
+_zero_response(LV2_Handle instance, int64_t frames, uint32_t size,
+	const void* body)
+{
+	plughandle_t *handle = instance;
+
+	//printf("_zero_response: %u\n", size);
+	sp_app_from_worker(handle->app, size, body);
+
+	return ZERO_WORKER_SUCCESS;
+}
+
+// rt-thread
+static Zero_Worker_Status
+_zero_end(LV2_Handle instance)
+{
+	plughandle_t *handle = instance;
+	
+	handle->working = 0;
+
+	return ZERO_WORKER_SUCCESS;
+}
+
+static const Zero_Worker_Interface zero_iface = {
+	.work = _zero_work,
+	.response = _zero_response,
+	.end = _zero_end
 };
 
 // rt-thread
@@ -255,9 +319,15 @@ _to_worker_request(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 	
-	//TODO test capacity
+	if(handle->zero_sched)
+	{
+		int64_t frames = 0; //TODO
+		return handle->zero_sched->request(handle->zero_sched->handle, frames, size);
+	}
 
-	return handle->buf.worker;
+	return size <= CHUNK_SIZE
+		? handle->buf.worker
+		: NULL;
 }
 static void
 _to_worker_advance(size_t size, void *data)
@@ -267,9 +337,15 @@ _to_worker_advance(size_t size, void *data)
 	//printf("_to_worker_advance: %zu\n", size);
 	
 	handle->working = 1;
+
+	if(handle->zero_sched)
+	{
+		handle->zero_sched->advance(handle->zero_sched->handle, size); //TODO check
+		return;
+	}
+	
 	handle->schedule->schedule_work(handle->schedule->handle,
-		size, handle->buf.worker);
-	//TODO check return result
+		size, handle->buf.worker); //TODO check
 }
 
 // non-rt worker-thread
@@ -278,9 +354,16 @@ _to_app_request(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 
-	//TODO test capacity
+	// use zero worker if present
+	if(handle->zero_worker.request)
+	{
+		int64_t frames = 0; //TODO
+		return handle->zero_worker.request(handle->zero_worker.target, frames, size);
+	}
 
-	return handle->buf.app;
+	return size <= CHUNK_SIZE
+		? handle->buf.app
+		: NULL;
 }
 static void
 _to_app_advance(size_t size, void *data)
@@ -288,9 +371,13 @@ _to_app_advance(size_t size, void *data)
 	plughandle_t *handle = data;
 
 	//printf("_to_app_advance: %zu\n", size);
+	if(handle->zero_worker.advance)
+	{
+		handle->zero_worker.advance(handle->zero_worker.target, size); //TODO check
+		return;
+	}
 
-	handle->worker.respond(handle->worker.target, size, handle->buf.app);
-	//TODO check return result
+	handle->worker.respond(handle->worker.target, size, handle->buf.app); //TODO check
 }
 
 static LV2_Handle
@@ -323,6 +410,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->opts = (LV2_Options_Option *)features[i]->data;
 		else if(!strcmp(features[i]->URI, SYNTHPOD_PREFIX"world"))
 			world = (const LilvWorld *)features[i]->data;
+		else if(!strcmp(features[i]->URI, ZERO_WORKER__schedule))
+			handle->zero_sched = (Zero_Worker_Schedule *)features[i]->data;
 
 	if(!handle->driver.map)
 	{
@@ -339,6 +428,13 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			descriptor->URI);
 		free(handle);
 		return NULL;
+	}
+
+	if(handle->zero_sched)
+	{
+		_log_printf(handle, handle->uri.log.note,
+			"%s: Host supports zero:schedule\n",
+			descriptor->URI);
 	}
 	
 	if(!handle->opts)
@@ -600,6 +696,8 @@ extension_data(const char* uri)
 		return &work_iface;
 	else if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
+	else if(!strcmp(uri, ZERO_WORKER__interface))
+		return &zero_iface;
 	else
 		return NULL;
 }

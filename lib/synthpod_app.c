@@ -34,7 +34,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 6
+#define NUM_FEATURES 7
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -89,6 +89,12 @@ struct _mod_t {
 		const LV2_Worker_Interface *iface;
 		LV2_Worker_Schedule schedule;
 	} worker;
+
+	// zero_worker
+	struct {
+		const Zero_Worker_Interface *iface;
+		Zero_Worker_Schedule schedule;
+	} zero;
 
 	// log
 	LV2_Log_Log log;
@@ -358,6 +364,39 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
+// rt
+static void *
+_zero_sched_request(Zero_Worker_Handle handle, int64_t frames, uint32_t size)
+{
+	mod_t *mod = handle;
+	sp_app_t *app = mod->app;
+
+	size_t work_size = sizeof(work_t) + size;
+	work_t *work = _sp_app_to_worker_request(app, work_size);
+	if(work)
+	{
+		work->target = mod;
+		work->size = size; //TODO overwrite in _zero_advance if size != written
+
+		return work->payload;
+	}
+
+	return NULL;
+}
+
+// rt
+static Zero_Worker_Status
+_zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
+{
+	mod_t *mod = handle;
+	sp_app_t *app = mod->app;
+
+	size_t work_written = sizeof(work_t) + written;
+	_sp_app_to_worker_advance(app, work_written);
+
+	return ZERO_WORKER_SUCCESS;
+}
+
 // non-rt worker-thread
 static inline mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri)
@@ -379,6 +418,11 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	// populate worker schedule
 	mod->worker.schedule.handle = mod;
 	mod->worker.schedule.schedule_work = _schedule_work;
+
+	// populate zero_worker schedule
+	mod->zero.schedule.handle = mod;
+	mod->zero.schedule.request = _zero_sched_request;
+	mod->zero.schedule.advance = _zero_sched_advance;
 
 	// populate log
 	mod->log.handle = mod;
@@ -423,6 +467,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->feature_list[4].data = mod->opts.options;
 	mod->feature_list[5].URI = SYNTHPOD_WORLD;
 	mod->feature_list[5].data = app->world;
+	mod->feature_list[6].URI = ZERO_WORKER__schedule;
+	mod->feature_list[6].data = &mod->zero.schedule;
 
 	for(int i=0; i<NUM_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];
@@ -436,6 +482,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->handle = lilv_instance_get_handle(mod->inst),
 	mod->worker.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_WORKER__interface);
+	mod->zero.iface = lilv_instance_get_extension_data(mod->inst,
+		ZERO_WORKER__interface);
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_OPTIONS__interface); //TODO actually use this for something?
 	lilv_instance_activate(mod->inst);
@@ -1288,8 +1336,17 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 	else // work is for module
 	{
 		mod_t *mod = work->target;
+		if(!mod)
+			return;
 
-		if(mod && mod->worker.iface && mod->worker.iface->work_response)
+		// zero worker takes precedence over standard worker
+		if(mod->zero.iface && mod->zero.iface->response)
+		{
+			int64_t frames = 0; //TODO
+			mod->zero.iface->response(mod->handle, frames, work->size, work->payload);
+			//TODO check return status
+		}
+		else if(mod->worker.iface && mod->worker.iface->work_response)
 		{
 			mod->worker.iface->work_response(mod->handle, work->size, work->payload);
 			//TODO check return status
@@ -1308,15 +1365,48 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 	work_t *work = _sp_worker_to_app_request(app, work_size);
 	if(work)
 	{
-			work->target = mod;
-			work->size = size;
-			memcpy(work->payload, data, size);
+		work->target = mod;
+		work->size = size;
+		memcpy(work->payload, data, size);
 		_sp_worker_to_app_advance(app, work_size);
 		
 		return LV2_WORKER_SUCCESS;
 	}
 
 	return LV2_WORKER_ERR_NO_SPACE;
+}
+
+// non-rt
+static void *
+_sp_zero_request(Zero_Worker_Handle handle, int64_t frames, uint32_t size)
+{
+	mod_t *mod = handle;
+	sp_app_t *app = mod->app;
+
+	size_t work_size = sizeof(work_t) + size;
+	work_t *work = _sp_worker_to_app_request(app, work_size);
+	if(work)
+	{
+		work->target = mod;
+		work->size = size; //TODO overwrite in _sp_zero_advance if size != written
+
+		return work->payload;
+	}
+
+	return NULL;
+}
+
+// non-rt
+static Zero_Worker_Status
+_sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
+{
+	mod_t *mod = handle;
+	sp_app_t *app = mod->app;
+
+	size_t work_written = sizeof(work_t) + written;
+	_sp_worker_to_app_advance(app, work_written);
+
+	return ZERO_WORKER_SUCCESS;
 }
 
 const LilvNode *
@@ -1731,8 +1821,18 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 	else // work is for module
 	{
 		mod_t *mod = work->target;
-		
-		if(mod && mod->worker.iface && mod->worker.iface->work)
+		if(!mod)
+			return;
+
+		// zero worker takes precedence over standard worker
+		if(mod->zero.iface && mod->zero.iface->work)
+		{
+			int64_t frames = 0; //TODO
+			mod->zero.iface->work(mod->handle, _sp_zero_request, _sp_zero_advance,
+				mod, frames, work->size, work->payload);
+			//TODO check return status
+		}
+		else if(mod->worker.iface && mod->worker.iface->work)
 		{
 			mod->worker.iface->work(mod->handle, _sp_worker_respond, mod,
 				work->size, work->payload);
@@ -1750,14 +1850,11 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 	{
 		mod_t *mod = app->mods[m];
 
-		// handle work
-		if(mod->worker.iface)
-		{
-			// the actual work should already be done at this point in time
-
-			if(mod->worker.iface->end_run)
-				mod->worker.iface->end_run(mod->handle);
-		}
+		// handle end of work
+		if(mod->zero.iface && mod->zero.iface->end)
+			mod->zero.iface->end(mod->handle);
+		else if(mod->worker.iface && mod->worker.iface->end_run)
+			mod->worker.iface->end_run(mod->handle);
 	
 		// clear atom sequence input / output buffers where needed
 		for(int i=0; i<mod->num_ports; i++)

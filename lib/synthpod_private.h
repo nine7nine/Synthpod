@@ -34,6 +34,7 @@
 #include <lv2/lv2plug.in/ns/ext/presets/presets.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
+#include <zero_worker.h>
 
 typedef enum _port_type_t port_type_t;
 typedef enum _port_buffer_type_t port_buffer_type_t;
@@ -114,6 +115,10 @@ struct _reg_t {
 	struct {
 		reg_item_t schedule;
 	} work;
+
+	struct {
+		reg_item_t schedule;
+	} zero;
 
 	struct {
 		reg_item_t entry;
@@ -235,6 +240,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->port.minimum_size, world, map, LV2_RESIZE_PORT__minimumSize);
 
 	_register(&regs->work.schedule, world, map, LV2_WORKER__schedule);
+	_register(&regs->zero.schedule, world, map, ZERO_WORKER__schedule);
 
 	_register(&regs->log.entry, world, map, LV2_LOG__Entry);
 	_register(&regs->log.error, world, map, LV2_LOG__Error);
@@ -326,6 +332,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->port.minimum_size);
 
 	_unregister(&regs->work.schedule);
+	_unregister(&regs->zero.schedule);
 
 	_unregister(&regs->log.entry);
 	_unregister(&regs->log.error);

@@ -35,6 +35,13 @@
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:	<http://open-music-kontrollers.ch/lv2/> .
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
+@prefix zero:	<http://open-music-kontrollers.ch/lv2/zero-worker#> .
+
+# to please sord_validate
+zero:interface
+	a lv2:ExtensionData .
+zero:schedule
+	a lv2:Feature .
 
 # Maintainer
 omk:me
@@ -367,9 +374,9 @@ synthpod:stereo
 	doap:name "Synthpod Stereo" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:extensionData work:interface , state:interface ;
+	lv2:extensionData work:interface , state:interface, zero:interface ;
 	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength ;
-	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zero:schedule ;
 
 	lv2:port [
 		# event in
