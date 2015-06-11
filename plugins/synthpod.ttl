@@ -35,12 +35,16 @@
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:	<http://open-music-kontrollers.ch/lv2/> .
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
-@prefix zero:	<http://open-music-kontrollers.ch/lv2/zero-worker#> .
+@prefix zwork:	<http://open-music-kontrollers.ch/lv2/zero-worker#> .
+@prefix zwrite:	<http://open-music-kontrollers.ch/lv2/zero-writer#> .
 
 # to please sord_validate
-zero:interface
+zwork:interface
 	a lv2:ExtensionData .
-zero:schedule
+zwork:schedule
+	a lv2:Feature .
+
+zwrite:schedule
 	a lv2:Feature .
 
 # Maintainer
@@ -335,7 +339,7 @@ synthpod:common_eo
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst: ;
+	lv2:optionalFeature inst:, zwrite:schedule ;
 	lv2:requiredFeature ui:portMap .
 synthpod:common_ui
 	a ui:UI ;
@@ -344,7 +348,7 @@ synthpod:common_ui
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst: ;
+	lv2:optionalFeature inst:, zwrite:schedule ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
 synthpod:common_x11
@@ -354,7 +358,7 @@ synthpod:common_x11
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature ui:resize, inst: ;
+	lv2:optionalFeature ui:resize, inst:, zwrite:schedule ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap ;
   lv2:extensionData ui:idleInterface .
 synthpod:common_kx
@@ -364,7 +368,7 @@ synthpod:common_kx
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst: ;
+	lv2:optionalFeature inst:, zwrite:schedule ;
 	lv2:requiredFeature kx:Host, ui:portMap .
 
 # Stereo Plugin
@@ -374,9 +378,9 @@ synthpod:stereo
 	doap:name "Synthpod Stereo" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:extensionData work:interface , state:interface, zero:interface ;
+	lv2:extensionData work:interface , state:interface, zwork:interface ;
 	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength ;
-	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zero:schedule ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
 
 	lv2:port [
 		# event in
