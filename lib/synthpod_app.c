@@ -2404,6 +2404,14 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 	//printf("absolute: %s\n", absolute);
 
+	if(!ecore_file_exists(absolute)) // new project?
+	{
+		// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
+		app->dirty = 1;
+
+		return LV2_STATE_SUCCESS;
+	}
+
 	char *root_str = NULL;
 	FILE *f = fopen(absolute, "rb");
 	if(f)
