@@ -30,7 +30,7 @@
 
 #include <lilv/lilv.h>
 
-#define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
+#include <synthpod_common.h>
 
 typedef struct _sp_app_t sp_app_t;
 typedef struct _sp_app_driver_t sp_app_driver_t;

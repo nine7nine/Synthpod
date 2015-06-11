@@ -20,8 +20,8 @@ add_definitions("-DSYNTHPOD_VERSION=\"${SYNTHPOD_VERSION}\"")
 set(CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
 
 # options
-option(BUILD_UI "Build user interface libraries" OFF)
-option(BUILD_JACK "Build JACK standalone host" OFF)
+option(BUILD_UI "Build user interface libraries" ON)
+option(BUILD_JACK "Build JACK standalone host" ON)
 option(BUILD_PORTAUDIO "Build PortAudio standalone host (experimental)" OFF)
 
 # eina

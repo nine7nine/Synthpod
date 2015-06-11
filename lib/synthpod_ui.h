@@ -29,7 +29,7 @@
 
 #include <lilv/lilv.h>
 
-#define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
+#include <synthpod_common.h>
 
 // magic to resolve naming issues with EFL on WIN32
 #if defined(_WIN32)
@@ -48,18 +48,6 @@
 #	pragma pop_macro("interface")
 #	pragma pop_macro("__MINGW32__")
 #endif
-
-typedef enum _port_widget_t port_widget_t;
-
-enum _port_widget_t {
-	PORT_WIDGET_SLIDER = 0,
-	PORT_WIDGET_CHECK,
-	PORT_WIDGET_DROPBOX,
-	PORT_WIDGET_SEGMENT,
-	PORT_WIDGET_PROGRESS,
-
-	PORT_WIDGET_NUM
-};
 
 typedef struct _sp_ui_t sp_ui_t;
 typedef struct _sp_ui_driver_t sp_ui_driver_t;
