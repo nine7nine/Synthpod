@@ -473,6 +473,41 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	for(int i=0; i<NUM_FEATURES; i++)
 		mod->features[i] = &mod->feature_list[i];
 	mod->features[NUM_FEATURES] = NULL; // sentinel
+
+	// check for missing features
+	int missing_required_feature = 0;
+	LilvNodes *required_features = lilv_plugin_get_required_features(plug);
+	if(required_features)
+	{
+		LILV_FOREACH(nodes, i, required_features)
+		{
+			const LilvNode* required_feature = lilv_nodes_get(required_features, i);
+			const char *required_feature_uri = lilv_node_as_uri(required_feature);
+			missing_required_feature = 1;
+
+			for(int i=0; i<NUM_FEATURES; i++)
+			{
+				if(!strcmp(mod->feature_list[i].URI, required_feature_uri))
+				{
+					missing_required_feature = 0;
+					break;
+				}
+			}
+
+			if(missing_required_feature)
+			{
+				fprintf(stderr, "plugin '%s' requires non-supported feature: %s\n",
+					uri, required_feature_uri);
+				break;
+			}
+		}
+		lilv_nodes_free(required_features);
+	}
+	if(missing_required_feature)
+	{
+		free(mod);
+		return NULL; // plugin requires a feature we do not support
+	}
 		
 	mod->app = app;
 	mod->uid = app->uid++;
@@ -770,16 +805,26 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	// inject source mod
 	uri_str = SYNTHPOD_PREFIX"source";
 	mod = _sp_app_mod_add(app, uri_str);
-	app->system.source = mod;
-	app->mods[app->num_mods] = mod;
-	app->num_mods += 1;
+	if(mod)
+	{
+		app->system.source = mod;
+		app->mods[app->num_mods] = mod;
+		app->num_mods += 1;
+	}
+	else
+		; //TODO report
 
 	// inject sink mod
 	uri_str = SYNTHPOD_PREFIX"sink";
 	mod = _sp_app_mod_add(app, uri_str);
-	app->system.sink = mod;
-	app->mods[app->num_mods] = mod;
-	app->num_mods += 1;
+	if(mod)
+	{
+		app->system.sink = mod;
+		app->mods[app->num_mods] = mod;
+		app->num_mods += 1;
+	}
+	else
+		; //TODO report
 	
 	return app;
 }
@@ -1742,6 +1787,8 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			case JOB_TYPE_MODULE_ADD:
 			{
 				mod_t *mod = _sp_app_mod_add(app, job->uri);
+				if(!mod)
+					break; //TODO report
 
 				// signal to ui
 				size_t work_size = sizeof(work_t) + sizeof(job_t);

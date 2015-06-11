@@ -28,7 +28,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 13
+#define NUM_UI_FEATURES 14
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -1340,6 +1340,12 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		mod->feature_list[nfeatures++].data = inst;
 	}
 	
+	//FIXME do we want to support this? its marked as DEPRECATED in LV2 spec
+	{
+		mod->feature_list[nfeatures].URI = LV2_UI_PREFIX"makeSONameResident";
+		mod->feature_list[nfeatures++].data = NULL;
+	}
+	
 	for(int i=0; i<nfeatures; i++)
 		mod->features[i] = &mod->feature_list[i];
 	mod->features[nfeatures] = NULL; // sentinel
@@ -1434,6 +1440,39 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			const LilvNode *ui_uri_node = lilv_ui_get_uri(lui);
 			if(!ui_uri_node)
 				continue;
+
+			// check for missing features
+			int missing_required_feature = 0;
+			LilvNodes *required_features = lilv_world_find_nodes(ui->world,
+				ui_uri_node, ui->regs.core.required_feature.node, NULL);
+			if(required_features)
+			{
+				LILV_FOREACH(nodes, i, required_features)
+				{
+					const LilvNode* required_feature = lilv_nodes_get(required_features, i);
+					const char *required_feature_uri = lilv_node_as_uri(required_feature);
+					missing_required_feature = 1;
+
+					for(int i=0; i<nfeatures; i++)
+					{
+						if(!strcmp(mod->feature_list[i].URI, required_feature_uri))
+						{
+							missing_required_feature = 0;
+							break;
+						}
+					}
+
+					if(missing_required_feature)
+					{
+						fprintf(stderr, "UI '%s' requires non-supported feature: %s\n",
+							lilv_node_as_uri(ui_uri_node), required_feature_uri);
+						break;
+					}
+				}
+				lilv_nodes_free(required_features);
+			}
+			if(missing_required_feature)
+				continue; // plugin requires a feature we do not support
 
 			// test for EoUI
 			{
@@ -3525,7 +3564,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body,
 			(void *)trans->inst.body, (data_access_t)trans->data.body);
 		if(!mod)
-			return;
+			return; //TODO report
 
 		if(mod->system.source || mod->system.sink || !ui->sink_itm)
 		{

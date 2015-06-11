@@ -139,6 +139,11 @@ struct _reg_t {
 	} pset;
 
 	struct {
+		reg_item_t optional_feature;
+		reg_item_t required_feature;
+	} core;
+
+	struct {
 		reg_item_t max_block_length;
 		reg_item_t min_block_length;
 		reg_item_t sequence_size;
@@ -254,6 +259,9 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
 	_register(&regs->pset.rdfs_label, world, map, LILV_NS_RDFS"label");
 
+	_register(&regs->core.optional_feature, world, map, LV2_CORE__optionalFeature);
+	_register(&regs->core.required_feature, world, map, LV2_CORE__requiredFeature);
+
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
 	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
 	_register(&regs->bufsz.sequence_size, world, map, LV2_BUF_SIZE__sequenceSize);
@@ -345,6 +353,9 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->pset.preset);
 	_unregister(&regs->pset.rdfs_label);
+
+	_unregister(&regs->core.optional_feature);
+	_unregister(&regs->core.required_feature);
 
 	_unregister(&regs->bufsz.max_block_length);
 	_unregister(&regs->bufsz.min_block_length);
