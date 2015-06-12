@@ -136,6 +136,7 @@ struct _port_t {
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
 	port_buffer_type_t buffer_type; // none, sequence
+	int patchable; // support patch:Message
 
 	LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
 	int subscriptions; // subsriptions reference counter
@@ -581,6 +582,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
 			//	: PORT_BUFFER_TYPE_NONE; //TODO discriminate properly
+				
+			// does this port support patch:Message?
+			tar->patchable = lilv_port_supports_event(plug, port, app->regs.patch.message.node);
 
 			// check whether this is a control port
 			LilvNode *control_designation = lilv_new_uri(app->world, LV2_CORE__control);
@@ -2058,8 +2062,11 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		{
 			port_t *port = &mod->ports[i];
 
-			if(port->subscriptions == 0) // no notification/subscription
-				continue;
+			// no notification/subscription and no support for patch:Message
+			int subscribed = port->subscriptions != 0;
+			int patchable = port->patchable && (port->direction == PORT_DIRECTION_INPUT);
+			if(!subscribed && !patchable)
+				continue; // skip this port
 				
 			const void *buf = port->num_sources == 1
 				? port->sources[0]->buf // direct link to source buffer
@@ -2143,13 +2150,28 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			else if(port->protocol == app->regs.port.event_transfer.urid)
 			{
 				const LV2_Atom_Sequence *seq = buf;
+				/*
 				if(seq->atom.size == sizeof(LV2_Atom_Sequence_Body)) // empty seq
 					continue;
+				*/
 
 				// transfer each atom of sequence separately
 				LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 				{
 					const LV2_Atom *atom = &ev->body;
+
+					if(!subscribed) // patched
+					{
+						const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+
+						if(  (obj->atom.type != app->forge.Object)
+							|| (obj->body.otype != app->regs.patch.response.urid) ) //FIXME handle more
+						{
+							continue; // skip this event
+						}
+
+						printf("routing response\n");
+					}
 
 					uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
 					size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);

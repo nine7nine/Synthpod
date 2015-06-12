@@ -32,6 +32,7 @@
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 #include <lv2/lv2plug.in/ns/ext/resize-port/resize-port.h>
 #include <lv2/lv2plug.in/ns/ext/presets/presets.h>
+#include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
@@ -135,8 +136,12 @@ struct _reg_t {
 
 	struct {
 		reg_item_t preset;
-		reg_item_t rdfs_label;
 	} pset;
+		
+	struct {
+		reg_item_t label;
+		reg_item_t range;
+	} rdfs;
 
 	struct {
 		reg_item_t optional_feature;
@@ -148,6 +153,20 @@ struct _reg_t {
 		reg_item_t min_block_length;
 		reg_item_t sequence_size;
 	} bufsz;
+
+	struct {
+		reg_item_t writable;	
+		reg_item_t readable;	
+		reg_item_t message;	
+		reg_item_t set;	
+		reg_item_t get;	
+		reg_item_t subject;	
+		reg_item_t property;	
+		reg_item_t value;	
+		reg_item_t response;	
+		reg_item_t request;	
+		reg_item_t body;	
+	} patch;
 
 	struct {
 		// properties
@@ -257,7 +276,9 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.window_title, world, map, LV2_UI__windowTitle);
 
 	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
-	_register(&regs->pset.rdfs_label, world, map, LILV_NS_RDFS"label");
+
+	_register(&regs->rdfs.label, world, map, LILV_NS_RDFS"label");
+	_register(&regs->rdfs.range, world, map, LILV_NS_RDFS"range");
 
 	_register(&regs->core.optional_feature, world, map, LV2_CORE__optionalFeature);
 	_register(&regs->core.required_feature, world, map, LV2_CORE__requiredFeature);
@@ -265,7 +286,19 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
 	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
 	_register(&regs->bufsz.sequence_size, world, map, LV2_BUF_SIZE__sequenceSize);
-	
+
+	_register(&regs->patch.writable, world, map, LV2_PATCH__writable);
+	_register(&regs->patch.readable, world, map, LV2_PATCH__readable);
+	_register(&regs->patch.message, world, map, LV2_PATCH__Message);
+	_register(&regs->patch.set, world, map, LV2_PATCH__Set);
+	_register(&regs->patch.get, world, map, LV2_PATCH__Get);
+	_register(&regs->patch.subject, world, map, LV2_PATCH__subject);
+	_register(&regs->patch.property, world, map, LV2_PATCH__property);
+	_register(&regs->patch.value, world, map, LV2_PATCH__value);
+	_register(&regs->patch.response, world, map, LV2_PATCH__Response);
+	_register(&regs->patch.request, world, map, LV2_PATCH__request);
+	_register(&regs->patch.body, world, map, LV2_PATCH__body);
+
 	_register(&regs->units.conversion, world, map, LV2_UNITS__conversion);
 	_register(&regs->units.prefixConversion, world, map, LV2_UNITS__prefixConversion);
 	_register(&regs->units.render, world, map, LV2_UNITS__render);
@@ -352,7 +385,9 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->ui.window_title);
 
 	_unregister(&regs->pset.preset);
-	_unregister(&regs->pset.rdfs_label);
+
+	_unregister(&regs->rdfs.label);
+	_unregister(&regs->rdfs.range);
 
 	_unregister(&regs->core.optional_feature);
 	_unregister(&regs->core.required_feature);
@@ -360,6 +395,18 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->bufsz.max_block_length);
 	_unregister(&regs->bufsz.min_block_length);
 	_unregister(&regs->bufsz.sequence_size);
+
+	_unregister(&regs->patch.writable);
+	_unregister(&regs->patch.readable);
+	_unregister(&regs->patch.message);
+	_unregister(&regs->patch.set);
+	_unregister(&regs->patch.get);
+	_unregister(&regs->patch.subject);
+	_unregister(&regs->patch.property);
+	_unregister(&regs->patch.value);
+	_unregister(&regs->patch.response);
+	_unregister(&regs->patch.request);
+	_unregister(&regs->patch.body);
 
 	_unregister(&regs->units.conversion);
 	_unregister(&regs->units.prefixConversion);
@@ -526,6 +573,9 @@ typedef struct _transfer_t transfer_t;
 typedef struct _transfer_float_t transfer_float_t;
 typedef struct _transfer_peak_t transfer_peak_t;
 typedef struct _transfer_atom_t transfer_atom_t;
+typedef struct _transfer_patch_set_t transfer_patch_set_t;
+typedef struct _transfer_patch_get_t transfer_patch_get_t;
+typedef struct _transfer_patch_response_t transfer_patch_response_t;
 
 struct _transfer_t {
 	transmit_t transmit _ATOM_ALIGNED;
@@ -548,7 +598,38 @@ struct _transfer_peak_t {
 struct _transfer_atom_t {
 	transfer_t transfer _ATOM_ALIGNED;
 	LV2_Atom atom [0] _ATOM_ALIGNED;
-};
+} _ATOM_ALIGNED;
+
+struct _transfer_patch_set_t {
+	transfer_t transfer _ATOM_ALIGNED;
+	LV2_Atom_Object obj _ATOM_ALIGNED;
+	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
+	LV2_URID subj_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
+	LV2_URID prop_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body str _ATOM_ALIGNED;
+	char str_val [0] _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transfer_patch_get_t {
+	transfer_t transfer _ATOM_ALIGNED;
+	LV2_Atom_Object obj _ATOM_ALIGNED;
+	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
+	LV2_URID subj_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
+	LV2_URID prop_val _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transfer_patch_response_t {
+	transfer_t transfer _ATOM_ALIGNED;
+	LV2_Atom_Object obj _ATOM_ALIGNED;
+	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
+	LV2_URID subj_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body req _ATOM_ALIGNED;
+	LV2_URID req_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body body _ATOM_ALIGNED;
+	char body_val [0] _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
 
 static inline void
 _sp_transmit_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_t *trans, uint32_t size,
@@ -890,12 +971,124 @@ _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *tra
 	return trans->atom;
 }
 
+static inline char *
+_sp_transfer_patch_set_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transfer_patch_set_t *trans, u_id_t module_uid, uint32_t port_index,
+	uint32_t str_size, LV2_URID subject, LV2_URID property, LV2_URID type)
+{
+	uint32_t trans_size = sizeof(transfer_patch_set_t)
+		+ lv2_atom_pad_size(str_size);
+	uint32_t obj_size = trans_size
+		- offsetof(transfer_patch_set_t, obj.atom);
+
+	_sp_transfer_fill(regs, forge, &trans->transfer, trans_size,
+		regs->port.event_transfer.urid, module_uid, port_index);
+
+	trans->obj.atom.size = obj_size;
+	trans->obj.atom.type = forge->Object;
+	trans->obj.body.id = 0; //TODO or regs->patch.message.urid?
+	trans->obj.body.otype = regs->patch.set.urid;
+
+	trans->subj.key = regs->patch.subject.urid;
+	trans->subj.context = 0;
+	trans->subj.value.size = sizeof(LV2_URID);
+	trans->subj.value.type = forge->URID;
+
+	trans->subj_val = subject;
+
+	trans->prop.key = regs->patch.property.urid;
+	trans->prop.context = 0;
+	trans->prop.value.size = sizeof(LV2_URID);
+	trans->prop.value.type = forge->URID;
+
+	trans->prop_val = property;
+
+	trans->str.key = regs->patch.value.urid;
+	trans->str.context = 0;
+	trans->str.value.size = str_size;
+	trans->str.value.type = type;
+
+	return trans->str_val;
+}
+
+static inline void
+_sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transfer_patch_get_t *trans, u_id_t module_uid, uint32_t port_index,
+	LV2_URID subject, LV2_URID property)
+{
+	uint32_t trans_size = sizeof(transfer_patch_get_t);
+	uint32_t obj_size = trans_size
+		- offsetof(transfer_patch_get_t, obj.atom);
+
+	_sp_transfer_fill(regs, forge, &trans->transfer, trans_size,
+		regs->port.event_transfer.urid, module_uid, port_index);
+
+	trans->obj.atom.size = obj_size;
+	trans->obj.atom.type = forge->Object;
+	trans->obj.body.id = 0; //TODO or regs->patch.message.urid?
+	trans->obj.body.otype = regs->patch.get.urid;
+
+	trans->subj.key = regs->patch.subject.urid;
+	trans->subj.context = 0;
+	trans->subj.value.size = sizeof(LV2_URID);
+	trans->subj.value.type = forge->URID;
+
+	trans->subj_val = subject;
+
+	trans->prop.key = regs->patch.property.urid;
+	trans->prop.context = 0;
+	trans->prop.value.size = sizeof(LV2_URID);
+	trans->prop.value.type = forge->URID;
+
+	trans->prop_val = property;
+}
+
+static inline char *
+_sp_transfer_patch_response_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transfer_patch_response_t *trans, u_id_t module_uid, uint32_t port_index,
+	uint32_t str_size, LV2_URID subject, LV2_URID request, LV2_URID type)
+{
+	uint32_t trans_size = sizeof(transfer_patch_response_t)
+		+ lv2_atom_pad_size(str_size);
+	uint32_t obj_size = trans_size
+		- offsetof(transfer_patch_response_t, obj.atom);
+
+	_sp_transfer_fill(regs, forge, &trans->transfer, trans_size,
+		regs->port.event_transfer.urid, module_uid, port_index);
+
+	trans->obj.atom.size = obj_size;
+	trans->obj.atom.type = forge->Object;
+	trans->obj.body.id = 0; //TODO or regs->patch.message.urid?
+	trans->obj.body.otype = regs->patch.response.urid;
+
+	trans->subj.key = regs->patch.subject.urid;
+	trans->subj.context = 0;
+	trans->subj.value.size = sizeof(LV2_URID);
+	trans->subj.value.type = forge->URID;
+
+	trans->subj_val = subject;
+
+	trans->req.key = regs->patch.request.urid;
+	trans->req.context = 0;
+	trans->req.value.size = sizeof(LV2_URID);
+	trans->req.value.type = forge->URID;
+
+	trans->req_val = request;
+
+	trans->body.key = regs->patch.body.urid;
+	trans->body.context = 0;
+	trans->body.value.size = str_size;
+	trans->body.value.type = type;
+
+	return trans->body_val;
+}
+
 static const char *
 _preset_label_get(LilvWorld *world, reg_t *regs, const LilvNode *preset)
 {
 	lilv_world_load_resource(world, preset);
 	LilvNodes* labels = lilv_world_find_nodes(world, preset,
-		regs->pset.rdfs_label.node, NULL);
+		regs->rdfs.label.node, NULL);
 	if(labels)
 	{
 		const LilvNode *label = lilv_nodes_get_first(labels);

@@ -34,6 +34,7 @@
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
+typedef struct _property_t property_t;
 
 typedef enum _plug_info_type_t plug_info_type_t;
 typedef struct _plug_info_t plug_info_t;
@@ -73,10 +74,20 @@ struct _mod_t {
 	const LilvPlugin *plug;
 	LilvUIs *all_uis;
 	LilvNodes *presets;
+	LV2_URID subject;
 
 	// ports
 	uint32_t num_ports;
 	port_t *ports;
+
+	// patches
+	LilvNodes *writs;
+	uint32_t num_writables;
+	property_t *writables;
+
+	LilvNodes *reads;
+	uint32_t num_readables;
+	property_t *readables;
 
 	// UI color
 	int col;
@@ -188,6 +199,7 @@ struct _port_t {
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
 	port_buffer_type_t buffer_type; // none, sequence
+	int patchable; // support patch:Message
 
 	LilvScalePoints *points;
 	char *unit;
@@ -198,6 +210,20 @@ struct _port_t {
 
 	float peak;
 			
+	struct {
+		Evas_Object *widget;
+	} std;
+};
+
+struct _property_t {
+	mod_t *mod;
+	int selected;
+	int editable;
+
+	const LilvNode *tar;
+	LV2_URID tar_urid;
+	LV2_URID type_urid;
+
 	struct {
 		Evas_Object *widget;
 	} std;
@@ -243,6 +269,7 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *psetsaveitc;
 	Elm_Gengrid_Item_Class *griditc;
 	Elm_Genlist_Item_Class *patchitc;
+	Elm_Genlist_Item_Class *propitc;
 		
 	Elm_Object_Item *sink_itm;
 
@@ -302,7 +329,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 {
 	mod_t *mod = handle;
 	sp_ui_t *ui = mod->ui;
-	port_t *port = &mod->ports[index];
+	port_t *port = &mod->ports[index]; //FIXME handle patch:Response
 
 	//printf("_std_port_event: %u %u %u\n", index, size, protocol);
 
@@ -311,10 +338,6 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	// check for expanded list
 	if(!elm_genlist_item_expanded_get(mod->std.itm))
-		return;
-
-	// check for realized port widget
-	if(!port->std.widget)
 		return;
 
 	if(protocol == ui->regs.port.float_protocol.urid)
@@ -328,12 +351,15 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		if(val > port->max)
 			val = port->max;
 
-		if(toggled)
-			smart_toggle_value_set(port->std.widget, val);
-		else if(port->points)
-			smart_spinner_value_set(port->std.widget, val);
-		else // integer or float
-			smart_slider_value_set(port->std.widget, val);
+		if(port->std.widget)
+		{
+			if(toggled)
+				smart_toggle_value_set(port->std.widget, val);
+			else if(port->points)
+				smart_spinner_value_set(port->std.widget, val);
+			else // integer or float
+				smart_slider_value_set(port->std.widget, val);
+		}
 	}
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 	{
@@ -342,11 +368,56 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 			port->peak = peak_data->peak;
 		else
 			port->peak *= 0.8;
-		if(port->peak > 0.f)
+
+		if(port->std.widget && (port->peak > 0.f) )
 			smart_meter_value_set(port->std.widget, port->peak);
 	}
+	else if(protocol == ui->regs.port.event_transfer.urid)
+	{
+		const LV2_Atom_Object *obj = buf;
+
+		// check for patch:Response
+		if(  (obj->atom.type == ui->forge.Object)
+			&& (obj->body.otype == ui->regs.patch.response.urid) )
+		{
+			const LV2_Atom_URID *subject = NULL;
+			const LV2_Atom_URID *request = NULL;
+			const LV2_Atom_String *body = NULL;
+			
+			LV2_Atom_Object_Query q[] = {
+				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+				{ ui->regs.patch.request.urid, (const LV2_Atom **)&request },
+				{ ui->regs.patch.body.urid, (const LV2_Atom **)&body },
+				LV2_ATOM_OBJECT_QUERY_END
+			};
+			lv2_atom_object_query(obj, q);
+
+			if(request && body)
+			{
+				LV2_URID subject_val = subject ? subject->body : 0;
+				LV2_URID request_val = request->body;
+				const char *body_val = LV2_ATOM_BODY_CONST(body);
+
+				printf("ui got patch:Response: %u %u %s\n",
+					subject_val, request_val, body_val);
+
+				for(int i=0; i<mod->num_readables; i++)
+				{
+					property_t *prop = &mod->readables[i];
+
+					if(prop->tar_urid == request_val) // matching readable?
+					{
+						if(prop->std.widget)
+							elm_object_text_set(prop->std.widget, body_val);
+
+						break;
+					}
+				}
+			}
+		}
+	}
 	else
-		; //TODO atom, sequence
+		; //TODO atom
 }
 
 static inline void
@@ -1354,6 +1425,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->uid = uid;
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
+	mod->subject = ui->driver->map->map(ui->driver->map->handle, plugin_string);
 
 	// discover system modules
 	if(!strcmp(uri, SYNTHPOD_PREFIX"source"))
@@ -1410,6 +1482,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				//tar->buffer_type = lilv_port_is_a(plug, port, ui->regs.port.sequence.node)
 				//	? PORT_BUFFER_TYPE_SEQUENCE
 				//	: PORT_BUFFER_TYPE_NONE; //TODO
+
+				// does this port support patch:Message?
+				tar->patchable = lilv_port_supports_event(plug, port, ui->regs.patch.message.node);
 			}
 
 			// get port unit
@@ -1424,6 +1499,88 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				}
 
 				lilv_node_free(unit);
+			}
+		}
+	}
+
+	// look for patch:writable's
+	mod->writs = lilv_world_find_nodes(ui->world,
+		plugin_uri, ui->regs.patch.writable.node, NULL);
+	if(mod->writs)
+	{
+		mod->num_writables = lilv_nodes_size(mod->writs);
+		mod->writables = calloc(mod->num_writables, sizeof(property_t));
+		if(mod->writables)
+		{
+			int j = 0;
+			LILV_FOREACH(nodes, i, mod->writs)
+			{
+				const LilvNode *writable = lilv_nodes_get(mod->writs, i);
+				const char *writable_str = lilv_node_as_uri(writable);
+
+				printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
+
+				property_t *prop = &mod->writables[j++];
+				prop->mod = mod;
+				prop->editable = 1;
+				prop->tar = writable;
+				prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, writable_str);
+				prop->type_urid = 0; // invalid type
+
+				// get type of patch:writable
+				LilvNodes *types = lilv_world_find_nodes(ui->world, writable,
+					ui->regs.rdfs.range.node, NULL);
+				if(types)
+				{
+					const LilvNode *type = lilv_nodes_get_first(types);
+					const char *type_str = lilv_node_as_string(type);
+				
+					printf("with type: %s\n", type_str);
+					prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
+					
+					lilv_nodes_free(types);
+				}
+			}
+		}
+	}
+
+	// look for patch:readable's
+	mod->reads = lilv_world_find_nodes(ui->world,
+		plugin_uri, ui->regs.patch.readable.node, NULL);
+	if(mod->reads)
+	{
+		mod->num_readables = lilv_nodes_size(mod->reads);
+		mod->readables = calloc(mod->num_readables, sizeof(property_t));
+		if(mod->readables)
+		{
+			int j = 0;
+			LILV_FOREACH(nodes, i, mod->reads)
+			{
+				const LilvNode *readable = lilv_nodes_get(mod->reads, i);
+				const char *readable_str = lilv_node_as_uri(readable);
+
+				printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
+
+				property_t *prop = &mod->readables[j++];
+				prop->mod = mod;
+				prop->editable = 0;
+				prop->tar = readable;
+				prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, readable_str);
+				prop->type_urid = 0; // invalid type
+
+				// get type of patch:readable
+				LilvNodes *types = lilv_world_find_nodes(ui->world, readable,
+					ui->regs.rdfs.range.node, NULL);
+				if(types)
+				{
+					const LilvNode *type = lilv_nodes_get_first(types);
+					const char *type_str = lilv_node_as_string(type);
+				
+					printf("with type: %s\n", type_str);
+					prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
+					
+					lilv_nodes_free(types);
+				}
 			}
 		}
 	}
@@ -1574,6 +1731,17 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 		if(port->unit)
 			free(port->unit);
 	}
+	if(mod->ports)
+		free(mod->ports);
+
+	if(mod->writables)
+		free(mod->writables);
+	if(mod->readables)
+		free(mod->readables);
+	if(mod->writs)
+		lilv_nodes_free(mod->writs);
+	if(mod->reads)
+		lilv_nodes_free(mod->reads);
 
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
@@ -1916,6 +2084,27 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 			// only add control, audio, cv ports
 			elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
+				ELM_GENLIST_ITEM_NONE, NULL, NULL);
+			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); TODO
+		}
+
+		for(int i=0; i<mod->num_writables; i++)
+		{
+			property_t *prop = &mod->writables[i];
+
+			// only add control, audio, cv ports
+			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
+				ELM_GENLIST_ITEM_NONE, NULL, NULL);
+			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); //TODO
+		}
+		for(int i=0; i<mod->num_readables; i++)
+		{
+			property_t *prop = &mod->readables[i];
+
+			// only add control, audio, cv ports
+			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); TODO
@@ -2339,6 +2528,240 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 
 	return lay;
 }
+
+static char *
+_property_label_get(void *data, Evas_Object *obj, const char *part)
+{
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+	property_t *prop = data;
+	if(!ui || !prop)
+		return NULL;
+
+	if(!strcmp(part, "elm.text"))
+	{
+		//FIXME
+
+		const char *label = lilv_node_as_uri(prop->tar);
+		return label
+			? strdup(label)
+			: NULL;
+	}
+
+	return NULL;
+}
+
+static void
+_property_path_chosen(void *data, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+
+	const char *path = event_info;
+	if(!path)
+		return;
+	
+	printf("_property_path_chosen: %s\n", path);
+
+	size_t strsize = strlen(path) + 1 + 7; // strlen("file://") == 7
+	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
+
+	for(uint32_t index=0; index<mod->num_ports; index++)
+	{
+		port_t *port = &mod->ports[index];
+
+		// only consider event ports which support patch:Message
+		if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+			|| (port->direction != PORT_DIRECTION_INPUT)
+			|| !port->patchable)
+		{
+			continue; // skip
+		}
+
+		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			char *str = _sp_transfer_patch_set_fill(&ui->regs,
+				&ui->forge, trans, mod->uid, index, strsize,
+				mod->subject, prop->tar_urid, prop->type_urid);
+			if(str)
+				asprintf(&str, "file://%s", path);
+			_sp_ui_to_app_advance(ui, len);
+		}
+	}
+}
+
+static void
+_property_string_activated(void *data, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+	
+	const char *entered = elm_entry_entry_get(obj);
+	if(!entered)
+		return;
+	
+	printf("_property_string_activated: %s\n", entered);
+
+	size_t strsize = strlen(entered) + 1;
+	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
+
+	for(uint32_t index=0; index<mod->num_ports; index++)
+	{
+		port_t *port = &mod->ports[index];
+
+		// only consider event ports which support patch:Message
+		if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+			|| (port->direction != PORT_DIRECTION_INPUT)
+			|| !port->patchable)
+		{
+			continue; // skip
+		}
+
+		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			char *str = _sp_transfer_patch_set_fill(&ui->regs,
+				&ui->forge, trans, mod->uid, index, strsize,
+				mod->subject, prop->tar_urid, prop->type_urid);
+			if(str)
+				strcpy(str, entered);
+			_sp_ui_to_app_advance(ui, len);
+		}
+	}
+}
+
+static Evas_Object *
+_property_content_get(void *data, Evas_Object *obj, const char *part)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+	
+	if(strcmp(part, "elm.swallow.content"))
+		return NULL;
+
+	// get label of patch:writable
+	const char *label_str = NULL;
+	LilvNodes *labels = lilv_world_find_nodes(ui->world, prop->tar,
+		ui->regs.rdfs.label.node, NULL);
+	if(labels)
+	{
+		const LilvNode *label = lilv_nodes_get_first(labels);
+		label_str = lilv_node_as_string(label);
+		
+		lilv_nodes_free(labels);
+	}
+	
+	Evas_Object *lay = elm_layout_add(obj);
+	if(lay)
+	{
+		elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
+			"/synthpod/modlist/port");
+		evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(lay);
+
+		Evas_Object *dir = edje_object_add(evas_object_evas_get(lay));
+		if(dir)
+		{
+			edje_object_file_set(dir, SYNTHPOD_DATA_DIR"/synthpod.edj",
+				"/synthpod/patcher/port");
+			char col [7];
+			sprintf(col, "col,%02i", mod->col);
+			edje_object_signal_emit(dir, col, PATCHER_UI);
+			evas_object_show(dir);
+			if(!prop->editable)
+			{
+				edje_object_signal_emit(dir, "source", PATCHER_UI);
+				elm_layout_content_set(lay, "elm.swallow.source", dir);
+			}
+			else
+			{
+				edje_object_signal_emit(dir, "sink", PATCHER_UI);
+				elm_layout_content_set(lay, "elm.swallow.sink", dir);
+			}
+		} // dir
+
+		if(label_str)
+			elm_layout_text_set(lay, "elm.text", label_str);
+
+		Evas_Object *child = NULL;
+
+		if(prop->editable)
+		{
+			if(  (prop->type_urid == ui->forge.String)
+				|| (prop->type_urid == ui->forge.URI) )
+			{
+				child = elm_entry_add(lay);
+				if(child)
+				{
+					elm_entry_single_line_set(child, EINA_TRUE);
+					evas_object_smart_callback_add(child, "activated",
+						_property_string_activated, prop);
+				}
+			}
+			else if(prop->type_urid == ui->forge.Path)
+			{
+				child = elm_fileselector_button_add(lay);
+				if(child)
+				{
+					elm_fileselector_button_inwin_mode_set(child, EINA_FALSE);
+					elm_fileselector_button_window_title_set(child, "Select file");
+					elm_fileselector_is_save_set(child, EINA_FALSE);
+					elm_object_part_text_set(child, "default", "Select file");
+					evas_object_smart_callback_add(child, "file,chosen",
+						_property_path_chosen, prop);
+					//TODO MIME type
+				}
+			}
+			else
+				fprintf(stderr, "property type %u not supported\n", prop->type_urid);
+		}
+		else // !editable
+		{
+			//TODO check for type
+			child = elm_label_add(lay);
+			evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
+
+			// send patch:Get
+			size_t len = sizeof(transfer_patch_get_t);
+			for(uint32_t index=0; index<mod->num_ports; index++)
+			{
+				port_t *port = &mod->ports[index];
+
+				// only consider event ports which support patch:Message
+				if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+					|| (port->direction != PORT_DIRECTION_INPUT)
+					|| !port->patchable)
+				{
+					continue; // skip
+				}
+
+				transfer_patch_get_t *trans = _sp_ui_to_app_request(ui, len);
+				if(trans)
+				{
+					_sp_transfer_patch_get_fill(&ui->regs,
+						&ui->forge, trans, mod->uid, index,
+						mod->subject, prop->tar_urid);
+					_sp_ui_to_app_advance(ui, len);
+				}
+			}
+		}
+			
+		if(child)
+		{
+			evas_object_show(child);
+			elm_layout_content_set(lay, "elm.swallow.content", child);
+		}
+		
+		prop->std.widget = child;
+	} // lay
+
+	return lay;
+}
+
 
 static void
 _patched_changed(void *data, Evas_Object *obj, void *event)
@@ -3221,6 +3644,17 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		ui->patchitc->func.content_get = _patchgrid_content_get;
 		ui->patchitc->func.state_get = NULL;
 		ui->patchitc->func.del = NULL;
+	}
+	
+	ui->propitc = elm_gengrid_item_class_new();
+	if(ui->propitc)
+	{
+		//FIXME
+		ui->propitc->item_style = "full";
+		ui->propitc->func.text_get = _property_label_get;
+		ui->propitc->func.content_get = _property_content_get;
+		ui->propitc->func.state_get = NULL;
+		ui->propitc->func.del = NULL;
 	}
 		
 	ui->moditc = elm_genlist_item_class_new();
