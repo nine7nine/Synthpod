@@ -1380,9 +1380,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = LV2_UI__portSubscribe;
 	mod->feature_list[nfeatures++].data = &mod->port_subscribe;
-	
-	mod->feature_list[nfeatures].URI = ZERO_WRITER__schedule;
-	mod->feature_list[nfeatures++].data = &mod->zero_writer;
 
 	mod->feature_list[nfeatures].URI = LV2_UI__idleInterface; // signal support for idleInterface
 	mod->feature_list[nfeatures++].data = NULL;
@@ -1392,9 +1389,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = LV2_UI__resize;
 	mod->feature_list[nfeatures++].data = &mod->x11.host_resize_iface;
-
-	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
-	mod->feature_list[nfeatures++].data = ui->world;
 
 	mod->feature_list[nfeatures].URI = LV2_OPTIONS__options;
 	mod->feature_list[nfeatures++].data = mod->opts.options;
@@ -1416,6 +1410,14 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		mod->feature_list[nfeatures].URI = LV2_UI_PREFIX"makeSONameResident";
 		mod->feature_list[nfeatures++].data = NULL;
 	}
+
+	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
+	mod->feature_list[nfeatures++].data = ui->world;
+	
+	mod->feature_list[nfeatures].URI = ZERO_WRITER__schedule;
+	mod->feature_list[nfeatures++].data = &mod->zero_writer;
+
+	assert(nfeatures <= NUM_FEATURES);
 	
 	for(int i=0; i<nfeatures; i++)
 		mod->features[i] = &mod->feature_list[i];

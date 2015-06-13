@@ -34,7 +34,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 7
+#define NUM_FEATURES 8
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -456,24 +456,59 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->opts.options[3].value = NULL; // sentinel
 
 	// populate feature list
-	mod->feature_list[0].URI = LV2_URID__map;
-	mod->feature_list[0].data = app->driver->map;
-	mod->feature_list[1].URI = LV2_URID__unmap;
-	mod->feature_list[1].data = app->driver->unmap;
-	mod->feature_list[2].URI = LV2_WORKER__schedule;
-	mod->feature_list[2].data = &mod->worker.schedule;
-	mod->feature_list[3].URI = LV2_LOG__log;
-	mod->feature_list[3].data = &mod->log;
-	mod->feature_list[4].URI = LV2_OPTIONS__options;
-	mod->feature_list[4].data = mod->opts.options;
-	mod->feature_list[5].URI = SYNTHPOD_WORLD;
-	mod->feature_list[5].data = app->world;
-	mod->feature_list[6].URI = ZERO_WORKER__schedule;
-	mod->feature_list[6].data = &mod->zero.schedule;
+	int nfeatures = 0;
+	mod->feature_list[nfeatures].URI = LV2_URID__map;
+	mod->feature_list[nfeatures++].data = app->driver->map;
 
-	for(int i=0; i<NUM_FEATURES; i++)
+	mod->feature_list[nfeatures].URI = LV2_URID__unmap;
+	mod->feature_list[nfeatures++].data = app->driver->unmap;
+
+	mod->feature_list[nfeatures].URI = LV2_WORKER__schedule;
+	mod->feature_list[nfeatures++].data = &mod->worker.schedule;
+
+	mod->feature_list[nfeatures].URI = LV2_LOG__log;
+	mod->feature_list[nfeatures++].data = &mod->log;
+	
+	mod->feature_list[nfeatures].URI = LV2_BUF_SIZE__boundedBlockLength;
+	mod->feature_list[nfeatures++].data = NULL;
+
+	/* TODO support
+	mod->feature_list[nfeatures].URI = LV2_BUF_SIZE__fixedBlockLength;
+	mod->feature_list[nfeatures++].data = NULL;
+	
+	mod->feature_list[nfeatures].URI = LV2_BUF_SIZE__powerOf2BlockLength;
+	mod->feature_list[nfeatures++].data = NULL;
+	*/
+
+	mod->feature_list[nfeatures].URI = LV2_OPTIONS__options;
+	mod->feature_list[nfeatures++].data = mod->opts.options;
+
+	/* TODO support
+	mod->feature_list[nfeatures].URI = LV2_PORT_PROPS__supportsStrictBounds;
+	mod->feature_list[nfeatures++].data = NULL;
+	*/
+	
+	/* TODO support
+	mod->feature_list[nfeatures].URI = LV2_RESIZE_PORT__resize;
+	mod->feature_list[nfeatures++].data = NULL;
+	*/
+
+	/* TODO support
+	mod->feature_list[nfeatures].URI = LV2_STATE__loadDefaultState;
+	mod->feature_list[nfeatures++].data = NULL;
+	*/
+
+	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
+	mod->feature_list[nfeatures++].data = app->world;
+
+	mod->feature_list[nfeatures].URI = ZERO_WORKER__schedule;
+	mod->feature_list[nfeatures++].data = &mod->zero.schedule;
+
+	assert(nfeatures <= NUM_FEATURES);
+
+	for(int i=0; i<nfeatures; i++)
 		mod->features[i] = &mod->feature_list[i];
-	mod->features[NUM_FEATURES] = NULL; // sentinel
+	mod->features[nfeatures] = NULL; // sentinel
 
 	// check for missing features
 	int missing_required_feature = 0;
@@ -486,7 +521,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			const char *required_feature_uri = lilv_node_as_uri(required_feature);
 			missing_required_feature = 1;
 
-			for(int i=0; i<NUM_FEATURES; i++)
+			for(int i=0; i<nfeatures; i++)
 			{
 				if(!strcmp(mod->feature_list[i].URI, required_feature_uri))
 				{

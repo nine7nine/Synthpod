@@ -33,6 +33,7 @@
 #include <lv2/lv2plug.in/ns/ext/resize-port/resize-port.h>
 #include <lv2/lv2plug.in/ns/ext/presets/presets.h>
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
+#include <lv2/lv2plug.in/ns/ext/port-props/port-props.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
