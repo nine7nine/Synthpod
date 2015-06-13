@@ -1417,7 +1417,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->feature_list[nfeatures].URI = ZERO_WRITER__schedule;
 	mod->feature_list[nfeatures++].data = &mod->zero_writer;
 
-	assert(nfeatures <= NUM_FEATURES);
+	assert(nfeatures <= NUM_UI_FEATURES);
 	
 	for(int i=0; i<nfeatures; i++)
 		mod->features[i] = &mod->feature_list[i];
