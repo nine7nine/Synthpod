@@ -378,27 +378,27 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 		// check for patch:Response
 		if(  (obj->atom.type == ui->forge.Object)
-			&& (obj->body.otype == ui->regs.patch.response.urid) )
+			&& (obj->body.otype == ui->regs.patch.set.urid) )
 		{
 			const LV2_Atom_URID *subject = NULL;
-			const LV2_Atom_URID *request = NULL;
-			const LV2_Atom_String *body = NULL;
+			const LV2_Atom_URID *property = NULL;
+			const LV2_Atom_String *value = NULL;
 			
 			LV2_Atom_Object_Query q[] = {
 				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
-				{ ui->regs.patch.request.urid, (const LV2_Atom **)&request },
-				{ ui->regs.patch.body.urid, (const LV2_Atom **)&body },
+				{ ui->regs.patch.property.urid, (const LV2_Atom **)&property },
+				{ ui->regs.patch.value.urid, (const LV2_Atom **)&value },
 				LV2_ATOM_OBJECT_QUERY_END
 			};
 			lv2_atom_object_query(obj, q);
 
-			if(request && body)
+			if(property && value)
 			{
 				LV2_URID subject_val = subject ? subject->body : 0;
-				LV2_URID request_val = request->body;
-				const char *body_val = LV2_ATOM_BODY_CONST(body);
+				LV2_URID request_val = property->body;
+				const char *body_val = LV2_ATOM_BODY_CONST(value);
 
-				printf("ui got patch:Response: %u %u %s\n",
+				printf("ui got patch:Set: %u %u %s\n",
 					subject_val, request_val, body_val);
 
 				for(int i=0; i<mod->num_readables; i++)
