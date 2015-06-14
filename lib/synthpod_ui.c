@@ -106,6 +106,9 @@ struct _mod_t {
 		LV2_Options_Option options [2];
 	} opts;
 
+	// port-groups
+	Eina_Hash *groups;
+
 	// Eo UI
 	struct {
 		const LilvUI *ui;
@@ -196,6 +199,8 @@ struct _port_t {
 	const LilvPort *tar;
 	uint32_t index;
 
+	LilvNode *group;
+
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
 	port_buffer_type_t buffer_type; // none, sequence
@@ -270,6 +275,7 @@ struct _sp_ui_t {
 	Elm_Gengrid_Item_Class *griditc;
 	Elm_Genlist_Item_Class *patchitc;
 	Elm_Genlist_Item_Class *propitc;
+	Elm_Genlist_Item_Class *grpitc;
 		
 	Elm_Object_Item *sink_itm;
 
@@ -1445,6 +1451,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			if(!port)
 				continue;
 
+			// discover port groups
+			tar->group = lilv_port_get(plug, port, ui->regs.group.group.node);
+
 			tar->mod = mod;
 			tar->tar = port;
 			tar->index = i;
@@ -1732,6 +1741,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 
 		if(port->unit)
 			free(port->unit);
+
+		if(port->group)
+			lilv_node_free(port->group);
 	}
 	if(mod->ports)
 		free(mod->ports);
@@ -1771,6 +1783,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 
 	if(mod->pset_label)
 		free(mod->pset_label);
+
+	if(mod->groups)
+		eina_hash_free(mod->groups);
 
 	free(mod);
 }
@@ -2073,6 +2088,9 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 	if(class == ui->moditc) // is parent module item
 	{
+		// port groups
+		mod->groups = eina_hash_pointer_new(NULL); //TODO check
+
 		// port entries
 		for(int i=0; i<mod->num_ports; i++)
 		{
@@ -2084,8 +2102,24 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			if(mod->system.sink && (port->direction == PORT_DIRECTION_OUTPUT) )
 				continue;
 
-			// only add control, audio, cv ports
-			elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
+			Elm_Object_Item *parent = itm;
+			if(port->group)
+			{
+				parent = eina_hash_find(mod->groups, &port->group);
+
+				if(!parent)
+				{
+					parent = elm_genlist_item_append(ui->modlist,
+						ui->grpitc, port->group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+					printf("parent created: %p %p\n", port->group, parent);
+					if(parent)
+						eina_hash_add(mod->groups, &port->group, parent);
+				}
+				else
+					printf("parent found: %p %p\n", port->group, parent);
+			}
+
+			elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, parent,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); TODO
@@ -2095,7 +2129,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		{
 			property_t *prop = &mod->writables[i];
 
-			// only add control, audio, cv ports
 			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
@@ -2105,7 +2138,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		{
 			property_t *prop = &mod->readables[i];
 
-			// only add control, audio, cv ports
 			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
@@ -2145,9 +2177,18 @@ static void
 _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
+	sp_ui_t *ui = data;
 
 	// clear items
 	elm_genlist_item_subitems_clear(itm);
+
+	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
+	if(class == ui->moditc)
+	{
+		mod_t *mod = elm_object_item_data_get(itm);
+		eina_hash_free(mod->groups);
+		mod->groups = NULL;
+	}
 }
 
 static void
@@ -2531,27 +2572,6 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	return lay;
 }
 
-static char *
-_property_label_get(void *data, Evas_Object *obj, const char *part)
-{
-	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	property_t *prop = data;
-	if(!ui || !prop)
-		return NULL;
-
-	if(!strcmp(part, "elm.text"))
-	{
-		//FIXME
-
-		const char *label = lilv_node_as_uri(prop->tar);
-		return label
-			? strdup(label)
-			: NULL;
-	}
-
-	return NULL;
-}
-
 static void
 _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 {
@@ -2776,6 +2796,38 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 	return lay;
 }
 
+static char * 
+_group_label_get(void *data, Evas_Object *obj, const char *part)
+{
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+	LilvNode *group = data;
+	if(!group)
+		return NULL;
+
+	if(!strcmp(part, "elm.text"))
+	{
+		char *label_str = NULL;
+
+		LilvNodes *labels = lilv_world_find_nodes(ui->world, group,
+			ui->regs.core.name.node, NULL);
+		if(labels)
+		{
+			const LilvNode *label = lilv_nodes_get_first(labels);
+			const char *label_const = lilv_node_as_string(label);
+			
+			printf("has_label: %s\n", label_const);
+			label_str = label_const
+				? strdup(label_const)
+				: NULL;
+			
+			lilv_nodes_free(labels);
+		}
+
+		return label_str;
+	}
+
+	return NULL;
+}
 
 static void
 _patched_changed(void *data, Evas_Object *obj, void *event)
@@ -3663,12 +3715,22 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->propitc = elm_gengrid_item_class_new();
 	if(ui->propitc)
 	{
-		//FIXME
 		ui->propitc->item_style = "full";
-		ui->propitc->func.text_get = _property_label_get;
+		ui->propitc->func.text_get = NULL;
 		ui->propitc->func.content_get = _property_content_get;
 		ui->propitc->func.state_get = NULL;
 		ui->propitc->func.del = NULL;
+	}
+	
+	ui->grpitc = elm_gengrid_item_class_new();
+	if(ui->grpitc)
+	{
+		//FIXME
+		ui->grpitc->item_style = "default";
+		ui->grpitc->func.text_get = _group_label_get;
+		ui->grpitc->func.content_get = NULL;
+		ui->grpitc->func.state_get = NULL;
+		ui->grpitc->func.del = NULL;
 	}
 		
 	ui->moditc = elm_genlist_item_class_new();
@@ -4310,6 +4372,10 @@ sp_ui_free(sp_ui_t *ui)
 		elm_genlist_item_class_free(ui->psetsaveitc);
 	if(ui->patchitc)
 		elm_gengrid_item_class_free(ui->patchitc);
+	if(ui->propitc)
+		elm_gengrid_item_class_free(ui->propitc);
+	if(ui->grpitc)
+		elm_gengrid_item_class_free(ui->grpitc);
 	
 	sp_regs_deinit(&ui->regs);
 

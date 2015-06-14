@@ -34,6 +34,7 @@
 #include <lv2/lv2plug.in/ns/ext/presets/presets.h>
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 #include <lv2/lv2plug.in/ns/ext/port-props/port-props.h>
+#include <lv2/lv2plug.in/ns/ext/port-groups/port-groups.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
@@ -147,6 +148,7 @@ struct _reg_t {
 	struct {
 		reg_item_t optional_feature;
 		reg_item_t required_feature;
+		reg_item_t name;
 	} core;
 
 	struct {
@@ -165,6 +167,10 @@ struct _reg_t {
 		reg_item_t property;	
 		reg_item_t value;	
 	} patch;
+
+	struct {
+		reg_item_t group;
+	} group;
 
 	struct {
 		// properties
@@ -280,6 +286,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->core.optional_feature, world, map, LV2_CORE__optionalFeature);
 	_register(&regs->core.required_feature, world, map, LV2_CORE__requiredFeature);
+	_register(&regs->core.name, world, map, LV2_CORE__name);
 
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
 	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
@@ -293,6 +300,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.subject, world, map, LV2_PATCH__subject);
 	_register(&regs->patch.property, world, map, LV2_PATCH__property);
 	_register(&regs->patch.value, world, map, LV2_PATCH__value);
+	
+	_register(&regs->group.group, world, map, LV2_PORT_GROUPS__group);
 
 	_register(&regs->units.conversion, world, map, LV2_UNITS__conversion);
 	_register(&regs->units.prefixConversion, world, map, LV2_UNITS__prefixConversion);
@@ -386,6 +395,7 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->core.optional_feature);
 	_unregister(&regs->core.required_feature);
+	_unregister(&regs->core.name);
 
 	_unregister(&regs->bufsz.max_block_length);
 	_unregister(&regs->bufsz.min_block_length);
@@ -399,6 +409,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.subject);
 	_unregister(&regs->patch.property);
 	_unregister(&regs->patch.value);
+	
+	_unregister(&regs->group.group);
 
 	_unregister(&regs->units.conversion);
 	_unregister(&regs->units.prefixConversion);
