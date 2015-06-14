@@ -61,7 +61,8 @@ group {
 				fixed: 1 1;
 				image.normal: "border.png";
 				image.border: 2 2 2 2;
-				image.middle: 0;
+				image.middle: NONE;
+				image.scale_hint: STATIC;
 			}
 		}
 		part {

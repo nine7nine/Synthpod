@@ -2696,12 +2696,24 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 			if(  (prop->type_urid == ui->forge.String)
 				|| (prop->type_urid == ui->forge.URI) )
 			{
-				child = elm_entry_add(lay);
+				child = elm_layout_add(lay);
 				if(child)
 				{
-					elm_entry_single_line_set(child, EINA_TRUE);
-					evas_object_smart_callback_add(child, "activated",
-						_property_string_activated, prop);
+					elm_layout_file_set(child, SYNTHPOD_DATA_DIR"/synthpod.edj",
+						"/synthpod/entry/theme");
+					char col [7];
+					sprintf(col, "col,%02i", mod->col);
+					elm_layout_signal_emit(child, col, "/synthpod/entry/ui");
+
+					Evas_Object *entry = elm_entry_add(child);
+					if(entry)
+					{
+						elm_entry_single_line_set(entry, EINA_TRUE);
+						evas_object_smart_callback_add(entry, "activated",
+							_property_string_activated, prop);
+						evas_object_show(entry);
+						elm_layout_content_set(child, "elm.swallow.content", entry);
+					}
 				}
 			}
 			else if(prop->type_urid == ui->forge.Path)

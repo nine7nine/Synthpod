@@ -48,4 +48,5 @@ collections {
 #include <smart_meter.edc>
 #include <smart_spinner.edc>
 #include <smart_toggle.edc>
+#include <entry.edc>
 }
