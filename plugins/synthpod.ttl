@@ -30,6 +30,7 @@
 @prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix kx:		<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
 @prefix inst:	<http://lv2plug.in/ns/ext/instance-access> .
+@prefix urid: <http://lv2plug.in/ns/ext/urid#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -340,7 +341,7 @@ synthpod:common_eo
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature inst:, zwrite:schedule ;
-	lv2:requiredFeature ui:portMap .
+	lv2:requiredFeature ui:portMap, urid:map .
 synthpod:common_ui
 	a ui:UI ;
 	ui:portNotification [
@@ -349,7 +350,7 @@ synthpod:common_ui
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature inst:, zwrite:schedule ;
-	lv2:requiredFeature ui:idleInterface, ui:portMap ;
+	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
 synthpod:common_x11
 	a ui:X11UI ;
@@ -359,7 +360,7 @@ synthpod:common_x11
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature ui:resize, inst:, zwrite:schedule ;
-	lv2:requiredFeature ui:idleInterface, ui:portMap ;
+	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface .
 synthpod:common_kx
 	a kx:Widget ;
@@ -369,7 +370,7 @@ synthpod:common_kx
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature inst:, zwrite:schedule ;
-	lv2:requiredFeature kx:Host, ui:portMap .
+	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
 
 # Stereo Plugin
 synthpod:stereo
@@ -379,7 +380,7 @@ synthpod:stereo
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:extensionData work:interface , state:interface, zwork:interface ;
-	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength ;
+	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
 
 	lv2:port [
@@ -524,19 +525,20 @@ synthpod:stereo
 
 # Keybaord UIs
 synthpod:keyboard_eo
-	a ui:EoUI .
+	a ui:EoUI ;
+	lv2:requiredFeature urid:map .
 synthpod:keyboard_ui
 	a ui:UI ;
-	lv2:requiredFeature ui:idleInterface ;
+	lv2:requiredFeature ui:idleInterface, urid:map ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
 synthpod:keyboard_x11
 	a ui:X11UI ;
-	lv2:requiredFeature ui:idleInterface ;
+	lv2:requiredFeature ui:idleInterface, urid:map ;
 	lv2:optionalFeature ui:resize ;
   lv2:extensionData ui:idleInterface .
 synthpod:keyboard_kx
 	a kx:Widget ;
-	lv2:requiredFeature kx:Host .
+	lv2:requiredFeature kx:Host, urid:map .
 
 # Keyboard Plugin
 synthpod:keyboard
@@ -545,6 +547,7 @@ synthpod:keyboard
 	doap:name "Synthpod Keyboard" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
