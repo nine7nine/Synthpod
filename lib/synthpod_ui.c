@@ -3047,6 +3047,28 @@ _smart_mouse_out(void *data, Evas_Object *obj, void *event_info)
 	elm_scroller_movement_block_set(ui->modlist, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
 }
 
+static void
+_modlist_std_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	if(!data)
+		return;
+
+	port_t *port = data;
+	mod_t *mod = port->mod;
+	sp_ui_t *ui = mod->ui;
+
+	port->std.widget = NULL;
+
+	// unsubscribe from port
+	const uint32_t i = port->index;
+	if(port->type == PORT_TYPE_CONTROL)
+		_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
+	else if(port->type == PORT_TYPE_AUDIO)
+		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
+	else if(port->type == PORT_TYPE_CV)
+		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
+}
+
 static Evas_Object * 
 _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -3067,6 +3089,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			"/synthpod/modlist/port");
 		evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_event_callback_add(lay, EVAS_CALLBACK_DEL, _modlist_std_del, port);
 		evas_object_show(lay);
 
 		Evas_Object *patched = elm_check_add(lay);
@@ -3215,28 +3238,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	} // lay
 
 	return lay;
-}
-
-static void
-_modlist_std_del(void *data, Evas_Object *obj)
-{
-	if(!data) // empty element
-		return;
-
-	port_t *port = data;
-	mod_t *mod = port->mod;
-	sp_ui_t *ui = mod->ui;
-
-	port->std.widget = NULL;
-
-	// unsubscribe from port
-	const uint32_t i = port->index;
-	if(port->type == PORT_TYPE_CONTROL)
-		_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
-	else if(port->type == PORT_TYPE_AUDIO)
-		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
-	else if(port->type == PORT_TYPE_CV)
-		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
 }
 
 static Evas_Object * 
@@ -3876,7 +3877,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		ui->stditc->func.text_get = NULL;
 		ui->stditc->func.content_get = _modlist_std_content_get;
 		ui->stditc->func.state_get = NULL;
-		ui->stditc->func.del = _modlist_std_del;
+		ui->stditc->func.del = NULL;
 	}
 
 	ui->psetitc = elm_genlist_item_class_new();
