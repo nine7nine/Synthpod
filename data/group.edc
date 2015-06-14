@@ -15,14 +15,14 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#define SMART_TOGGLE_UI "/synthpod/smart_toggle/ui"
+#define GROUP_UI "/synthpod/group/ui"
 
 images {
 	image: "border.png" COMP;
 }
 
 group {
-	name: "/synthpod/smart_toggle/theme";
+	name: "/synthpod/group/theme";
 
 	parts {
 		part {
@@ -34,9 +34,7 @@ group {
 				fixed: 1 1;
 				rel1.relative: 0.0 0.05;
 				rel2.relative: 1.0 0.95;
-				aspect_preference: BOTH;
-				aspect: 1 1;
-				color: 32 32 32 255;
+				color: 32 32 32 0;
 			}
 		}
 
@@ -71,24 +69,19 @@ group {
 		}
 		
 		part {
-			name: "drag";
-			type: RECT;
+			name: "elm.text";
+			type: TEXT;
 			mouse_events: 0;
-			clip_to: "col.clip";
-			dragable.x: 1 1 0;
-			dragable.y: 0 0 0;
-			dragable.confine: "col.clip";
+			scale: 1;
 			description {
 				state: "default" 0.0;
-				color: 255 255 255 128;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
+				text.size: 10;
+				text.text: "";
+				text.align: 0.0 0.5;
 				color: 255 255 255 255;
 			}
 		}
-
+		
 		part {
 			name: "border";
 			type: IMAGE;
@@ -99,47 +92,34 @@ group {
 				rel1.to: "shadow";
 				rel2.to: "shadow";
 				image.normal: "border.png";
-				image.border: 2 2 2 2;
+				image.border: 0 0 0 2;
 				image.middle: NONE;
 				image.scale_hint: STATIC;
-			}
-		}
-		
-		part {
-			name: "ev";
-			type: RECT;
-			mouse_events: 1;
-			description {
-				state: "default" 0.0;
-				color: 255 255 255 0;
 			}
 		}
 	}
 
 	programs {
-		program { signal: "col,00"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.00; target: "col.clip"; }
-		program { signal: "col,01"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.01; target: "col.clip"; }
-		program { signal: "col,02"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.02; target: "col.clip"; }
-		program { signal: "col,03"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.03; target: "col.clip"; }
-		program { signal: "col,04"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.04; target: "col.clip"; }
-		program { signal: "col,05"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.05; target: "col.clip"; }
-		program { signal: "col,06"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.06; target: "col.clip"; }
-		program { signal: "col,07"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.07; target: "col.clip"; }
-		program { signal: "col,08"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.08; target: "col.clip"; }
-		program { signal: "col,09"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.09; target: "col.clip"; }
-		program { signal: "col,10"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.10; target: "col.clip"; }
-		program { signal: "col,11"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.11; target: "col.clip"; }
-		program { signal: "col,12"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.12; target: "col.clip"; }
-		program { signal: "col,13"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.13; target: "col.clip"; }
-		program { signal: "col,14"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.14; target: "col.clip"; }
-		program { signal: "col,15"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.15; target: "col.clip"; }
-		program { signal: "col,16"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.16; target: "col.clip"; }
-		program { signal: "col,17"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.17; target: "col.clip"; }
-		program { signal: "col,18"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.18; target: "col.clip"; }
-		program { signal: "col,19"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.19; target: "col.clip"; }
-		program { signal: "col,20"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.20; target: "col.clip"; }
-		
-		program { signal: "enabled"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 1.0; target: "drag"; }
-		program { signal: "disabled"; source: SMART_TOGGLE_UI; action: STATE_SET "default" 0.0; target: "drag"; }
+		program { signal: "col,00"; source: GROUP_UI; action: STATE_SET "default" 0.00; target: "col.clip"; }
+		program { signal: "col,01"; source: GROUP_UI; action: STATE_SET "default" 0.01; target: "col.clip"; }
+		program { signal: "col,02"; source: GROUP_UI; action: STATE_SET "default" 0.02; target: "col.clip"; }
+		program { signal: "col,03"; source: GROUP_UI; action: STATE_SET "default" 0.03; target: "col.clip"; }
+		program { signal: "col,04"; source: GROUP_UI; action: STATE_SET "default" 0.04; target: "col.clip"; }
+		program { signal: "col,05"; source: GROUP_UI; action: STATE_SET "default" 0.05; target: "col.clip"; }
+		program { signal: "col,06"; source: GROUP_UI; action: STATE_SET "default" 0.06; target: "col.clip"; }
+		program { signal: "col,07"; source: GROUP_UI; action: STATE_SET "default" 0.07; target: "col.clip"; }
+		program { signal: "col,08"; source: GROUP_UI; action: STATE_SET "default" 0.08; target: "col.clip"; }
+		program { signal: "col,09"; source: GROUP_UI; action: STATE_SET "default" 0.09; target: "col.clip"; }
+		program { signal: "col,10"; source: GROUP_UI; action: STATE_SET "default" 0.10; target: "col.clip"; }
+		program { signal: "col,11"; source: GROUP_UI; action: STATE_SET "default" 0.11; target: "col.clip"; }
+		program { signal: "col,12"; source: GROUP_UI; action: STATE_SET "default" 0.12; target: "col.clip"; }
+		program { signal: "col,13"; source: GROUP_UI; action: STATE_SET "default" 0.13; target: "col.clip"; }
+		program { signal: "col,14"; source: GROUP_UI; action: STATE_SET "default" 0.14; target: "col.clip"; }
+		program { signal: "col,15"; source: GROUP_UI; action: STATE_SET "default" 0.15; target: "col.clip"; }
+		program { signal: "col,16"; source: GROUP_UI; action: STATE_SET "default" 0.16; target: "col.clip"; }
+		program { signal: "col,17"; source: GROUP_UI; action: STATE_SET "default" 0.17; target: "col.clip"; }
+		program { signal: "col,18"; source: GROUP_UI; action: STATE_SET "default" 0.18; target: "col.clip"; }
+		program { signal: "col,19"; source: GROUP_UI; action: STATE_SET "default" 0.19; target: "col.clip"; }
+		program { signal: "col,20"; source: GROUP_UI; action: STATE_SET "default" 0.20; target: "col.clip"; }
 	}
 }

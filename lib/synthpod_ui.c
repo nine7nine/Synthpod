@@ -34,9 +34,11 @@
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
+typedef struct _group_t group_t;
 typedef struct _property_t property_t;
 
 typedef enum _plug_info_type_t plug_info_type_t;
+typedef enum _group_type_t group_type_t;
 typedef struct _plug_info_t plug_info_t;
 
 enum _plug_info_type_t {
@@ -49,6 +51,12 @@ enum _plug_info_type_t {
 	PLUG_INFO_TYPE_AUTHOR_HOMEPAGE		= 6	,
 
 	PLUG_INFO_TYPE_MAX								= 7
+};
+
+enum _group_type_t {
+	GROUP_TYPE_PORT,
+	GROUP_TYPE_PROPERTY,
+	GROUP_TYPE_PRESET
 };
 
 struct _plug_info_t {
@@ -189,6 +197,12 @@ struct _mod_t {
 		int source;
 		int sink;
 	} system;
+};
+
+struct _group_t {
+	group_type_t type;
+	mod_t *mod;
+	LilvNode *node;
 };
 
 struct _port_t {
@@ -2089,7 +2103,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 	if(class == ui->moditc) // is parent module item
 	{
 		// port groups
-		mod->groups = eina_hash_pointer_new(NULL); //TODO check
+		mod->groups = eina_hash_string_superfast_new(NULL); //TODO check
 
 		// port entries
 		for(int i=0; i<mod->num_ports; i++)
@@ -2105,18 +2119,47 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			Elm_Object_Item *parent = itm;
 			if(port->group)
 			{
-				parent = eina_hash_find(mod->groups, &port->group);
+				const char *group_lbl = lilv_node_as_string(port->group);
+				parent = eina_hash_find(mod->groups, group_lbl);
 
 				if(!parent)
 				{
-					parent = elm_genlist_item_append(ui->modlist,
-						ui->grpitc, port->group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
-					printf("parent created: %p %p\n", port->group, parent);
-					if(parent)
-						eina_hash_add(mod->groups, &port->group, parent);
+					group_t *group = malloc(sizeof(group_t));
+					if(group)
+					{
+						group->type = GROUP_TYPE_PORT;
+						group->mod = mod;
+						group->node = port->group;
+
+						parent = elm_genlist_item_append(ui->modlist,
+							ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
+						if(parent)
+							eina_hash_add(mod->groups, group_lbl, parent);
+					}
 				}
-				else
-					printf("parent found: %p %p\n", port->group, parent);
+			}
+			else
+			{
+				const char *group_lbl = "*Ungrouped*";
+				parent = eina_hash_find(mod->groups, group_lbl);
+
+				if(!parent)
+				{
+					group_t *group = malloc(sizeof(group_t));
+					if(group)
+					{
+						group->type = GROUP_TYPE_PORT;
+						group->mod = mod;
+						group->node = NULL;
+
+						parent = elm_genlist_item_append(ui->modlist,
+							ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
+						if(parent)
+							eina_hash_add(mod->groups, group_lbl, parent);
+					}
+				}
 			}
 
 			elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, parent,
@@ -2129,7 +2172,27 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		{
 			property_t *prop = &mod->writables[i];
 
-			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
+			const char *group_lbl = "*Properties*";
+			Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
+
+			if(!parent)
+			{
+				group_t *group = malloc(sizeof(group_t));
+				if(group)
+				{
+					group->type = GROUP_TYPE_PROPERTY;
+					group->mod = mod;
+					group->node = NULL;
+
+					parent = elm_genlist_item_append(ui->modlist,
+						ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+					elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
+					if(parent)
+						eina_hash_add(mod->groups, group_lbl, parent);
+				}
+			}
+
+			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, parent,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); //TODO
@@ -2138,7 +2201,27 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		{
 			property_t *prop = &mod->readables[i];
 
-			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
+			const char *group_lbl = "*Properties*";
+			Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
+
+			if(!parent)
+			{
+				group_t *group = malloc(sizeof(group_t));
+				if(group)
+				{
+					group->type = GROUP_TYPE_PROPERTY;
+					group->mod = mod;
+					group->node = NULL;
+
+					parent = elm_genlist_item_append(ui->modlist,
+						ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+					elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
+					if(parent)
+						eina_hash_add(mod->groups, group_lbl, parent);
+				}
+			}
+
+			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, parent,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); TODO
@@ -2178,7 +2261,7 @@ _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
-
+		
 	// clear items
 	elm_genlist_item_subitems_clear(itm);
 
@@ -2796,37 +2879,63 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 	return lay;
 }
 
-static char * 
-_group_label_get(void *data, Evas_Object *obj, const char *part)
+static Evas_Object *
+_group_content_get(void *data, Evas_Object *obj, const char *part)
 {
 	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	LilvNode *group = data;
-	if(!group)
+	group_t *group = data;
+	if(!group || !ui)
+		return NULL;
+	
+	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
 
-	if(!strcmp(part, "elm.text"))
+	Evas_Object *lay = elm_layout_add(obj);
+	if(lay)
 	{
-		char *label_str = NULL;
+		elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
+			"/synthpod/group/theme");
+		char col [7];
+		sprintf(col, "col,%02i", group->mod->col);
+		elm_layout_signal_emit(lay, col, "/synthpod/group/ui");
+		evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(lay);
 
-		LilvNodes *labels = lilv_world_find_nodes(ui->world, group,
-			ui->regs.core.name.node, NULL);
-		if(labels)
+		if(group->node)
 		{
-			const LilvNode *label = lilv_nodes_get_first(labels);
-			const char *label_const = lilv_node_as_string(label);
-			
-			printf("has_label: %s\n", label_const);
-			label_str = label_const
-				? strdup(label_const)
-				: NULL;
-			
-			lilv_nodes_free(labels);
-		}
+			LilvNodes *labels = lilv_world_find_nodes(ui->world, group->node,
+				ui->regs.core.name.node, NULL);
+			if(labels)
+			{
+				const LilvNode *label = lilv_nodes_get_first(labels);
+				const char *label_str = lilv_node_as_string(label);
 
-		return label_str;
+				if(label_str)
+					elm_object_part_text_set(lay, "elm.text", label_str);
+
+				lilv_nodes_free(labels);
+			}
+		}
+		else
+		{
+			if(group->type == GROUP_TYPE_PORT)
+				elm_object_part_text_set(lay, "elm.text", "UNgroup");
+			else if(group->type == GROUP_TYPE_PROPERTY)
+				elm_object_part_text_set(lay, "elm.text", "Properties");
+		}
 	}
 
-	return NULL;
+	return lay;
+}
+
+static void
+_group_del(void *data, Evas_Object *obj)
+{
+	group_t *group = data;
+
+	if(group)
+		free(group);
 }
 
 static void
@@ -3130,15 +3239,33 @@ _modlist_std_del(void *data, Evas_Object *obj)
 		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
 }
 
-static char * 
-_modlist_psets_label_get(void *data, Evas_Object *obj, const char *part)
+static Evas_Object * 
+_modlist_psets_content_get(void *data, Evas_Object *obj, const char *part)
 {
+	if(!data) // mepty item
+		return NULL;
+
 	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
+	
+	if(strcmp(part, "elm.swallow.content"))
+		return NULL;
 
-	if(!strcmp(part, "elm.text"))
-		return strdup("Presets");
+	Evas_Object *lay = elm_layout_add(obj);
+	if(lay)
+	{
+		elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
+			"/synthpod/group/theme");
+		char col [7];
+		sprintf(col, "col,%02i", mod->col);
+		elm_layout_signal_emit(lay, col, "/synthpod/group/ui");
+		elm_object_part_text_set(lay, "elm.text", "Presets");
+		evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(lay);
+	}
 
-	return NULL;
+	return lay;
 }
 
 static char * 
@@ -3725,12 +3852,11 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->grpitc = elm_gengrid_item_class_new();
 	if(ui->grpitc)
 	{
-		//FIXME
-		ui->grpitc->item_style = "default";
-		ui->grpitc->func.text_get = _group_label_get;
-		ui->grpitc->func.content_get = NULL;
+		ui->grpitc->item_style = "full";
+		ui->grpitc->func.text_get = NULL;
+		ui->grpitc->func.content_get = _group_content_get;
 		ui->grpitc->func.state_get = NULL;
-		ui->grpitc->func.del = NULL;
+		ui->grpitc->func.del = _group_del;
 	}
 		
 	ui->moditc = elm_genlist_item_class_new();
@@ -3756,9 +3882,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->psetitc = elm_genlist_item_class_new();
 	if(ui->psetitc)
 	{
-		ui->psetitc->item_style = "default";
-		ui->psetitc->func.text_get = _modlist_psets_label_get;
-		ui->psetitc->func.content_get = NULL;
+		ui->psetitc->item_style = "full";
+		ui->psetitc->func.text_get = NULL;
+		ui->psetitc->func.content_get = _modlist_psets_content_get;
 		ui->psetitc->func.state_get = NULL;
 		ui->psetitc->func.del = NULL;
 	}

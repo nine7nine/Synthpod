@@ -27,7 +27,8 @@ if(BUILD_UI)
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/theme.edc
 			${CMAKE_CURRENT_SOURCE_DIR}/omk_logo.edc
-			${CMAKE_CURRENT_SOURCE_DIR}/entry.edc)
+			${CMAKE_CURRENT_SOURCE_DIR}/entry.edc
+			${CMAKE_CURRENT_SOURCE_DIR}/group.edc)
 	add_custom_target(THEME ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod.edj)
 	install(FILES ${PROJECT_BINARY_DIR}/synthpod.edj DESTINATION ${SYNTHPOD_DATA_DIR})
 endif()
