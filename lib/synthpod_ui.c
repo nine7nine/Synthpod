@@ -396,7 +396,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	{
 		const LV2_Atom_Object *obj = buf;
 
-		// check for patch:Response
+		// check for patch:Set
 		if(  (obj->atom.type == ui->forge.Object)
 			&& (obj->body.otype == ui->regs.patch.set.urid) )
 		{

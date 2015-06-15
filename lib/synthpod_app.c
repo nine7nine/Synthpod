@@ -290,8 +290,9 @@ sp_app_set_system_source(sp_app_t *app, uint32_t index, const void *buf)
 
 	// get first mod aka system source
 	mod_t *mod = app->system.source;
+	port_t *port = &mod->ports[index];
 
-	mod->ports[index].num_sources = 1;
+	port->num_sources = 1;
 	lilv_instance_connect_port(mod->inst, index, (void *)buf);
 
 	return 0;
@@ -322,10 +323,11 @@ sp_app_get_system_source(sp_app_t *app, uint32_t index)
 
 	// get last mod aka system source
 	mod_t *mod = app->system.source;
+	port_t *port = &mod->ports[index];
 
-	mod->ports[index].num_sources = 1;
+	port->num_sources = 1;
 	//lilv_instance_connect_port(mod->inst, index, mod->ports[index].buf);
-	return mod->ports[index].buf;
+	return port->buf;
 }
 
 // rt
@@ -337,10 +339,11 @@ sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 
 	// get last mod aka system sink
 	mod_t *mod = app->system.sink;
+	port_t *port = &mod->ports[index];
 
 	index += 7; //TODO make configurable
 	//lilv_instance_connect_port(mod->inst, index, mod->ports[index].buf);
-	return mod->ports[index].buf;
+	return port->buf;
 }
 
 // rt
@@ -406,7 +409,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(app->plugs, uri_node);
 	lilv_node_free(uri_node);
 			
-	if(!plug || !lilv_plugin_verify(plug))
+	if(!plug)
 		return NULL;
 
 	mod_t *mod = calloc(1, sizeof(mod_t));
@@ -620,6 +623,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 				
 			// does this port support patch:Message?
 			tar->patchable = lilv_port_supports_event(plug, port, app->regs.patch.message.node);
+			if(tar->patchable)
+				tar->protocol = app->regs.port.event_transfer.urid;
 
 			// check whether this is a control port
 			LilvNode *control_designation = lilv_new_uri(app->world, LV2_CORE__control);
@@ -628,9 +633,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 					? app->regs.port.input.node
 					: app->regs.port.output.node
 					, control_designation);
-			lilv_node_free(control_designation);
 
 			tar->selected = control_port == port; // only select control ports by default
+			lilv_node_free(control_designation);
 		}
 		else
 			; //TODO
@@ -2099,18 +2104,27 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 			// no notification/subscription and no support for patch:Message
 			int subscribed = port->subscriptions != 0;
-			int patchable = port->patchable && (port->direction == PORT_DIRECTION_INPUT);
-			if(!subscribed && !patchable)
+			int patchable = port->patchable && (port->direction == PORT_DIRECTION_OUTPUT);
+			if(!(subscribed || patchable))
 				continue; // skip this port
-				
+
+			//FIXME
+			if( (mod == app->system.source) && (port->direction == PORT_DIRECTION_INPUT) )
+				continue;
+			if( (mod == app->system.sink) && (port->direction == PORT_DIRECTION_OUTPUT) )
+				continue;
+			//FIXME
+
 			const void *buf = port->num_sources == 1
-				? (port->sources[0]
-					? port->sources[0]->buf // direct link to source buffer
-					: NULL)
+				? port->sources[0]->buf // direct link to source buffer
 				: port->buf; // dummy (n==0) or multiplexed (n>1) link
 
-			if(!buf)
-				continue;
+			assert(buf != NULL);
+
+			/*
+			if(patchable)
+				printf("patchable %i %i %i\n", mod->uid, i, subscribed);
+			*/
 
 			if(port->protocol == app->regs.port.float_protocol.urid)
 			{
@@ -2190,10 +2204,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			else if(port->protocol == app->regs.port.event_transfer.urid)
 			{
 				const LV2_Atom_Sequence *seq = buf;
-				/*
 				if(seq->atom.size == sizeof(LV2_Atom_Sequence_Body)) // empty seq
 					continue;
-				*/
 
 				// transfer each atom of sequence separately
 				LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
@@ -2210,7 +2222,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 							continue; // skip this event
 						}
 
-						printf("routing response\n");
+						//printf("routing response\n");
 					}
 
 					uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
