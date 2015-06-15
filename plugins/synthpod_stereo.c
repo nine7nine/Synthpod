@@ -31,6 +31,7 @@
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
+#include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 #include <zero_worker.h>
 
 #include <Eina.h>
@@ -65,6 +66,9 @@ struct _plughandle_t {
 		struct {
 			LV2_URID event;
 		} synthpod;
+		struct {
+			LV2_URID set;
+		} patch;
 	} uri;
 
 	struct {
@@ -468,6 +472,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->uri.synthpod.event = handle->driver.map->map(handle->driver.map->handle,
 		SYNTHPOD_EVENT_URI);
 
+	handle->uri.patch.set = handle->driver.map->map(handle->driver.map->handle,
+		LV2_PATCH__Set);
+
 	for(LV2_Options_Option *opt = handle->opts;
 		(opt->key != 0) && (opt->value != NULL);
 		opt++)
@@ -653,11 +660,18 @@ run(LV2_Handle instance, uint32_t nsamples)
 			const LV2_Atom *atom = &ev->body;
 			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
 
-			if(  (atom->type == handle->forge.notify.Object)
-				&& (obj->body.id == handle->uri.synthpod.event) )
+			if(atom->type == handle->forge.notify.Object)
 			{
-				//printf("control: %u\n", atom->size);
-				sp_app_from_ui(app, atom);
+				if(obj->body.id == handle->uri.synthpod.event)
+				{
+					//printf("control: %u\n", atom->size);
+					sp_app_from_ui(app, atom);
+				}
+				else if(obj->body.otype == handle->uri.patch.set)
+				{
+					printf("synthpod_stereo: got patch:Set\n");
+					//FIXME
+				}
 			}
 		}
 		

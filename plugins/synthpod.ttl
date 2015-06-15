@@ -14,6 +14,7 @@
 # http://www.perlfoundation.org/artistic_license_2_0.
 
 @prefix owl:	<http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:	<http://www.w3.org/2000/01/rdf-schema#> .
 @prefix foaf:	<http://xmlns.com/foaf/0.1/> .
 @prefix doap:	<http://usefulinc.com/ns/doap#> .
 @prefix lv2:	<http://lv2plug.in/ns/lv2core#> .
@@ -31,6 +32,7 @@
 @prefix kx:		<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
 @prefix inst:	<http://lv2plug.in/ns/ext/instance-access> .
 @prefix urid: <http://lv2plug.in/ns/ext/urid#> .
+@prefix patch: <http://lv2plug.in/ns/ext/patch#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -91,6 +93,7 @@ synthpod:source
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
+		atom:supports patch:Message ;
 		lv2:index 0 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
@@ -150,6 +153,7 @@ synthpod:source
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
+		atom:supports patch:Message ;
 		lv2:index 7 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
@@ -220,6 +224,7 @@ synthpod:sink
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
+		atom:supports patch:Message ;
 		lv2:index 0 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
@@ -279,6 +284,7 @@ synthpod:sink
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
+		atom:supports patch:Message ;
 		lv2:index 7 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
@@ -372,6 +378,12 @@ synthpod:common_kx
 	lv2:optionalFeature inst:, zwrite:schedule ;
 	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
 
+# Synthpod Properties
+synthpod:presetBundle
+	a lv2:Parameter ;
+	rdfs:label "Preset Bundle" ;
+	rdfs:range atom:Path .
+
 # Stereo Plugin
 synthpod:stereo
 	a lv2:Plugin ,
@@ -383,6 +395,8 @@ synthpod:stereo
 	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
 
+	patch:writable synthpod:presetBundle ;
+
 	lv2:port [
 		# event in
 	  a lv2:InputPort ,
@@ -391,6 +405,7 @@ synthpod:stereo
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
+		atom:supports patch:Message ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
@@ -403,6 +418,7 @@ synthpod:stereo
 		atom:supports midi:MidiEvent ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
+		atom:supports patch:Message ;
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
@@ -507,6 +523,7 @@ synthpod:stereo
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
+		atom:supports patch:Message ;
 		lv2:index 14 ;
 		lv2:symbol "control" ;
 		lv2:name "Control" ;
@@ -517,6 +534,7 @@ synthpod:stereo
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
+		atom:supports patch:Message ;
 		lv2:index 15 ;
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;

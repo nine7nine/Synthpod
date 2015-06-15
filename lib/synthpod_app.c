@@ -2104,8 +2104,13 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				continue; // skip this port
 				
 			const void *buf = port->num_sources == 1
-				? port->sources[0]->buf // direct link to source buffer
+				? (port->sources[0]
+					? port->sources[0]->buf // direct link to source buffer
+					: NULL)
 				: port->buf; // dummy (n==0) or multiplexed (n>1) link
+
+			if(!buf)
+				continue;
 
 			if(port->protocol == app->regs.port.float_protocol.urid)
 			{
