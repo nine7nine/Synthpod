@@ -971,7 +971,7 @@ _sp_transfer_patch_set_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	uint32_t trans_size = sizeof(transfer_patch_set_t)
 		+ lv2_atom_pad_size(str_size);
 	uint32_t obj_size = trans_size
-		- offsetof(transfer_patch_set_t, obj.atom);
+		- offsetof(transfer_patch_set_t, obj.body);
 
 	_sp_transfer_fill(regs, forge, &trans->transfer, trans_size,
 		regs->port.event_transfer.urid, module_uid, port_index);
@@ -1010,7 +1010,7 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 {
 	uint32_t trans_size = sizeof(transfer_patch_get_t);
 	uint32_t obj_size = trans_size
-		- offsetof(transfer_patch_get_t, obj.atom);
+		- offsetof(transfer_patch_get_t, obj.body);
 
 	_sp_transfer_fill(regs, forge, &trans->transfer, trans_size,
 		regs->port.event_transfer.urid, module_uid, port_index);
@@ -1099,6 +1099,8 @@ _lv2_atom_forge_sequence_append(LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *fra
 	LV2_Atom_Forge_Ref ref = (LV2_Atom_Forge_Ref)&seq->atom;
 	ref = lv2_atom_forge_push(forge, frame, ref);
 	forge->offset = sizeof(LV2_Atom) + lv2_atom_pad_size(seq->atom.size); //TODO test
+
+	//printf("_lv2_atom_forge_sequence_append: %u\n", forge->offset);
 
 	return ref;
 }

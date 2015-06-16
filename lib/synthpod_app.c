@@ -922,9 +922,9 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(!port) // port not found
 			return;
 
-		void *buf = port->num_sources == 1
-			? port->sources[0]->buf // direct link to source output buffer
-			: port->buf; // empty (n==0) or multiplexed (n>1) link
+		// messages from UI are always appended to default port buffer, no matter
+		// how many sources the port may have
+		void *buf = port->buf;
 
 		// find last event in sequence
 		LV2_Atom_Sequence *seq = buf;
@@ -1948,9 +1948,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
-				if(port->num_sources == 1)
-					continue; // atom already cleared/filled by source (direct link)
-
 				LV2_Atom_Sequence *seq = port->buf;
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = port->direction == PORT_DIRECTION_INPUT
@@ -2065,7 +2062,39 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 						else
 							break; // no more events to process
 					};
-					
+
+					lv2_atom_forge_pop(forge, &frame);
+				}
+			}
+			else if(port->num_sources == 1) // move messages from UI on default buffer
+			{
+				if( (port->type == PORT_TYPE_ATOM)
+							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+				{
+					if(!port->sources[0]) //FIXME handle system.source
+						continue; //skip
+
+					const LV2_Atom_Sequence *seq = (const LV2_Atom_Sequence *)port->buf;
+					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // no messages from UI
+						continue; // skip
+
+					//printf("adding UI event\n");
+
+					// create forge to append to sequence (may contain events from UI)
+					LV2_Atom_Forge *forge = &app->forge;
+					LV2_Atom_Forge_Frame frame;
+					_lv2_atom_forge_sequence_append(forge, &frame, port->sources[0]->buf,
+						port->sources[0]->size);
+
+					LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+					{
+						const LV2_Atom *atom = &ev->body;
+
+						lv2_atom_forge_frame_time(forge, nsamples-1);
+						lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
+						lv2_atom_forge_pad(forge, atom->size);
+					}
+
 					lv2_atom_forge_pop(forge, &frame);
 				}
 			}

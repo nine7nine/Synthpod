@@ -418,8 +418,8 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				LV2_URID request_val = property->body;
 				const char *body_val = LV2_ATOM_BODY_CONST(value);
 
-				printf("ui got patch:Set: %u %u %s\n",
-					subject_val, request_val, body_val);
+				//printf("ui got patch:Set: %u %u %s\n",
+				//	subject_val, request_val, body_val);
 
 				for(int i=0; i<mod->num_readables; i++)
 				{
