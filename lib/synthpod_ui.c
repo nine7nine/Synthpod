@@ -3559,7 +3559,7 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 	{
 		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
 			source_port->mod->uid, source_port->index,
-			sink_port->mod->uid, sink_port->index, 1, -1);
+			sink_port->mod->uid, sink_port->index, 1, -999);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -3588,7 +3588,7 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 	{
 		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
 			source_port->mod->uid, source_port->index,
-			sink_port->mod->uid, sink_port->index, 0, -1);
+			sink_port->mod->uid, sink_port->index, 0, -999);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -3617,7 +3617,7 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 	{
 		_sp_transmit_port_connected_fill(&ui->regs, &ui->forge, trans, size,
 			source_port->mod->uid, source_port->index,
-			sink_port->mod->uid, sink_port->index, -1, -1);
+			sink_port->mod->uid, sink_port->index, -1, -999);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -4291,7 +4291,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		{
 			patcher_object_connected_set(matrix, src, snk,
 				trans->state.body ? EINA_TRUE : EINA_FALSE,
-				trans->indirect.body ? EINA_TRUE : EINA_FALSE);
+				trans->indirect.body);
 		}
 	}
 	else if(protocol == ui->regs.port.float_protocol.urid)

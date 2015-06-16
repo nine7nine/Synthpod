@@ -1197,7 +1197,8 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			}
 			case 1: // connect
 			{
-				state = _sp_app_port_connect(app, src_port, snk_port);
+				if(src_port->mod != snk_port->mod) // feedback to self is not allowed
+					state = _sp_app_port_connect(app, src_port, snk_port);
 				break;
 			}
 		}
@@ -1205,7 +1206,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		int32_t indirect = 0; // aka direct
 		if(src_port->mod == snk_port->mod)
 		{
-			indirect = 1;
+			indirect = -1; // feedback
 		}
 		else
 		{

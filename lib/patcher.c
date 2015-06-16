@@ -596,7 +596,7 @@ _patcher_object_connected_index_set(Evas_Object *o, int source, int sink,
 
 static inline void
 _patcher_object_indirected_index_set(Evas_Object *o, int source, int sink,
-	Eina_Bool indirect)
+	int indirect)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 	int src = source + priv->max - priv->sources;
@@ -608,10 +608,18 @@ _patcher_object_indirected_index_set(Evas_Object *o, int source, int sink,
 		return; // no change, thus nothing to do
 	*/
 
-	if(indirect)
-		edje_object_signal_emit(edj, "indirect", PATCHER_UI);
-	else // disable node
-		edje_object_signal_emit(edj, "direct", PATCHER_UI);
+	switch(indirect)
+	{
+		case 1:
+			edje_object_signal_emit(edj, "indirect", PATCHER_UI);
+			break;
+		case 0:
+			edje_object_signal_emit(edj, "direct", PATCHER_UI);
+			break;
+		case -1:
+			edje_object_signal_emit(edj, "feedback", PATCHER_UI);
+			break;
+	}
 
 	/* TODO
 	priv->indirect[source][sink] = indirect;
@@ -620,7 +628,7 @@ _patcher_object_indirected_index_set(Evas_Object *o, int source, int sink,
 
 void
 patcher_object_connected_set(Evas_Object *o, void *source_data,
-	void *sink_data, Eina_Bool state, Eina_Bool indirect)
+	void *sink_data, Eina_Bool state, int indirect)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
 	int source = _patcher_object_source_index_get(o, source_data);

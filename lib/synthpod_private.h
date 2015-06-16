@@ -785,7 +785,7 @@ _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	trans->indirect.atom.size = sizeof(int32_t);
 	trans->indirect.atom.type = forge->Int;
-	trans->indirect.body = indirect; // 0 (direct), 1 (indirect)
+	trans->indirect.body = indirect; // -1 (feedback), 0 (direct), 1 (indirect)
 }
 
 static inline void
