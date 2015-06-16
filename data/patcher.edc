@@ -36,16 +36,6 @@ group {
 				fixed: 1 1;
 				color: 255 255 255 0;
 			}
-			description {
-				state: "default" 0.5;
-				inherit: "default" 0.0;
-				color: 0 0 0 48;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 0 0 0 96;
-			}
 		}
 
 		part {
@@ -220,20 +210,23 @@ group {
 		program {
 			signal: "direct";
 			source: PATCHER_UI;
-			action: STATE_SET "default" 0.5;
-			target: "bg";
+			action: STATE_SET "default" 0.0;
+			target: "grid.horizontal";
+			target: "grid.vertical";
 		}
 		program {
 			signal: "indirect";
 			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "bg";
+			action: STATE_SET "default" 0.0;
+			target: "grid.horizontal";
+			target: "grid.vertical";
 		}
 		program {
 			signal: "feedback";
 			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "bg";
+			action: STATE_SET "default" 1.0;
+			target: "grid.horizontal";
+			target: "grid.vertical";
 		}
 
 		program {

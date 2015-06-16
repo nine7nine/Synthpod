@@ -1941,19 +1941,18 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		else if(mod->worker.iface && mod->worker.iface->end_run)
 			mod->worker.iface->end_run(mod->handle);
 	
-		// clear atom sequence input / output buffers where needed
+		// clear atom sequence input buffers
 		for(int i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
 
 			if(  (port->type == PORT_TYPE_ATOM)
-				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+				&& (port->direction == PORT_DIRECTION_INPUT) )
 			{
 				LV2_Atom_Sequence *seq = port->buf;
 				seq->atom.type = app->regs.port.sequence.urid;
-				seq->atom.size = port->direction == PORT_DIRECTION_INPUT
-					? sizeof(LV2_Atom_Sequence_Body) // empty sequence
-					: app->driver->seq_size; // capacity
+				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 			}
 		}
 	}
@@ -2098,6 +2097,21 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					lv2_atom_forge_pop(forge, &frame);
 				}
+			}
+		}
+
+		// clear atom sequence output buffers
+		for(int i=0; i<mod->num_ports; i++)
+		{
+			port_t *port = &mod->ports[i];
+
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+				&& (port->direction == PORT_DIRECTION_OUTPUT) )
+			{
+				LV2_Atom_Sequence *seq = port->buf;
+				seq->atom.type = app->regs.port.sequence.urid;
+				seq->atom.size = port->size;
 			}
 		}
 
@@ -2652,6 +2666,18 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 		lilv_state_free(state);
 		free(path);
+	}
+
+	// iterate over mods and their ports
+	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;
+		mod_json;
+		mod_json = mod_json->next)
+	{
+		u_id_t mod_uid = cJSON_GetObjectItem(mod_json, "uid")->valueint;
+
+		mod_t *mod = _sp_app_mod_get(app, mod_uid);
+		if(!mod)
+			continue;
 
 		// iterate over ports
 		for(cJSON *port_json = cJSON_GetObjectItem(mod_json, "ports")->child;
@@ -2671,7 +2697,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 				port->selected = cJSON_GetObjectItem(port_json, "selected")->type == cJSON_True;
 
-				// TODO cannot handle recursive connections, needs a second loop
 				for(cJSON *source_json = cJSON_GetObjectItem(port_json, "sources")->child;
 					source_json;
 					source_json = source_json->next)
