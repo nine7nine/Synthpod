@@ -926,29 +926,22 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			? port->sources[0]->buf // direct link to source output buffer
 			: port->buf; // empty (n==0) or multiplexed (n>1) link
 
-		//inject atom at end of (existing) sequence
-		LV2_Atom_Sequence *seq = buf;
-
 		// find last event in sequence
+		LV2_Atom_Sequence *seq = buf;
 		LV2_Atom_Event *last = NULL;
 		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 			last = ev;
 
-		void *ptr;
-		if(last)
-		{
-			ptr = last;
-			ptr += sizeof(LV2_Atom_Event) + lv2_atom_pad_size(last->body.size);
-		}
-		else
-			ptr = LV2_ATOM_CONTENTS(LV2_Atom_Sequence, seq);
-					
-		// append event at end of sequence
-		// TODO check for buffer overflow
-		LV2_Atom_Event *new_last = ptr;
-		new_last->time.frames = last ? last->time.frames : 0;
-		memcpy(&new_last->body, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
-		seq->atom.size += sizeof(LV2_Atom_Event) + lv2_atom_pad_size(trans->atom->size);
+		// create forge to append to sequence
+		LV2_Atom_Forge *forge = &app->forge;
+		LV2_Atom_Forge_Frame frame;
+		_lv2_atom_forge_sequence_append(forge, &frame, buf, port->size);
+
+		//inject atom at end of (existing) sequence
+		lv2_atom_forge_frame_time(forge, last ? last->time.frames : 0);
+		lv2_atom_forge_write(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+		lv2_atom_forge_pad(forge, trans->atom->size);
+		lv2_atom_forge_pop(forge, &frame);
 	}
 	else if(protocol == app->regs.synthpod.module_list.urid)
 	{
@@ -2027,11 +2020,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				else if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
-					//FIXME append to UI messages 
+					// create forge to append to sequence (may contain events from UI)
 					LV2_Atom_Forge *forge = &app->forge;
-					lv2_atom_forge_set_buffer(forge, port->buf, app->driver->seq_size);
 					LV2_Atom_Forge_Frame frame;
-					lv2_atom_forge_sequence_head(forge, &frame, 0);
+					_lv2_atom_forge_sequence_append(forge, &frame, port->buf, port->size);
 
 					LV2_Atom_Sequence *seq [32]; //TODO how big?
 					LV2_Atom_Event *itr [32]; //TODO how big?

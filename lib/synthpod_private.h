@@ -1089,4 +1089,18 @@ _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 	return lilv_plugin_get_related(plugin, regs->pset.preset.node);
 }
 
+static inline LV2_Atom_Forge_Ref
+_lv2_atom_forge_sequence_append(LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
+	uint8_t *buf, uint32_t size)
+{
+	LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)buf;
+
+	lv2_atom_forge_set_buffer(forge, buf, size);
+	LV2_Atom_Forge_Ref ref = (LV2_Atom_Forge_Ref)&seq->atom;
+	ref = lv2_atom_forge_push(forge, frame, ref);
+	forge->offset = sizeof(LV2_Atom) + lv2_atom_pad_size(seq->atom.size); //TODO test
+
+	return ref;
+}
+
 #endif // _SYNTHPOD_PRIVATE_H
