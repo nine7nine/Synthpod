@@ -15,6 +15,7 @@
 
 @prefix owl:	<http://www.w3.org/2002/07/owl#> .
 @prefix rdfs:	<http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf:	<http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix foaf:	<http://xmlns.com/foaf/0.1/> .
 @prefix doap:	<http://usefulinc.com/ns/doap#> .
 @prefix lv2:	<http://lv2plug.in/ns/lv2core#> .
@@ -340,4 +341,81 @@ synthpod:keyboard
 		lv2:maximum 6 ;
 		lv2:portProperty lv2:integer ;
 		units:unit units:oct ;
+	] .
+
+# CV2Control Plugin
+synthpod:cv2control
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Synthpod CV2Control" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+		# cv_in
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 0 ;
+		lv2:symbol "cv_in" ;
+		lv2:name "CV In" ;
+		pg:group synthpod:group_in ;
+	] , [
+		# mode
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "mode" ;
+		lv2:name "Mode" ;
+		pg:group synthpod:group_in ;
+		lv2:default 1 ;
+		lv2:minimum 0 ;
+		lv2:maximum 2 ;
+		lv2:portProperty lv2:integer, lv2:enumeration ;
+		lv2:scalePoint [ rdfs:label "Minimum" ; rdf:value 0 ] ;
+		lv2:scalePoint [ rdfs:label "Average" ; rdf:value 1 ] ;
+		lv2:scalePoint [ rdfs:label "Maximum" ; rdf:value 2 ] ;
+	] , [
+		# control_out
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "control_out" ;
+		lv2:name "Output" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] .
+
+# Control2CV Plugin
+synthpod:control2cv
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Synthpod Control2CV" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+		# control_out
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 0 ;
+		lv2:symbol "control_in" ;
+		lv2:name "Input" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+		# cv_out
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 1 ;
+		lv2:symbol "cv_out" ;
+		lv2:name "CV Out" ;
+		pg:group synthpod:group_out ;
 	] .
