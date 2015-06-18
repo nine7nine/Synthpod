@@ -27,10 +27,6 @@ lv2_descriptor(uint32_t index)
 		case 0:
 			return &synthpod_stereo;
 		case 1:
-			return &synthpod_source;
-		case 2:
-			return &synthpod_sink;
-		case 3:
 			return &synthpod_keyboard;
 		default:
 			return NULL;

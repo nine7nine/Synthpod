@@ -263,24 +263,35 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 	void *midi_out_buf = NULL;
 	float **audio_out_buf = outputs;
 
+	const size_t sample_buf_size = sizeof(float) * nsamples;
+
 	if(sp_app_paused(app))
 	{
 		// clear output buffers
-		memset(audio_out_buf[0], 0x0, sizeof(float) * nsamples);
-		memset(audio_out_buf[1], 0x0, sizeof(float) * nsamples);
+		memset(audio_out_buf[0], 0x0, sample_buf_size);
+		memset(audio_out_buf[1], 0x0, sample_buf_size);
 		//TODO midi
 
 		return 0;
 	}
 
 	LV2_Atom_Sequence *seq_in = sp_app_get_system_source(app, 0);
-	sp_app_set_system_source(app, 1, audio_in_buf[0]);
-	sp_app_set_system_source(app, 2, audio_in_buf[1]);
+	float *audio_in [2] = {
+		[0] = sp_app_get_system_source(app, 1),
+		[1] = sp_app_get_system_source(app, 2)
+	};
+	assert(seq_in && audio_in[0] && audio_in[1]);
+
+	// fill audio input buffers
+	memcpy(audio_in[0], audio_in_buf[0], sample_buf_size);
+	memcpy(audio_in[1], audio_in_buf[1], sample_buf_size);
+
 	const LV2_Atom_Sequence *seq_out = sp_app_get_system_sink(app, 0);
-	if(sp_app_set_system_sink(app, 1, audio_out_buf[0]))
-		memset(audio_out_buf[0], 0x0, sizeof(float) * nsamples);
-	if(sp_app_set_system_sink(app, 2, audio_out_buf[1]))
-		memset(audio_out_buf[1], 0x0, sizeof(float) * nsamples);
+	const float *audio_out [2] = {
+		[0] = sp_app_get_system_sink(app, 1),
+		[1] = sp_app_get_system_sink(app, 2)
+	};
+	assert(seq_out && audio_out[0] && audio_out[1]);
 
 	if(seq_in)
 	{
@@ -321,6 +332,10 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 	
 	// run synthpod app post
 	sp_app_run_post(handle->app, nsamples);
+
+	// fill audio output buffers
+	memcpy(audio_out_buf[0], audio_out[0], sample_buf_size);
+	memcpy(audio_out_buf[1], audio_out[1], sample_buf_size);
 
 	// fill midi output buffer
 	//TODO

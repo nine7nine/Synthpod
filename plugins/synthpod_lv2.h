@@ -31,13 +31,9 @@
 
 // plugin uris
 #define SYNTHPOD_STEREO_URI			SYNTHPOD_URI"#stereo"
-#define SYNTHPOD_SOURCE_URI			SYNTHPOD_URI"#source"
-#define SYNTHPOD_SINK_URI				SYNTHPOD_URI"#sink"
 #define SYNTHPOD_KEYBOARD_URI		SYNTHPOD_URI"#keyboard"
 
 extern const LV2_Descriptor synthpod_stereo;
-extern const LV2_Descriptor synthpod_source;
-extern const LV2_Descriptor synthpod_sink;
 extern const LV2_Descriptor synthpod_keyboard;
 
 // common UI uris

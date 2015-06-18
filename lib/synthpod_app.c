@@ -282,39 +282,6 @@ sp_app_activate(sp_app_t *app)
 }
 
 // rt
-int
-sp_app_set_system_source(sp_app_t *app, uint32_t index, const void *buf)
-{
-	if(!app->system.source)
-		return -1;
-
-	// get first mod aka system source
-	mod_t *mod = app->system.source;
-	port_t *port = &mod->ports[index];
-
-	port->num_sources = 1;
-	lilv_instance_connect_port(mod->inst, index, (void *)buf);
-
-	return 0;
-}
-
-// rt
-int
-sp_app_set_system_sink(sp_app_t *app, uint32_t index, void *buf)
-{
-	if(!app->system.sink)
-		return -1;
-
-	// get last mod aka system sink
-	mod_t *mod = app->system.sink;
-
-	index += 7; //TODO make configurable
-	lilv_instance_connect_port(mod->inst, index, (void *)buf);
-
-	return 0;
-}
-
-// rt
 void *
 sp_app_get_system_source(sp_app_t *app, uint32_t index)
 {
@@ -325,8 +292,6 @@ sp_app_get_system_source(sp_app_t *app, uint32_t index)
 	mod_t *mod = app->system.source;
 	port_t *port = &mod->ports[index];
 
-	port->num_sources = 1;
-	//lilv_instance_connect_port(mod->inst, index, mod->ports[index].buf);
 	return port->buf;
 }
 
@@ -341,9 +306,9 @@ sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 	mod_t *mod = app->system.sink;
 	port_t *port = &mod->ports[index];
 
-	index += 7; //TODO make configurable
-	//lilv_instance_connect_port(mod->inst, index, mod->ports[index].buf);
-	return port->buf;
+	return port->num_sources == 1
+		? port->sources[0]->buf
+		: port->buf;
 }
 
 // rt
@@ -640,11 +605,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		else
 			; //TODO
 		
-		if(system_source && (tar->direction == PORT_DIRECTION_INPUT) )
-			tar->selected = 0;
-		if(system_sink && (tar->direction == PORT_DIRECTION_OUTPUT) )
-			tar->selected = 0;
-
 		// get minimum port size if specified
 		LilvNode *minsize = lilv_port_get(plug, port, app->regs.port.minimum_size.node);
 		if(minsize)
@@ -834,6 +794,12 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	{
 		app->world = lilv_world_new();
 		lilv_world_load_all(app->world);
+		LilvNode *synthpod_bundle = lilv_new_uri(app->world, "file://"SYNTHPOD_BUNDLE_DIR"/");
+		if(synthpod_bundle)
+		{
+			lilv_world_load_bundle(app->world, synthpod_bundle);
+			lilv_node_free(synthpod_bundle);
+		}
 	}
 	app->plugs = lilv_world_get_all_plugins(app->world);
 
@@ -939,7 +905,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		//inject atom at end of (existing) sequence
 		lv2_atom_forge_frame_time(forge, last ? last->time.frames : 0);
-		lv2_atom_forge_write(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+		lv2_atom_forge_raw(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
 		lv2_atom_forge_pad(forge, trans->atom->size);
 		lv2_atom_forge_pop(forge, &frame);
 	}
@@ -1946,13 +1912,23 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		{
 			port_t *port = &mod->ports[i];
 
-			if(  (port->type == PORT_TYPE_ATOM)
-				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-				&& (port->direction == PORT_DIRECTION_INPUT) )
+			if(port->direction == PORT_DIRECTION_INPUT) // ignore output ports
 			{
-				LV2_Atom_Sequence *seq = port->buf;
-				seq->atom.type = app->regs.port.sequence.urid;
-				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
+				if(  (port->type == PORT_TYPE_ATOM)
+					&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+				{
+					LV2_Atom_Sequence *seq = port->buf;
+					seq->atom.type = app->regs.port.sequence.urid;
+					seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
+				}
+				else if(port->num_sources == 0) // clear audio/cv ports without connections
+				{
+					if(  (port->type == PORT_TYPE_AUDIO)
+						|| (port->type == PORT_TYPE_CV) )
+					{
+						memset(port->buf, 0x0, port->size);
+					}
+				}
 			}
 		}
 	}
@@ -2071,9 +2047,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
-					if(!port->sources[0]) //FIXME handle system.source
-						continue; //skip
-
 					const LV2_Atom_Sequence *seq = (const LV2_Atom_Sequence *)port->buf;
 					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // no messages from UI
 						continue; // skip
@@ -2107,7 +2080,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-				&& (port->direction == PORT_DIRECTION_OUTPUT) )
+				&& (port->direction == PORT_DIRECTION_OUTPUT)
+				&& (mod != app->system.source) ) // don't overwirte source buffer events
 			{
 				LV2_Atom_Sequence *seq = port->buf;
 				seq->atom.type = app->regs.port.sequence.urid;
@@ -2143,13 +2117,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			int patchable = port->patchable && (port->direction == PORT_DIRECTION_OUTPUT);
 			if(!(subscribed || patchable))
 				continue; // skip this port
-
-			//FIXME
-			if( (mod == app->system.source) && (port->direction == PORT_DIRECTION_INPUT) )
-				continue;
-			if( (mod == app->system.sink) && (port->direction == PORT_DIRECTION_OUTPUT) )
-				continue;
-			//FIXME
 
 			const void *buf = port->num_sources == 1
 				? port->sources[0]->buf // direct link to source buffer
@@ -2456,7 +2423,6 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar)));
 			cJSON *port_selected_json = cJSON_CreateBool(port->selected);
 			cJSON *port_sources_json = cJSON_CreateArray();
-			if(mod->uid != 1) // skip system source
 				for(int j=0; j<port->num_sources; j++)
 				{
 					port_t *source = port->sources[j];

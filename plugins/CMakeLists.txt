@@ -5,7 +5,6 @@ include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
-set(DEST lib/lv2/synthpod.lv2)
 if(WIN32)
 	set(LIB_EXT ".dll")
 elseif(APPLE)
@@ -27,20 +26,19 @@ if(BUILD_RTMIDI)
 		rtmidi_out.cpp)
 	target_link_libraries(rtmidi ${RTMIDI_LDFLAGS})
 	set_target_properties(rtmidi PROPERTIES PREFIX "")
-	install(TARGETS rtmidi DESTINATION ${DEST})
-	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/rtmidi.ttl DESTINATION ${DEST})
+	install(TARGETS rtmidi DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/rtmidi.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 endif()
 
 # synthpod
 add_library(synthpod.lv2 MODULE
 	synthpod_lv2.c
 	synthpod_stereo.c
-	synthpod_sinksource.c
 	synthpod_keyboard.c)
 target_link_libraries(synthpod.lv2 synthpod.lib)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
-install(TARGETS synthpod.lv2 DESTINATION ${DEST})
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${DEST})
+install(TARGETS synthpod.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
 if(BUILD_UI)
 	if((DEFINED ECORE_X_FOUND) AND ((${ELM_VERSION} VERSION_EQUAL "1.13.0") OR (${ELM_VERSION} VERSION_GREATER "1.13.0")))
@@ -63,7 +61,7 @@ if(BUILD_UI)
 		synthpod_keyboard_ui.c)
 	target_link_libraries(synthpod_ui.lv2 synthpod_ui.lib)
 	set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
-	install(TARGETS synthpod_ui.lv2 DESTINATION ${DEST})
+	install(TARGETS synthpod_ui.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 else()
 	set(EO_UI_WRAP "#")
 	set(UI_UI_WRAP "#")
@@ -73,4 +71,4 @@ endif()
 
 # manifest
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/plugins/manifest.ttl)
-install(FILES ${PROJECT_BINARY_DIR}/plugins/manifest.ttl DESTINATION ${DEST})
+install(FILES ${PROJECT_BINARY_DIR}/plugins/manifest.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})

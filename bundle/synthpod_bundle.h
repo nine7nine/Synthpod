@@ -15,34 +15,19 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#include <stdlib.h>
+#ifndef _SYNTHPOD_LV2_H
+#define _SYNTHPOD_LV2_H
 
-#include <synthpod_lv2.h>
+#include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 
-LV2_SYMBOL_EXPORT const LV2UI_Descriptor*
-lv2ui_descriptor(uint32_t index)
-{
-	switch(index)
-	{
-		case 0:
-			return &synthpod_common_eo;
-		case 1:
-			return &synthpod_common_ui;
-		case 2:
-			return &synthpod_common_x11;
-		case 3:
-			return &synthpod_common_kx;
+// bundle uri
+#define SYNTHPOD_URI			"http://open-music-kontrollers.ch/lv2/synthpod"
 
-		case 4:
-			return &synthpod_keyboard_eo;
-		case 5:
-			return &synthpod_keyboard_ui;
-		case 6:
-			return &synthpod_keyboard_x11;
-		case 7:
-			return &synthpod_keyboard_kx;
+// plugin uris
+#define SYNTHPOD_SOURCE_URI			SYNTHPOD_URI"#source"
+#define SYNTHPOD_SINK_URI				SYNTHPOD_URI"#sink"
 
-		default:
-			return NULL;
-	}
-}
+extern const LV2_Descriptor synthpod_source;
+extern const LV2_Descriptor synthpod_sink;
+
+#endif // _SYNTHPOD_LV2_H

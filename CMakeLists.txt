@@ -14,6 +14,12 @@ include_directories(${PROJECT_BINARY_DIR})
 set(SYNTHPOD_DATA_DIR "share/synthpod")
 add_definitions("-DSYNTHPOD_DATA_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_DATA_DIR}\"")
 
+set(SYNTHPOD_BUNDLE_DIR "lib/synthpod")
+add_definitions("-DSYNTHPOD_BUNDLE_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BUNDLE_DIR}\"")
+
+set(SYNTHPOD_PLUGIN_DIR "lib/lv2/synthpod.lv2")
+add_definitions("-DSYNTHPOD_PLUGIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_PLUGIN_DIR}\"")
+
 set(SYNTHPOD_VERSION "0.1.0_alpha")
 add_definitions("-DSYNTHPOD_VERSION=\"${SYNTHPOD_VERSION}\"")
 
@@ -66,4 +72,5 @@ add_subdirectory(lib)
 add_subdirectory(bin)
 add_subdirectory(plugins)
 add_subdirectory(data)
+add_subdirectory(state)
 add_subdirectory(bundle)

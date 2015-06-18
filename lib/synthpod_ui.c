@@ -3818,6 +3818,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			return NULL;
 		}
 		lilv_world_load_all(ui->world);
+		LilvNode *synthpod_bundle = lilv_new_uri(ui->world, "file://"SYNTHPOD_BUNDLE_DIR"/");
+		if(synthpod_bundle)
+		{
+			lilv_world_load_bundle(ui->world, synthpod_bundle);
+			lilv_node_free(synthpod_bundle);
+		}
 	}
 
 	ui->plugitc = elm_genlist_item_class_new();

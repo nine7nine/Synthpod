@@ -91,6 +91,18 @@ struct _plughandle_t {
 		LV2_Atom_Sequence *notify;
 	} port;
 
+	struct {
+		LV2_Atom_Sequence *event_in;
+		float *audio_in[2];
+		float *input[4];
+	} source;
+
+	struct {
+		const LV2_Atom_Sequence *event_out;
+		const float *audio_out[2];
+		const float *output[4];
+	} sink;
+
 	// non-rt worker-thread
 	struct {
 		LV2_Worker_Respond_Function respond;
@@ -519,63 +531,49 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	{
 		case 0:
 			handle->port.event_in = (const LV2_Atom_Sequence *)data;
-			sp_app_set_system_source(app, 0, data);
 			break;
 		case 1:
 			handle->port.event_out = (LV2_Atom_Sequence *)data;
-			sp_app_set_system_sink(app, 0, data);
 			break;
 
 		case 2:
 			handle->port.audio_in[0] = (const float *)data;
-			sp_app_set_system_source(app, 1, data);
 			break;
 		case 3:
 			handle->port.audio_in[1] = (const float *)data;
-			sp_app_set_system_source(app, 2, data);
 			break;
 
 		case 4:
 			handle->port.audio_out[0] = (float *)data;
-			sp_app_set_system_sink(app, 1, data);
 			break;
 		case 5:
 			handle->port.audio_out[1] = (float *)data;
-			sp_app_set_system_sink(app, 2, data);
 			break;
 		
 		case 6:
 			handle->port.input[0] = (const float *)data;
-			sp_app_set_system_source(app, 3, data);
 			break;
 		case 7:
 			handle->port.input[1] = (const float *)data;
-			sp_app_set_system_source(app, 4, data);
 			break;
 		case 8:
 			handle->port.input[2] = (const float *)data;
-			sp_app_set_system_source(app, 5, data);
 			break;
 		case 9:
 			handle->port.input[3] = (const float *)data;
-			sp_app_set_system_source(app, 6, data);
 			break;
 		
 		case 10:
 			handle->port.output[0] = (float *)data;
-			sp_app_set_system_sink(app, 3, data);
 			break;
 		case 11:
 			handle->port.output[1] = (float *)data;
-			sp_app_set_system_sink(app, 4, data);
 			break;
 		case 12:
 			handle->port.output[2] = (float *)data;
-			sp_app_set_system_sink(app, 5, data);
 			break;
 		case 13:
 			handle->port.output[3] = (float *)data;
-			sp_app_set_system_sink(app, 6, data);
 			break;
 
 		case 14:
@@ -604,6 +602,30 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
+
+	size_t sample_buf_size = sizeof(float) * nsamples;
+
+	handle->source.event_in = sp_app_get_system_source(app, 0);
+	handle->source.audio_in[0] = sp_app_get_system_source(app, 1);
+	handle->source.audio_in[1] = sp_app_get_system_source(app, 2);
+	handle->source.input[0] = sp_app_get_system_source(app, 3);
+	handle->source.input[1] = sp_app_get_system_source(app, 4);
+	handle->source.input[2] = sp_app_get_system_source(app, 5);
+	handle->source.input[3] = sp_app_get_system_source(app, 6);
+
+	assert(handle->source.event_in
+		&& handle->source.audio_in[0] && handle->source.audio_in[1]
+		&& handle->source.input[0] && handle->source.input[1]
+		&& handle->source.input[2] && handle->source.input[3]);
+
+	// fill input buffers
+	memcpy(handle->source.event_in, handle->port.event_in, SEQ_SIZE);
+	memcpy(handle->source.audio_in[0], handle->port.audio_in[0], sample_buf_size);
+	memcpy(handle->source.audio_in[1], handle->port.audio_in[1], sample_buf_size);
+	*handle->source.input[0] = *handle->port.input[0];
+	*handle->source.input[1] = *handle->port.input[1];
+	*handle->source.input[2] = *handle->port.input[2];
+	*handle->source.input[3] = *handle->port.input[3];
 
 	if(handle->dirty_in)
 	{
@@ -682,6 +704,28 @@ run(LV2_Handle instance, uint32_t nsamples)
 	// end sequence(s)
 	lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
 	lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
+
+	// fill output buffers
+	handle->sink.event_out = sp_app_get_system_sink(app, 0);
+	handle->sink.audio_out[0] = sp_app_get_system_sink(app, 1);
+	handle->sink.audio_out[1] = sp_app_get_system_sink(app, 2);
+	handle->sink.output[0] = sp_app_get_system_sink(app, 3);
+	handle->sink.output[1] = sp_app_get_system_sink(app, 4);
+	handle->sink.output[2] = sp_app_get_system_sink(app, 5);
+	handle->sink.output[3] = sp_app_get_system_sink(app, 6);
+
+	assert(handle->sink.event_out
+		&& handle->sink.audio_out[0] && handle->sink.audio_out[1]
+		&& handle->sink.output[0] && handle->sink.output[1]
+		&& handle->sink.output[2] && handle->sink.output[3]);
+
+	memcpy(handle->port.event_out, handle->sink.event_out, SEQ_SIZE);
+	memcpy(handle->port.audio_out[0], handle->sink.audio_out[0], sample_buf_size);
+	memcpy(handle->port.audio_out[1], handle->sink.audio_out[1], sample_buf_size);
+	*handle->port.output[0] = *handle->sink.output[0];
+	*handle->port.output[1] = *handle->sink.output[1];
+	*handle->port.output[2] = *handle->sink.output[2];
+	*handle->port.output[3] = *handle->sink.output[3];
 }
 
 static void

@@ -19,17 +19,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <synthpod_lv2.h>
+#include <synthpod_bundle.h>
 
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
-	const LV2_Atom_Sequence *event_out;
-	const float *audio_out[2];
-	const float *output[4];
-
 	LV2_Atom_Sequence *event_in;
 	float *audio_in[2];
 	float *input[4];
@@ -54,50 +50,26 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->event_out = (const LV2_Atom_Sequence *)data;
-			break;
-
-		case 1:
-			handle->audio_out[0] = (const float *)data;
-			break;
-		case 2:
-			handle->audio_out[1] = (const float *)data;
-			break;
-
-		case 3:
-			handle->output[0] = (const float *)data;
-			break;
-		case 4:
-			handle->output[1] = (const float *)data;
-			break;
-		case 5:
-			handle->output[2] = (const float *)data;
-			break;
-		case 6:
-			handle->output[3] = (const float *)data;
-			break;
-
-		case 7:
 			handle->event_in = (LV2_Atom_Sequence *)data;
 			break;
 
-		case 8:
+		case 1:
 			handle->audio_in[0] = (float *)data;
 			break;
-		case 9:
+		case 2:
 			handle->audio_in[1] = (float *)data;
 			break;
 
-		case 10:
+		case 3:
 			handle->input[0] = (float *)data;
 			break;
-		case 11:
+		case 4:
 			handle->input[1] = (float *)data;
 			break;
-		case 12:
+		case 5:
 			handle->input[2] = (float *)data;
 			break;
-		case 13:
+		case 6:
 			handle->input[3] = (float *)data;
 			break;
 
@@ -119,23 +91,13 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 
-	size_t audio_size = nsamples * sizeof(float);
-	memcpy(handle->audio_in[0], handle->audio_out[0], audio_size);
-	memcpy(handle->audio_in[1], handle->audio_out[1], audio_size);
-
-	size_t seq_size = sizeof(LV2_Atom) + handle->event_out->atom.size;
-	memcpy(handle->event_in, handle->event_out, seq_size);
-
-	*handle->input[0] = *handle->output[0];
-	*handle->input[1] = *handle->output[1];
-	*handle->input[2] = *handle->output[2];
-	*handle->input[3] = *handle->output[3];
+	// nothing
 }
 
 static void
 deactivate(LV2_Handle instance)
 {
-	//plughandle_t *handle = instance;
+	plughandle_t *handle = instance;
 
 	// nothing
 }
@@ -153,17 +115,6 @@ extension_data(const char* uri)
 {
 	return NULL;
 }
-
-const LV2_Descriptor synthpod_source = {
-	.URI						= SYNTHPOD_SOURCE_URI,
-	.instantiate		= instantiate,
-	.connect_port		= connect_port,
-	.activate				= activate,
-	.run						= run,
-	.deactivate			= deactivate,
-	.cleanup				= cleanup,
-	.extension_data	= extension_data
-};
 
 const LV2_Descriptor synthpod_sink = {
 	.URI						= SYNTHPOD_SINK_URI,
