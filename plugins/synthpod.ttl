@@ -419,3 +419,81 @@ synthpod:control2cv
 		lv2:name "CV Out" ;
 		pg:group synthpod:group_out ;
 	] .
+
+# CV2Atom Plugin
+synthpod:cv2atom
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Synthpod CV2Atom" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+		# cv_in
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 0 ;
+		lv2:symbol "cv_in" ;
+		lv2:name "CV In" ;
+		pg:group synthpod:group_in ;
+	] , [
+		# type
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "type" ;
+		lv2:name "Type" ;
+		pg:group synthpod:group_in ;
+		lv2:default 2 ;
+		lv2:minimum 0 ;
+		lv2:maximum 3 ;
+		lv2:portProperty lv2:integer, lv2:enumeration ;
+		lv2:scalePoint [ rdfs:label "Int" ; rdf:value 0 ] ;
+		lv2:scalePoint [ rdfs:label "Long" ; rdf:value 1 ] ;
+		lv2:scalePoint [ rdfs:label "Float" ; rdf:value 2 ] ;
+		lv2:scalePoint [ rdfs:label "Double" ; rdf:value 3 ] ;
+	] , [
+		# control_out
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports atom:Int, atom:Long, atom:Float, atom:Double ;
+		lv2:index 2 ;
+		lv2:symbol "atom_out" ;
+		lv2:name "Atom Out" ;
+		lv2:designation lv2:control ;
+		pg:group synthpod:group_out ;
+	] .
+
+# Atom2CV Plugin
+synthpod:atom2cv
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Synthpod Atom2CV" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+		# control_out
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports atom:Int, atom:Long, atom:Float, atom:Double ;
+		lv2:index 0 ;
+		lv2:symbol "atom_in" ;
+		lv2:name "Atom In" ;
+		lv2:designation lv2:control ;
+		pg:group synthpod:group_in ;
+	] , [
+		# cv_out
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 1 ;
+		lv2:symbol "cv_out" ;
+		lv2:name "CV Out" ;
+		pg:group synthpod:group_out ;
+	] .

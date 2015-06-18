@@ -34,11 +34,15 @@
 #define SYNTHPOD_KEYBOARD_URI		SYNTHPOD_URI"#keyboard"
 #define SYNTHPOD_CV2CONTROL_URI	SYNTHPOD_URI"#cv2control"
 #define SYNTHPOD_CONTROL2CV_URI	SYNTHPOD_URI"#control2cv"
+#define SYNTHPOD_CV2ATOM_URI		SYNTHPOD_URI"#cv2atom"
+#define SYNTHPOD_ATOM2CV_URI		SYNTHPOD_URI"#atom2cv"
 
 extern const LV2_Descriptor synthpod_stereo;
 extern const LV2_Descriptor synthpod_keyboard;
 extern const LV2_Descriptor synthpod_cv2control;
 extern const LV2_Descriptor synthpod_control2cv;
+extern const LV2_Descriptor synthpod_cv2atom;
+extern const LV2_Descriptor synthpod_atom2cv;
 
 // common UI uris
 #define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_eo"

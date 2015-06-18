@@ -32,6 +32,10 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_cv2control;
 		case 3:
 			return &synthpod_control2cv;
+		case 4:
+			return &synthpod_cv2atom;
+		case 5:
+			return &synthpod_atom2cv;
 		default:
 			return NULL;
 	}

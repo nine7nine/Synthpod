@@ -36,7 +36,9 @@ add_library(synthpod.lv2 MODULE
 	synthpod_stereo.c
 	synthpod_keyboard.c
 	synthpod_cv2control.c
-	synthpod_control2cv.c)
+	synthpod_control2cv.c
+	synthpod_cv2atom.c
+	synthpod_atom2cv.c)
 target_link_libraries(synthpod.lv2 synthpod.lib)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
