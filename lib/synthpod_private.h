@@ -84,7 +84,7 @@ struct _reg_item_t {
 	LilvNode *node;
 	LV2_URID urid;
 };
-	
+
 struct _reg_t {
 	struct {
 		reg_item_t input;
@@ -139,11 +139,15 @@ struct _reg_t {
 	struct {
 		reg_item_t preset;
 	} pset;
-		
+
 	struct {
 		reg_item_t label;
 		reg_item_t range;
 	} rdfs;
+
+	struct {
+		reg_item_t license;
+	} doap;
 
 	struct {
 		reg_item_t optional_feature;
@@ -158,14 +162,14 @@ struct _reg_t {
 	} bufsz;
 
 	struct {
-		reg_item_t writable;	
-		reg_item_t readable;	
-		reg_item_t message;	
-		reg_item_t set;	
-		reg_item_t get;	
-		reg_item_t subject;	
-		reg_item_t property;	
-		reg_item_t value;	
+		reg_item_t writable;
+		reg_item_t readable;
+		reg_item_t message;
+		reg_item_t set;
+		reg_item_t get;
+		reg_item_t subject;
+		reg_item_t property;
+		reg_item_t value;
 	} patch;
 
 	struct {
@@ -284,6 +288,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->rdfs.label, world, map, LILV_NS_RDFS"label");
 	_register(&regs->rdfs.range, world, map, LILV_NS_RDFS"range");
 
+	_register(&regs->doap.license, world, map, LILV_NS_DOAP"license");
+
 	_register(&regs->core.optional_feature, world, map, LV2_CORE__optionalFeature);
 	_register(&regs->core.required_feature, world, map, LV2_CORE__requiredFeature);
 	_register(&regs->core.name, world, map, LV2_CORE__name);
@@ -300,7 +306,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.subject, world, map, LV2_PATCH__subject);
 	_register(&regs->patch.property, world, map, LV2_PATCH__property);
 	_register(&regs->patch.value, world, map, LV2_PATCH__value);
-	
+
 	_register(&regs->group.group, world, map, LV2_PORT_GROUPS__group);
 
 	_register(&regs->units.conversion, world, map, LV2_UNITS__conversion);
@@ -393,6 +399,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->rdfs.label);
 	_unregister(&regs->rdfs.range);
 
+	_unregister(&regs->doap.license);
+
 	_unregister(&regs->core.optional_feature);
 	_unregister(&regs->core.required_feature);
 	_unregister(&regs->core.name);
@@ -409,7 +417,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.subject);
 	_unregister(&regs->patch.property);
 	_unregister(&regs->patch.value);
-	
+
 	_unregister(&regs->group.group);
 
 	_unregister(&regs->units.conversion);
@@ -644,7 +652,7 @@ _sp_transmit_module_list_fill(reg_t *regs, LV2_Atom_Forge *forge,
 {
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_list.urid);
 }
-					
+
 typedef const void *(*data_access_t)(const char * uri);
 
 static inline void
@@ -658,11 +666,11 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
-	
+
 	trans->inst.atom.size = sizeof(int64_t);
 	trans->inst.atom.type = forge->Long;
 	trans->inst.body = (uintptr_t)inst;
-	
+
 	trans->data.atom.size = sizeof(int64_t);
 	trans->data.atom.type = forge->Long;
 	trans->data.body = (uintptr_t)data_access;
@@ -770,7 +778,7 @@ _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->src_port.atom.size = sizeof(int32_t);
 	trans->src_port.atom.type = forge->Int;
 	trans->src_port.body = src_port;
-	
+
 	trans->snk_uid.atom.size = sizeof(int32_t);
 	trans->snk_uid.atom.type = forge->Int;
 	trans->snk_uid.body = snk_uid;
@@ -778,7 +786,7 @@ _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->snk_port.atom.size = sizeof(int32_t);
 	trans->snk_port.atom.type = forge->Int;
 	trans->snk_port.body = snk_port;
-	
+
 	trans->state.atom.size = sizeof(int32_t);
 	trans->state.atom.type = forge->Int;
 	trans->state.body = state; // -1 (query), 0 (disconnected), 1 (connected)
@@ -802,11 +810,11 @@ _sp_transmit_port_subscribed_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->port.atom.size = sizeof(int32_t);
 	trans->port.atom.type = forge->Int;
 	trans->port.body = port_index;
-	
+
 	trans->prot.atom.size = sizeof(LV2_URID);
 	trans->prot.atom.type = forge->URID;
 	trans->prot.body = prot;
-	
+
 	trans->state.atom.size = sizeof(int32_t);
 	trans->state.atom.type = forge->Int;
 	trans->state.body = state; // -1 (query), 0 (disconnected), 1 (connected)
@@ -842,7 +850,7 @@ _sp_transmit_port_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->port.atom.size = sizeof(int32_t);
 	trans->port.atom.type = forge->Int;
 	trans->port.body = port_index;
-	
+
 	trans->state.atom.size = sizeof(int32_t);
 	trans->state.atom.type = forge->Int;
 	trans->state.body = state;
@@ -854,7 +862,7 @@ _sp_transmit_bundle_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	int32_t status, const char *bundle_path)
 {
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.bundle_load.urid);
-	
+
 	trans->status.atom.size = sizeof(int32_t);
 	trans->status.atom.type = forge->Int;
 	trans->status.body = status;
@@ -874,7 +882,7 @@ _sp_transmit_bundle_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	int32_t status, const char *bundle_path)
 {
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.bundle_save.urid);
-	
+
 	trans->status.atom.size = sizeof(int32_t);
 	trans->status.atom.type = forge->Int;
 	trans->status.body = status;
@@ -897,7 +905,7 @@ _sp_transfer_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_t *trans, uint32_
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
-	
+
 	trans->port.atom.size = sizeof(int32_t);
 	trans->port.atom.type = forge->Int;
 	trans->port.body = port_index;
@@ -909,7 +917,7 @@ _sp_transfer_float_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_float_t *tr
 {
 	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_float_t),
 		regs->port.float_protocol.urid, module_uid, port_index);
-	
+
 	trans->value.atom.size = sizeof(float);
 	trans->value.atom.type = forge->Float;
 	trans->value.body = *value;
@@ -921,15 +929,15 @@ _sp_transfer_peak_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_peak_t *tran
 {
 	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_peak_t),
 		regs->port.peak_protocol.urid, module_uid, port_index);
-	
+
 	trans->period_start.atom.size = sizeof(uint32_t);
 	trans->period_start.atom.type = forge->Int;
 	trans->period_start.body = data->period_start;
-	
+
 	trans->period_size.atom.size = sizeof(uint32_t);
 	trans->period_size.atom.type = forge->Int;
 	trans->period_size.body = data->period_size;
-	
+
 	trans->peak.atom.size = sizeof(float);
 	trans->peak.atom.type = forge->Float;
 	trans->peak.body = data->peak;
@@ -1082,7 +1090,7 @@ _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 			lilv_world_load_bundle(world, bndl_node);
 			lilv_node_free(bndl_node);
 		}
-		
+
 		free(bndl_path);
 	}
 

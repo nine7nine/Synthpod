@@ -44,13 +44,14 @@ typedef struct _plug_info_t plug_info_t;
 enum _plug_info_type_t {
 	PLUG_INFO_TYPE_NAME								= 0,
 	PLUG_INFO_TYPE_URI								= 1,
-	PLUG_INFO_TYPE_PROJECT						= 2,
-	PLUG_INFO_TYPE_BUNDLE_URI					= 3,
-	PLUG_INFO_TYPE_AUTHOR_NAME				= 4,
-	PLUG_INFO_TYPE_AUTHOR_EMAIL				= 5,
-	PLUG_INFO_TYPE_AUTHOR_HOMEPAGE		= 6	,
+	PLUG_INFO_TYPE_LICENSE						= 2,
+	PLUG_INFO_TYPE_PROJECT						= 3,
+	PLUG_INFO_TYPE_BUNDLE_URI					= 4,
+	PLUG_INFO_TYPE_AUTHOR_NAME				= 5,
+	PLUG_INFO_TYPE_AUTHOR_EMAIL				= 6,
+	PLUG_INFO_TYPE_AUTHOR_HOMEPAGE		= 7	,
 
-	PLUG_INFO_TYPE_MAX								= 7
+	PLUG_INFO_TYPE_MAX								= 8
 };
 
 enum _group_type_t {
@@ -1804,11 +1805,15 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	free(mod);
 }
 
+#define INFO_PRE "<color=#bbb font=Mono>"
+#define INFO_POST "</color>"
+
 static char * 
 _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 {
 	const plug_info_t *info = data;
-	if(!info)
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+	if(!ui || !info)
 		return NULL;
 
 	switch(info->type)
@@ -1816,71 +1821,104 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 		case PLUG_INFO_TYPE_NAME:
 		{
 			LilvNode *node = lilv_plugin_get_name(info->plug);
-			if(!node)
-				return NULL;
 
-			char *str = strdup(lilv_node_as_string(node));
-			lilv_node_free(node);
+			char *str = NULL;
+			asprintf(&str, "%s", node
+				? lilv_node_as_string(node)
+				: "-");
+			if(node)
+				lilv_node_free(node);
 
 			return str;
 		}
 		case PLUG_INFO_TYPE_URI:
 		{
 			const LilvNode *node = lilv_plugin_get_uri(info->plug);
-			if(!node)
-				return NULL;
 
-			return strdup(lilv_node_as_uri(node));
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"URI     "INFO_POST" %s", node
+				? lilv_node_as_uri(node)
+				: "-");
+
+			return str;
+		}
+		case PLUG_INFO_TYPE_LICENSE:
+		{
+			LilvNodes *nodes = lilv_plugin_get_value(info->plug,
+				ui->regs.doap.license.node);
+			LilvNode *node = nodes
+				? lilv_nodes_get_first(nodes) //FIXME delete?
+				: NULL;
+
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"License "INFO_POST" %s", node
+				? lilv_node_as_uri(node)
+				: "-");
+			if(nodes)
+				lilv_nodes_free(nodes);
+
+			return str;
 		}
 		case PLUG_INFO_TYPE_BUNDLE_URI:
 		{
 			const LilvNode *node = lilv_plugin_get_bundle_uri(info->plug);
-			if(!node)
-				return NULL;
 
-			return strdup(lilv_node_as_uri(node));
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"Bundle  "INFO_POST" %s", node
+				? lilv_node_as_uri(node)
+				: "-");
+
+			return str;
 		}
 		case PLUG_INFO_TYPE_PROJECT:
 		{
 			LilvNode *node = lilv_plugin_get_project(info->plug);
-			if(!node)
-				return NULL;
 
-			char *str = strdup(lilv_node_as_string(node));
-			lilv_node_free(node);
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"Project "INFO_POST" %s", node
+				? lilv_node_as_string(node)
+				: "-");
+			if(node)
+				lilv_node_free(node);
 
 			return str;
 		}
 		case PLUG_INFO_TYPE_AUTHOR_NAME:
 		{
 			LilvNode *node = lilv_plugin_get_author_name(info->plug);
-			if(!node)
-				return NULL;
 
-			char *str = strdup(lilv_node_as_string(node));
-			lilv_node_free(node);
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"Author  "INFO_POST" %s", node
+				? lilv_node_as_string(node)
+				: "-");
+			if(node)
+				lilv_node_free(node);
 
 			return str;
 		}
 		case PLUG_INFO_TYPE_AUTHOR_EMAIL:
 		{
 			LilvNode *node = lilv_plugin_get_author_email(info->plug);
-			if(!node)
-				return NULL;
 
-			char *str = strdup(lilv_node_as_string(node));
-			lilv_node_free(node);
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"Email   "INFO_POST" %s", node
+				? lilv_node_as_string(node)
+				: "-");
+			if(node)
+				lilv_node_free(node);
 
 			return str;
 		}
 		case PLUG_INFO_TYPE_AUTHOR_HOMEPAGE:
 		{
 			LilvNode *node = lilv_plugin_get_author_homepage(info->plug);
-			if(!node)
-				return NULL;
 
-			char *str = strdup(lilv_node_as_string(node));
-			lilv_node_free(node);
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"Homepage"INFO_POST" %s", node
+				? lilv_node_as_string(node)
+				: "-");
+			if(node)
+				lilv_node_free(node);
 
 			return str;
 		}
@@ -3829,7 +3867,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->plugitc = elm_genlist_item_class_new();
 	if(ui->plugitc)
 	{
-		ui->plugitc->item_style = "default";
+		ui->plugitc->item_style = "default_style";
 		ui->plugitc->func.text_get = _pluglist_label_get;
 		ui->plugitc->func.content_get = NULL;
 		ui->plugitc->func.state_get = NULL;
