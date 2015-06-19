@@ -40,6 +40,8 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_audioxfademono;
 		case 7:
 			return &synthpod_audioxfadestereo;
+		case 8:
+			return &synthpod_atom2control;
 		default:
 			return NULL;
 	}
