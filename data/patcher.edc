@@ -36,6 +36,16 @@ group {
 				fixed: 1 1;
 				color: 255 255 255 0;
 			}
+			description {
+				state: "default" 0.5;
+				inherit: "default" 0.0;
+				color: 0 0 0 48;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 0 0 0 96;
+			}
 		}
 
 		part {
@@ -51,11 +61,6 @@ group {
 				rel2.offset: 0.5 0;
 				color: 128 128 128 255;
 			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 128 128 128 0;
-			}
 		}
 		part {
 			name: "grid.horizontal";
@@ -69,11 +74,6 @@ group {
 				rel2.relative: 1 0.5;
 				rel2.offset: 0 0.5;
 				color: 128 128 128 255;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 128 128 128 0;
 			}
 		}
 		
@@ -211,22 +211,19 @@ group {
 			signal: "direct";
 			source: PATCHER_UI;
 			action: STATE_SET "default" 0.0;
-			target: "grid.horizontal";
-			target: "grid.vertical";
-		}
-		program {
-			signal: "indirect";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "grid.horizontal";
-			target: "grid.vertical";
+			target: "bg";
 		}
 		program {
 			signal: "feedback";
 			source: PATCHER_UI;
+			action: STATE_SET "default" 0.5;
+			target: "bg";
+		}
+		program {
+			signal: "indirect";
+			source: PATCHER_UI;
 			action: STATE_SET "default" 1.0;
-			target: "grid.horizontal";
-			target: "grid.vertical";
+			target: "bg";
 		}
 
 		program {

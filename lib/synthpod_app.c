@@ -128,6 +128,7 @@ struct _port_t {
 	uint32_t index;
 
 	int num_sources;
+	int num_feedbacks;
 	port_t *sources [MAX_SOURCES];
 
 	size_t size;
@@ -306,7 +307,7 @@ sp_app_get_system_sink(sp_app_t *app, uint32_t index)
 	mod_t *mod = app->system.sink;
 	port_t *port = &mod->ports[index];
 
-	return port->num_sources == 1
+	return (port->num_sources + port->num_feedbacks) == 1
 		? port->sources[0]->buf
 		: port->buf;
 }
@@ -695,8 +696,9 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 
 	snk_port->sources[snk_port->num_sources] = src_port;;
 	snk_port->num_sources += 1;
+	snk_port->num_feedbacks += src_port->mod == snk_port->mod ? 1 : 0;
 
-	if(snk_port->num_sources == 1)
+	if( (snk_port->num_sources + snk_port->num_feedbacks) == 1)
 	{
 		// directly wire source port output buffer to sink input buffer
 		lilv_instance_connect_port(
@@ -736,8 +738,9 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		return;
 
 	snk_port->num_sources -= 1;
+	snk_port->num_feedbacks -= src_port->mod == snk_port->mod ? 1 : 0;
 
-	if(snk_port->num_sources == 1)
+	if( (snk_port->num_sources + snk_port->num_feedbacks) == 1)
 	{
 		// directly wire source port output buffer to sink input buffer
 		lilv_instance_connect_port(
@@ -860,7 +863,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return;
 
 		// set port value
-		void *buf = port->num_sources == 1
+		void *buf = (port->num_sources + port->num_feedbacks) == 1
 			? port->sources[0]->buf // direct link to source output buffer
 			: port->buf; // empty (n==0) or multiplexed (n>1) link
 		*(float *)buf = trans->value.body;
@@ -875,7 +878,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return;
 
 		// set port value
-		void *buf = port->num_sources == 1
+		void *buf = (port->num_sources + port->num_feedbacks) == 1
 			? port->sources[0]->buf // direct link to source output buffer
 			: port->buf; // empty (n==0) or multiplexed (n>1) link
 		memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
@@ -1163,8 +1166,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			}
 			case 1: // connect
 			{
-				if(src_port->mod != snk_port->mod) // feedback to self is not allowed
-					state = _sp_app_port_connect(app, src_port, snk_port);
+				state = _sp_app_port_connect(app, src_port, snk_port);
 				break;
 			}
 		}
@@ -1921,7 +1923,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 					seq->atom.type = app->regs.port.sequence.urid;
 					seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 				}
-				else if(port->num_sources == 0) // clear audio/cv ports without connections
+				else if( (port->num_sources + port->num_feedbacks) == 0) // clear audio/cv ports without connections
 				{
 					if(  (port->type == PORT_TYPE_AUDIO)
 						|| (port->type == PORT_TYPE_CV) )
@@ -1964,7 +1966,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			if(port->direction == PORT_DIRECTION_OUTPUT)
 				continue; // not a sink
 
-			if(port->num_sources > 1) // needs multiplexing
+			if( (port->num_sources + port->num_feedbacks) > 1) // needs multiplexing
 			{
 				if(port->type == PORT_TYPE_CONTROL)
 				{
@@ -2042,7 +2044,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					lv2_atom_forge_pop(forge, &frame);
 				}
 			}
-			else if(port->num_sources == 1) // move messages from UI on default buffer
+			else if( (port->num_sources + port->num_feedbacks) == 1) // move messages from UI on default buffer
 			{
 				if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
@@ -2118,7 +2120,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			if(!(subscribed || patchable))
 				continue; // skip this port
 
-			const void *buf = port->num_sources == 1
+			const void *buf = (port->num_sources + port->num_feedbacks) == 1
 				? port->sources[0]->buf // direct link to source buffer
 				: port->buf; // dummy (n==0) or multiplexed (n>1) link
 
