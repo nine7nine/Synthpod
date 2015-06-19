@@ -17,6 +17,51 @@
 
 #define MODLIST_UI "/synthpod/modlist/ui"
 
+images {
+	image: "icon_arrow_up_right.png" COMP;
+	image: "icon_close.png" COMP;
+}
+
+group {
+	name: "/synthpod/modlist/expand";
+
+	parts {
+		part {
+			name: "ev";
+			type: IMAGE;
+			mouse_events: 0;
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				image {
+					normal: "icon_arrow_up_right.png";
+					scale_hint: STATIC;
+				}
+			}
+		}
+	}
+}
+
+group {
+	name: "/synthpod/modlist/close";
+
+	parts {
+		part {
+			name: "ev";
+			type: IMAGE;
+			mouse_events: 0;
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				image {
+					normal: "icon_close.png";
+					scale_hint: STATIC;
+				}
+			}
+		}
+	}
+}
+
 group {
 	name: "/synthpod/modlist/module";
 

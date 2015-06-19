@@ -19,8 +19,8 @@
 
 images {
 	image: "border.png" COMP;
-	image: "arrow_up.png" COMP;
-	image: "arrow_right.png" COMP;
+	image: "icon_arrow_up.png" COMP;
+	image: "icon_arrow_right.png" COMP;
 }
 
 group {
@@ -329,15 +329,13 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.relative: 0.15 0.15;
-				rel2.relative: 0.85 0.85;
-				image.normal: "arrow_up.png";
+				image.normal: "icon_arrow_up.png";
 				color: 255 255 255 255;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				image.normal: "arrow_right.png";
+				image.normal: "icon_arrow_right.png";
 				color: 255 255 255 255;
 			}
 		}

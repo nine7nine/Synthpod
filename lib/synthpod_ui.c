@@ -2668,7 +2668,9 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			Evas_Object *icon = elm_icon_add(lay);
 			if(icon)
 			{
-				elm_icon_standard_set(icon, "close");
+				//elm_icon_standard_set(icon, "close");
+				elm_layout_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
+					"/synthpod/modlist/close");
 				evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
 				evas_object_show(icon);
 				elm_layout_content_set(lay, "elm.swallow.end", icon);
@@ -2682,7 +2684,9 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			Evas_Object *icon = elm_icon_add(lay);
 			if(icon)
 			{
-				elm_icon_standard_set(icon, "arrow_up");
+				//elm_icon_standard_set(icon, "arrow_up");
+				elm_layout_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
+					"/synthpod/modlist/expand");
 				evas_object_smart_callback_add(icon, "clicked", _modlist_toggle_clicked, mod);
 				evas_object_show(icon);
 				elm_layout_content_set(lay, "elm.swallow.preend", icon);
