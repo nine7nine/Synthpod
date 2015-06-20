@@ -29,13 +29,13 @@
 
 typedef struct _plughandle_t plughandle_t;
 
-#define MAX_OUTPUTS 16
+#define MAX_INPUTS 16
 
 struct _plughandle_t {
-	const LV2_Atom_Sequence *atom_in;
+	const float *input [MAX_INPUTS];
 	const float *offset;
-	float *output [MAX_OUTPUTS];
-	float last [MAX_OUTPUTS];
+	LV2_Atom_Sequence *atom_out;
+	float last [MAX_INPUTS];
 
 	LV2_URID_Map *map;
 	LV2_Atom_Forge forge;
@@ -74,11 +74,9 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->atom_in = (const LV2_Atom_Sequence *)data;
-			break;
-		case 1:
 			handle->offset = (const float *)data;
 			break;
+		case 1:
 		case 2:
 		case 3:
 		case 4:
@@ -94,8 +92,10 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 		case 14:
 		case 15:
 		case 16:
+			handle->input[port - 1] = (const float *)data;
+			break;
 		case 17:
-			handle->output[port-2] = (float *)data;
+			handle->atom_out = (LV2_Atom_Sequence *)data;
 			break;
 		default:
 			break;
@@ -107,7 +107,7 @@ activate(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
-	for(int i=0; i<MAX_OUTPUTS; i++)
+	for(int i=0; i<MAX_INPUTS; i++)
 		handle->last[i] = 0.f;
 }
 
@@ -117,52 +117,32 @@ run(LV2_Handle instance, uint32_t nsamples)
 	plughandle_t *handle = instance;
 
 	int offset = floor(*handle->offset);
-	int bound = offset + MAX_OUTPUTS;
 
-	LV2_ATOM_SEQUENCE_FOREACH(handle->atom_in, ev)
+	uint32_t capacity = handle->atom_out->atom.size;
+	LV2_Atom_Forge *forge = &handle->forge;
+	LV2_Atom_Forge_Frame frame;
+	lv2_atom_forge_set_buffer(forge, (uint8_t *)handle->atom_out, capacity);
+	lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+	for(int i=0; i<MAX_INPUTS; i++)
 	{
-		const LV2_Atom *atom = &ev->body;
+		const float val = *handle->input[i];
 
-		if(atom->type == handle->forge.Tuple)
+		if(val != handle->last[i])
 		{
-			int i = -1;
-			float val;
+			LV2_Atom_Forge_Frame tup_frame;
 
-			const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)atom;
-			const LV2_Atom *itm = lv2_atom_tuple_begin(tup);
+			lv2_atom_forge_frame_time(forge, 0);
+			lv2_atom_forge_tuple(forge, &tup_frame);
+				lv2_atom_forge_int(forge, i + 1 + offset);
+				lv2_atom_forge_float(forge, val);
+			lv2_atom_forge_pop(forge, &tup_frame);
 
-			if(!itm || lv2_atom_tuple_is_end(LV2_ATOM_BODY(tup), tup->atom.size, itm))
-				continue; // skip
-
-			if(itm->type == handle->forge.Int)
-				i = ((const LV2_Atom_Int *)itm)->body;
-			else if(itm->type == handle->forge.Long)
-				i = ((const LV2_Atom_Long *)itm)->body;
-			else
-				continue; // skip
-
-			itm = lv2_atom_tuple_next(itm);
-
-			if( !itm || (i <= offset) || (i > bound) )
-				continue; // skip
-
-			if(itm->type == handle->forge.Float)
-				val = ((const LV2_Atom_Float *)itm)->body;
-			else if(itm->type == handle->forge.Double)
-				val = ((const LV2_Atom_Double *)itm)->body;
-			else
-				continue; //skip
-
-			// valid atom
-			i -= offset + 1;
 			handle->last[i] = val;
 		}
-		else
-			continue; // unsupported type
 	}
 
-	for(int i=0; i<MAX_OUTPUTS; i++)
-		*handle->output[i] = handle->last[i];
+	lv2_atom_forge_pop(forge, &frame);
 }
 
 static void
@@ -187,8 +167,8 @@ extension_data(const char* uri)
 	return NULL;
 }
 
-const LV2_Descriptor synthpod_atom2control = {
-	.URI						= SYNTHPOD_ATOM2CONTROL_URI,
+const LV2_Descriptor synthpod_control2atom = {
+	.URI						= SYNTHPOD_CONTROL2ATOM_URI,
 	.instantiate		= instantiate,
 	.connect_port		= connect_port,
 	.activate				= activate,

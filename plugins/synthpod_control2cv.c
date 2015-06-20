@@ -29,9 +29,11 @@
 
 typedef struct _plughandle_t plughandle_t;
 
+#define MAX_PORTS 8
+
 struct _plughandle_t {
-	const float *input;
-	float *cv_out;
+	const float *input [MAX_PORTS];
+	float *cv_out [MAX_PORTS];
 };
 
 static LV2_Handle
@@ -53,10 +55,24 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->input = (const float *)data;
-			break;
 		case 1:
-			handle->cv_out = (float *)data;
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+			handle->input[port] = (const float *)data;
+			break;
+		case 8:
+		case 9:
+		case 10:
+		case 11:
+		case 12:
+		case 13:
+		case 14:
+		case 15:
+			handle->cv_out[port-8] = (float *)data;
 			break;
 		default:
 			break;
@@ -76,8 +92,11 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 
-	for(int i=0; i<nsamples; i++)
-		handle->cv_out[i] = *handle->input;
+	for(int i=0; i<MAX_PORTS; i++)
+	{
+		for(int f=0; f<nsamples; f++)
+			handle->cv_out[i][f] = *handle->input[i];
+	}
 }
 
 static void

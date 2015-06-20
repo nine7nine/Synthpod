@@ -29,10 +29,13 @@
 
 typedef struct _plughandle_t plughandle_t;
 
+#define MAX_OUTPUTS 8
+
 struct _plughandle_t {
 	const LV2_Atom_Sequence *atom_in;
-	float *cv_out;
-	float last;
+	const float *offset;
+	float *cv_out [MAX_OUTPUTS];
+	float last [MAX_OUTPUTS];
 
 	LV2_URID_Map *map;
 	LV2_Atom_Forge forge;
@@ -74,7 +77,17 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->atom_in = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->cv_out = (float *)data;
+			handle->offset = (const float *)data;
+			break;
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+		case 8:
+		case 9:
+			handle->cv_out[port - 2] = (float *)data;
 			break;
 		default:
 			break;
@@ -84,9 +97,10 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 static void
 activate(LV2_Handle instance)
 {
-	//plughandle_t *handle = instance;
-	
-	// nothing
+	plughandle_t *handle = instance;
+
+	for(int i=0; i<MAX_OUTPUTS; i++)
+		handle->last[i] = 0.f;
 }
 
 static void
@@ -94,31 +108,63 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 
-	int i = 0;
+	int offset = floor(*handle->offset);
+	int bound = offset + MAX_OUTPUTS;
+
+	int f [MAX_OUTPUTS];
+	for(int i=0; i<MAX_OUTPUTS; i++)
+		f[i] = 0;
+
 	LV2_ATOM_SEQUENCE_FOREACH(handle->atom_in, ev)
 	{
 		const LV2_Atom *atom = &ev->body;
-		float val;
 
-		if(atom->type == handle->forge.Int)
-			val = ((LV2_Atom_Int *)atom)->body;
-		else if(atom->type == handle->forge.Long)
-			val = ((LV2_Atom_Long *)atom)->body;
-		else if(atom->type == handle->forge.Float)
-			val = ((LV2_Atom_Float *)atom)->body;
-		else if(atom->type == handle->forge.Double)
-			val = ((LV2_Atom_Double *)atom)->body;
+		if(atom->type == handle->forge.Tuple)
+		{
+			int i = -1;
+			float val;
+
+			const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)atom;
+			const LV2_Atom *itm = lv2_atom_tuple_begin(tup);
+
+			if(!itm || lv2_atom_tuple_is_end(LV2_ATOM_BODY(tup), tup->atom.size, itm))
+				continue; // skip
+
+			if(itm->type == handle->forge.Int)
+				i = ((const LV2_Atom_Int *)itm)->body;
+			else if(itm->type == handle->forge.Long)
+				i = ((const LV2_Atom_Long *)itm)->body;
+			else
+				continue; // skip
+
+			itm = lv2_atom_tuple_next(itm);
+
+			if( !itm || (i <= offset) || (i > bound) )
+				continue; // skip
+
+			if(itm->type == handle->forge.Float)
+				val = ((const LV2_Atom_Float *)itm)->body;
+			else if(itm->type == handle->forge.Double)
+				val = ((const LV2_Atom_Double *)itm)->body;
+			else
+				continue; //skip
+
+			// valid atom
+			i -= offset + 1;
+			for( ; f[i]<ev->time.frames; f[i]++)
+				handle->cv_out[i][f[i]] = handle->last[i];
+
+			handle->last[i] = val;
+		}
 		else
 			continue; // unsupported type
-
-		for( ; i<ev->time.frames; i++)
-			handle->cv_out[i] = handle->last;
-
-		handle->last = val;
 	}
 
-	for( ; i<nsamples; i++)
-		handle->cv_out[i] = handle->last;
+	for(int i=0; i<MAX_OUTPUTS; i++)
+	{
+		for( ; f[i]<nsamples; f[i]++)
+			handle->cv_out[i][f[i]] = handle->last[i];
+	}
 }
 
 static void

@@ -29,10 +29,12 @@
 
 typedef struct _plughandle_t plughandle_t;
 
+#define MAX_PORTS 8
+
 struct _plughandle_t {
-	const float *cv_in;
 	const float *mode;
-	float *output;
+	const float *cv_in [MAX_PORTS];
+	float *output [MAX_PORTS];
 };
 
 static LV2_Handle
@@ -54,13 +56,27 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->cv_in = (const float *)data;
-			break;
-		case 1:
 			handle->mode = (const float *)data;
 			break;
+		case 1:
 		case 2:
-			handle->output = (float *)data;
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+		case 8:
+			handle->cv_in[port-1] = (const float *)data;
+			break;
+		case 9:
+		case 10:
+		case 11:
+		case 12:
+		case 13:
+		case 14:
+		case 15:
+		case 16:
+			handle->output[port-9] = (float *)data;
 			break;
 		default:
 			break;
@@ -82,51 +98,54 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	int mode = floor(*handle->mode);
 
-	switch(mode)
+	for(int i=0; i<MAX_PORTS; i++)
 	{
-		case 0:
+		switch(mode)
 		{
-			float min = 1.f;
-
-			for(int i=0; i<nsamples; i++)
+			case 0:
 			{
-				const float *val = &handle->cv_in[i];
-				if(*val < min)
-					min = *val;
+				float min = 1.f;
+
+				for(int f=0; f<nsamples; f++)
+				{
+					const float *val = &handle->cv_in[i][f];
+					if(*val < min)
+						min = *val;
+				}
+
+				*handle->output[i] = min;
+
+				break;
 			}
-
-			*handle->output = min;
-
-			break;
-		}
-		case 1:
-		{
-			float sum = 0.f;
-
-			for(int i=0; i<nsamples; i++)
+			case 1:
 			{
-				const float *val = &handle->cv_in[i];
-				sum += *val;
+				float sum = 0.f;
+
+				for(int f=0; f<nsamples; f++)
+				{
+					const float *val = &handle->cv_in[i][f];
+					sum += *val;
+				}
+
+				*handle->output[i] = sum / nsamples;
+
+				break;
 			}
-
-			*handle->output = sum / nsamples;
-
-			break;
-		}
-		case 2:
-		{
-			float max = 0.f;
-
-			for(int i=0; i<nsamples; i++)
+			case 2:
 			{
-				const float *val = &handle->cv_in[i];
-				if(*val > max)
-					max = *val;
+				float max = 0.f;
+
+				for(int f=0; f<nsamples; f++)
+				{
+					const float *val = &handle->cv_in[i][f];
+					if(*val > max)
+						max = *val;
+				}
+
+				*handle->output[i] = max;
+
+				break;
 			}
-
-			*handle->output = max;
-
-			break;
 		}
 	}
 }

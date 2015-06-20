@@ -354,18 +354,10 @@ synthpod:cv2control
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
-		# cv_in
-	  a lv2:InputPort ,
-			lv2:CVPort ;
-		lv2:index 0 ;
-		lv2:symbol "cv_in" ;
-		lv2:name "CV In" ;
-		pg:group synthpod:group_in ;
-	] , [
 		# mode
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
-		lv2:index 1 ;
+		lv2:index 0 ;
 		lv2:symbol "mode" ;
 		lv2:name "Mode" ;
 		pg:group synthpod:group_in ;
@@ -377,12 +369,139 @@ synthpod:cv2control
 		lv2:scalePoint [ rdfs:label "Average" ; rdf:value 1 ] ;
 		lv2:scalePoint [ rdfs:label "Maximum" ; rdf:value 2 ] ;
 	] , [
+		# cv_in
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 1 ;
+		lv2:symbol "cv_in_1" ;
+		lv2:name "CV In 1" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 2 ;
+		lv2:symbol "cv_in_2" ;
+		lv2:name "CV In 2" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 3 ;
+		lv2:symbol "cv_in_3" ;
+		lv2:name "CV In 3" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 4 ;
+		lv2:symbol "cv_in_4" ;
+		lv2:name "CV In 4" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 5 ;
+		lv2:symbol "cv_in_5" ;
+		lv2:name "CV In 5" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 6 ;
+		lv2:symbol "cv_in_6" ;
+		lv2:name "CV In 6" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 7 ;
+		lv2:symbol "cv_in_7" ;
+		lv2:name "CV In 7" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 8 ;
+		lv2:symbol "cv_in_8" ;
+		lv2:name "CV In 8" ;
+		pg:group synthpod:group_in ;
+	] , [
 		# control_out
 	  a lv2:OutputPort ,
 			lv2:ControlPort ;
-		lv2:index 2 ;
-		lv2:symbol "control_out" ;
-		lv2:name "Output" ;
+		lv2:index 9 ;
+		lv2:symbol "output_1" ;
+		lv2:name "Output 1" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 10 ;
+		lv2:symbol "output_2" ;
+		lv2:name "Output 2" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 11 ;
+		lv2:symbol "output_3" ;
+		lv2:name "Output 3" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 12 ;
+		lv2:symbol "output_4" ;
+		lv2:name "Output 4" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 13 ;
+		lv2:symbol "output_5" ;
+		lv2:name "Output 5" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 14 ;
+		lv2:symbol "output_6" ;
+		lv2:name "Output 6" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 15 ;
+		lv2:symbol "output_7" ;
+		lv2:name "Output 7" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 16 ;
+		lv2:symbol "output_8" ;
+		lv2:name "Output 8" ;
 		lv2:default 0 ;
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
@@ -404,8 +523,78 @@ synthpod:control2cv
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 0 ;
-		lv2:symbol "control_in" ;
-		lv2:name "Input" ;
+		lv2:symbol "control_in_1" ;
+		lv2:name "Input 1" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "control_in_2" ;
+		lv2:name "Input 2" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "control_in_3" ;
+		lv2:name "Input 3" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "control_in_4" ;
+		lv2:name "Input 4" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "control_in_5" ;
+		lv2:name "Input 5" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "control_in_6" ;
+		lv2:name "Input 6" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "control_in_7" ;
+		lv2:name "Input 7" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 7 ;
+		lv2:symbol "control_in_8" ;
+		lv2:name "Input 8" ;
 		lv2:default 0 ;
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
@@ -414,9 +603,58 @@ synthpod:control2cv
 		# cv_out
 	  a lv2:OutputPort ,
 			lv2:CVPort ;
-		lv2:index 1 ;
-		lv2:symbol "cv_out" ;
-		lv2:name "CV Out" ;
+		lv2:index 8 ;
+		lv2:symbol "cv_out_1" ;
+		lv2:name "CV Out 1" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 9 ;
+		lv2:symbol "cv_out_2" ;
+		lv2:name "CV Out 2" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 10 ;
+		lv2:symbol "cv_out_3" ;
+		lv2:name "CV Out 3" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 11 ;
+		lv2:symbol "cv_out_4" ;
+		lv2:name "CV Out 4" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 12 ;
+		lv2:symbol "cv_out_5" ;
+		lv2:name "CV Out 5" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 13 ;
+		lv2:symbol "cv_out_6" ;
+		lv2:name "CV Out 6" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 14 ;
+		lv2:symbol "cv_out_7" ;
+		lv2:name "CV Out 7" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 15 ;
+		lv2:symbol "cv_out_8" ;
+		lv2:name "CV Out 8" ;
 		pg:group synthpod:group_out ;
 	] .
 
@@ -431,36 +669,97 @@ synthpod:cv2atom
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
+		# input
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 0 ;
+		lv2:symbol "offset" ;
+		lv2:name "Offset" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 120.0 ;
+		lv2:portProperty lv2:integer, lv2:enumeration ;
+		lv2:scalePoint [ rdfs:label   "0" ; rdf:value   0 ] ;
+		lv2:scalePoint [ rdfs:label   "8" ; rdf:value   8 ] ;
+		lv2:scalePoint [ rdfs:label  "16" ; rdf:value  16 ] ;
+		lv2:scalePoint [ rdfs:label  "24" ; rdf:value  24 ] ;
+		lv2:scalePoint [ rdfs:label  "32" ; rdf:value  32 ] ;
+		lv2:scalePoint [ rdfs:label  "40" ; rdf:value  40 ] ;
+		lv2:scalePoint [ rdfs:label  "48" ; rdf:value  48 ] ;
+		lv2:scalePoint [ rdfs:label  "56" ; rdf:value  56 ] ;
+		lv2:scalePoint [ rdfs:label  "64" ; rdf:value  64 ] ;
+		lv2:scalePoint [ rdfs:label  "72" ; rdf:value  72 ] ;
+		lv2:scalePoint [ rdfs:label  "80" ; rdf:value  80 ] ;
+		lv2:scalePoint [ rdfs:label  "88" ; rdf:value  88 ] ;
+		lv2:scalePoint [ rdfs:label  "96" ; rdf:value  96 ] ;
+		lv2:scalePoint [ rdfs:label "104" ; rdf:value 104 ] ;
+		lv2:scalePoint [ rdfs:label "112" ; rdf:value 112 ] ;
+		lv2:scalePoint [ rdfs:label "120" ; rdf:value 120 ] ;
+		pg:group synthpod:group_in ;
+	] , [
 		# cv_in
 	  a lv2:InputPort ,
 			lv2:CVPort ;
-		lv2:index 0 ;
-		lv2:symbol "cv_in" ;
-		lv2:name "CV In" ;
+		lv2:index 1 ;
+		lv2:symbol "cv_in_1" ;
+		lv2:name "CV In 1" ;
 		pg:group synthpod:group_in ;
 	] , [
-		# type
 	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 1 ;
-		lv2:symbol "type" ;
-		lv2:name "Type" ;
+			lv2:CVPort ;
+		lv2:index 2 ;
+		lv2:symbol "cv_in_2" ;
+		lv2:name "CV In 2" ;
 		pg:group synthpod:group_in ;
-		lv2:default 2 ;
-		lv2:minimum 0 ;
-		lv2:maximum 3 ;
-		lv2:portProperty lv2:integer, lv2:enumeration ;
-		lv2:scalePoint [ rdfs:label "Int" ; rdf:value 0 ] ;
-		lv2:scalePoint [ rdfs:label "Long" ; rdf:value 1 ] ;
-		lv2:scalePoint [ rdfs:label "Float" ; rdf:value 2 ] ;
-		lv2:scalePoint [ rdfs:label "Double" ; rdf:value 3 ] ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 3 ;
+		lv2:symbol "cv_in_3" ;
+		lv2:name "CV In 3" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 4 ;
+		lv2:symbol "cv_in_4" ;
+		lv2:name "CV In 4" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 5 ;
+		lv2:symbol "cv_in_5" ;
+		lv2:name "CV In 5" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 6 ;
+		lv2:symbol "cv_in_6" ;
+		lv2:name "CV In 6" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 7 ;
+		lv2:symbol "cv_in_7" ;
+		lv2:name "CV In 7" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 8 ;
+		lv2:symbol "cv_in_8" ;
+		lv2:name "CV In 8" ;
+		pg:group synthpod:group_in ;
 	] , [
 		# control_out
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Int, atom:Long, atom:Float, atom:Double ;
-		lv2:index 2 ;
+		lv2:index 9 ;
 		lv2:symbol "atom_out" ;
 		lv2:name "Atom Out" ;
 		lv2:designation lv2:control ;
@@ -489,12 +788,89 @@ synthpod:atom2cv
 		lv2:designation lv2:control ;
 		pg:group synthpod:group_in ;
 	] , [
+		# input
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "offset" ;
+		lv2:name "Offset" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 120.0 ;
+		lv2:portProperty lv2:integer, lv2:enumeration ;
+		lv2:scalePoint [ rdfs:label   "0" ; rdf:value   0 ] ;
+		lv2:scalePoint [ rdfs:label   "8" ; rdf:value   8 ] ;
+		lv2:scalePoint [ rdfs:label  "16" ; rdf:value  16 ] ;
+		lv2:scalePoint [ rdfs:label  "24" ; rdf:value  24 ] ;
+		lv2:scalePoint [ rdfs:label  "32" ; rdf:value  32 ] ;
+		lv2:scalePoint [ rdfs:label  "40" ; rdf:value  40 ] ;
+		lv2:scalePoint [ rdfs:label  "48" ; rdf:value  48 ] ;
+		lv2:scalePoint [ rdfs:label  "56" ; rdf:value  56 ] ;
+		lv2:scalePoint [ rdfs:label  "64" ; rdf:value  64 ] ;
+		lv2:scalePoint [ rdfs:label  "72" ; rdf:value  72 ] ;
+		lv2:scalePoint [ rdfs:label  "80" ; rdf:value  80 ] ;
+		lv2:scalePoint [ rdfs:label  "88" ; rdf:value  88 ] ;
+		lv2:scalePoint [ rdfs:label  "96" ; rdf:value  96 ] ;
+		lv2:scalePoint [ rdfs:label "104" ; rdf:value 104 ] ;
+		lv2:scalePoint [ rdfs:label "112" ; rdf:value 112 ] ;
+		lv2:scalePoint [ rdfs:label "120" ; rdf:value 120 ] ;
+		pg:group synthpod:group_in ;
+	] , [
 		# cv_out
 	  a lv2:OutputPort ,
 			lv2:CVPort ;
-		lv2:index 1 ;
-		lv2:symbol "cv_out" ;
-		lv2:name "CV Out" ;
+		lv2:index 2 ;
+		lv2:symbol "cv_out_1" ;
+		lv2:name "CV Out 1" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 3 ;
+		lv2:symbol "cv_out_2" ;
+		lv2:name "CV Out 2" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 4 ;
+		lv2:symbol "cv_out_3" ;
+		lv2:name "CV Out 3" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 5 ;
+		lv2:symbol "cv_out_4" ;
+		lv2:name "CV Out 4" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 6 ;
+		lv2:symbol "cv_out_5" ;
+		lv2:name "CV Out 5" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 7 ;
+		lv2:symbol "cv_out_6" ;
+		lv2:name "CV Out 6" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 8 ;
+		lv2:symbol "cv_out_7" ;
+		lv2:name "CV Out 7" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 9 ;
+		lv2:symbol "cv_out_8" ;
+		lv2:name "CV Out 8" ;
 		pg:group synthpod:group_out ;
 	] .
 
@@ -852,5 +1228,169 @@ synthpod:atom2control
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
 		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] .
+
+# Control2Atom Plugin
+synthpod:control2atom
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Synthpod Control2Atom" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+		# input
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 0 ;
+		lv2:symbol "offset" ;
+		lv2:name "Offset" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 240.0 ;
+		lv2:portProperty lv2:integer, lv2:enumeration ;
+		lv2:scalePoint [ rdfs:label   "0" ; rdf:value   0 ] ;
+		lv2:scalePoint [ rdfs:label  "16" ; rdf:value  16 ] ;
+		lv2:scalePoint [ rdfs:label  "32" ; rdf:value  32 ] ;
+		lv2:scalePoint [ rdfs:label  "48" ; rdf:value  48 ] ;
+		lv2:scalePoint [ rdfs:label  "64" ; rdf:value  64 ] ;
+		lv2:scalePoint [ rdfs:label  "80" ; rdf:value  80 ] ;
+		lv2:scalePoint [ rdfs:label  "96" ; rdf:value  96 ] ;
+		lv2:scalePoint [ rdfs:label "112" ; rdf:value 112 ] ;
+		lv2:scalePoint [ rdfs:label "128" ; rdf:value 128 ] ;
+		lv2:scalePoint [ rdfs:label "144" ; rdf:value 144 ] ;
+		lv2:scalePoint [ rdfs:label "160" ; rdf:value 160 ] ;
+		lv2:scalePoint [ rdfs:label "176" ; rdf:value 176 ] ;
+		lv2:scalePoint [ rdfs:label "192" ; rdf:value 192 ] ;
+		lv2:scalePoint [ rdfs:label "208" ; rdf:value 208 ] ;
+		lv2:scalePoint [ rdfs:label "224" ; rdf:value 224 ] ;
+		lv2:scalePoint [ rdfs:label "240" ; rdf:value 240 ] ;
+		pg:group synthpod:group_in ;
+	] , [
+		# input
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "input_1" ;
+		lv2:name "Input 1" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "input_2" ;
+		lv2:name "Input 2" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "input_3" ;
+		lv2:name "Input 3" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "input_4" ;
+		lv2:name "Input 4" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "input_5" ;
+		lv2:name "Input 5" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "input_6" ;
+		lv2:name "Input 6" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 7 ;
+		lv2:symbol "input_7" ;
+		lv2:name "Input 7" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 8 ;
+		lv2:symbol "input_8" ;
+		lv2:name "Input 8" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 9 ;
+		lv2:symbol "input_9" ;
+		lv2:name "Input 9" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 10 ;
+		lv2:symbol "input_10" ;
+		lv2:name "Input 10" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 11 ;
+		lv2:symbol "input_11" ;
+		lv2:name "Input 11" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 12 ;
+		lv2:symbol "input_12" ;
+		lv2:name "Input 12" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 13 ;
+		lv2:symbol "input_13" ;
+		lv2:name "Input 13" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 14 ;
+		lv2:symbol "input_14" ;
+		lv2:name "Input 14" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 15 ;
+		lv2:symbol "input_15" ;
+		lv2:name "Input 15" ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 16 ;
+		lv2:symbol "input_16" ;
+		lv2:name "Input 16" ;
+		pg:group synthpod:group_in ;
+	] , [
+		# control_out
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports atom:Int, atom:Long, atom:Float, atom:Double ;
+		lv2:index 17 ;
+		lv2:symbol "atom_out" ;
+		lv2:name "Atom Out" ;
+		lv2:designation lv2:control ;
 		pg:group synthpod:group_out ;
 	] .

@@ -29,11 +29,13 @@
 
 typedef struct _plughandle_t plughandle_t;
 
+#define MAX_INPUTS 8
+
 struct _plughandle_t {
-	const float *cv_in;
-	const float *type;
+	const float *cv_in [MAX_INPUTS];
+	const float *offset;
 	LV2_Atom_Sequence *atom_out;
-	float last;
+	float last [MAX_INPUTS];
 
 	LV2_URID_Map *map;
 	LV2_Atom_Forge forge;
@@ -72,12 +74,19 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->cv_in = (const float *)data;
+			handle->offset = (const float *)data;
 			break;
 		case 1:
-			handle->type = (const float *)data;
-			break;
 		case 2:
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+		case 8:
+			handle->cv_in[port - 1] = (const float *)data;
+			break;
+		case 9:
 			handle->atom_out = (LV2_Atom_Sequence *)data;
 			break;
 		default:
@@ -88,9 +97,10 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 static void
 activate(LV2_Handle instance)
 {
-	//plughandle_t *handle = instance;
-	
-	// nothing
+	plughandle_t *handle = instance;
+
+	for(int i=0; i<MAX_INPUTS; i++)
+		handle->last[i] = 0.f;
 }
 
 static void
@@ -98,7 +108,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 
-	int type = floor(*handle->type);
+	int offset = floor(*handle->offset);
 
 	uint32_t capacity = handle->atom_out->atom.size;
 	LV2_Atom_Forge *forge = &handle->forge;
@@ -106,30 +116,24 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_set_buffer(forge, (uint8_t *)handle->atom_out, capacity);
 	lv2_atom_forge_sequence_head(forge, &frame, 0);
 
-	for(int i=0; i<nsamples; i++)
+	for(int f=0; f<nsamples; f++)
 	{
-		const float *val = &handle->cv_in[i];
-
-		if(*val != handle->last)
+		for(int i=0; i<MAX_INPUTS; i++)
 		{
-			lv2_atom_forge_frame_time(forge, i);
-			switch(type)
-			{
-				case 0:
-					lv2_atom_forge_int(forge, floor(*val));
-					break;
-				case 1:
-					lv2_atom_forge_long(forge, floor(*val));
-					break;
-				case 2:
-					lv2_atom_forge_float(forge, *val);
-					break;
-				case 3:
-					lv2_atom_forge_double(forge, *val);
-					break;
-			}
+			const float val = handle->cv_in[i][f];
 
-			handle->last = *val;
+			if(val != handle->last[i])
+			{
+				LV2_Atom_Forge_Frame tup_frame;
+
+				lv2_atom_forge_frame_time(forge, f);
+				lv2_atom_forge_tuple(forge, &tup_frame);
+					lv2_atom_forge_int(forge, i + 1 + offset);
+					lv2_atom_forge_float(forge, val);
+				lv2_atom_forge_pop(forge, &tup_frame);
+
+				handle->last[i] = val;
+			}
 		}
 	}
 
