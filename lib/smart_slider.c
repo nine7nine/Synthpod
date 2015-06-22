@@ -175,20 +175,9 @@ _mouse_move(void *data, Evas *e, Evas_Object *obj, void *event_info)
 		float dx = ev->cur.output.x - ev->prev.output.x;
 		float dy = ev->cur.output.y - ev->prev.output.y;
 
-		float scale;
-		if(priv->integer)
-		{
-			scale = 1.f / (priv->max - priv->min);
-			scale *= evas_key_modifier_is_set(ev->modifiers, SMART_SLIDER_MODIFIER)
-				? 0.01 // 100 steps
-				: 0.1; // 10 steps
-		}
-		else
-		{
-			scale = evas_key_modifier_is_set(ev->modifiers, SMART_SLIDER_MODIFIER)
-				? 0.0001 // 10000 steps
-				: 0.001; // 1000 steps
-		}
+		float scale = evas_key_modifier_is_set(ev->modifiers, SMART_SLIDER_MODIFIER)
+			? 0.0001 // 10000 steps
+			: 0.001; // 1000 steps
 
 		float rel = (fabs(dx) > fabs(dy) ? dx : dy) * scale;
 
