@@ -386,13 +386,10 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	else if(protocol == ui->regs.port.peak_protocol.urid)
 	{
 		const LV2UI_Peak_Data *peak_data = buf;
-		if(peak_data->peak > port->peak)
-			port->peak = peak_data->peak;
-		else
-			port->peak *= 0.8;
+		//TODO smooth/filter signal?
+		port->peak = peak_data->peak;
 
-		if(port->std.widget && (port->peak > 0.f) )
-			smart_meter_value_set(port->std.widget, port->peak);
+		smart_meter_value_set(port->std.widget, port->peak);
 	}
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{

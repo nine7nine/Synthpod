@@ -144,7 +144,6 @@ struct _port_t {
 	int subscriptions; // subsriptions reference counter
 
 	float last;
-	uint32_t period_cnt;
 
 	float min;
 	float dflt;
@@ -189,6 +188,12 @@ struct _sp_app_t {
 
 	char *bundle_path;
 	char *bundle_filename;
+
+	struct {
+		uint32_t period_cnt;
+		uint32_t bound;
+		uint32_t counter;
+	} fps;
 };
 
 static void
@@ -850,6 +855,9 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	}
 	else
 		; //TODO report
+
+	app->fps.bound = driver->sample_rate / 30; //TODO make this configurable
+	app->fps.counter = 0;
 	
 	return app;
 }
@@ -1983,6 +1991,16 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 {
+	int send_port_updates = 0;
+
+	app->fps.counter += nsamples; // increase sample counter
+	app->fps.period_cnt += 1; // increase period counter
+	if(app->fps.counter >= app->fps.bound) // check whether we reached boundary
+	{
+		send_port_updates = 1;
+		app->fps.counter -= app->fps.bound; // reet sample counter
+	}
+
 	// iterate over all modules
 	for(int m=0; m<app->num_mods; m++)
 	{
@@ -2176,58 +2194,59 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 			if(port->protocol == app->regs.port.float_protocol.urid)
 			{
-				const float val = *(const float *)buf;
-				if(val != port->last) // has value changed since last time?
+				if(send_port_updates)
 				{
-					// update last value
-					port->last = val;
+					const float val = *(const float *)buf;
 
-					size_t size = sizeof(transfer_float_t);
-					transfer_float_t *trans = _sp_app_to_ui_request(app, size);
-					if(trans)
+					if(val != port->last)
 					{
-						_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, &val);
-						_sp_app_to_ui_advance(app, size);
+						// update last value
+						port->last = val;
+
+						size_t size = sizeof(transfer_float_t);
+						transfer_float_t *trans = _sp_app_to_ui_request(app, size);
+						if(trans)
+						{
+							_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, &val);
+							_sp_app_to_ui_advance(app, size);
+						}
 					}
 				}
 			}
 			else if(port->protocol == app->regs.port.peak_protocol.urid)
 			{
-				const float *vec = (const float *)buf;
-
-				// find peak value in current period
-				float peak = 0.f;
-				for(int j=0; j<nsamples; j++)
+				if(send_port_updates)
 				{
-					float val = fabs(vec[j]);
-					if(val > peak)
-						peak = val;
-				}
+					const float *vec = (const float *)buf;
 
-				port->period_cnt += 1; // increase period counter
-				//printf("%u %f\n", port->period_cnt, peak);
-
-				if(  (peak != port->last) //TODO make below two configurable
-					&& ((port->period_cnt & 0x3f) == 0x00) ) // only update every 512th period
-				{
-					//printf("peak different: %i %i\n", port->last == 0.f, peak == 0.f);
-
-					// update last value
-					port->last = peak;
-
-					LV2UI_Peak_Data data = {
-						.period_start = port->period_cnt,
-						.period_size = nsamples,
-						.peak = peak
-					};
-
-					size_t size = sizeof(transfer_peak_t);
-					transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
-					if(trans)
+					// find peak value in current period
+					float peak = 0.f;
+					for(int j=0; j<nsamples; j++)
 					{
-						_sp_transfer_peak_fill(&app->regs, &app->forge, trans,
-							port->mod->uid, port->index, &data);
-						_sp_app_to_ui_advance(app, size);
+						float val = fabs(vec[j]);
+						if(val > peak)
+							peak = val;
+					}
+
+					if(fabs(peak - port->last) >= 1e-3) //TODO make this configurable
+					{
+						// update last value
+						port->last = peak;
+
+						LV2UI_Peak_Data data = {
+							.period_start = app->fps.period_cnt,
+							.period_size = nsamples,
+							.peak = peak
+						};
+
+						size_t size = sizeof(transfer_peak_t);
+						transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
+						if(trans)
+						{
+							_sp_transfer_peak_fill(&app->regs, &app->forge, trans,
+								port->mod->uid, port->index, &data);
+							_sp_app_to_ui_advance(app, size);
+						}
 					}
 				}
 			}
