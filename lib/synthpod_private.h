@@ -226,6 +226,7 @@ struct _reg_t {
 		reg_item_t port_refresh;
 		reg_item_t port_connected;
 		reg_item_t port_subscribed;
+		reg_item_t port_monitored;
 		reg_item_t port_selected;
 		reg_item_t bundle_load;
 		reg_item_t bundle_save;
@@ -352,6 +353,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.port_refresh, world, map, SYNTHPOD_PREFIX"portRefresh");
 	_register(&regs->synthpod.port_connected, world, map, SYNTHPOD_PREFIX"portConnect");
 	_register(&regs->synthpod.port_subscribed, world, map, SYNTHPOD_PREFIX"portSubscribe");
+	_register(&regs->synthpod.port_monitored, world, map, SYNTHPOD_PREFIX"portMonitor");
 	_register(&regs->synthpod.port_selected, world, map, SYNTHPOD_PREFIX"portSelect");
 	_register(&regs->synthpod.bundle_load, world, map, SYNTHPOD_PREFIX"bundleLoad");
 	_register(&regs->synthpod.bundle_save, world, map, SYNTHPOD_PREFIX"bundleSave");
@@ -463,6 +465,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.port_refresh);
 	_unregister(&regs->synthpod.port_connected);
 	_unregister(&regs->synthpod.port_subscribed);
+	_unregister(&regs->synthpod.port_monitored);
 	_unregister(&regs->synthpod.port_selected);
 	_unregister(&regs->synthpod.bundle_load);
 	_unregister(&regs->synthpod.bundle_save);
@@ -481,6 +484,7 @@ typedef struct _transmit_module_preset_save_t transmit_module_preset_save_t;
 typedef struct _transmit_module_selected_t transmit_module_selected_t;
 typedef struct _transmit_port_connected_t transmit_port_connected_t;
 typedef struct _transmit_port_subscribed_t transmit_port_subscribed_t;
+typedef struct _transmit_port_monitored_t transmit_port_monitored_t;
 typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
 typedef struct _transmit_port_selected_t transmit_port_selected_t;
 typedef struct _transmit_bundle_load_t transmit_bundle_load_t;
@@ -550,6 +554,13 @@ struct _transmit_port_subscribed_t {
 	LV2_Atom_Int uid _ATOM_ALIGNED;
 	LV2_Atom_Int port _ATOM_ALIGNED;
 	LV2_Atom_URID prot _ATOM_ALIGNED;
+	LV2_Atom_Int state _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_port_monitored_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_Int port _ATOM_ALIGNED;
 	LV2_Atom_Int state _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
@@ -818,6 +829,26 @@ _sp_transmit_port_subscribed_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->state.atom.size = sizeof(int32_t);
 	trans->state.atom.type = forge->Int;
 	trans->state.body = state; // -1 (query), 0 (disconnected), 1 (connected)
+}
+
+static inline void
+_sp_transmit_port_monitored_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_port_monitored_t *trans, uint32_t size,
+	u_id_t module_uid, uint32_t port_index, int32_t state)
+{
+	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_monitored.urid);
+
+	trans->uid.atom.size = sizeof(int32_t);
+	trans->uid.atom.type = forge->Int;
+	trans->uid.body = module_uid;
+
+	trans->port.atom.size = sizeof(int32_t);
+	trans->port.atom.type = forge->Int;
+	trans->port.body = port_index;
+
+	trans->state.atom.size = sizeof(int32_t);
+	trans->state.atom.type = forge->Int;
+	trans->state.body = state; // -1 (query), 0 (not monitored), 1 (monitored)
 }
 
 static inline void

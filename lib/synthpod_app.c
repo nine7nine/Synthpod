@@ -123,6 +123,7 @@ struct _mod_t {
 struct _port_t {
 	mod_t *mod;
 	int selected;
+	int monitored;
 	
 	const LilvPort *tar;
 	uint32_t index;
@@ -554,18 +555,21 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			tar->size = app->driver->max_block_size * sizeof(float);
 			tar->type =  PORT_TYPE_AUDIO;
 			tar->selected = 1;
+			tar->monitored = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
 			tar->size = app->driver->max_block_size * sizeof(float);
 			tar->type = PORT_TYPE_CV;
 			tar->selected = 1;
+			tar->monitored = 1;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.control.node))
 		{
 			tar->size = sizeof(float);
 			tar->type = PORT_TYPE_CONTROL;
 			tar->selected = 0;
+			tar->monitored = 1;
 		
 			LilvNode *dflt_node;
 			LilvNode *min_node;
@@ -582,6 +586,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		{
 			tar->size = app->driver->seq_size;
 			tar->type = PORT_TYPE_ATOM;
+			tar->selected = 0;
+			tar->monitored = 0;
 			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
 			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
 			//	? PORT_BUFFER_TYPE_SEQUENCE
@@ -594,14 +600,17 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 
 			// check whether this is a control port
 			LilvNode *control_designation = lilv_new_uri(app->world, LV2_CORE__control);
-			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
-				tar->direction == PORT_DIRECTION_INPUT
-					? app->regs.port.input.node
-					: app->regs.port.output.node
-					, control_designation);
+			if(control_designation)
+			{
+				const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
+					tar->direction == PORT_DIRECTION_INPUT
+						? app->regs.port.input.node
+						: app->regs.port.output.node
+						, control_designation);
 
-			tar->selected = control_port == port; // only select control ports by default
-			lilv_node_free(control_designation);
+				tar->selected = control_port == port; // only select control ports by default
+				lilv_node_free(control_designation);
+			}
 		}
 		else
 			; //TODO
@@ -609,8 +618,10 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		// get minimum port size if specified
 		LilvNode *minsize = lilv_port_get(plug, port, app->regs.port.minimum_size.node);
 		if(minsize)
+		{
 			tar->size = lilv_node_as_int(minsize);
-		lilv_node_free(minsize);
+			lilv_node_free(minsize);
+		}
 
 		// allocate 8-byte aligned buffer
 #if defined(_WIN32)
@@ -619,12 +630,13 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		posix_memalign(&tar->buf, 8, tar->size); //FIXME check
 		mlock(tar->buf, tar->size);
 #endif
-		//TODO mlock
 		memset(tar->buf, 0x0, tar->size);
 
 		// initialize control buffers to default value
 		if(tar->type == PORT_TYPE_CONTROL)
 			*(float *)tar->buf = tar->dflt;
+		else
+			memset(tar->buf, 0x0, tar->size); // clear audio/cv/atom buffers
 
 		// set port buffer
 		lilv_instance_connect_port(mod->inst, i, tar->buf);
@@ -1261,6 +1273,37 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 				break;
 			case 1: // select
 				port->selected = 1;
+				break;
+		}
+	}
+	else if(protocol == app->regs.synthpod.port_monitored.urid)
+	{
+		const transmit_port_monitored_t *monitor = (const transmit_port_monitored_t *)atom;
+
+		port_t *port = _sp_app_port_get(app, monitor->uid.body, monitor->port.body);
+		if(!port)
+			return;
+
+		switch(monitor->state.body)
+		{
+			case -1: // query
+			{
+				// signal ui
+				size_t size = sizeof(transmit_port_monitored_t);
+				transmit_port_monitored_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transmit_port_monitored_fill(&app->regs, &app->forge, trans, size,
+						port->mod->uid, port->index, port->monitored);
+					_sp_app_to_ui_advance(app, size);
+				}
+				break;
+			}
+			case 0: // unmonitor
+				port->monitored = 0;
+				break;
+			case 1: // monitor
+				port->monitored = 1;
 				break;
 		}
 	}
@@ -2424,6 +2467,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			cJSON *port_symbol_json = cJSON_CreateString(
 				lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar)));
 			cJSON *port_selected_json = cJSON_CreateBool(port->selected);
+			cJSON *port_monitored_json = cJSON_CreateBool(port->monitored);
 			cJSON *port_sources_json = cJSON_CreateArray();
 				for(int j=0; j<port->num_sources; j++)
 				{
@@ -2441,6 +2485,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				}
 			cJSON_AddItemToObject(port_json, "symbol", port_symbol_json);
 			cJSON_AddItemToObject(port_json, "selected", port_selected_json);
+			cJSON_AddItemToObject(port_json, "monitored", port_monitored_json);
 			cJSON_AddItemToObject(port_json, "sources", port_sources_json);
 			cJSON_AddItemToArray(mod_ports_json, port_json);
 		}
@@ -2586,8 +2631,13 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		mod_json;
 		mod_json = mod_json->next)
 	{
-		const char *mod_uri_str = cJSON_GetObjectItem(mod_json, "uri")->valuestring;
-		u_id_t mod_uid = cJSON_GetObjectItem(mod_json, "uid")->valueint;
+		const cJSON *mod_uri_json = cJSON_GetObjectItem(mod_json, "uri");
+		const cJSON *mod_uid_json = cJSON_GetObjectItem(mod_json, "uid");
+		if(!mod_uri_json || !mod_uid_json)
+			continue;
+
+		const char *mod_uri_str = mod_uri_json->valuestring;
+		u_id_t mod_uid = mod_uid_json->valueint;
 
 		mod_t *mod = _sp_app_mod_add(app, mod_uri_str);
 		if(!mod)
@@ -2602,7 +2652,10 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 
-		mod->selected = cJSON_GetObjectItem(mod_json, "selected")->type == cJSON_True;
+		const cJSON *mod_selected_json = cJSON_GetObjectItem(mod_json, "selected");
+		mod->selected = mod_selected_json
+			? mod_selected_json->type == cJSON_True
+			: 0;
 		mod->uid = mod_uid;
 
 		if(mod->uid > app->uid)
@@ -2641,7 +2694,11 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		mod_json;
 		mod_json = mod_json->next)
 	{
-		u_id_t mod_uid = cJSON_GetObjectItem(mod_json, "uid")->valueint;
+		const cJSON *mod_uid_json = cJSON_GetObjectItem(mod_json, "uid");
+		if(!mod_uid_json)
+			continue;
+
+		u_id_t mod_uid = mod_uid_json->valueint;
 
 		mod_t *mod = _sp_app_mod_get(app, mod_uid);
 		if(!mod)
@@ -2652,25 +2709,43 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			port_json;
 			port_json = port_json->next)
 		{
-			const char *port_symbol_str = cJSON_GetObjectItem(port_json, "symbol")->valuestring;
+			const cJSON *port_symbol_json = cJSON_GetObjectItem(port_json, "symbol");
+			if(!port_symbol_json)
+				continue;
+
+			const char *port_symbol_str = port_symbol_json->valuestring;
 
 			for(int i=0; i<mod->num_ports; i++)
 			{
 				port_t *port = &mod->ports[i];
 				const LilvNode *port_symbol_node = lilv_port_get_symbol(mod->plug, port->tar);
+				if(!port_symbol_node)
+					continue;
 
 				// search for matching port symbol
 				if(strcmp(port_symbol_str, lilv_node_as_string(port_symbol_node)))
 					continue;
 
-				port->selected = cJSON_GetObjectItem(port_json, "selected")->type == cJSON_True;
+				const cJSON *port_selected_json = cJSON_GetObjectItem(port_json, "selected");
+				port->selected = port_selected_json
+					? port_selected_json->type == cJSON_True
+					: 0;
+				const cJSON *port_monitored_json = cJSON_GetObjectItem(port_json, "monitored");
+				port->monitored = port_monitored_json
+					? port_monitored_json->type == cJSON_True
+					: 1;
 
 				for(cJSON *source_json = cJSON_GetObjectItem(port_json, "sources")->child;
 					source_json;
 					source_json = source_json->next)
 				{
-					uint32_t source_uid = cJSON_GetObjectItem(source_json, "uid")->valueint;
-					const char *source_symbol_str = cJSON_GetObjectItem(source_json, "symbol")->valuestring;
+					const cJSON *source_uid_json = cJSON_GetObjectItem(source_json, "uid");
+					const cJSON *source_symbol_json = cJSON_GetObjectItem(source_json, "symbol");
+					if(!source_uid_json || !source_symbol_json)
+						continue;
+
+					uint32_t source_uid = source_uid_json->valueint;
+					const char *source_symbol_str = source_symbol_json->valuestring;
 
 					mod_t *source = _sp_app_mod_get(app, source_uid);
 					if(!source)

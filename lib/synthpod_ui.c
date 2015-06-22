@@ -232,6 +232,7 @@ struct _port_t {
 			
 	struct {
 		Evas_Object *widget;
+		int monitored;
 	} std;
 };
 
@@ -539,6 +540,7 @@ _ui_mod_selected_request(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
 
+	// request module selected state
 	size_t size = sizeof(transmit_module_selected_t);
 	transmit_module_selected_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
@@ -551,12 +553,26 @@ _ui_mod_selected_request(mod_t *mod)
 	{
 		port_t *port = &mod->ports[i];
 
-		size_t size = sizeof(transmit_port_selected_t);
-		transmit_port_selected_t *trans = _sp_ui_to_app_request(ui, size);
-		if(trans)
+		// request port selected state
 		{
-			_sp_transmit_port_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, -1);
-			_sp_ui_to_app_advance(ui, size);
+			size_t size = sizeof(transmit_port_selected_t);
+			transmit_port_selected_t *trans = _sp_ui_to_app_request(ui, size);
+			if(trans)
+			{
+				_sp_transmit_port_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, -1);
+				_sp_ui_to_app_advance(ui, size);
+			}
+		}
+
+		// request port monitored state
+		{
+			size_t size = sizeof(transmit_port_monitored_t);
+			transmit_port_monitored_t *trans = _sp_ui_to_app_request(ui, size);
+			if(trans)
+			{
+				_sp_transmit_port_monitored_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, -1);
+				_sp_ui_to_app_advance(ui, size);
+			}
 		}
 	}
 }
@@ -2606,7 +2622,7 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_modlist_check_changed(void *data, Evas_Object *obj, void *event_info)
+_modlist_selected_changed(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
@@ -2657,7 +2673,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		if(check)
 		{
 			elm_check_state_set(check, mod->selected);
-			evas_object_smart_callback_add(check, "changed", _modlist_check_changed, mod);
+			evas_object_smart_callback_add(check, "changed", _modlist_selected_changed, mod);
 			evas_object_show(check);
 			elm_layout_icon_set(lay, check);
 			elm_layout_content_set(lay, "elm.swallow.icon", check);
@@ -2981,7 +2997,7 @@ _group_del(void *data, Evas_Object *obj)
 }
 
 static void
-_patched_changed(void *data, Evas_Object *obj, void *event)
+_selected_changed(void *data, Evas_Object *obj, void *event)
 {
 	port_t *port = data;
 	mod_t *mod = port->mod;
@@ -2996,6 +3012,40 @@ _patched_changed(void *data, Evas_Object *obj, void *event)
 	{
 		_sp_transmit_port_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, port->selected);
 		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static void
+_monitored_changed(void *data, Evas_Object *obj, void *event)
+{
+	port_t *port = data;
+	mod_t *mod = port->mod;
+	sp_ui_t *ui = mod->ui;
+
+	port->std.monitored = elm_check_state_get(obj);
+
+	// subsribe or unsubscribe, depending on monitored state
+	{
+		int32_t i = port->index;
+		int32_t state = port->std.monitored;
+
+		if(port->type == PORT_TYPE_CONTROL)
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, state);
+		else if(port->type == PORT_TYPE_AUDIO)
+			_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, state);
+		else if(port->type == PORT_TYPE_CV)
+			_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, state);
+	}
+
+	// signal monitored state to app
+	{
+		size_t size = sizeof(transmit_port_monitored_t);
+		transmit_port_monitored_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_port_monitored_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, port->std.monitored);
+			_sp_ui_to_app_advance(ui, size);
+		}
 	}
 }
 
@@ -3102,13 +3152,16 @@ _modlist_std_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	port->std.widget = NULL;
 
 	// unsubscribe from port
-	const uint32_t i = port->index;
-	if(port->type == PORT_TYPE_CONTROL)
-		_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
-	else if(port->type == PORT_TYPE_AUDIO)
-		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
-	else if(port->type == PORT_TYPE_CV)
-		_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
+	if(port->std.monitored)
+	{
+		const uint32_t i = port->index;
+		if(port->type == PORT_TYPE_CONTROL)
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
+		else if(port->type == PORT_TYPE_AUDIO)
+			_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
+		else if(port->type == PORT_TYPE_CV)
+			_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 0);
+	}
 }
 
 static Evas_Object * 
@@ -3137,10 +3190,20 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		Evas_Object *patched = elm_check_add(lay);
 		if(patched)
 		{
-			evas_object_smart_callback_add(patched, "changed", _patched_changed, port);
+			elm_check_state_set(patched, port->selected ? EINA_TRUE : EINA_FALSE);
+			evas_object_smart_callback_add(patched, "changed", _selected_changed, port);
 			evas_object_show(patched);
 			elm_layout_content_set(lay, "elm.swallow.icon", patched);
 		} // patched
+
+		Evas_Object *monitored = elm_check_add(lay);
+		if(monitored && (port->type != PORT_TYPE_ATOM) )
+		{
+			elm_check_state_set(monitored, port->std.monitored ? EINA_TRUE : EINA_FALSE);
+			evas_object_smart_callback_add(monitored, "changed", _monitored_changed, port);
+			evas_object_show(monitored);
+			elm_layout_content_set(lay, "elm.swallow.end", monitored);
+		} // monitored
 
 		Evas_Object *dir = edje_object_add(evas_object_evas_get(lay));
 		if(dir)
@@ -3264,17 +3327,18 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_layout_content_set(lay, "elm.swallow.content", child);
 		}
 
-		if(port->selected)
-			elm_check_state_set(patched, EINA_TRUE);
+		if(port->std.monitored)
+		{
 
-		// subscribe to port
-		const uint32_t i = port->index;
-		if(port->type == PORT_TYPE_CONTROL)
-			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
-		else if(port->type == PORT_TYPE_AUDIO)
-			_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 1);
-		else if(port->type == PORT_TYPE_CV)
-			_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 1);
+			// subscribe to port
+			const uint32_t i = port->index;
+			if(port->type == PORT_TYPE_CONTROL)
+				_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
+			else if(port->type == PORT_TYPE_AUDIO)
+				_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 1);
+			else if(port->type == PORT_TYPE_CV)
+				_port_subscription_set(mod, i, ui->regs.port.peak_protocol.urid, 1);
+		}
 
 		port->std.widget = child;
 	} // lay
@@ -4403,11 +4467,29 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		{
 			port->selected = trans->state.body;
 
+			// FIXME update port itm
 			mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
 			if(mod && mod->std.itm)
 				elm_genlist_item_update(mod->std.itm);
 
 			_patches_update(ui);
+		}
+	}
+	else if(protocol == ui->regs.synthpod.port_monitored.urid)
+	{
+		const transmit_port_monitored_t *trans = (const transmit_port_monitored_t *)atom;
+		port_t *port = _sp_ui_port_get(ui, trans->uid.body, trans->port.body);
+		if(!port)
+			return;
+
+		if(port->std.monitored != trans->state.body)
+		{
+			port->std.monitored = trans->state.body;
+
+			// FIXME update port itm
+			mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+			if(mod && mod->std.itm)
+				elm_genlist_item_update(mod->std.itm);
 		}
 	}
 	else if(protocol == ui->regs.synthpod.module_list.urid)
