@@ -118,6 +118,9 @@ struct _mod_t {
 	// ports
 	uint32_t num_ports;
 	port_t *ports;
+
+	size_t size;
+	void *buf;
 };
 
 struct _port_t {
@@ -541,6 +544,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	else if(!strcmp(uri, SYNTHPOD_PREFIX"sink"))
 		system_sink = 1;
 
+	mod->size = 0;
+
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
 	for(uint32_t i=0; i<mod->num_ports; i++)
 	{
@@ -628,23 +633,56 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 			lilv_node_free(minsize);
 		}
 
-		// allocate 8-byte aligned buffer
+		mod->size += lv2_atom_pad_size(tar->size);
+	}
+
+	// allocate single 8-byte aligned buffer per plugin
 #if defined(_WIN32)
-		tar->buf = _aligned_malloc(tar->size, 8); //FIXME check
+	mod->buf = _aligned_malloc(mod->size, 8);
+	if(mod->buf)
+	{
 #else
-		posix_memalign(&tar->buf, 8, tar->size); //FIXME check
-		mlock(tar->buf, tar->size);
+	posix_memalign(&mod->buf, 8, mod->size);
+	if(mod->buf)
+	{
+		mlock(mod->buf, mod->size);
 #endif
-		memset(tar->buf, 0x0, tar->size);
+		memset(mod->buf, 0x0, mod->size);
+	}
+	else
+	{
+		free(mod->ports);
+		free(mod);
+		return NULL;
+	}
 
-		// initialize control buffers to default value
-		if(tar->type == PORT_TYPE_CONTROL)
-			*(float *)tar->buf = tar->dflt;
-		else
-			memset(tar->buf, 0x0, tar->size); // clear audio/cv/atom buffers
+	// slice plugin buffer into per-port-type-and-direction regions for
+	// efficient dereference in plugin instance
+	void *ptr = mod->buf;
+	for(port_type_t type=0; type<PORT_TYPE_NUM; type++)
+	{
+		for(port_direction_t dir=0; dir<PORT_DIRECTION_NUM; dir++)
+		{
+			for(uint32_t i=0; i<mod->num_ports; i++)
+			{
+				port_t *tar = &mod->ports[i];
 
-		// set port buffer
-		lilv_instance_connect_port(mod->inst, i, tar->buf);
+				if( (tar->type != type) || (tar->direction != dir) )
+					continue; //skip
+
+				// define buffer slice
+				tar->buf = ptr;
+
+				// initialize control buffers to default value
+				if(tar->type == PORT_TYPE_CONTROL)
+					*(float *)tar->buf = tar->dflt;
+
+				// set port buffer
+				lilv_instance_connect_port(mod->inst, i, tar->buf);
+
+				ptr += lv2_atom_pad_size(tar->size);
+			}
+		}
 	}
 
 	// load presets
@@ -665,17 +703,18 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	lilv_instance_deactivate(mod->inst);
 	lilv_instance_free(mod->inst);
 
-	// deinit ports
-	for(int i=0; i<mod->num_ports; i++)
+	// free memory
+	if(mod->buf)
 	{
-		port_t *port = &mod->ports[i];
-
 #if !defined(_WIN32)
-		munlock(port->buf, port->size);
+		munlock(mod->buf, mod->size);
 #endif
-		free(port->buf);
+		free(mod->buf);
 	}
-	free(mod->ports);
+
+	// free ports
+	if(mod->ports)
+		free(mod->ports);
 
 	eina_semaphore_free(&mod->bypass_sem);
 
