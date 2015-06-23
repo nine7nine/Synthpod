@@ -71,14 +71,14 @@ struct _mod_t {
 	int selected;
 
 	char *pset_label;
-	
+
 	// features
 	LV2_Feature feature_list [NUM_UI_FEATURES];
 	const LV2_Feature *features [NUM_UI_FEATURES + 1];
 
 	// extension data
 	LV2_Extension_Data_Feature ext_data;
-	
+
 	// self
 	const LilvPlugin *plug;
 	LilvUIs *all_uis;
@@ -229,7 +229,7 @@ struct _port_t {
 	float max;
 
 	float peak;
-			
+
 	struct {
 		Evas_Object *widget;
 		int monitored;
@@ -247,6 +247,7 @@ struct _property_t {
 
 	struct {
 		Evas_Object *widget;
+		Evas_Object *entry;
 	} std;
 };
 
@@ -292,7 +293,7 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *patchitc;
 	Elm_Genlist_Item_Class *propitc;
 	Elm_Genlist_Item_Class *grpitc;
-		
+
 	Elm_Object_Item *sink_itm;
 
 	volatile int dirty;
@@ -401,12 +402,12 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		{
 			const LV2_Atom_URID *subject = NULL;
 			const LV2_Atom_URID *property = NULL;
-			const LV2_Atom_String *value = NULL;
-			
+			const LV2_Atom *value = NULL;
+
 			LV2_Atom_Object_Query q[] = {
 				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
 				{ ui->regs.patch.property.urid, (const LV2_Atom **)&property },
-				{ ui->regs.patch.value.urid, (const LV2_Atom **)&value },
+				{ ui->regs.patch.value.urid, &value },
 				LV2_ATOM_OBJECT_QUERY_END
 			};
 			lv2_atom_object_query(obj, q);
@@ -414,20 +415,113 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 			if(property && value)
 			{
 				LV2_URID subject_val = subject ? subject->body : 0;
-				LV2_URID request_val = property->body;
-				const char *body_val = LV2_ATOM_BODY_CONST(value);
+				LV2_URID property_val = property->body;
 
 				//printf("ui got patch:Set: %u %u %s\n",
 				//	subject_val, request_val, body_val);
 
+				for(int i=0; i<mod->num_writables; i++)
+				{
+					property_t *prop = &mod->writables[i];
+
+					// matching property?
+					if( (prop->tar_urid == property_val) && (prop->type_urid == value->type))
+					{
+						if(prop->std.widget)
+						{
+							if(  (prop->type_urid == ui->forge.String)
+								|| (prop->type_urid == ui->forge.URI) )
+							{
+								const char *val = LV2_ATOM_BODY_CONST(value);
+								elm_entry_entry_set(prop->std.entry, val);
+							}
+							else if(prop->type_urid == ui->forge.Path)
+							{
+								const char *val = LV2_ATOM_BODY_CONST(value);
+								elm_object_text_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Int)
+							{
+								int32_t val = ((const LV2_Atom_Int *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.URID)
+							{
+								uint32_t val = ((const LV2_Atom_URID *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Long)
+							{
+								int64_t val = ((const LV2_Atom_Long *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Float)
+							{
+								float val = ((const LV2_Atom_Float *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Double)
+							{
+								double val = ((const LV2_Atom_Double *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Bool)
+							{
+								int val = ((const LV2_Atom_Bool *)value)->body;
+								smart_toggle_value_set(prop->std.widget, val);
+							}
+						}
+
+						break;
+					}
+				}
 				for(int i=0; i<mod->num_readables; i++)
 				{
 					property_t *prop = &mod->readables[i];
 
-					if(prop->tar_urid == request_val) // matching readable?
+					// matching property?
+					if( (prop->tar_urid == property_val) && (prop->type_urid == value->type))
 					{
 						if(prop->std.widget)
-							elm_object_text_set(prop->std.widget, body_val);
+						{
+							if(  (prop->type_urid == ui->forge.String)
+								|| (prop->type_urid == ui->forge.URI)
+								|| (prop->type_urid == ui->forge.Path) )
+							{
+								const char *val = LV2_ATOM_BODY_CONST(value);
+								elm_object_text_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Int)
+							{
+								int32_t val = ((const LV2_Atom_Int *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.URID)
+							{
+								uint32_t val = ((const LV2_Atom_URID *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Long)
+							{
+								int64_t val = ((const LV2_Atom_Long *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Float)
+							{
+								float val = ((const LV2_Atom_Float *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Double)
+							{
+								double val = ((const LV2_Atom_Double *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Bool)
+							{
+								int val = ((const LV2_Atom_Bool *)value)->body;
+								smart_toggle_value_set(prop->std.widget, val);
+							}
+						}
 
 						break;
 					}
@@ -757,7 +851,7 @@ _std_ui_write_function(LV2UI_Controller controller, uint32_t port,
 static void
 _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 {
-	sp_ui_t *ui = mod->ui;	
+	sp_ui_t *ui = mod->ui;
 
 	// subscribe manually for port notifications
 	const LilvNode *plug_uri_node = lilv_plugin_get_uri(mod->plug);
@@ -821,7 +915,7 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 
 			//TODO handle ui:notifyType
 
-			/*	
+			/*
 			printf("port has notification for: %s %s %u %u %u\n",
 				lilv_node_as_string(sym),
 				lilv_node_as_uri(prot),
@@ -866,7 +960,7 @@ _show_ui_hide(mod_t *mod)
 		if(port->type == PORT_TYPE_CONTROL)
 			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
 	}
-	
+
 	// unsubscribe from notifications
 	_mod_subscription_set(mod, mod->show.ui, 0);
 
@@ -948,7 +1042,7 @@ _show_ui_show(mod_t *mod)
 	if(mod->show.show_iface && mod->show.show_iface->show && mod->show.handle)
 		res = mod->show.show_iface->show(mod->show.handle);
 	//TODO handle res != 0
-		
+
 	mod->show.visible = 1; // toggle visibility flag
 
 	// get idle iface if any
@@ -980,7 +1074,7 @@ _kx_ui_cleanup(mod_t *mod)
 		if(port->type == PORT_TYPE_CONTROL)
 			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
 	}
-	
+
 	// unsubscribe from notifications
 	_mod_subscription_set(mod, mod->kx.ui, 0);
 
@@ -1120,7 +1214,7 @@ _x11_ui_hide(mod_t *mod)
 		if(port->type == PORT_TYPE_CONTROL)
 			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
 	}
-	
+
 	// unsubscribe from notifications
 	_mod_subscription_set(mod, mod->x11.ui, 0);
 
@@ -1198,7 +1292,7 @@ _x11_ui_show(mod_t *mod)
 		mod,
 		&dummy,
 		mod->features);
-	
+
 	mod->feature_list[2].data = NULL;
 
 	if(!mod->x11.handle)
@@ -1209,7 +1303,7 @@ _x11_ui_show(mod_t *mod)
 	{
 		// get idle iface
 		mod->x11.idle_iface = mod->x11.descriptor->extension_data(LV2_UI__idleInterface);
-		
+
 		// get resize iface
 		mod->x11.client_resize_iface = mod->x11.descriptor->extension_data(LV2_UI__resize);
 		if(mod->x11.client_resize_iface)
@@ -1247,7 +1341,7 @@ _ui_dlopen(const LilvUI *ui, Eina_Module **lib)
 
 		return NULL;
 	}
-	
+
 	LV2UI_DescriptorFunction ui_descfunc = NULL;
 	ui_descfunc = eina_module_symbol_get(*lib, "lv2ui_descriptor");
 
@@ -1282,7 +1376,7 @@ _zero_writer_request(Zero_Writer_Handle handle, uint32_t port, uint32_t size,
 	port_t *tar = &mod->ports[port];
 
 	//printf("_zero_writer_request: %u\n", size);
-	
+
 	// ignore output ports
 	if(tar->direction != PORT_DIRECTION_INPUT)
 	{
@@ -1347,7 +1441,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	const char *plugin_string = NULL;
 	if(plugin_uri)
 		plugin_string = lilv_node_as_string(plugin_uri);
-			
+
 	if(!lilv_plugin_verify(plug))
 		return NULL;
 
@@ -1438,7 +1532,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		mod->feature_list[nfeatures].URI = LV2_INSTANCE_ACCESS_URI;
 		mod->feature_list[nfeatures++].data = inst;
 	}
-	
+
 	//FIXME do we want to support this? its marked as DEPRECATED in LV2 spec
 	{
 		mod->feature_list[nfeatures].URI = LV2_UI_PREFIX"makeSONameResident";
@@ -1447,12 +1541,12 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
 	mod->feature_list[nfeatures++].data = ui->world;
-	
+
 	mod->feature_list[nfeatures].URI = ZERO_WRITER__schedule;
 	mod->feature_list[nfeatures++].data = &mod->zero_writer;
 
 	assert(nfeatures <= NUM_UI_FEATURES);
-	
+
 	for(int i=0; i<nfeatures; i++)
 		mod->features[i] = &mod->feature_list[i];
 	mod->features[nfeatures] = NULL; // sentinel
@@ -1500,7 +1594,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			else if(lilv_port_is_a(plug, port, ui->regs.port.control.node))
 			{
 				tar->type = PORT_TYPE_CONTROL;
-			
+
 				LilvNode *dflt_node;
 				LilvNode *min_node;
 				LilvNode *max_node;
@@ -1557,7 +1651,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				const LilvNode *writable = lilv_nodes_get(mod->writs, i);
 				const char *writable_str = lilv_node_as_uri(writable);
 
-				printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
+				//printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
 
 				property_t *prop = &mod->writables[j++];
 				prop->mod = mod;
@@ -1573,10 +1667,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				{
 					const LilvNode *type = lilv_nodes_get_first(types);
 					const char *type_str = lilv_node_as_string(type);
-				
-					printf("with type: %s\n", type_str);
+
+					//printf("with type: %s\n", type_str);
 					prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
-					
+
 					lilv_nodes_free(types);
 				}
 			}
@@ -1598,7 +1692,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				const LilvNode *readable = lilv_nodes_get(mod->reads, i);
 				const char *readable_str = lilv_node_as_uri(readable);
 
-				printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
+				//printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
 
 				property_t *prop = &mod->readables[j++];
 				prop->mod = mod;
@@ -1614,16 +1708,16 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				{
 					const LilvNode *type = lilv_nodes_get_first(types);
 					const char *type_str = lilv_node_as_string(type);
-				
-					printf("with type: %s\n", type_str);
+
+					//printf("with type: %s\n", type_str);
 					prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
-					
+
 					lilv_nodes_free(types);
 				}
 			}
 		}
 	}
-		
+
 	// ui
 	mod->all_uis = lilv_plugin_get_uis(mod->plug);
 	if(mod->all_uis)
@@ -1685,7 +1779,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				//LilvNode *required_feature = lilv_new_uri(ui->world, LV2_CORE__requiredFeature);
 				LilvNode *show_interface = lilv_new_uri(ui->world, LV2_UI__showInterface);
 				LilvNode *idle_interface = lilv_new_uri(ui->world, LV2_UI__idleInterface);
-				
+
 				LilvNodes* has_idle_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
 					extension_data, idle_interface);
 				LilvNodes* has_show_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
@@ -1738,7 +1832,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		mod->kx.descriptor = _ui_dlopen(mod->kx.ui, &mod->kx.lib);
 	else if(mod->x11.ui)
 		mod->x11.descriptor = _ui_dlopen(mod->x11.ui, &mod->x11.lib);
-	
+
 	if(mod->system.source || mod->system.sink)
 		mod->col = 0; // reserved color for system ports
 	else
@@ -1753,7 +1847,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	//TODO save visibility in synthpod state?
 	//if(!mod->eo.ui && mod->kx.ui)
 	//	_kx_ui_show(mod);
-	
+
 	return mod;
 }
 
@@ -1957,7 +2051,7 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	plug_info_t *info = elm_object_item_data_get(itm);
 	if(!info)
 		return;
-		
+
 	const LilvNode *uri_node = lilv_plugin_get_uri(info->plug);
 	if(!uri_node)
 		return;
@@ -2099,7 +2193,7 @@ _patches_update(sp_ui_t *ui)
 				name_str = lilv_node_as_string(name_node);
 				lilv_node_free(name_node);
 			}
-			
+
 			if(port->direction == PORT_DIRECTION_OUTPUT) // source
 			{
 				if(ui->matrix[port->type])
@@ -2124,7 +2218,7 @@ _patches_update(sp_ui_t *ui)
 						count[port->direction][port->type], name_str);
 				}
 			}
-		
+
 			count[port->direction][port->type] += 1;
 		}
 	}
@@ -2245,8 +2339,9 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, parent,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
-			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
-			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); //TODO
+			elm_genlist_item_select_mode_set(elmnt,
+				(prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
+					? ELM_OBJECT_SELECT_MODE_DEFAULT : ELM_OBJECT_SELECT_MODE_NONE);
 		}
 		for(int i=0; i<mod->num_readables; i++)
 		{
@@ -2275,7 +2370,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, parent,
 				ELM_GENLIST_ITEM_NONE, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
-			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); TODO
 		}
 
 		// presets
@@ -2312,7 +2406,7 @@ _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
-		
+
 	// clear items
 	elm_genlist_item_subitems_clear(itm);
 
@@ -2330,7 +2424,7 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
-	
+
 	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
 
 	if(class == ui->psetitmitc) // is presets item
@@ -2402,13 +2496,13 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *prev = elm_genlist_item_prev_get(itm);
 	if(!prev)
 		return;
-		
+
 	mod_t *itm_mod = elm_object_item_data_get(itm);
 	mod_t *prev_mod = elm_object_item_data_get(prev);
 
 	if(!itm_mod || !prev_mod)
 		return;
-		
+
 	// signal app
 	size_t size = sizeof(transmit_module_move_t);
 	transmit_module_move_t *trans = _sp_ui_to_app_request(ui, size);
@@ -2437,7 +2531,7 @@ _modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
 	// close x11 ui
 	else if(mod->x11.ui && mod->x11.descriptor)
 		_x11_ui_hide(mod);
-	
+
 	size_t size = sizeof(transmit_module_del_t);
 	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
@@ -2476,7 +2570,7 @@ _eo_widget_create(Evas_Object *parent, mod_t *mod)
 
 	// set subscriptions for notifications
 	_mod_subscription_set(mod, mod->eo.ui, 1);
-	
+
 	// instantiate UI
 	mod->eo.widget = NULL;
 
@@ -2492,7 +2586,7 @@ _eo_widget_create(Evas_Object *parent, mod_t *mod)
 			mod,
 			(void **)&(mod->eo.widget),
 			mod->features);
-		
+
 		mod->feature_list[2].data = NULL;
 	}
 
@@ -2542,7 +2636,7 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 		{
 			// remove EoUI from modgrid
 			elm_object_item_del(mod->eo.embedded.itm);
-	
+
 			const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 			const char *plugin_string = NULL;
 			if(plugin_uri)
@@ -2560,7 +2654,7 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 
 				mod->eo.full.win = win;
 
-				Evas_Object *bg = elm_bg_add(win);	
+				Evas_Object *bg = elm_bg_add(win);
 				if(bg)
 				{
 					elm_bg_color_set(bg, 64, 64, 64);
@@ -2569,7 +2663,7 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 					evas_object_show(bg);
 					elm_win_resize_object_add(win, bg);
 				} // bg
-				
+
 				Evas_Object *container = elm_layout_add(win);
 				if(container)
 				{
@@ -2661,7 +2755,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			lilv_node_free(name_node);
 			elm_layout_text_set(lay, "elm.text", name_str);
 		}
-		
+
 		char col [7];
 		sprintf(col, "col,%02i", mod->col);
 		elm_layout_signal_emit(lay, col, MODLIST_UI);
@@ -2711,6 +2805,29 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 }
 
 static void
+_smart_mouse_in(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	if(!ui->modlist)
+		return;
+
+	elm_scroller_movement_block_set(ui->modlist,
+		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
+}
+
+static void
+_smart_mouse_out(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	if(!ui->modlist)
+		return;
+
+	elm_scroller_movement_block_set(ui->modlist, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
+}
+
+static void
 _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 {
 	property_t *prop = data;
@@ -2720,8 +2837,8 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 	const char *path = event_info;
 	if(!path)
 		return;
-	
-	printf("_property_path_chosen: %s\n", path);
+
+	//printf("_property_path_chosen: %s\n", path);
 
 	size_t strsize = strlen(path) + 1 + 7; // strlen("file://") == 7
 	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
@@ -2741,11 +2858,11 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
-			char *str = _sp_transfer_patch_set_fill(&ui->regs,
+			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
 				&ui->forge, trans, mod->uid, index, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
-			if(str)
-				asprintf(&str, "file://%s", path);
+			if(atom)
+				sprintf(LV2_ATOM_BODY(atom), "file://%s", path);
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
@@ -2757,12 +2874,12 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 	property_t *prop = data;
 	mod_t *mod = prop->mod;
 	sp_ui_t *ui = mod->ui;
-	
+
 	const char *entered = elm_entry_entry_get(obj);
 	if(!entered)
 		return;
-	
-	printf("_property_string_activated: %s\n", entered);
+
+	//printf("_property_string_activated: %s\n", entered);
 
 	size_t strsize = strlen(entered) + 1;
 	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
@@ -2782,11 +2899,108 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
-			char *str = _sp_transfer_patch_set_fill(&ui->regs,
+			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
 				&ui->forge, trans, mod->uid, index, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
-			if(str)
-				strcpy(str, entered);
+			if(atom)
+				strcpy(LV2_ATOM_BODY(atom), entered);
+			_sp_ui_to_app_advance(ui, len);
+		}
+	}
+}
+
+static void
+_property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+
+	double value = smart_slider_value_get(obj);
+
+	size_t body_size = 0;
+	if(  (prop->type_urid == ui->forge.Int)
+		|| (prop->type_urid == ui->forge.Float)
+		|| (prop->type_urid == ui->forge.URID) )
+	{
+		body_size = sizeof(int32_t);
+	}
+	else if(  (prop->type_urid == ui->forge.Long)
+		|| (prop->type_urid == ui->forge.Double) )
+	{
+		body_size = sizeof(int64_t);
+	}
+
+	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
+
+	for(uint32_t index=0; index<mod->num_ports; index++)
+	{
+		port_t *port = &mod->ports[index];
+
+		// only consider event ports which support patch:Message
+		if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+			|| (port->direction != PORT_DIRECTION_INPUT)
+			|| !port->patchable)
+		{
+			continue; // skip
+		}
+
+		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
+				&ui->forge, trans, mod->uid, index, body_size,
+				mod->subject, prop->tar_urid, prop->type_urid);
+			if(atom)
+			{
+				if(prop->type_urid == ui->forge.Int)
+					((LV2_Atom_Int *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Long)
+					((LV2_Atom_Long *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Float)
+					((LV2_Atom_Float *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Double)
+					((LV2_Atom_Double *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.URID)
+					((LV2_Atom_URID *)atom)->body = value;
+			}
+			_sp_ui_to_app_advance(ui, len);
+		}
+	}
+}
+
+static void
+_property_check_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+
+	int value = smart_toggle_value_get(obj);
+
+	size_t body_size = sizeof(int32_t);
+	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
+
+	for(uint32_t index=0; index<mod->num_ports; index++)
+	{
+		port_t *port = &mod->ports[index];
+
+		// only consider event ports which support patch:Message
+		if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+			|| (port->direction != PORT_DIRECTION_INPUT)
+			|| !port->patchable)
+		{
+			continue; // skip
+		}
+
+		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
+				&ui->forge, trans, mod->uid, index, body_size,
+				mod->subject, prop->tar_urid, prop->type_urid);
+			if(atom)
+				((LV2_Atom_Bool *)atom)->body = value;
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
@@ -2798,7 +3012,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 	property_t *prop = data;
 	mod_t *mod = prop->mod;
 	sp_ui_t *ui = mod->ui;
-	
+
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
 
@@ -2810,10 +3024,10 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 	{
 		const LilvNode *label = lilv_nodes_get_first(labels);
 		label_str = lilv_node_as_string(label);
-		
+
 		lilv_nodes_free(labels);
 	}
-	
+
 	Evas_Object *lay = elm_layout_add(obj);
 	if(lay)
 	{
@@ -2849,10 +3063,10 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 
 		Evas_Object *child = NULL;
 
-		if(prop->editable)
+		if(  (prop->type_urid == ui->forge.String)
+			|| (prop->type_urid == ui->forge.URI) )
 		{
-			if(  (prop->type_urid == ui->forge.String)
-				|| (prop->type_urid == ui->forge.URI) )
+			if(prop->editable)
 			{
 				child = elm_layout_add(lay);
 				if(child)
@@ -2863,18 +3077,27 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					sprintf(col, "col,%02i", mod->col);
 					elm_layout_signal_emit(child, col, "/synthpod/entry/ui");
 
-					Evas_Object *entry = elm_entry_add(child);
-					if(entry)
+					prop->std.entry = elm_entry_add(child);
+					if(prop->std.entry)
 					{
-						elm_entry_single_line_set(entry, EINA_TRUE);
-						evas_object_smart_callback_add(entry, "activated",
+						elm_entry_single_line_set(prop->std.entry, EINA_TRUE);
+						evas_object_smart_callback_add(prop->std.entry, "activated",
 							_property_string_activated, prop);
-						evas_object_show(entry);
-						elm_layout_content_set(child, "elm.swallow.content", entry);
+						evas_object_show(prop->std.entry);
+						elm_layout_content_set(child, "elm.swallow.content", prop->std.entry);
 					}
 				}
 			}
-			else if(prop->type_urid == ui->forge.Path)
+			else // !editable
+			{
+				child = elm_label_add(lay);
+				if(child)
+					evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
+			}
+		}
+		else if(prop->type_urid == ui->forge.Path)
+		{
+			if(prop->editable)
 			{
 				child = elm_fileselector_button_add(lay);
 				if(child)
@@ -2888,47 +3111,89 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					//TODO MIME type
 				}
 			}
-			else
-				fprintf(stderr, "property type %u not supported\n", prop->type_urid);
-		}
-		else // !editable
-		{
-			//TODO check for type
-			child = elm_label_add(lay);
-			evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
-
-			// send patch:Get
-			size_t len = sizeof(transfer_patch_get_t);
-			for(uint32_t index=0; index<mod->num_ports; index++)
+			else // !editable
 			{
-				port_t *port = &mod->ports[index];
-
-				// only consider event ports which support patch:Message
-				if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
-					|| (port->direction != PORT_DIRECTION_INPUT)
-					|| !port->patchable)
-				{
-					continue; // skip
-				}
-
-				transfer_patch_get_t *trans = _sp_ui_to_app_request(ui, len);
-				if(trans)
-				{
-					_sp_transfer_patch_get_fill(&ui->regs,
-						&ui->forge, trans, mod->uid, index,
-						mod->subject, prop->tar_urid);
-					_sp_ui_to_app_advance(ui, len);
-				}
+				child = elm_label_add(lay);
+				if(child)
+					evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
 			}
 		}
-			
+		else if( (prop->type_urid == ui->forge.Int)
+			|| (prop->type_urid == ui->forge.URID)
+			|| (prop->type_urid == ui->forge.Long)
+			|| (prop->type_urid == ui->forge.Float)
+			|| (prop->type_urid == ui->forge.Double) )
+		{
+			child = smart_slider_add(evas_object_evas_get(lay));
+			if(child)
+			{
+				int integer = (prop->type_urid == ui->forge.Int)
+					|| (prop->type_urid == ui->forge.URID)
+					|| (prop->type_urid == ui->forge.Long);
+				double min = integer ? 0 : 0.f; //FIXME
+				double max = integer ? 100 : 1.f; //FIXME
+				double dflt = integer ? 50 : 0.5; //FIXME
+
+				smart_slider_range_set(child, min, max, dflt);
+				smart_slider_color_set(child, mod->col);
+				smart_slider_integer_set(child, integer);
+				smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s");
+				smart_slider_disabled_set(child, !prop->editable);
+				//if(prop->unit) //FIXME
+				//	smart_slider_unit_set(child, port->unit);
+				if(prop->editable)
+					evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
+				evas_object_smart_callback_add(child, "mouse,in", _smart_mouse_in, ui);
+				evas_object_smart_callback_add(child, "mouse,out", _smart_mouse_out, ui);
+			}
+		}
+		else if(prop->type_urid == ui->forge.Bool)
+		{
+			child = smart_toggle_add(evas_object_evas_get(lay));
+			if(child)
+			{
+				smart_toggle_color_set(child, mod->col);
+				smart_toggle_disabled_set(child, !prop->editable);
+				if(prop->editable)
+					evas_object_smart_callback_add(child, "changed", _property_check_changed, prop);
+				evas_object_smart_callback_add(child, "mouse,in", _smart_mouse_in, ui);
+				evas_object_smart_callback_add(child, "mouse,out", _smart_mouse_out, ui);
+			}
+		}
+		else
+			fprintf(stderr, "property type %u not supported\n", prop->type_urid);
+
+		// send patch:Get
+		size_t len = sizeof(transfer_patch_get_t);
+		for(uint32_t index=0; index<mod->num_ports; index++)
+		{
+			port_t *port = &mod->ports[index];
+
+			// only consider event ports which support patch:Message
+			if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+				|| (port->direction != PORT_DIRECTION_INPUT)
+				|| !port->patchable)
+			{
+				continue; // skip
+			}
+
+			transfer_patch_get_t *trans = _sp_ui_to_app_request(ui, len);
+			if(trans)
+			{
+				_sp_transfer_patch_get_fill(&ui->regs,
+					&ui->forge, trans, mod->uid, index,
+					mod->subject, prop->tar_urid);
+				_sp_ui_to_app_advance(ui, len);
+			}
+		}
+
 		if(child)
 		{
 			evas_object_show(child);
 			elm_layout_content_set(lay, "elm.swallow.content", child);
 		}
-		
-		prop->std.widget = child;
+
+		prop->std.widget = child; //FIXME reset to NULL + std.entry
 	} // lay
 
 	return lay;
@@ -2941,7 +3206,7 @@ _group_content_get(void *data, Evas_Object *obj, const char *part)
 	group_t *group = data;
 	if(!group || !ui)
 		return NULL;
-	
+
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
 
@@ -3088,54 +3353,6 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 		ui->regs.port.float_protocol.urid, &val);
 }
 
-static char *
-_fmt_int(double val)
-{
-	char str [64];
-	sprintf(str, "%.0lf", floor(val));
-
-	return strdup(str);	
-}
-
-static char *
-_fmt_flt(double val)
-{
-	char str [64];
-	sprintf(str, "%.4lf", val);
-
-	return strdup(str);	
-}
-
-static void
-_fmt_free(char *str)
-{
-	if(str)
-		free(str);
-}
-
-static void
-_smart_mouse_in(void *data, Evas_Object *obj, void *event_info)
-{
-	sp_ui_t *ui = data;
-
-	if(!ui->modlist)
-		return;
-
-	elm_scroller_movement_block_set(ui->modlist,
-		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
-}
-
-static void
-_smart_mouse_out(void *data, Evas_Object *obj, void *event_info)
-{
-	sp_ui_t *ui = data;
-
-	if(!ui->modlist)
-		return;
-
-	elm_scroller_movement_block_set(ui->modlist, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
-}
-
 static void
 _modlist_std_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
@@ -3170,10 +3387,10 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	sp_ui_t *ui = mod->ui;
-	
+
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
-	
+
 	Evas_Object *lay = elm_layout_add(obj);
 	if(lay)
 	{
@@ -3351,7 +3568,7 @@ _modlist_psets_content_get(void *data, Evas_Object *obj, const char *part)
 
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
-	
+
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
 
@@ -3403,7 +3620,7 @@ static void
 _pset_changed(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
-	
+
 	const char *chunk = elm_entry_entry_get(obj);
 	char *utf8 = elm_entry_markup_to_utf8(chunk);
 
@@ -3496,7 +3713,7 @@ _modlist_pset_content_get(void *data, Evas_Object *obj, const char *part)
 				elm_box_pack_start(hbox, but);
 			}
 		}
-		
+
 		return hbox;
 	}
 
@@ -3531,7 +3748,7 @@ _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	const LilvPlugin *plug = mod->plug;
 	if(!plug)
 		return NULL;
-	
+
 	if(!strcmp(part, "elm.text"))
 	{
 		LilvNode *name_node = lilv_plugin_get_name(plug);
@@ -3599,7 +3816,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 
 		return container;
 	}
-	
+
 	return NULL;
 }
 
@@ -3631,7 +3848,7 @@ _modgrid_del(void *data, Evas_Object *obj)
 	{
 		mod->eo.descriptor->cleanup(mod->eo.handle);
 	}
-	
+
 	// clear parameters
 	mod->eo.handle = NULL;
 	mod->eo.widget = NULL;
@@ -3793,7 +4010,7 @@ _patchgrid_content_get(void *data, Evas_Object *obj, const char *part)
 
 		return *matrix;
 	}
-	
+
 	return NULL;
 }
 
@@ -3838,7 +4055,7 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 					ELM_GENLIST_ITEM_TREE, NULL, NULL);
 			}
 		}
-		
+
 		lilv_node_free(name_node);
 	}
 }
@@ -3904,7 +4121,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->win = win;
 	ui->driver = driver;
 	ui->data = data;
-	
+
 	lv2_atom_forge_init(&ui->forge, ui->driver->map);
 
 	if(world)
@@ -3948,7 +4165,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		ui->patchitc->func.state_get = NULL;
 		ui->patchitc->func.del = NULL;
 	}
-	
+
 	ui->propitc = elm_gengrid_item_class_new();
 	if(ui->propitc)
 	{
@@ -3958,7 +4175,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		ui->propitc->func.state_get = NULL;
 		ui->propitc->func.del = NULL;
 	}
-	
+
 	ui->grpitc = elm_gengrid_item_class_new();
 	if(ui->grpitc)
 	{
@@ -3968,7 +4185,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		ui->grpitc->func.state_get = NULL;
 		ui->grpitc->func.del = _group_del;
 	}
-		
+
 	ui->moditc = elm_genlist_item_class_new();
 	if(ui->moditc)
 	{
@@ -4120,7 +4337,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					}
 				}
 			}
-		
+
 			ui->leftpane = elm_panes_add(ui->mainpane);
 			if(ui->leftpane)
 			{
@@ -4151,7 +4368,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 						evas_object_size_hint_align_set(ui->plugbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
 						evas_object_show(ui->plugbox);
 						elm_object_part_content_set(ui->plugpane, "left", ui->plugbox);
-		
+
 						ui->plugentry = elm_entry_add(ui->plugbox);
 						if(ui->plugentry)
 						{
@@ -4290,7 +4507,7 @@ _sp_ui_port_get(sp_ui_t *ui, u_id_t uid, uint32_t index)
 	mod_t *mod = _sp_ui_mod_get(ui, uid);
 	if(mod && (index < mod->num_ports) )
 		return &mod->ports[index];
-	
+
 	return NULL;
 }
 
@@ -4325,7 +4542,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 			mod->std.itm = elm_genlist_item_insert_before(ui->modlist, ui->moditc, mod,
 				NULL, ui->sink_itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
 		}
-	
+
 		if(mod->eo.ui) // has EoUI
 		{
 			mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
@@ -4357,7 +4574,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
 		elm_object_item_del(mod->std.itm);
 		mod->std.itm = NULL;
-	
+
 		_patches_update(ui);
 	}
 	else if(protocol == ui->regs.synthpod.module_preset_save.urid)
@@ -4506,7 +4723,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 
 		if(ui->driver->opened)
 			ui->driver->opened(ui->data, trans->status.body);
-	
+
 		if(ui->popup && evas_object_visible_get(ui->popup))
 		{
 			elm_popup_timeout_set(ui->popup, 1.f);
@@ -4549,7 +4766,7 @@ sp_ui_refresh(sp_ui_t *ui)
 	ui->dirty = 0; // enable ui -> app communication
 	*/
 
-	_modlist_refresh(ui);	
+	_modlist_refresh(ui);
 }
 
 void
@@ -4630,7 +4847,7 @@ sp_ui_free(sp_ui_t *ui)
 		elm_gengrid_item_class_free(ui->propitc);
 	if(ui->grpitc)
 		elm_gengrid_item_class_free(ui->grpitc);
-	
+
 	sp_regs_deinit(&ui->regs);
 
 	if(!ui->embedded)
@@ -4662,7 +4879,7 @@ sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path)
 {
 	if(!ui || !bundle_path)
 		return;
-	
+
 	// signal to app
 	size_t size = sizeof(transmit_bundle_save_t)
 		+ lv2_atom_pad_size(strlen(bundle_path) + 1);

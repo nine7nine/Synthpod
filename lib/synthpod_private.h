@@ -629,8 +629,7 @@ struct _transfer_patch_set_t {
 	LV2_URID subj_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
 	LV2_URID prop_val _ATOM_ALIGNED;
-	LV2_Atom_Property_Body str _ATOM_ALIGNED;
-	char str_val [0] _ATOM_ALIGNED;
+	LV2_Atom_Property_Body val _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transfer_patch_get_t {
@@ -1002,13 +1001,13 @@ _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *tra
 	return trans->atom;
 }
 
-static inline char *
+static inline LV2_Atom *
 _sp_transfer_patch_set_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transfer_patch_set_t *trans, u_id_t module_uid, uint32_t port_index,
-	uint32_t str_size, LV2_URID subject, LV2_URID property, LV2_URID type)
+	uint32_t body_size, LV2_URID subject, LV2_URID property, LV2_URID type)
 {
 	uint32_t trans_size = sizeof(transfer_patch_set_t)
-		+ lv2_atom_pad_size(str_size);
+		+ lv2_atom_pad_size(body_size);
 	uint32_t obj_size = trans_size
 		- offsetof(transfer_patch_set_t, obj.body);
 
@@ -1034,12 +1033,13 @@ _sp_transfer_patch_set_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	trans->prop_val = property;
 
-	trans->str.key = regs->patch.value.urid;
-	trans->str.context = 0;
-	trans->str.value.size = str_size;
-	trans->str.value.type = type;
+	trans->val.key = regs->patch.value.urid;
+	trans->val.context = 0;
+	trans->val.value.size = body_size;
+	trans->val.value.type = type;
 
-	return trans->str_val;
+	//return LV2_ATOM_BODY(&trans->val.value);
+	return &trans->val.value;
 }
 
 static inline void
