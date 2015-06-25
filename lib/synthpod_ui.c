@@ -28,7 +28,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 14
+#define NUM_UI_FEATURES 15
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -1509,10 +1509,13 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->feature_list[nfeatures].URI = LV2_UI__portSubscribe;
 	mod->feature_list[nfeatures++].data = &mod->port_subscribe;
 
-	mod->feature_list[nfeatures].URI = LV2_UI__idleInterface; // signal support for idleInterface
+	mod->feature_list[nfeatures].URI = LV2_UI__idleInterface;
 	mod->feature_list[nfeatures++].data = NULL;
 
 	mod->feature_list[nfeatures].URI = LV2_EXTERNAL_UI__Host;
+	mod->feature_list[nfeatures++].data = &mod->kx.host;
+
+	mod->feature_list[nfeatures].URI = LV2_EXTERNAL_UI_DEPRECATED_URI;
 	mod->feature_list[nfeatures++].data = &mod->kx.host;
 
 	mod->feature_list[nfeatures].URI = LV2_UI__resize;
@@ -1533,7 +1536,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		mod->feature_list[nfeatures++].data = inst;
 	}
 
-	//FIXME do we want to support this? its marked as DEPRECATED in LV2 spec
+	//FIXME do we want to support this? it's marked as DEPRECATED in LV2 spec
 	{
 		mod->feature_list[nfeatures].URI = LV2_UI_PREFIX"makeSONameResident";
 		mod->feature_list[nfeatures++].data = NULL;
@@ -1803,12 +1806,14 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			// test for kxstudio kx_ui
 			{
 				LilvNode *kx_ui = lilv_new_uri(ui->world, LV2_EXTERNAL_UI__Widget);
-				if(lilv_ui_is_a(lui, kx_ui))
+				LilvNode *ext_ui = lilv_new_uri(ui->world, LV2_EXTERNAL_UI_DEPRECATED_URI);
+				if( lilv_ui_is_a(lui, kx_ui) || lilv_ui_is_a(lui, ext_ui) )
 				{
 					//printf("has kx-ui\n");
 					mod->kx.ui = lui;
 				}
 				lilv_node_free(kx_ui);
+				lilv_node_free(ext_ui);
 			}
 
 			// test for X11UI
