@@ -4078,20 +4078,6 @@ _modlist_refresh(sp_ui_t *ui)
 }
 
 static void
-_background_loading(void *data)
-{
-	sp_ui_t *ui = data;
-
-	// walk plugin directories
-	ui->plugs = lilv_world_get_all_plugins(ui->world);
-
-	// fill pluglist
-	_pluglist_populate(ui, ""); // populate with everything
-
-	// request mod list
-}
-
-static void
 _plugentry_changed(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
@@ -4477,7 +4463,11 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	// initialzie registry
 	sp_regs_init(&ui->regs, ui->world, ui->driver->map);
 
-	ecore_job_add(_background_loading, ui);
+	// walk plugin directories
+	ui->plugs = lilv_world_get_all_plugins(ui->world);
+
+	// fill pluglist
+	_pluglist_populate(ui, ""); // populate with everything
 
 	return ui;
 }
