@@ -4547,7 +4547,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		const transmit_module_add_t *trans = (const transmit_module_add_t *)atom;
 
 		mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body,
-			(void *)trans->inst.body, (data_access_t)trans->data.body);
+			(void *)(uintptr_t)trans->inst.body, (data_access_t)(uintptr_t)trans->data.body);
 		if(!mod)
 			return; //TODO report
 
