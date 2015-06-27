@@ -153,6 +153,8 @@ struct _reg_t {
 		reg_item_t optional_feature;
 		reg_item_t required_feature;
 		reg_item_t name;
+		reg_item_t minor_version;
+		reg_item_t micro_version;
 	} core;
 
 	struct {
@@ -294,6 +296,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.optional_feature, world, map, LV2_CORE__optionalFeature);
 	_register(&regs->core.required_feature, world, map, LV2_CORE__requiredFeature);
 	_register(&regs->core.name, world, map, LV2_CORE__name);
+	_register(&regs->core.minor_version, world, map, LV2_CORE__minorVersion);
+	_register(&regs->core.micro_version, world, map, LV2_CORE__microVersion);
 
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
 	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
@@ -406,6 +410,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.optional_feature);
 	_unregister(&regs->core.required_feature);
 	_unregister(&regs->core.name);
+	_unregister(&regs->core.minor_version);
+	_unregister(&regs->core.micro_version);
 
 	_unregister(&regs->bufsz.max_block_length);
 	_unregister(&regs->bufsz.min_block_length);

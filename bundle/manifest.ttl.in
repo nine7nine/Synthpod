@@ -21,11 +21,15 @@
 # Synthpod Source
 synthpod:source
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod_bundle@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 
 # Synthpod Sink
 synthpod:sink
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod_bundle@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .

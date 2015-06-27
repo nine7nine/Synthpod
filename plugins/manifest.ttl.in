@@ -35,17 +35,23 @@ kx:Host
 # RtMidi
 rtmidi:out
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <rtmidi@LIB_EXT@> ;
 	rdfs:seeAlso <rtmidi.ttl> .
 
 rtmidi:in
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <rtmidi@LIB_EXT@> ;
 	rdfs:seeAlso <rtmidi.ttl> .
 
 # Synthpod Stereo
 synthpod:stereo
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	@EO_UI_WRAP@ui:ui synthpod:common_eo ;
 	@UI_UI_WRAP@ui:ui synthpod:common_ui ;
@@ -73,6 +79,8 @@ synthpod:common_x11
 # Synthpod Keyboard
 synthpod:keyboard
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	@EO_UI_WRAP@ui:ui synthpod:keyboard_eo ;
 	@UI_UI_WRAP@ui:ui synthpod:keyboard_ui ;
@@ -100,47 +108,63 @@ synthpod:keyboard_x11
 # CV2Control
 synthpod:cv2control
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Control2CV
 synthpod:control2cv
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # CV2Atom
 synthpod:cv2atom
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Atom2CV
 synthpod:atom2cv
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # AudioXFadeMono
 synthpod:audioxfademono
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # AudioXFadeStereo
 synthpod:audioxfadestereo
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Atom2Control
 synthpod:atom2control
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Control2Atom
 synthpod:control2atom
 	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@LIB_EXT@> ;
 	rdfs:seeAlso <synthpod.ttl> .

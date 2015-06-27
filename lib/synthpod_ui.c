@@ -42,16 +42,17 @@ typedef enum _group_type_t group_type_t;
 typedef struct _plug_info_t plug_info_t;
 
 enum _plug_info_type_t {
-	PLUG_INFO_TYPE_NAME								= 0,
-	PLUG_INFO_TYPE_URI								= 1,
-	PLUG_INFO_TYPE_LICENSE						= 2,
-	PLUG_INFO_TYPE_PROJECT						= 3,
-	PLUG_INFO_TYPE_BUNDLE_URI					= 4,
-	PLUG_INFO_TYPE_AUTHOR_NAME				= 5,
-	PLUG_INFO_TYPE_AUTHOR_EMAIL				= 6,
-	PLUG_INFO_TYPE_AUTHOR_HOMEPAGE		= 7	,
+	PLUG_INFO_TYPE_NAME = 0,
+	PLUG_INFO_TYPE_URI,
+	PLUG_INFO_TYPE_VERSION,
+	PLUG_INFO_TYPE_LICENSE,
+	PLUG_INFO_TYPE_PROJECT,
+	PLUG_INFO_TYPE_BUNDLE_URI,
+	PLUG_INFO_TYPE_AUTHOR_NAME,
+	PLUG_INFO_TYPE_AUTHOR_EMAIL,
+	PLUG_INFO_TYPE_AUTHOR_HOMEPAGE,
 
-	PLUG_INFO_TYPE_MAX								= 8
+	PLUG_INFO_TYPE_MAX
 };
 
 enum _group_type_t {
@@ -1951,6 +1952,32 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			asprintf(&str, INFO_PRE"URI     "INFO_POST" %s", node
 				? lilv_node_as_uri(node)
 				: "-");
+
+			return str;
+		}
+		case PLUG_INFO_TYPE_VERSION:
+		{
+			LilvNodes *nodes = lilv_plugin_get_value(info->plug,
+				ui->regs.core.minor_version.node);
+			LilvNode *node = nodes
+				? lilv_nodes_get_first(nodes) //FIXME delete?
+				: NULL;
+			LilvNodes *nodes2 = lilv_plugin_get_value(info->plug,
+				ui->regs.core.micro_version.node);
+			LilvNode *node2 = nodes2
+				? lilv_nodes_get_first(nodes2) //FIXME delete?
+				: NULL;
+
+			char *str = NULL;
+			if(node && node2)
+				asprintf(&str, INFO_PRE"Version "INFO_POST" 0.%i.%i",
+					lilv_node_as_int(node), lilv_node_as_int(node2));
+			else
+				asprintf(&str, INFO_PRE"Version "INFO_POST" -");
+			if(nodes)
+				lilv_nodes_free(nodes);
+			if(nodes2)
+				lilv_nodes_free(nodes2);
 
 			return str;
 		}
