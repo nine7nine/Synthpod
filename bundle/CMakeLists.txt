@@ -1,4 +1,5 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/system_port.lv2)
 
 if(WIN32)
 	set(LIB_EXT ".dll")
@@ -12,7 +13,15 @@ endif()
 add_library(synthpod_bundle.lv2 MODULE
 	synthpod_bundle.c
 	synthpod_sink.c
-	synthpod_source.c)
+	synthpod_source.c
+	synthpod_osc_sink.c
+	synthpod_osc_source.c
+	synthpod_cv_sink.c
+	synthpod_cv_source.c
+	synthpod_audio_sink.c
+	synthpod_audio_source.c
+	synthpod_midi_sink.c
+	synthpod_midi_source.c)
 target_link_libraries(synthpod_bundle.lv2 synthpod.lib)
 set_target_properties(synthpod_bundle.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_bundle")
 install(TARGETS synthpod_bundle.lv2 DESTINATION ${SYNTHPOD_BUNDLE_DIR})

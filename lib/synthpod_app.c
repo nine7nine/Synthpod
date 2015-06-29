@@ -34,7 +34,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 8
+#define NUM_FEATURES 9
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -96,6 +96,11 @@ struct _mod_t {
 		Zero_Worker_Schedule schedule;
 	} zero;
 
+	// system_port
+	struct {
+		const System_Port_Interface *iface;	
+	} sys;
+
 	// log
 	LV2_Log_Log log;
 
@@ -151,6 +156,12 @@ struct _port_t {
 	float min;
 	float dflt;
 	float max;
+
+	// system_port iface
+	struct {
+		System_Port_Type type;
+		void *data;
+	} sys;
 };
 
 struct _sp_app_t {
@@ -177,10 +188,8 @@ struct _sp_app_t {
 	uint32_t num_mods;
 	mod_t *mods [MAX_MODS];
 
-	struct {
-		mod_t *source;
-		mod_t *sink;
-	} system;
+	sp_app_system_source_t system_sources [128]; //FIXME, how many?
+	sp_app_system_sink_t system_sinks [128]; //FIXME, how many?
 
 	u_id_t uid;
 	
@@ -292,33 +301,82 @@ sp_app_activate(sp_app_t *app)
 }
 
 // rt
-void *
-sp_app_get_system_source(sp_app_t *app, uint32_t index)
+const sp_app_system_source_t *
+sp_app_get_system_sources(sp_app_t *app)
 {
-	if(!app->system.source)
-		return NULL;
+	int num_system_sources = 0;
 
-	// get last mod aka system source
-	mod_t *mod = app->system.source;
-	port_t *port = &mod->ports[index];
+	for(uint32_t m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
 
-	return port->buf;
+		if(!mod->sys.iface) // has system ports?
+			continue; // skip
+
+		for(uint32_t p=0; p<mod->num_ports; p++)
+		{
+			port_t *port = &mod->ports[p];
+
+			if(port->sys.type == SYSTEM_PORT_NONE)
+				continue; // skip
+
+			if(port->direction == PORT_DIRECTION_OUTPUT)
+			{
+				app->system_sources[num_system_sources].type = port->sys.type;
+				app->system_sources[num_system_sources].buf = port->buf;
+				app->system_sources[num_system_sources].sys_port = port->sys.data;
+				num_system_sources += 1;
+			}
+		}
+	}
+
+	// sentinel
+	app->system_sources[num_system_sources].type = SYSTEM_PORT_NONE;
+	app->system_sources[num_system_sources].buf = NULL;
+	app->system_sources[num_system_sources].sys_port = NULL;
+
+	return app->system_sources;
 }
 
 // rt
-const void *
-sp_app_get_system_sink(sp_app_t *app, uint32_t index)
+const sp_app_system_sink_t *
+sp_app_get_system_sinks(sp_app_t *app)
 {
-	if(!app->system.sink)
-		return NULL;
+	int num_system_sinks = 0;
 
-	// get last mod aka system sink
-	mod_t *mod = app->system.sink;
-	port_t *port = &mod->ports[index];
+	for(uint32_t m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
 
-	return (port->num_sources + port->num_feedbacks) == 1
-		? port->sources[0]->buf
-		: port->buf;
+		if(!mod->sys.iface) // has system ports?
+			continue;
+
+		for(uint32_t p=0; p<mod->num_ports; p++)
+		{
+			port_t *port = &mod->ports[p];
+
+			if(port->sys.type == SYSTEM_PORT_NONE)
+				continue; // skip
+
+			if(port->direction == PORT_DIRECTION_INPUT)
+			{
+				app->system_sinks[num_system_sinks].type = port->sys.type;
+				app->system_sinks[num_system_sinks].buf =
+					(port->num_sources + port->num_feedbacks) == 1
+						? port->sources[0]->buf
+						: port->buf;
+				app->system_sinks[num_system_sinks].sys_port = port->sys.data;
+				num_system_sinks += 1;
+			}
+		}
+	}
+
+	// sentinel
+	app->system_sinks[num_system_sinks].type = SYSTEM_PORT_NONE;
+	app->system_sinks[num_system_sinks].buf = NULL;
+	app->system_sinks[num_system_sinks].sys_port = NULL;
+
+	return app->system_sinks;
 }
 
 // rt
@@ -378,7 +436,7 @@ _zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
 
 // non-rt worker-thread
 static inline mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri)
+_sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 {
 	LilvNode *uri_node = lilv_new_uri(app->world, uri);
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(app->plugs, uri_node);
@@ -482,6 +540,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	mod->feature_list[nfeatures].URI = ZERO_WORKER__schedule;
 	mod->feature_list[nfeatures++].data = &mod->zero.schedule;
 
+	if(app->driver->system_port_add && app->driver->system_port_del)
+	{
+		mod->feature_list[nfeatures].URI = SYSTEM_PORT__dynamicPorts;
+		mod->feature_list[nfeatures++].data = NULL;
+	}
+
 	assert(nfeatures <= NUM_FEATURES);
 
 	for(int i=0; i<nfeatures; i++)
@@ -524,7 +588,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 	}
 		
 	mod->app = app;
-	mod->uid = app->uid++;
+	mod->uid = uid != 0 ? uid : app->uid++;
 	mod->plug = plug;
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
@@ -535,6 +599,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		ZERO_WORKER__interface);
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_OPTIONS__interface); //TODO actually use this for something?
+	mod->sys.iface = lilv_instance_get_extension_data(mod->inst,
+		SYSTEM_PORT__interface);
 	lilv_instance_activate(mod->inst);
 
 	int system_source = 0;
@@ -559,6 +625,32 @@ _sp_app_mod_add(sp_app_t *app, const char *uri)
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
 			? PORT_DIRECTION_INPUT
 			: PORT_DIRECTION_OUTPUT;
+
+		// register system ports
+		if(mod->sys.iface)
+		{
+			tar->sys.type = mod->sys.iface->query(mod->inst, i);
+
+			if(app->driver->system_port_add)
+			{
+				//FIXME check lilv returns
+				char *short_name = NULL;
+				char *pretty_name = NULL;
+				asprintf(&short_name, "plugin_%u_%s",
+					mod->uid, lilv_node_as_string(lilv_port_get_symbol(plug, port)));
+				asprintf(&pretty_name, "Plugin %u - %s",
+					mod->uid, lilv_node_as_string(lilv_port_get_name(plug, port)));
+				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
+					short_name, pretty_name, tar->direction == PORT_DIRECTION_OUTPUT);
+				free(short_name);
+				free(pretty_name);
+			}
+		}
+		else
+		{
+			tar->sys.type = SYSTEM_PORT_NONE;
+			tar->sys.data = NULL;
+		}
 
 		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
@@ -710,6 +802,15 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 		munlock(mod->buf, mod->size);
 #endif
 		free(mod->buf);
+	}
+
+	// unregister system ports
+	for(uint32_t i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		if(port->sys.data && app->driver->system_port_del)
+			app->driver->system_port_del(app->data, port->sys.data);
 	}
 
 	// free ports
@@ -873,10 +974,9 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	// inject source mod
 	uri_str = SYNTHPOD_PREFIX"source";
-	mod = _sp_app_mod_add(app, uri_str);
+	mod = _sp_app_mod_add(app, uri_str, 0);
 	if(mod)
 	{
-		app->system.source = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 	}
@@ -885,10 +985,9 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	// inject sink mod
 	uri_str = SYNTHPOD_PREFIX"sink";
-	mod = _sp_app_mod_add(app, uri_str);
+	mod = _sp_app_mod_add(app, uri_str, 0);
 	if(mod)
 	{
-		app->system.sink = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 	}
@@ -1410,15 +1509,17 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 		{
 			case JOB_TYPE_MODULE_ADD:
 			{
+				mod_t *mod = job->mod;
+
 				if(app->num_mods >= MAX_MODS)
 					break; //TODO delete mod
 
 				// inject module into module graph
 				app->mods[app->num_mods] = app->mods[app->num_mods-1]; // system sink
-				app->mods[app->num_mods-1] = job->mod;
+				app->mods[app->num_mods-1] = mod;
 				app->num_mods += 1;
 			
-				const LilvNode *uri_node = lilv_plugin_get_uri(job->mod->plug);
+				const LilvNode *uri_node = lilv_plugin_get_uri(mod->plug);
 				const char *uri_str = lilv_node_as_string(uri_node);
 				
 				//signal to UI
@@ -1427,12 +1528,12 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
-					const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(job->mod->inst);
+					const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
 					data_access_t data_access = descriptor
 						? descriptor->extension_data
 						: NULL;
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-						job->mod->uid, uri_str, job->mod->handle, data_access);
+						mod->uid, uri_str, mod->handle, data_access);
 					_sp_app_to_ui_advance(app, size);
 				}
 
@@ -1882,7 +1983,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		{
 			case JOB_TYPE_MODULE_ADD:
 			{
-				mod_t *mod = _sp_app_mod_add(app, job->uri);
+				mod_t *mod = _sp_app_mod_add(app, job->uri, 0);
 				if(!mod)
 					break; //TODO report
 
@@ -2183,7 +2284,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
 				&& (port->direction == PORT_DIRECTION_OUTPUT)
-				&& (mod != app->system.source) ) // don't overwirte source buffer events
+				&& (!mod->sys.iface) ) // don't overwrite source buffer events
 			{
 				LV2_Atom_Sequence *seq = port->buf;
 				seq->atom.type = app->regs.port.sequence.urid;
@@ -2678,8 +2779,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	int num_mods = app->num_mods;
 
 	app->num_mods = 0;
-	app->system.source = NULL; // if host should call port_connect()
-	app->system.sink = NULL; // if host should call port_connect()
 
 	for(int m=0; m<num_mods; m++)
 		_sp_app_mod_del(app, app->mods[m]);
@@ -2697,14 +2796,9 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		const char *mod_uri_str = mod_uri_json->valuestring;
 		u_id_t mod_uid = mod_uid_json->valueint;
 
-		mod_t *mod = _sp_app_mod_add(app, mod_uri_str);
+		mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_uid);
 		if(!mod)
 			continue;
-
-		if(mod_uid == 1)
-			app->system.source = mod;
-		else if(mod_uid == 2)
-			app->system.sink = mod;
 
 		// inject module into module graph
 		app->mods[app->num_mods] = mod;
@@ -2714,10 +2808,9 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		mod->selected = mod_selected_json
 			? mod_selected_json->type == cJSON_True
 			: 0;
-		mod->uid = mod_uid;
 
-		if(mod->uid > app->uid)
-			app->uid = mod->uid;
+		if(mod->uid > app->uid - 1)
+			app->uid = mod->uid + 1;
 
 		char uid [64];
 		sprintf(uid, "%u/state.ttl", mod_uid);

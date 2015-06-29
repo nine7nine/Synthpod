@@ -43,6 +43,9 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include <jack/transport.h>
+#if defined(JACK_HAS_METADATA_API)
+#	include <jack/metadata.h>
+#endif
 
 #include <Eina.h>
 
@@ -104,10 +107,6 @@ struct _prog_t {
 	LV2_URID time_speed;
 
 	jack_client_t *client;
-	jack_port_t *midi_in;
-	jack_port_t *audio_in[2];
-	jack_port_t *midi_out;
-	jack_port_t *audio_out[2];
 	
 	volatile int kill;
 
@@ -128,18 +127,6 @@ static int
 _jack_init(prog_t *handle, const char *id)
 {
 	handle->client = jack_client_open(id, JackNullOption, NULL);
-	handle->midi_in = jack_port_register(handle->client, "midi_in",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	handle->audio_in[0] = jack_port_register(handle->client, "audio_in_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle->audio_in[1] = jack_port_register(handle->client, "audio_in_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	handle->midi_out = jack_port_register(handle->client, "midi_out",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	handle->audio_out[0] = jack_port_register(handle->client, "audio_out_1",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	handle->audio_out[1] = jack_port_register(handle->client, "audio_out_2",
-		JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
 	return 0; //TODO
 }
@@ -149,21 +136,9 @@ _jack_deinit(prog_t *handle)
 {
 	if(handle->client)
 	{
-		if(handle->midi_in)
-			jack_port_unregister(handle->client, handle->midi_in);
-		if(handle->audio_in[0])
-			jack_port_unregister(handle->client, handle->audio_in[0]);
-		if(handle->audio_in[1])
-			jack_port_unregister(handle->client, handle->audio_in[1]);
-		if(handle->midi_out)
-			jack_port_unregister(handle->client, handle->midi_out);
-		if(handle->audio_out[0])
-			jack_port_unregister(handle->client, handle->audio_out[0]);
-		if(handle->audio_out[1])
-			jack_port_unregister(handle->client, handle->audio_out[1]);
-
 		jack_deactivate(handle->client);
 		jack_client_close(handle->client);
+		handle->client = NULL;
 	}
 }
 
@@ -290,71 +265,116 @@ _process(jack_nframes_t nsamples, void *data)
 		|| (pos.frame != handle->trans.frame)
 		|| (pos.beats_per_minute != handle->trans.bpm);
 
-	// get buffers
-	void *midi_in_buf = jack_port_get_buffer(handle->midi_in, nsamples);
-	const float *audio_in_buf[2] = {
-		jack_port_get_buffer(handle->audio_in[0], nsamples),
-		jack_port_get_buffer(handle->audio_in[1], nsamples)
-	};
-	void *midi_out_buf = jack_port_get_buffer(handle->midi_out, nsamples);
-	float *audio_out_buf[2] = {
-		jack_port_get_buffer(handle->audio_out[0], nsamples),
-		jack_port_get_buffer(handle->audio_out[1], nsamples)
-	};
-
 	const size_t sample_buf_size = sizeof(float) * nsamples;
+	const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
+	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
 	if(sp_app_paused(app))
 	{
 		// clear output buffers
-		memset(audio_out_buf[0], 0x0, sample_buf_size);
-		memset(audio_out_buf[1], 0x0, sample_buf_size);
-		jack_midi_clear_buffer(midi_out_buf);
+		for(const sp_app_system_sink_t *sink=sinks;
+			sink->type != SYSTEM_PORT_NONE;
+			sink++)
+		{
+			switch(sink->type)
+			{
+				case SYSTEM_PORT_NONE:
+				case SYSTEM_PORT_CONTROL:
+					break;
+
+				case SYSTEM_PORT_AUDIO:
+				case SYSTEM_PORT_CV:
+				{
+					void *out_buf = jack_port_get_buffer(sink->sys_port, nsamples);
+					memset(out_buf, 0x0, sample_buf_size);
+					break;
+				}
+				case SYSTEM_PORT_MIDI:
+				case SYSTEM_PORT_OSC:
+				{
+					void *out_buf = jack_port_get_buffer(sink->sys_port, nsamples);
+					jack_midi_clear_buffer(out_buf);
+					break;
+				}
+			}
+		}
 
 		return 0;
 	}
 
-	LV2_Atom_Sequence *seq_in = sp_app_get_system_source(app, 0);
-	float *audio_in [2] = {
-		[0] = sp_app_get_system_source(app, 1),
-		[1] = sp_app_get_system_source(app, 2)
-	};
-	assert(seq_in && audio_in[0] && audio_in[1]);
-
-	// fill audio input buffers
-	memcpy(audio_in[0], audio_in_buf[0], sample_buf_size);
-	memcpy(audio_in[1], audio_in_buf[1], sample_buf_size);
-
-	const LV2_Atom_Sequence *seq_out = sp_app_get_system_sink(app, 0);
-	const float *audio_out [2] = {
-		[0] = sp_app_get_system_sink(app, 1),
-		[1] = sp_app_get_system_sink(app, 2)
-	};
-	assert(seq_out && audio_out[0] && audio_out[1]);
-
-	if(seq_in)
+	// fill input buffers
+	for(const sp_app_system_source_t *source=sources; source->sys_port; source++)
 	{
-		LV2_Atom_Forge *forge = &handle->forge;
-		LV2_Atom_Forge_Frame frame;
-		lv2_atom_forge_set_buffer(forge, (void *)seq_in, SEQ_SIZE);
-		lv2_atom_forge_sequence_head(forge, &frame, 0);
-
-		if(trans_changed)
-			_trans_event(handle, forge, rolling, &pos);
-
-		int n = jack_midi_get_event_count(midi_in_buf);	
-		for(int i=0; i<n; i++)
+		switch(source->type)
 		{
-			jack_midi_event_t mev;
-			jack_midi_event_get(&mev, midi_in_buf, i);
+			case SYSTEM_PORT_NONE:
+			case SYSTEM_PORT_CONTROL:
+				break;
 
-			//add jack midi event to seq_in
-			lv2_atom_forge_frame_time(forge, mev.time);
-			lv2_atom_forge_atom(forge, mev.size, handle->midi_MidiEvent);
-			lv2_atom_forge_raw(forge, mev.buffer, mev.size);
-			lv2_atom_forge_pad(forge, mev.size);
+			case SYSTEM_PORT_AUDIO:
+			case SYSTEM_PORT_CV:
+			{
+				const void *in_buf = jack_port_get_buffer(source->sys_port, nsamples);
+				memcpy(source->buf, in_buf, sample_buf_size);
+				break;
+			}
+			case SYSTEM_PORT_MIDI:
+			{
+				void *in_buf = jack_port_get_buffer(source->sys_port, nsamples);
+				void *seq_in = source->buf;
+
+				LV2_Atom_Forge *forge = &handle->forge;
+				LV2_Atom_Forge_Frame frame;
+				lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
+				lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+				if(trans_changed)
+					_trans_event(handle, forge, rolling, &pos);
+
+				int n = jack_midi_get_event_count(in_buf);
+				for(int i=0; i<n; i++)
+				{
+					jack_midi_event_t mev;
+					jack_midi_event_get(&mev, in_buf, i);
+
+					//add jack midi event to in_buf
+					lv2_atom_forge_frame_time(forge, mev.time);
+					lv2_atom_forge_atom(forge, mev.size, handle->midi_MidiEvent);
+					lv2_atom_forge_raw(forge, mev.buffer, mev.size);
+					lv2_atom_forge_pad(forge, mev.size);
+				}
+				lv2_atom_forge_pop(forge, &frame);
+
+				break;
+			}
+
+			case SYSTEM_PORT_OSC:
+			{
+				void *in_buf = jack_port_get_buffer(source->sys_port, nsamples);
+				void *seq_in = source->buf;
+
+				LV2_Atom_Forge *forge = &handle->forge;
+				LV2_Atom_Forge_Frame frame;
+				lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
+				lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+				if(trans_changed)
+					_trans_event(handle, forge, rolling, &pos);
+
+				int n = jack_midi_get_event_count(in_buf);	
+				for(int i=0; i<n; i++)
+				{
+					jack_midi_event_t mev;
+					jack_midi_event_get(&mev, (void *)in_buf, i);
+
+					//add jack osc event to in_buf
+					//FIXME
+				}
+				lv2_atom_forge_pop(forge, &frame);
+
+				break;
+			}
 		}
-		lv2_atom_forge_pop(forge, &frame);
 	}
 
 	// update transport state
@@ -394,20 +414,64 @@ _process(jack_nframes_t nsamples, void *data)
 	// run synthpod app post
 	sp_app_run_post(handle->app, nsamples);
 
-	// fill audio output buffers
-	memcpy(audio_out_buf[0], audio_out[0], sample_buf_size);
-	memcpy(audio_out_buf[1], audio_out[1], sample_buf_size);
-
-	// fill midi output buffer
-	jack_midi_clear_buffer(midi_out_buf);
-	if(seq_out)
+	// fill output buffers
+	for(const sp_app_system_sink_t *sink=sinks;
+		sink->type != SYSTEM_PORT_NONE;
+		sink++)
 	{
-		LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
+		switch(sink->type)
 		{
-			const LV2_Atom *atom = &ev->body;
+			case SYSTEM_PORT_NONE:
+			case SYSTEM_PORT_CONTROL:
+				break;
 
-			jack_midi_event_write(midi_out_buf, ev->time.frames,
-				LV2_ATOM_BODY_CONST(atom), atom->size);
+			case SYSTEM_PORT_AUDIO:
+			case SYSTEM_PORT_CV:
+			{
+				void *out_buf = jack_port_get_buffer(sink->sys_port, nsamples);
+				memcpy(out_buf, sink->buf, sample_buf_size);
+				break;
+			}
+			case SYSTEM_PORT_MIDI:
+			{
+				void *out_buf = jack_port_get_buffer(sink->sys_port, nsamples);
+				const LV2_Atom_Sequence *seq_out = sink->buf;
+
+				// fill midi output buffer
+				jack_midi_clear_buffer(out_buf);
+				if(seq_out)
+				{
+					LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
+					{
+						const LV2_Atom *atom = &ev->body;
+
+						jack_midi_event_write(out_buf, ev->time.frames,
+							LV2_ATOM_BODY_CONST(atom), atom->size);
+					}
+				}
+
+				break;
+			}
+
+			case SYSTEM_PORT_OSC:
+			{
+				void *out_buf = jack_port_get_buffer(sink->sys_port, nsamples);
+				const LV2_Atom_Sequence *seq_out = sink->buf;
+
+				// fill midi output buffer
+				jack_midi_clear_buffer(out_buf);
+				if(seq_out)
+				{
+					LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
+					{
+						const LV2_Atom *atom = &ev->body;
+
+						//FIXME
+					}
+				}
+
+				break;
+			}
 		}
 	}
 
@@ -567,6 +631,108 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
+static void *
+_system_port_add(void *data, System_Port_Type type, const char *short_name,
+	const char *pretty_name, int input)
+{
+	prog_t *handle = data;
+	
+	//printf("_system_port_add: %s\n", short_name);
+
+	jack_port_t *jack_port = NULL;
+
+	unsigned long flags = input ? JackPortIsInput : JackPortIsOutput;
+
+	switch(type)
+	{
+		case SYSTEM_PORT_NONE:
+		{
+			// skip
+			break;
+		}
+
+		case SYSTEM_PORT_CONTROL:
+		{
+			// unsupported, skip
+			break;
+		}
+
+		case SYSTEM_PORT_AUDIO:
+		{
+			jack_port = jack_port_register(handle->client, short_name,
+				JACK_DEFAULT_AUDIO_TYPE, flags, 0);
+			break;
+		}
+		case SYSTEM_PORT_CV:
+		{
+			jack_port = jack_port_register(handle->client, short_name,
+				JACK_DEFAULT_AUDIO_TYPE, flags, 0);
+
+#if defined(JACK_HAS_METADATA_API)
+			if(jack_port)
+			{
+				jack_uuid_t uuid = jack_port_uuid(jack_port);
+				jack_set_property(handle->client, uuid,
+					"http://jackaudio.org/metadata/signal-type", "CV", "text/plain");
+			}
+#endif
+			break;
+		}
+
+		case SYSTEM_PORT_MIDI:
+		{
+			jack_port = jack_port_register(handle->client, short_name,
+				JACK_DEFAULT_MIDI_TYPE, flags, 0);
+			break;
+		}
+		case SYSTEM_PORT_OSC:
+		{
+			jack_port = jack_port_register(handle->client, short_name,
+				JACK_DEFAULT_MIDI_TYPE, flags, 0);
+
+#if defined(JACK_HAS_METADATA_API)
+			if(jack_port)
+			{
+				jack_uuid_t uuid = jack_port_uuid(jack_port);
+				jack_set_property(handle->client, uuid,
+					"http://jackaudio.org/metadata/event-types", "OSC", "text/plain");
+			}
+#endif
+			break;
+		}
+	}
+
+#if defined(JACK_HAS_METADATA_API)
+	if(jack_port && pretty_name)
+	{
+		jack_uuid_t uuid = jack_port_uuid(jack_port);
+		jack_set_property(handle->client, uuid,
+			JACK_METADATA_PRETTY_NAME, pretty_name, "text/plain");
+	}
+#endif
+
+	return jack_port;
+}
+
+static void
+_system_port_del(void *data, void *sys_port)
+{
+	//printf("_system_port_del\n");
+
+	prog_t *handle = data;
+	jack_port_t *jack_port = sys_port;
+
+	if(!jack_port || !handle->client)
+		return;
+
+#if defined(JACK_HAS_METADATA_API)
+	jack_uuid_t uuid = jack_port_uuid(jack_port);
+	jack_remove_properties(handle->client, uuid);
+#endif
+			
+	jack_port_unregister(handle->client, jack_port);
+}
+
 static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
@@ -685,6 +851,8 @@ main(int argc, char **argv)
 	handle.app_driver.to_worker_advance = _app_to_worker_advance;
 	handle.app_driver.to_app_request = _worker_to_app_request;
 	handle.app_driver.to_app_advance = _worker_to_app_advance;
+	handle.app_driver.system_port_add = _system_port_add;
+	handle.app_driver.system_port_del = _system_port_del;
 
 #if defined(BUILD_UI)
 	handle.ui_driver.map = map;

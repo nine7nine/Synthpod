@@ -29,6 +29,26 @@ lv2_descriptor(uint32_t index)
 		case 1:
 			return &synthpod_sink;
 
+		case 2:
+			return &synthpod_osc_source;
+		case 3:
+			return &synthpod_osc_sink;
+
+		case 4:
+			return &synthpod_cv_source;
+		case 5:
+			return &synthpod_cv_sink;
+
+		case 6:
+			return &synthpod_audio_source;
+		case 7:
+			return &synthpod_audio_sink;
+
+		case 8:
+			return &synthpod_midi_source;
+		case 9:
+			return &synthpod_midi_sink;
+
 		default:
 			return NULL;
 	}

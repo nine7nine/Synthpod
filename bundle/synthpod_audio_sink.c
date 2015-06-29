@@ -27,9 +27,7 @@
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
-	LV2_Atom_Sequence *event_in;
-	float *audio_in[2];
-	float *input[4];
+	float *audio_in;
 };
 
 static LV2_Handle
@@ -51,27 +49,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->event_in = (LV2_Atom_Sequence *)data;
-			break;
-
-		case 1:
-			handle->audio_in[0] = (float *)data;
-			break;
-		case 2:
-			handle->audio_in[1] = (float *)data;
-			break;
-
-		case 3:
-			handle->input[0] = (float *)data;
-			break;
-		case 4:
-			handle->input[1] = (float *)data;
-			break;
-		case 5:
-			handle->input[2] = (float *)data;
-			break;
-		case 6:
-			handle->input[3] = (float *)data;
+			handle->audio_in = (float *)data;
 			break;
 
 		default:
@@ -85,17 +63,7 @@ query(LV2_Handle instance, uint32_t port)
 	switch(port)
 	{
 		case 0:
-			return SYSTEM_PORT_MIDI;
-
-		case 1:
-		case 2:
 			return SYSTEM_PORT_AUDIO;
-
-		case 3:
-		case 4:
-		case 5:
-		case 6:
-			return SYSTEM_PORT_CONTROL;
 
 		default:
 			return SYSTEM_PORT_NONE;
@@ -147,8 +115,8 @@ extension_data(const char* uri)
 	return NULL;
 }
 
-const LV2_Descriptor synthpod_sink = {
-	.URI						= SYNTHPOD_SINK_URI,
+const LV2_Descriptor synthpod_audio_sink = {
+	.URI						= SYNTHPOD_AUDIO_SINK_URI,
 	.instantiate		= instantiate,
 	.connect_port		= connect_port,
 	.activate				= activate,
