@@ -27,7 +27,31 @@
 #define SYNTHPOD_SOURCE_URI			SYNTHPOD_URI"#source"
 #define SYNTHPOD_SINK_URI				SYNTHPOD_URI"#sink"
 
+#define SYNTHPOD_OSC_SOURCE_URI	SYNTHPOD_URI"#osc_source"
+#define SYNTHPOD_OSC_SINK_URI		SYNTHPOD_URI"#osc_sink"
+
+#define SYNTHPOD_CV_SOURCE_URI	SYNTHPOD_URI"#cv_source"
+#define SYNTHPOD_CV_SINK_URI		SYNTHPOD_URI"#cv_sink"
+
+#define SYNTHPOD_AUDIO_SOURCE_URI	SYNTHPOD_URI"#audio_source"
+#define SYNTHPOD_AUDIO_SINK_URI		SYNTHPOD_URI"#audio_sink"
+
+#define SYNTHPOD_MIDI_SOURCE_URI	SYNTHPOD_URI"#midi_source"
+#define SYNTHPOD_MIDI_SINK_URI		SYNTHPOD_URI"#midi_sink"
+
 extern const LV2_Descriptor synthpod_source;
 extern const LV2_Descriptor synthpod_sink;
+
+extern const LV2_Descriptor synthpod_osc_source;
+extern const LV2_Descriptor synthpod_osc_sink;
+
+extern const LV2_Descriptor synthpod_cv_source;
+extern const LV2_Descriptor synthpod_cv_sink;
+
+extern const LV2_Descriptor synthpod_audio_source;
+extern const LV2_Descriptor synthpod_audio_sink;
+
+extern const LV2_Descriptor synthpod_midi_source;
+extern const LV2_Descriptor synthpod_midi_sink;
 
 #endif // _SYNTHPOD_LV2_H

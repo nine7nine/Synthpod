@@ -1,6 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/libosc) # osc.h
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
+include_directories(${PROJECT_SOURCE_DIR}/system_port.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
 add_definitions("-D_GNU_SOURCE=1") # asprintf
@@ -28,6 +29,13 @@ if(BUILD_JACK)
 # jack
 	pkg_search_module(JACK REQUIRED jack)
 	include_directories(${JACK_INCLUDE_DIRS})
+
+# metadata
+	include(CheckIncludeFiles)
+	CHECK_INCLUDE_FILES("jack/metadata.h" JACK_HAS_METADATA_API)
+	if(${JACK_HAS_METADATA_API})
+		add_definitions("-DJACK_HAS_METADATA_API")
+	endif()
 
 	if(APPLE)
 		set(JACK_LIBS ${CORE_AUDIO} ${CORE_SERVICES} ${AUDIO_UNIT} "-ljack")

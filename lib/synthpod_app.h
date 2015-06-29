@@ -31,8 +31,11 @@
 #include <lilv/lilv.h>
 
 #include <synthpod_common.h>
+#include <system_port.h>
 
 typedef struct _sp_app_t sp_app_t;
+typedef struct _sp_app_system_source_t sp_app_system_source_t;
+typedef struct _sp_app_system_sink_t sp_app_system_sink_t;
 typedef struct _sp_app_driver_t sp_app_driver_t;
 
 typedef void *(*sp_to_request_t)(size_t size, void *data);
@@ -40,6 +43,22 @@ typedef void (*sp_to_advance_t)(size_t size, void *data);
 
 typedef int (*sp_printf)(void *data, LV2_URID type, const char *fmt, ...);
 typedef int (*sp_vprintf)(void *data, LV2_URID type, const char *fmt, va_list args);
+
+typedef void *(*sp_system_port_add)(void *data, System_Port_Type type,
+	const char *short_name, const char *pretty_name, int input);
+typedef void (*sp_system_port_del)(void *data, void *sys_port);
+
+struct _sp_app_system_source_t {
+	System_Port_Type type;
+	void *sys_port;
+	void *buf;
+};
+
+struct _sp_app_system_sink_t {
+	System_Port_Type type;
+	void *sys_port;
+	const void *buf;
+};
 
 struct _sp_app_driver_t {
 	uint32_t sample_rate;
@@ -64,6 +83,10 @@ struct _sp_app_driver_t {
 	// logging
 	sp_printf log_printf;
 	sp_vprintf log_vprintf;
+
+	// system_port
+	sp_system_port_add system_port_add;
+	sp_system_port_del system_port_del;
 };
 
 sp_app_t *
@@ -72,11 +95,11 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data);
 void
 sp_app_activate(sp_app_t *app);
 
-void *
-sp_app_get_system_source(sp_app_t *app, uint32_t index);
+const sp_app_system_source_t *
+sp_app_get_system_sources(sp_app_t *app);
 
-const void *
-sp_app_get_system_sink(sp_app_t *app, uint32_t index);
+const sp_app_system_sink_t *
+sp_app_get_system_sinks(sp_app_t *app);
 
 void
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom);

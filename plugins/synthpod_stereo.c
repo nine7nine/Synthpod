@@ -410,6 +410,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.seq_size = SEQ_SIZE;
 	handle->driver.log_printf = _log_printf;
 	handle->driver.log_vprintf = _log_vprintf;
+	handle->driver.system_port_add = NULL;
+	handle->driver.system_port_del = NULL;
 
 	const LilvWorld *world = NULL;
 
@@ -605,13 +607,39 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	size_t sample_buf_size = sizeof(float) * nsamples;
 
-	handle->source.event_in = sp_app_get_system_source(app, 0);
-	handle->source.audio_in[0] = sp_app_get_system_source(app, 1);
-	handle->source.audio_in[1] = sp_app_get_system_source(app, 2);
-	handle->source.input[0] = sp_app_get_system_source(app, 3);
-	handle->source.input[1] = sp_app_get_system_source(app, 4);
-	handle->source.input[2] = sp_app_get_system_source(app, 5);
-	handle->source.input[3] = sp_app_get_system_source(app, 6);
+	handle->source.event_in = NULL;
+	handle->source.audio_in[0] = NULL;
+	handle->source.audio_in[1] = NULL;
+	handle->source.input[0] = NULL;
+	handle->source.input[1] = NULL;
+	handle->source.input[2] = NULL;
+	handle->source.input[3] = NULL;
+	
+	const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
+	int audio_ptr = 0;
+	int control_ptr = 0;
+	for(const sp_app_system_source_t *source=sources;
+		source->type != SYSTEM_PORT_NONE;
+		source++)
+	{
+		switch(source->type)
+		{
+			case SYSTEM_PORT_MIDI:
+				handle->source.event_in = source->buf;
+				break;
+			case SYSTEM_PORT_AUDIO:
+				handle->source.audio_in[audio_ptr++] = source->buf;
+				break;
+			case SYSTEM_PORT_CONTROL:
+				handle->source.input[control_ptr++] = source->buf;
+				break;
+
+			case SYSTEM_PORT_CV:
+			case SYSTEM_PORT_OSC:
+			case SYSTEM_PORT_NONE:
+				break;
+		}
+	}
 
 	assert(handle->source.event_in
 		&& handle->source.audio_in[0] && handle->source.audio_in[1]
@@ -704,15 +732,42 @@ run(LV2_Handle instance, uint32_t nsamples)
 	// end sequence(s)
 	lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
 	lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
+	
+	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
 	// fill output buffers
-	handle->sink.event_out = sp_app_get_system_sink(app, 0);
-	handle->sink.audio_out[0] = sp_app_get_system_sink(app, 1);
-	handle->sink.audio_out[1] = sp_app_get_system_sink(app, 2);
-	handle->sink.output[0] = sp_app_get_system_sink(app, 3);
-	handle->sink.output[1] = sp_app_get_system_sink(app, 4);
-	handle->sink.output[2] = sp_app_get_system_sink(app, 5);
-	handle->sink.output[3] = sp_app_get_system_sink(app, 6);
+	handle->sink.event_out = NULL;
+	handle->sink.audio_out[0] = NULL;
+	handle->sink.audio_out[1] = NULL;
+	handle->sink.output[0] = NULL;
+	handle->sink.output[1] = NULL;
+	handle->sink.output[2] = NULL;
+	handle->sink.output[3] = NULL;
+	
+	audio_ptr = 0;
+	control_ptr = 0;
+	for(const sp_app_system_sink_t *sink=sinks;
+		sink->type != SYSTEM_PORT_NONE;
+		sink++)
+	{
+		switch(sink->type)
+		{
+			case SYSTEM_PORT_MIDI:
+				handle->sink.event_out = sink->buf;
+				break;
+			case SYSTEM_PORT_AUDIO:
+				handle->sink.audio_out[audio_ptr++] = sink->buf;
+				break;
+			case SYSTEM_PORT_CONTROL:
+				handle->sink.output[control_ptr++] = sink->buf;
+				break;
+
+			case SYSTEM_PORT_CV:
+			case SYSTEM_PORT_OSC:
+			case SYSTEM_PORT_NONE:
+				break;
+		}
+	}
 
 	assert(handle->sink.event_out
 		&& handle->sink.audio_out[0] && handle->sink.audio_out[1]

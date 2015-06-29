@@ -265,43 +265,7 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 
 	const size_t sample_buf_size = sizeof(float) * nsamples;
 
-	if(sp_app_paused(app))
-	{
-		// clear output buffers
-		memset(audio_out_buf[0], 0x0, sample_buf_size);
-		memset(audio_out_buf[1], 0x0, sample_buf_size);
-		//TODO midi
-
-		return 0;
-	}
-
-	LV2_Atom_Sequence *seq_in = sp_app_get_system_source(app, 0);
-	float *audio_in [2] = {
-		[0] = sp_app_get_system_source(app, 1),
-		[1] = sp_app_get_system_source(app, 2)
-	};
-	assert(seq_in && audio_in[0] && audio_in[1]);
-
-	// fill audio input buffers
-	memcpy(audio_in[0], audio_in_buf[0], sample_buf_size);
-	memcpy(audio_in[1], audio_in_buf[1], sample_buf_size);
-
-	const LV2_Atom_Sequence *seq_out = sp_app_get_system_sink(app, 0);
-	const float *audio_out [2] = {
-		[0] = sp_app_get_system_sink(app, 1),
-		[1] = sp_app_get_system_sink(app, 2)
-	};
-	assert(seq_out && audio_out[0] && audio_out[1]);
-
-	if(seq_in)
-	{
-		LV2_Atom_Forge *forge = &handle->forge;
-		LV2_Atom_Forge_Frame frame;
-		lv2_atom_forge_set_buffer(forge, (void *)seq_in, SEQ_SIZE);
-		lv2_atom_forge_sequence_head(forge, &frame, 0);
-		//TODO
-		lv2_atom_forge_pop(forge, &frame);
-	}
+	//FIXME
 
 	// read events from worker
 	{
@@ -333,12 +297,7 @@ _process(const void *inputs, void *outputs, unsigned long nsamples,
 	// run synthpod app post
 	sp_app_run_post(handle->app, nsamples);
 
-	// fill audio output buffers
-	memcpy(audio_out_buf[0], audio_out[0], sample_buf_size);
-	memcpy(audio_out_buf[1], audio_out[1], sample_buf_size);
-
-	// fill midi output buffer
-	//TODO
+	//FIXME
 
 	return 0;
 }
@@ -603,6 +562,8 @@ main(int argc, char **argv)
 	handle.app_driver.to_worker_advance = _app_to_worker_advance;
 	handle.app_driver.to_app_request = _worker_to_app_request;
 	handle.app_driver.to_app_advance = _worker_to_app_advance;
+	handle.app_driver.system_port_add = NULL; //FIXME
+	handle.app_driver.system_port_del = NULL; //FIXME
 
 #if defined(BUILD_UI)
 	handle.ui_driver.map = map;

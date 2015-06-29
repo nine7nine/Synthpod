@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include <synthpod_bundle.h>
+#include <system_port.h>
 
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 
@@ -78,6 +79,29 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	}
 }
 
+static System_Port_Type
+query(LV2_Handle instance, uint32_t port)
+{
+	switch(port)
+	{
+		case 0:
+			return SYSTEM_PORT_MIDI;
+
+		case 1:
+		case 2:
+			return SYSTEM_PORT_AUDIO;
+
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+			return SYSTEM_PORT_CONTROL;
+
+		default:
+			return SYSTEM_PORT_NONE;
+	}
+}
+
 static void
 activate(LV2_Handle instance)
 {
@@ -110,9 +134,16 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
+static const System_Port_Interface sys = {
+	.query = query
+};
+
 static const void*
 extension_data(const char* uri)
 {
+	if(!strcmp(uri, SYSTEM_PORT__interface))
+		return &sys;
+
 	return NULL;
 }
 
