@@ -2785,7 +2785,10 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		{
 			const char *name_str = lilv_node_as_string(name_node);
 			lilv_node_free(name_node);
-			elm_layout_text_set(lay, "elm.text", name_str);
+			char *title = NULL;
+			asprintf(&title, "%s (%u)", name_str, mod->uid);
+			elm_layout_text_set(lay, "elm.text", title ? title : name_str);
+			free(title);
 		}
 
 		char col [7];
