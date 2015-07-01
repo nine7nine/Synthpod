@@ -4131,9 +4131,11 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		|| !driver->to_app_request || !driver->to_app_advance)
 		return NULL;
 
+#if defined(ELM_1_10)
 	elm_config_focus_autoscroll_mode_set(ELM_FOCUS_AUTOSCROLL_MODE_NONE);
 	elm_config_focus_move_policy_set(ELM_FOCUS_MOVE_POLICY_CLICK);
 	elm_config_first_item_focus_on_first_focusin_set(EINA_TRUE);
+#endif
 
 	sp_ui_t *ui = calloc(1, sizeof(sp_ui_t));
 	if(!ui)

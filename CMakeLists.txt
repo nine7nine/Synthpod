@@ -68,6 +68,10 @@ if(BUILD_UI)
 	pkg_search_module(ELM REQUIRED elementary>=1.8)
 	include_directories(${ELM_INCLUDE_DIRS})
 
+	if((${ELM_VERSION} VERSION_EQUAL "1.10.0") OR (${ELM_VERSION} VERSION_GREATER "1.10.0"))
+		add_definitions("-DELM_1_10")
+	endif()
+
 	pkg_search_module(ECORE_X OPTIONAL ecore-x)
 endif()
 
