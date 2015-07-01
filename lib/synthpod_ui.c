@@ -2849,8 +2849,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			Evas_Object *icon = elm_icon_add(lay);
 			if(icon)
 			{
-				//elm_icon_standard_set(icon, "close");
-				elm_layout_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
+				elm_image_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
 					"/synthpod/modlist/close");
 				evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
 				evas_object_show(icon);
@@ -2865,8 +2864,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			Evas_Object *icon = elm_icon_add(lay);
 			if(icon)
 			{
-				//elm_icon_standard_set(icon, "arrow_up");
-				elm_layout_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
+				elm_image_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
 					"/synthpod/modlist/expand");
 				evas_object_smart_callback_add(icon, "clicked", _modlist_toggle_clicked, mod);
 				evas_object_show(icon);
@@ -4372,7 +4370,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					Evas_Object *icon = elm_icon_add(hbox);
 					if(icon)
 					{
-						elm_layout_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
+						elm_image_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
 							"/omk/logo");
 						evas_object_size_hint_min_set(icon, 128, 128);
 						evas_object_size_hint_max_set(icon, 256, 256);
