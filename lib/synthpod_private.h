@@ -103,6 +103,7 @@ struct _reg_t {
 
 		// control port property
 		reg_item_t integer;
+		reg_item_t enumeration;
 		reg_item_t toggled;
 
 		// port protocols
@@ -264,6 +265,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->port.midi, world, map, LV2_MIDI__MidiEvent);
 
 	_register(&regs->port.integer, world, map, LV2_CORE__integer);
+	_register(&regs->port.enumeration, world, map, LV2_CORE__enumeration);
 	_register(&regs->port.toggled, world, map, LV2_CORE__toggled);
 
 	_register(&regs->port.float_protocol, world, map, LV2_UI_PREFIX"floatProtocol");
@@ -378,6 +380,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->port.midi);
 
 	_unregister(&regs->port.integer);
+	_unregister(&regs->port.enumeration);
 	_unregister(&regs->port.toggled);
 
 	_unregister(&regs->port.float_protocol);

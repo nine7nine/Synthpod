@@ -22,8 +22,8 @@
 #define SMART_TOGGLE_TYPE "Smart Slider"
 
 #define SMART_TOGGLE_CHANGED "changed"
-#define SMART_TOGGLE_MOUSE_IN "mouse,in"
-#define SMART_TOGGLE_MOUSE_OUT "mouse,out"
+#define SMART_TOGGLE_MOUSE_IN "cat,in"
+#define SMART_TOGGLE_MOUSE_OUT "cat,out"
 
 #define SMART_TOGGLE_MODIFIER "Control" //TODO make configurable
 
@@ -37,9 +37,9 @@ struct _smart_toggle_t {
 };
 
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
-	{SMART_TOGGLE_CHANGED, NULL},
-	{SMART_TOGGLE_MOUSE_IN, NULL},
-	{SMART_TOGGLE_MOUSE_OUT, NULL},
+	{SMART_TOGGLE_CHANGED, ""},
+	{SMART_TOGGLE_MOUSE_IN, ""},
+	{SMART_TOGGLE_MOUSE_OUT, ""},
 	{NULL, NULL}
 };
 
@@ -84,7 +84,7 @@ _mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_toggle_t *priv = data;
 
-	evas_object_smart_callback_call(obj, SMART_TOGGLE_CHANGED, NULL);
+	evas_object_smart_callback_call(obj, SMART_TOGGLE_MOUSE_IN, NULL);
 }
 
 static void
@@ -92,7 +92,7 @@ _mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_toggle_t *priv = data;
 
-	evas_object_smart_callback_call(obj, SMART_TOGGLE_CHANGED, NULL);
+	evas_object_smart_callback_call(obj, SMART_TOGGLE_MOUSE_OUT, NULL);
 }
 
 static void

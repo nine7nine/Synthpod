@@ -22,8 +22,8 @@
 #define SMART_SPINNER_TYPE "Smart Slider"
 
 #define SMART_SPINNER_CHANGED "changed"
-#define SMART_SPINNER_MOUSE_IN "mouse,in"
-#define SMART_SPINNER_MOUSE_OUT "mouse,out"
+#define SMART_SPINNER_MOUSE_IN "cat,in"
+#define SMART_SPINNER_MOUSE_OUT "cat,out"
 
 #define SMART_SPINNER_MODIFIER "Control" //TODO make configurable
 
@@ -48,9 +48,9 @@ struct _smart_spinner_t {
 };
 
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
-	{SMART_SPINNER_CHANGED, NULL},
-	{SMART_SPINNER_MOUSE_IN, NULL},
-	{SMART_SPINNER_MOUSE_OUT, NULL},
+	{SMART_SPINNER_CHANGED, ""},
+	{SMART_SPINNER_MOUSE_IN, ""},
+	{SMART_SPINNER_MOUSE_OUT, ""},
 	{NULL, NULL}
 };
 
@@ -121,7 +121,7 @@ _mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_spinner_t *priv = data;
 
-	evas_object_smart_callback_call(obj, SMART_SPINNER_CHANGED, NULL);
+	evas_object_smart_callback_call(obj, SMART_SPINNER_MOUSE_IN, NULL);
 }
 
 static void
@@ -129,7 +129,7 @@ _mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_spinner_t *priv = data;
 
-	evas_object_smart_callback_call(obj, SMART_SPINNER_CHANGED, NULL);
+	evas_object_smart_callback_call(obj, SMART_SPINNER_MOUSE_OUT, NULL);
 }
 
 static void
@@ -363,7 +363,9 @@ smart_spinner_value_get(Evas_Object *o)
 
 	elmnt_t *elmnt = eina_list_nth(priv->elmnts, priv->value);
 
-	return elmnt->value;
+	return elmnt
+		? elmnt->value
+		: 0.f;
 }
 
 void

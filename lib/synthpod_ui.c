@@ -28,7 +28,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 15
+#define NUM_UI_FEATURES 16
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -1542,6 +1542,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		mod->feature_list[nfeatures].URI = LV2_UI_PREFIX"makeSONameResident";
 		mod->feature_list[nfeatures++].data = NULL;
 	}
+	{
+		mod->feature_list[nfeatures].URI = LV2_UI_PREFIX"makeResident";
+		mod->feature_list[nfeatures++].data = NULL;
+	}
 
 	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
 	mod->feature_list[nfeatures++].data = ui->world;
@@ -1610,7 +1614,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				lilv_node_free(min_node);
 				lilv_node_free(max_node);
 
-				tar->points = lilv_port_get_scale_points(plug, port);
+				int enumeration = lilv_port_has_property(plug, port, ui->regs.port.enumeration.node);
+				tar->points = enumeration
+					? lilv_port_get_scale_points(plug, port)
+					: NULL;
 			}
 			else if(lilv_port_is_a(plug, port, ui->regs.port.atom.node)) 
 			{
@@ -3215,8 +3222,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 				//	smart_slider_unit_set(child, port->unit);
 				if(prop->editable)
 					evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
-				evas_object_smart_callback_add(child, "mouse,in", _smart_mouse_in, ui);
-				evas_object_smart_callback_add(child, "mouse,out", _smart_mouse_out, ui);
+				evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
+				evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
 			}
 		}
 		else if(prop->type_urid == ui->forge.Bool)
@@ -3228,8 +3235,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 				smart_toggle_disabled_set(child, !prop->editable);
 				if(prop->editable)
 					evas_object_smart_callback_add(child, "changed", _property_check_changed, prop);
-				evas_object_smart_callback_add(child, "mouse,in", _smart_mouse_in, ui);
-				evas_object_smart_callback_add(child, "mouse,out", _smart_mouse_out, ui);
+				evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
+				evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
 			}
 		}
 		else
@@ -3542,8 +3549,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_toggle_disabled_set(check, port->direction == PORT_DIRECTION_OUTPUT);
 					if(port->direction == PORT_DIRECTION_INPUT)
 						evas_object_smart_callback_add(check, "changed", _check_changed, port);
-					evas_object_smart_callback_add(check, "mouse,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(check, "mouse,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(check, "cat,in", _smart_mouse_in, ui);
+					evas_object_smart_callback_add(check, "cat,out", _smart_mouse_out, ui);
 				}
 
 				child = check;
@@ -3566,8 +3573,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					}
 					if(port->direction == PORT_DIRECTION_INPUT)
 						evas_object_smart_callback_add(spin, "changed", _spinner_changed, port);
-					evas_object_smart_callback_add(spin, "mouse,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(spin, "mouse,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(spin, "cat,in", _smart_mouse_in, ui);
+					evas_object_smart_callback_add(spin, "cat,out", _smart_mouse_out, ui);
 				}
 
 				child = spin;
@@ -3586,8 +3593,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
 					if(port->direction == PORT_DIRECTION_INPUT)
 						evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
-					evas_object_smart_callback_add(sldr, "mouse,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(sldr, "mouse,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(sldr, "cat,in", _smart_mouse_in, ui);
+					evas_object_smart_callback_add(sldr, "cat,out", _smart_mouse_out, ui);
 				}
 
 				child = sldr;
