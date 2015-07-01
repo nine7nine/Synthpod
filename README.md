@@ -25,6 +25,23 @@
 	make
 	sudo make install
 
+#### ArchLinux
+
+	# build/runtime dependencies
+	sudo pacman -S cmake lv2 lilv elementary jack
+
+#### Debian (>= jessie) and derivatives (Ubuntu, Mint, ...)
+
+	# build dependencies
+	sudo apt-get install cmake lv2-dev liblilv-dev libelementary-dev libjack-dev libasound2-dev portaudio19-dev
+	# runtime dependencies
+	sudo apt-get install libevas1-engine-software-x11 libevas1-engine-gl-x11 libelementary2 jackd
+
+#### Ubuntu (<= 14.04)
+
+	# synthpod needs libefl(>=1.8) and libelementary(>=1.8), you may thus need to add a ppa
+	sudo add-apt-repository -y ppa:enlightenment-git/ppa
+
 ### License
 
 Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
