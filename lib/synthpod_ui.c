@@ -2406,9 +2406,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			group->children = eina_list_append(group->children, prop);
 		}
 
-		// extract all groups by default
-		eina_hash_foreach(mod->groups, _groups_foreach, NULL);
-
 		// presets
 		elmnt = elm_genlist_item_append(ui->modlist, ui->psetitc, mod, itm,
 			ELM_GENLIST_ITEM_TREE, NULL, NULL);
@@ -2418,6 +2415,9 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, NULL, itm,
 			ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+
+		// extract all groups by default
+		eina_hash_foreach(mod->groups, _groups_foreach, NULL);
 	}
 	else if(class == ui->grpitc) // is group
 	{
