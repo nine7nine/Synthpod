@@ -624,9 +624,12 @@ _process(jack_nframes_t nsamples, void *data)
 					jack_midi_event_get(&mev, (void *)in_buf, i);
 
 					//add jack osc event to in_buf
-					lv2_atom_forge_frame_time(forge, mev.time);
-					osc_dispatch_method(OSC_IMMEDIATE, mev.buffer, mev.size, methods,
-						_bundle_in, _bundle_out, handle);
+					if(osc_check_packet(mev.buffer, mev.size))
+					{
+						lv2_atom_forge_frame_time(forge, mev.time);
+						osc_dispatch_method(OSC_IMMEDIATE, mev.buffer, mev.size, methods,
+							_bundle_in, _bundle_out, handle);
+					}
 				}
 				lv2_atom_forge_pop(forge, &frame);
 
