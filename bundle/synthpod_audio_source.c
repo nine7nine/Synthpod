@@ -27,7 +27,7 @@
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
-	const float *audio_out;
+	const float *audio_out [4];
 };
 
 static LV2_Handle
@@ -46,34 +46,23 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
 	plughandle_t *handle = instance;
 
-	switch(port)
-	{
-		case 0:
-			handle->audio_out = (const float *)data;
-			break;
-
-		default:
-			break;
-	}
+	if(port < 4)
+		handle->audio_out[port] = (const float *)data;
 }
 
 static System_Port_Type
 query(LV2_Handle instance, uint32_t port)
 {
-	switch(port)
-	{
-		case 0:
-			return SYSTEM_PORT_AUDIO;
+	if(port < 4)
+		return SYSTEM_PORT_AUDIO;
 
-		default:
-			return SYSTEM_PORT_NONE;
-	}
+	return SYSTEM_PORT_NONE;
 }
 
 static void
 activate(LV2_Handle instance)
 {
-	//plughandle_t *handle = instance;
+	plughandle_t *handle = instance;
 	
 	// nothing
 }

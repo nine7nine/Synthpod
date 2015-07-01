@@ -27,7 +27,7 @@
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
-	float *cv_in;
+	float *cv_in [4];
 };
 
 static LV2_Handle
@@ -46,34 +46,23 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
 	plughandle_t *handle = instance;
 
-	switch(port)
-	{
-		case 0:
-			handle->cv_in = (float *)data;
-			break;
-
-		default:
-			break;
-	}
+	if(port < 4)
+		handle->cv_in[port] = (float *)data;
 }
 
 static System_Port_Type
 query(LV2_Handle instance, uint32_t port)
 {
-	switch(port)
-	{
-		case 0:
-			return SYSTEM_PORT_CV;
+	if(port < 4)
+		return SYSTEM_PORT_CV;
 
-		default:
-			return SYSTEM_PORT_NONE;
-	}
+	return SYSTEM_PORT_NONE;
 }
 
 static void
 activate(LV2_Handle instance)
 {
-	//plughandle_t *handle = instance;
+	plughandle_t *handle = instance;
 	
 	// nothing
 }

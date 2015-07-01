@@ -27,7 +27,7 @@
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
-	LV2_Atom_Sequence *event_in;
+	LV2_Atom_Sequence *event_in [1];
 };
 
 static LV2_Handle
@@ -46,34 +46,23 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
 	plughandle_t *handle = instance;
 
-	switch(port)
-	{
-		case 0:
-			handle->event_in = (LV2_Atom_Sequence *)data;
-			break;
-
-		default:
-			break;
-	}
+	if(port < 1)
+		handle->event_in[port] = (LV2_Atom_Sequence *)data;
 }
 
 static System_Port_Type
 query(LV2_Handle instance, uint32_t port)
 {
-	switch(port)
-	{
-		case 0:
-			return SYSTEM_PORT_MIDI;
+	if(port < 1)
+		return SYSTEM_PORT_MIDI;
 
-		default:
-			return SYSTEM_PORT_NONE;
-	}
+	return SYSTEM_PORT_NONE;
 }
 
 static void
 activate(LV2_Handle instance)
 {
-	//plughandle_t *handle = instance;
+	plughandle_t *handle = instance;
 	
 	// nothing
 }

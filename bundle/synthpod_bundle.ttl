@@ -314,8 +314,29 @@ synthpod:cv_sink
 	  a lv2:InputPort ,
 			lv2:CVPort ;
 		lv2:index 0 ;
-		lv2:symbol "cv_sink" ;
-		lv2:name "CV Sink" ;
+		lv2:symbol "cv_sink_1" ;
+		lv2:name "CV Sink 1" ;
+		pg:group synthpod:group_sink ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 1 ;
+		lv2:symbol "cv_sink_2" ;
+		lv2:name "CV Sink 2" ;
+		pg:group synthpod:group_sink ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 2 ;
+		lv2:symbol "cv_sink_3" ;
+		lv2:name "CV Sink 3" ;
+		pg:group synthpod:group_sink ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:CVPort ;
+		lv2:index 3 ;
+		lv2:symbol "cv_sink_4" ;
+		lv2:name "CV Sink 4" ;
 		pg:group synthpod:group_sink ;
 	] .
 # CV Source Plugin
@@ -333,8 +354,29 @@ synthpod:cv_source
 	  a lv2:OutputPort ,
 			lv2:CVPort ;
 		lv2:index 0 ;
-		lv2:symbol "cv_source" ;
-		lv2:name "CV Source" ;
+		lv2:symbol "cv_source_1" ;
+		lv2:name "CV Source 1" ;
+		pg:group synthpod:group_source ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 1 ;
+		lv2:symbol "cv_source_2" ;
+		lv2:name "CV Source 2" ;
+		pg:group synthpod:group_source ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 2 ;
+		lv2:symbol "cv_source_3" ;
+		lv2:name "CV Source 3" ;
+		pg:group synthpod:group_source ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:CVPort ;
+		lv2:index 3 ;
+		lv2:symbol "cv_source_4" ;
+		lv2:name "CV Source 4" ;
 		pg:group synthpod:group_source ;
 	] .
 
@@ -353,8 +395,29 @@ synthpod:audio_sink
 	  a lv2:InputPort ,
 			lv2:AudioPort ;
 		lv2:index 0 ;
-		lv2:symbol "audio_sink" ;
-		lv2:name "Audio Sink" ;
+		lv2:symbol "audio_sink_1" ;
+		lv2:name "Audio Sink 1" ;
+		pg:group synthpod:group_sink ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:AudioPort ;
+		lv2:index 1 ;
+		lv2:symbol "audio_sink_2" ;
+		lv2:name "Audio Sink 2" ;
+		pg:group synthpod:group_sink ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:AudioPort ;
+		lv2:index 2 ;
+		lv2:symbol "audio_sink_3" ;
+		lv2:name "Audio Sink 3" ;
+		pg:group synthpod:group_sink ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:AudioPort ;
+		lv2:index 3 ;
+		lv2:symbol "audio_sink_4" ;
+		lv2:name "Audio Sink 4" ;
 		pg:group synthpod:group_sink ;
 	] .
 # AudioSource Plugin
@@ -372,7 +435,28 @@ synthpod:audio_source
 	  a lv2:OutputPort ,
 			lv2:AudioPort ;
 		lv2:index 0 ;
-		lv2:symbol "audio_source" ;
-		lv2:name "Audio Source" ;
+		lv2:symbol "audio_source_1" ;
+		lv2:name "Audio Source 1" ;
+		pg:group synthpod:group_source ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:AudioPort ;
+		lv2:index 1 ;
+		lv2:symbol "audio_source_2" ;
+		lv2:name "Audio Source 2" ;
+		pg:group synthpod:group_source ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:AudioPort ;
+		lv2:index 2 ;
+		lv2:symbol "audio_source_3" ;
+		lv2:name "Audio Source 3" ;
+		pg:group synthpod:group_source ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:AudioPort ;
+		lv2:index 3 ;
+		lv2:symbol "audio_source_4" ;
+		lv2:name "Audio Source 4" ;
 		pg:group synthpod:group_source ;
 	] .
