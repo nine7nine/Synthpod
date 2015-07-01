@@ -57,8 +57,7 @@ enum _plug_info_type_t {
 
 enum _group_type_t {
 	GROUP_TYPE_PORT,
-	GROUP_TYPE_PROPERTY,
-	GROUP_TYPE_PRESET
+	GROUP_TYPE_PROPERTY
 };
 
 struct _plug_info_t {
@@ -205,6 +204,7 @@ struct _group_t {
 	group_type_t type;
 	mod_t *mod;
 	LilvNode *node;
+	Eina_List *children;
 };
 
 struct _port_t {
@@ -2264,14 +2264,19 @@ _patches_update(sp_ui_t *ui)
 	}
 }
 
+Eina_Bool
+_groups_foreach(const Eina_Hash *hash, const void *key, void *data, void *fdata)
+{
+	Elm_Object_Item *parent = data;
+	elm_genlist_item_expanded_set(parent, EINA_TRUE);
+
+	return EINA_TRUE;
+}
+
 static void
 _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
-	mod_t *mod = elm_object_item_data_get(itm);
-	if(!mod)
-		return;
-
 	sp_ui_t *ui = data;
 	Elm_Object_Item *elmnt;
 
@@ -2279,6 +2284,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 	if(class == ui->moditc) // is parent module item
 	{
+		mod_t *mod = elm_object_item_data_get(itm);
+
 		// port groups
 		mod->groups = eina_hash_string_superfast_new(NULL); //TODO check
 
@@ -2301,7 +2308,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 				if(!parent)
 				{
-					group_t *group = malloc(sizeof(group_t));
+					group_t *group = calloc(1, sizeof(group_t));
 					if(group)
 					{
 						group->type = GROUP_TYPE_PORT;
@@ -2309,7 +2316,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 						group->node = port->group;
 
 						parent = elm_genlist_item_append(ui->modlist,
-							ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
 						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 						if(parent)
 							eina_hash_add(mod->groups, group_lbl, parent);
@@ -2323,7 +2330,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 				if(!parent)
 				{
-					group_t *group = malloc(sizeof(group_t));
+					group_t *group = calloc(1, sizeof(group_t));
 					if(group)
 					{
 						group->type = GROUP_TYPE_PORT;
@@ -2331,7 +2338,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 						group->node = NULL;
 
 						parent = elm_genlist_item_append(ui->modlist,
-							ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
 						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 						if(parent)
 							eina_hash_add(mod->groups, group_lbl, parent);
@@ -2339,10 +2346,9 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 				}
 			}
 
-			elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, parent,
-				ELM_GENLIST_ITEM_NONE, NULL, NULL);
-			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
-			//elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT); TODO
+			// append port to corresponding group
+			group_t *group = elm_object_item_data_get(parent);
+			group->children = eina_list_append(group->children, port);
 		}
 
 		for(int i=0; i<mod->num_writables; i++)
@@ -2354,26 +2360,23 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 			if(!parent)
 			{
-				group_t *group = malloc(sizeof(group_t));
+				group_t *group = calloc(1, sizeof(group_t));
 				if(group)
 				{
 					group->type = GROUP_TYPE_PROPERTY;
 					group->mod = mod;
-					group->node = NULL;
 
 					parent = elm_genlist_item_append(ui->modlist,
-						ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+						ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
 					elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 					if(parent)
 						eina_hash_add(mod->groups, group_lbl, parent);
 				}
 			}
 
-			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, parent,
-				ELM_GENLIST_ITEM_NONE, NULL, NULL);
-			elm_genlist_item_select_mode_set(elmnt,
-				(prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
-					? ELM_OBJECT_SELECT_MODE_DEFAULT : ELM_OBJECT_SELECT_MODE_NONE);
+			// append property to corresponding group
+			group_t *group = elm_object_item_data_get(parent);
+			group->children = eina_list_append(group->children, prop);
 		}
 		for(int i=0; i<mod->num_readables; i++)
 		{
@@ -2384,25 +2387,27 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 			if(!parent)
 			{
-				group_t *group = malloc(sizeof(group_t));
+				group_t *group = calloc(1, sizeof(group_t));
 				if(group)
 				{
 					group->type = GROUP_TYPE_PROPERTY;
 					group->mod = mod;
-					group->node = NULL;
 
 					parent = elm_genlist_item_append(ui->modlist,
-						ui->grpitc, group, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+						ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
 					elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 					if(parent)
 						eina_hash_add(mod->groups, group_lbl, parent);
 				}
 			}
 
-			elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, parent,
-				ELM_GENLIST_ITEM_NONE, NULL, NULL);
-			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			// append property to corresponding group
+			group_t *group = elm_object_item_data_get(parent);
+			group->children = eina_list_append(group->children, prop);
 		}
+
+		// extract all groups by default
+		eina_hash_foreach(mod->groups, _groups_foreach, NULL);
 
 		// presets
 		elmnt = elm_genlist_item_append(ui->modlist, ui->psetitc, mod, itm,
@@ -2414,8 +2419,42 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 	}
+	else if(class == ui->grpitc) // is group
+	{
+		group_t *group = elm_object_item_data_get(itm);
+		
+		if(group->type == GROUP_TYPE_PORT)
+		{
+			Eina_List *l;
+			port_t *port;
+			EINA_LIST_FOREACH(group->children, l, port)
+			{
+				elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
+					ELM_GENLIST_ITEM_NONE, NULL, NULL);
+				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			}
+		}
+		else if(group->type == GROUP_TYPE_PROPERTY)
+		{
+			Eina_List *l;
+			property_t *prop;
+			EINA_LIST_FOREACH(group->children, l, prop)
+			{
+				elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
+					ELM_GENLIST_ITEM_NONE, NULL, NULL);
+				int select_mode = prop->editable
+					? ( (prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
+						? ELM_OBJECT_SELECT_MODE_DEFAULT
+						: ELM_OBJECT_SELECT_MODE_NONE)
+					: ELM_OBJECT_SELECT_MODE_NONE;
+				elm_genlist_item_select_mode_set(elmnt, select_mode);
+			}
+		}
+	}
 	else if(class == ui->psetitc) // is presets item
 	{
+		mod_t *mod = elm_object_item_data_get(itm);
+
 		LILV_FOREACH(nodes, i, mod->presets)
 		{
 			const LilvNode* preset = lilv_nodes_get(mod->presets, i);
@@ -3290,7 +3329,11 @@ _group_del(void *data, Evas_Object *obj)
 	group_t *group = data;
 
 	if(group)
+	{
+		if(group->children)
+			eina_list_free(group->children);
 		free(group);
+	}
 }
 
 static void
