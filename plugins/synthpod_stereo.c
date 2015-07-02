@@ -256,10 +256,9 @@ static const LV2_Worker_Interface work_iface = {
 static Zero_Worker_Status 
 _zero_work(LV2_Handle instance, Zero_Worker_Request_Function request,
 	Zero_Worker_Advance_Function advance, Zero_Worker_Handle target,
-	int64_t frames, uint32_t size, const void *body)
+	uint32_t size, const void *body)
 {
 	plughandle_t *handle = instance;
-	(void)frames; //TODO
 	
 	//printf("_zero_work: %u\n", size);
 	handle->zero_worker.request = request;
@@ -277,7 +276,7 @@ _zero_work(LV2_Handle instance, Zero_Worker_Request_Function request,
 
 // rt-thread
 static Zero_Worker_Status
-_zero_response(LV2_Handle instance, int64_t frames, uint32_t size,
+_zero_response(LV2_Handle instance, uint32_t size,
 	const void* body)
 {
 	plughandle_t *handle = instance;
@@ -337,8 +336,7 @@ _to_worker_request(size_t size, void *data)
 	
 	if(handle->zero_sched)
 	{
-		int64_t frames = 0; //TODO
-		return handle->zero_sched->request(handle->zero_sched->handle, frames, size);
+		return handle->zero_sched->request(handle->zero_sched->handle, size);
 	}
 
 	return size <= CHUNK_SIZE
@@ -373,8 +371,7 @@ _to_app_request(size_t size, void *data)
 	// use zero worker if present
 	if(handle->zero_worker.request)
 	{
-		int64_t frames = 0; //TODO
-		return handle->zero_worker.request(handle->zero_worker.target, frames, size);
+		return handle->zero_worker.request(handle->zero_worker.target, size);
 	}
 
 	return size <= CHUNK_SIZE

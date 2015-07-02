@@ -405,7 +405,7 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 
 // rt
 static void *
-_zero_sched_request(Zero_Worker_Handle handle, int64_t frames, uint32_t size)
+_zero_sched_request(Zero_Worker_Handle handle, uint32_t size)
 {
 	mod_t *mod = handle;
 	sp_app_t *app = mod->app;
@@ -1586,8 +1586,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 		// zero worker takes precedence over standard worker
 		if(mod->zero.iface && mod->zero.iface->response)
 		{
-			int64_t frames = 0; //TODO
-			mod->zero.iface->response(mod->handle, frames, work->size, work->payload);
+			mod->zero.iface->response(mod->handle, work->size, work->payload);
 			//TODO check return status
 		}
 		else if(mod->worker.iface && mod->worker.iface->work_response)
@@ -1622,7 +1621,7 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 
 // non-rt
 static void *
-_sp_zero_request(Zero_Worker_Handle handle, int64_t frames, uint32_t size)
+_sp_zero_request(Zero_Worker_Handle handle, uint32_t size)
 {
 	mod_t *mod = handle;
 	sp_app_t *app = mod->app;
@@ -2073,9 +2072,8 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		// zero worker takes precedence over standard worker
 		if(mod->zero.iface && mod->zero.iface->work)
 		{
-			int64_t frames = 0; //TODO
 			mod->zero.iface->work(mod->handle, _sp_zero_request, _sp_zero_advance,
-				mod, frames, work->size, work->payload);
+				mod, work->size, work->payload);
 			//TODO check return status
 		}
 		else if(mod->worker.iface && mod->worker.iface->work)

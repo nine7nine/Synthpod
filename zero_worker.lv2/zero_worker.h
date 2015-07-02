@@ -41,7 +41,7 @@ typedef void *Zero_Worker_Handle;
 
 // non-rt thread
 typedef void *(*Zero_Worker_Request_Function)(Zero_Worker_Handle handle,
-	int64_t frames, uint32_t size);
+	uint32_t size);
 typedef Zero_Worker_Status (*Zero_Worker_Advance_Function)(Zero_Worker_Handle handle,
 	uint32_t written);
 
@@ -51,11 +51,11 @@ typedef struct _Zero_Worker_Interface {
 		Zero_Worker_Request_Function request,
 		Zero_Worker_Advance_Function advance,
 		Zero_Worker_Handle handle,
-		int64_t frames, uint32_t size, const void *body);
+		uint32_t size, const void *body);
 
 	// rt thread
 	Zero_Worker_Status (*response)(LV2_Handle instance,
-		int64_t frames, uint32_t size, const void* body);
+		uint32_t size, const void* body);
 	Zero_Worker_Status (*end)(LV2_Handle instance);
 
 } Zero_Worker_Interface;
