@@ -48,8 +48,10 @@ typedef struct _job_t job_t;
 
 enum _bypass_state_t {
 	BYPASS_STATE_PAUSED	= 0,
+	BYPASS_STATE_LOCKED,
 	BYPASS_STATE_RUNNING,
-	BYPASS_STATE_PAUSE_REQUESTED
+	BYPASS_STATE_PAUSE_REQUESTED,
+	BYPASS_STATE_LOCK_REQUESTED
 };
 
 enum _job_type_t {
@@ -1803,7 +1805,7 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
 
 	// enable bypass
-	mod->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	mod->bypass_state = BYPASS_STATE_LOCK_REQUESTED; // atomic instruction
 	eina_semaphore_lock(&mod->bypass_sem);
 	
 	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
@@ -1955,7 +1957,7 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 		return -1;
 
 	// pause rt-thread
-	app->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	app->bypass_state = BYPASS_STATE_LOCK_REQUESTED; // atomic instruction
 	eina_semaphore_lock(&app->bypass_sem);
 
 	// store state
@@ -2151,12 +2153,21 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			case BYPASS_STATE_RUNNING:
 				// do nothing
 				break;
+
 			case BYPASS_STATE_PAUSE_REQUESTED:
 				mod->bypass_state = BYPASS_STATE_PAUSED;
 				eina_semaphore_release(&mod->bypass_sem, 1);
 				// fall-through
-			case BYPASS_STATE_PAUSED:
-				continue; // skip this module
+			case BYPASS_STATE_PAUSED: // aka state loading
+				continue; // skip this module FIXME clear audio output buffers or xfade
+
+			case BYPASS_STATE_LOCK_REQUESTED:
+				mod->bypass_state = BYPASS_STATE_LOCKED;
+				eina_semaphore_release(&mod->bypass_sem, 1);
+				// fall-through
+			case BYPASS_STATE_LOCKED: // aka state saving
+				// do nothing, plugins MUST be able to save state while running
+				break;
 		}
 	
 		// multiplex multiple sources to single sink where needed
@@ -2935,11 +2946,19 @@ sp_app_paused(sp_app_t *app)
 	{
 		case BYPASS_STATE_RUNNING:
 			return 0;
+
 		case BYPASS_STATE_PAUSE_REQUESTED:
 			app->bypass_state = BYPASS_STATE_PAUSED;
 			eina_semaphore_release(&app->bypass_sem, 1);
 			// fall-through
-		case BYPASS_STATE_PAUSED:
+		case BYPASS_STATE_PAUSED: // aka loading state
 			return 1;
+
+		case BYPASS_STATE_LOCK_REQUESTED:
+			app->bypass_state = BYPASS_STATE_LOCKED;
+			eina_semaphore_release(&app->bypass_sem, 1);
+			// fall-through
+		case BYPASS_STATE_LOCKED: // aka saving state
+			return 2;
 	}
 }

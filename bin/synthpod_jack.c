@@ -522,7 +522,8 @@ _process(jack_nframes_t nsamples, void *data)
 	const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
 	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
-	if(sp_app_paused(app))
+	int paused = sp_app_paused(app);
+	if(paused == 1) // aka loading state
 	{
 		// clear output buffers
 		for(const sp_app_system_sink_t *sink=sinks;
@@ -645,6 +646,7 @@ _process(jack_nframes_t nsamples, void *data)
 	handle->trans.rolling = rolling;
 
 	// read events from worker
+	if(!paused) // aka not saving state
 	{
 		size_t size;
 		const void *body;
@@ -660,6 +662,7 @@ _process(jack_nframes_t nsamples, void *data)
 
 #if defined(BUILD_UI)
 	// read events from UI
+	if(!paused) // aka not saving state
 	{
 		size_t size;
 		const LV2_Atom *atom;
