@@ -99,7 +99,6 @@ struct _prog_t {
 	int frame_cnt;
 	LV2_Atom_Forge_Frame frame [32][2]; // 32 nested bundles should be enough
 
-	LV2_URID synthpod_json;
 	LV2_URID midi_MidiEvent;
 
 	LV2_URID log_entry;
@@ -1058,9 +1057,38 @@ _save(void *data)
 	return 0; // success
 }
 
+#if defined(BUILD_UI)
+static int
+_show(void *data)
+{
+	prog_t *handle = data;
+
+	evas_object_show(handle->win);
+	
+	return 0;
+}
+
+static int
+_hide(void *data)
+{
+	prog_t *handle = data;
+
+	evas_object_hide(handle->win);
+
+	return 0;
+}
+#endif // BUILD_UI
+
 static const synthpod_nsm_driver_t nsm_driver = {
 	.open = _open,
-	.save = _save
+	.save = _save,
+#if defined(BUILD_UI)
+	.show = _show,
+	.hide = _hide
+#else
+	.show = NULL,
+	.hide = NULL
+#endif // BUILD_UI
 };
 
 #if defined(BUILD_UI)
@@ -1091,8 +1119,6 @@ main(int argc, char **argv)
 	lv2_atom_forge_init(&handle.forge, map);
 	osc_forge_init(&handle.oforge, map);
 	
-	handle.synthpod_json = map->map(map->handle, SYNTHPOD_PREFIX"json");
-
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 
 	handle.log_entry = map->map(map->handle, LV2_LOG__Entry);

@@ -129,15 +129,82 @@ _client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	return 1;
 }
 
+static int
+_client_show_optional_gui(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
+{
+	synthpod_nsm_t *nsm = data;	
+
+	// show gui
+	int ret = nsm->driver->show(nsm->data); //TODO check
+
+	// reply
+	const osc_data_t *ptr;
+	osc_data_t *buf0 = nsm->send;
+
+	ptr = osc_set_vararg(buf0, buf0+256, "/nsm/client/gui_is_shown", "");
+
+	size_t written = ptr ? ptr - buf0 : 0;
+	if(written)
+		ecore_con_server_send(nsm->serv, nsm->send, written);
+	else
+		; //TODO
+
+	return 1;
+}
+
+static int
+_client_hide_optional_gui(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
+	size_t size, void *data)
+{
+	synthpod_nsm_t *nsm = data;	
+
+	// hide gui
+	int ret = nsm->driver->hide(nsm->data); //TODO check
+
+	// reply
+	const osc_data_t *ptr;
+	osc_data_t *buf0 = nsm->send;
+
+	ptr = osc_set_vararg(buf0, buf0+256, "/nsm/client/gui_is_hidden", "");
+
+	size_t written = ptr ? ptr - buf0 : 0;
+	if(written)
+		ecore_con_server_send(nsm->serv, nsm->send, written);
+	else
+		; //TODO
+
+	return 1;
+}
+
 static void
 _announce(synthpod_nsm_t *nsm)
 {
 	// send announce message
 	pid_t pid = getpid();
 
+	int has_gui = nsm->driver->show && nsm->driver->hide;
+	const char *capabilities = has_gui
+		? ":message:optional-gui:"
+		: ":message:";
+
 	osc_data_t *buf0 = nsm->send;
-	osc_data_t *ptr = osc_set_vararg(buf0, buf0+512, "/nsm/server/announce", "sssiii",
-		nsm->call, ":message:", nsm->exe, 1, 2, pid);
+	osc_data_t *ptr = buf0;
+	osc_data_t *end = buf0 + 512;
+	osc_data_t *bndl, *itm;
+
+	ptr = osc_start_bundle(ptr, end, OSC_IMMEDIATE, &bndl);
+	ptr = osc_start_bundle_item(ptr, end, &itm);
+	ptr = osc_set_vararg(ptr, end, "/nsm/server/announce", "sssiii",
+		nsm->call, capabilities, nsm->exe, 1, 2, pid);
+	ptr = osc_end_bundle_item(ptr, end, itm);
+	if(has_gui)
+	{
+		ptr = osc_start_bundle_item(ptr, end, &itm);
+		ptr = osc_set_vararg(ptr, end, "/nsm/client/gui_is_shown", "");
+		ptr = osc_end_bundle_item(ptr, end, itm);
+	}
+	ptr = osc_end_bundle(ptr, end, bndl);
 
 	size_t written = ptr ? ptr - buf0 : 0;
 	if(written)
@@ -152,6 +219,8 @@ static const osc_method_t methods [] = {
 	
 	{"/nsm/client/open", "sss", _client_open},
 	{"/nsm/client/save", "", _client_save},
+	{"/nsm/client/show_optional_gui", "", _client_show_optional_gui},
+	{"/nsm/client/hide_optional_gui", "", _client_hide_optional_gui},
 
 	{NULL, NULL, NULL}
 };

@@ -21,10 +21,14 @@ typedef struct _synthpod_nsm_driver_t synthpod_nsm_driver_t;
 typedef int (*synthpod_nsm_open_t)(const char *path, const char *name,
 	const char *id, void *data);
 typedef int (*synthpod_nsm_save_t)(void *data);
+typedef int (*synthpod_nsm_show_t)(void *data);
+typedef int (*synthpod_nsm_hide_t)(void *data);
 
 struct _synthpod_nsm_driver_t {
 	synthpod_nsm_open_t open;
 	synthpod_nsm_save_t save;
+	synthpod_nsm_show_t show;
+	synthpod_nsm_hide_t hide;
 };
 
 synthpod_nsm_t *
