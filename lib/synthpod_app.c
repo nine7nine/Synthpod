@@ -144,7 +144,10 @@ struct _port_t {
 
 	size_t size;
 	void *buf;
+	int32_t i32;
 
+	int integer;
+	int toggled;
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
 	port_buffer_type_t buffer_type; // none, sequence
@@ -624,6 +627,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 		tar->mod = mod;
 		tar->tar = port;
 		tar->index = i;
+		tar->integer = lilv_port_has_property(plug, port, app->regs.port.integer.node);
+		tar->toggled = lilv_port_has_property(plug, port, app->regs.port.toggled.node);
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
 			? PORT_DIRECTION_INPUT
 			: PORT_DIRECTION_OUTPUT;
@@ -2511,14 +2516,16 @@ _state_set_value(const char *symbol, void *data,
 	{
 		float val = 0.f;
 
-		if(type == app->forge.Int)
+		if( (type == app->forge.Int) && (size == sizeof(int32_t)) )
 			val = *(const int32_t *)value;
-		else if(type == app->forge.Long)
+		else if( (type == app->forge.Long) && (size == sizeof(int64_t)) )
 			val = *(const int64_t *)value;
-		else if(type == app->forge.Float)
+		else if( (type == app->forge.Float) && (size == sizeof(float)) )
 			val = *(const float *)value;
-		else if(type == app->forge.Double)
+		else if( (type == app->forge.Double) && (size == sizeof(double)) )
 			val = *(const double *)value;
+		else if( (type == app->forge.Bool) && (size == sizeof(int32_t)) )
+			val = *(const int32_t *)value;
 		else
 			return; //TODO warning
 
@@ -2526,7 +2533,6 @@ _state_set_value(const char *symbol, void *data,
 		*(float *)tar->buf = val;
 		tar->last = val - 0.1; // triggers notification
 	}
-	// TODO handle non-seq atom ports, e.g. string, path, ...
 }
 
 // non-rt / rt
@@ -2548,15 +2554,32 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 	uint32_t index = lilv_port_get_index(mod->plug, port);
 	port_t *tar = &mod->ports[index];
 
-	if(tar->direction == PORT_DIRECTION_INPUT)
+	if(  (tar->direction == PORT_DIRECTION_INPUT)
+		&& (tar->type == PORT_TYPE_CONTROL)
+		&& (tar->num_sources == 0) )
 	{
-		if(tar->type == PORT_TYPE_CONTROL)
+		const float *val = tar->buf;
+
+		if(tar->toggled)
+		{
+			*size = sizeof(int32_t);
+			*type = app->forge.Bool;
+			tar->i32 = floor(*val);
+			return &tar->i32;
+		}
+		else if(tar->integer)
+		{
+			*size = sizeof(int32_t);
+			*type = app->forge.Int;
+			tar->i32 = floor(*val);
+			return &tar->i32;
+		}
+		else // float
 		{
 			*size = sizeof(float);
 			*type = app->forge.Float;
-			return tar->buf;
+			return val;
 		}
-		// TODO handle non-seq atom ports, e.g. string, path, ...
 	}
 
 fail:

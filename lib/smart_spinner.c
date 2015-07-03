@@ -90,7 +90,7 @@ _smart_spinner_smart_deinit(Evas_Object *o)
 	}
 }
 
-static inline void
+static inline int
 _smart_spinner_value_flush(Evas_Object *o)
 {
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
@@ -110,10 +110,12 @@ _smart_spinner_value_flush(Evas_Object *o)
 		{
 			edje_object_part_drag_value_set(priv->theme, "drag", drag_x, 0.f);
 			edje_object_part_text_set(priv->theme, "label", elmnt->label);
-
-			evas_object_smart_callback_call(o, SMART_SPINNER_CHANGED, NULL);
 		}
+
+		return 1;
 	}
+
+	return 0;
 }
 
 static void
@@ -183,7 +185,8 @@ _mouse_move(void *data, Evas *e, Evas_Object *obj, void *event_info)
 		else if(priv->drag < 0.f)
 			priv->drag = 0.f;
 	
-		_smart_spinner_value_flush(obj);
+		if(_smart_spinner_value_flush(obj))
+			evas_object_smart_callback_call(obj, SMART_SPINNER_CHANGED, NULL);
 	}
 }
 
@@ -206,7 +209,8 @@ _mouse_wheel(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	else if(priv->drag < 0.f)
 		priv->drag = 0.f;
 
-	_smart_spinner_value_flush(obj);
+	if(_smart_spinner_value_flush(obj))
+		evas_object_smart_callback_call(obj, SMART_SPINNER_CHANGED, NULL);
 }
 
 static void

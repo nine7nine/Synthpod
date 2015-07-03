@@ -378,7 +378,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		if(port->std.widget)
 		{
 			if(toggled)
-				smart_toggle_value_set(port->std.widget, val);
+				smart_toggle_value_set(port->std.widget, floor(val));
 			else if(port->points)
 				smart_spinner_value_set(port->std.widget, val);
 			else // integer or float
@@ -3626,7 +3626,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 		if(port->std.monitored)
 		{
-
 			// subscribe to port
 			const uint32_t i = port->index;
 			if(port->type == PORT_TYPE_CONTROL)

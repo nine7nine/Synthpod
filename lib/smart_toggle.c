@@ -75,8 +75,6 @@ _smart_toggle_value_flush(Evas_Object *o)
 
 	float size_x = priv->value;
 	edje_object_part_drag_size_set(priv->theme, "drag", size_x, 1.f);
-
-	evas_object_smart_callback_call(o, SMART_TOGGLE_CHANGED, NULL);
 }
 
 static void
@@ -108,6 +106,7 @@ _mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	priv->value ^= 1;
 	
 	_smart_toggle_value_flush(obj);
+	evas_object_smart_callback_call(obj, SMART_TOGGLE_CHANGED, NULL);
 }
 
 static void
@@ -123,6 +122,7 @@ _mouse_wheel(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	priv->value ^= 1;
 
 	_smart_toggle_value_flush(obj);
+	evas_object_smart_callback_call(obj, SMART_TOGGLE_CHANGED, NULL);
 }
 
 static void

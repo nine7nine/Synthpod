@@ -88,7 +88,7 @@ _smart_slider_smart_deinit(Evas_Object *o)
 	//TODO
 }
 
-static inline void
+static inline int
 _smart_slider_value_flush(Evas_Object *o)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
@@ -116,8 +116,10 @@ _smart_slider_value_flush(Evas_Object *o)
 		sprintf(label, priv->format, priv->value, priv->unit);
 		edje_object_part_text_set(priv->theme, "label", label);
 
-		evas_object_smart_callback_call(o, SMART_SLIDER_CHANGED, NULL);
+		return 1;
 	}
+
+	return 0;
 }
 
 static void
@@ -187,7 +189,8 @@ _mouse_move(void *data, Evas *e, Evas_Object *obj, void *event_info)
 		else if(priv->drag < 0.f)
 			priv->drag = 0.f;
 	
-		_smart_slider_value_flush(obj);
+		if(_smart_slider_value_flush(obj))
+			evas_object_smart_callback_call(obj, SMART_SLIDER_CHANGED, NULL);
 	}
 }
 
@@ -220,7 +223,8 @@ _mouse_wheel(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	else if(priv->drag < 0.f)
 		priv->drag = 0.f;
 
-	_smart_slider_value_flush(obj);
+	if(_smart_slider_value_flush(obj))
+		evas_object_smart_callback_call(obj, SMART_SLIDER_CHANGED, NULL);
 }
 
 static void
