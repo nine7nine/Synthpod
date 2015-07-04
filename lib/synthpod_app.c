@@ -606,7 +606,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 		LV2_OPTIONS__interface); //TODO actually use this for something?
 	mod->sys.iface = lilv_instance_get_extension_data(mod->inst,
 		SYSTEM_PORT__interface);
-	lilv_instance_activate(mod->inst);
 
 	int system_source = 0;
 	int system_sink = 0;
@@ -789,6 +788,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	
 	// selection
 	mod->selected = 0;
+
+	lilv_instance_activate(mod->inst);
 
 	return mod;
 }
