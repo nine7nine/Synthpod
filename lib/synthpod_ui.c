@@ -89,14 +89,11 @@ struct _mod_t {
 	uint32_t num_ports;
 	port_t *ports;
 
-	// patches
+	// properties
+	Eina_List *static_properties;
+	Eina_List *dynamic_properties; //FIXME implement
 	LilvNodes *writs;
-	uint32_t num_writables;
-	property_t *writables;
-
 	LilvNodes *reads;
-	uint32_t num_readables;
-	property_t *readables;
 
 	// UI color
 	int col;
@@ -421,10 +418,10 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				//printf("ui got patch:Set: %u %u %s\n",
 				//	subject_val, request_val, body_val);
 
-				for(int i=0; i<mod->num_writables; i++)
+				Eina_List *l;
+				property_t *prop;
+				EINA_LIST_FOREACH(mod->static_properties, l, prop)
 				{
-					property_t *prop = &mod->writables[i];
-
 					// matching property?
 					if( (prop->tar_urid == property_val) && (prop->type_urid == value->type))
 					{
@@ -434,60 +431,12 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								|| (prop->type_urid == ui->forge.URI) )
 							{
 								const char *val = LV2_ATOM_BODY_CONST(value);
-								elm_entry_entry_set(prop->std.entry, val);
+								if(prop->editable)
+									elm_entry_entry_set(prop->std.entry, val);
+								else
+									elm_object_text_set(prop->std.widget, val);
 							}
 							else if(prop->type_urid == ui->forge.Path)
-							{
-								const char *val = LV2_ATOM_BODY_CONST(value);
-								elm_object_text_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Int)
-							{
-								int32_t val = ((const LV2_Atom_Int *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.URID)
-							{
-								uint32_t val = ((const LV2_Atom_URID *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Long)
-							{
-								int64_t val = ((const LV2_Atom_Long *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Float)
-							{
-								float val = ((const LV2_Atom_Float *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Double)
-							{
-								double val = ((const LV2_Atom_Double *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Bool)
-							{
-								int val = ((const LV2_Atom_Bool *)value)->body;
-								smart_toggle_value_set(prop->std.widget, val);
-							}
-						}
-
-						break;
-					}
-				}
-				for(int i=0; i<mod->num_readables; i++)
-				{
-					property_t *prop = &mod->readables[i];
-
-					// matching property?
-					if( (prop->tar_urid == property_val) && (prop->type_urid == value->type))
-					{
-						if(prop->std.widget)
-						{
-							if(  (prop->type_urid == ui->forge.String)
-								|| (prop->type_urid == ui->forge.URI)
-								|| (prop->type_urid == ui->forge.Path) )
 							{
 								const char *val = LV2_ATOM_BODY_CONST(value);
 								elm_object_text_set(prop->std.widget, val);
@@ -1425,6 +1374,19 @@ _zero_writer_advance(Zero_Writer_Handle handle, uint32_t written)
 	_sp_ui_to_app_advance(ui, len);
 }
 
+static int
+_urid_cmp(const void *data1, const void *data2)
+{
+	const property_t *prop1 = data1;
+	const property_t *prop2 = data2;
+
+	return prop1->tar_urid < prop2->tar_urid
+		? -1
+		: (prop1->tar_urid > prop2->tar_urid
+			? 1
+			: 0);
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	data_access_t data_access)
@@ -1652,39 +1614,37 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		plugin_uri, ui->regs.patch.writable.node, NULL);
 	if(mod->writs)
 	{
-		mod->num_writables = lilv_nodes_size(mod->writs);
-		mod->writables = calloc(mod->num_writables, sizeof(property_t));
-		if(mod->writables)
+		LILV_FOREACH(nodes, i, mod->writs)
 		{
-			int j = 0;
-			LILV_FOREACH(nodes, i, mod->writs)
+			const LilvNode *writable = lilv_nodes_get(mod->writs, i);
+			const char *writable_str = lilv_node_as_uri(writable);
+
+			//printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
+
+			property_t *prop = calloc(1, sizeof(property_t));
+			if(!prop)
+				continue;
+			prop->mod = mod;
+			prop->editable = 1;
+			prop->tar = writable;
+			prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, writable_str);
+			prop->type_urid = 0; // invalid type
+
+			// get type of patch:writable
+			LilvNodes *types = lilv_world_find_nodes(ui->world, writable,
+				ui->regs.rdfs.range.node, NULL);
+			if(types)
 			{
-				const LilvNode *writable = lilv_nodes_get(mod->writs, i);
-				const char *writable_str = lilv_node_as_uri(writable);
+				const LilvNode *type = lilv_nodes_get_first(types);
+				const char *type_str = lilv_node_as_string(type);
 
-				//printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
+				//printf("with type: %s\n", type_str);
+				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
-				property_t *prop = &mod->writables[j++];
-				prop->mod = mod;
-				prop->editable = 1;
-				prop->tar = writable;
-				prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, writable_str);
-				prop->type_urid = 0; // invalid type
-
-				// get type of patch:writable
-				LilvNodes *types = lilv_world_find_nodes(ui->world, writable,
-					ui->regs.rdfs.range.node, NULL);
-				if(types)
-				{
-					const LilvNode *type = lilv_nodes_get_first(types);
-					const char *type_str = lilv_node_as_string(type);
-
-					//printf("with type: %s\n", type_str);
-					prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
-
-					lilv_nodes_free(types);
-				}
+				lilv_nodes_free(types);
 			}
+
+			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
 		}
 	}
 
@@ -1693,39 +1653,37 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		plugin_uri, ui->regs.patch.readable.node, NULL);
 	if(mod->reads)
 	{
-		mod->num_readables = lilv_nodes_size(mod->reads);
-		mod->readables = calloc(mod->num_readables, sizeof(property_t));
-		if(mod->readables)
+		LILV_FOREACH(nodes, i, mod->reads)
 		{
-			int j = 0;
-			LILV_FOREACH(nodes, i, mod->reads)
+			const LilvNode *readable = lilv_nodes_get(mod->reads, i);
+			const char *readable_str = lilv_node_as_uri(readable);
+
+			//printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
+
+			property_t *prop = calloc(1, sizeof(property_t));
+			if(!prop)
+				continue;
+			prop->mod = mod;
+			prop->editable = 0;
+			prop->tar = readable;
+			prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, readable_str);
+			prop->type_urid = 0; // invalid type
+
+			// get type of patch:readable
+			LilvNodes *types = lilv_world_find_nodes(ui->world, readable,
+				ui->regs.rdfs.range.node, NULL);
+			if(types)
 			{
-				const LilvNode *readable = lilv_nodes_get(mod->reads, i);
-				const char *readable_str = lilv_node_as_uri(readable);
+				const LilvNode *type = lilv_nodes_get_first(types);
+				const char *type_str = lilv_node_as_string(type);
 
-				//printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
+				//printf("with type: %s\n", type_str);
+				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
-				property_t *prop = &mod->readables[j++];
-				prop->mod = mod;
-				prop->editable = 0;
-				prop->tar = readable;
-				prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, readable_str);
-				prop->type_urid = 0; // invalid type
-
-				// get type of patch:readable
-				LilvNodes *types = lilv_world_find_nodes(ui->world, readable,
-					ui->regs.rdfs.range.node, NULL);
-				if(types)
-				{
-					const LilvNode *type = lilv_nodes_get_first(types);
-					const char *type_str = lilv_node_as_string(type);
-
-					//printf("with type: %s\n", type_str);
-					prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
-
-					lilv_nodes_free(types);
-				}
+				lilv_nodes_free(types);
 			}
+
+			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
 		}
 	}
 
@@ -1883,10 +1841,18 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	if(mod->ports)
 		free(mod->ports);
 
-	if(mod->writables)
-		free(mod->writables);
-	if(mod->readables)
-		free(mod->readables);
+	if(mod->static_properties)
+	{
+		property_t *prop;
+		EINA_LIST_FREE(mod->static_properties, prop)
+			free(prop);
+	}
+	if(mod->dynamic_properties)
+	{
+		property_t *prop;
+		EINA_LIST_FREE(mod->dynamic_properties, prop)
+			free(prop);
+	}
 	if(mod->writs)
 		lilv_nodes_free(mod->writs);
 	if(mod->reads)
@@ -2358,37 +2324,10 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			group->children = eina_list_append(group->children, port);
 		}
 
-		for(int i=0; i<mod->num_writables; i++)
+		Eina_List *l;
+		property_t *prop;
+		EINA_LIST_FOREACH(mod->static_properties, l, prop)
 		{
-			property_t *prop = &mod->writables[i];
-
-			const char *group_lbl = "*Properties*";
-			Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
-
-			if(!parent)
-			{
-				group_t *group = calloc(1, sizeof(group_t));
-				if(group)
-				{
-					group->type = GROUP_TYPE_PROPERTY;
-					group->mod = mod;
-
-					parent = elm_genlist_item_append(ui->modlist,
-						ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
-					elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
-					if(parent)
-						eina_hash_add(mod->groups, group_lbl, parent);
-				}
-			}
-
-			// append property to corresponding group
-			group_t *group = elm_object_item_data_get(parent);
-			group->children = eina_list_append(group->children, prop);
-		}
-		for(int i=0; i<mod->num_readables; i++)
-		{
-			property_t *prop = &mod->readables[i];
-
 			const char *group_lbl = "*Properties*";
 			Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
 
