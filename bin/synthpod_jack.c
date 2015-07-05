@@ -556,6 +556,8 @@ _process(jack_nframes_t nsamples, void *data)
 		return 0;
 	}
 
+	//TODO use __builtin_assume_aligned
+
 	// fill input buffers
 	for(const sp_app_system_source_t *source=sources;
 		source->type != SYSTEM_PORT_NONE;

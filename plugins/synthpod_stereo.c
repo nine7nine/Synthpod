@@ -643,6 +643,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 		&& handle->source.input[0] && handle->source.input[1]
 		&& handle->source.input[2] && handle->source.input[3]);
 
+	//TODO use __builtin_assume_aligned
+
 	// fill input buffers
 	memcpy(handle->source.event_in, handle->port.event_in, SEQ_SIZE);
 	memcpy(handle->source.audio_in[0], handle->port.audio_in[0], sample_buf_size);

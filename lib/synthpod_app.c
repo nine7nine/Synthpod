@@ -213,6 +213,16 @@ struct _sp_app_t {
 	} fps;
 };
 
+static inline void *
+_port_sink_get(port_t *port)
+{
+	return (port->num_sources + port->num_feedbacks) == 1
+		? port->sources[0]->buf
+		: port->buf;
+}
+#define PORT_SINK_ALIGNED(PORT) ASSUME_ALIGNED(_port_sink_get((PORT)))
+#define PORT_BUF_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->buf)
+
 static void
 _state_set_value(const char *symbol, void *data,
 	const void *value, uint32_t size, uint32_t type);
@@ -222,13 +232,15 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 
 // rt
 static inline void *
-_sp_app_to_ui_request(sp_app_t *app, size_t size)
+__sp_app_to_ui_request(sp_app_t *app, size_t size)
 {
 	if(app->driver->to_ui_request)
 		return app->driver->to_ui_request(size, app->data);
 	else
 		return NULL;
 }
+#define _sp_app_to_ui_request(APP, SIZE) \
+	ASSUME_ALIGNED(__sp_app_to_ui_request((APP), (SIZE)))
 static inline void
 _sp_app_to_ui_advance(sp_app_t *app, size_t size)
 {
@@ -238,13 +250,15 @@ _sp_app_to_ui_advance(sp_app_t *app, size_t size)
 
 // rt
 static inline void *
-_sp_app_to_worker_request(sp_app_t *app, size_t size)
+__sp_app_to_worker_request(sp_app_t *app, size_t size)
 {
 	if(app->driver->to_worker_request)
 		return app->driver->to_worker_request(size, app->data);
 	else
 		return NULL;
 }
+#define _sp_app_to_worker_request(APP, SIZE) \
+	ASSUME_ALIGNED(__sp_app_to_worker_request((APP), (SIZE)))
 static inline void
 _sp_app_to_worker_advance(sp_app_t *app, size_t size)
 {
@@ -254,13 +268,15 @@ _sp_app_to_worker_advance(sp_app_t *app, size_t size)
 
 // non-rt worker-thread
 static inline void *
-_sp_worker_to_app_request(sp_app_t *app, size_t size)
+__sp_worker_to_app_request(sp_app_t *app, size_t size)
 {
 	if(app->driver->to_app_request)
 		return app->driver->to_app_request(size, app->data);
 	else
 		return NULL;
 }
+#define _sp_worker_to_app_request(APP, SIZE) \
+	ASSUME_ALIGNED(__sp_worker_to_app_request((APP), (SIZE)))
 static inline void
 _sp_worker_to_app_advance(sp_app_t *app, size_t size)
 {
@@ -366,10 +382,7 @@ sp_app_get_system_sinks(sp_app_t *app)
 			if(port->direction == PORT_DIRECTION_INPUT)
 			{
 				app->system_sinks[num_system_sinks].type = port->sys.type;
-				app->system_sinks[num_system_sinks].buf =
-					(port->num_sources + port->num_feedbacks) == 1
-						? port->sources[0]->buf
-						: port->buf;
+				app->system_sinks[num_system_sinks].buf = PORT_SINK_ALIGNED(port);
 				app->system_sinks[num_system_sinks].sys_port = port->sys.data;
 				num_system_sinks += 1;
 			}
@@ -773,7 +786,10 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 
 				// initialize control buffers to default value
 				if(tar->type == PORT_TYPE_CONTROL)
-					*(float *)tar->buf = tar->dflt;
+				{
+					float *buf_ptr = PORT_BUF_ALIGNED(tar);
+					*buf_ptr = tar->dflt;
+				}
 
 				// set port buffer
 				lilv_instance_connect_port(mod->inst, i, tar->buf);
@@ -1012,6 +1028,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 void
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 {
+	atom = ASSUME_ALIGNED(atom);
 	const transmit_t *transmit = (const transmit_t *)atom;
 
 	// check for correct atom object type
@@ -1029,9 +1046,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return;
 
 		// set port value
-		void *buf = (port->num_sources + port->num_feedbacks) == 1
-			? port->sources[0]->buf // direct link to source output buffer
-			: port->buf; // empty (n==0) or multiplexed (n>1) link
+		void *buf = PORT_SINK_ALIGNED(port);
 		*(float *)buf = trans->value.body;
 		port->last = trans->value.body;
 	}
@@ -1044,9 +1059,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return;
 
 		// set port value
-		void *buf = (port->num_sources + port->num_feedbacks) == 1
-			? port->sources[0]->buf // direct link to source output buffer
-			: port->buf; // empty (n==0) or multiplexed (n>1) link
+		void *buf = PORT_SINK_ALIGNED(port);
 		memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
 	}
 	else if(protocol == app->regs.port.event_transfer.urid)
@@ -1059,7 +1072,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		// messages from UI are always appended to default port buffer, no matter
 		// how many sources the port may have
-		void *buf = port->buf;
+		void *buf = PORT_BUF_ALIGNED(port);
 
 		// find last event in sequence
 		LV2_Atom_Sequence *seq = buf;
@@ -1396,8 +1409,9 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		port_t *port = _sp_app_port_get(app, refresh->uid.body, refresh->port.body);
 		if(!port)
 			return;
-
-		port->last = *(float *)port->buf - 0.1; // will force notification
+		
+		float *buf_ptr = PORT_BUF_ALIGNED(port);
+		port->last = *buf_ptr - 0.1; // will force notification
 	}
 	else if(protocol == app->regs.synthpod.port_selected.urid)
 	{
@@ -1507,7 +1521,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 void
 sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 {
-	const work_t *work = data;
+	const work_t *work = ASSUME_ALIGNED(data);
 
 	if(work->target == app) // work is for self
 	{
@@ -1980,7 +1994,7 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 void
 sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 {
-	const work_t *work = data;
+	const work_t *work = ASSUME_ALIGNED(data);
 
 	if(work->target == app) // work is for self
 	{
@@ -2116,7 +2130,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 				if(  (port->type == PORT_TYPE_ATOM)
 					&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
-					LV2_Atom_Sequence *seq = port->buf;
+					LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 					seq->atom.type = app->regs.port.sequence.urid;
 					seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 				}
@@ -2125,7 +2139,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 					if(  (port->type == PORT_TYPE_AUDIO)
 						|| (port->type == PORT_TYPE_CV) )
 					{
-						memset(port->buf, 0x0, port->size);
+						memset(PORT_BUF_ALIGNED(port), 0x0, port->size);
 					}
 				}
 			}
@@ -2186,27 +2200,28 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			{
 				if(port->type == PORT_TYPE_CONTROL)
 				{
-					float *val = port->buf;
+					float *val = PORT_BUF_ALIGNED(port);
 					*val = 0; // init
 					for(int i=0; i<port->num_sources; i++)
 					{
-						float *src = port->sources[i]->buf;
+						float *src = PORT_BUF_ALIGNED(port->sources[i]);
 						*val += *src;
 					}
 				}
 				else if( (port->type == PORT_TYPE_AUDIO)
 							|| (port->type == PORT_TYPE_CV) )
 				{
-					float *val = port->buf;
+					float *val = PORT_BUF_ALIGNED(port);
 					memset(val, 0, nsamples * sizeof(float)); // init
 					for(int i=0; i<port->num_sources; i++)
 					{
-						float *src = port->sources[i]->buf;
+						float *src = PORT_BUF_ALIGNED(port->sources[i]);
 						for(int j=0; j<nsamples; j++)
 						{
 							val[j] += src[j];
 						}
 					}
+					
 				}
 				else if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
@@ -2220,7 +2235,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					LV2_Atom_Event *itr [32]; //TODO how big?
 					for(int i=0; i<port->num_sources; i++)
 					{
-						seq[i] = port->sources[i]->buf;
+						seq[i] = PORT_BUF_ALIGNED(port->sources[i]);
 						itr[i] = lv2_atom_sequence_begin(&seq[i]->body);
 					}
 
@@ -2265,7 +2280,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
-					const LV2_Atom_Sequence *seq = (const LV2_Atom_Sequence *)port->buf;
+					const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // no messages from UI
 						continue; // skip
 
@@ -2301,7 +2316,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				&& (port->direction == PORT_DIRECTION_OUTPUT)
 				&& (!mod->sys.iface) ) // don't overwrite source buffer events
 			{
-				LV2_Atom_Sequence *seq = port->buf;
+				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = port->size;
 			}
@@ -2336,10 +2351,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			if(!(subscribed || patchable))
 				continue; // skip this port
 
-			const void *buf = (port->num_sources + port->num_feedbacks) == 1
-				? port->sources[0]->buf // direct link to source buffer
-				: port->buf; // dummy (n==0) or multiplexed (n>1) link
-
+			const void *buf = PORT_SINK_ALIGNED(port);
 			assert(buf != NULL);
 
 			/*
@@ -2531,7 +2543,8 @@ _state_set_value(const char *symbol, void *data,
 			return; //TODO warning
 
 		//printf("%u %f\n", index, val);
-		*(float *)tar->buf = val;
+		float *buf_ptr = PORT_BUF_ALIGNED(tar);
+		*buf_ptr = val;
 		tar->last = val - 0.1; // triggers notification
 	}
 }
@@ -2559,7 +2572,7 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 		&& (tar->type == PORT_TYPE_CONTROL)
 		&& (tar->num_sources == 0) )
 	{
-		const float *val = tar->buf;
+		const float *val = PORT_BUF_ALIGNED(tar);
 
 		if(tar->toggled)
 		{

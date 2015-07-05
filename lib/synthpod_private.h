@@ -22,6 +22,8 @@
 #define SYNTHPOD_WORLD				SYNTHPOD_PREFIX"world"
 #define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
+#define ASSUME_ALIGNED(PTR) __builtin_assume_aligned((PTR), 16)
+
 #include <lilv/lilv.h>
 
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
@@ -654,6 +656,8 @@ static inline void
 _sp_transmit_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_t *trans, uint32_t size,
 	LV2_URID protocol)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	trans->obj.atom.size = size - sizeof(LV2_Atom);
 	trans->obj.atom.type = forge->Object;
 	trans->obj.body.id = regs->synthpod.event.urid;
@@ -669,6 +673,8 @@ static inline void
 _sp_transmit_module_list_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_list_t *trans, uint32_t size)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_list.urid);
 }
 
@@ -680,6 +686,8 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	u_id_t module_uid, const char *module_uri, const LV2_Handle *inst,
 	data_access_t data_access)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_add.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -708,6 +716,8 @@ static inline void
 _sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_del_t *trans, uint32_t size, u_id_t module_uid)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_del.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -719,6 +729,8 @@ static inline void
 _sp_transmit_module_move_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_move_t *trans, uint32_t size, u_id_t module_uid, u_id_t prev_uid)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_move.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -734,6 +746,8 @@ static inline void
 _sp_transmit_module_preset_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_preset_load_t *trans, uint32_t size, u_id_t module_uid, const char *label)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_preset_load.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -753,6 +767,8 @@ static inline void
 _sp_transmit_module_preset_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_preset_save_t *trans, uint32_t size, u_id_t module_uid, const char *label)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_preset_save.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -772,6 +788,8 @@ static inline void
 _sp_transmit_module_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_selected_t *trans, uint32_t size, u_id_t module_uid, int state)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.module_selected.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -788,6 +806,8 @@ _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_connected_t *trans, uint32_t size, u_id_t src_uid,
 	uint32_t src_port, u_id_t snk_uid, uint32_t snk_port, int32_t state, int32_t indirect)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_connected.urid);
 
 	trans->src_uid.atom.size = sizeof(int32_t);
@@ -820,6 +840,8 @@ _sp_transmit_port_subscribed_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_subscribed_t *trans, uint32_t size,
 	u_id_t module_uid, uint32_t port_index, LV2_URID prot, int32_t state)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_subscribed.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -844,6 +866,8 @@ _sp_transmit_port_monitored_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_monitored_t *trans, uint32_t size,
 	u_id_t module_uid, uint32_t port_index, int32_t state)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_monitored.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -864,6 +888,8 @@ _sp_transmit_port_refresh_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_refresh_t *trans, uint32_t size,
 	u_id_t module_uid, uint32_t port_index)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_refresh.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -880,6 +906,8 @@ _sp_transmit_port_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_port_selected_t *trans, uint32_t size,
 	u_id_t module_uid, uint32_t port_index, int32_t state)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.port_selected.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -900,6 +928,8 @@ _sp_transmit_bundle_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_bundle_load_t *trans, uint32_t size,
 	int32_t status, const char *bundle_path)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.bundle_load.urid);
 
 	trans->status.atom.size = sizeof(int32_t);
@@ -920,6 +950,8 @@ _sp_transmit_bundle_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_bundle_save_t *trans, uint32_t size,
 	int32_t status, const char *bundle_path)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, regs->synthpod.bundle_save.urid);
 
 	trans->status.atom.size = sizeof(int32_t);
@@ -939,6 +971,8 @@ static inline void
 _sp_transfer_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_t *trans, uint32_t size,
 	LV2_URID protocol, u_id_t module_uid, uint32_t port_index)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, protocol);
 
 	trans->uid.atom.size = sizeof(int32_t);
@@ -954,6 +988,8 @@ static inline void
 _sp_transfer_float_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_float_t *trans,
 	u_id_t module_uid, uint32_t port_index, const float *value)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_float_t),
 		regs->port.float_protocol.urid, module_uid, port_index);
 
@@ -966,6 +1002,8 @@ static inline void
 _sp_transfer_peak_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_peak_t *trans,
 	u_id_t module_uid, uint32_t port_index, const LV2UI_Peak_Data *data)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_peak_t),
 		regs->port.peak_protocol.urid, module_uid, port_index);
 
@@ -986,6 +1024,9 @@ static inline LV2_Atom *
 _sp_transfer_atom_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *trans,
 	u_id_t module_uid, uint32_t port_index, uint32_t atom_size, const LV2_Atom *atom)
 {
+	trans = ASSUME_ALIGNED(trans);
+	//TODO atom aligned, too?
+
 	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t)
 		+ lv2_atom_pad_size(atom_size),
 		regs->port.atom_transfer.urid, module_uid, port_index);
@@ -1000,6 +1041,9 @@ static inline LV2_Atom *
 _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *trans,
 	u_id_t module_uid, uint32_t port_index, uint32_t atom_size, const LV2_Atom *atom)
 {
+	trans = ASSUME_ALIGNED(trans);
+	//TODO atom aligned, too?
+
 	_sp_transfer_fill(regs, forge, &trans->transfer, sizeof(transfer_atom_t)
 		+ lv2_atom_pad_size(atom_size),
 		regs->port.event_transfer.urid, module_uid, port_index);
@@ -1015,6 +1059,8 @@ _sp_transfer_patch_set_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transfer_patch_set_t *trans, u_id_t module_uid, uint32_t port_index,
 	uint32_t body_size, LV2_URID subject, LV2_URID property, LV2_URID type)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	uint32_t trans_size = sizeof(transfer_patch_set_t)
 		+ lv2_atom_pad_size(body_size);
 	uint32_t obj_size = trans_size
@@ -1056,6 +1102,8 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transfer_patch_get_t *trans, u_id_t module_uid, uint32_t port_index,
 	LV2_URID subject, LV2_URID property)
 {
+	trans = ASSUME_ALIGNED(trans);
+
 	uint32_t trans_size = sizeof(transfer_patch_get_t);
 	uint32_t obj_size = trans_size
 		- offsetof(transfer_patch_get_t, obj.body);
@@ -1141,6 +1189,7 @@ static inline LV2_Atom_Forge_Ref
 _lv2_atom_forge_sequence_append(LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
 	uint8_t *buf, uint32_t size)
 {
+	buf = ASSUME_ALIGNED(buf);
 	LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)buf;
 
 	lv2_atom_forge_set_buffer(forge, buf, size);

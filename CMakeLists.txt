@@ -26,12 +26,15 @@ set(SYNTHPOD_MICRO_VERSION 1)
 set(SYNTHPOD_VERSION "${SYNTHPOD_MAJOR_VERSION}.${SYNTHPOD_MINOR_VERSION}.${SYNTHPOD_MICRO_VERSION}")
 add_definitions("-DSYNTHPOD_VERSION=\"${SYNTHPOD_VERSION}\"")
 
-set(CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-std=gnu11 -ffast-math -ftree-vectorize ${CMAKE_C_FLAGS}")
+
+#set(CMAKE_C_FLAGS "-ftree-vectorizer-verbose=1 ${CMAKE_C_FLAGS}")
+#set(CMAKE_C_FLAGS "-Rpass=loop-vectorize ${CMAKE_C_FLAGS}")
 
 # options
 option(BUILD_UI "Build user interface libraries" ON)
 option(BUILD_JACK "Build JACK standalone host" ON)
-option(BUILD_PORTAUDIO "Build PortAudio standalone host (experimental)" OFF)
+option(BUILD_PORTAUDIO "Build PortAudio standalone host (broken)" OFF)
 
 # eina
 pkg_search_module(EINA REQUIRED eina>=1.8)

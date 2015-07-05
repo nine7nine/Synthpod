@@ -298,13 +298,15 @@ struct _sp_ui_t {
 };
 
 static inline void *
-_sp_ui_to_app_request(sp_ui_t *ui, size_t size)
+__sp_ui_to_app_request(sp_ui_t *ui, size_t size)
 {
 	if(ui->driver->to_app_request && !ui->dirty)
 		return ui->driver->to_app_request(size, ui->data);
 	else
 		return NULL;
 }
+#define _sp_ui_to_app_request(APP, SIZE) \
+	ASSUME_ALIGNED(__sp_ui_to_app_request((APP), (SIZE)))
 static inline void
 _sp_ui_to_app_advance(sp_ui_t *ui, size_t size)
 {
@@ -4530,6 +4532,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	if(!ui || !atom)
 		return;
 
+	atom = ASSUME_ALIGNED(atom);
 	const transmit_t *transmit = (const transmit_t *)atom;
 	LV2_URID protocol = transmit->prop.key;
 
