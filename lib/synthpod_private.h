@@ -22,7 +22,11 @@
 #define SYNTHPOD_WORLD				SYNTHPOD_PREFIX"world"
 #define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
-#define ASSUME_ALIGNED(PTR) __builtin_assume_aligned((PTR), 16)
+#if defined(HAS_BUILTIN_ASSUME_ALIGNED)
+#	define ASSUME_ALIGNED(PTR) __builtin_assume_aligned((PTR), 16)
+#else
+#	define ASSUME_ALIGNED(PTR) (PTR)
+#endif
 
 #include <lilv/lilv.h>
 

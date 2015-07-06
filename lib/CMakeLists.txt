@@ -7,6 +7,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cjson)
 		
 add_definitions("-D_GNU_SOURCE=1") # asprintf
 
+include(CheckCSourceCompiles)
+CHECK_C_SOURCE_COMPILES("int main(int argc, char **argv)
+	{void *src; void *dst = __builtin_assume_aligned(src, 16); return 0;}"
+	HAS_BUILTIN_ASSUME_ALIGNED)
+if(${HAS_BUILTIN_ASSUME_ALIGNED})
+	add_definitions("-DHAS_BUILTIN_ASSUME_ALIGNED")
+endif()
+
 # synthpod
 add_library(synthpod.lib SHARED
 	synthpod_app.c
