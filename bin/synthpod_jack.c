@@ -47,6 +47,7 @@
 #include <jack/transport.h>
 #if defined(JACK_HAS_METADATA_API)
 #	include <jack/metadata.h>
+#	include <jack/uuid.h>
 #endif
 
 #include <Eina.h>
@@ -134,25 +135,6 @@ struct _prog_t {
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
-
-static int
-_jack_init(prog_t *handle, const char *id)
-{
-	handle->client = jack_client_open(id, JackNullOption, NULL);
-
-	return 0; //TODO
-}
-
-static void
-_jack_deinit(prog_t *handle)
-{
-	if(handle->client)
-	{
-		jack_deactivate(handle->client);
-		jack_client_close(handle->client);
-		handle->client = NULL;
-	}
-}
 
 // non-rt worker-thread
 static void *
@@ -1012,6 +994,75 @@ _system_port_del(void *data, void *sys_port)
 	jack_port_unregister(handle->client, jack_port);
 }
 
+static void
+_shutdown_async(void *data)
+{
+	prog_t *handle = data;
+
+	//FIXME save state?
+	//handle->kill = 1; // exit after save
+	//sp_ui_bundle_save(handle->ui, handle->path);
+
+#if defined(BUILD_UI)
+	elm_exit();
+#else
+	ecore_main_loop_quit();
+#endif
+}
+
+static void
+_shutdown(void *data)
+{
+	prog_t *handle = data;
+
+	handle->client = NULL; // client has died, didn't it?
+	ecore_main_loop_thread_safe_call_async(_shutdown_async, handle);
+}
+
+static int
+_jack_init(prog_t *handle, const char *id)
+{
+	if(!(handle->client = jack_client_open(id, JackNullOption, NULL)))
+		return -1;
+
+	// set client pretty name
+#if defined(JACK_HAS_METADATA_API)
+	jack_uuid_t uuid;
+	const char *client_name = jack_get_client_name(handle->client);
+	const char *uuid_str = jack_get_uuid_for_client_name(handle->client, client_name);
+	jack_uuid_parse(uuid_str, &uuid);
+	jack_set_property(handle->client, uuid,
+		JACK_METADATA_PRETTY_NAME, "Synthpod", "text/plain");
+#endif
+
+	// set client process callback
+	if(jack_set_process_callback(handle->client, _process, handle))
+		return -1;
+	jack_on_shutdown(handle->client, _shutdown, handle);
+
+	return 0;
+}
+
+static void
+_jack_deinit(prog_t *handle)
+{
+	if(handle->client)
+	{
+		// remove client properties
+#if defined(JACK_HAS_METADATA_API)
+		jack_uuid_t uuid;
+		const char *client_name = jack_get_client_name(handle->client);
+		const char *uuid_str = jack_get_uuid_for_client_name(handle->client, client_name);
+		jack_uuid_parse(uuid_str, &uuid);
+		jack_remove_properties(handle->client, uuid);
+#endif
+
+		jack_deactivate(handle->client);
+		jack_client_close(handle->client);
+		handle->client = NULL;
+	}
+}
+
 static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
@@ -1040,7 +1091,6 @@ _open(const char *path, const char *name, const char *id, void *data)
 #endif
 
 	// jack activate
-	jack_set_process_callback(handle->client, _process, handle);
 	jack_activate(handle->client); //TODO check
 
 #if defined(BUILD_UI) //FIXME
