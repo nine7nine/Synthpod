@@ -264,6 +264,7 @@ struct _sp_ui_t {
 	Evas_Object *table;
 	Evas_Object *popup;
 	Evas_Object *mainmenu;
+	Evas_Object *nonsm;
 	Evas_Object *statusline;
 
 	int colors_max;
@@ -4142,19 +4143,6 @@ _menu_about(void *data, Evas_Object *obj, void *event_info)
 		evas_object_show(ui->popup);
 }
 
-static void
-_menu_show(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	sp_ui_t *ui = data;
-	Evas_Event_Mouse_Down *ev = event_info;
-	
-	if(ev->button == 3)
-	{
-		elm_menu_move(ui->mainmenu, ev->output.x, ev->output.y);
-		evas_object_show(ui->mainmenu);
-	}
-}
-
 sp_ui_t *
 sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	void *data, int show_splash)
@@ -4332,24 +4320,26 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 		_theme_resize(ui, NULL, ui->win, NULL);
 		evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
-		
-		ui->mainmenu = elm_menu_add(ui->table);
-		//ui->mainmenu = elm_win_main_menu_get(ui->win);
+
+		ui->mainmenu = elm_toolbar_add(ui->table);
 		if(ui->mainmenu)
 		{
+			elm_toolbar_horizontal_set(ui->mainmenu, EINA_FALSE);
+			elm_toolbar_select_mode_set(ui->mainmenu, ELM_OBJECT_SELECT_MODE_NONE);
+			elm_toolbar_align_set(ui->mainmenu, 0.f);
+			evas_object_size_hint_weight_set(ui->mainmenu, 0.f, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(ui->mainmenu, 0.f, EVAS_HINT_FILL);
+			evas_object_show(ui->mainmenu);
+			elm_table_pack(ui->table, ui->mainmenu, 1, 0, 1, 1);
+
 			//TODO use
 			Elm_Object_Item *itm; 
-			itm = elm_menu_item_add(ui->mainmenu, NULL, "document-open", "Load",
+			itm = elm_toolbar_item_append(ui->mainmenu, "document-open", "Load",
 				_menu_open, ui);
-			itm = elm_menu_item_add(ui->mainmenu, NULL, "document-save", "Save",
+			itm = elm_toolbar_item_append(ui->mainmenu, "document-save", "Save",
 				_menu_save, ui);
-
-			elm_menu_item_separator_add(ui->mainmenu, NULL);
-			itm = elm_menu_item_add(ui->mainmenu, NULL, "help-about", "About",
+			itm = elm_toolbar_item_append(ui->mainmenu, "help-about", "About",
 				_menu_about, ui);
-		
-			evas_object_event_callback_add(ui->table, EVAS_CALLBACK_MOUSE_DOWN,
-				_menu_show, ui);
 		} // mainmenu
 
 		ui->mainpane = elm_panes_add(ui->table);
@@ -4360,7 +4350,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(ui->mainpane);
-			elm_table_pack(ui->table, ui->mainpane, 0, 1, 1, 1);
+			elm_table_pack(ui->table, ui->mainpane, 0, 0, 1, 1);
 
 			ui->popup = elm_popup_add(ui->table);
 			if(ui->popup)
@@ -4542,7 +4532,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				elm_object_part_content_set(ui->mainpane, "right", ui->modgrid);
 			} // modgrid
 		} // mainpane
-
+		
 		ui->statusline = elm_label_add(ui->table);
 		if(ui->statusline)
 		{
@@ -4551,7 +4541,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			evas_object_size_hint_weight_set(ui->statusline, EVAS_HINT_EXPAND, 0.f);
 			evas_object_size_hint_align_set(ui->statusline, 0.f, 1.f);
 			evas_object_show(ui->statusline);
-			elm_table_pack(ui->table, ui->statusline, 0, 2, 1, 1);
+			elm_table_pack(ui->table, ui->statusline, 0, 1, 2, 1);
 		} // statusline
 
 		//TODO add info button
