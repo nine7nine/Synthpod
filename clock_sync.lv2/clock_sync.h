@@ -36,18 +36,10 @@ typedef void *Clock_Sync_Handle;
 // rt
 typedef uint64_t (*Clock_Sync_Time2Frames_Function)(Clock_Sync_Handle handle,
 	uint64_t time);
-// rt
-typedef uint64_t (*Clock_Sync_Frames2Time_Function)(Clock_Sync_Handle handle,
-	uint64_t frames);
-// non-rt
 typedef uint64_t (*Clock_Sync_Frames_Function)(Clock_Sync_Handle handle);
-// rt
-typedef uint64_t (*Clock_Sync_Time_Function)(Clock_Sync_Handle handle);
 
 typedef struct _Clock_Sync_Schedule {
 	Clock_Sync_Time2Frames_Function time2frames;
-	Clock_Sync_Frames2Time_Function frames2time;
-	Clock_Sync_Time_Function time;
 	Clock_Sync_Frames_Function frames;
 	Clock_Sync_Handle handle;
 } Clock_Sync_Schedule;

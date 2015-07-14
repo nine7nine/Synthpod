@@ -1181,13 +1181,6 @@ _clock_sync_cb(void *data)
 	sync1->t1 += 100000; // ideal period of timer
 	sync1->T = (sync1->t1 - sync1->t0) / 0.1; // estimated us/s
 
-	/*
-	printf("_clock_sync_cb: %i %p %p, %08lx.%08lx %lu %lu %lf\n",
-		handle->sync_ptr, sync1, handle,
-		sync1->ntp.tv_sec, sync1->ntp.tv_nsec,
-		sync1->t0, sync1->t1, sync1->T);
-	*/
-
 	handle->sync_ptr ^= 1; // toggle pointer, atomic operation
 
 	return ECORE_CALLBACK_RENEW;
@@ -1202,6 +1195,8 @@ _clock_sync_time2frames(Clock_Sync_Handle instance, uint64_t time)
 	if(time == 1ULL)
 		return 0; // inject immediately
 
+	if(time < handle->last_time)
+		fprintf(stderr, "OSC bundle late\n");
 	if(time == handle->last_time)
 		return handle->last_frame;
 
@@ -1216,12 +1211,6 @@ _clock_sync_time2frames(Clock_Sync_Handle instance, uint64_t time)
 	diff += time_frac * SLICE;
 	diff -= sync->ntp.tv_nsec * 1e-9;
 
-	/*
-	printf("_clock_sync_time2frames: %p %p, %lu %lu %lf\n",
-		sync, handle,
-		sync->t0, sync->t1, diff);
-	*/
-
 	jack_time_t t = sync->t0 + diff * sync->T;
 	jack_nframes_t frame = jack_time_to_frames(handle->client, t);
 
@@ -1233,35 +1222,11 @@ _clock_sync_time2frames(Clock_Sync_Handle instance, uint64_t time)
 
 // rt
 static uint64_t
-_clock_sync_frames2time(Clock_Sync_Handle instance, uint64_t frames)
-{
-	prog_t *handle = instance;
-
-	//FIXME
-
-	return 0;
-}
-
-// rt
-static uint64_t
 _clock_sync_frames(Clock_Sync_Handle instance)
 {
 	prog_t *handle = instance;
 
 	return jack_last_frame_time(handle->client);
-}
-
-// non-rt
-static uint64_t
-_clock_sync_time(Clock_Sync_Handle instance)
-{
-	prog_t *handle = instance;
-
-	struct timespec ntp;
-	clock_gettime(CLOCK_REALTIME, &ntp);
-	ntp.tv_sec += JAN_1970;
-
-	return ((uint64_t)ntp.tv_sec << 32) | (uint32_t)(ntp.tv_nsec * 4.295);
 }
 
 #if defined(BUILD_UI)
@@ -1330,8 +1295,6 @@ main(int argc, char **argv)
 	handle.app_driver.system_port_del = _system_port_del;
 
 	handle.clock_sync_sched.time2frames = _clock_sync_time2frames;
-	handle.clock_sync_sched.frames2time = _clock_sync_frames2time;
-	handle.clock_sync_sched.time = _clock_sync_time;
 	handle.clock_sync_sched.frames = _clock_sync_frames;
 	handle.clock_sync_sched.handle = &handle;
 	handle.app_driver.clock_sync_sched = &handle.clock_sync_sched;
@@ -1368,8 +1331,7 @@ main(int argc, char **argv)
 		EINA_THREAD_URGENT, -1, _worker_thread, &handle); //TODO
 
 	handle.sync_timer = ecore_timer_add(0.1, _clock_sync_cb, &handle);
-	//_clock_sync_cb(&handle);
-	//_clock_sync_cb(&handle);
+	_clock_sync_cb(&handle); // initialize
 
 #if defined(BUILD_UI)
 	// main loop
