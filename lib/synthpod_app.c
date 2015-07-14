@@ -34,7 +34,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 9
+#define NUM_FEATURES 10
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -562,6 +562,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	{
 		mod->feature_list[nfeatures].URI = SYSTEM_PORT__dynamicPorts;
 		mod->feature_list[nfeatures++].data = NULL;
+	}
+
+	if(app->driver->clock_sync_sched)
+	{
+		mod->feature_list[nfeatures].URI = CLOCK_SYNC__schedule;
+		mod->feature_list[nfeatures++].data = app->driver->clock_sync_sched;
 	}
 
 	assert(nfeatures <= NUM_FEATURES);

@@ -56,7 +56,14 @@
 #define SEQ_SIZE 0x2000
 #define OSC_SIZE 0x800
 
+typedef struct _sync_t sync_t;
 typedef struct _prog_t prog_t;
+
+struct _sync_t {
+	struct timespec ntp; // wall clock
+	uint64_t t0, t1; // rt clock
+	double T; // period
+};
 
 struct _prog_t {
 	ext_urid_t *ext_urid;
@@ -132,6 +139,13 @@ struct _prog_t {
 		jack_nframes_t frame;
 		double bpm;
 	} trans;
+
+	Clock_Sync_Schedule clock_sync_sched;
+	volatile int sync_ptr;
+	sync_t sync[2];
+	uint64_t last_time;
+	uint64_t last_frame;
+	Ecore_Timer *sync_timer;
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
@@ -1146,6 +1160,110 @@ static const synthpod_nsm_driver_t nsm_driver = {
 #endif // BUILD_UI
 };
 
+#	define JAN_1970 (uint64_t)0x83aa7e80
+#	define SLICE (double)0x0.00000001p0 // smallest NTP time slice
+
+static Eina_Bool
+_clock_sync_cb(void *data)
+{
+	prog_t *handle = data;
+
+	sync_t *sync0 = &handle->sync[handle->sync_ptr];
+	sync_t *sync1 = &handle->sync[!handle->sync_ptr];
+
+	sync1->t0 = sync0->t1;
+
+	sync1->t1 = jack_get_time() / 2;
+	clock_gettime(CLOCK_REALTIME, &sync1->ntp);
+	sync1->t1 += jack_get_time() / 2;
+	sync1->ntp.tv_sec += JAN_1970; // NTP -> OSC timestamp conversion
+
+	sync1->t1 += 100000; // ideal period of timer
+	sync1->T = (sync1->t1 - sync1->t0) / 0.1; // estimated us/s
+
+	/*
+	printf("_clock_sync_cb: %i %p %p, %08lx.%08lx %lu %lu %lf\n",
+		handle->sync_ptr, sync1, handle,
+		sync1->ntp.tv_sec, sync1->ntp.tv_nsec,
+		sync1->t0, sync1->t1, sync1->T);
+	*/
+
+	handle->sync_ptr ^= 1; // toggle pointer, atomic operation
+
+	return ECORE_CALLBACK_RENEW;
+}
+
+// rt
+static uint64_t
+_clock_sync_time2frames(Clock_Sync_Handle instance, uint64_t time)
+{
+	prog_t *handle = instance;
+
+	if(time == 1ULL)
+		return 0; // inject immediately
+
+	if(time == handle->last_time)
+		return handle->last_frame;
+
+	uint32_t time_sec = time >> 32;
+	uint32_t time_frac = time & 0xffffffff;
+
+	volatile int sync_ptr = handle->sync_ptr;
+	sync_t *sync = &handle->sync[sync_ptr];
+
+	double diff = time_sec;
+	diff -= sync->ntp.tv_sec;
+	diff += time_frac * SLICE;
+	diff -= sync->ntp.tv_nsec * 1e-9;
+
+	/*
+	printf("_clock_sync_time2frames: %p %p, %lu %lu %lf\n",
+		sync, handle,
+		sync->t0, sync->t1, diff);
+	*/
+
+	jack_time_t t = sync->t0 + diff * sync->T;
+	jack_nframes_t frame = jack_time_to_frames(handle->client, t);
+
+	handle->last_time = time;
+	handle->last_frame = frame;
+
+	return frame;
+}
+
+// rt
+static uint64_t
+_clock_sync_frames2time(Clock_Sync_Handle instance, uint64_t frames)
+{
+	prog_t *handle = instance;
+
+	//FIXME
+
+	return 0;
+}
+
+// rt
+static uint64_t
+_clock_sync_frames(Clock_Sync_Handle instance)
+{
+	prog_t *handle = instance;
+
+	return jack_last_frame_time(handle->client);
+}
+
+// non-rt
+static uint64_t
+_clock_sync_time(Clock_Sync_Handle instance)
+{
+	prog_t *handle = instance;
+
+	struct timespec ntp;
+	clock_gettime(CLOCK_REALTIME, &ntp);
+	ntp.tv_sec += JAN_1970;
+
+	return ((uint64_t)ntp.tv_sec << 32) | (uint32_t)(ntp.tv_nsec * 4.295);
+}
+
 #if defined(BUILD_UI)
 EAPI_MAIN int
 elm_main(int argc, char **argv)
@@ -1211,6 +1329,13 @@ main(int argc, char **argv)
 	handle.app_driver.system_port_add = _system_port_add;
 	handle.app_driver.system_port_del = _system_port_del;
 
+	handle.clock_sync_sched.time2frames = _clock_sync_time2frames;
+	handle.clock_sync_sched.frames2time = _clock_sync_frames2time;
+	handle.clock_sync_sched.time = _clock_sync_time;
+	handle.clock_sync_sched.frames = _clock_sync_frames;
+	handle.clock_sync_sched.handle = &handle;
+	handle.app_driver.clock_sync_sched = &handle.clock_sync_sched;
+
 #if defined(BUILD_UI)
 	handle.ui_driver.map = map;
 	handle.ui_driver.unmap = unmap;
@@ -1242,6 +1367,10 @@ main(int argc, char **argv)
 	Eina_Bool status = eina_thread_create(&handle.worker_thread,
 		EINA_THREAD_URGENT, -1, _worker_thread, &handle); //TODO
 
+	handle.sync_timer = ecore_timer_add(0.1, _clock_sync_cb, &handle);
+	//_clock_sync_cb(&handle);
+	//_clock_sync_cb(&handle);
+
 #if defined(BUILD_UI)
 	// main loop
 	elm_run();
@@ -1258,6 +1387,9 @@ main(int argc, char **argv)
 
 	ecore_event_handler_del(handle.sig);
 #endif // BUILD_UI
+
+	if(handle.sync_timer)
+		ecore_timer_del(handle.sync_timer);
 
 	// threads deinit
 	handle.worker_dead = 1; // atomic operation
