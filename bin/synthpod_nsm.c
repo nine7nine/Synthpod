@@ -266,7 +266,7 @@ _con_dat(void *data, int type, void *info)
 	//printf("_client_data\n");
 
 	if(osc_check_packet(ev->data, ev->size))
-		osc_dispatch_method(0, ev->data, ev->size, methods, NULL, NULL, nsm);
+		osc_dispatch_method(ev->data, ev->size, methods, NULL, NULL, nsm);
 	else
 		fprintf(stderr, "_client_dat: malformed OSC packet\n");
 

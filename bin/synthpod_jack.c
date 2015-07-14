@@ -625,7 +625,7 @@ _process(jack_nframes_t nsamples, void *data)
 					if(osc_check_packet(mev.buffer, mev.size))
 					{
 						lv2_atom_forge_frame_time(forge, mev.time);
-						osc_dispatch_method(OSC_IMMEDIATE, mev.buffer, mev.size, methods,
+						osc_dispatch_method(mev.buffer, mev.size, methods,
 							_bundle_in, _bundle_out, handle);
 					}
 				}
