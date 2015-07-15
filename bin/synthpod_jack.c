@@ -136,6 +136,7 @@ struct _prog_t {
 		double bpm;
 	} trans;
 
+#if defined(JACK_HAS_CYCLE_TIMES)
 	osc_schedule_t osc_sched;
 	struct timespec ntp;
 	struct {
@@ -145,6 +146,7 @@ struct _prog_t {
 		jack_time_t nxt_usecs;
 		float T;
 	} cycle;
+#endif
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
@@ -505,7 +507,8 @@ _process(jack_nframes_t nsamples, void *data)
 {
 	prog_t *handle = data;
 	sp_app_t *app = handle->app;
-	
+
+#if defined(JACK_HAS_CYCLE_TIMES)
 	clock_gettime(CLOCK_REALTIME, &handle->ntp);
 	jack_nframes_t offset = jack_frames_since_cycle_start(handle->client);
 
@@ -515,6 +518,7 @@ _process(jack_nframes_t nsamples, void *data)
 	handle->cycle.ref_frames = handle->cycle.cur_frames + offset;
 	handle->ntp.tv_sec += JAN_1970; // convert NTP to OSC time
 	handle->cycle.T = (float)nsamples / (handle->cycle.nxt_usecs - handle->cycle.cur_usecs);
+#endif
 
 	// get transport position
 	jack_position_t pos;
@@ -1169,6 +1173,7 @@ static const synthpod_nsm_driver_t nsm_driver = {
 #endif // BUILD_UI
 };
 
+#if defined(JACK_HAS_CYCLE_TIMES)
 // rt
 static int64_t
 _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
@@ -1176,7 +1181,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 	prog_t *handle = instance;
 
 	if(timestamp == 1ULL)
-		return handle->cycle.cur_frames; // inject at start of period
+		return 0; // inject at start of period
 
 	uint32_t time_sec = timestamp >> 32;
 	uint32_t time_frac = timestamp & 0xffffffff;
@@ -1223,6 +1228,7 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 
 	return timestamp;
 }
+#endif // JACK_HAS_CYCLE_TIMES
 
 #if defined(BUILD_UI)
 EAPI_MAIN int
@@ -1289,10 +1295,14 @@ main(int argc, char **argv)
 	handle.app_driver.system_port_add = _system_port_add;
 	handle.app_driver.system_port_del = _system_port_del;
 
+#if defined(JACK_HAS_CYCLE_TIMES)
 	handle.osc_sched.osc2frames = _osc_schedule_osc2frames;
 	handle.osc_sched.frames2osc = _osc_schedule_frames2osc;
 	handle.osc_sched.handle = &handle;
 	handle.app_driver.osc_sched = &handle.osc_sched;
+#else
+	handle.app_driver.osc_sched = NULL;
+#endif
 
 #if defined(BUILD_UI)
 	handle.ui_driver.map = map;

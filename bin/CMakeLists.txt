@@ -37,6 +37,12 @@ if(BUILD_JACK)
 	if(${JACK_HAS_METADATA_API})
 		add_definitions("-DJACK_HAS_METADATA_API")
 	endif()
+	
+	include(CheckLibraryExists)
+	CHECK_LIBRARY_EXISTS(jack jack_get_cycle_times "" JACK_HAS_CYCLE_TIMES)
+	if(${JACK_HAS_CYCLE_TIMES})
+		add_definitions("-DJACK_HAS_CYCLE_TIMES")
+	endif()
 
 	if(APPLE)
 		set(JACK_LIBS ${CORE_AUDIO} ${CORE_SERVICES} ${AUDIO_UNIT} "-ljack")
