@@ -56,14 +56,10 @@
 #define SEQ_SIZE 0x2000
 #define OSC_SIZE 0x800
 
-typedef struct _sync_t sync_t;
-typedef struct _prog_t prog_t;
+#	define JAN_1970 (uint64_t)0x83aa7e80
+#	define SLICE (double)0x0.00000001p0 // smallest NTP time slice
 
-struct _sync_t {
-	struct timespec ntp; // wall clock
-	uint64_t t0, t1; // rt clock
-	double T; // period
-};
+typedef struct _prog_t prog_t;
 
 struct _prog_t {
 	ext_urid_t *ext_urid;
@@ -140,12 +136,15 @@ struct _prog_t {
 		double bpm;
 	} trans;
 
-	Clock_Sync_Schedule clock_sync_sched;
-	volatile int sync_ptr;
-	sync_t sync[2];
-	uint64_t last_time;
-	uint64_t last_frame;
-	Ecore_Timer *sync_timer;
+	osc_schedule_t osc_sched;
+	struct timespec ntp;
+	struct {
+		jack_nframes_t cur_frames;
+		jack_nframes_t ref_frames;
+		jack_time_t cur_usecs;
+		jack_time_t nxt_usecs;
+		float T;
+	} cycle;
 };
 
 static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
@@ -506,6 +505,16 @@ _process(jack_nframes_t nsamples, void *data)
 {
 	prog_t *handle = data;
 	sp_app_t *app = handle->app;
+	
+	clock_gettime(CLOCK_REALTIME, &handle->ntp);
+	jack_nframes_t offset = jack_frames_since_cycle_start(handle->client);
+
+	jack_get_cycle_times(handle->client, &handle->cycle.cur_frames,
+		&handle->cycle.cur_usecs, &handle->cycle.nxt_usecs, &handle->cycle.T);
+
+	handle->cycle.ref_frames = handle->cycle.cur_frames + offset;
+	handle->ntp.tv_sec += JAN_1970; // convert NTP to OSC time
+	handle->cycle.T = (float)nsamples / (handle->cycle.nxt_usecs - handle->cycle.cur_usecs);
 
 	// get transport position
 	jack_position_t pos;
@@ -1160,73 +1169,59 @@ static const synthpod_nsm_driver_t nsm_driver = {
 #endif // BUILD_UI
 };
 
-#	define JAN_1970 (uint64_t)0x83aa7e80
-#	define SLICE (double)0x0.00000001p0 // smallest NTP time slice
-
-static Eina_Bool
-_clock_sync_cb(void *data)
-{
-	prog_t *handle = data;
-
-	sync_t *sync0 = &handle->sync[handle->sync_ptr];
-	sync_t *sync1 = &handle->sync[!handle->sync_ptr];
-
-	sync1->t0 = sync0->t1;
-
-	sync1->t1 = jack_get_time() / 2;
-	clock_gettime(CLOCK_REALTIME, &sync1->ntp);
-	sync1->t1 += jack_get_time() / 2;
-	sync1->ntp.tv_sec += JAN_1970; // NTP -> OSC timestamp conversion
-
-	sync1->t1 += 100000; // ideal period of timer
-	sync1->T = (sync1->t1 - sync1->t0) / 0.1; // estimated us/s
-
-	handle->sync_ptr ^= 1; // toggle pointer, atomic operation
-
-	return ECORE_CALLBACK_RENEW;
-}
-
 // rt
-static uint64_t
-_clock_sync_time2frames(Clock_Sync_Handle instance, uint64_t time)
+static int64_t
+_osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 {
 	prog_t *handle = instance;
 
-	if(time == 1ULL)
-		return 0; // inject immediately
+	if(timestamp == 1ULL)
+		return handle->cycle.cur_frames; // inject at start of period
 
-	if(time < handle->last_time)
-		fprintf(stderr, "OSC bundle late\n");
-	if(time == handle->last_time)
-		return handle->last_frame;
-
-	uint32_t time_sec = time >> 32;
-	uint32_t time_frac = time & 0xffffffff;
-
-	volatile int sync_ptr = handle->sync_ptr;
-	sync_t *sync = &handle->sync[sync_ptr];
+	uint32_t time_sec = timestamp >> 32;
+	uint32_t time_frac = timestamp & 0xffffffff;
 
 	double diff = time_sec;
-	diff -= sync->ntp.tv_sec;
+	diff -= handle->ntp.tv_sec;
 	diff += time_frac * SLICE;
-	diff -= sync->ntp.tv_nsec * 1e-9;
+	diff -= handle->ntp.tv_nsec * 1e-9;
+	diff *= 1e6; // convert s to us
 
-	jack_time_t t = sync->t0 + diff * sync->T;
-	jack_nframes_t frame = jack_time_to_frames(handle->client, t);
+	int64_t frames = handle->cycle.ref_frames
+		- handle->cycle.cur_frames
+		+ handle->cycle.T * diff;
 
-	handle->last_time = time;
-	handle->last_frame = frame;
-
-	return frame;
+	return frames;
 }
 
 // rt
 static uint64_t
-_clock_sync_frames(Clock_Sync_Handle instance)
+_osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 {
 	prog_t *handle = instance;
 
-	return jack_last_frame_time(handle->client);
+	double diff = (frames - handle->cycle.ref_frames + handle->cycle.cur_frames) / handle->cycle.T;
+	uint64_t secs = trunc(diff);
+	uint64_t nsecs = (diff - secs) * 1e9;
+
+	uint64_t time_sec = handle->ntp.tv_sec;
+	uint64_t time_frac = handle->ntp.tv_nsec;
+	
+	time_sec += secs;
+	time_frac += nsecs;
+
+	while(time_frac > 1000000000)
+	{
+		time_sec += 1;
+		time_frac -= 1000000000;
+	}
+	
+	time_frac *= 4.295; // ns -> frac
+
+
+	uint64_t timestamp = (time_sec << 32) | time_frac;
+
+	return timestamp;
 }
 
 #if defined(BUILD_UI)
@@ -1294,10 +1289,10 @@ main(int argc, char **argv)
 	handle.app_driver.system_port_add = _system_port_add;
 	handle.app_driver.system_port_del = _system_port_del;
 
-	handle.clock_sync_sched.time2frames = _clock_sync_time2frames;
-	handle.clock_sync_sched.frames = _clock_sync_frames;
-	handle.clock_sync_sched.handle = &handle;
-	handle.app_driver.clock_sync_sched = &handle.clock_sync_sched;
+	handle.osc_sched.osc2frames = _osc_schedule_osc2frames;
+	handle.osc_sched.frames2osc = _osc_schedule_frames2osc;
+	handle.osc_sched.handle = &handle;
+	handle.app_driver.osc_sched = &handle.osc_sched;
 
 #if defined(BUILD_UI)
 	handle.ui_driver.map = map;
@@ -1330,9 +1325,6 @@ main(int argc, char **argv)
 	Eina_Bool status = eina_thread_create(&handle.worker_thread,
 		EINA_THREAD_URGENT, -1, _worker_thread, &handle); //TODO
 
-	handle.sync_timer = ecore_timer_add(0.1, _clock_sync_cb, &handle);
-	_clock_sync_cb(&handle); // initialize
-
 #if defined(BUILD_UI)
 	// main loop
 	elm_run();
@@ -1349,9 +1341,6 @@ main(int argc, char **argv)
 
 	ecore_event_handler_del(handle.sig);
 #endif // BUILD_UI
-
-	if(handle.sync_timer)
-		ecore_timer_del(handle.sync_timer);
 
 	// threads deinit
 	handle.worker_dead = 1; // atomic operation

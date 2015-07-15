@@ -32,7 +32,7 @@
 
 #include <synthpod_common.h>
 #include <system_port.h>
-#include <clock_sync.h>
+#include <lv2_osc.h>
 
 typedef struct _sp_app_t sp_app_t;
 typedef struct _sp_app_system_source_t sp_app_system_source_t;
@@ -90,7 +90,7 @@ struct _sp_app_driver_t {
 	sp_system_port_del system_port_del;
 
 	// clock_sync
-	Clock_Sync_Schedule *clock_sync_sched;
+	osc_schedule_t *osc_sched;
 };
 
 sp_app_t *

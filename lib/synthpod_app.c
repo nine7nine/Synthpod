@@ -564,10 +564,10 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 		mod->feature_list[nfeatures++].data = NULL;
 	}
 
-	if(app->driver->clock_sync_sched)
+	if(app->driver->osc_sched)
 	{
-		mod->feature_list[nfeatures].URI = CLOCK_SYNC__schedule;
-		mod->feature_list[nfeatures++].data = app->driver->clock_sync_sched;
+		mod->feature_list[nfeatures].URI = OSC__schedule;
+		mod->feature_list[nfeatures++].data = app->driver->osc_sched;
 	}
 
 	assert(nfeatures <= NUM_FEATURES);

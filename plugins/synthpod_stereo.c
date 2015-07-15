@@ -34,7 +34,7 @@
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 
 #include <zero_worker.h>
-#include <clock_sync.h>
+#include <lv2_osc.h>
 
 #include <Eina.h>
 
@@ -411,7 +411,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.log_vprintf = _log_vprintf;
 	handle->driver.system_port_add = NULL;
 	handle->driver.system_port_del = NULL;
-	handle->driver.clock_sync_sched = NULL;
+	handle->driver.osc_sched = NULL;
 
 	const LilvWorld *world = NULL;
 
@@ -430,8 +430,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			world = (const LilvWorld *)features[i]->data;
 		else if(!strcmp(features[i]->URI, ZERO_WORKER__schedule))
 			handle->zero_sched = (Zero_Worker_Schedule *)features[i]->data;
-		else if(!strcmp(features[i]->URI, CLOCK_SYNC__schedule))
-			handle->driver.clock_sync_sched = (Clock_Sync_Schedule *)features[i]->data;
+		else if(!strcmp(features[i]->URI, OSC__schedule))
+			handle->driver.osc_sched = (osc_schedule_t *)features[i]->data;
 
 	if(!handle->driver.map)
 	{
