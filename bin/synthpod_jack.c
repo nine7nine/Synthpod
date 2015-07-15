@@ -1206,6 +1206,7 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 	prog_t *handle = instance;
 
 	double diff = (frames - handle->cycle.ref_frames + handle->cycle.cur_frames) / handle->cycle.T;
+	diff *= 1e-6; // convert us to s;
 	uint64_t secs = trunc(diff);
 	uint64_t nsecs = (diff - secs) * 1e9;
 
@@ -1222,7 +1223,6 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 	}
 	
 	time_frac *= 4.295; // ns -> frac
-
 
 	uint64_t timestamp = (time_sec << 32) | time_frac;
 
