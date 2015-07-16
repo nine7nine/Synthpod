@@ -122,6 +122,7 @@ struct _prog_t {
 	LV2_URID time_framesPerSecond;
 	LV2_URID time_speed;
 
+	char *server_name;
 	jack_client_t *client;
 	
 	volatile int kill;
@@ -1049,8 +1050,15 @@ _shutdown(void *data)
 static int
 _jack_init(prog_t *handle, const char *id)
 {
-	if(!(handle->client = jack_client_open(id, JackNullOption, NULL)))
+	jack_options_t opts = JackNullOption;
+	if(handle->server_name)
+		opts |= JackServerName;
+
+	jack_status_t status;
+	if(!(handle->client = jack_client_open(id, opts, &status, handle->server_name)))
 		return -1;
+
+	//TODO check status
 
 	// set client pretty name
 #if defined(JACK_HAS_METADATA_API)
@@ -1239,6 +1247,58 @@ main(int argc, char **argv)
 #endif
 {
 	static prog_t handle;
+
+	handle.server_name = NULL;
+	
+	char c;
+	while((c = getopt(argc, argv, "vhs:")) != -1)
+	{
+		switch(c)
+		{
+			case 'v':
+				fprintf(stderr, "Synthpod "SYNTHPOD_VERSION"\n"
+					"\n"
+					"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+					"\n"
+					"This is free software: you can redistribute it and/or modify\n"
+					"it under the terms of the Artistic License 2.0 as published by\n"
+					"The Perl Foundation.\n"
+					"\n"
+					"This source is distributed in the hope that it will be useful,\n"
+					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
+					"Artistic License 2.0 for more details.\n"
+					"\n"
+					"You should have received a copy of the Artistic License 2.0\n"
+					"along the source as a COPYING file. If not, obtain it from\n"
+					"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
+				return 0;
+			case 'h':
+				fprintf(stderr,
+					"USAGE\n"
+					"   %s [OPTIONS] [BUNDLE_PATH]\n"
+					"\n"
+					"OPTIONS\n"
+					"   [-v]    print version and license information\n"
+					"   [-h]    print usage information\n"
+					"   [-s]    connect to named JACK daemon\n\n"
+					, argv[0]);
+				return 0;
+			case 's':
+				handle.server_name = optarg;
+				break;
+			case '?':
+				if(optopt == 's')
+					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
+				else if(isprint(optopt))
+					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+				else
+					fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+				return -1;
+			default:
+				return -1;
+		}
+	}
 
 	// varchunk init
 #if defined(BUILD_UI)

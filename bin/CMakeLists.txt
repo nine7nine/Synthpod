@@ -24,6 +24,10 @@ if(BUILD_JACK OR BUILD_PORTAUDIO)
 # icon
 	install(FILES ${PROJECT_SOURCE_DIR}/data/pix/synthpod.png DESTINATION
 		${SYNTHPOD_ICON_DIR})
+
+# man page 
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.1 DESTINATION
+		man/man1)
 endif()
 
 if(BUILD_JACK)
