@@ -124,6 +124,7 @@ struct _prog_t {
 
 	char *server_name;
 	jack_client_t *client;
+	uint32_t seq_size;
 	
 	volatile int kill;
 
@@ -1116,7 +1117,8 @@ _open(const char *path, const char *name, const char *id, void *data)
 	handle->app_driver.sample_rate = jack_get_sample_rate(handle->client);
 	handle->app_driver.max_block_size = jack_get_buffer_size(handle->client);
 	handle->app_driver.min_block_size = jack_get_buffer_size(handle->client);
-	handle->app_driver.seq_size = SEQ_SIZE; //TODO
+	handle->app_driver.seq_size = MAX(handle->seq_size,
+		jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
 	
 	// app init
 #if defined(BUILD_UI)
@@ -1249,9 +1251,10 @@ main(int argc, char **argv)
 	static prog_t handle;
 
 	handle.server_name = NULL;
+	handle.seq_size = SEQ_SIZE;
 	
 	char c;
-	while((c = getopt(argc, argv, "vhs:")) != -1)
+	while((c = getopt(argc, argv, "vhn:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -1284,11 +1287,14 @@ main(int argc, char **argv)
 					"   [-s]    connect to named JACK daemon\n\n"
 					, argv[0]);
 				return 0;
-			case 's':
+			case 'n':
 				handle.server_name = optarg;
 				break;
+			case 's':
+				handle.seq_size = MAX(SEQ_SIZE, atoi(optarg));
+				break;
 			case '?':
-				if(optopt == 's')
+				if( (optopt == 'n') || (optopt == 's') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
