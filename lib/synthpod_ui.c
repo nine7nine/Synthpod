@@ -253,6 +253,8 @@ struct _sp_ui_t {
 	sp_ui_driver_t *driver;
 	void *data;
 
+	char *bundle_path;
+
 	int embedded;
 	LilvWorld *world;
 	const LilvPlugins *plugs;
@@ -264,8 +266,10 @@ struct _sp_ui_t {
 	Evas_Object *table;
 	Evas_Object *popup;
 	Evas_Object *mainmenu;
-	Evas_Object *nonsm;
 	Evas_Object *statusline;
+
+	Evas_Object *save_as_but;
+	Evas_Object *load_but;
 
 	int colors_max;
 
@@ -1845,6 +1849,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	}
 	if(mod->ports)
 		free(mod->ports);
+
+	if(mod->std.itm == ui->sink_itm)
+		ui->sink_itm = 0;
 
 	if(mod->static_properties)
 	{
@@ -4053,6 +4060,17 @@ _theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 }
 
 static void
+_theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	Evas_Event_Key_Down *ev = event_info;
+
+	printf("_theme_key_down: %s\n", ev->key);
+	//FIXME
+}
+
+static void
 _pluglist_populate(sp_ui_t *ui, const char *match)
 {
 	if(!ui->plugs || !ui->pluglist || !ui->plugitc)
@@ -4112,13 +4130,59 @@ _plugentry_changed(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
+_modlist_clear(sp_ui_t *ui, int clear_system_ports)
+{
+	// iterate over all registered modules
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
+		itm != NULL;
+		itm = elm_genlist_item_next_get(itm))
+	{
+		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
+		if(itc != ui->moditc) // is not a parent mod item 
+			continue; // skip 
+
+		mod_t *mod = elm_object_item_data_get(itm);
+
+		if(!clear_system_ports && (mod->system.source || mod->system.sink) )
+			continue; // skip
+
+		_modlist_icon_clicked(mod, ui->modlist, NULL); //TODO rename
+	}
+}
+
+static void
+_menu_new(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	_modlist_clear(ui, 0);
+}
+
+static void
 _menu_open(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
 
-	const char *bundle_path = NULL; //TODO
+	const char *bundle_path = event_info;
 	if(bundle_path)
-		sp_ui_bundle_load(ui, bundle_path);
+	{
+		int update_path = ui->driver->features & SP_UI_FEATURE_OPEN ? 1 : 0;
+		_modlist_clear(ui, 1);
+		sp_ui_bundle_load(ui, bundle_path, update_path);
+	}
+}
+
+static void
+_menu_save_as(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	const char *bundle_path = event_info;
+	if(bundle_path)
+	{
+		int update_path = ui->driver->features & SP_UI_FEATURE_SAVE_AS ? 1 : 0;
+		sp_ui_bundle_save(ui, bundle_path, update_path);
+	}
 }
 
 static void
@@ -4126,9 +4190,17 @@ _menu_save(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
 
-	const char *bundle_path = NULL; //TODO
-	if(bundle_path)
-		sp_ui_bundle_save(ui, bundle_path);
+	if(ui->bundle_path)
+		sp_ui_bundle_save(ui, ui->bundle_path, 0);
+}
+
+static void
+_menu_close(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	if(ui->driver->close)
+		ui->driver->close(ui->data);
 }
 
 static void
@@ -4320,26 +4392,186 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 		_theme_resize(ui, NULL, ui->win, NULL);
 		evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
+		evas_object_event_callback_add(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down, ui);
 
-		ui->mainmenu = elm_toolbar_add(ui->table);
+		ui->mainmenu = elm_box_add(ui->table);
 		if(ui->mainmenu)
 		{
-			elm_toolbar_horizontal_set(ui->mainmenu, EINA_FALSE);
-			elm_toolbar_select_mode_set(ui->mainmenu, ELM_OBJECT_SELECT_MODE_NONE);
-			elm_toolbar_align_set(ui->mainmenu, 0.f);
-			evas_object_size_hint_weight_set(ui->mainmenu, 0.f, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(ui->mainmenu, 0.f, EVAS_HINT_FILL);
-			evas_object_show(ui->mainmenu);
-			elm_table_pack(ui->table, ui->mainmenu, 1, 0, 1, 1);
+			Evas_Object *but;
 
-			//TODO use
-			Elm_Object_Item *itm; 
-			itm = elm_toolbar_item_append(ui->mainmenu, "document-open", "Load",
-				_menu_open, ui);
-			itm = elm_toolbar_item_append(ui->mainmenu, "document-save", "Save",
-				_menu_save, ui);
-			itm = elm_toolbar_item_append(ui->mainmenu, "help-about", "About",
-				_menu_about, ui);
+			elm_box_horizontal_set(ui->mainmenu, EINA_TRUE);
+			elm_box_homogeneous_set(ui->mainmenu, EINA_FALSE);
+			evas_object_size_hint_weight_set(ui->mainmenu, EVAS_HINT_EXPAND, 0.f);
+			evas_object_size_hint_align_set(ui->mainmenu, 0.f, 0.f);
+			evas_object_show(ui->mainmenu);
+			elm_table_pack(ui->table, ui->mainmenu, 0, 0, 1, 1);
+		
+			if(ui->driver->features & SP_UI_FEATURE_NEW)
+			{
+				but = elm_button_add(ui->mainmenu);
+				if(but)
+				{
+					elm_object_tooltip_text_set(but, "Ctrl+N");
+#if defined(ELM_1_10)
+					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
+					elm_object_text_set(but, "New");
+					evas_object_smart_callback_add(but, "clicked", _menu_new, ui);
+					evas_object_show(but);
+					elm_box_pack_end(ui->mainmenu, but);
+
+					Evas_Object *icon;
+					icon = elm_icon_add(but);
+					if(icon)
+					{
+						elm_icon_standard_set(icon, "document-new");
+						evas_object_show(icon);
+						elm_object_content_set(but, icon);
+					}
+				}
+			}
+
+			if(ui->driver->features & (SP_UI_FEATURE_OPEN | SP_UI_FEATURE_IMPORT_FROM) )
+			{
+				but = elm_fileselector_button_add(ui->mainmenu);
+				if(but)
+				{
+					elm_object_tooltip_text_set(but, "Ctrl+O");
+#if defined(ELM_1_10)
+					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
+					elm_fileselector_is_save_set(but, EINA_FALSE);
+					elm_fileselector_folder_only_set(but, EINA_TRUE);
+					if(ui->driver->features & SP_UI_FEATURE_OPEN)
+						elm_object_text_set(but, "Open");
+					else if(ui->driver->features & SP_UI_FEATURE_IMPORT_FROM)
+						elm_object_text_set(but, "Import");
+					evas_object_smart_callback_add(but, "file,chosen", _menu_open, ui);
+					evas_object_show(but);
+					elm_box_pack_end(ui->mainmenu, but);
+
+					Evas_Object *icon;
+					icon = elm_icon_add(but);
+					if(icon)
+					{
+						if(ui->driver->features & SP_UI_FEATURE_OPEN)
+							elm_icon_standard_set(icon, "document-open");
+						else if(ui->driver->features & SP_UI_FEATURE_IMPORT_FROM)
+							elm_icon_standard_set(icon, "document-import");
+						evas_object_show(icon);
+						elm_object_content_set(but, icon);
+					}
+
+					ui->load_but = but;
+				}
+			}
+
+			if(ui->driver->features & SP_UI_FEATURE_SAVE)
+			{
+				but = elm_button_add(ui->mainmenu);
+				if(but)
+				{
+					elm_object_tooltip_text_set(but, "Ctrl+S");
+#if defined(ELM_1_10)
+					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
+					elm_object_text_set(but, "Save");
+					evas_object_smart_callback_add(but, "clicked", _menu_save, ui);
+					evas_object_show(but);
+					elm_box_pack_end(ui->mainmenu, but);
+
+					Evas_Object *icon;
+					icon = elm_icon_add(but);
+					if(icon)
+					{
+						elm_icon_standard_set(icon, "document-save");
+						evas_object_show(icon);
+						elm_object_content_set(but, icon);
+					}
+				}
+			}
+
+			if(ui->driver->features & (SP_UI_FEATURE_SAVE_AS | SP_UI_FEATURE_EXPORT_TO))
+			{
+				but = elm_fileselector_button_add(ui->mainmenu);
+				if(but)
+				{
+					elm_object_tooltip_text_set(but, "Ctrl+Shift+S");
+#if defined(ELM_1_10)
+					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
+					elm_fileselector_is_save_set(but, EINA_TRUE);
+					elm_fileselector_folder_only_set(but, EINA_TRUE);
+					if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
+						elm_object_text_set(but, "Save as");
+					else if(ui->driver->features & SP_UI_FEATURE_EXPORT_TO)
+						elm_object_text_set(but, "Export");
+					evas_object_smart_callback_add(but, "file,chosen", _menu_save_as, ui);
+					evas_object_show(but);
+					elm_box_pack_end(ui->mainmenu, but);
+
+					Evas_Object *icon;
+					icon = elm_icon_add(but);
+					if(icon)
+					{
+						if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
+							elm_icon_standard_set(icon, "document-save-as");
+						else if(ui->driver->features & SP_UI_FEATURE_EXPORT_TO)
+							elm_icon_standard_set(icon, "document-export");
+						evas_object_show(icon);
+						elm_object_content_set(but, icon);
+					}
+
+					ui->save_as_but = but;
+				}
+			}
+
+			if(ui->driver->features & SP_UI_FEATURE_CLOSE)
+			{
+				but = elm_button_add(ui->mainmenu);
+				if(but)
+				{
+					elm_object_tooltip_text_set(but, "Ctrl+Q");
+#if defined(ELM_1_10)
+					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
+					elm_object_text_set(but, "Close");
+					evas_object_smart_callback_add(but, "clicked", _menu_close, ui);
+					evas_object_show(but);
+					elm_box_pack_end(ui->mainmenu, but);
+
+					Evas_Object *icon;
+					icon = elm_icon_add(but);
+					if(icon)
+					{
+						elm_icon_standard_set(icon, "document-close");
+						evas_object_show(icon);
+						elm_object_content_set(but, icon);
+					}
+				}
+			}
+
+			but = elm_button_add(ui->mainmenu);
+			if(but)
+			{
+					elm_object_tooltip_text_set(but, "Ctrl+?");
+#if defined(ELM_1_10)
+					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
+				elm_object_text_set(but, "About");
+				evas_object_smart_callback_add(but, "clicked", _menu_about, ui);
+				evas_object_show(but);
+				elm_box_pack_end(ui->mainmenu, but);
+
+				Evas_Object *icon;
+				icon = elm_icon_add(but);
+				if(icon)
+				{
+					elm_icon_standard_set(icon, "help-about");
+					evas_object_show(icon);
+					elm_object_content_set(but, icon);
+				}
+			}
 		} // mainmenu
 
 		ui->mainpane = elm_panes_add(ui->table);
@@ -4350,7 +4582,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(ui->mainpane);
-			elm_table_pack(ui->table, ui->mainpane, 0, 0, 1, 1);
+			elm_table_pack(ui->table, ui->mainpane, 0, 1, 1, 1);
 
 			ui->popup = elm_popup_add(ui->table);
 			if(ui->popup)
@@ -4541,7 +4773,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			evas_object_size_hint_weight_set(ui->statusline, EVAS_HINT_EXPAND, 0.f);
 			evas_object_size_hint_align_set(ui->statusline, 0.f, 1.f);
 			evas_object_show(ui->statusline);
-			elm_table_pack(ui->table, ui->statusline, 0, 1, 2, 1);
+			elm_table_pack(ui->table, ui->statusline, 0, 2, 1, 1);
 		} // statusline
 
 		//TODO add info button
@@ -4864,6 +5096,9 @@ sp_ui_free(sp_ui_t *ui)
 	if(!ui)
 		return;
 
+	if(ui->bundle_path)
+		free(ui->bundle_path);
+
 	if(ui->modgrid)
 	{
 		elm_gengrid_clear(ui->modgrid);
@@ -4940,10 +5175,21 @@ sp_ui_free(sp_ui_t *ui)
 }
 
 void
-sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path)
+sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path)
 {
 	if(!ui || !bundle_path)
 		return;
+
+	// update internal bundle_path for one-click-save
+	if(update_path)
+	{
+		if(ui->bundle_path)
+			free(ui->bundle_path);
+		ui->bundle_path = strdup(bundle_path);
+	}
+		
+	elm_fileselector_path_set(ui->load_but, bundle_path);
+	elm_fileselector_path_set(ui->save_as_but, bundle_path);
 
 	// signal to app
 	size_t size = sizeof(transmit_bundle_load_t)
@@ -4958,10 +5204,21 @@ sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path)
 }
 
 void
-sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path)
+sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path, int update_path)
 {
 	if(!ui || !bundle_path)
 		return;
+
+	// update internal bundle_path for one-click-save
+	if(update_path)
+	{
+		if(ui->bundle_path)
+			free(ui->bundle_path);
+		ui->bundle_path = strdup(bundle_path);
+	}
+		
+	elm_fileselector_path_set(ui->load_but, bundle_path);
+	elm_fileselector_path_set(ui->save_as_but, bundle_path);
 
 	// signal to app
 	size_t size = sizeof(transmit_bundle_save_t)

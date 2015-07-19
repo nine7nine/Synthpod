@@ -30,6 +30,8 @@
 #include <synthpod_nsm.h>
 
 struct _synthpod_nsm_t {
+	int managed;
+
 	char *url;
 	char *call;
 	char *exe;
@@ -295,6 +297,8 @@ synthpod_nsm_new(const char *exe, const char *path,
 	nsm->url = getenv("NSM_URL");
 	if(nsm->url)
 	{
+		nsm->managed = 1;
+
 		nsm->url = strdup(nsm->url);
 		if(!nsm->url)
 			return NULL;
@@ -339,10 +343,11 @@ synthpod_nsm_new(const char *exe, const char *path,
 	}
 	else
 	{
+		nsm->managed = 0;
+
 		if(path)
 		{
-			nsm->driver->open(path,
-				nsm->call, nsm->exe, nsm->data);
+			nsm->driver->open(path, nsm->call, nsm->exe, nsm->data);
 		}
 		else
 		{
@@ -453,4 +458,10 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
 		; //TODO
+}
+
+int
+synthpod_nsm_managed()
+{
+	return getenv("NSM_URL") ? 1 : 0;
 }

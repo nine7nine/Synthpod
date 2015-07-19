@@ -95,7 +95,6 @@ struct _prog_t {
 	uint32_t sample_rate;
 	uint32_t min_block_size;
 	uint32_t max_block_size;
-	volatile int kill;
 
 	volatile int worker_dead;
 	Eina_Thread worker_thread;
@@ -212,8 +211,7 @@ _ui_delete_request(void *data, Evas_Object *obj, void *event)
 {
 	prog_t *handle = data;
 
-	handle->kill = 1; // exit after save
-	sp_ui_bundle_save(handle->ui, handle->path);
+	elm_exit();	
 }
 
 // non-rt ui-thread
@@ -238,11 +236,7 @@ _quit(void *data, int type, void *info)
 {
 	prog_t *handle = data;
 
-	handle->kill = 1; // exit after save
-#if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_save(handle->ui, handle->path);
-#endif
-	ecore_main_loop_quit(); //FIXME
+	ecore_main_loop_quit();
 
 	return EINA_TRUE;
 }
@@ -355,9 +349,14 @@ _ui_saved(void *data, int status)
 
 	//printf("_ui_saved: %i\n", status);
 	synthpod_nsm_saved(handle->nsm, status);
+}
+static void
+_ui_close(void *data)
+{
+	prog_t *handle = data;
 
-	if(handle->kill)
-		elm_exit();
+	//printf("_ui_close\n");
+	elm_exit();
 }
 #endif // BUILD_UI
 
@@ -487,7 +486,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 		fprintf(stderr, "Pa_StartStream failed\n");
 
 #if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_load(handle->ui, handle->path);
+	sp_ui_bundle_load(handle->ui, handle->path, 1);
 #endif
 
 	return 0; // success
@@ -499,7 +498,7 @@ _save(void *data)
 	prog_t *handle = data;
 
 #if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_save(handle->ui, handle->path);
+	sp_ui_bundle_save(handle->ui, handle->path, 1);
 #endif
 
 	return 0; // success
@@ -572,6 +571,7 @@ main(int argc, char **argv)
 	handle.ui_driver.to_app_advance = _ui_to_app_advance;
 	handle.ui_driver.opened = _ui_opened;
 	handle.ui_driver.saved = _ui_saved;
+	handle.ui_driver.close = _ui_close;
 	handle.ui_driver.instance_access = 1; // enabled
 
 	// create main window

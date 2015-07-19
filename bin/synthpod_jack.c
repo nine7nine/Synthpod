@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <assert.h>
 
 #include <synthpod_app.h>
@@ -51,6 +52,10 @@
 #endif
 
 #include <Eina.h>
+
+#ifndef MAX
+#	define MAX(A, B) ((A) > (B) ? (A) : (B))
+#endif
 
 #define CHUNK_SIZE 0x10000
 #define SEQ_SIZE 0x2000
@@ -126,8 +131,6 @@ struct _prog_t {
 	jack_client_t *client;
 	uint32_t seq_size;
 	
-	volatile int kill;
-
 	volatile int worker_dead;
 	Eina_Thread worker_thread;
 	Eina_Semaphore worker_sem;
@@ -190,8 +193,7 @@ _ui_delete_request(void *data, Evas_Object *obj, void *event)
 {
 	prog_t *handle = data;
 
-	handle->kill = 1; // exit after save
-	sp_ui_bundle_save(handle->ui, handle->path);
+	elm_exit();	
 }
 
 // non-rt ui-thread
@@ -216,11 +218,7 @@ _quit(void *data, int type, void *info)
 {
 	prog_t *handle = data;
 
-	handle->kill = 1; // exit after save
-#if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_save(handle->ui, handle->path);
-#endif
-	ecore_main_loop_quit(); //FIXME
+	ecore_main_loop_quit();
 
 	return EINA_TRUE;
 }
@@ -821,9 +819,14 @@ _ui_saved(void *data, int status)
 
 	//printf("_ui_saved: %i\n", status);
 	synthpod_nsm_saved(handle->nsm, status);
+}
+static void
+_ui_close(void *data)
+{
+	prog_t *handle = data;
 
-	if(handle->kill)
-		elm_exit();
+	//printf("_ui_close\n");
+	elm_exit();
 }
 #endif // BUILD_UI
 
@@ -1028,10 +1031,6 @@ _shutdown_async(void *data)
 {
 	prog_t *handle = data;
 
-	//FIXME save state?
-	//handle->kill = 1; // exit after save
-	//sp_ui_bundle_save(handle->ui, handle->path);
-
 #if defined(BUILD_UI)
 	elm_exit();
 #else
@@ -1121,17 +1120,13 @@ _open(const char *path, const char *name, const char *id, void *data)
 		jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
 	
 	// app init
-#if defined(BUILD_UI)
 	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
-#else //FIXME
-	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
-#endif
 
 	// jack activate
 	jack_activate(handle->client); //TODO check
 
 #if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_load(handle->ui, handle->path);
+	sp_ui_bundle_load(handle->ui, handle->path, 1);
 #endif
 
 	return 0; // success
@@ -1143,7 +1138,7 @@ _save(void *data)
 	prog_t *handle = data;
 
 #if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_save(handle->ui, handle->path);
+	sp_ui_bundle_save(handle->ui, handle->path, 1);
 #endif
 
 	return 0; // success
@@ -1377,7 +1372,13 @@ main(int argc, char **argv)
 	handle.ui_driver.to_app_advance = _ui_to_app_advance;
 	handle.ui_driver.opened = _ui_opened;
 	handle.ui_driver.saved = _ui_saved;
+	handle.ui_driver.close = _ui_close;
 	handle.ui_driver.instance_access = 1; // enabled
+	handle.ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
+	if(synthpod_nsm_managed())
+		handle.ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
+	else
+		handle.ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
 
 	// create main window
 	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);
@@ -1391,7 +1392,7 @@ main(int argc, char **argv)
 #endif
 
 	// NSM init
-	handle.nsm = synthpod_nsm_new(argv[0], argc > 1 ? argv[1] : NULL,
+	handle.nsm = synthpod_nsm_new(argv[0], argc > 1 ? argv[argc-1] : NULL,
 		&nsm_driver, &handle); //TODO check
 
 	// init semaphores

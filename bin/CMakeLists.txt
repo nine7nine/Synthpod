@@ -62,6 +62,7 @@ if(BUILD_JACK)
 	target_link_libraries(synthpod.jack
 		${ECORE_CON_LDFLAGS}
 		${JACK_LIBS}
+		"-lm"
 		synthpod.lib)
 	if(BUILD_UI)
 		target_link_libraries(synthpod.jack

@@ -49,6 +49,7 @@
 #	pragma pop_macro("__MINGW32__")
 #endif
 
+typedef enum _sp_ui_features_t sp_ui_features_t;
 typedef struct _sp_ui_t sp_ui_t;
 typedef struct _sp_ui_driver_t sp_ui_driver_t;
 
@@ -57,6 +58,17 @@ typedef void (*sp_to_advance_t)(size_t size, void *data);
 
 typedef void (*sp_opened_t)(void *data, int status);
 typedef void (*sp_saved_t)(void *data, int status);
+typedef void (*sp_close_t)(void *data);
+
+enum _sp_ui_features_t {
+	SP_UI_FEATURE_NEW					= 1,
+	SP_UI_FEATURE_OPEN				= 2,
+	SP_UI_FEATURE_IMPORT_FROM	= 4,
+	SP_UI_FEATURE_SAVE				= 8,
+	SP_UI_FEATURE_SAVE_AS			= 16,
+	SP_UI_FEATURE_EXPORT_TO		= 32,
+	SP_UI_FEATURE_CLOSE				= 64
+};
 
 struct _sp_ui_driver_t {
 	LV2_URID_Map *map;
@@ -69,6 +81,9 @@ struct _sp_ui_driver_t {
 	
 	sp_opened_t opened;
 	sp_saved_t saved;
+	sp_close_t close;
+
+	sp_ui_features_t features;
 };
 
 sp_ui_t *
@@ -85,10 +100,10 @@ void
 sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom);
 
 void
-sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path);
+sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path);
 
 void
-sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path);
+sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path, int update_path);
 
 void
 sp_ui_resize(sp_ui_t *ui, int w, int h);

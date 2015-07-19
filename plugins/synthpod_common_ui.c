@@ -182,6 +182,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	{
 		fprintf(stderr, "%s: Host supports zero-writer:schedule\n", descriptor->URI);
 	}
+
+	handle->driver.features = SP_UI_FEATURE_NEW
+		| SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
 	
 	// query port indeces of "control" and "notify" ports
 	handle->control_port = handle->port_map->port_index(handle->port_map->handle, "control");
@@ -196,6 +199,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->driver.to_app_advance = _to_app_advance;
 	handle->driver.opened = NULL; //TODO
 	handle->driver.saved = NULL; //TODO
+	handle->driver.close = NULL; //TODO
 
 	if(eoui_instantiate(eoui, descriptor, plugin_uri, bundle_path, write_function,
 		controller, widget, features))
