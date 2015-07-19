@@ -23,7 +23,7 @@
 #define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
 #if defined(HAS_BUILTIN_ASSUME_ALIGNED)
-#	define ASSUME_ALIGNED(PTR) __builtin_assume_aligned((PTR), 16)
+#	define ASSUME_ALIGNED(PTR) __builtin_assume_aligned((PTR), 8)
 #else
 #	define ASSUME_ALIGNED(PTR) (PTR)
 #endif
