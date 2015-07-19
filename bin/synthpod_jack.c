@@ -1277,9 +1277,10 @@ main(int argc, char **argv)
 					"   %s [OPTIONS] [BUNDLE_PATH]\n"
 					"\n"
 					"OPTIONS\n"
-					"   [-v]    print version and license information\n"
-					"   [-h]    print usage information\n"
-					"   [-s]    connect to named JACK daemon\n\n"
+					"   [-v]                 print version and license information\n"
+					"   [-h]                 print usage information\n"
+					"   [-n] server-name     connect to named JACK daemon\n"
+					"   [-s] sequence-size   minimum sequence size\n\n"
 					, argv[0]);
 				return 0;
 			case 'n':
@@ -1392,8 +1393,7 @@ main(int argc, char **argv)
 #endif
 
 	// NSM init
-	handle.nsm = synthpod_nsm_new(argv[0], argc > 1 ? argv[argc-1] : NULL,
-		&nsm_driver, &handle); //TODO check
+	handle.nsm = synthpod_nsm_new(argv[0], argv[optind], &nsm_driver, &handle); //TODO check
 
 	// init semaphores
 	eina_semaphore_new(&handle.worker_sem, 0);
