@@ -408,6 +408,11 @@ group {
 			source: "ev";
 			action: SIGNAL_EMIT "out" PATCHER_UI;
 		}
+		program {
+			signal: "mouse,clicked,*";
+			source: "ev";
+			action: SIGNAL_EMIT "toggled" PATCHER_UI;
+		}
 
 		program {
 			signal: "on";

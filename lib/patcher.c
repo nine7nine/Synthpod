@@ -39,6 +39,9 @@ struct _patcher_t {
 	int sources;
 	int sinks;
 	int max;
+
+	Evas_Object *source_over;
+	Evas_Object *sink_over;
 };
 
 static const Evas_Smart_Cb_Description _smart_callbacks [] = {
@@ -201,6 +204,8 @@ _source_in(void *data, Evas_Object *edj, const char *emission, const char *sourc
 			edje_object_signal_emit(tar, "vertical", PATCHER_UI);
 		}
 	}
+
+	priv->source_over = edj;
 }
 
 static void
@@ -243,6 +248,49 @@ _source_out(void *data, Evas_Object *edj, const char *emission, const char *sour
 			edje_object_signal_emit(tar, "clear", PATCHER_UI);
 		}
 	}
+
+	priv->source_over = NULL;
+}
+
+static void
+_source_toggled(void *data, Evas_Object *edj, const char *emission, const char *source)
+{
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short src;
+	evas_object_table_pack_get(priv->matrix, edj, &src, NULL, NULL, NULL);
+	int src_index = src + priv->sources - priv->max;
+
+	int has_connections = 0;
+	for(int i=0; i<priv->sinks; i++)
+	{
+		if(priv->state[src_index][i])
+		{
+			has_connections = 1;
+			break;
+		}
+	}
+
+	for(int i=0; i<priv->sinks; i++)
+	{
+		patcher_event_t ev [2] = {
+			{
+				.index = src_index,
+				.ptr = priv->data.source[src_index]
+			},
+			{
+				.index = i,
+				.ptr = priv->data.sink[i]
+			}
+		};
+
+		if(has_connections)
+			evas_object_smart_callback_call(o, PATCHER_DISCONNECT_REQUEST, (void *)ev);
+		else
+			evas_object_smart_callback_call(o, PATCHER_CONNECT_REQUEST, (void *)ev);
+	}
+
+	//FIXME update view
 }
 
 static void
@@ -292,6 +340,8 @@ _sink_in(void *data, Evas_Object *edj, const char *emission, const char *source)
 			edje_object_signal_emit(tar, "horizontal", PATCHER_UI);
 		}
 	}
+
+	priv->sink_over = edj;
 }
 
 static void
@@ -334,6 +384,49 @@ _sink_out(void *data, Evas_Object *edj, const char *emission, const char *source
 			edje_object_signal_emit(tar, "clear", PATCHER_UI);
 		}
 	}
+
+	priv->sink_over = NULL;
+}
+
+static void
+_sink_toggled(void *data, Evas_Object *edj, const char *emission, const char *source)
+{
+	Evas_Object *o = data;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	unsigned short snk;
+	evas_object_table_pack_get(priv->matrix, edj, NULL, &snk, NULL, NULL);
+	int snk_index = snk + priv->sinks - priv->max;
+
+	int has_connections = 0;
+	for(int i=0; i<priv->sources; i++)
+	{
+		if(priv->state[i][snk_index])
+		{
+			has_connections = 1;
+			break;
+		}
+	}
+
+	for(int i=0; i<priv->sources; i++)
+	{
+		patcher_event_t ev [2] = {
+			{
+				.index = i,
+				.ptr = priv->data.source[i]
+			},
+			{
+				.index = snk_index,
+				.ptr = priv->data.sink[snk_index]
+			}
+		};
+
+		if(has_connections)
+			evas_object_smart_callback_call(o, PATCHER_DISCONNECT_REQUEST, (void *)ev);
+		else
+			evas_object_smart_callback_call(o, PATCHER_CONNECT_REQUEST, (void *)ev);
+	}
+
+	//FIXME update view
 }
 
 static void
@@ -374,6 +467,9 @@ _patcher_smart_init(Evas_Object *o)
 	if( !(priv->sinks && priv->sources) )
 		return;
 
+	priv->source_over = NULL;
+	priv->sink_over = NULL;
+
 	priv->data.source = calloc(priv->sources, sizeof(void *));
 	priv->data.sink = calloc(priv->sinks, sizeof(void *));
 
@@ -408,6 +504,7 @@ _patcher_smart_init(Evas_Object *o)
 			"/synthpod/patcher/port");
 		edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _source_in, o);
 		edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _source_out, o);
+		edje_object_signal_callback_add(elmnt, "toggled", PATCHER_UI, _source_toggled, o);
 		edje_object_signal_emit(elmnt, "source", PATCHER_UI);
 		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -431,6 +528,7 @@ _patcher_smart_init(Evas_Object *o)
 			"/synthpod/patcher/port");
 		edje_object_signal_callback_add(elmnt, "in", PATCHER_UI, _sink_in, o);
 		edje_object_signal_callback_add(elmnt, "out", PATCHER_UI, _sink_out, o);
+		edje_object_signal_callback_add(elmnt, "toggled", PATCHER_UI, _sink_toggled, o);
 		edje_object_signal_emit(elmnt, "sink", PATCHER_UI);
 		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -635,9 +733,24 @@ patcher_object_connected_set(Evas_Object *o, void *source_data,
 	int sink = _patcher_object_sink_index_get(o, sink_data);
 	if( (source == -1) || (sink == -1) )
 		return;
+		
+	Evas_Object *sink_over = priv->sink_over;
+	Evas_Object *source_over = priv->source_over;
+
+	// clear connections if hovering over sink|source node
+	if(source_over)
+		_source_out(o, source_over, NULL, NULL);
+	if(sink_over)
+		_sink_out(o, sink_over, NULL, NULL);
 
 	_patcher_object_connected_index_set(o, source, sink, state);
 	_patcher_object_indirected_index_set(o, source, sink, indirect);
+
+	// update connections if hovering over sink|source node
+	if(source_over)
+		_source_in(o, source_over, NULL, NULL);
+	if(sink_over)
+		_sink_in(o, sink_over, NULL, NULL);
 }
 
 void
