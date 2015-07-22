@@ -1089,13 +1089,18 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		// create forge to append to sequence
 		LV2_Atom_Forge *forge = &app->forge;
 		LV2_Atom_Forge_Frame frame;
-		_lv2_atom_forge_sequence_append(forge, &frame, buf, port->size);
+		LV2_Atom_Forge_Ref ref;
+		ref = _lv2_atom_forge_sequence_append(forge, &frame, buf, port->size);
 
 		//inject atom at end of (existing) sequence
-		lv2_atom_forge_frame_time(forge, last ? last->time.frames : 0);
-		lv2_atom_forge_raw(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
-		lv2_atom_forge_pad(forge, trans->atom->size);
-		lv2_atom_forge_pop(forge, &frame);
+		if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
+			+ sizeof(LV2_Atom) + lv2_atom_pad_size(trans->atom->size) < forge->size) )
+		{
+			lv2_atom_forge_frame_time(forge, last ? last->time.frames : 0);
+			lv2_atom_forge_raw(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+			lv2_atom_forge_pad(forge, trans->atom->size);
+			lv2_atom_forge_pop(forge, &frame);
+		}
 	}
 	else if(protocol == app->regs.synthpod.module_list.urid)
 	{
@@ -2235,7 +2240,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					// create forge to append to sequence (may contain events from UI)
 					LV2_Atom_Forge *forge = &app->forge;
 					LV2_Atom_Forge_Frame frame;
-					_lv2_atom_forge_sequence_append(forge, &frame, port->buf, port->size);
+					LV2_Atom_Forge_Ref ref;
+					ref = _lv2_atom_forge_sequence_append(forge, &frame, port->buf, port->size);
 
 					LV2_Atom_Sequence *seq [32]; //TODO how big?
 					LV2_Atom_Event *itr [32]; //TODO how big?
@@ -2267,9 +2273,13 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 						{
 							// add event to forge
 							size_t len = sizeof(LV2_Atom) + itr[nxt]->body.size;
-							lv2_atom_forge_frame_time(forge, frames);
-							lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
-							lv2_atom_forge_pad(forge, len);
+							if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
+								+ lv2_atom_pad_size(len) < forge->size) )
+							{
+								lv2_atom_forge_frame_time(forge, frames);
+								lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
+								lv2_atom_forge_pad(forge, len);
+							}
 
 							// advance iterator
 							itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
@@ -2278,7 +2288,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 							break; // no more events to process
 					};
 
-					lv2_atom_forge_pop(forge, &frame);
+					if(ref)
+						lv2_atom_forge_pop(forge, &frame);
 				}
 			}
 			else if( (port->num_sources + port->num_feedbacks) == 1) // move messages from UI on default buffer
@@ -2295,19 +2306,25 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					// create forge to append to sequence (may contain events from UI)
 					LV2_Atom_Forge *forge = &app->forge;
 					LV2_Atom_Forge_Frame frame;
-					_lv2_atom_forge_sequence_append(forge, &frame, port->sources[0]->buf,
+					LV2_Atom_Forge_Ref ref;
+					ref = _lv2_atom_forge_sequence_append(forge, &frame, port->sources[0]->buf,
 						port->sources[0]->size);
 
 					LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 					{
 						const LV2_Atom *atom = &ev->body;
 
-						lv2_atom_forge_frame_time(forge, nsamples-1);
-						lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
-						lv2_atom_forge_pad(forge, atom->size);
+						if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
+							+ sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size) < forge->size) )
+						{
+							lv2_atom_forge_frame_time(forge, nsamples-1);
+							lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
+							lv2_atom_forge_pad(forge, atom->size);
+						}
 					}
 
-					lv2_atom_forge_pop(forge, &frame);
+					if(ref)
+						lv2_atom_forge_pop(forge, &frame);
 				}
 			}
 		}
