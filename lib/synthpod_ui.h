@@ -100,6 +100,9 @@ void
 sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom);
 
 void
+sp_ui_bundle_new(sp_ui_t *ui);
+
+void
 sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path);
 
 void

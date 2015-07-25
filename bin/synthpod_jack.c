@@ -46,6 +46,7 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include <jack/transport.h>
+#include <jack/session.h>
 #if defined(JACK_HAS_METADATA_API)
 #	include <jack/metadata.h>
 #	include <jack/uuid.h>
@@ -64,7 +65,14 @@
 #	define JAN_1970 (uint64_t)0x83aa7e80
 #	define SLICE (double)0x0.00000001p0 // smallest NTP time slice
 
+typedef enum _save_state_t save_state_t;
 typedef struct _prog_t prog_t;
+
+enum _save_state_t {
+	SAVE_STATE_INTERNAL = 0,
+	SAVE_STATE_NSM,
+	SAVE_STATE_JACK
+};
 
 struct _prog_t {
 	ext_urid_t *ext_urid;
@@ -127,8 +135,13 @@ struct _prog_t {
 	LV2_URID time_framesPerSecond;
 	LV2_URID time_speed;
 
+	volatile int kill;
+	save_state_t save_state;
+
 	char *server_name;
+	char *session_id;
 	jack_client_t *client;
+	jack_session_event_t *session_event;
 	uint32_t seq_size;
 	
 	volatile int worker_dead;
@@ -766,6 +779,53 @@ _process(jack_nframes_t nsamples, void *data)
 	return 0;
 }
 
+// ui
+static void
+_session_async(void *data)
+{
+	prog_t *handle = data;
+
+	jack_session_event_t *ev = handle->session_event;
+	
+	/*
+	printf("_session_async: %s %s %s\n",
+		ev->session_dir, ev->client_uuid, ev->command_line);
+	*/
+
+	asprintf(&ev->command_line, "synthpod_jack -u %s $(SESSION_DIR)",
+		ev->client_uuid);
+
+	switch(ev->type)
+	{
+		case JackSessionSaveAndQuit:
+			handle->kill = 1; // quit after saving
+			// fall-through
+		case JackSessionSave:
+			handle->save_state = SAVE_STATE_JACK;
+#if defined(BUILD_UI) //FIXME
+			sp_ui_bundle_save(handle->ui, ev->session_dir, 1);
+#endif
+			break;
+		case JackSessionSaveTemplate:
+			handle->save_state = SAVE_STATE_JACK;
+#if defined(BUILD_UI) //FIXME
+			sp_ui_bundle_new(handle->ui);
+			sp_ui_bundle_save(handle->ui, ev->session_dir, 1);
+#endif
+			break;
+	}
+}
+
+// non-rt
+static void
+_session(jack_session_event_t *ev, void *data)
+{
+	prog_t *handle = data;
+
+	handle->session_event = ev;
+	ecore_main_loop_thread_safe_call_async(_session_async, data);
+}
+
 #if defined(BUILD_UI)
 // rt
 static void *
@@ -818,7 +878,32 @@ _ui_saved(void *data, int status)
 	prog_t *handle = data;
 
 	//printf("_ui_saved: %i\n", status);
-	synthpod_nsm_saved(handle->nsm, status);
+	if(handle->save_state == SAVE_STATE_NSM)
+	{
+		synthpod_nsm_saved(handle->nsm, status);
+	}
+	else if(handle->save_state == SAVE_STATE_JACK)
+	{
+		jack_session_event_t *ev = handle->session_event;
+		if(ev)
+		{
+			if(status != 0)
+				ev->flags |= JackSessionSaveError;
+			jack_session_reply(handle->client, ev);
+			jack_session_event_free(ev);
+		}
+		handle->session_event = NULL;
+	}
+	handle->save_state = SAVE_STATE_INTERNAL;
+
+	if(handle->kill)
+	{
+#if defined(BUILD_UI)
+		elm_exit();
+#else
+		ecore_main_loop_quit();
+#endif
+	}
 }
 static void
 _ui_close(void *data)
@@ -1053,10 +1138,16 @@ _jack_init(prog_t *handle, const char *id)
 	jack_options_t opts = JackNullOption;
 	if(handle->server_name)
 		opts |= JackServerName;
+	if(handle->session_id)
+		opts |= JackSessionID;
 
 	jack_status_t status;
-	if(!(handle->client = jack_client_open(id, opts, &status, handle->server_name)))
+	if(!(handle->client = jack_client_open(id, opts, &status,
+		handle->server_name ? handle->server_name : handle->session_id,
+		handle->server_name ? handle->session_id : NULL)))
+	{
 		return -1;
+	}
 
 	//TODO check status
 
@@ -1072,6 +1163,8 @@ _jack_init(prog_t *handle, const char *id)
 
 	// set client process callback
 	if(jack_set_process_callback(handle->client, _process, handle))
+		return -1;
+	if(jack_set_session_callback(handle->client, _session, handle))
 		return -1;
 	jack_on_shutdown(handle->client, _shutdown, handle);
 
@@ -1137,6 +1230,7 @@ _save(void *data)
 {
 	prog_t *handle = data;
 
+	handle->save_state = SAVE_STATE_NSM;
 #if defined(BUILD_UI) //FIXME
 	sp_ui_bundle_save(handle->ui, handle->path, 1);
 #endif
@@ -1246,10 +1340,11 @@ main(int argc, char **argv)
 	static prog_t handle;
 
 	handle.server_name = NULL;
+	handle.session_id = NULL;
 	handle.seq_size = SEQ_SIZE;
 	
 	char c;
-	while((c = getopt(argc, argv, "vhn:s:")) != -1)
+	while((c = getopt(argc, argv, "vhn:u:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -1280,17 +1375,21 @@ main(int argc, char **argv)
 					"   [-v]                 print version and license information\n"
 					"   [-h]                 print usage information\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
+					"   [-u] client-uuid     client UUID for JACK session management\n"
 					"   [-s] sequence-size   minimum sequence size\n\n"
 					, argv[0]);
 				return 0;
 			case 'n':
 				handle.server_name = optarg;
 				break;
+			case 'u':
+				handle.session_id = optarg;
+				break;
 			case 's':
 				handle.seq_size = MAX(SEQ_SIZE, atoi(optarg));
 				break;
 			case '?':
-				if( (optopt == 'n') || (optopt == 's') )
+				if( (optopt == 'n') || (optopt == 'u') || (optopt == 's') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -1376,7 +1475,7 @@ main(int argc, char **argv)
 	handle.ui_driver.close = _ui_close;
 	handle.ui_driver.instance_access = 1; // enabled
 	handle.ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
-	if(synthpod_nsm_managed())
+	if(synthpod_nsm_managed() || handle.session_id)
 		handle.ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
 	else
 		handle.ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
@@ -1393,7 +1492,9 @@ main(int argc, char **argv)
 #endif
 
 	// NSM init
-	handle.nsm = synthpod_nsm_new(argv[0], argv[optind], &nsm_driver, &handle); //TODO check
+	const char *exe = strrchr(argv[0], '/');
+	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
+	handle.nsm = synthpod_nsm_new(exe, argv[optind], &nsm_driver, &handle); //TODO check
 
 	// init semaphores
 	eina_semaphore_new(&handle.worker_sem, 0);

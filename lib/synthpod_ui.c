@@ -4066,8 +4066,8 @@ _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 
 	Evas_Event_Key_Down *ev = event_info;
 
-	printf("_theme_key_down: %s\n", ev->key);
-	//FIXME
+	//printf("_theme_key_down: %s\n", ev->key);
+	//FIXME new/open/save/exit callbacks
 }
 
 static void
@@ -4155,7 +4155,7 @@ _menu_new(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
 
-	_modlist_clear(ui, 0);
+	sp_ui_bundle_new(ui);
 }
 
 static void
@@ -4167,7 +4167,7 @@ _menu_open(void *data, Evas_Object *obj, void *event_info)
 	if(bundle_path)
 	{
 		int update_path = ui->driver->features & SP_UI_FEATURE_OPEN ? 1 : 0;
-		_modlist_clear(ui, 1);
+		_modlist_clear(ui, 1); // clear system ports
 		sp_ui_bundle_load(ui, bundle_path, update_path);
 	}
 }
@@ -4544,7 +4544,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					icon = elm_icon_add(but);
 					if(icon)
 					{
-						elm_icon_standard_set(icon, "document-close");
+						elm_icon_standard_set(icon, "application-exit");
 						evas_object_show(icon);
 						elm_object_content_set(but, icon);
 					}
@@ -5201,6 +5201,15 @@ sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path)
 			-1, bundle_path);
 		_sp_ui_to_app_advance(ui, size);
 	}
+}
+
+void
+sp_ui_bundle_new(sp_ui_t *ui)
+{
+	if(!ui)
+		return;
+
+	_modlist_clear(ui, 0); // do not clear system ports
 }
 
 void
