@@ -44,6 +44,8 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_atom2control;
 		case 9:
 			return &synthpod_control2atom;
+		case 10:
+			return &synthpod_mixer;
 		default:
 			return NULL;
 	}

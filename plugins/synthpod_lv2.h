@@ -40,6 +40,7 @@
 #define SYNTHPOD_AUDIOXFADESTEREO_URI	SYNTHPOD_URI"#audioxfadestereo"
 #define SYNTHPOD_ATOM2CONTROL_URI			SYNTHPOD_URI"#atom2control"
 #define SYNTHPOD_CONTROL2ATOM_URI			SYNTHPOD_URI"#control2atom"
+#define SYNTHPOD_MIXER_URI						SYNTHPOD_URI"#mixer"
 
 extern const LV2_Descriptor synthpod_stereo;
 extern const LV2_Descriptor synthpod_keyboard;
@@ -51,6 +52,7 @@ extern const LV2_Descriptor synthpod_audioxfademono;
 extern const LV2_Descriptor synthpod_audioxfadestereo;
 extern const LV2_Descriptor synthpod_atom2control;
 extern const LV2_Descriptor synthpod_control2atom;
+extern const LV2_Descriptor synthpod_mixer;
 
 // common UI uris
 #define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_eo"
