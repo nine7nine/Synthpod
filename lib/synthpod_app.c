@@ -40,6 +40,7 @@
 
 typedef enum _job_type_t job_type_t;
 typedef enum _bypass_state_t bypass_state_t;
+typedef enum _ramp_state_t ramp_state_t;
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -52,6 +53,12 @@ enum _bypass_state_t {
 	BYPASS_STATE_RUNNING,
 	BYPASS_STATE_PAUSE_REQUESTED,
 	BYPASS_STATE_LOCK_REQUESTED
+};
+
+enum _ramp_state_t {
+	RAMP_STATE_NONE = 0,
+	RAMP_STATE_UP,
+	RAMP_STATE_DOWN
 };
 
 enum _job_type_t {
@@ -167,6 +174,14 @@ struct _port_t {
 		System_Port_Type type;
 		void *data;
 	} sys;
+
+	// ramping
+	struct {
+		int can;
+		int samples;
+		ramp_state_t state;
+		float value;
+	} ramp;
 };
 
 struct _sp_app_t {
@@ -211,6 +226,8 @@ struct _sp_app_t {
 		uint32_t bound;
 		uint32_t counter;
 	} fps;
+
+	int ramp_samples;
 };
 
 static inline void *
@@ -677,6 +694,10 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 			tar->sys.data = NULL;
 		}
 
+		tar->ramp.samples = 0;
+		tar->ramp.state = RAMP_STATE_NONE;
+		tar->ramp.value = 0.f;
+
 		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
 			tar->size = app->driver->max_block_size * sizeof(float);
@@ -902,6 +923,15 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->buf);
 	}
 
+	// only audio output ports need to be ramped to be clickless
+	if(  (src_port->type == PORT_TYPE_AUDIO)
+		&& (src_port->direction == PORT_DIRECTION_OUTPUT) )
+	{
+		src_port->ramp.samples = app->ramp_samples;
+		src_port->ramp.state = RAMP_STATE_UP;
+		src_port->ramp.value = 0.f;
+	}
+
 	return 1;
 }
 
@@ -943,6 +973,8 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->index,
 			snk_port->buf);
 	}
+
+	//FIXME ramp audio output ports to be clickless
 }
 
 // non-rt
@@ -1026,6 +1058,8 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	app->fps.bound = driver->sample_rate / 30; //TODO make this configurable
 	app->fps.counter = 0;
+
+	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s
 	
 	return app;
 }
@@ -2367,6 +2401,31 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		for(int i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
+
+			// ramp audio output ports
+			if(port->ramp.state != RAMP_STATE_NONE)
+			{
+				float *buf = PORT_SINK_ALIGNED(port);
+
+				// scale audio amplitude with ramp value
+				for(int s=0; s<nsamples; s++)
+					buf[s] *= port->ramp.value;
+
+				// update ramp properties
+				port->ramp.samples -= nsamples; // update remaining samples to ramp over
+				if(port->ramp.samples <= 0)
+				{
+					if(port->ramp.state == RAMP_STATE_DOWN)
+						; //FIXME call callback, e.g. disconnect, free
+					port->ramp.state = RAMP_STATE_NONE; // ramp is complete
+				}
+				else
+				{
+					port->ramp.value = (float)port->ramp.samples / (float)app->ramp_samples;
+					if(port->ramp.state == RAMP_STATE_UP)
+						port->ramp.value = 1.f - port->ramp.value;
+				}
+			}
 
 			// no notification/subscription and no support for patch:Message
 			int subscribed = port->subscriptions != 0;
