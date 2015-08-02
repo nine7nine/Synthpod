@@ -1000,10 +1000,10 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 		{
 			conn->ramp.samples = app->ramp_samples;
 			conn->ramp.state = RAMP_STATE_DOWN;
-			conn->ramp.value = 0.f;
+			conn->ramp.value = 1.f;
 		}
 	}
-	else
+	else // disconnect immediately
 	{
 		_sp_app_port_disconnect(app, src_port, snk_port);
 	}
