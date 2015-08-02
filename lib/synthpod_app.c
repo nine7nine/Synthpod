@@ -46,6 +46,7 @@ typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
 typedef struct _work_t work_t;
 typedef struct _job_t job_t;
+typedef struct _source_t source_t;
 
 enum _bypass_state_t {
 	BYPASS_STATE_PAUSED	= 0,
@@ -137,6 +138,18 @@ struct _mod_t {
 	void *buf;
 };
 
+struct _source_t {
+	port_t *port;
+
+	// ramping
+	struct {
+		int can;
+		int samples;
+		ramp_state_t state;
+		float value;
+	} ramp;
+};
+
 struct _port_t {
 	mod_t *mod;
 	int selected;
@@ -147,7 +160,7 @@ struct _port_t {
 
 	int num_sources;
 	int num_feedbacks;
-	port_t *sources [MAX_SOURCES];
+	source_t sources [MAX_SOURCES];
 
 	size_t size;
 	void *buf;
@@ -174,14 +187,6 @@ struct _port_t {
 		System_Port_Type type;
 		void *data;
 	} sys;
-
-	// ramping
-	struct {
-		int can;
-		int samples;
-		ramp_state_t state;
-		float value;
-	} ramp;
 };
 
 struct _sp_app_t {
@@ -234,7 +239,7 @@ static inline void *
 _port_sink_get(port_t *port)
 {
 	return (port->num_sources + port->num_feedbacks) == 1
-		? port->sources[0]->buf
+		? port->sources[0].port->buf
 		: port->buf;
 }
 #define PORT_SINK_ALIGNED(PORT) ASSUME_ALIGNED(_port_sink_get((PORT)))
@@ -694,10 +699,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 			tar->sys.data = NULL;
 		}
 
-		tar->ramp.samples = 0;
-		tar->ramp.state = RAMP_STATE_NONE;
-		tar->ramp.value = 0.f;
-
 		if(lilv_port_is_a(plug, port, app->regs.port.audio.node))
 		{
 			tar->size = app->driver->max_block_size * sizeof(float);
@@ -902,7 +903,8 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	if(snk_port->num_sources >= MAX_SOURCES)
 		return 0;
 
-	snk_port->sources[snk_port->num_sources] = src_port;;
+	source_t *conn = &snk_port->sources[snk_port->num_sources];
+	conn->port = src_port;;
 	snk_port->num_sources += 1;
 	snk_port->num_feedbacks += src_port->mod == snk_port->mod ? 1 : 0;
 
@@ -912,7 +914,7 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		lilv_instance_connect_port(
 			snk_port->mod->inst,
 			snk_port->index,
-			snk_port->sources[0]->buf);
+			snk_port->sources[0].port->buf);
 	}
 	else
 	{
@@ -927,9 +929,9 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	if(  (src_port->type == PORT_TYPE_AUDIO)
 		&& (src_port->direction == PORT_DIRECTION_OUTPUT) )
 	{
-		src_port->ramp.samples = app->ramp_samples;
-		src_port->ramp.state = RAMP_STATE_UP;
-		src_port->ramp.value = 0.f;
+		conn->ramp.samples = app->ramp_samples;
+		conn->ramp.state = RAMP_STATE_UP;
+		conn->ramp.value = 0.f;
 	}
 
 	return 1;
@@ -942,13 +944,13 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	int connected = 0;
 	for(int i=0, j=0; i<snk_port->num_sources; i++)
 	{
-		if(snk_port->sources[i] == src_port)
+		if(snk_port->sources[i].port == src_port)
 		{
 			connected = 1;
 			continue;
 		}
 
-		snk_port->sources[j++] = snk_port->sources[i];
+		snk_port->sources[j++].port = snk_port->sources[i].port;
 	}
 
 	if(!connected)
@@ -963,7 +965,7 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		lilv_instance_connect_port(
 			snk_port->mod->inst,
 			snk_port->index,
-			snk_port->sources[0]->buf);
+			snk_port->sources[0].port->buf);
 	}
 	else
 	{
@@ -973,8 +975,38 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->index,
 			snk_port->buf);
 	}
+}
 
-	//FIXME ramp audio output ports to be clickless
+static inline void
+_sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_port)
+{
+	// only audio output ports need to be ramped to be clickless
+	if(  (src_port->type == PORT_TYPE_AUDIO)
+		&& (src_port->direction == PORT_DIRECTION_OUTPUT) )
+	{
+		source_t *conn = NULL;
+	
+		// find connection
+		for(int i=0; i<snk_port->num_sources; i++)
+		{
+			if(snk_port->sources[i].port == src_port)
+			{
+				conn = &snk_port->sources[i];
+				break;
+			}
+		}
+
+		if(conn)
+		{
+			conn->ramp.samples = app->ramp_samples;
+			conn->ramp.state = RAMP_STATE_DOWN;
+			conn->ramp.value = 0.f;
+		}
+	}
+	else
+	{
+		_sp_app_port_disconnect(app, src_port, snk_port);
+	}
 }
 
 // non-rt
@@ -1204,12 +1236,12 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 			// disconnect sources
 			for(int s=0; s<port->num_sources; s++)
-				_sp_app_port_disconnect(app, port->sources[s], port);
+				_sp_app_port_disconnect(app, port->sources[s].port, port);
 
 			// disconnect sinks
 			for(int m=0; m<app->num_mods; m++)
 				for(int p2=0; p2<app->mods[m]->num_ports; p2++)
-					_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]);
+					_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]); //FIXME ramp
 		}
 
 		// send request to worker thread
@@ -1374,7 +1406,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			{
 				for(int s=0; s<snk_port->num_sources; s++)
 				{
-					if(snk_port->sources[s] == src_port)
+					if(snk_port->sources[s].port == src_port)
 					{
 						state = 1;
 						break;
@@ -1384,7 +1416,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			}
 			case 0: // disconnect
 			{
-				_sp_app_port_disconnect(app, src_port, snk_port);
+				_sp_app_port_disconnect_request(app, src_port, snk_port);
 				state = 0;
 				break;
 			}
@@ -2193,6 +2225,26 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 }
 
 // rt
+static inline void
+_update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
+{
+	// update ramp properties
+	source->ramp.samples -= nsamples; // update remaining samples to ramp over
+	if(source->ramp.samples <= 0)
+	{
+		if(source->ramp.state == RAMP_STATE_DOWN)
+			_sp_app_port_disconnect(app, source->port, port);
+		source->ramp.state = RAMP_STATE_NONE; // ramp is complete
+	}
+	else
+	{
+		source->ramp.value = (float)source->ramp.samples / (float)app->ramp_samples;
+		if(source->ramp.state == RAMP_STATE_UP)
+			source->ramp.value = 1.f - source->ramp.value;
+	}
+}
+
+// rt
 void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 {
@@ -2249,7 +2301,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					*val = 0; // init
 					for(int i=0; i<port->num_sources; i++)
 					{
-						float *src = PORT_BUF_ALIGNED(port->sources[i]);
+						float *src = PORT_BUF_ALIGNED(port->sources[i].port);
 						*val += *src;
 					}
 				}
@@ -2260,13 +2312,24 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					memset(val, 0, nsamples * sizeof(float)); // init
 					for(int i=0; i<port->num_sources; i++)
 					{
-						float *src = PORT_BUF_ALIGNED(port->sources[i]);
-						for(int j=0; j<nsamples; j++)
+						source_t *source = &port->sources[i];
+
+						// ramp audio output ports
+						if(source->ramp.state != RAMP_STATE_NONE)
 						{
-							val[j] += src[j];
+							float *src = PORT_BUF_ALIGNED(source->port);
+							for(int j=0; j<nsamples; j++)
+								val[j] += src[j] * source->ramp.value;
+
+							_update_ramp(app, source, port, nsamples);
+						}
+						else // RAMP_STATE_NONE
+						{
+							float *src = PORT_BUF_ALIGNED(source->port);
+							for(int j=0; j<nsamples; j++)
+								val[j] += src[j];
 						}
 					}
-					
 				}
 				else if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
@@ -2281,7 +2344,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					LV2_Atom_Event *itr [32]; //TODO how big?
 					for(int i=0; i<port->num_sources; i++)
 					{
-						seq[i] = PORT_BUF_ALIGNED(port->sources[i]);
+						seq[i] = PORT_BUF_ALIGNED(port->sources[i].port);
 						itr[i] = lv2_atom_sequence_begin(&seq[i]->body);
 					}
 
@@ -2328,8 +2391,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			}
 			else if( (port->num_sources + port->num_feedbacks) == 1) // move messages from UI on default buffer
 			{
-				if( (port->type == PORT_TYPE_ATOM)
-							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+				if(  (port->type == PORT_TYPE_ATOM)
+					&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
 					const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // no messages from UI
@@ -2341,8 +2404,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					LV2_Atom_Forge *forge = &app->forge;
 					LV2_Atom_Forge_Frame frame;
 					LV2_Atom_Forge_Ref ref;
-					ref = _lv2_atom_forge_sequence_append(forge, &frame, port->sources[0]->buf,
-						port->sources[0]->size);
+					ref = _lv2_atom_forge_sequence_append(forge, &frame, port->sources[0].port->buf,
+						port->sources[0].port->size);
 
 					LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 					{
@@ -2359,6 +2422,19 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					if(ref)
 						lv2_atom_forge_pop(forge, &frame);
+				}
+				else if(port->type == PORT_TYPE_AUDIO)
+				{
+					source_t *source = &port->sources[0];
+
+					if(source->ramp.state != RAMP_STATE_NONE)
+					{
+						float *src = PORT_BUF_ALIGNED(source->port);
+						for(int j=0; j<nsamples; j++)
+							src[j] *= source->ramp.value;
+
+						_update_ramp(app, source, port, nsamples);
+					}
 				}
 			}
 		}
@@ -2401,31 +2477,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		for(int i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
-
-			// ramp audio output ports
-			if(port->ramp.state != RAMP_STATE_NONE)
-			{
-				float *buf = PORT_SINK_ALIGNED(port);
-
-				// scale audio amplitude with ramp value
-				for(int s=0; s<nsamples; s++)
-					buf[s] *= port->ramp.value;
-
-				// update ramp properties
-				port->ramp.samples -= nsamples; // update remaining samples to ramp over
-				if(port->ramp.samples <= 0)
-				{
-					if(port->ramp.state == RAMP_STATE_DOWN)
-						; //FIXME call callback, e.g. disconnect, free
-					port->ramp.state = RAMP_STATE_NONE; // ramp is complete
-				}
-				else
-				{
-					port->ramp.value = (float)port->ramp.samples / (float)app->ramp_samples;
-					if(port->ramp.state == RAMP_STATE_UP)
-						port->ramp.value = 1.f - port->ramp.value;
-				}
-			}
 
 			// no notification/subscription and no support for patch:Message
 			int subscribed = port->subscriptions != 0;
@@ -2758,7 +2809,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			cJSON *port_sources_json = cJSON_CreateArray();
 				for(int j=0; j<port->num_sources; j++)
 				{
-					port_t *source = port->sources[j];
+					port_t *source = port->sources[j].port;
 
 					cJSON *conn_json = cJSON_CreateObject();
 
