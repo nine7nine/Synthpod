@@ -86,38 +86,38 @@ struct _sp_ui_driver_t {
 	sp_ui_features_t features;
 };
 
-sp_ui_t *
+SYNTHPOD_SYMBOL_EXTERN sp_ui_t *
 sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	void *data, int show_splash);
 
-Evas_Object *
+SYNTHPOD_SYMBOL_EXTERN Evas_Object *
 sp_ui_widget_get(sp_ui_t *ui);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_refresh(sp_ui_t *ui);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_bundle_new(sp_ui_t *ui);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path, int update_path);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_resize(sp_ui_t *ui, int w, int h);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_iterate(sp_ui_t *ui);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_run(sp_ui_t *ui);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_free(sp_ui_t *ui);
 
 #endif // _SYNTHPOD_UI_H

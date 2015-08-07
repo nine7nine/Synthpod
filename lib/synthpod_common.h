@@ -20,4 +20,10 @@
 
 #define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
 
+#ifdef _WIN32
+#	define SYNTHPOD_SYMBOL_EXTERN __declspec(dllexport)
+#else
+#	define SYNTHPOD_SYMBOL_EXTERN __attribute__((visibility("default")))
+#endif
+
 #endif // _SYNTHPOD_COMMON_H

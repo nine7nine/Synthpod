@@ -26,7 +26,7 @@ set(SYNTHPOD_MICRO_VERSION 1)
 set(SYNTHPOD_VERSION "${SYNTHPOD_MAJOR_VERSION}.${SYNTHPOD_MINOR_VERSION}.${SYNTHPOD_MICRO_VERSION}")
 add_definitions("-DSYNTHPOD_VERSION=\"${SYNTHPOD_VERSION}\"")
 
-set(CMAKE_C_FLAGS "-std=gnu11 -ffast-math ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-std=gnu11 -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
 
 # options
 option(BUILD_UI "Build user interface libraries" ON)

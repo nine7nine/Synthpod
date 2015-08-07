@@ -93,48 +93,48 @@ struct _sp_app_driver_t {
 	osc_schedule_t *osc_sched;
 };
 
-sp_app_t *
+SYNTHPOD_SYMBOL_EXTERN sp_app_t *
 sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_app_activate(sp_app_t *app);
 
-const sp_app_system_source_t *
+SYNTHPOD_SYMBOL_EXTERN const sp_app_system_source_t *
 sp_app_get_system_sources(sp_app_t *app);
 
-const sp_app_system_sink_t *
+SYNTHPOD_SYMBOL_EXTERN const sp_app_system_sink_t *
 sp_app_get_system_sinks(sp_app_t *app);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_app_run_pre(sp_app_t *app, uint32_t nsamples);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_app_deactivate(sp_app_t *app);
 
-void
+SYNTHPOD_SYMBOL_EXTERN void
 sp_app_free(sp_app_t *app);
 
-LV2_State_Status
+SYNTHPOD_SYMBOL_EXTERN LV2_State_Status
 sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
-LV2_State_Status
+SYNTHPOD_SYMBOL_EXTERN LV2_State_Status
 sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
-int
+SYNTHPOD_SYMBOL_EXTERN int
 sp_app_paused(sp_app_t *app);
 
 #endif // _SYNTHPOD_APP_H
