@@ -219,6 +219,8 @@ struct _port_t {
 	port_buffer_type_t buffer_type; // none, sequence
 	int patchable; // support patch:Message
 
+	bool integer;
+	bool toggled;
 	LilvScalePoints *points;
 	char *unit;
 
@@ -373,9 +375,9 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	if(protocol == ui->regs.port.float_protocol.urid)
 	{
 		float val = *(float *)buf;
-		int toggled = lilv_port_has_property(mod->plug, port->tar, ui->regs.port.toggled.node);
 
 		// we should not set a value lower/higher than min/max for widgets
+		//FIXME should be done by smart_*_value_set
 		if(val < port->min)
 			val = port->min;
 		if(val > port->max)
@@ -383,7 +385,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 		if(port->std.widget)
 		{
-			if(toggled)
+			if(port->toggled)
 				smart_toggle_value_set(port->std.widget, floor(val));
 			else if(port->points)
 				smart_spinner_value_set(port->std.widget, val);
@@ -1585,6 +1587,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				lilv_node_free(min_node);
 				lilv_node_free(max_node);
 
+				tar->integer = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.integer.node);
+				tar->toggled = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.toggled.node);
 				int enumeration = lilv_port_has_property(plug, port, ui->regs.port.enumeration.node);
 				tar->points = enumeration
 					? lilv_port_get_scale_points(plug, port)
@@ -3380,7 +3384,7 @@ _sldr_changed(void *data, Evas_Object *obj, void *event)
 	sp_ui_t *ui = mod->ui;
 
 	float val = smart_slider_value_get(obj);
-	if(lilv_port_has_property(mod->plug, port->tar, ui->regs.port.integer.node)) //FIXME use integer flag
+	if(port->integer)
 		val = floor(val);
 
 	_std_ui_write_function(mod, port->index, sizeof(float),
@@ -3484,14 +3488,12 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		Evas_Object *child = NULL;
 		if(port->type == PORT_TYPE_CONTROL)
 		{
-			int integer = lilv_port_has_property(mod->plug, port->tar, ui->regs.port.integer.node);
-			int toggled = lilv_port_has_property(mod->plug, port->tar, ui->regs.port.toggled.node);
-			float step_val = integer
+			float step_val = port->integer
 				? 1.f / (port->max - port->min)
 				: 0.001; // use 1000 steps for continuous values
 			float val = port->dflt;
 
-			if(toggled)
+			if(port->toggled)
 			{
 				Evas_Object *check = smart_toggle_add(evas_object_evas_get(lay));
 				if(check)
@@ -3537,8 +3539,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 				{
 					smart_slider_range_set(sldr, port->min, port->max, port->dflt);
 					smart_slider_color_set(sldr, mod->col);
-					smart_slider_integer_set(sldr, integer);
-					smart_slider_format_set(sldr, integer ? "%.0f %s" : "%.4f %s");
+					smart_slider_integer_set(sldr, port->integer);
+					smart_slider_format_set(sldr, port->integer ? "%.0f %s" : "%.4f %s");
 					if(port->unit)
 						smart_slider_unit_set(sldr, port->unit);
 					smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);

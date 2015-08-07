@@ -1088,7 +1088,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	else
 		; //TODO report
 
-	app->fps.bound = driver->sample_rate / 30; //TODO make this configurable
+	app->fps.bound = driver->sample_rate / 24; //TODO make this configurable
 	app->fps.counter = 0;
 
 	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s
@@ -2255,7 +2255,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	if(app->fps.counter >= app->fps.bound) // check whether we reached boundary
 	{
 		send_port_updates = 1;
-		app->fps.counter -= app->fps.bound; // reet sample counter
+		app->fps.counter -= app->fps.bound; // reset sample counter
 	}
 
 	// iterate over all modules

@@ -33,6 +33,8 @@ struct _smart_slider_t {
 	Evas_Object *theme;
 	float min;
 	float max;
+	float scale;
+	float diff;
 	float dflt;
 	float value;
 
@@ -66,6 +68,8 @@ _smart_slider_smart_init(Evas_Object *o)
 
 	priv->min = 0.f;
 	priv->max = 1.f;
+	priv->diff = priv->max - priv->min;
+	priv->scale = 1.f / priv->diff;
 	priv->dflt = 0.f;
 	priv->value = priv->dflt;
 
@@ -94,13 +98,13 @@ _smart_slider_value_flush(Evas_Object *o)
 	smart_slider_t *priv = evas_object_smart_data_get(o);
 
 	// calculate exact value
-	float new_value = priv->min + (priv->drag * (priv->max - priv->min));
+	float new_value = priv->min + priv->drag * priv->diff;
 
 	double drag_x;
 	if(priv->integer)
 	{
 		new_value = floor(new_value);
-		drag_x = (new_value - priv->min) / (priv->max - priv->min);
+		drag_x = (new_value - priv->min) * priv->scale;
 	}
 	else
 		drag_x = priv->drag;
@@ -206,7 +210,7 @@ _mouse_wheel(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	float scale;
 	if(priv->integer)
 	{
-		scale = 1.f / (priv->max - priv->min);
+		scale = priv->scale;
 	}
 	else
 	{
@@ -312,6 +316,8 @@ smart_slider_range_set(Evas_Object *o, float min, float max, float dflt)
 	priv->min = min;
 	priv->max = max;
 	priv->dflt = dflt;
+	priv->diff = priv->max - priv->min;
+	priv->scale = 1.f / priv->diff;
 	
 	_smart_slider_value_flush(o);
 }
@@ -345,7 +351,7 @@ smart_slider_value_set(Evas_Object *o, float value)
 			: value);
 
 	priv->value = INFINITY;
-	priv->drag = (new_value - priv->min) / (priv->max - priv->min);
+	priv->drag = (new_value - priv->min) * priv->scale;
 
 	_smart_slider_value_flush(o);
 }
