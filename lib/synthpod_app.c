@@ -129,6 +129,7 @@ struct _mod_t {
 	LilvInstance *inst;
 	LV2_Handle handle;
 	LilvNodes *presets;
+	char *uri_str;
 
 	// ports
 	uint32_t num_ports;
@@ -344,8 +345,8 @@ sp_app_activate(sp_app_t *app)
 }
 
 // rt
-const sp_app_system_source_t *
-sp_app_get_system_sources(sp_app_t *app)
+static inline void
+_sp_app_update_system_sources(sp_app_t *app)
 {
 	int num_system_sources = 0;
 
@@ -377,13 +378,11 @@ sp_app_get_system_sources(sp_app_t *app)
 	app->system_sources[num_system_sources].type = SYSTEM_PORT_NONE;
 	app->system_sources[num_system_sources].buf = NULL;
 	app->system_sources[num_system_sources].sys_port = NULL;
-
-	return app->system_sources;
 }
 
 // rt
-const sp_app_system_sink_t *
-sp_app_get_system_sinks(sp_app_t *app)
+static inline void
+_sp_app_update_system_sinks(sp_app_t *app)
 {
 	int num_system_sinks = 0;
 
@@ -415,7 +414,19 @@ sp_app_get_system_sinks(sp_app_t *app)
 	app->system_sinks[num_system_sinks].type = SYSTEM_PORT_NONE;
 	app->system_sinks[num_system_sinks].buf = NULL;
 	app->system_sinks[num_system_sinks].sys_port = NULL;
+}
 
+// rt
+const sp_app_system_source_t *
+sp_app_get_system_sources(sp_app_t *app)
+{
+	return app->system_sources;
+}
+
+// rt
+const sp_app_system_sink_t *
+sp_app_get_system_sinks(sp_app_t *app)
+{
 	return app->system_sinks;
 }
 
@@ -479,6 +490,9 @@ static inline mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 {
 	LilvNode *uri_node = lilv_new_uri(app->world, uri);
+	if(!uri_node)
+		return NULL;
+
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(app->plugs, uri_node);
 	lilv_node_free(uri_node);
 			
@@ -636,6 +650,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	mod->app = app;
 	mod->uid = uid != 0 ? uid : app->uid++;
 	mod->plug = plug;
+	mod->uri_str = strdup(uri); //TODO check
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
 	mod->handle = lilv_instance_get_handle(mod->inst),
@@ -790,6 +805,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	}
 	else
 	{
+		free(mod->uri_str);
 		free(mod->ports);
 		free(mod);
 		return NULL;
@@ -868,6 +884,9 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	// free ports
 	if(mod->ports)
 		free(mod->ports);
+
+	if(mod->uri_str)
+		free(mod->uri_str);
 
 	eina_semaphore_free(&mod->bypass_sem);
 
@@ -1175,21 +1194,18 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		{
 			mod_t *mod = app->mods[m];
 
-			const LilvNode *uri_node = lilv_plugin_get_uri(mod->plug);
-			const char *uri_str = lilv_node_as_string(uri_node);
-			
 			//signal to UI
 			size_t size = sizeof(transmit_module_add_t)
-				+ lv2_atom_pad_size(strlen(uri_str) + 1);
+				+ lv2_atom_pad_size(strlen(mod->uri_str) + 1);
 			transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 			if(trans)
 			{
 				const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
-				data_access_t data_access = descriptor
+				const data_access_t data_access = descriptor
 					? descriptor->extension_data
 					: NULL;
 				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-					mod->uid, uri_str, mod->handle, data_access);
+					mod->uid, mod->uri_str, mod->handle, data_access);
 				_sp_app_to_ui_advance(app, size);
 			}
 		}
@@ -1203,11 +1219,11 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		work_t *work = _sp_app_to_worker_request(app, size);
 		if(work)
 		{
-				work->target = app;
-				work->size = size - sizeof(work_t);
+			work->target = app;
+			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-				job->type = JOB_TYPE_MODULE_ADD;
-				memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
+			job->type = JOB_TYPE_MODULE_ADD;
+			memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
@@ -1244,16 +1260,20 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 					_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]); //FIXME ramp
 		}
 
+		// update system ports lists
+		_sp_app_update_system_sources(app);
+		_sp_app_update_system_sinks(app);
+
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t);
 		work_t *work = _sp_app_to_worker_request(app, size);
 		if(work)
 		{
-				work->target = app;
-				work->size = size - sizeof(work_t);
+			work->target = app;
+			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-				job->type = JOB_TYPE_MODULE_DEL;
-				job->mod = mod;
+			job->type = JOB_TYPE_MODULE_DEL;
+			job->mod = mod;
 			_sp_app_to_worker_advance(app, size);
 		}
 
@@ -1313,6 +1333,10 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			}
 		}
 
+		// update system ports lists
+		_sp_app_update_system_sources(app);
+		_sp_app_update_system_sinks(app);
+
 		//TODO signal to ui
 	}
 	else if(protocol == app->regs.synthpod.module_preset_load.urid)
@@ -1328,12 +1352,12 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		work_t *work = _sp_app_to_worker_request(app, size);
 		if(work)
 		{
-				work->target = app;
-				work->size = size - sizeof(work_t);
+			work->target = app;
+			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-				job->type = JOB_TYPE_PRESET_LOAD;
-				job->mod = mod;
-				memcpy(job->uri, pset->label_str, pset->label.atom.size);
+			job->type = JOB_TYPE_PRESET_LOAD;
+			job->mod = mod;
+			memcpy(job->uri, pset->label_str, pset->label.atom.size);
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
@@ -1350,12 +1374,12 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		work_t *work = _sp_app_to_worker_request(app, size);
 		if(work)
 		{
-				work->target = app;
-				work->size = size - sizeof(work_t);
+			work->target = app;
+			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-				job->type = JOB_TYPE_PRESET_SAVE;
-				job->mod = mod;
-				memcpy(job->uri, pset->label_str, pset->label.atom.size);
+			job->type = JOB_TYPE_PRESET_SAVE;
+			job->mod = mod;
+			memcpy(job->uri, pset->label_str, pset->label.atom.size);
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
@@ -1563,12 +1587,12 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		work_t *work = _sp_app_to_worker_request(app, size);
 		if(work)
 		{
-				work->target = app;
-				work->size = size - sizeof(work_t);
+			work->target = app;
+			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-				job->type = JOB_TYPE_BUNDLE_LOAD;
-				job->status = load->status.body;
-				memcpy(job->uri, load->path_str, load->path.atom.size);
+			job->type = JOB_TYPE_BUNDLE_LOAD;
+			job->status = load->status.body;
+			memcpy(job->uri, load->path_str, load->path.atom.size);
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
@@ -1583,12 +1607,12 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		work_t *work = _sp_app_to_worker_request(app, size);
 		if(work)
 		{
-				work->target = app;
-				work->size = size - sizeof(work_t);
+			work->target = app;
+			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-				job->type = JOB_TYPE_BUNDLE_SAVE;
-				job->status = save->status.body;
-				memcpy(job->uri, save->path_str, save->path.atom.size);
+			job->type = JOB_TYPE_BUNDLE_SAVE;
+			job->status = save->status.body;
+			memcpy(job->uri, save->path_str, save->path.atom.size);
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
@@ -1617,22 +1641,23 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				app->mods[app->num_mods] = app->mods[app->num_mods-1]; // system sink
 				app->mods[app->num_mods-1] = mod;
 				app->num_mods += 1;
-			
-				const LilvNode *uri_node = lilv_plugin_get_uri(mod->plug);
-				const char *uri_str = lilv_node_as_string(uri_node);
+
+				// update system ports lists
+				_sp_app_update_system_sources(app);
+				_sp_app_update_system_sinks(app);
 				
 				//signal to UI
 				size_t size = sizeof(transmit_module_add_t)
-					+ lv2_atom_pad_size(strlen(uri_str) + 1);
+					+ lv2_atom_pad_size(strlen(mod->uri_str) + 1);
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
 					const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
-					data_access_t data_access = descriptor
+					const data_access_t data_access = descriptor
 						? descriptor->extension_data
 						: NULL;
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-						mod->uid, uri_str, mod->handle, data_access);
+						mod->uid, mod->uri_str, mod->handle, data_access);
 					_sp_app_to_ui_advance(app, size);
 				}
 
@@ -1641,6 +1666,10 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			case JOB_TYPE_BUNDLE_LOAD:
 			{
 				//printf("app: bundle loaded\n");
+
+				// update system ports lists
+				_sp_app_update_system_sources(app);
+				_sp_app_update_system_sinks(app);
 
 				// signal to app
 				size_t size = sizeof(transmit_bundle_load_t);
@@ -1749,6 +1778,7 @@ _sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
 	return ZERO_WORKER_SUCCESS;
 }
 
+// non-rt
 const LilvNode *
 _mod_preset_get(mod_t *mod, const char *label)
 {
@@ -2787,13 +2817,10 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 
 		free(path);
 		
-		const LilvNode *uri_node = lilv_state_get_plugin_uri(state);
-		const char *uri_str = lilv_node_as_string(uri_node);
-
 		// fill mod json object
 		cJSON *mod_json = cJSON_CreateObject();
 		cJSON *mod_uid_json = cJSON_CreateNumber(mod->uid);
-		cJSON *mod_uri_json = cJSON_CreateString(uri_str);
+		cJSON *mod_uri_json = cJSON_CreateString(mod->uri_str);
 		cJSON *mod_selected_json = cJSON_CreateBool(mod->selected);
 		cJSON *mod_ports_json = cJSON_CreateArray();
 

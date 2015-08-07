@@ -147,6 +147,7 @@ struct _prog_t {
 	volatile int worker_dead;
 	Eina_Thread worker_thread;
 	Eina_Semaphore worker_sem;
+	bool worker_sem_needs_release;
 
 	struct {
 		jack_transport_state_t rolling;
@@ -674,7 +675,9 @@ _process(jack_nframes_t nsamples, void *data)
 	{
 		size_t size;
 		const void *body;
-		while((body = varchunk_read_request(handle->app_from_worker, &size)))
+		int n = 0;
+		while((body = varchunk_read_request(handle->app_from_worker, &size))
+			&& (n++ < 10) ) //FIXME limit to how many events?
 		{
 			sp_app_from_worker(handle->app, size, body);
 			varchunk_read_advance(handle->app_from_worker);
@@ -690,7 +693,9 @@ _process(jack_nframes_t nsamples, void *data)
 	{
 		size_t size;
 		const LV2_Atom *atom;
-		while((atom = varchunk_read_request(handle->app_from_ui, &size)))
+		int n = 0;
+		while((atom = varchunk_read_request(handle->app_from_ui, &size))
+			&& (n++ < 10) ) //FIXME limit to how many events?
 		{
 			sp_app_from_ui(handle->app, atom);
 			varchunk_read_advance(handle->app_from_ui);
@@ -774,6 +779,12 @@ _process(jack_nframes_t nsamples, void *data)
 				break;
 			}
 		}
+	}
+	
+	if(handle->worker_sem_needs_release)
+	{
+		eina_semaphore_release(&handle->worker_sem, 1);
+		handle->worker_sem_needs_release = false;
 	}
 
 	return 0;
@@ -929,7 +940,7 @@ _app_to_worker_advance(size_t size, void *data)
 	prog_t *handle = data;
 
 	varchunk_write_advance(handle->app_to_worker, size);
-	eina_semaphore_release(&handle->worker_sem, 1);
+	handle->worker_sem_needs_release = true;
 }
 
 // non-rt worker-thread
@@ -968,7 +979,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 
 			size_t written = strlen(trace) + 1;
 			varchunk_write_advance(handle->app_to_log, written);
-			eina_semaphore_release(&handle->worker_sem, 1);
+			handle->worker_sem_needs_release = true;
 		}
 	}
 	else // !log_trace
@@ -1132,6 +1143,24 @@ _shutdown(void *data)
 	ecore_main_loop_thread_safe_call_async(_shutdown_async, handle);
 }
 
+static void
+_xrun_async(void *data)
+{
+	prog_t *handle = data;
+
+	fprintf(stderr, "JACK XRun\n");
+}
+
+static int
+_xrun(void *data)
+{
+	prog_t *handle = data;
+
+	ecore_main_loop_thread_safe_call_async(_xrun_async, handle);
+
+	return 0;
+}
+
 static int
 _jack_init(prog_t *handle, const char *id)
 {
@@ -1167,6 +1196,7 @@ _jack_init(prog_t *handle, const char *id)
 	if(jack_set_session_callback(handle->client, _session, handle))
 		return -1;
 	jack_on_shutdown(handle->client, _shutdown, handle);
+	jack_set_xrun_callback(handle->client, _xrun, handle);
 
 	return 0;
 }
