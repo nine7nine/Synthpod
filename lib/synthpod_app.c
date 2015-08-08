@@ -420,6 +420,8 @@ _sp_app_update_system_sinks(sp_app_t *app)
 const sp_app_system_source_t *
 sp_app_get_system_sources(sp_app_t *app)
 {
+	_sp_app_update_system_sources(app);
+
 	return app->system_sources;
 }
 
@@ -427,6 +429,8 @@ sp_app_get_system_sources(sp_app_t *app)
 const sp_app_system_sink_t *
 sp_app_get_system_sinks(sp_app_t *app)
 {
+	_sp_app_update_system_sinks(app);
+
 	return app->system_sinks;
 }
 
@@ -1260,10 +1264,6 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 					_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]); //FIXME ramp
 		}
 
-		// update system ports lists
-		_sp_app_update_system_sources(app);
-		_sp_app_update_system_sinks(app);
-
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t);
 		work_t *work = _sp_app_to_worker_request(app, size);
@@ -1332,10 +1332,6 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 				app->mods[j--] = app->mods[i];
 			}
 		}
-
-		// update system ports lists
-		_sp_app_update_system_sources(app);
-		_sp_app_update_system_sinks(app);
 
 		//TODO signal to ui
 	}
@@ -1642,10 +1638,6 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				app->mods[app->num_mods-1] = mod;
 				app->num_mods += 1;
 
-				// update system ports lists
-				_sp_app_update_system_sources(app);
-				_sp_app_update_system_sinks(app);
-				
 				//signal to UI
 				size_t size = sizeof(transmit_module_add_t)
 					+ lv2_atom_pad_size(strlen(mod->uri_str) + 1);
@@ -1666,10 +1658,6 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			case JOB_TYPE_BUNDLE_LOAD:
 			{
 				//printf("app: bundle loaded\n");
-
-				// update system ports lists
-				_sp_app_update_system_sources(app);
-				_sp_app_update_system_sinks(app);
 
 				// signal to app
 				size_t size = sizeof(transmit_bundle_load_t);

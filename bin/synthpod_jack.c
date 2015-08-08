@@ -152,7 +152,13 @@ struct _prog_t {
 	struct {
 		jack_transport_state_t rolling;
 		jack_nframes_t frame;
-		double bpm;
+		int32_t bar;
+		int32_t beat;
+		int32_t tick;
+		float beats_per_bar;
+		float beat_type;
+		double ticks_per_beat;
+		double beats_per_minute;
 	} trans;
 
 #if defined(JACK_HAS_CYCLE_TIMES)
@@ -254,12 +260,18 @@ _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t 
 
 		if(pos->valid & JackPositionBBT)
 		{
+			float bar_beat = pos->beat - 1 + (pos->tick / pos->ticks_per_beat);
+			float bar = pos->bar - 1;
+			double beat = bar * pos->beats_per_bar + bar_beat;
+
+			lv2_atom_forge_key(forge, prog->time_beat);
+			lv2_atom_forge_double(forge, beat);
+
 			lv2_atom_forge_key(forge, prog->time_barBeat);
-			lv2_atom_forge_float(forge,
-				pos->beat - 1 + (pos->tick / pos->ticks_per_beat));
+			lv2_atom_forge_float(forge, bar_beat);
 
 			lv2_atom_forge_key(forge, prog->time_bar);
-			lv2_atom_forge_long(forge, pos->bar - 1);
+			lv2_atom_forge_long(forge, bar);
 
 			lv2_atom_forge_key(forge, prog->time_beatUnit);
 			lv2_atom_forge_int(forge, pos->beat_type);
@@ -539,7 +551,13 @@ _process(jack_nframes_t nsamples, void *data)
 	int rolling = jack_transport_query(handle->client, &pos) == JackTransportRolling;
 	int trans_changed = (rolling != handle->trans.rolling)
 		|| (pos.frame != handle->trans.frame)
-		|| (pos.beats_per_minute != handle->trans.bpm);
+		|| (pos.bar != handle->trans.bar)
+		|| (pos.beat != handle->trans.beat)
+		|| (pos.tick != handle->trans.tick)
+		|| (pos.beats_per_bar != handle->trans.beats_per_bar)
+		|| (pos.beat_type != handle->trans.beat_type)
+		|| (pos.ticks_per_beat != handle->trans.ticks_per_beat)
+		|| (pos.beats_per_minute != handle->trans.beats_per_minute);
 
 	const size_t sample_buf_size = sizeof(float) * nsamples;
 	const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
@@ -664,11 +682,15 @@ _process(jack_nframes_t nsamples, void *data)
 	}
 
 	// update transport state
-	handle->trans.frame = rolling
-		? pos.frame + nsamples
-		: pos.frame;
-	handle->trans.bpm = pos.beats_per_minute;
 	handle->trans.rolling = rolling;
+	handle->trans.frame += rolling ? nsamples : 0;
+	handle->trans.bar = pos.bar;
+	handle->trans.beat = pos.beat;
+	handle->trans.tick = pos.tick;
+	handle->trans.beats_per_bar = pos.beats_per_bar;
+	handle->trans.beat_type = pos.beat_type;
+	handle->trans.ticks_per_beat = pos.ticks_per_beat;
+	handle->trans.beats_per_minute = pos.beats_per_minute;
 
 	// read events from worker
 	if(!paused) // aka not saving state
