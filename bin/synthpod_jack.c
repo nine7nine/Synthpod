@@ -127,7 +127,6 @@ struct _prog_t {
 	LV2_URID time_position;
 	LV2_URID time_barBeat;
 	LV2_URID time_bar;
-	LV2_URID time_beat;
 	LV2_URID time_beatUnit;
 	LV2_URID time_beatsPerBar;
 	LV2_URID time_beatsPerMinute;
@@ -152,9 +151,6 @@ struct _prog_t {
 	struct {
 		jack_transport_state_t rolling;
 		jack_nframes_t frame;
-		int32_t bar;
-		int32_t beat;
-		int32_t tick;
 		float beats_per_bar;
 		float beat_type;
 		double ticks_per_beat;
@@ -262,10 +258,6 @@ _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t 
 		{
 			float bar_beat = pos->beat - 1 + (pos->tick / pos->ticks_per_beat);
 			float bar = pos->bar - 1;
-			double beat = bar * pos->beats_per_bar + bar_beat;
-
-			lv2_atom_forge_key(forge, prog->time_beat);
-			lv2_atom_forge_double(forge, beat);
 
 			lv2_atom_forge_key(forge, prog->time_barBeat);
 			lv2_atom_forge_float(forge, bar_beat);
@@ -551,9 +543,6 @@ _process(jack_nframes_t nsamples, void *data)
 	int rolling = jack_transport_query(handle->client, &pos) == JackTransportRolling;
 	int trans_changed = (rolling != handle->trans.rolling)
 		|| (pos.frame != handle->trans.frame)
-		|| (pos.bar != handle->trans.bar)
-		|| (pos.beat != handle->trans.beat)
-		|| (pos.tick != handle->trans.tick)
 		|| (pos.beats_per_bar != handle->trans.beats_per_bar)
 		|| (pos.beat_type != handle->trans.beat_type)
 		|| (pos.ticks_per_beat != handle->trans.ticks_per_beat)
@@ -683,10 +672,9 @@ _process(jack_nframes_t nsamples, void *data)
 
 	// update transport state
 	handle->trans.rolling = rolling;
-	handle->trans.frame += rolling ? nsamples : 0;
-	handle->trans.bar = pos.bar;
-	handle->trans.beat = pos.beat;
-	handle->trans.tick = pos.tick;
+	handle->trans.frame = rolling
+		? handle->trans.frame + nsamples
+		: pos.frame;
 	handle->trans.beats_per_bar = pos.beats_per_bar;
 	handle->trans.beat_type = pos.beat_type;
 	handle->trans.ticks_per_beat = pos.ticks_per_beat;
@@ -1482,7 +1470,6 @@ main(int argc, char **argv)
 	handle.time_position = map->map(map->handle, LV2_TIME__Position);
 	handle.time_barBeat = map->map(map->handle, LV2_TIME__barBeat);
 	handle.time_bar = map->map(map->handle, LV2_TIME__bar);
-	handle.time_beat = map->map(map->handle, LV2_TIME__beat);
 	handle.time_beatUnit = map->map(map->handle, LV2_TIME__beatUnit);
 	handle.time_beatsPerBar = map->map(map->handle, LV2_TIME__beatsPerBar);
 	handle.time_beatsPerMinute = map->map(map->handle, LV2_TIME__beatsPerMinute);
