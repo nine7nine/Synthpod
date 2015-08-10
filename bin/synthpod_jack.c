@@ -63,7 +63,6 @@
 #define OSC_SIZE 0x800
 
 #	define JAN_1970 (uint64_t)0x83aa7e80
-#	define SLICE (double)0x0.00000001p0 // smallest NTP time slice
 
 typedef enum _save_state_t save_state_t;
 typedef struct _prog_t prog_t;
@@ -166,6 +165,8 @@ struct _prog_t {
 		jack_time_t cur_usecs;
 		jack_time_t nxt_usecs;
 		float T;
+		double dT;
+		double dTm1;
 	} cycle;
 #endif
 };
@@ -519,6 +520,13 @@ _message_cb(const char *path, const char *fmt, const LV2_Atom_Tuple *body,
 	handle->osc_ptr = ptr;
 }
 
+//FIXME
+static int64_t
+_osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp);
+static uint64_t
+_osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames);
+//FIXME
+
 // rt
 static int
 _process(jack_nframes_t nsamples, void *data)
@@ -535,7 +543,22 @@ _process(jack_nframes_t nsamples, void *data)
 
 	handle->cycle.ref_frames = handle->cycle.cur_frames + offset;
 	handle->ntp.tv_sec += JAN_1970; // convert NTP to OSC time
-	handle->cycle.T = (float)nsamples / (handle->cycle.nxt_usecs - handle->cycle.cur_usecs);
+	handle->cycle.dT = 1e6 * (double)nsamples
+		/ (double)(handle->cycle.nxt_usecs - handle->cycle.cur_usecs);
+	handle->cycle.dTm1 = 1e-6 * (double)(handle->cycle.nxt_usecs - handle->cycle.cur_usecs)
+		/ (double)nsamples;
+	/* less exact
+	handle->cycle.dT = 1e6 * (double)nsamples / (double)handle->cycle.T;
+	handle->cycle.dTm1 = 1e-6 * (double)handle->cycle.T / (double)nsamples;
+	*/
+
+	/*
+	// debug
+	int64_t frame1 = 12345678LL;
+	uint64_t osc1 = _osc_schedule_frames2osc(handle, frame1);
+	int64_t frame2 = _osc_schedule_osc2frames(handle, osc1);
+	printf("%li %li\n", frame1, frame2);
+	*/
 #endif
 
 	// get transport position
@@ -1322,18 +1345,19 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 	if(timestamp == 1ULL)
 		return 0; // inject at start of period
 
-	uint32_t time_sec = timestamp >> 32;
-	uint32_t time_frac = timestamp & 0xffffffff;
+	uint64_t time_sec = timestamp >> 32;
+	uint64_t time_frac = timestamp & 0xffffffff;
 
-	double diff = time_sec;
+	volatile double diff = time_sec;
 	diff -= handle->ntp.tv_sec;
-	diff += time_frac * SLICE;
+	diff += time_frac * 0x1p-32;
 	diff -= handle->ntp.tv_nsec * 1e-9;
-	diff *= 1e6; // convert s to us
 
-	int64_t frames = handle->cycle.ref_frames
+	double frames_d = handle->cycle.ref_frames
 		- handle->cycle.cur_frames
-		+ handle->cycle.T * diff;
+		+ diff * handle->cycle.dT;
+
+	int64_t frames = round(frames_d);
 
 	return frames;
 }
@@ -1344,24 +1368,18 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 {
 	prog_t *handle = instance;
 
-	double diff = (frames - handle->cycle.ref_frames + handle->cycle.cur_frames) / handle->cycle.T;
-	diff *= 1e-6; // convert us to s;
-	uint64_t secs = trunc(diff);
-	uint64_t nsecs = (diff - secs) * 1e9;
+	volatile double diff = (double)(frames - handle->cycle.ref_frames + handle->cycle.cur_frames)
+		* handle->cycle.dTm1;
+	diff += handle->ntp.tv_nsec * 1e-9;
+	diff += handle->ntp.tv_sec;
 
-	uint64_t time_sec = handle->ntp.tv_sec;
-	uint64_t time_frac = handle->ntp.tv_nsec;
-	
-	time_sec += secs;
-	time_frac += nsecs;
+	double time_sec_d;
+	double time_frac_d = modf(diff, &time_sec_d);
 
-	while(time_frac > 1000000000)
-	{
-		time_sec += 1;
-		time_frac -= 1000000000;
-	}
-	
-	time_frac *= 4.295; // ns -> frac
+	uint64_t time_sec = time_sec_d;
+	uint64_t time_frac = time_frac_d * 0x1p32;
+	if(time_frac >= 0x100000000ULL) // illegal overflow
+		time_frac = 0xffffffffULL;
 
 	uint64_t timestamp = (time_sec << 32) | time_frac;
 
