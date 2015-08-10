@@ -34,7 +34,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 10
+#define NUM_FEATURES 11
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -113,6 +113,9 @@ struct _mod_t {
 
 	// log
 	LV2_Log_Log log;
+
+	// make_path
+	LV2_State_Make_Path make_path;
 
 	// opts
 	struct {
@@ -489,6 +492,19 @@ _zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
 	return ZERO_WORKER_SUCCESS;
 }
 
+// non-rt
+static char *
+_mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
+{
+	mod_t *mod = instance;
+	sp_app_t *app = mod->app;
+
+	char *absolute_path = NULL;
+	asprintf(&absolute_path, "%s/%i/%s", app->bundle_path, mod->uid, abstract_path);
+
+	return absolute_path;
+}
+
 // non-rt worker-thread
 static inline mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
@@ -523,6 +539,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	mod->log.handle = mod;
 	mod->log.printf = _log_printf;
 	mod->log.vprintf = _log_vprintf;
+
+	mod->make_path.handle = mod;
+	mod->make_path.path = _mod_make_path;
 		
 	// populate options
 	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
@@ -562,6 +581,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 
 	mod->feature_list[nfeatures].URI = LV2_LOG__log;
 	mod->feature_list[nfeatures++].data = &mod->log;
+
+	mod->feature_list[nfeatures].URI = LV2_STATE__makePath;
+	mod->feature_list[nfeatures++].data = &mod->make_path;
 	
 	mod->feature_list[nfeatures].URI = LV2_BUF_SIZE__boundedBlockLength;
 	mod->feature_list[nfeatures++].data = NULL;
