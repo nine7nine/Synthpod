@@ -498,9 +498,24 @@ _mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 {
 	mod_t *mod = instance;
 	sp_app_t *app = mod->app;
-
+	
 	char *absolute_path = NULL;
-	asprintf(&absolute_path, "%s/%i/%s", app->bundle_path, mod->uid, abstract_path);
+	asprintf(&absolute_path, "%s/%u/%s", app->bundle_path, mod->uid, abstract_path);
+
+	// create leading directory tree, e.g. up to last '/'
+	if(absolute_path)
+	{
+		const char *end = strrchr(absolute_path, '/');
+		if(end)
+		{
+			char *path = strndup(absolute_path, end - absolute_path);
+			if(path)
+			{
+				ecore_file_mkpath(path);
+				free(path);
+			}
+		}
+	}
 
 	return absolute_path;
 }
@@ -1834,8 +1849,21 @@ static char *
 _make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 {
 	char *absolute_path = _absolute_path(instance, abstract_path);
+
+	// create leading directory tree, e.g. up to last '/'
 	if(absolute_path)
-		ecore_file_mkpath(absolute_path);
+	{
+		const char *end = strrchr(absolute_path, '/');
+		if(end)
+		{
+			char *path = strndup(absolute_path, end - absolute_path);
+			if(path)
+			{
+				ecore_file_mkpath(path);
+				free(path);
+			}
+		}
+	}
 
 	return absolute_path;
 }
@@ -2001,11 +2029,8 @@ _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	if(strcmp(value, "state.json"))
 		return LV2_STATE_ERR_UNKNOWN;
 
-	char *manifest_dst = NULL;
-	char *state_dst = NULL;
-
-	asprintf(&manifest_dst, "%s/manifest.ttl", app->bundle_path);
-	asprintf(&state_dst, "%s/state.ttl", app->bundle_path);
+	char *manifest_dst = _make_path(app->bundle_path, "manifest.ttl");
+	char *state_dst = _make_path(app->bundle_path, "state.ttl");
 
 	if(manifest_dst && state_dst)
 	{
@@ -2042,7 +2067,7 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 		if(app->bundle_filename)
 			free(app->bundle_filename);
 
-		asprintf(&app->bundle_filename, "%s/state.json", app->bundle_path);
+		app->bundle_filename = _make_path(app->bundle_path, "state.json");
 
 		*size = strlen(app->bundle_filename) + 1;
 		return app->bundle_filename;
@@ -2800,6 +2825,48 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 
+	// cleanup state module trees
+	for(uint32_t uid=0; uid<app->uid; uid++)
+	{
+		int exists = 0;
+
+		for(int m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+
+			if(mod->uid == uid)
+			{
+				exists = 1;
+				break;
+			}
+		}
+
+		if(!exists)
+		{
+			char uid_str [64];
+			sprintf(uid_str, "%u", uid);
+
+			char *root_path = map_path->absolute_path(map_path->handle, uid_str);
+			if(root_path)
+			{
+				ecore_file_recursive_rm(root_path); // remove whole bundle tree
+				free(root_path);
+			}
+		}
+		else
+		{
+			char uid_str [64];
+			sprintf(uid_str, "%u/manifest.ttl", uid);
+
+			char *manifest_path = map_path->absolute_path(map_path->handle, uid_str);
+			if(manifest_path)
+			{
+				ecore_file_remove(manifest_path); // remove manifest.ttl
+				free(manifest_path);
+			}
+		}
+	}
+
 	// create json object
 	cJSON *root_json = cJSON_CreateObject();
 	cJSON *arr_json = cJSON_CreateArray();
@@ -2809,13 +2876,11 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	{
 		mod_t *mod = app->mods[m];
 
-		char uid [32];
+		char uid [64];
 		sprintf(uid, "%u/", mod->uid);
 		char *path = make_path->path(make_path->handle, uid);
 		if(!path)
 			continue;
-
-		//printf("made path: %s\n", path);
 
 		LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
 			app->driver->map, NULL, NULL, NULL, path,
@@ -2880,7 +2945,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	if(!root_str)
 		return LV2_STATE_ERR_UNKNOWN;
 
-	char *absolute = map_path->absolute_path(map_path->handle, "state.json");
+	char *absolute = make_path->path(make_path->handle, "state.json");
 	if(!absolute)
 		return LV2_STATE_ERR_UNKNOWN;
 
@@ -2927,7 +2992,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 	if(!map_path)
 	{
-		fprintf(stderr, "sp_app_save: LV2_STATE__mapPath not supported.");
+		fprintf(stderr, "sp_app_restore: LV2_STATE__mapPath not supported.");
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 
@@ -3033,8 +3098,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		char *path = map_path->absolute_path(map_path->handle, uid);
 		if(!path)
 			continue;
-
-		//printf("mapped path: %s\n", path);
 
 		// strip 'file://'
 		const char *tmp = !strncmp(path, "file://", 7)
