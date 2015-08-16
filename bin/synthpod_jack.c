@@ -1401,7 +1401,7 @@ main(int argc, char **argv)
 	handle.session_id = NULL;
 	handle.seq_size = SEQ_SIZE;
 	
-	char c;
+	int c;
 	while((c = getopt(argc, argv, "vhn:u:s:")) != -1)
 	{
 		switch(c)

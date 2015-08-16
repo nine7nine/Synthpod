@@ -78,6 +78,10 @@ if(BUILD_JACK)
 		${SYNTHPOD_DESKTOP_DIR})
 endif()
 
+if(BUILD_RTAUDIO)
+	#TODO
+endif()
+
 if(BUILD_PORTAUDIO)
 # portaudio
 	pkg_search_module(PORTAUDIO REQUIRED portaudio-2.0>=19)
