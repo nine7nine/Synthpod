@@ -78,8 +78,71 @@ if(BUILD_JACK)
 		${SYNTHPOD_DESKTOP_DIR})
 endif()
 
+if(BUILD_ALSA)
+# zita_alsa_pcmi
+	find_library(ZITA_ALSA_PCMI_LIBRARY NAMES zita-alsa-pcmi)
+	find_path(ZITA_ALSA_PCMI_INCLUDE_DIR zita-alsa-pcmi.h)
+	if(NOT (ZITA_ALSA_PCMI_LIBRARY AND ZITA_ALSA_PCMI_INCLUDE_DIR))
+		message(FATAL_ERROR "zita-alsa-pcmi not found")
+	endif()
+
+	include_directories(${ZITA_ALSA_PCMI_INCLUDE_DIR})
+
+# ALSA
+	pkg_search_module(ALSA REQUIRED alsa>=1.0)
+	include_directories(${ALSA_INCLUDE_DIRS})
+
+# synthpod
+	add_executable(synthpod.alsa
+		synthpod_alsa.cpp
+		synthpod_nsm.c
+		ext_urid.c)
+	target_link_libraries(synthpod.alsa
+		${ECORE_CON_LDFLAGS}
+		${ZITA_ALSA_PCMI_LIBRARY}
+		"-lm"
+		synthpod.lib)
+	if(BUILD_UI)
+		target_link_libraries(synthpod.alsa
+			synthpod_ui.lib)
+	endif()
+	set_target_properties(synthpod.alsa PROPERTIES OUTPUT_NAME "synthpod_alsa")
+	install(TARGETS synthpod.alsa DESTINATION bin)
+
+# desktop  file
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_alsa.desktop.in
+		${PROJECT_BINARY_DIR}/bin/synthpod_alsa.desktop @ONLY)
+	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_alsa.desktop DESTINATION
+		${SYNTHPOD_DESKTOP_DIR})
+endif()
+
 if(BUILD_RTAUDIO)
-	#TODO
+# rtaudio
+	pkg_search_module(RTAUDIO REQUIRED librtaudio>=4.1)
+	include_directories(${RTAUDIO_INCLUDE_DIRS})
+
+# synthpod
+	add_executable(synthpod.rtaudio
+		synthpod_rtaudio.cpp
+		synthpod_nsm.c
+		ext_urid.c)
+	target_link_libraries(synthpod.rtaudio
+		${ECORE_CON_LDFLAGS}
+		${RTAUDIO_LDFLAGS}
+		"-lm"
+		synthpod.lib)
+	if(BUILD_UI)
+		target_link_libraries(synthpod.rtaudio
+			synthpod_ui.lib)
+	endif()
+	set_target_properties(synthpod.rtaudio PROPERTIES OUTPUT_NAME "synthpod_rtaudio")
+	install(TARGETS synthpod.rtaudio DESTINATION bin)
+
+# desktop  file
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_rtaudio.desktop.in
+		${PROJECT_BINARY_DIR}/bin/synthpod_rtaudio.desktop @ONLY)
+	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_rtaudio.desktop DESTINATION
+		${SYNTHPOD_DESKTOP_DIR})
 endif()
 
 if(BUILD_PORTAUDIO)
