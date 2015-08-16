@@ -804,18 +804,13 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 				tar->protocol = app->regs.port.event_transfer.urid;
 
 			// check whether this is a control port
-			LilvNode *control_designation = lilv_new_uri(app->world, LV2_CORE__control);
-			if(control_designation)
-			{
-				const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
-					tar->direction == PORT_DIRECTION_INPUT
-						? app->regs.port.input.node
-						: app->regs.port.output.node
-						, control_designation);
+			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
+				tar->direction == PORT_DIRECTION_INPUT
+					? app->regs.port.input.node
+					: app->regs.port.output.node
+					, app->regs.core.control.node);
 
-				tar->selected = control_port == port; // only select control ports by default
-				lilv_node_free(control_designation);
-			}
+			tar->selected = control_port == port; // only select control ports by default
 		}
 		else
 			; //TODO

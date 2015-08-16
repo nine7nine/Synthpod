@@ -816,20 +816,20 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 
 	// subscribe manually for port notifications
 	const LilvNode *plug_uri_node = lilv_plugin_get_uri(mod->plug);
-	LilvNode *lv2_symbol = lilv_new_uri(ui->world, LV2_CORE__symbol);
-	LilvNode *lv2_index = lilv_new_uri(ui->world, LV2_CORE__index);
-	LilvNode *ui_plugin = lilv_new_uri(ui->world, LV2_UI__plugin);
-	LilvNode *ui_prot = lilv_new_uri(ui->world, LV2_UI_PREFIX"protocol");
 
 	LilvNodes *notifs = lilv_world_find_nodes(ui->world,
 		lilv_ui_get_uri(ui_ui), ui->regs.port.notification.node, NULL);
 	LILV_FOREACH(nodes, n, notifs)
 	{
 		const LilvNode *notif = lilv_nodes_get(notifs, n);
-		const LilvNode *sym = lilv_world_get(ui->world, notif, lv2_symbol, NULL);
-		const LilvNode *ind = lilv_world_get(ui->world, notif, lv2_index, NULL);
-		const LilvNode *plug = lilv_world_get(ui->world, notif, ui_plugin, NULL);
-		const LilvNode *prot = lilv_world_get(ui->world, notif, ui_prot, NULL);
+		const LilvNode *sym = lilv_world_get(ui->world, notif,
+			ui->regs.core.symbol.node, NULL);
+		const LilvNode *ind = lilv_world_get(ui->world, notif,
+			ui->regs.core.index.node, NULL);
+		const LilvNode *plug = lilv_world_get(ui->world, notif,
+			ui->regs.ui.plugin.node, NULL);
+		const LilvNode *prot = lilv_world_get(ui->world, notif,
+			ui->regs.ui.protocol.node, NULL);
 
 		if(plug && !lilv_node_equals(plug, plug_uri_node))
 			continue; // notification not for this plugin 
@@ -887,10 +887,6 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 		}
 	}
 	lilv_nodes_free(notifs);
-	lilv_node_free(lv2_symbol);
-	lilv_node_free(lv2_index);
-	lilv_node_free(ui_plugin);
-	lilv_node_free(ui_prot);
 }
 
 static void
@@ -1757,15 +1753,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 			// test for show UI
 			{ //TODO add to reg_t
-				LilvNode *extension_data = lilv_new_uri(ui->world, LV2_CORE__extensionData);
-				//LilvNode *required_feature = lilv_new_uri(ui->world, LV2_CORE__requiredFeature);
-				LilvNode *show_interface = lilv_new_uri(ui->world, LV2_UI__showInterface);
-				LilvNode *idle_interface = lilv_new_uri(ui->world, LV2_UI__idleInterface);
-
 				LilvNodes* has_idle_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
-					extension_data, idle_interface);
+					ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
 				LilvNodes* has_show_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
-					extension_data, show_interface);
+					ui->regs.core.extension_data.node, ui->regs.ui.show_interface.node);
 
 				if(lilv_nodes_size(has_show_iface)) // idle_iface is implicitely included
 				{
@@ -1775,35 +1766,25 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 				lilv_nodes_free(has_show_iface);
 				lilv_nodes_free(has_idle_iface);
-
-				lilv_node_free(extension_data);
-				//lilv_node_free(required_feature);
-				lilv_node_free(show_interface);
-				lilv_node_free(idle_interface);
 			}
 
 			// test for kxstudio kx_ui
 			{
-				LilvNode *kx_ui = lilv_new_uri(ui->world, LV2_EXTERNAL_UI__Widget);
-				LilvNode *ext_ui = lilv_new_uri(ui->world, LV2_EXTERNAL_UI_DEPRECATED_URI);
-				if( lilv_ui_is_a(lui, kx_ui) || lilv_ui_is_a(lui, ext_ui) )
+				if(  lilv_ui_is_a(lui, ui->regs.ui.kx_widget.node)
+					|| lilv_ui_is_a(lui, ui->regs.ui.external.node) )
 				{
 					//printf("has kx-ui\n");
 					mod->kx.ui = lui;
 				}
-				lilv_node_free(kx_ui);
-				lilv_node_free(ext_ui);
 			}
 
 			// test for X11UI
 			{
-				LilvNode *x11_ui = lilv_new_uri(ui->world, LV2_UI__X11UI);
-				if(lilv_ui_is_a(lui, x11_ui))
+				if(lilv_ui_is_a(lui, ui->regs.ui.x11.node))
 				{
 					//printf("has x11-ui\n");
 					mod->x11.ui = lui;
 				}
-				lilv_node_free(x11_ui);
 			}
 		}
 	}

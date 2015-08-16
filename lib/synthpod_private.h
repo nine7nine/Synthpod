@@ -44,6 +44,7 @@
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
+#include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 typedef enum _port_type_t port_type_t;
 typedef enum _port_buffer_type_t port_buffer_type_t;
@@ -141,6 +142,13 @@ struct _reg_t {
 	struct {
 		reg_item_t eo;
 		reg_item_t window_title;
+		reg_item_t show_interface;
+		reg_item_t idle_interface;
+		reg_item_t kx_widget;
+		reg_item_t external;
+		reg_item_t x11;
+		reg_item_t plugin;
+		reg_item_t protocol;
 	} ui;
 
 	struct {
@@ -162,6 +170,10 @@ struct _reg_t {
 		reg_item_t name;
 		reg_item_t minor_version;
 		reg_item_t micro_version;
+		reg_item_t extension_data;
+		reg_item_t control;
+		reg_item_t symbol;
+		reg_item_t index;
 	} core;
 
 	struct {
@@ -293,6 +305,13 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->ui.eo, world, map, LV2_UI__EoUI);
 	_register(&regs->ui.window_title, world, map, LV2_UI__windowTitle);
+	_register(&regs->ui.show_interface, world, map, LV2_UI__showInterface);
+	_register(&regs->ui.idle_interface, world, map, LV2_UI__idleInterface);
+	_register(&regs->ui.kx_widget, world, map, LV2_EXTERNAL_UI__Widget);
+	_register(&regs->ui.external, world, map, LV2_EXTERNAL_UI_DEPRECATED_URI);
+	_register(&regs->ui.x11, world, map, LV2_UI__X11UI);
+	_register(&regs->ui.plugin, world, map, LV2_UI__plugin);
+	_register(&regs->ui.protocol, world, map, LV2_UI_PREFIX"protocol");
 
 	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
 
@@ -306,6 +325,10 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.name, world, map, LV2_CORE__name);
 	_register(&regs->core.minor_version, world, map, LV2_CORE__minorVersion);
 	_register(&regs->core.micro_version, world, map, LV2_CORE__microVersion);
+	_register(&regs->core.extension_data, world, map, LV2_CORE__extensionData);
+	_register(&regs->core.control, world, map, LV2_CORE__control);
+	_register(&regs->core.symbol, world, map, LV2_CORE__symbol);
+	_register(&regs->core.index, world, map, LV2_CORE__index);
 
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
 	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
@@ -408,6 +431,13 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->ui.eo);
 	_unregister(&regs->ui.window_title);
+	_unregister(&regs->ui.show_interface);
+	_unregister(&regs->ui.idle_interface);
+	_unregister(&regs->ui.kx_widget);
+	_unregister(&regs->ui.external);
+	_unregister(&regs->ui.x11);
+	_unregister(&regs->ui.plugin);
+	_unregister(&regs->ui.protocol);
 
 	_unregister(&regs->pset.preset);
 
@@ -421,6 +451,10 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.name);
 	_unregister(&regs->core.minor_version);
 	_unregister(&regs->core.micro_version);
+	_unregister(&regs->core.extension_data);
+	_unregister(&regs->core.control);
+	_unregister(&regs->core.symbol);
+	_unregister(&regs->core.index);
 
 	_unregister(&regs->bufsz.max_block_length);
 	_unregister(&regs->bufsz.min_block_length);
