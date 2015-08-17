@@ -20,63 +20,28 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#include <zita-alsa-pcmi.h>
-#include <seq.h>
+#include <pcmi.h>
+//#include <seq.h>
 
-//#include <synthpod_app.h>
-//#include <synthpod_ui.h>
-//#include <synthpod_nsm.h>
-//#include <ext_urid.h>
+#include <Elementary.h>
 
-#include <Ecore.h>
-#include <Eina.h>
+typedef struct _prog_t prog_t;
 
-class prog_t {
-	public:
-		prog_t(const char *play_name, const char *capt_name, unsigned srate,
-			unsigned int frsize, unsigned int nfrags);
-		~prog_t();
+struct _prog_t {
+	pcmi_t *pcmi;
+	volatile int kill;
+	Eina_Thread thread;
 
-		static void *rt_thread(void *data, Eina_Thread thread);
-
-	private:
-		void *_rt_thread();
-
-		Alsa_pcmi *_pcmi;
-		volatile bool _kill;
-		Eina_Thread _thread;
-
-		unsigned int _srate;
-		unsigned int _frsize;
-		unsigned int _nfrags;
+	uint32_t srate;
+	uint32_t frsize;
+	uint32_t nfrags;
 };
 
-prog_t::prog_t(const char *play_name, const char *capt_name, unsigned srate,
-	unsigned int frsize, unsigned int nfrags)
-	:_kill(false), _srate(srate), _frsize(frsize), _nfrags(nfrags)
-{
-	unsigned int opts = Alsa_pcmi::DEBUG_ALL;
-	//opts |= Alsa_pcmi::FORCE_2CH;
-
-	_pcmi = new Alsa_pcmi(play_name, capt_name, NULL, srate, frsize, nfrags, opts);
-	_pcmi->printinfo();
-	
-	Eina_Bool status = eina_thread_create(&_thread,
-		EINA_THREAD_URGENT, -1, &prog_t::rt_thread, this); //TODO
-}
-
-prog_t::~prog_t()
-{
-	_kill = true;
-	eina_thread_join(_thread);
-
-	delete _pcmi;
-}
-
 void *
-prog_t::rt_thread(void *data, Eina_Thread thread)
+_rt_thread(void *data, Eina_Thread thread)
 {
-	prog_t *prog = (prog_t *)data;
+	prog_t *prog = data;
+	pcmi_t *pcmi = prog->pcmi;
 	
 	pthread_t self = pthread_self();
 
@@ -90,58 +55,67 @@ prog_t::rt_thread(void *data, Eina_Thread thread)
 			fprintf(stderr, "pthread_setschedparam error\n");
 	}
 
-	return prog->_rt_thread();
-}
+	const int nplay = pcmi_nplay(pcmi);
+	const int ncapt = pcmi_ncapt(pcmi);
 
-void *
-prog_t::_rt_thread()
-{
-	const int channels = 2;
-	float inp [channels][_frsize];
-	float out [channels][_frsize];
-	
-	_pcmi->pcm_start();
+	float inp [ncapt][prog->frsize];
+	float out [nplay][prog->frsize];
 
-	while(!_kill)
+	pcmi_pcm_start(pcmi);
+
+	while(!prog->kill)
 	{
-		int na = _pcmi->pcm_wait();
+		int na = pcmi_pcm_wait(pcmi);
 
-		while(na >= _frsize)
+		while(na >= prog->frsize)
 		{
-			_pcmi->capt_init(_frsize);
-			for(int i=0; i<channels; i++)
-				_pcmi->capt_chan(i, inp[i], _frsize);
-			_pcmi->capt_done(_frsize);
+			if( ncapt)
+			{
+				pcmi_capt_init(pcmi, prog->frsize);
+				for(int i=0; i<ncapt; i++)
+					pcmi_capt_chan(pcmi, i, inp[i], prog->frsize);
+				pcmi_capt_done(pcmi, prog->frsize);
+			}
 
-			//memcpy(out[0], inp[0], _frsize * sizeof(float));
-			//memcpy(out[1], inp[1], _frsize * sizeof(float));
+			if(nplay)
+			{
+				//memcpy(out[0], inp[0], prog->frsize * sizeof(float));
+				//memcpy(out[1], inp[1], prog->frsize * sizeof(float));
 
-			for(int i=0; i<channels; i++)
-				for(int j=0; j<_frsize; j++)
-					out[i][j] = (float)rand() / RAND_MAX;
+				for(int i=0; i<nplay; i++)
+					for(int j=0; j<prog->frsize; j++)
+						out[i][j] = (float)rand() / RAND_MAX;
 
-			_pcmi->play_init(_frsize);
-			for(int i=0; i<channels; i++)
-				_pcmi->play_chan(i, out[i], _frsize);
-			_pcmi->play_done(_frsize);
+				pcmi_play_init(pcmi, prog->frsize);
+				for(int i=0; i<nplay; i++)
+					pcmi_play_chan(pcmi, i, out[i], prog->frsize);
+				pcmi_play_done(pcmi, prog->frsize);
+			}
 
-			na -= _frsize;
+			na -= prog->frsize;
 		}
 	}
 
-	_pcmi->pcm_stop();
+	pcmi_pcm_stop(pcmi);
 
 	return NULL;
 }
 	
+#if defined(BUILD_UI)
+EAPI_MAIN int
+elm_main(int argc, char **argv)
+#else
 int
 main(int argc, char **argv)
+#endif
 {
-	const char *play_name = "hw:0";
-	const char *capt_name = "hw:0";
-	unsigned int srate = 48000;
-	unsigned int frsize = 1024;
-	unsigned int nfrags = 2;
+	static prog_t prog;
+	prog.srate = 48000;
+	prog.frsize = 1024;
+	prog.nfrags = 2;
+
+	const char *play_name = NULL;
+	const char *capt_name = NULL;
 	
 	int c;
 	while((c = getopt(argc, argv, "vhi:o:r:p:n:s:")) != -1)
@@ -189,13 +163,13 @@ main(int argc, char **argv)
 				play_name = optarg;
 				break;
 			case 'r':
-				srate = atoi(optarg);
+				prog.srate = atoi(optarg);
 				break;
 			case 'p':
-				frsize = atoi(optarg);
+				prog.frsize = atoi(optarg);
 				break;
 			case 'n':
-				nfrags = atoi(optarg);
+				prog.nfrags = atoi(optarg);
 				break;
 			case 's':
 				//TODO
@@ -214,19 +188,35 @@ main(int argc, char **argv)
 		}
 	}
 
-	ecore_init();
-	eina_init();
+	prog.pcmi = pcmi_new(play_name, capt_name, prog.srate, prog.frsize, prog.nfrags);
+	pcmi_printinfo(prog.pcmi);
+	
+	Eina_Bool status = eina_thread_create(&prog.thread,
+		EINA_THREAD_URGENT, -1, _rt_thread, &prog); //TODO
 
-	prog_t *prog = new prog_t(play_name, capt_name, srate, frsize, nfrags);
-	if(prog)
-	{
-		ecore_main_loop_begin();
+	// create main window
+	//ui_anim = ecore_animator_add(_ui_animator, &handle);
+	Evas_Object *win = elm_win_util_standard_add("synthpod", "Synthpod");
+	//evas_object_smart_callback_add(win, "delete,request", _ui_delete_request, &handle);
+	evas_object_resize(win, 1280, 720);
+	evas_object_show(win);
 
-		delete prog;
-	}
+#if defined(BUILD_UI)
+	elm_run();
+#else
+	ecore_main_loop_begin();
+#endif
 
-	eina_shutdown();
-	ecore_shutdown();
+	evas_object_del(win);
+
+	prog.kill = 1;
+	eina_thread_join(prog.thread);
+
+	pcmi_free(prog.pcmi);
 
 	return 0;
 }
+
+#if defined(BUILD_UI)
+ELM_MAIN()
+#endif

@@ -94,7 +94,8 @@ if(BUILD_ALSA)
 
 # synthpod
 	add_executable(synthpod.alsa
-		synthpod_alsa.cpp
+		pcmi.cpp
+		synthpod_alsa.c
 		synthpod_nsm.c
 		ext_urid.c)
 	target_link_libraries(synthpod.alsa
