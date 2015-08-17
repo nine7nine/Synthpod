@@ -26,7 +26,7 @@ pcmi_new(const char *capt_name, const char *play_name, uint32_t srate,
 	//opts |= Alsa_pcmi::FORCE_2CH;
 
 	Alsa_pcmi *_pcmi = new Alsa_pcmi(capt_name, play_name, NULL,
-		48000, 1024, 2, 0);
+		48000, 1024, 2, opts);
 
 	return (pcmi_t *)_pcmi;
 }
