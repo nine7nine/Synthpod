@@ -20,13 +20,14 @@
 
 pcmi_t *
 pcmi_new(const char *capt_name, const char *play_name, uint32_t srate,
-	uint32_t frsize, uint32_t nfrags)
+	uint32_t frsize, uint32_t nfrags, int twochan)
 {
 	unsigned int opts = Alsa_pcmi::DEBUG_ALL;
-	//opts |= Alsa_pcmi::FORCE_2CH;
+	if(twochan) // force 2 channels
+		opts |= Alsa_pcmi::FORCE_2CH;
 
 	Alsa_pcmi *_pcmi = new Alsa_pcmi(capt_name, play_name, NULL,
-		48000, 1024, 2, opts);
+		srate, frsize, nfrags, opts);
 
 	return (pcmi_t *)_pcmi;
 }

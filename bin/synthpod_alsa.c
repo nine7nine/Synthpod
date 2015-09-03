@@ -112,13 +112,15 @@ main(int argc, char **argv)
 	static prog_t prog;
 	prog.srate = 48000;
 	prog.frsize = 1024;
-	prog.nfrags = 2;
+	prog.nfrags = 3;
+	int twochan = 0;
 
-	const char *play_name = NULL;
-	const char *capt_name = NULL;
+	const char *def = "default";
+	const char *play_name = def;
+	const char *capt_name = def;
 	
 	int c;
-	while((c = getopt(argc, argv, "vhi:o:r:p:n:s:")) != -1)
+	while((c = getopt(argc, argv, "vh2i:o:r:p:n:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -148,6 +150,7 @@ main(int argc, char **argv)
 					"OPTIONS\n"
 					"   [-v]                 print version and license information\n"
 					"   [-h]                 print usage information\n"
+					"   [-2]                 force 2 channel mode\n"
 					"   [-i] capture-device  capture device\n"
 					"   [-o] playback-device playback device\n"
 					"   [-r] sample-rate     sample rate\n"
@@ -156,6 +159,9 @@ main(int argc, char **argv)
 					"   [-s] sequence-size   minimum sequence size\n\n"
 					, argv[0]);
 				return 0;
+			case '2':
+				twochan = 1;
+				break;
 			case 'i':
 				capt_name = optarg;
 				break;
@@ -188,7 +194,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	prog.pcmi = pcmi_new(play_name, capt_name, prog.srate, prog.frsize, prog.nfrags);
+	prog.pcmi = pcmi_new(play_name, capt_name, prog.srate, prog.frsize, prog.nfrags, twochan);
 	pcmi_printinfo(prog.pcmi);
 	
 	Eina_Bool status = eina_thread_create(&prog.thread,

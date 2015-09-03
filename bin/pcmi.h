@@ -25,7 +25,7 @@ typedef void pcmi_t;
 
 pcmi_t *
 pcmi_new(const char *capt_name, const char *play_name, uint32_t srate,
-	uint32_t frsize, uint32_t nfrags);
+	uint32_t frsize, uint32_t nfrags, int twochan);
 
 void
 pcmi_free(pcmi_t *pcmi);
