@@ -151,12 +151,12 @@ main(int argc, char **argv)
 					"   [-v]                 print version and license information\n"
 					"   [-h]                 print usage information\n"
 					"   [-2]                 force 2 channel mode\n"
-					"   [-i] capture-device  capture device\n"
-					"   [-o] playback-device playback device\n"
-					"   [-r] sample-rate     sample rate\n"
-					"   [-p] sample-period   frames per period\n"
-					"   [-n] period-number   number of periods of playback latency\n"
-					"   [-s] sequence-size   minimum sequence size\n\n"
+					"   [-i] capture-device  capture device (\"default\")\n"
+					"   [-o] playback-device playback device (\"default\")\n"
+					"   [-r] sample-rate     sample rate (48000)\n"
+					"   [-p] sample-period   frames per period (1024)\n"
+					"   [-n] period-number   number of periods of playback latency (3)\n"
+					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
 					, argv[0]);
 				return 0;
 			case '2':

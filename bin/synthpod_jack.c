@@ -1434,7 +1434,7 @@ main(int argc, char **argv)
 					"   [-h]                 print usage information\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-u] client-uuid     client UUID for JACK session management\n"
-					"   [-s] sequence-size   minimum sequence size\n\n"
+					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
 					, argv[0]);
 				return 0;
 			case 'n':
