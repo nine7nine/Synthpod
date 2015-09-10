@@ -34,6 +34,7 @@
 @prefix inst:	<http://lv2plug.in/ns/ext/instance-access> .
 @prefix urid: <http://lv2plug.in/ns/ext/urid#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
+@prefix opts: <http://lv2plug.in/ns/ext/options#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -130,7 +131,7 @@ synthpod:stereo
 	doap:name "Synthpod Stereo" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:extensionData work:interface , state:interface, zwork:interface ;
+	lv2:extensionData work:interface , state:interface, zwork:interface, opts:interface ;
 	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
 

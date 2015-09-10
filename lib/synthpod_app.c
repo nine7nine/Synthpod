@@ -47,6 +47,7 @@ typedef struct _port_t port_t;
 typedef struct _work_t work_t;
 typedef struct _job_t job_t;
 typedef struct _source_t source_t;
+typedef struct _pool_t pool_t;
 
 enum _bypass_state_t {
 	BYPASS_STATE_PAUSED	= 0,
@@ -86,6 +87,11 @@ struct _work_t {
 	uint8_t payload [0];
 };
 
+struct _pool_t {
+	size_t size;
+	void *buf;
+};
+
 struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
@@ -119,7 +125,7 @@ struct _mod_t {
 
 	// opts
 	struct {
-		LV2_Options_Option options [4];
+		LV2_Options_Option options [5];
 		const LV2_Options_Interface *iface;
 	} opts;
 
@@ -138,8 +144,7 @@ struct _mod_t {
 	uint32_t num_ports;
 	port_t *ports;
 
-	size_t size;
-	void *buf;
+	pool_t pools [PORT_TYPE_NUM];
 };
 
 struct _source_t {
@@ -520,6 +525,71 @@ _mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 	return absolute_path;
 }
 
+static inline int
+_mod_alloc_pool(pool_t *pool)
+{
+#if defined(_WIN32)
+	pool->buf = _aligned_malloc(pool->size, 8);
+	if(pool->buf)
+	{
+#else
+	posix_memalign(&pool->buf, 8, pool->size);
+	if(pool->buf)
+	{
+		mlock(pool->buf, pool->size);
+#endif
+		memset(pool->buf, 0x0, pool->size);
+
+		return 0;
+	}
+
+	return -1;
+}
+
+static inline void
+_mod_free_pool(pool_t *pool)
+{
+	if(pool->buf)
+	{
+#if !defined(_WIN32)
+		munlock(pool->buf, pool->size);
+#endif
+		free(pool->buf);
+		pool->buf = NULL;
+	}
+}
+
+static void
+_mod_slice_pool(mod_t *mod, port_type_t type)
+{
+	// set ptr to pool buffer
+	void *ptr = mod->pools[type].buf;
+
+	for(port_direction_t dir=0; dir<PORT_DIRECTION_NUM; dir++)
+	{
+		for(uint32_t i=0; i<mod->num_ports; i++)
+		{
+			port_t *tar = &mod->ports[i];
+
+			if( (tar->type != type) || (tar->direction != dir) )
+				continue; //skip
+
+			// define buffer slice
+			tar->buf = ptr;
+
+			// initialize control buffers to default value
+			if(tar->type == PORT_TYPE_CONTROL)
+			{
+				float *buf_ptr = PORT_BUF_ALIGNED(tar);
+				*buf_ptr = tar->dflt;
+			}
+
+			ptr += lv2_atom_pad_size(tar->size);
+		}
+	}
+}
+
+
 // non-rt worker-thread
 static inline mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
@@ -580,8 +650,15 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	mod->opts.options[2].type = app->forge.Int;
 	mod->opts.options[2].value = &app->driver->seq_size;
 	
-	mod->opts.options[3].key = 0; // sentinel
-	mod->opts.options[3].value = NULL; // sentinel
+	mod->opts.options[3].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[3].subject = 0;
+	mod->opts.options[3].key = app->regs.bufsz.nominal_block_length.urid;
+	mod->opts.options[3].size = sizeof(int32_t);
+	mod->opts.options[3].type = app->forge.Int;
+	mod->opts.options[3].value = &app->driver->max_block_size; // set to max by default
+
+	mod->opts.options[4].key = 0; // sentinel
+	mod->opts.options[4].value = NULL; // sentinel
 
 	// populate feature list
 	int nfeatures = 0;
@@ -700,7 +777,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	mod->zero.iface = lilv_instance_get_extension_data(mod->inst,
 		ZERO_WORKER__interface);
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
-		LV2_OPTIONS__interface); //TODO actually use this for something?
+		LV2_OPTIONS__interface);
 	mod->sys.iface = lilv_instance_get_extension_data(mod->inst,
 		SYSTEM_PORT__interface);
 
@@ -711,7 +788,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	else if(!strcmp(uri, SYNTHPOD_PREFIX"sink"))
 		system_sink = 1;
 
-	mod->size = 0;
+	// clear pool sizes
+	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
+		mod->pools[pool].size = 0;
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
 	for(uint32_t i=0; i<mod->num_ports; i++)
@@ -823,60 +902,44 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 			lilv_node_free(minsize);
 		}
 
-		mod->size += lv2_atom_pad_size(tar->size);
+		// increase pool sizes
+		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
 	}
 
-	// allocate single 8-byte aligned buffer per plugin
-#if defined(_WIN32)
-	mod->buf = _aligned_malloc(mod->size, 8);
-	if(mod->buf)
+	// allocate 8-byte aligned buffer per plugin and port type pool
+	int alloc_failed = 0;
+	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
 	{
-#else
-	posix_memalign(&mod->buf, 8, mod->size);
-	if(mod->buf)
-	{
-		mlock(mod->buf, mod->size);
-#endif
-		memset(mod->buf, 0x0, mod->size);
+		if(_mod_alloc_pool(&mod->pools[pool]))
+		{
+			alloc_failed = 1;
+			break;
+		}
 	}
-	else
+
+	if(alloc_failed)
 	{
+		for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
+			_mod_free_pool(&mod->pools[pool]);
+
 		free(mod->uri_str);
 		free(mod->ports);
 		free(mod);
+
 		return NULL;
 	}
 
 	// slice plugin buffer into per-port-type-and-direction regions for
 	// efficient dereference in plugin instance
-	void *ptr = mod->buf;
-	for(port_type_t type=0; type<PORT_TYPE_NUM; type++)
+	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
+		_mod_slice_pool(mod, pool);
+
+	for(uint32_t i=0; i<mod->num_ports; i++)
 	{
-		for(port_direction_t dir=0; dir<PORT_DIRECTION_NUM; dir++)
-		{
-			for(uint32_t i=0; i<mod->num_ports; i++)
-			{
-				port_t *tar = &mod->ports[i];
+		port_t *tar = &mod->ports[i];
 
-				if( (tar->type != type) || (tar->direction != dir) )
-					continue; //skip
-
-				// define buffer slice
-				tar->buf = ptr;
-
-				// initialize control buffers to default value
-				if(tar->type == PORT_TYPE_CONTROL)
-				{
-					float *buf_ptr = PORT_BUF_ALIGNED(tar);
-					*buf_ptr = tar->dflt;
-				}
-
-				// set port buffer
-				lilv_instance_connect_port(mod->inst, i, tar->buf);
-
-				ptr += lv2_atom_pad_size(tar->size);
-			}
-		}
+		// set port buffer
+		lilv_instance_connect_port(mod->inst, i, tar->buf);
 	}
 
 	// load presets
@@ -900,13 +963,8 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	lilv_instance_free(mod->inst);
 
 	// free memory
-	if(mod->buf)
-	{
-#if !defined(_WIN32)
-		munlock(mod->buf, mod->size);
-#endif
-		free(mod->buf);
-	}
+	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
+		_mod_free_pool(&mod->pools[pool]);
 
 	// unregister system ports
 	for(uint32_t i=0; i<mod->num_ports; i++)
@@ -2684,7 +2742,7 @@ sp_app_free(sp_app_t *app)
 	// free mods
 	for(int m=0; m<app->num_mods; m++)
 		_sp_app_mod_del(app, app->mods[m]);
-	
+
 	sp_regs_deinit(&app->regs);
 
 	if(!app->embedded)
@@ -3224,4 +3282,149 @@ sp_app_paused(sp_app_t *app)
 		case BYPASS_STATE_LOCKED: // aka saving state
 			return 2;
 	}
+}
+
+uint32_t
+sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options)
+{
+	LV2_Options_Status status = LV2_OPTIONS_SUCCESS;
+
+	for(int m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		if(mod->opts.iface && mod->opts.iface->set)
+			status |= mod->opts.iface->set(mod->handle, options);
+	}
+	
+	return status;
+}
+
+// non-rt
+static void
+_sp_app_reinitialize(sp_app_t *app)
+{
+	for(int m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+	
+		// reinitialize all modules,
+		lilv_instance_deactivate(mod->inst);
+		lilv_instance_free(mod->inst);
+		mod->inst = NULL;
+		mod->handle = NULL;
+
+		// mod->features should be up-to-date
+		mod->inst = lilv_plugin_instantiate(mod->plug, app->driver->sample_rate, mod->features);
+		mod->handle = lilv_instance_get_handle(mod->inst),
+
+		//TODO should we re-get extension_data?
+
+		// resize sample based buffers only (e.g. AUDIO and CV)
+		_mod_free_pool(&mod->pools[PORT_TYPE_AUDIO]);
+		_mod_free_pool(&mod->pools[PORT_TYPE_CV]);
+			
+		mod->pools[PORT_TYPE_AUDIO].size = 0;
+		mod->pools[PORT_TYPE_CV].size = 0;
+	
+		for(uint32_t i=0; i<mod->num_ports; i++)
+		{
+			port_t *tar = &mod->ports[i];
+
+			if(  (tar->type == PORT_TYPE_AUDIO)
+				|| (tar->type == PORT_TYPE_CV) )
+			{
+				tar->size = app->driver->max_block_size * sizeof(float);
+				mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
+			}
+		}
+		
+		_mod_alloc_pool(&mod->pools[PORT_TYPE_AUDIO]);
+		_mod_alloc_pool(&mod->pools[PORT_TYPE_CV]);
+
+		_mod_slice_pool(mod, PORT_TYPE_AUDIO);
+		_mod_slice_pool(mod, PORT_TYPE_CV);
+	}
+
+	// refresh all connections
+	for(int m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		for(uint32_t i=0; i<mod->num_ports; i++)
+		{
+			port_t *tar = &mod->ports[i];
+
+			// set port buffer
+			lilv_instance_connect_port(mod->inst, i,
+				tar->direction == PORT_DIRECTION_INPUT
+					? PORT_SINK_ALIGNED(tar)
+					: PORT_BUF_ALIGNED(tar));
+		}
+	
+		lilv_instance_activate(mod->inst);
+	}
+}
+
+// non-rt
+int
+sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
+{
+	if(nsamples <= app->driver->max_block_size)
+	{
+		for(int m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+
+			if(mod->opts.iface && mod->opts.iface->set)
+			{
+				if(nsamples < app->driver->min_block_size)
+				{
+					// update driver struct
+					app->driver->min_block_size = nsamples;
+
+					const LV2_Options_Option options [2] = {{
+						.context = LV2_OPTIONS_INSTANCE,
+						.subject = 0, // is ignored
+						.key = app->regs.bufsz.min_block_length.urid,
+						.size = sizeof(int32_t),
+						.type = app->forge.Int,
+						.value = &app->driver->min_block_size
+					}, {
+						.key = 0, // sentinel
+						.value =NULL // sentinel 
+					}};
+
+					// notify new minimalBlockLength
+					uint32_t ret = mod->opts.iface->set(mod->handle, options); // TODO check
+				}
+
+				const int32_t nominal_block_length = nsamples;
+
+				const LV2_Options_Option options [2] = {{
+					.context = LV2_OPTIONS_INSTANCE,
+					.subject = 0, // is ignored
+					.key = app->regs.bufsz.nominal_block_length.urid,
+					.size = sizeof(int32_t),
+					.type = app->forge.Int,
+					.value = &nominal_block_length
+				}, {
+					.key = 0, // sentinel
+					.value =NULL // sentinel 
+				}};
+
+				// notify new nominalBlockLength
+				uint32_t ret = mod->opts.iface->set(mod->handle, options); // TODO check
+			}
+		}
+	}
+	else // nsamples > max_block_size
+	{
+		// update driver struct
+		app->driver->max_block_size = nsamples;
+
+		_sp_app_reinitialize(app);
+	}
+
+	return 0;
 }

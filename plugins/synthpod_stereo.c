@@ -806,6 +806,28 @@ cleanup(LV2_Handle instance)
 	eina_shutdown();
 }
 
+static uint32_t
+_opts_get(LV2_Handle instance, LV2_Options_Option *options)
+{
+	// we have no options
+
+	return LV2_OPTIONS_ERR_BAD_KEY;
+}
+
+static uint32_t
+_opts_set(LV2_Handle instance, const LV2_Options_Option *options)
+{
+	plughandle_t *handle = instance;
+
+	// route options to all plugins
+	return sp_app_options_set(handle->app, options);
+}
+
+static const LV2_Options_Interface opts_iface = {
+	.get = _opts_get,
+	.set = _opts_set
+};
+
 static const void*
 extension_data(const char* uri)
 {
@@ -815,6 +837,8 @@ extension_data(const char* uri)
 		return &state_iface;
 	else if(!strcmp(uri, ZERO_WORKER__interface))
 		return &zero_iface;
+	else if(!strcmp(uri, LV2_OPTIONS__interface))
+		return &opts_iface;
 	else
 		return NULL;
 }

@@ -137,4 +137,10 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 SYNTHPOD_SYMBOL_EXTERN int
 sp_app_paused(sp_app_t *app);
 
+SYNTHPOD_SYMBOL_EXTERN uint32_t
+sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options);
+
+SYNTHPOD_SYMBOL_EXTERN int
+sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples);
+
 #endif // _SYNTHPOD_APP_H

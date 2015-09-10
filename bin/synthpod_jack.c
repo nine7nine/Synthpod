@@ -870,6 +870,33 @@ _session(jack_session_event_t *ev, void *data)
 	ecore_main_loop_thread_safe_call_async(_session_async, data);
 }
 
+// rt, but can do non-rt stuff, as process won't be called
+static int
+_buffer_size(jack_nframes_t block_size, void *data)
+{
+	prog_t *handle = data;
+
+	//printf("JACK: new buffer size: %p %u %u\n",
+	//	handle->app, handle->app_driver.max_block_size, block_size);
+
+	if(handle->app)
+		return sp_app_nominal_block_length(handle->app, block_size);
+
+	return 0;
+}
+
+// non-rt
+static int
+_sample_rate(jack_nframes_t sample_rate, void *data)
+{
+	prog_t *handle = data;
+
+	if(handle->app && (sample_rate != handle->app_driver.sample_rate) )
+		fprintf(stderr, "synthpod does not support dynamic sample rate changes\n");
+
+	return 0;
+}
+
 #if defined(BUILD_UI)
 // rt
 static void *
@@ -1228,6 +1255,10 @@ _jack_init(prog_t *handle, const char *id)
 		return -1;
 	if(jack_set_session_callback(handle->client, _session, handle))
 		return -1;
+	if(jack_set_sample_rate_callback(handle->client, _sample_rate, handle))
+		return -1;
+	if(jack_set_buffer_size_callback(handle->client, _buffer_size, handle))
+		return -1;
 	jack_on_shutdown(handle->client, _shutdown, handle);
 	jack_set_xrun_callback(handle->client, _xrun, handle);
 
@@ -1271,7 +1302,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// synthpod init
 	handle->app_driver.sample_rate = jack_get_sample_rate(handle->client);
 	handle->app_driver.max_block_size = jack_get_buffer_size(handle->client);
-	handle->app_driver.min_block_size = jack_get_buffer_size(handle->client);
+	handle->app_driver.min_block_size = 1;
 	handle->app_driver.seq_size = MAX(handle->seq_size,
 		jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
 	

@@ -177,6 +177,7 @@ struct _reg_t {
 	} core;
 
 	struct {
+		reg_item_t nominal_block_length;
 		reg_item_t max_block_length;
 		reg_item_t min_block_length;
 		reg_item_t sequence_size;
@@ -330,6 +331,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.symbol, world, map, LV2_CORE__symbol);
 	_register(&regs->core.index, world, map, LV2_CORE__index);
 
+	_register(&regs->bufsz.nominal_block_length, world, map, LV2_BUF_SIZE_PREFIX "nominalBlockLength");
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
 	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
 	_register(&regs->bufsz.sequence_size, world, map, LV2_BUF_SIZE__sequenceSize);
@@ -456,6 +458,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.symbol);
 	_unregister(&regs->core.index);
 
+	_unregister(&regs->bufsz.nominal_block_length);
 	_unregister(&regs->bufsz.max_block_length);
 	_unregister(&regs->bufsz.min_block_length);
 	_unregister(&regs->bufsz.sequence_size);
