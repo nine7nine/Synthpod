@@ -61,6 +61,9 @@ void
 pcmi_play_init(pcmi_t *pcmi, uint32_t frsize);
 
 void
+pcmi_clear_chan(pcmi_t *pcmi, uint32_t channel, uint32_t frsize);
+
+void
 pcmi_play_chan(pcmi_t *pcmi, uint32_t channel, const float *src, uint32_t frsize);
 
 void

@@ -20,28 +20,7 @@
 #include <unistd.h>
 #include <assert.h>
 
-#include <synthpod_app.h>
-#if defined(BUILD_UI)
-#	include <synthpod_ui.h>
-#else
-# include <Ecore.h>
-# include <Ecore_File.h>
-#endif
-#include <ext_urid.h>
-#include <varchunk.h>
-#include <lv2_osc.h>
-#include <osc.h>
-
-#include <synthpod_nsm.h>
-
-#include <lv2/lv2plug.in/ns/ext/atom/atom.h>
-#include <lv2/lv2plug.in/ns/ext/atom/forge.h>
-#include <lv2/lv2plug.in/ns/ext/midi/midi.h>
-#include <lv2/lv2plug.in/ns/ext/urid/urid.h>
-#include <lv2/lv2plug.in/ns/ext/worker/worker.h>
-#include <lv2/lv2plug.in/ns/ext/state/state.h>
-#include <lv2/lv2plug.in/ns/ext/log/log.h>
-#include <lv2/lv2plug.in/ns/ext/time/time.h>
+#include <synthpod_bin.h>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
@@ -52,56 +31,17 @@
 #	include <jack/uuid.h>
 #endif
 
-#include <Eina.h>
-
 #ifndef MAX
 #	define MAX(A, B) ((A) > (B) ? (A) : (B))
 #endif
 
-#define CHUNK_SIZE 0x10000
-#define SEQ_SIZE 0x2000
 #define OSC_SIZE 0x800
+#define JAN_1970 (uint64_t)0x83aa7e80
 
-#	define JAN_1970 (uint64_t)0x83aa7e80
-
-typedef enum _save_state_t save_state_t;
 typedef struct _prog_t prog_t;
 
-enum _save_state_t {
-	SAVE_STATE_INTERNAL = 0,
-	SAVE_STATE_NSM,
-	SAVE_STATE_JACK
-};
-
 struct _prog_t {
-	ext_urid_t *ext_urid;
-
-	sp_app_t *app;
-	sp_app_driver_t app_driver;
-	
-	varchunk_t *app_to_worker;
-	varchunk_t *app_from_worker;
-
-	varchunk_t *app_to_log;
-
-	char *path;
-	synthpod_nsm_t *nsm;
-
-#if defined(BUILD_UI)
-	sp_ui_t *ui;
-	sp_ui_driver_t ui_driver;
-
-	varchunk_t *app_to_ui;
-	varchunk_t *app_from_ui;
-
-	varchunk_t *ui_to_app;
-	varchunk_t *ui_from_app;
-
-	Ecore_Animator *ui_anim;
-	Evas_Object *win;
-#else
-	Ecore_Event_Handler *sig;
-#endif
+	bin_t bin;
 
 	LV2_Atom_Forge forge;
 
@@ -116,12 +56,6 @@ struct _prog_t {
 	LV2_Atom_Forge_Frame frame [32][2]; // 32 nested bundles should be enough
 
 	LV2_URID midi_MidiEvent;
-
-	LV2_URID log_entry;
-	LV2_URID log_error;
-	LV2_URID log_note;
-	LV2_URID log_trace;
-	LV2_URID log_warning;
 
 	LV2_URID time_position;
 	LV2_URID time_barBeat;
@@ -141,11 +75,6 @@ struct _prog_t {
 	jack_client_t *client;
 	jack_session_event_t *session_event;
 	uint32_t seq_size;
-	
-	volatile int worker_dead;
-	Eina_Thread worker_thread;
-	Eina_Semaphore worker_sem;
-	bool worker_sem_needs_release;
 
 	struct {
 		jack_transport_state_t rolling;
@@ -170,76 +99,6 @@ struct _prog_t {
 	} cycle;
 #endif
 };
-
-static const synthpod_nsm_driver_t nsm_driver; // forwared-declaration
-
-// non-rt worker-thread
-static void *
-_worker_thread(void *data, Eina_Thread thread)
-{
-	prog_t *handle = data;
-
-	while(!handle->worker_dead)
-	{
-		eina_semaphore_lock(&handle->worker_sem);
-
-		size_t size;
-		const void *body;
-		while((body = varchunk_read_request(handle->app_to_worker, &size)))
-		{
-			sp_worker_from_app(handle->app, size, body);
-			varchunk_read_advance(handle->app_to_worker);
-		}
-
-		const char *trace;
-		while((trace = varchunk_read_request(handle->app_to_log, &size)))
-		{
-			fprintf(stderr, "[Trace] %s\n", trace);
-
-			varchunk_read_advance(handle->app_to_log);
-		}
-	}
-
-	return NULL;
-}
-
-#if defined(BUILD_UI)
-// non-rt ui-thread
-static void
-_ui_delete_request(void *data, Evas_Object *obj, void *event)
-{
-	prog_t *handle = data;
-
-	elm_exit();	
-}
-
-// non-rt ui-thread
-static Eina_Bool
-_ui_animator(void *data)
-{
-	prog_t *handle = data;
-
-	size_t size;
-	const LV2_Atom *atom;
-	while((atom = varchunk_read_request(handle->app_to_ui, &size)))
-	{
-		sp_ui_from_app(handle->ui, atom);
-		varchunk_read_advance(handle->app_to_ui);
-	}
-
-	return EINA_TRUE; // continue animator
-}
-#else
-static Eina_Bool
-_quit(void *data, int type, void *info)
-{
-	prog_t *handle = data;
-
-	ecore_main_loop_quit();
-
-	return EINA_TRUE;
-}
-#endif // BUILD_UI
 
 static void
 _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t *pos)
@@ -532,7 +391,8 @@ static int
 _process(jack_nframes_t nsamples, void *data)
 {
 	prog_t *handle = data;
-	sp_app_t *app = handle->app;
+	bin_t *bin = &handle->bin;
+	sp_app_t *app = bin->app;
 
 #if defined(JACK_HAS_CYCLE_TIMES)
 	clock_gettime(CLOCK_REALTIME, &handle->ntp);
@@ -703,41 +563,7 @@ _process(jack_nframes_t nsamples, void *data)
 	handle->trans.ticks_per_beat = pos.ticks_per_beat;
 	handle->trans.beats_per_minute = pos.beats_per_minute;
 
-	// read events from worker
-	if(!paused) // aka not saving state
-	{
-		size_t size;
-		const void *body;
-		int n = 0;
-		while((body = varchunk_read_request(handle->app_from_worker, &size))
-			&& (n++ < 10) ) //FIXME limit to how many events?
-		{
-			sp_app_from_worker(handle->app, size, body);
-			varchunk_read_advance(handle->app_from_worker);
-		}
-	}
-
-	// run synthpod app pre
-	sp_app_run_pre(handle->app, nsamples);
-
-#if defined(BUILD_UI)
-	// read events from UI
-	if(!paused) // aka not saving state
-	{
-		size_t size;
-		const LV2_Atom *atom;
-		int n = 0;
-		while((atom = varchunk_read_request(handle->app_from_ui, &size))
-			&& (n++ < 10) ) //FIXME limit to how many events?
-		{
-			sp_app_from_ui(handle->app, atom);
-			varchunk_read_advance(handle->app_from_ui);
-		}
-	}
-#endif // BUILD_UI
-	
-	// run synthpod app post
-	sp_app_run_post(handle->app, nsamples);
+	bin_process_pre(bin, nsamples, paused);
 
 	// fill output buffers
 	for(const sp_app_system_sink_t *sink=sinks;
@@ -814,11 +640,7 @@ _process(jack_nframes_t nsamples, void *data)
 		}
 	}
 	
-	if(handle->worker_sem_needs_release)
-	{
-		eina_semaphore_release(&handle->worker_sem, 1);
-		handle->worker_sem_needs_release = false;
-	}
+	bin_process_post(bin);
 
 	return 0;
 }
@@ -828,6 +650,7 @@ static void
 _session_async(void *data)
 {
 	prog_t *handle = data;
+	bin_t *bin = &handle->bin;
 
 	jack_session_event_t *ev = handle->session_event;
 	
@@ -847,14 +670,14 @@ _session_async(void *data)
 		case JackSessionSave:
 			handle->save_state = SAVE_STATE_JACK;
 #if defined(BUILD_UI) //FIXME
-			sp_ui_bundle_save(handle->ui, ev->session_dir, 1);
+			sp_ui_bundle_save(bin->ui, ev->session_dir, 1);
 #endif
 			break;
 		case JackSessionSaveTemplate:
 			handle->save_state = SAVE_STATE_JACK;
 #if defined(BUILD_UI) //FIXME
-			sp_ui_bundle_new(handle->ui);
-			sp_ui_bundle_save(handle->ui, ev->session_dir, 1);
+			sp_ui_bundle_new(bin->ui);
+			sp_ui_bundle_save(bin->ui, ev->session_dir, 1);
 #endif
 			break;
 	}
@@ -875,12 +698,13 @@ static int
 _buffer_size(jack_nframes_t block_size, void *data)
 {
 	prog_t *handle = data;
+	bin_t *bin = &handle->bin;
 
 	//printf("JACK: new buffer size: %p %u %u\n",
 	//	handle->app, handle->app_driver.max_block_size, block_size);
 
-	if(handle->app)
-		return sp_app_nominal_block_length(handle->app, block_size);
+	if(bin->app)
+		return sp_app_nominal_block_length(bin->app, block_size);
 
 	return 0;
 }
@@ -890,68 +714,25 @@ static int
 _sample_rate(jack_nframes_t sample_rate, void *data)
 {
 	prog_t *handle = data;
+	bin_t *bin = &handle->bin;
 
-	if(handle->app && (sample_rate != handle->app_driver.sample_rate) )
+	if(bin->app && (sample_rate != bin->app_driver.sample_rate) )
 		fprintf(stderr, "synthpod does not support dynamic sample rate changes\n");
 
 	return 0;
 }
 
 #if defined(BUILD_UI)
-// rt
-static void *
-_app_to_ui_request(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	return varchunk_write_request(handle->app_to_ui, size);
-}
-static void
-_app_to_ui_advance(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	varchunk_write_advance(handle->app_to_ui, size);
-}
-
-// non-rt ui-thread
-static void *
-_ui_to_app_request(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	void *ptr;
-	do
-		ptr = varchunk_write_request(handle->app_from_ui, size);
-	while(!ptr); // wait until there is enough space
-
-	return ptr;
-}
-static void
-_ui_to_app_advance(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	varchunk_write_advance(handle->app_from_ui, size);
-}
-
-static void
-_ui_opened(void *data, int status)
-{
-	prog_t *handle = data;
-
-	//printf("_ui_opened: %i\n", status);
-	synthpod_nsm_opened(handle->nsm, status);
-}
 static void
 _ui_saved(void *data, int status)
 {
-	prog_t *handle = data;
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
 	//printf("_ui_saved: %i\n", status);
 	if(handle->save_state == SAVE_STATE_NSM)
 	{
-		synthpod_nsm_saved(handle->nsm, status);
+		synthpod_nsm_saved(bin->nsm, status);
 	}
 	else if(handle->save_state == SAVE_STATE_JACK)
 	{
@@ -969,122 +750,17 @@ _ui_saved(void *data, int status)
 
 	if(handle->kill)
 	{
-#if defined(BUILD_UI)
 		elm_exit();
-#else
-		ecore_main_loop_quit();
-#endif
 	}
-}
-static void
-_ui_close(void *data)
-{
-	prog_t *handle = data;
-
-	//printf("_ui_close\n");
-	elm_exit();
 }
 #endif // BUILD_UI
-
-// rt
-static void *
-_app_to_worker_request(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	return varchunk_write_request(handle->app_to_worker, size);
-}
-static void
-_app_to_worker_advance(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	varchunk_write_advance(handle->app_to_worker, size);
-	handle->worker_sem_needs_release = true;
-}
-
-// non-rt worker-thread
-static void *
-_worker_to_app_request(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	void *ptr;
-	do
-		ptr = varchunk_write_request(handle->app_from_worker, size);
-	while(!ptr); // wait until there is enough space
-
-	return ptr;
-}
-static void
-_worker_to_app_advance(size_t size, void *data)
-{
-	prog_t *handle = data;
-
-	varchunk_write_advance(handle->app_from_worker, size);
-}
-
-// non-rt || rt with LV2_LOG__Trace
-static int
-_log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
-{
-	prog_t *handle = data;
-
-	if(type == handle->log_trace)
-	{
-		char *trace;
-		if((trace = varchunk_write_request(handle->app_to_log, 1024)))
-		{
-			vsprintf(trace, fmt, args);
-
-			size_t written = strlen(trace) + 1;
-			varchunk_write_advance(handle->app_to_log, written);
-			handle->worker_sem_needs_release = true;
-		}
-	}
-	else // !log_trace
-	{
-		const char *type_str = NULL;
-		if(type == handle->log_entry)
-			type_str = "Entry";
-		else if(type == handle->log_error)
-			type_str = "Error";
-		else if(type == handle->log_note)
-			type_str = "Note";
-		else if(type == handle->log_warning)
-			type_str = "Warning";
-
-		//TODO send to UI?
-
-		fprintf(stderr, "[%s] ", type_str);
-		vfprintf(stderr, fmt, args);
-		fputc('\n', stderr);
-
-		return 0;
-	}
-
-	return -1;
-}
-
-// non-rt || rt with LV2_LOG__Trace
-static int
-_log_printf(void *data, LV2_URID type, const char *fmt, ...)
-{
-  va_list args;
-	int ret;
-
-  va_start (args, fmt);
-	ret = _log_vprintf(data, type, fmt, args);
-  va_end(args);
-
-	return ret;
-}
 
 static void *
 _system_port_add(void *data, System_Port_Type type, const char *short_name,
 	const char *pretty_name, int input)
 {
-	prog_t *handle = data;
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 	
 	//printf("_system_port_add: %s\n", short_name);
 
@@ -1166,9 +842,9 @@ _system_port_add(void *data, System_Port_Type type, const char *short_name,
 static void
 _system_port_del(void *data, void *sys_port)
 {
-	//printf("_system_port_del\n");
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
-	prog_t *handle = data;
 	jack_port_t *jack_port = sys_port;
 
 	if(!jack_port || !handle->client)
@@ -1288,32 +964,33 @@ _jack_deinit(prog_t *handle)
 static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 	(void)name;
-	prog_t *handle = data;
 
-	if(handle->path)
-		free(handle->path);
-	handle->path = strdup(path);
+	if(bin->path)
+		free(bin->path);
+	bin->path = strdup(path);
 
 	// jack init
 	if(_jack_init(handle, id))
 		return -1;
 
 	// synthpod init
-	handle->app_driver.sample_rate = jack_get_sample_rate(handle->client);
-	handle->app_driver.max_block_size = jack_get_buffer_size(handle->client);
-	handle->app_driver.min_block_size = 1;
-	handle->app_driver.seq_size = MAX(handle->seq_size,
+	bin->app_driver.sample_rate = jack_get_sample_rate(handle->client);
+	bin->app_driver.max_block_size = jack_get_buffer_size(handle->client);
+	bin->app_driver.min_block_size = 1;
+	bin->app_driver.seq_size = MAX(handle->seq_size,
 		jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
 	
 	// app init
-	handle->app = sp_app_new(NULL, &handle->app_driver, handle);
+	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
 
 	// jack activate
 	jack_activate(handle->client); //TODO check
 
 #if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_load(handle->ui, handle->path, 1);
+	sp_ui_bundle_load(bin->ui, bin->path, 1);
 #endif
 
 	return 0; // success
@@ -1322,37 +999,16 @@ _open(const char *path, const char *name, const char *id, void *data)
 static int
 _save(void *data)
 {
-	prog_t *handle = data;
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
 	handle->save_state = SAVE_STATE_NSM;
 #if defined(BUILD_UI) //FIXME
-	sp_ui_bundle_save(handle->ui, handle->path, 1);
+	sp_ui_bundle_save(bin->ui, bin->path, 1);
 #endif
 
 	return 0; // success
 }
-
-#if defined(BUILD_UI)
-static int
-_show(void *data)
-{
-	prog_t *handle = data;
-
-	evas_object_show(handle->win);
-	
-	return 0;
-}
-
-static int
-_hide(void *data)
-{
-	prog_t *handle = data;
-
-	evas_object_hide(handle->win);
-
-	return 0;
-}
-#endif // BUILD_UI
 
 static const synthpod_nsm_driver_t nsm_driver = {
 	.open = _open,
@@ -1427,6 +1083,7 @@ main(int argc, char **argv)
 #endif
 {
 	static prog_t handle;
+	bin_t *bin = &handle.bin;
 
 	handle.server_name = NULL;
 	handle.session_id = NULL;
@@ -1490,31 +1147,15 @@ main(int argc, char **argv)
 		}
 	}
 
-	// varchunk init
-#if defined(BUILD_UI)
-	handle.app_to_ui = varchunk_new(CHUNK_SIZE);
-	handle.app_from_ui = varchunk_new(CHUNK_SIZE);
-#endif
-	handle.app_to_worker = varchunk_new(CHUNK_SIZE);
-	handle.app_from_worker = varchunk_new(CHUNK_SIZE);
+	bin_init(bin);
 
-	handle.app_to_log = varchunk_new(CHUNK_SIZE);
-
-	// ext_urid init
-	handle.ext_urid = ext_urid_new();
-	LV2_URID_Map *map = ext_urid_map_get(handle.ext_urid);
-	LV2_URID_Unmap *unmap = ext_urid_unmap_get(handle.ext_urid);
+	LV2_URID_Map *map = ext_urid_map_get(bin->ext_urid);
+	LV2_URID_Unmap *unmap = ext_urid_unmap_get(bin->ext_urid);
 
 	lv2_atom_forge_init(&handle.forge, map);
 	osc_forge_init(&handle.oforge, map);
 	
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
-
-	handle.log_entry = map->map(map->handle, LV2_LOG__Entry);
-	handle.log_error = map->map(map->handle, LV2_LOG__Error);
-	handle.log_note = map->map(map->handle, LV2_LOG__Note);
-	handle.log_trace = map->map(map->handle, LV2_LOG__Trace);
-	handle.log_warning = map->map(map->handle, LV2_LOG__Warning);
 
 	handle.time_position = map->map(map->handle, LV2_TIME__Position);
 	handle.time_barBeat = map->map(map->handle, LV2_TIME__barBeat);
@@ -1526,119 +1167,39 @@ main(int argc, char **argv)
 	handle.time_framesPerSecond = map->map(map->handle, LV2_TIME__framesPerSecond);
 	handle.time_speed = map->map(map->handle, LV2_TIME__speed);
 
-	handle.app_driver.map = map;
-	handle.app_driver.unmap = unmap;
-	handle.app_driver.log_printf = _log_printf;
-	handle.app_driver.log_vprintf = _log_vprintf;
-#if defined(BUILD_UI)
-	handle.app_driver.to_ui_request = _app_to_ui_request;
-	handle.app_driver.to_ui_advance = _app_to_ui_advance;
-#else
-	handle.app_driver.to_ui_request = NULL;
-	handle.app_driver.to_ui_advance = NULL;
-#endif
-	handle.app_driver.to_worker_request = _app_to_worker_request;
-	handle.app_driver.to_worker_advance = _app_to_worker_advance;
-	handle.app_driver.to_app_request = _worker_to_app_request;
-	handle.app_driver.to_app_advance = _worker_to_app_advance;
-	handle.app_driver.system_port_add = _system_port_add;
-	handle.app_driver.system_port_del = _system_port_del;
+	bin->app_driver.system_port_add = _system_port_add;
+	bin->app_driver.system_port_del = _system_port_del;
 
 #if defined(JACK_HAS_CYCLE_TIMES)
 	handle.osc_sched.osc2frames = _osc_schedule_osc2frames;
 	handle.osc_sched.frames2osc = _osc_schedule_frames2osc;
 	handle.osc_sched.handle = &handle;
-	handle.app_driver.osc_sched = &handle.osc_sched;
+	bin->app_driver.osc_sched = &handle.osc_sched;
 #else
-	handle.app_driver.osc_sched = NULL;
+	bin->app_driver.osc_sched = NULL;
 #endif
 
 #if defined(BUILD_UI)
-	handle.ui_driver.map = map;
-	handle.ui_driver.unmap = unmap;
-	handle.ui_driver.to_app_request = _ui_to_app_request;
-	handle.ui_driver.to_app_advance = _ui_to_app_advance;
-	handle.ui_driver.opened = _ui_opened;
-	handle.ui_driver.saved = _ui_saved;
-	handle.ui_driver.close = _ui_close;
-	handle.ui_driver.instance_access = 1; // enabled
-	handle.ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
+	bin->ui_driver.saved = _ui_saved;
+
+	bin->ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
 	if(synthpod_nsm_managed() || handle.session_id)
-		handle.ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
+		bin->ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
 	else
-		handle.ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
-
-	// create main window
-	handle.ui_anim = ecore_animator_add(_ui_animator, &handle);
-	handle.win = elm_win_util_standard_add("synthpod", "Synthpod");
-	evas_object_smart_callback_add(handle.win, "delete,request", _ui_delete_request, &handle);
-	evas_object_resize(handle.win, 1280, 720);
-	evas_object_show(handle.win);
-
-	// ui init
-	handle.ui = sp_ui_new(handle.win, NULL, &handle.ui_driver, &handle, 1);
+		bin->ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
 #endif
 
-	// NSM init
-	const char *exe = strrchr(argv[0], '/');
-	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
-	handle.nsm = synthpod_nsm_new(exe, argv[optind], &nsm_driver, &handle); //TODO check
+	// run
+	bin_run(bin, argv, &nsm_driver);
 
-	// init semaphores
-	eina_semaphore_new(&handle.worker_sem, 0);
-
-	// threads init
-	Eina_Bool status = eina_thread_create(&handle.worker_thread,
-		EINA_THREAD_URGENT, -1, _worker_thread, &handle); //TODO
-
-#if defined(BUILD_UI)
-	// main loop
-	elm_run();
-
-	// ui deinit
-	sp_ui_free(handle.ui);
-
-	evas_object_del(handle.win);
-	ecore_animator_del(handle.ui_anim);
-#else
-	handle.sig = ecore_event_handler_add(ECORE_EVENT_SIGNAL_EXIT, _quit, &handle);
-
-	ecore_main_loop_begin();
-
-	ecore_event_handler_del(handle.sig);
-#endif // BUILD_UI
-
-	// threads deinit
-	handle.worker_dead = 1; // atomic operation
-	eina_semaphore_release(&handle.worker_sem, 1);
-	eina_thread_join(handle.worker_thread);
-
-	// NSM deinit
-	synthpod_nsm_free(handle.nsm);
-
-	// deinit semaphores
-	eina_semaphore_free(&handle.worker_sem);
-
-	if(handle.path)
-		free(handle.path);
+	// stop
+	bin_stop(bin);
 
 	// deinit JACK
 	_jack_deinit(&handle);
 
-	// synthpod deinit
-	sp_app_free(handle.app);
-
-	// ext_urid deinit
-	ext_urid_free(handle.ext_urid);
-
-	// varchunk deinit
-#if defined(BUILD_UI)
-	varchunk_free(handle.app_to_ui);
-	varchunk_free(handle.app_from_ui);
-#endif
-	varchunk_free(handle.app_to_log);
-	varchunk_free(handle.app_to_worker);
-	varchunk_free(handle.app_from_worker);
+	// deinit
+	bin_deinit(bin);
 
 	return 0;
 }

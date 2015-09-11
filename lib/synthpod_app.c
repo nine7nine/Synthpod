@@ -2316,9 +2316,9 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			mod->worker.iface->end_run(mod->handle);
 	
 		// clear atom sequence input buffers
-		for(int i=0; i<mod->num_ports; i++)
+		for(int p=0; p<mod->num_ports; p++)
 		{
-			port_t *port = &mod->ports[i];
+			port_t *port = &mod->ports[p];
 
 			if(port->direction == PORT_DIRECTION_INPUT) // ignore output ports
 			{
@@ -2404,9 +2404,9 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		}
 	
 		// multiplex multiple sources to single sink where needed
-		for(int i=0; i<mod->num_ports; i++)
+		for(int p=0; p<mod->num_ports; p++)
 		{
-			port_t *port = &mod->ports[i];
+			port_t *port = &mod->ports[p];
 
 			if(port->direction == PORT_DIRECTION_OUTPUT)
 				continue; // not a sink
@@ -2417,9 +2417,9 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				{
 					float *val = PORT_BUF_ALIGNED(port);
 					*val = 0; // init
-					for(int i=0; i<port->num_sources; i++)
+					for(int s=0; s<port->num_sources; s++)
 					{
-						float *src = PORT_BUF_ALIGNED(port->sources[i].port);
+						float *src = PORT_BUF_ALIGNED(port->sources[s].port);
 						*val += *src;
 					}
 				}
@@ -2428,9 +2428,9 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				{
 					float *val = PORT_BUF_ALIGNED(port);
 					memset(val, 0, nsamples * sizeof(float)); // init
-					for(int i=0; i<port->num_sources; i++)
+					for(int s=0; s<port->num_sources; s++)
 					{
-						source_t *source = &port->sources[i];
+						source_t *source = &port->sources[s];
 
 						// ramp audio output ports
 						if(source->ramp.state != RAMP_STATE_NONE)
@@ -2460,10 +2460,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					LV2_Atom_Sequence *seq [32]; //TODO how big?
 					LV2_Atom_Event *itr [32]; //TODO how big?
-					for(int i=0; i<port->num_sources; i++)
+					for(int s=0; s<port->num_sources; s++)
 					{
-						seq[i] = PORT_BUF_ALIGNED(port->sources[i].port);
-						itr[i] = lv2_atom_sequence_begin(&seq[i]->body);
+						seq[s] = PORT_BUF_ALIGNED(port->sources[s].port);
+						itr[s] = lv2_atom_sequence_begin(&seq[s]->body);
 					}
 
 					while(1)
@@ -2472,15 +2472,15 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 						int64_t frames = nsamples;
 
 						// search for next event in timeline accross source ports
-						for(i=0; i<port->num_sources; i++)
+						for(int s=0; s<port->num_sources; s++)
 						{
-							if(lv2_atom_sequence_is_end(&seq[i]->body, seq[i]->atom.size, itr[i]))
+							if(lv2_atom_sequence_is_end(&seq[s]->body, seq[s]->atom.size, itr[s]))
 								continue; // reached sequence end
 							
-							if(itr[i]->time.frames < frames)
+							if(itr[s]->time.frames < frames)
 							{
-								frames = itr[i]->time.frames;
-								nxt = i;
+								frames = itr[s]->time.frames;
+								nxt = s;
 							}
 						}
 

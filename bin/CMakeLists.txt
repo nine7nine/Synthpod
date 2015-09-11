@@ -11,16 +11,7 @@ set(SYNTHPOD_BIN_DIR "bin")
 set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
 set(SYNTHPOD_DESKTOP_DIR "share/applications")
 
-if(APPLE)
-	find_library(CORE_AUDIO CoreAudio)
-	find_library(AUDIO_TOOLBOX AudioToolbox)
-	find_library(AUDIO_UNIT AudioUnit)
-	find_library(CARBON Carbon)
-	
-	find_library(CORE_SERVICES CoreServices)
-endif(APPLE)
-
-if(BUILD_JACK OR BUILD_PORTAUDIO)
+if(BUILD_JACK OR BUILD_ALSA)
 # icon
 	install(FILES ${PROJECT_SOURCE_DIR}/data/pix/synthpod.png DESTINATION
 		${SYNTHPOD_ICON_DIR})
@@ -100,6 +91,7 @@ if(BUILD_ALSA)
 		ext_urid.c)
 	target_link_libraries(synthpod.alsa
 		${ECORE_CON_LDFLAGS}
+		"-lasound" #FIXME
 		${ZITA_ALSA_PCMI_LIBRARY}
 		"-lm"
 		synthpod.lib)
@@ -114,68 +106,5 @@ if(BUILD_ALSA)
 	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_alsa.desktop.in
 		${PROJECT_BINARY_DIR}/bin/synthpod_alsa.desktop @ONLY)
 	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_alsa.desktop DESTINATION
-		${SYNTHPOD_DESKTOP_DIR})
-endif()
-
-if(BUILD_RTAUDIO)
-# rtaudio
-	pkg_search_module(RTAUDIO REQUIRED librtaudio>=4.1)
-	include_directories(${RTAUDIO_INCLUDE_DIRS})
-
-# synthpod
-	add_executable(synthpod.rtaudio
-		synthpod_rtaudio.cpp
-		synthpod_nsm.c
-		ext_urid.c)
-	target_link_libraries(synthpod.rtaudio
-		${ECORE_CON_LDFLAGS}
-		${RTAUDIO_LDFLAGS}
-		"-lm"
-		synthpod.lib)
-	if(BUILD_UI)
-		target_link_libraries(synthpod.rtaudio
-			synthpod_ui.lib)
-	endif()
-	set_target_properties(synthpod.rtaudio PROPERTIES OUTPUT_NAME "synthpod_rtaudio")
-	install(TARGETS synthpod.rtaudio DESTINATION bin)
-
-# desktop  file
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_rtaudio.desktop.in
-		${PROJECT_BINARY_DIR}/bin/synthpod_rtaudio.desktop @ONLY)
-	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_rtaudio.desktop DESTINATION
-		${SYNTHPOD_DESKTOP_DIR})
-endif()
-
-if(BUILD_PORTAUDIO)
-# portaudio
-	pkg_search_module(PORTAUDIO REQUIRED portaudio-2.0>=19)
-	include_directories(${PORTAUDIO_INCLUDE_DIRS})
-
-	if(APPLE)
-		set(PORTAUDIO_LIBS ${CORE_AUDIO} ${AUDIO_TOOLBOX} ${AUDIO_UNIT} ${CARBON} "-lportaudio")
-	else()
-		set(PORTAUDIO_LIBS ${PORTAUDIO_LDFLAGS})
-	endif()
-
-# synthpod
-	add_executable(synthpod.pa
-		synthpod_pa.c
-		synthpod_nsm.c
-		ext_urid.c)
-	target_link_libraries(synthpod.pa
-		${ECORE_CON_LDFLAGS}
-		${PORTAUDIO_LIBS}
-		synthpod.lib)
-	if(BUILD_UI)
-		target_link_libraries(synthpod.pa
-			synthpod_ui.lib)
-	endif()
-	set_target_properties(synthpod.pa PROPERTIES OUTPUT_NAME "synthpod_pa")
-	install(TARGETS synthpod.pa DESTINATION bin)
-
-# desktop  file
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_pa.desktop.in
-		${PROJECT_BINARY_DIR}/bin/synthpod_pa.desktop @ONLY)
-	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_pa.desktop DESTINATION
 		${SYNTHPOD_DESKTOP_DIR})
 endif()

@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Synthpod (PortAudio)
-Comment=Lightweight, nonlinear LV2 plugin host
-Exec=@CMAKE_INSTALL_PREFIX@/@SYNTHPOD_BIN_DIR@/synthpod_pa
-Terminal=false
-Icon=@CMAKE_INSTALL_PREFIX@/@SYNTHPOD_ICON_DIR@/synthpod.png
-Type=Application
-Categories=AudioVideo;Audio;

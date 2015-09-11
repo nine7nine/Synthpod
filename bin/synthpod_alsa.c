@@ -20,28 +20,65 @@
 #include <unistd.h>
 #include <ctype.h>
 
+#include <asoundlib.h>
 #include <pcmi.h>
-//#include <seq.h>
 
-#include <Elementary.h>
+#include <synthpod_bin.h>
 
+typedef enum _chan_type_t chan_type_t;
 typedef struct _prog_t prog_t;
+typedef struct _chan_t chan_t;
+
+enum _chan_type_t {
+	CHAN_TYPE_PCMI,
+	CHAN_TYPE_MIDI
+};
+
+struct _chan_t {
+	chan_type_t type;
+
+	union {
+		struct {
+			//TODO
+		} audio;
+		struct {
+			int port;
+			snd_midi_event_t *trans;
+		} midi;
+	};
+};
 
 struct _prog_t {
+	bin_t bin;
+	
+	LV2_Atom_Forge forge;
+	
+	LV2_URID midi_MidiEvent;
+
 	pcmi_t *pcmi;
+	snd_seq_t *seq;
+	int queue;
+
+	save_state_t save_state;
 	volatile int kill;
 	Eina_Thread thread;
 
 	uint32_t srate;
 	uint32_t frsize;
 	uint32_t nfrags;
+	int twochan;
+
+	const char *play_name;
+	const char *capt_name;
 };
 
-void *
+static void *
 _rt_thread(void *data, Eina_Thread thread)
 {
-	prog_t *prog = data;
-	pcmi_t *pcmi = prog->pcmi;
+	prog_t *handle = data;
+	pcmi_t *pcmi = handle->pcmi;
+	bin_t *bin = &handle->bin;
+	sp_app_t *app = bin->app;
 	
 	pthread_t self = pthread_self();
 
@@ -54,52 +91,433 @@ _rt_thread(void *data, Eina_Thread thread)
 		if(pthread_setschedparam(self, SCHED_RR, &schedp))
 			fprintf(stderr, "pthread_setschedparam error\n");
 	}
+		
+	const uint32_t nsamples = handle->frsize;
+	const size_t sample_buf_size = sizeof(float) * nsamples;
+	int play_num;
+	int capt_num;
 
-	const int nplay = pcmi_nplay(pcmi);
-	const int ncapt = pcmi_ncapt(pcmi);
-
-	float inp [ncapt][prog->frsize];
-	float out [nplay][prog->frsize];
-
-	pcmi_pcm_start(pcmi);
-
-	while(!prog->kill)
+	pcmi_pcm_start(handle->pcmi);
+	while(!handle->kill)
 	{
 		int na = pcmi_pcm_wait(pcmi);
 
-		while(na >= prog->frsize)
+		while(na >= nsamples)
 		{
-			if( ncapt)
+			const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
+			const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
+	
+			int paused = sp_app_paused(app);
+			if(paused == 1) // aka loading state
 			{
-				pcmi_capt_init(pcmi, prog->frsize);
-				for(int i=0; i<ncapt; i++)
-					pcmi_capt_chan(pcmi, i, inp[i], prog->frsize);
-				pcmi_capt_done(pcmi, prog->frsize);
+				// clear output buffers
+				pcmi_play_init(pcmi, nsamples);
+				play_num = 0;
+				for(const sp_app_system_sink_t *sink=sinks;
+					sink->type != SYSTEM_PORT_NONE;
+					sink++)
+				{
+					switch(sink->type)
+					{
+						case SYSTEM_PORT_NONE:
+						case SYSTEM_PORT_CONTROL:
+						case SYSTEM_PORT_CV:
+						case SYSTEM_PORT_OSC:
+							break;
+
+						case SYSTEM_PORT_AUDIO:
+						{
+							chan_t *chan = sink->sys_port;
+
+							pcmi_clear_chan(pcmi, play_num++, nsamples);
+
+							break;
+						}
+
+						case SYSTEM_PORT_MIDI:
+						{
+							//TODO
+
+							break;
+						}
+					}
+				}
+				pcmi_play_done(pcmi, nsamples);
+
+				continue;
 			}
 
-			if(nplay)
+			// fill input buffers
+			pcmi_capt_init(pcmi, nsamples);
+			capt_num = 0;
+			for(const sp_app_system_source_t *source=sources;
+				source->type != SYSTEM_PORT_NONE;
+				source++)
 			{
-				//memcpy(out[0], inp[0], prog->frsize * sizeof(float));
-				//memcpy(out[1], inp[1], prog->frsize * sizeof(float));
+				switch(source->type)
+				{
+					case SYSTEM_PORT_NONE:
+					case SYSTEM_PORT_CONTROL:
+					case SYSTEM_PORT_CV:
+					case SYSTEM_PORT_OSC:
+						break;
 
-				for(int i=0; i<nplay; i++)
-					for(int j=0; j<prog->frsize; j++)
-						out[i][j] = (float)rand() / RAND_MAX;
+					case SYSTEM_PORT_AUDIO:
+					{
+						chan_t *chan = source->sys_port;
 
-				pcmi_play_init(pcmi, prog->frsize);
-				for(int i=0; i<nplay; i++)
-					pcmi_play_chan(pcmi, i, out[i], prog->frsize);
-				pcmi_play_done(pcmi, prog->frsize);
+						pcmi_capt_chan(pcmi, capt_num++, source->buf, nsamples);
+
+						break;
+					}
+					
+					case SYSTEM_PORT_MIDI:
+					{
+						chan_t *chan = source->sys_port;
+						void *seq_in = source->buf;
+
+						LV2_Atom_Forge *forge = &handle->forge;
+						LV2_Atom_Forge_Frame frame;
+						lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
+						lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+						uint8_t m [0x10];
+						snd_seq_event_t *sev;
+						while(snd_seq_event_input_pending(handle->seq, 1) > 0)
+						{
+							snd_seq_event_input(handle->seq, &sev); //FIXME filter according to port
+							long len;
+							if((len = snd_midi_event_decode(chan->midi.trans, m, 0x10, sev)) > 0)
+							{
+								//add alsa midi event to in_buf
+								lv2_atom_forge_frame_time(forge, 0); //FIXME
+								lv2_atom_forge_atom(forge, len, handle->midi_MidiEvent);
+								lv2_atom_forge_raw(forge, m, len);
+								lv2_atom_forge_pad(forge, len);
+							}
+							else
+								fprintf(stderr, "event decode failed\n");
+
+							if(snd_seq_free_event(sev))
+								fprintf(stderr, "event free failed\n");
+						}
+
+						lv2_atom_forge_pop(forge, &frame);
+						
+						break;
+					}
+				}
 			}
+			pcmi_capt_done(pcmi, nsamples);
+	
+			bin_process_pre(bin, nsamples, paused);
 
-			na -= prog->frsize;
+			// fill output buffers
+			pcmi_play_init(pcmi, nsamples);
+			play_num = 0;
+			for(const sp_app_system_sink_t *sink=sinks;
+				sink->type != SYSTEM_PORT_NONE;
+				sink++)
+			{
+				switch(sink->type)
+				{
+					case SYSTEM_PORT_NONE:
+					case SYSTEM_PORT_CONTROL:
+					case SYSTEM_PORT_CV:
+					case SYSTEM_PORT_OSC:
+						break;
+
+					case SYSTEM_PORT_AUDIO:
+					{
+						chan_t *chan = sink->sys_port;
+
+						pcmi_play_chan(pcmi, play_num++, sink->buf, nsamples);
+
+						break;
+					}
+
+					case SYSTEM_PORT_MIDI:
+					{
+						chan_t *chan = sink->sys_port;
+						const LV2_Atom_Sequence *seq_out = sink->buf;
+
+						LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
+						{
+							const LV2_Atom *atom = &ev->body;
+
+							snd_seq_event_t sev;
+							snd_seq_ev_clear(&sev);
+							if(snd_midi_event_encode(chan->midi.trans, LV2_ATOM_BODY_CONST(atom), atom->size, &sev) != atom->size)
+								fprintf(stderr, "encode event failed\n");
+						
+							// relative timestamp
+							struct snd_seq_real_time rtime = {
+								.tv_sec = 0,
+								//.tv_nsec = (float)time * 1e9 / module->host->srate
+								.tv_nsec = 0
+							};
+
+							// schedule midi
+							snd_seq_ev_set_source(&sev, chan->midi.port);
+							snd_seq_ev_set_subs(&sev); // set broadcasting to subscribers
+							snd_seq_ev_schedule_real(&sev, handle->queue, 1, &rtime); // relative scheduling
+							snd_seq_event_output(handle->seq, &sev);
+						}
+
+						break;
+					}
+				}
+			}
+			snd_seq_drain_output(handle->seq);
+			pcmi_play_done(pcmi, nsamples);
+		
+			bin_process_post(bin);
+
+			na -= nsamples;
 		}
 	}
-
-	pcmi_pcm_stop(pcmi);
+	pcmi_pcm_stop(handle->pcmi);
 
 	return NULL;
 }
+
+static void *
+_system_port_add(void *data, System_Port_Type type, const char *short_name,
+	const char *pretty_name, int input)
+{
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+
+	chan_t *chan = NULL;
+
+	switch(type)
+	{
+		case SYSTEM_PORT_NONE:
+		{
+			// skip
+			break;
+		}
+
+		case SYSTEM_PORT_CONTROL:
+		{
+			// unsupported, skip
+			break;
+		}
+
+		case SYSTEM_PORT_AUDIO:
+		{
+			chan = calloc(1, sizeof(chan_t));
+			if(chan)
+			{
+				chan->type = CHAN_TYPE_PCMI;
+				//TODO
+			}
+
+			break;
+		}
+		case SYSTEM_PORT_CV:
+		{
+			// unsupported, skip
+			break;
+		}
+
+		case SYSTEM_PORT_MIDI:
+		{
+			chan = calloc(1, sizeof(chan_t));
+			if(chan)
+			{
+				chan->type = CHAN_TYPE_MIDI;
+
+				unsigned int caps = input
+					? SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE
+					: SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ;
+
+				chan->midi.port = snd_seq_create_simple_port(handle->seq, short_name,
+					caps, SND_SEQ_PORT_TYPE_APPLICATION);
+				if(chan->midi.port < 0)
+					fprintf(stderr, "could not create port\n");
+
+				if(snd_midi_event_new(0x10, &chan->midi.trans))
+					fprintf(stderr, "could not create event\n");
+				snd_midi_event_init(chan->midi.trans);
+				if(input)
+					snd_midi_event_reset_encode(chan->midi.trans);
+				else
+					snd_midi_event_reset_decode(chan->midi.trans);
+				snd_midi_event_no_status(chan->midi.trans, 1);
+			}
+
+			break;
+		}
+		case SYSTEM_PORT_OSC:
+		{
+			// unsupported, skip
+			break;
+		}
+	}
+
+	if(chan)
+		printf("channel add: %p %i %s\n", chan, chan->type, short_name);
+
+	return chan;
+}
+
+static void
+_system_port_del(void *data, void *sys_port)
+{
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+
+	chan_t *chan = sys_port;
+
+	if(!chan || !handle->seq)
+		return;
+
+	printf("channel_del: %p %i\n", chan, chan->type);
+
+	switch(chan->type)
+	{
+		case CHAN_TYPE_PCMI:
+		{
+			//TODO
+
+			break;
+		}
+		case CHAN_TYPE_MIDI:
+		{
+			snd_midi_event_free(chan->midi.trans);
+			snd_seq_delete_simple_port(handle->seq, chan->midi.port);
+
+			break;
+		}
+	}
+
+	free(chan);
+}
+
+#if defined(BUILD_UI)
+static void
+_ui_saved(void *data, int status)
+{
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+
+	//printf("_ui_saved: %i\n", status);
+	if(handle->save_state == SAVE_STATE_NSM)
+	{
+		synthpod_nsm_saved(bin->nsm, status);
+	}
+	handle->save_state = SAVE_STATE_INTERNAL;
+
+	if(handle->kill)
+	{
+		elm_exit();
+	}
+}
+#endif // BUILD_UI
+
+static int
+_alsa_init(prog_t *handle)
+{
+	// init alsa sequencer
+	if(snd_seq_open(&handle->seq, "hw", SND_SEQ_OPEN_DUPLEX, SND_SEQ_NONBLOCK))
+		fprintf(stderr, "could not open sequencer\n");
+	if(snd_seq_set_client_name(handle->seq, "Synthpod"))
+		fprintf(stderr, "could not set name\n");
+	handle->queue = snd_seq_alloc_queue(handle->seq);
+	if(handle->queue < 0)
+		fprintf(stderr, "could not allocate queue\n");
+	snd_seq_start_queue(handle->seq, handle->queue, NULL);
+
+	// init alsa pcm
+	handle->pcmi = pcmi_new(handle->play_name, handle->capt_name, handle->srate, handle->frsize, handle->nfrags, handle->twochan);
+	pcmi_printinfo(handle->pcmi);
+
+	return 0;
+}
+
+static void
+_alsa_deinit(prog_t *handle)
+{
+	handle->kill = 1;
+	eina_thread_join(handle->thread);
+
+	pcmi_free(handle->pcmi);
+	handle->pcmi = NULL;
+				
+	if(snd_seq_drain_output(handle->seq))
+		fprintf(stderr, "draining output failed\n");
+	snd_seq_stop_queue(handle->seq, handle->queue, NULL);
+	if(snd_seq_free_queue(handle->seq, handle->queue))
+		fprintf(stderr, "freeing queue failed\n");
+	if(snd_seq_close(handle->seq))
+		fprintf(stderr, "close sequencer failed\n");
+	handle->seq = NULL;
+	handle->queue = 0;
+}
+
+static int 
+_open(const char *path, const char *name, const char *id, void *data)
+{
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+	(void)name;
+
+	if(bin->path)
+		free(bin->path);
+	bin->path = strdup(path);
+
+	// alsa init
+	if(_alsa_init(handle))
+		return -1;
+
+	// synthpod init
+	bin->app_driver.sample_rate = handle->srate;
+	bin->app_driver.max_block_size = handle->frsize;
+	bin->app_driver.min_block_size = 1;
+	bin->app_driver.seq_size = SEQ_SIZE;
+	
+	// app init
+	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
+
+	// alsa activate
+	Eina_Bool status = eina_thread_create(&handle->thread,
+		EINA_THREAD_URGENT, -1, _rt_thread, handle); //TODO
+
+	sleep(1);
+
+#if defined(BUILD_UI) //FIXME
+	sp_ui_bundle_load(bin->ui, bin->path, 1);
+#endif
+
+	return 0; // success
+}
+
+static int
+_save(void *data)
+{
+	bin_t *bin = data;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+
+	handle->save_state = SAVE_STATE_NSM;
+#if defined(BUILD_UI) //FIXME
+	sp_ui_bundle_save(bin->ui, bin->path, 1);
+#endif
+
+	return 0; // success
+}
+
+static const synthpod_nsm_driver_t nsm_driver = {
+	.open = _open,
+	.save = _save,
+#if defined(BUILD_UI)
+	.show = _show,
+	.hide = _hide
+#else
+	.show = NULL,
+	.hide = NULL
+#endif // BUILD_UI
+};
 	
 #if defined(BUILD_UI)
 EAPI_MAIN int
@@ -109,15 +527,17 @@ int
 main(int argc, char **argv)
 #endif
 {
-	static prog_t prog;
-	prog.srate = 48000;
-	prog.frsize = 1024;
-	prog.nfrags = 3;
-	int twochan = 0;
+	static prog_t handle;
+	bin_t *bin = &handle.bin;
+
+	handle.srate = 48000;
+	handle.frsize = 1024;
+	handle.nfrags = 3;
+	handle.twochan = 0;
 
 	const char *def = "default";
-	const char *play_name = def;
-	const char *capt_name = def;
+	handle.play_name = def;
+	handle.capt_name = def;
 	
 	int c;
 	while((c = getopt(argc, argv, "vh2i:o:r:p:n:s:")) != -1)
@@ -160,22 +580,22 @@ main(int argc, char **argv)
 					, argv[0]);
 				return 0;
 			case '2':
-				twochan = 1;
+				handle.twochan = 1;
 				break;
 			case 'i':
-				capt_name = optarg;
+				handle.capt_name = optarg;
 				break;
 			case 'o':
-				play_name = optarg;
+				handle.play_name = optarg;
 				break;
 			case 'r':
-				prog.srate = atoi(optarg);
+				handle.srate = atoi(optarg);
 				break;
 			case 'p':
-				prog.frsize = atoi(optarg);
+				handle.frsize = atoi(optarg);
 				break;
 			case 'n':
-				prog.nfrags = atoi(optarg);
+				handle.nfrags = atoi(optarg);
 				break;
 			case 's':
 				//TODO
@@ -193,32 +613,42 @@ main(int argc, char **argv)
 				return -1;
 		}
 	}
-
-	prog.pcmi = pcmi_new(play_name, capt_name, prog.srate, prog.frsize, prog.nfrags, twochan);
-	pcmi_printinfo(prog.pcmi);
 	
-	Eina_Bool status = eina_thread_create(&prog.thread,
-		EINA_THREAD_URGENT, -1, _rt_thread, &prog); //TODO
-
-	// create main window
-	//ui_anim = ecore_animator_add(_ui_animator, &handle);
-	Evas_Object *win = elm_win_util_standard_add("synthpod", "Synthpod");
-	//evas_object_smart_callback_add(win, "delete,request", _ui_delete_request, &handle);
-	evas_object_resize(win, 1280, 720);
-	evas_object_show(win);
+	bin_init(bin);
+	
+	LV2_URID_Map *map = ext_urid_map_get(bin->ext_urid);
+	LV2_URID_Unmap *unmap = ext_urid_unmap_get(bin->ext_urid);
+	
+	lv2_atom_forge_init(&handle.forge, map);
+	
+	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
+	
+	bin->app_driver.system_port_add = _system_port_add;
+	bin->app_driver.system_port_del = _system_port_del;
+	
+	bin->app_driver.osc_sched = NULL;
 
 #if defined(BUILD_UI)
-	elm_run();
-#else
-	ecore_main_loop_begin();
+	bin->ui_driver.saved = _ui_saved;
+
+	bin->ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
+	if(synthpod_nsm_managed())
+		bin->ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
+	else
+		bin->ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
 #endif
 
-	evas_object_del(win);
+	// run
+	bin_run(bin, argv, &nsm_driver);
 
-	prog.kill = 1;
-	eina_thread_join(prog.thread);
+	// stop
+	bin_stop(bin);
 
-	pcmi_free(prog.pcmi);
+	// deinit alsa
+	_alsa_deinit(&handle);
+
+	// deinit
+	bin_deinit(bin);
 
 	return 0;
 }

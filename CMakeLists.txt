@@ -33,8 +33,6 @@ set(CMAKE_CXX_FLAGS "-std=gnu++11 -ffast-math -fvisibility=hidden ${CMAKE_CXX_FL
 option(BUILD_UI "Build user interface libraries" ON)
 option(BUILD_JACK "Build JACK standalone host" ON)
 option(BUILD_ALSA "Build ALSA standalone host (experimental)" OFF)
-option(BUILD_RTAUDIO "Build RtAudio standalone host (experimental)" OFF)
-option(BUILD_PORTAUDIO "Build PortAudio standalone host (broken)" OFF)
 
 # vectorization
 include(CheckCCompilerFlag)
