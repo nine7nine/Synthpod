@@ -19,15 +19,22 @@
 #include <zita-alsa-pcmi.h>
 
 pcmi_t *
-pcmi_new(const char *capt_name, const char *play_name, uint32_t srate,
-	uint32_t frsize, uint32_t nfrags, int twochan)
+pcmi_new(const char *play_name, const char *capt_name, uint32_t srate,
+	uint32_t frsize, uint32_t nfrags, int twochan, int debug)
 {
-	unsigned int opts = Alsa_pcmi::DEBUG_ALL;
+	unsigned int opts = 0;
+	if(debug)
+		opts |= Alsa_pcmi::DEBUG_ALL;
 	if(twochan) // force 2 channels
 		opts |= Alsa_pcmi::FORCE_2CH;
 
-	Alsa_pcmi *_pcmi = new Alsa_pcmi(capt_name, play_name, NULL,
+	Alsa_pcmi *_pcmi = new Alsa_pcmi(play_name, capt_name, NULL,
 		srate, frsize, nfrags, opts);
+	if(_pcmi->state())
+	{
+		delete _pcmi;
+		return NULL;
+	}
 
 	return (pcmi_t *)_pcmi;
 }
@@ -78,6 +85,14 @@ pcmi_pcm_wait(pcmi_t *pcmi)
 	Alsa_pcmi *_pcmi = (Alsa_pcmi *)pcmi;
 
 	return _pcmi->pcm_wait();
+}
+
+int
+pcmi_pcm_idle(pcmi_t *pcmi, uint32_t frsize)
+{
+	Alsa_pcmi *_pcmi = (Alsa_pcmi *)pcmi;
+
+	return _pcmi->pcm_idle(frsize);
 }
 
 void

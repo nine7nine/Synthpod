@@ -99,6 +99,7 @@ _rt_thread(void *data, Eina_Thread thread)
 		
 	const uint32_t nsamples = handle->frsize;
 	const size_t sample_buf_size = sizeof(float) * nsamples;
+	int nplay = pcmi_nplay(pcmi);
 	int play_num;
 	int capt_num;
 
@@ -115,39 +116,8 @@ _rt_thread(void *data, Eina_Thread thread)
 			int paused = sp_app_paused(app);
 			if(paused == 1) // aka loading state
 			{
-				// clear output buffers
-				pcmi_play_init(pcmi, nsamples);
-				play_num = 0;
-				for(const sp_app_system_sink_t *sink=sinks;
-					sink->type != SYSTEM_PORT_NONE;
-					sink++)
-				{
-					switch(sink->type)
-					{
-						case SYSTEM_PORT_NONE:
-						case SYSTEM_PORT_CONTROL:
-						case SYSTEM_PORT_CV:
-						case SYSTEM_PORT_OSC:
-							break;
-
-						case SYSTEM_PORT_AUDIO:
-						{
-							chan_t *chan = sink->sys_port;
-
-							pcmi_clear_chan(pcmi, play_num++, nsamples);
-
-							break;
-						}
-
-						case SYSTEM_PORT_MIDI:
-						{
-							//TODO
-
-							break;
-						}
-					}
-				}
-				pcmi_play_done(pcmi, nsamples);
+				printf("paused\n");
+				pcmi_pcm_idle(pcmi, nsamples);
 
 				continue;
 			}
@@ -329,7 +299,14 @@ _rt_thread(void *data, Eina_Thread thread)
 					}
 				}
 			}
-			snd_seq_drain_output(handle->seq);
+			snd_seq_drain_output(handle->seq); //TODO is this rt-safe?
+
+			// clear unused output channels
+			while(play_num<nplay)
+			{
+				pcmi_clear_chan(pcmi, play_num++, nsamples);
+			}
+
 			pcmi_play_done(pcmi, nsamples);
 		
 			bin_process_post(bin);
@@ -417,9 +394,6 @@ _system_port_add(void *data, System_Port_Type type, const char *short_name,
 		}
 	}
 
-	if(chan)
-		printf("channel add: %p %i %s\n", chan, chan->type, short_name);
-
 	return chan;
 }
 
@@ -433,8 +407,6 @@ _system_port_del(void *data, void *sys_port)
 
 	if(!chan || !handle->seq)
 		return;
-
-	printf("channel_del: %p %i\n", chan, chan->type);
 
 	switch(chan->type)
 	{
@@ -491,7 +463,10 @@ _alsa_init(prog_t *handle, const char *id)
 	snd_seq_start_queue(handle->seq, handle->queue, NULL);
 
 	// init alsa pcm
-	handle->pcmi = pcmi_new(handle->play_name, handle->capt_name, handle->srate, handle->frsize, handle->nfrags, handle->twochan);
+	handle->pcmi = pcmi_new(handle->play_name, handle->capt_name,
+		handle->srate, handle->frsize, handle->nfrags, handle->twochan, 0); //TODO debug
+	if(!handle->pcmi)
+		return -1;
 	pcmi_printinfo(handle->pcmi);
 
 	return 0;
@@ -544,8 +519,6 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// alsa activate
 	Eina_Bool status = eina_thread_create(&handle->thread,
 		EINA_THREAD_URGENT, -1, _rt_thread, handle); //TODO
-
-	sleep(1);
 
 #if defined(BUILD_UI) //FIXME
 	sp_ui_bundle_load(bin->ui, bin->path, 1);

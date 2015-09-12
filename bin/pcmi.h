@@ -24,8 +24,8 @@ extern "C" {
 typedef void pcmi_t;
 
 pcmi_t *
-pcmi_new(const char *capt_name, const char *play_name, uint32_t srate,
-	uint32_t frsize, uint32_t nfrags, int twochan);
+pcmi_new(const char *play_name, const char *capt_name, uint32_t srate,
+	uint32_t frsize, uint32_t nfrags, int twochan, int debug);
 
 void
 pcmi_free(pcmi_t *pcmi);
@@ -44,6 +44,9 @@ pcmi_pcm_start(pcmi_t *pcmi);
 
 int
 pcmi_pcm_wait(pcmi_t *pcmi);
+
+int
+pcmi_pcm_idle(pcmi_t *pcmi, uint32_t frsize);
 
 void
 pcmi_pcm_stop(pcmi_t *pcmi);
