@@ -31,7 +31,7 @@ install:
 before_script:
  - if [ "$CC" = "gcc" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi
  - mkdir build && pushd build
- - cmake -DBUILD_JACK=1 -DBUILD_UI=1 -DBUILD_PORTAUDIO=0 -DBUILD_RTMIDI=0 ..
+ - cmake -DBUILD_JACK=1 -DBUILD_UI=1 -DBUILD_ALSA=0 ..
  - popd
 script:
  - pushd build && make && sudo make install && popd
