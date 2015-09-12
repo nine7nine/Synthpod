@@ -15,23 +15,6 @@ else()
 	set(LIB_EXT ".so")
 endif()
 
-option(BUILD_RTMIDI OFF)
-if(BUILD_RTMIDI)
-# rtmidi
-	pkg_search_module(RTMIDI REQUIRED librtmidi>=2.1)
-	include_directories(${RTMIDI_INCLUDE_DIRS})
-
-# RtMidi
-	add_library(rtmidi MODULE
-		rtmidi.c
-		rtmidi_in.cpp
-		rtmidi_out.cpp)
-	target_link_libraries(rtmidi ${RTMIDI_LDFLAGS})
-	set_target_properties(rtmidi PROPERTIES PREFIX "")
-	install(TARGETS rtmidi DESTINATION ${SYNTHPOD_PLUGIN_DIR})
-	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/rtmidi.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
-endif()
-
 # synthpod
 add_library(synthpod.lv2 MODULE
 	synthpod_lv2.c

@@ -25,6 +25,8 @@
 
 #include <synthpod_bin.h>
 
+#define MIDI_SEQ_SIZE 2048
+
 typedef enum _chan_type_t chan_type_t;
 typedef struct _prog_t prog_t;
 typedef struct _chan_t chan_t;
@@ -44,6 +46,8 @@ struct _chan_t {
 		struct {
 			int port;
 			snd_midi_event_t *trans;
+			LV2_Atom_Forge forge;
+			LV2_Atom_Forge_Frame frame;
 		} midi;
 	};
 };
@@ -58,6 +62,7 @@ struct _prog_t {
 	pcmi_t *pcmi;
 	snd_seq_t *seq;
 	int queue;
+	uint8_t m [MIDI_SEQ_SIZE];
 
 	save_state_t save_state;
 	volatile int kill;
@@ -154,6 +159,8 @@ _rt_thread(void *data, Eina_Thread thread)
 				source->type != SYSTEM_PORT_NONE;
 				source++)
 			{
+				chan_t *chan = source->sys_port;
+
 				switch(source->type)
 				{
 					case SYSTEM_PORT_NONE:
@@ -164,7 +171,6 @@ _rt_thread(void *data, Eina_Thread thread)
 
 					case SYSTEM_PORT_AUDIO:
 					{
-						chan_t *chan = source->sys_port;
 
 						pcmi_capt_chan(pcmi, capt_num++, source->buf, nsamples);
 
@@ -173,39 +179,90 @@ _rt_thread(void *data, Eina_Thread thread)
 					
 					case SYSTEM_PORT_MIDI:
 					{
-						chan_t *chan = source->sys_port;
 						void *seq_in = source->buf;
 
-						LV2_Atom_Forge *forge = &handle->forge;
-						LV2_Atom_Forge_Frame frame;
+						// initialize LV2 event port
+						LV2_Atom_Forge *forge = &chan->midi.forge;
 						lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
-						lv2_atom_forge_sequence_head(forge, &frame, 0);
+						lv2_atom_forge_sequence_head(forge, &chan->midi.frame, 0);
 
-						uint8_t m [0x10];
-						snd_seq_event_t *sev;
-						while(snd_seq_event_input_pending(handle->seq, 1) > 0)
-						{
-							snd_seq_event_input(handle->seq, &sev); //FIXME filter according to port
-							long len;
-							if((len = snd_midi_event_decode(chan->midi.trans, m, 0x10, sev)) > 0)
-							{
-								//add alsa midi event to in_buf
-								lv2_atom_forge_frame_time(forge, 0); //FIXME
-								lv2_atom_forge_atom(forge, len, handle->midi_MidiEvent);
-								lv2_atom_forge_raw(forge, m, len);
-								lv2_atom_forge_pad(forge, len);
-							}
-							else
-								fprintf(stderr, "event decode failed\n");
-
-							if(snd_seq_free_event(sev))
-								fprintf(stderr, "event free failed\n");
-						}
-
-						lv2_atom_forge_pop(forge, &frame);
-						
 						break;
 					}
+				}
+			}
+
+			// read incoming MIDI and dispatch to corresponding MIDI port
+			{
+				snd_seq_event_t *sev;
+				while(snd_seq_event_input_pending(handle->seq, 1) > 0)
+				{
+					chan_t *chan = NULL;
+
+					// get event
+					snd_seq_event_input(handle->seq, &sev);
+
+					// search for matching port
+					for(const sp_app_system_source_t *source=sources;
+						source->type != SYSTEM_PORT_NONE;
+						source++)
+					{
+						if(source->type == SYSTEM_PORT_MIDI)
+						{
+							chan_t *_chan = source->sys_port;
+
+							if(_chan->midi.port == sev->dest.port)
+							{
+								chan = _chan;
+								break; // right port found, break out of loop 
+							}
+						}
+					}
+
+					if(chan)
+					{
+						long len;
+						if((len = snd_midi_event_decode(chan->midi.trans, handle->m,
+							MIDI_SEQ_SIZE, sev)) > 0)
+						{
+							LV2_Atom_Forge *forge = &chan->midi.forge;
+
+							int64_t frames = 0;
+							/* FIXME
+							if( (sev->flags & (SND_SEQ_TIME_STAMP_MASK | SND_SEQ_TIME_MODE_MASK))
+								== (SND_SEQ_TIME_STAMP_REAL | SND_SEQ_TIME_MODE_REL) )
+							{
+								frames = sev->time.time.tv_nsec * 1e-9 * handle->srate;
+							}
+							*/
+
+							lv2_atom_forge_frame_time(forge, 0);
+							lv2_atom_forge_atom(forge, len, handle->midi_MidiEvent);
+							lv2_atom_forge_raw(forge, handle->m, len);
+							lv2_atom_forge_pad(forge, len);
+						}
+						else
+							fprintf(stderr, "event decode failed\n");
+					}
+					else
+						fprintf(stderr, "no matching port for event\n");
+
+					if(snd_seq_free_event(sev))
+						fprintf(stderr, "event free failed\n");
+				}
+			}
+						
+			for(const sp_app_system_source_t *source=sources;
+				source->type != SYSTEM_PORT_NONE;
+				source++)
+			{
+				chan_t *chan = source->sys_port;
+
+				if(source->type == SYSTEM_PORT_MIDI)
+				{
+					LV2_Atom_Forge *forge = &chan->midi.forge;
+
+					// finalize LV2 event port
+					lv2_atom_forge_pop(forge, &chan->midi.frame);
 				}
 			}
 			pcmi_capt_done(pcmi, nsamples);
@@ -219,6 +276,8 @@ _rt_thread(void *data, Eina_Thread thread)
 				sink->type != SYSTEM_PORT_NONE;
 				sink++)
 			{
+				chan_t *chan = sink->sys_port;
+
 				switch(sink->type)
 				{
 					case SYSTEM_PORT_NONE:
@@ -229,7 +288,6 @@ _rt_thread(void *data, Eina_Thread thread)
 
 					case SYSTEM_PORT_AUDIO:
 					{
-						chan_t *chan = sink->sys_port;
 
 						pcmi_play_chan(pcmi, play_num++, sink->buf, nsamples);
 
@@ -238,7 +296,6 @@ _rt_thread(void *data, Eina_Thread thread)
 
 					case SYSTEM_PORT_MIDI:
 					{
-						chan_t *chan = sink->sys_port;
 						const LV2_Atom_Sequence *seq_out = sink->buf;
 
 						LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
@@ -253,9 +310,13 @@ _rt_thread(void *data, Eina_Thread thread)
 							// relative timestamp
 							struct snd_seq_real_time rtime = {
 								.tv_sec = 0,
-								//.tv_nsec = (float)time * 1e9 / module->host->srate
-								.tv_nsec = 0
+								.tv_nsec = (float)ev->time.frames * 1e9 / handle->srate //TODO improve
 							};
+							while(rtime.tv_nsec > 1000000000) // handle overflow
+							{
+								rtime.tv_sec++;
+								rtime.tv_nsec -= 1000000000;
+							}
 
 							// schedule midi
 							snd_seq_ev_set_source(&sev, chan->midi.port);
@@ -337,7 +398,7 @@ _system_port_add(void *data, System_Port_Type type, const char *short_name,
 				if(chan->midi.port < 0)
 					fprintf(stderr, "could not create port\n");
 
-				if(snd_midi_event_new(0x10, &chan->midi.trans))
+				if(snd_midi_event_new(MIDI_SEQ_SIZE, &chan->midi.trans))
 					fprintf(stderr, "could not create event\n");
 				snd_midi_event_init(chan->midi.trans);
 				if(input)
@@ -417,12 +478,12 @@ _ui_saved(void *data, int status)
 #endif // BUILD_UI
 
 static int
-_alsa_init(prog_t *handle)
+_alsa_init(prog_t *handle, const char *id)
 {
 	// init alsa sequencer
 	if(snd_seq_open(&handle->seq, "hw", SND_SEQ_OPEN_DUPLEX, SND_SEQ_NONBLOCK))
 		fprintf(stderr, "could not open sequencer\n");
-	if(snd_seq_set_client_name(handle->seq, "Synthpod"))
+	if(snd_seq_set_client_name(handle->seq, id))
 		fprintf(stderr, "could not set name\n");
 	handle->queue = snd_seq_alloc_queue(handle->seq);
 	if(handle->queue < 0)
@@ -468,7 +529,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->path = strdup(path);
 
 	// alsa init
-	if(_alsa_init(handle))
+	if(_alsa_init(handle, id))
 		return -1;
 
 	// synthpod init
