@@ -15,10 +15,6 @@ if(BUILD_JACK OR BUILD_ALSA)
 # icon
 	install(FILES ${PROJECT_SOURCE_DIR}/data/pix/synthpod.png DESTINATION
 		${SYNTHPOD_ICON_DIR})
-
-# man page 
-	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.1 DESTINATION
-		man/man1)
 endif()
 
 if(BUILD_JACK)
@@ -54,11 +50,8 @@ if(BUILD_JACK)
 		${ECORE_CON_LDFLAGS}
 		${JACK_LIBS}
 		"-lm"
-		synthpod.lib)
-	if(BUILD_UI)
-		target_link_libraries(synthpod.jack
-			synthpod_ui.lib)
-	endif()
+		synthpod.lib
+		synthpod_ui.lib)
 	set_target_properties(synthpod.jack PROPERTIES OUTPUT_NAME "synthpod_jack")
 	install(TARGETS synthpod.jack DESTINATION bin)
 
@@ -67,6 +60,10 @@ if(BUILD_JACK)
 		${PROJECT_BINARY_DIR}/bin/synthpod_jack.desktop @ONLY)
 	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_jack.desktop DESTINATION
 		${SYNTHPOD_DESKTOP_DIR})
+
+# man page 
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod_jack.1 DESTINATION
+		man/man1)
 endif()
 
 if(BUILD_ALSA)
@@ -94,11 +91,8 @@ if(BUILD_ALSA)
 		"-lasound" #FIXME
 		${ZITA_ALSA_PCMI_LIBRARY}
 		"-lm"
-		synthpod.lib)
-	if(BUILD_UI)
-		target_link_libraries(synthpod.alsa
-			synthpod_ui.lib)
-	endif()
+		synthpod.lib
+		synthpod_ui.lib)
 	set_target_properties(synthpod.alsa PROPERTIES OUTPUT_NAME "synthpod_alsa")
 	install(TARGETS synthpod.alsa DESTINATION bin)
 
@@ -107,4 +101,8 @@ if(BUILD_ALSA)
 		${PROJECT_BINARY_DIR}/bin/synthpod_alsa.desktop @ONLY)
 	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_alsa.desktop DESTINATION
 		${SYNTHPOD_DESKTOP_DIR})
+
+# man page 
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod_alsa.1 DESTINATION
+		man/man1)
 endif()

@@ -1,36 +1,65 @@
-.TH SYNTHPOD "1" "July 16, 2015"
+.TH SYNTHPOD "1" "September 12, 2015"
+
 .SH NAME
 synthpod \- a lightweight nonlinear LV2 plugin container
+
 .SH SYNOPSIS
-.B synthpod_jack
+.B synthpod_alsa
 [\fIoptions\fR] [\fIbundle-path\fR]
+
 .SH DESCRIPTION
 \fBsynthpod\fP is a lightweight nonlinear LV2 plugin container, aka host.
 .PP
-It is a pure stand-alone JACK client with JACK/NSM session support and JACK AUDIO/MIDI.
+It is a pure stand-alone ALSA client with NSM session support and ALSA AUDIO/MIDI.
 .PP
 It is a also a first-class LV2 plugin (http://open-music-kontrollers.ch/lv2/synthpod#stereo).
+
 .SH OPTIONS
 .HP
 \fB\-v\fR
 .IP
 Print version and license information
+
 .HP
 \fB\-h\fR
 .IP
 Print usage information
+
 .HP
-\fB\-n\fR server-name
+\fB\-2\fR
 .IP
-Connect to named JACK daemon
+Disable GUI
+
 .HP
-\fB\-u\fR client-uuid
+\fB\-i\fR capture-device
 .IP
-Client UUID for JACK session management
+Capture device ("default")
+
+.HP
+\fB\-o\fR playback-device
+.IP
+Playback device ("default")
+
+.HP
+\fB\-r\fR sample-rate
+.IP
+Sample Rate (48000)
+
+.HP
+\fB\-p\fR sample-period
+.IP
+Frames per period (1024)
+
+.HP
+\fB\-n\fR period-number
+.IP
+Number of periods of playback latency (3)
+
 .HP
 \fB\-s\fR sequence-size
 .IP
-Minimal byte size of event sequence buffers (may be bigger)
+Minimal byte size of event sequence buffers (8192)
+
 .SH FILES
 .TP
 .I $XDG_DATA_HOME/synthpod $HOME/.local/share/synthpod
@@ -38,7 +67,9 @@ Default bundle state directory
 .TP
 .I $HOME/.lv2
 Default LV2 preset directory
+
 .SH LICENSE
 Artistic License 2.0.
+
 .SH AUTHOR
 Hanspeter Portner (dev@open-music-kontrollers.ch).

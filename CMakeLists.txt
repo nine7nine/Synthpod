@@ -31,7 +31,6 @@ set(CMAKE_CXX_FLAGS "-std=gnu++11 -ffast-math -fvisibility=hidden ${CMAKE_CXX_FL
 set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
 
 # options
-option(BUILD_UI "Build user interface libraries" ON)
 option(BUILD_JACK "Build JACK standalone host" ON)
 option(BUILD_ALSA "Build ALSA standalone host (experimental)" OFF)
 
@@ -72,19 +71,15 @@ include_directories(${LILV_INCLUDE_DIRS})
 pkg_search_module(LV2 REQUIRED lv2>=1.10)
 include_directories(${LV2_INCLUDE_DIRS})
 
-if(BUILD_UI)
-	add_definitions("-DBUILD_UI")
-
 # elm
-	pkg_search_module(ELM REQUIRED elementary>=1.8)
-	include_directories(${ELM_INCLUDE_DIRS})
+pkg_search_module(ELM REQUIRED elementary>=1.8)
+include_directories(${ELM_INCLUDE_DIRS})
 
-	if((${ELM_VERSION} VERSION_EQUAL "1.10.0") OR (${ELM_VERSION} VERSION_GREATER "1.10.0"))
-		add_definitions("-DELM_1_10")
-	endif()
-
-	pkg_search_module(ECORE_X OPTIONAL ecore-x)
+if((${ELM_VERSION} VERSION_EQUAL "1.10.0") OR (${ELM_VERSION} VERSION_GREATER "1.10.0"))
+	add_definitions("-DELM_1_10")
 endif()
+
+pkg_search_module(ECORE_X OPTIONAL ecore-x)
 
 add_subdirectory(lib)
 add_subdirectory(bin)

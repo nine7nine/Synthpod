@@ -669,16 +669,12 @@ _session_async(void *data)
 			// fall-through
 		case JackSessionSave:
 			handle->save_state = SAVE_STATE_JACK;
-#if defined(BUILD_UI) //FIXME
 			sp_ui_bundle_save(bin->ui, ev->session_dir, 1);
-#endif
 			break;
 		case JackSessionSaveTemplate:
 			handle->save_state = SAVE_STATE_JACK;
-#if defined(BUILD_UI) //FIXME
 			sp_ui_bundle_new(bin->ui);
 			sp_ui_bundle_save(bin->ui, ev->session_dir, 1);
-#endif
 			break;
 	}
 }
@@ -722,7 +718,6 @@ _sample_rate(jack_nframes_t sample_rate, void *data)
 	return 0;
 }
 
-#if defined(BUILD_UI)
 static void
 _ui_saved(void *data, int status)
 {
@@ -753,7 +748,6 @@ _ui_saved(void *data, int status)
 		elm_exit();
 	}
 }
-#endif // BUILD_UI
 
 static void *
 _system_port_add(void *data, System_Port_Type type, const char *short_name,
@@ -863,11 +857,7 @@ _shutdown_async(void *data)
 {
 	prog_t *handle = data;
 
-#if defined(BUILD_UI)
 	elm_exit();
-#else
-	ecore_main_loop_quit();
-#endif
 }
 
 static void
@@ -989,9 +979,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// jack activate
 	jack_activate(handle->client); //TODO check
 
-#if defined(BUILD_UI) //FIXME
 	sp_ui_bundle_load(bin->ui, bin->path, 1);
-#endif
 
 	return 0; // success
 }
@@ -1003,9 +991,7 @@ _save(void *data)
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
 	handle->save_state = SAVE_STATE_NSM;
-#if defined(BUILD_UI) //FIXME
 	sp_ui_bundle_save(bin->ui, bin->path, 1);
-#endif
 
 	return 0; // success
 }
@@ -1013,13 +999,8 @@ _save(void *data)
 static const synthpod_nsm_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
-#if defined(BUILD_UI)
 	.show = _show,
 	.hide = _hide
-#else
-	.show = NULL,
-	.hide = NULL
-#endif // BUILD_UI
 };
 
 #if defined(JACK_HAS_CYCLE_TIMES)
@@ -1074,13 +1055,8 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 }
 #endif // JACK_HAS_CYCLE_TIMES
 
-#if defined(BUILD_UI)
 EAPI_MAIN int
 elm_main(int argc, char **argv)
-#else
-int
-main(int argc, char **argv)
-#endif
 {
 	static prog_t handle;
 	bin_t *bin = &handle.bin;
@@ -1088,21 +1064,27 @@ main(int argc, char **argv)
 	handle.server_name = NULL;
 	handle.session_id = NULL;
 	handle.seq_size = SEQ_SIZE;
+
+	bin->has_gui = true;
+
+	fprintf(stderr,
+		"--------------------------------------------------------------------\n"
+		"Synthpod "SYNTHPOD_VERSION"\n"
+		"--------------------------------------------------------------------\n"
+		"\n"
+		"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+		"\n"
+		"This is free software: you can redistribute it and/or modify\n"
+		"it under the terms of the Artistic License 2.0 as published by\n"
+		"The Perl Foundation.\n\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhn:u:s:")) != -1)
+	while((c = getopt(argc, argv, "vhGn:u:s:")) != -1)
 	{
 		switch(c)
 		{
 			case 'v':
-				fprintf(stderr, "Synthpod "SYNTHPOD_VERSION"\n"
-					"\n"
-					"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
-					"\n"
-					"This is free software: you can redistribute it and/or modify\n"
-					"it under the terms of the Artistic License 2.0 as published by\n"
-					"The Perl Foundation.\n"
-					"\n"
+				fprintf(stderr,
 					"This source is distributed in the hope that it will be useful,\n"
 					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
 					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
@@ -1114,17 +1096,22 @@ main(int argc, char **argv)
 				return 0;
 			case 'h':
 				fprintf(stderr,
+					"--------------------------------------------------------------------\n"
 					"USAGE\n"
 					"   %s [OPTIONS] [BUNDLE_PATH]\n"
 					"\n"
 					"OPTIONS\n"
-					"   [-v]                 print version and license information\n"
+					"   [-v]                 print version and full license information\n"
 					"   [-h]                 print usage information\n"
+					"   [-G]                 disable GUI\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-u] client-uuid     client UUID for JACK session management\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
 					, argv[0]);
 				return 0;
+			case 'G':
+				bin->has_gui = false;
+				break;
 			case 'n':
 				handle.server_name = optarg;
 				break;
@@ -1179,7 +1166,6 @@ main(int argc, char **argv)
 	bin->app_driver.osc_sched = NULL;
 #endif
 
-#if defined(BUILD_UI)
 	bin->ui_driver.saved = _ui_saved;
 
 	bin->ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
@@ -1187,7 +1173,6 @@ main(int argc, char **argv)
 		bin->ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
 	else
 		bin->ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
-#endif
 
 	// run
 	bin_run(bin, argv, &nsm_driver);
@@ -1204,6 +1189,4 @@ main(int argc, char **argv)
 	return 0;
 }
 
-#if defined(BUILD_UI)
 ELM_MAIN()
-#endif

@@ -20,12 +20,7 @@
 
 #include <synthpod_app.h>
 
-#if defined(BUILD_UI)
 #	include <synthpod_ui.h>
-#else
-# include <Ecore.h>
-# include <Ecore_File.h>
-#endif
 
 #include <Eina.h>
 
@@ -71,7 +66,7 @@ struct _bin_t {
 	char *path;
 	synthpod_nsm_t *nsm;
 
-#if defined(BUILD_UI)
+	bool has_gui;
 	sp_ui_t *ui;
 	sp_ui_driver_t ui_driver;
 	
@@ -80,9 +75,6 @@ struct _bin_t {
 	
 	Ecore_Animator *ui_anim;
 	Evas_Object *win;
-#else
-	Ecore_Event_Handler *sig;
-#endif
 	
 	volatile int worker_dead;
 	Eina_Thread worker_thread;
@@ -96,7 +88,6 @@ struct _bin_t {
 	LV2_URID log_warning;
 };
 
-#if defined(BUILD_UI)
 // non-rt ui-thread
 static void
 _ui_delete_request(void *data, Evas_Object *obj, void *event)
@@ -136,15 +127,6 @@ _ui_animator(void *data)
 
 	return EINA_TRUE; // continue animator
 }
-#else
-static Eina_Bool
-_quit(void *data, int type, void *info)
-{
-	ecore_main_loop_quit();
-
-	return EINA_TRUE;
-}
-#endif // BUILD_UI
 
 // non-rt worker-thread
 static void *
@@ -188,7 +170,6 @@ _worker_thread(void *data, Eina_Thread thread)
 	return NULL;
 }
 
-#if defined(BUILD_UI)
 // rt
 static void *
 _app_to_ui_request(size_t size, void *data)
@@ -227,7 +208,6 @@ _ui_to_app_advance(size_t size, void *data)
 
 	varchunk_write_advance(bin->app_from_ui, size);
 }
-#endif
 
 // rt
 static void *
@@ -325,13 +305,13 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
-#if defined(BUILD_UI)
 static int
 _show(void *data)
 {
 	bin_t *bin = data;
 
-	evas_object_show(bin->win);
+	if(bin->win)
+		evas_object_show(bin->win);
 	
 	return 0;
 }
@@ -341,20 +321,18 @@ _hide(void *data)
 {
 	bin_t *bin = data;
 
-	evas_object_hide(bin->win);
+	if(bin->win)
+		evas_object_hide(bin->win);
 
 	return 0;
 }
-#endif // BUILD_UI
 
 static void
 bin_init(bin_t *bin)
 {
 	// varchunk init
-#if defined(BUILD_UI)
 	bin->app_to_ui = varchunk_new(CHUNK_SIZE);
 	bin->app_from_ui = varchunk_new(CHUNK_SIZE);
-#endif
 	bin->app_to_worker = varchunk_new(CHUNK_SIZE);
 	bin->app_from_worker = varchunk_new(CHUNK_SIZE);
 	bin->app_to_log = varchunk_new(CHUNK_SIZE);
@@ -373,19 +351,13 @@ bin_init(bin_t *bin)
 	bin->app_driver.unmap = unmap;
 	bin->app_driver.log_printf = _log_printf;
 	bin->app_driver.log_vprintf = _log_vprintf;
-#if defined(BUILD_UI)
 	bin->app_driver.to_ui_request = _app_to_ui_request;
 	bin->app_driver.to_ui_advance = _app_to_ui_advance;
-#else
-	bin->app_driver.to_ui_request = NULL;
-	bin->app_driver.to_ui_advance = NULL;
-#endif
 	bin->app_driver.to_worker_request = _app_to_worker_request;
 	bin->app_driver.to_worker_advance = _app_to_worker_advance;
 	bin->app_driver.to_app_request = _worker_to_app_request;
 	bin->app_driver.to_app_advance = _worker_to_app_advance;
 
-#if defined(BUILD_UI)
 	bin->ui_driver.map = map;
 	bin->ui_driver.unmap = unmap;
 	bin->ui_driver.to_app_request = _ui_to_app_request;
@@ -394,23 +366,28 @@ bin_init(bin_t *bin)
 
 	bin->ui_driver.opened = _ui_opened;
 	bin->ui_driver.close = _ui_close;
-#endif
 }
 
 static void
 bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 {
-#if defined(BUILD_UI)
 	// create main window
 	bin->ui_anim = ecore_animator_add(_ui_animator, bin);
-	bin->win = elm_win_util_standard_add("synthpod", "Synthpod");
-	evas_object_smart_callback_add(bin->win, "delete,request", _ui_delete_request, NULL);
-	evas_object_resize(bin->win, 1280, 720);
-	evas_object_show(bin->win);
+
+	bin->win = NULL;
+	if(bin->has_gui)
+	{
+		bin->win = elm_win_util_standard_add("synthpod", "Synthpod");
+		if(bin->win)
+		{
+			evas_object_smart_callback_add(bin->win, "delete,request", _ui_delete_request, NULL);
+			evas_object_resize(bin->win, 1280, 720);
+			evas_object_show(bin->win);
+		}
+	}
 
 	// ui init
 	bin->ui = sp_ui_new(bin->win, NULL, &bin->ui_driver, bin, 1);
-#endif
 
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
@@ -424,22 +401,17 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	Eina_Bool status = eina_thread_create(&bin->worker_thread,
 		EINA_THREAD_URGENT, -1, _worker_thread, bin); //TODO
 
-#if defined(BUILD_UI)
 	// main loop
 	elm_run();
 
 	// ui deinit
 	sp_ui_free(bin->ui);
 
-	evas_object_del(bin->win);
-	ecore_animator_del(bin->ui_anim);
-#else
-	bin->sig = ecore_event_handler_add(ECORE_EVENT_SIGNAL_EXIT, _quit, NULL);
+	if(bin->win)
+		evas_object_del(bin->win);
 
-	ecore_main_loop_begin();
-
-	ecore_event_handler_del(bin->sig);
-#endif // BUILD_UI
+	if(bin->ui_anim)
+		ecore_animator_del(bin->ui_anim);
 }
 
 static void
@@ -470,10 +442,8 @@ bin_deinit(bin_t *bin)
 	ext_urid_free(bin->ext_urid);
 
 	// varchunk deinit
-#if defined(BUILD_UI)
 	varchunk_free(bin->app_to_ui);
 	varchunk_free(bin->app_from_ui);
-#endif
 	varchunk_free(bin->app_to_log);
 	varchunk_free(bin->app_to_worker);
 	varchunk_free(bin->app_from_worker);
@@ -499,7 +469,6 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
 	// run synthpod app pre
 	sp_app_run_pre(bin->app, nsamples);
 
-#if defined(BUILD_UI)
 	// read events from UI
 	if(!paused) // aka not saving state
 	{
@@ -513,7 +482,6 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
 			varchunk_read_advance(bin->app_from_ui);
 		}
 	}
-#endif // BUILD_UI
 	
 	// run synthpod app post
 	sp_app_run_post(bin->app, nsamples);

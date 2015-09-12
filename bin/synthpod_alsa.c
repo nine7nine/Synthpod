@@ -117,7 +117,6 @@ _rt_thread(void *data, Eina_Thread thread)
 			int paused = sp_app_paused(app);
 			if(paused == 1) // aka loading state
 			{
-				printf("paused\n");
 				pcmi_pcm_idle(pcmi, nsamples);
 
 				continue;
@@ -433,7 +432,6 @@ _system_port_del(void *data, void *sys_port)
 	free(chan);
 }
 
-#if defined(BUILD_UI)
 static void
 _ui_saved(void *data, int status)
 {
@@ -452,7 +450,6 @@ _ui_saved(void *data, int status)
 		elm_exit();
 	}
 }
-#endif // BUILD_UI
 
 static int
 _alsa_init(prog_t *handle, const char *id)
@@ -525,9 +522,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	Eina_Bool status = eina_thread_create(&handle->thread,
 		EINA_THREAD_URGENT, -1, _rt_thread, handle); //TODO
 
-#if defined(BUILD_UI) //FIXME
 	sp_ui_bundle_load(bin->ui, bin->path, 1);
-#endif
 
 	return 0; // success
 }
@@ -539,9 +534,7 @@ _save(void *data)
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
 	handle->save_state = SAVE_STATE_NSM;
-#if defined(BUILD_UI) //FIXME
 	sp_ui_bundle_save(bin->ui, bin->path, 1);
-#endif
 
 	return 0; // success
 }
@@ -549,22 +542,12 @@ _save(void *data)
 static const synthpod_nsm_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
-#if defined(BUILD_UI)
 	.show = _show,
 	.hide = _hide
-#else
-	.show = NULL,
-	.hide = NULL
-#endif // BUILD_UI
 };
 	
-#if defined(BUILD_UI)
 EAPI_MAIN int
 elm_main(int argc, char **argv)
-#else
-int
-main(int argc, char **argv)
-#endif
 {
 	static prog_t handle;
 	bin_t *bin = &handle.bin;
@@ -577,21 +560,27 @@ main(int argc, char **argv)
 	const char *def = "default";
 	handle.play_name = def;
 	handle.capt_name = def;
+
+	bin->has_gui = true;
+
+	fprintf(stderr,
+		"--------------------------------------------------------------------\n"
+		"Synthpod "SYNTHPOD_VERSION"\n"
+		"--------------------------------------------------------------------\n"
+		"\n"
+		"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+		"\n"
+		"This is free software: you can redistribute it and/or modify\n"
+		"it under the terms of the Artistic License 2.0 as published by\n"
+		"The Perl Foundation.\n\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vh2i:o:r:p:n:s:")) != -1)
+	while((c = getopt(argc, argv, "vhG2i:o:r:p:n:s:")) != -1)
 	{
 		switch(c)
 		{
 			case 'v':
-				fprintf(stderr, "Synthpod " SYNTHPOD_VERSION "\n"
-					"\n"
-					"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
-					"\n"
-					"This is free software: you can redistribute it and/or modify\n"
-					"it under the terms of the Artistic License 2.0 as published by\n"
-					"The Perl Foundation.\n"
-					"\n"
+				fprintf(stderr,
 					"This source is distributed in the hope that it will be useful,\n"
 					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
 					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
@@ -603,12 +592,14 @@ main(int argc, char **argv)
 				return 0;
 			case 'h':
 				fprintf(stderr,
+					"--------------------------------------------------------------------\n"
 					"USAGE\n"
 					"   %s [OPTIONS] [BUNDLE_PATH]\n"
 					"\n"
 					"OPTIONS\n"
-					"   [-v]                 print version and license information\n"
+					"   [-v]                 print version and full license information\n"
 					"   [-h]                 print usage information\n"
+					"   [-G]                 disable GUI\n"
 					"   [-2]                 force 2 channel mode\n"
 					"   [-i] capture-device  capture device (\"default\")\n"
 					"   [-o] playback-device playback device (\"default\")\n"
@@ -618,6 +609,9 @@ main(int argc, char **argv)
 					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
 					, argv[0]);
 				return 0;
+			case 'G':
+				bin->has_gui = false;
+				break;
 			case '2':
 				handle.twochan = 1;
 				break;
@@ -667,7 +661,6 @@ main(int argc, char **argv)
 	
 	bin->app_driver.osc_sched = NULL;
 
-#if defined(BUILD_UI)
 	bin->ui_driver.saved = _ui_saved;
 
 	bin->ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
@@ -675,7 +668,6 @@ main(int argc, char **argv)
 		bin->ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
 	else
 		bin->ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
-#endif
 
 	// run
 	bin_run(bin, argv, &nsm_driver);
@@ -692,6 +684,4 @@ main(int argc, char **argv)
 	return 0;
 }
 
-#if defined(BUILD_UI)
 ELM_MAIN()
-#endif
