@@ -124,7 +124,8 @@ _rt_thread(void *data, Eina_Thread thread)
 			}
 
 			// fill input buffers
-			pcmi_capt_init(pcmi, nsamples);
+			if(ncapt)
+				pcmi_capt_init(pcmi, nsamples);
 			capt_num = 0;
 			for(const sp_app_system_source_t *source=sources;
 				(source->type != SYSTEM_PORT_NONE) && (capt_num < ncapt);
@@ -236,12 +237,14 @@ _rt_thread(void *data, Eina_Thread thread)
 					lv2_atom_forge_pop(forge, &chan->midi.frame);
 				}
 			}
-			pcmi_capt_done(pcmi, nsamples);
+			if(ncapt)
+				pcmi_capt_done(pcmi, nsamples);
 	
 			bin_process_pre(bin, nsamples, paused);
 
 			// fill output buffers
-			pcmi_play_init(pcmi, nsamples);
+			if(nplay)
+				pcmi_play_init(pcmi, nsamples);
 			play_num = 0;
 			for(const sp_app_system_sink_t *sink=sinks;
 				(sink->type != SYSTEM_PORT_NONE) && (play_num < nplay);
@@ -308,7 +311,8 @@ _rt_thread(void *data, Eina_Thread thread)
 				pcmi_clear_chan(pcmi, play_num++, nsamples);
 			}
 
-			pcmi_play_done(pcmi, nsamples);
+			if(nplay)
+				pcmi_play_done(pcmi, nsamples);
 		
 			bin_process_post(bin);
 
