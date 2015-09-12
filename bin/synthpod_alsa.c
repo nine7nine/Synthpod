@@ -100,6 +100,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	const uint32_t nsamples = handle->frsize;
 	const size_t sample_buf_size = sizeof(float) * nsamples;
 	int nplay = pcmi_nplay(pcmi);
+	int ncapt = pcmi_ncapt(pcmi);
 	int play_num;
 	int capt_num;
 
@@ -126,7 +127,7 @@ _rt_thread(void *data, Eina_Thread thread)
 			pcmi_capt_init(pcmi, nsamples);
 			capt_num = 0;
 			for(const sp_app_system_source_t *source=sources;
-				source->type != SYSTEM_PORT_NONE;
+				(source->type != SYSTEM_PORT_NONE) && (capt_num < ncapt);
 				source++)
 			{
 				chan_t *chan = source->sys_port;
@@ -243,7 +244,7 @@ _rt_thread(void *data, Eina_Thread thread)
 			pcmi_play_init(pcmi, nsamples);
 			play_num = 0;
 			for(const sp_app_system_sink_t *sink=sinks;
-				sink->type != SYSTEM_PORT_NONE;
+				(sink->type != SYSTEM_PORT_NONE) && (play_num < nplay);
 				sink++)
 			{
 				chan_t *chan = sink->sys_port;
