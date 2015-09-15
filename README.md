@@ -10,10 +10,12 @@
 
 ### Dependencies
 
-* [lv2](http://lv2plug.in) (LV2 plugin specification)
+* [LV2](http://lv2plug.in) (LV2 plugin specification)
 * [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
 * [JACK](http://jackaudio.org/) (JACK audio connection kit)
 * [Elementary](http://docs.enlightenment.org/auto/elementary/) (EFL UI toolkit)
+* [ALSA](http://alsa-project.org) (Advanced Linux Sound Architecture)
+* [zita-alsa-pcmi](http://kokkinizita.linuxaudio.org/linuxaudio/) (ALSA PCM high-level API)
 
 ### Build / install
 
@@ -28,7 +30,7 @@
 #### ArchLinux
 
 	# build/runtime dependencies
-	sudo pacman -S cmake lv2 lilv elementary jack
+	sudo pacman -S cmake lv2 lilv elementary jack zita-alsa-pcmi
 
 #### Debian (>= jessie) and derivatives (Ubuntu, Mint, ...)
 
