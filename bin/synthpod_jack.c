@@ -1068,15 +1068,9 @@ elm_main(int argc, char **argv)
 	bin->has_gui = true;
 
 	fprintf(stderr,
-		"--------------------------------------------------------------------\n"
 		"Synthpod "SYNTHPOD_VERSION"\n"
-		"--------------------------------------------------------------------\n"
-		"\n"
 		"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
-		"\n"
-		"This is free software: you can redistribute it and/or modify\n"
-		"it under the terms of the Artistic License 2.0 as published by\n"
-		"The Perl Foundation.\n\n");
+		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
 	while((c = getopt(argc, argv, "vhGn:u:s:")) != -1)
@@ -1085,6 +1079,11 @@ elm_main(int argc, char **argv)
 		{
 			case 'v':
 				fprintf(stderr,
+					"--------------------------------------------------------------------\n"
+					"This is free software: you can redistribute it and/or modify\n"
+					"it under the terms of the Artistic License 2.0 as published by\n"
+					"The Perl Foundation.\n"
+					"\n"
 					"This source is distributed in the hope that it will be useful,\n"
 					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
 					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
