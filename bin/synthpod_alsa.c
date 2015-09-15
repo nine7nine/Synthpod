@@ -107,9 +107,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	pcmi_pcm_start(handle->pcmi);
 	while(!handle->kill)
 	{
-		int na = pcmi_pcm_wait(pcmi);
-
-		while(na >= nsamples)
+		for(int na = pcmi_pcm_wait(pcmi); na >= nsamples; na -= nsamples)
 		{
 			const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
 			const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
@@ -314,8 +312,6 @@ _rt_thread(void *data, Eina_Thread thread)
 				pcmi_play_done(pcmi, nsamples);
 		
 			bin_process_post(bin);
-
-			na -= nsamples;
 		}
 	}
 	pcmi_pcm_stop(handle->pcmi);
