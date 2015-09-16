@@ -72,6 +72,7 @@ struct _prog_t {
 	uint32_t frsize;
 	uint32_t nfrags;
 	int twochan;
+	int debug;
 
 	const char *play_name;
 	const char *capt_name;
@@ -462,7 +463,7 @@ _alsa_init(prog_t *handle, const char *id)
 
 	// init alsa pcm
 	handle->pcmi = pcmi_new(handle->play_name, handle->capt_name,
-		handle->srate, handle->frsize, handle->nfrags, handle->twochan, 0); //TODO debug
+		handle->srate, handle->frsize, handle->nfrags, handle->twochan, handle->debug);
 	if(!handle->pcmi)
 		return -1;
 	pcmi_printinfo(handle->pcmi);
@@ -552,6 +553,7 @@ elm_main(int argc, char **argv)
 	handle.frsize = 1024;
 	handle.nfrags = 3;
 	handle.twochan = 0;
+	handle.debug = 0;
 
 	const char *def = "default";
 	handle.play_name = def;
@@ -565,7 +567,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhG2i:o:r:p:n:s:")) != -1)
+	while((c = getopt(argc, argv, "vhG2di:o:r:p:n:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -596,6 +598,7 @@ elm_main(int argc, char **argv)
 					"   [-h]                 print usage information\n"
 					"   [-G]                 disable GUI\n"
 					"   [-2]                 force 2 channel mode\n"
+					"   [-d]                 enable debugging\n"
 					"   [-i] capture-device  capture device (\"default\")\n"
 					"   [-o] playback-device playback device (\"default\")\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
@@ -609,6 +612,9 @@ elm_main(int argc, char **argv)
 				break;
 			case '2':
 				handle.twochan = 1;
+				break;
+			case 'd':
+				handle.debug = 1;
 				break;
 			case 'i':
 				handle.capt_name = optarg;
