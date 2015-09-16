@@ -555,7 +555,7 @@ elm_main(int argc, char **argv)
 	handle.twochan = 0;
 	handle.debug = 0;
 
-	const char *def = "default";
+	const char *def = "hw:0";
 	handle.play_name = def;
 	handle.capt_name = def;
 
@@ -599,8 +599,8 @@ elm_main(int argc, char **argv)
 					"   [-G]                 disable GUI\n"
 					"   [-2]                 force 2 channel mode\n"
 					"   [-d]                 enable debugging\n"
-					"   [-i] capture-device  capture device (\"default\")\n"
-					"   [-o] playback-device playback device (\"default\")\n"
+					"   [-i] capture-device  capture device (\"hw:0\")\n"
+					"   [-o] playback-device playback device (\"hw:0\")\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
 					"   [-p] sample-period   frames per period (1024)\n"
 					"   [-n] period-number   number of periods of playback latency (3)\n"
