@@ -36,7 +36,6 @@
 #endif
 
 #define OSC_SIZE 0x800
-#define JAN_1970 (uint64_t)0x83aa7e80
 
 typedef struct _prog_t prog_t;
 

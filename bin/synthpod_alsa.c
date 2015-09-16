@@ -26,6 +26,7 @@
 #include <synthpod_bin.h>
 
 #define MIDI_SEQ_SIZE 2048
+#define NANO_SECONDS 1000000000
 
 typedef enum _chan_type_t chan_type_t;
 typedef struct _prog_t prog_t;
@@ -79,7 +80,53 @@ struct _prog_t {
 	const char *io_name;
 	const char *play_name;
 	const char *capt_name;
+
+	osc_schedule_t osc_sched;
+	struct timespec cur_ntp;
+	struct timespec nxt_ntp;
+	struct {
+		uint64_t cur_frames;
+		uint64_t ref_frames;
+		double dT;
+		double dTm1;
+	} cycle;
 };
+
+static inline void
+_ntp_now(struct timespec *ntp)
+{
+	clock_gettime(CLOCK_REALTIME, ntp);
+	ntp->tv_sec += JAN_1970; // convert NTP to OSC time
+}
+
+static inline void
+_ntp_clone(struct timespec *dst, struct timespec *src)
+{
+	dst->tv_sec = src->tv_sec;
+	dst->tv_nsec = src->tv_nsec;
+}
+
+static inline void
+_ntp_add_nanos(struct timespec *ntp, uint64_t nanos)
+{
+	ntp->tv_nsec += nanos;
+	while(ntp->tv_nsec >= NANO_SECONDS) // has overflowed
+	{
+		ntp->tv_sec += 1;
+		ntp->tv_nsec -= NANO_SECONDS;
+	}
+}
+
+static inline double
+_ntp_diff(struct timespec *from, struct timespec *to)
+{
+	double diff = to->tv_sec;
+	diff -= from->tv_sec;
+	diff += 1e-9 * to->tv_nsec;
+	diff -= 1e-9 * from->tv_nsec;
+
+	return diff;
+}
 
 static void *
 _rt_thread(void *data, Eina_Thread thread)
@@ -108,10 +155,39 @@ _rt_thread(void *data, Eina_Thread thread)
 	int play_num;
 	int capt_num;
 
+	const uint64_t nanos_per_period = nsamples * NANO_SECONDS / handle->srate;
+	handle->cycle.cur_frames = 0; // initialize frame counter
+	_ntp_now(&handle->nxt_ntp);
+
 	pcmi_pcm_start(handle->pcmi);
 	while(!handle->kill)
 	{
-		for(int na = pcmi_pcm_wait(pcmi); na >= nsamples; na -= nsamples)
+		int na = pcmi_pcm_wait(pcmi);
+
+		// current time is next time from last cycle
+		_ntp_clone(&handle->cur_ntp, &handle->nxt_ntp);
+
+		// extrapolate new nxt_ntp
+		struct timespec nxt_ntp;
+		_ntp_now(&nxt_ntp);
+		_ntp_clone(&handle->nxt_ntp, &nxt_ntp);
+
+		// increase cur_frames
+		handle->cycle.cur_frames += na;
+		handle->cycle.ref_frames = handle->cycle.cur_frames;
+
+		// calculate apparent period
+		_ntp_add_nanos(&nxt_ntp, nanos_per_period);
+		double diff = _ntp_diff(&handle->cur_ntp, &nxt_ntp);
+
+		/// calculate apparent samples per period
+		handle->cycle.dT = nsamples / diff;
+		handle->cycle.dTm1 = diff / nsamples;
+
+		for( ; na >= nsamples;
+				na -= nsamples,
+				handle->cycle.ref_frames += nsamples,
+				_ntp_add_nanos(&handle->nxt_ntp, nanos_per_period) )
 		{
 			const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
 			const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
@@ -285,12 +361,12 @@ _rt_thread(void *data, Eina_Thread thread)
 							// relative timestamp
 							struct snd_seq_real_time rtime = {
 								.tv_sec = 0,
-								.tv_nsec = (float)ev->time.frames * 1e9 / handle->srate //TODO improve
+								.tv_nsec = ev->time.frames * nanos_per_period
 							};
-							while(rtime.tv_nsec > 1000000000) // handle overflow
+							while(rtime.tv_nsec >= NANO_SECONDS) // handle overflow
 							{
-								rtime.tv_sec++;
-								rtime.tv_nsec -= 1000000000;
+								rtime.tv_sec += 1;
+								rtime.tv_nsec -= NANO_SECONDS;
 							}
 
 							// schedule midi
@@ -545,6 +621,56 @@ static const synthpod_nsm_driver_t nsm_driver = {
 	.show = _show,
 	.hide = _hide
 };
+
+// rt
+static int64_t
+_osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
+{
+	prog_t *handle = instance;
+
+	if(timestamp == 1ULL)
+		return 0; // inject at start of period
+
+	uint64_t time_sec = timestamp >> 32;
+	uint64_t time_frac = timestamp & 0xffffffff;
+
+	volatile double diff = time_sec;
+	diff -= handle->cur_ntp.tv_sec;
+	diff += time_frac * 0x1p-32;
+	diff -= handle->cur_ntp.tv_nsec * 1e-9;
+
+	double frames_d = handle->cycle.ref_frames
+		- handle->cycle.cur_frames
+		+ diff * handle->cycle.dT;
+
+	int64_t frames = round(frames_d);
+
+	return frames;
+}
+
+// rt
+static uint64_t
+_osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
+{
+	prog_t *handle = instance;
+
+	volatile double diff = (double)(frames - handle->cycle.ref_frames + handle->cycle.cur_frames)
+		* handle->cycle.dTm1;
+	diff += handle->cur_ntp.tv_nsec * 1e-9;
+	diff += handle->cur_ntp.tv_sec;
+
+	double time_sec_d;
+	double time_frac_d = modf(diff, &time_sec_d);
+
+	uint64_t time_sec = time_sec_d;
+	uint64_t time_frac = time_frac_d * 0x1p32;
+	if(time_frac >= 0x100000000ULL) // illegal overflow
+		time_frac = 0xffffffffULL;
+
+	uint64_t timestamp = (time_sec << 32) | time_frac;
+
+	return timestamp;
+}
 	
 EAPI_MAIN int
 elm_main(int argc, char **argv)
@@ -682,7 +808,10 @@ elm_main(int argc, char **argv)
 	bin->app_driver.system_port_add = _system_port_add;
 	bin->app_driver.system_port_del = _system_port_del;
 	
-	bin->app_driver.osc_sched = NULL;
+	handle.osc_sched.osc2frames = _osc_schedule_osc2frames;
+	handle.osc_sched.frames2osc = _osc_schedule_frames2osc;
+	handle.osc_sched.handle = &handle;
+	bin->app_driver.osc_sched = &handle.osc_sched;
 
 	bin->ui_driver.saved = _ui_saved;
 

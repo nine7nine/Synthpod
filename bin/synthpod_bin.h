@@ -42,6 +42,7 @@
 
 #define SEQ_SIZE 0x2000
 #define CHUNK_SIZE 0x10000
+#define JAN_1970 (uint64_t)0x83aa7e80
 
 typedef enum _save_state_t save_state_t;
 
