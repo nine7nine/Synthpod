@@ -73,7 +73,10 @@ struct _prog_t {
 	uint32_t nfrags;
 	int twochan;
 	int debug;
+	int do_play;
+	int do_capt;
 
+	const char *io_name;
 	const char *play_name;
 	const char *capt_name;
 };
@@ -222,7 +225,7 @@ _rt_thread(void *data, Eina_Thread thread)
 			}
 						
 			for(const sp_app_system_source_t *source=sources;
-				source->type != SYSTEM_PORT_NONE;
+				(source->type != SYSTEM_PORT_NONE) && (capt_num < ncapt);
 				source++)
 			{
 				chan_t *chan = source->sys_port;
@@ -554,10 +557,13 @@ elm_main(int argc, char **argv)
 	handle.nfrags = 3;
 	handle.twochan = 0;
 	handle.debug = 0;
+	handle.do_play = 1;
+	handle.do_capt = 1;
 
 	const char *def = "hw:0";
-	handle.play_name = def;
-	handle.capt_name = def;
+	handle.io_name = def;
+	handle.play_name = NULL;
+	handle.capt_name = NULL;
 
 	bin->has_gui = true;
 
@@ -567,7 +573,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhG2di:o:r:p:n:s:")) != -1)
+	while((c = getopt(argc, argv, "vhGIO2xd:i:o:r:p:n:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -597,6 +603,8 @@ elm_main(int argc, char **argv)
 					"   [-v]                 print version and full license information\n"
 					"   [-h]                 print usage information\n"
 					"   [-G]                 disable GUI\n"
+					"   [-I]                 disable capture\n"
+					"   [-O]                 disable playback\n"
 					"   [-2]                 force 2 channel mode\n"
 					"   [-d]                 enable debugging\n"
 					"   [-i] capture-device  capture device (\"hw:0\")\n"
@@ -610,11 +618,20 @@ elm_main(int argc, char **argv)
 			case 'G':
 				bin->has_gui = false;
 				break;
+			case 'I':
+				handle.do_capt = 0;
+				break;
+			case 'O':
+				handle.do_play = 0;
+				break;
 			case '2':
 				handle.twochan = 1;
 				break;
-			case 'd':
+			case 'x':
 				handle.debug = 1;
+				break;
+			case 'd':
+				handle.io_name = optarg;
 				break;
 			case 'i':
 				handle.capt_name = optarg;
@@ -635,7 +652,7 @@ elm_main(int argc, char **argv)
 				//TODO
 				break;
 			case '?':
-				if( (optopt == 'i') || (optopt == 'o') || (optopt == 'r')
+				if( (optopt == 'd') || (optopt == 'i') || (optopt == 'o') || (optopt == 'r')
 					  || (optopt == 'p') || (optopt == 'n') || (optopt == 's') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
@@ -647,6 +664,11 @@ elm_main(int argc, char **argv)
 				return -1;
 		}
 	}
+
+	if(!handle.capt_name && handle.do_capt)
+		handle.capt_name = handle.io_name;
+	if(!handle.play_name && handle.do_play)
+		handle.play_name = handle.io_name;
 	
 	bin_init(bin);
 	
