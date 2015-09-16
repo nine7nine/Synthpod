@@ -76,6 +76,7 @@ struct _prog_t {
 	int debug;
 	int do_play;
 	int do_capt;
+	uint32_t seq_size;
 
 	const char *io_name;
 	const char *play_name;
@@ -589,7 +590,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->app_driver.sample_rate = handle->srate;
 	bin->app_driver.max_block_size = handle->frsize;
 	bin->app_driver.min_block_size = 1;
-	bin->app_driver.seq_size = SEQ_SIZE;
+	bin->app_driver.seq_size = handle->seq_size;
 	
 	// app init
 	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
@@ -685,6 +686,7 @@ elm_main(int argc, char **argv)
 	handle.debug = 0;
 	handle.do_play = 1;
 	handle.do_capt = 1;
+	handle.seq_size = SEQ_SIZE;
 
 	const char *def = "hw:0";
 	handle.io_name = def;
@@ -775,7 +777,7 @@ elm_main(int argc, char **argv)
 				handle.nfrags = atoi(optarg);
 				break;
 			case 's':
-				//TODO
+				handle.seq_size = MAX(SEQ_SIZE, atoi(optarg));
 				break;
 			case '?':
 				if( (optopt == 'd') || (optopt == 'i') || (optopt == 'o') || (optopt == 'r')
