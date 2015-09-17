@@ -741,9 +741,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 			const char *required_feature_uri = lilv_node_as_uri(required_feature);
 			missing_required_feature = 1;
 
-			for(int i=0; i<nfeatures; i++)
+			for(int f=0; f<nfeatures; f++)
 			{
-				if(!strcmp(mod->feature_list[i].URI, required_feature_uri))
+				if(!strcmp(mod->feature_list[f].URI, required_feature_uri))
 				{
 					missing_required_feature = 0;
 					break;
@@ -2181,11 +2181,11 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 void
 sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 {
-	const work_t *work = ASSUME_ALIGNED(data);
+	const work_t *work0 = ASSUME_ALIGNED(data);
 
-	if(work->target == app) // work is for self
+	if(work0->target == app) // work is for self
 	{
-		const job_t *job = (const job_t *)work->payload;
+		const job_t *job = (const job_t *)work0->payload;
 
 		switch(job->type)
 		{
@@ -2202,9 +2202,9 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				{
 						work->target = app;
 						work->size = sizeof(job_t);
-					job_t *job = (job_t *)work->payload;
-						job->type = JOB_TYPE_MODULE_ADD;
-						job->mod = mod;
+					job_t *job1 = (job_t *)work->payload;
+						job1->type = JOB_TYPE_MODULE_ADD;
+						job1->mod = mod;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
@@ -2241,9 +2241,9 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				{
 						work->target = app;
 						work->size = sizeof(job_t);
-					job_t *job = (job_t *)work->payload;
-						job->type = JOB_TYPE_BUNDLE_LOAD;
-						job->status = status;
+					job_t *job1 = (job_t *)work->payload;
+						job1->type = JOB_TYPE_BUNDLE_LOAD;
+						job1->status = status;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
@@ -2260,9 +2260,9 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				{
 						work->target = app;
 						work->size = sizeof(job_t);
-					job_t *job = (job_t *)work->payload;
-						job->type = JOB_TYPE_BUNDLE_SAVE;
-						job->status = status;
+					job_t *job1 = (job_t *)work->payload;
+						job1->type = JOB_TYPE_BUNDLE_SAVE;
+						job1->status = status;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
@@ -2272,7 +2272,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 	}
 	else // work is for module
 	{
-		mod_t *mod = work->target;
+		mod_t *mod = work0->target;
 		if(!mod)
 			return;
 
@@ -2280,13 +2280,13 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		if(mod->zero.iface && mod->zero.iface->work)
 		{
 			mod->zero.iface->work(mod->handle, _sp_zero_request, _sp_zero_advance,
-				mod, work->size, work->payload);
+				mod, work0->size, work0->payload);
 			//TODO check return status
 		}
 		else if(mod->worker.iface && mod->worker.iface->work)
 		{
 			mod->worker.iface->work(mod->handle, _sp_worker_respond, mod,
-				work->size, work->payload);
+				work0->size, work0->payload);
 			//TODO check return status
 		}
 	}

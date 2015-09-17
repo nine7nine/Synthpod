@@ -558,10 +558,10 @@ _ui_mod_selected_request(mod_t *mod)
 
 	// request module selected state
 	size_t size = sizeof(transmit_module_selected_t);
-	transmit_module_selected_t *trans = _sp_ui_to_app_request(ui, size);
-	if(trans)
+	transmit_module_selected_t *trans0 = _sp_ui_to_app_request(ui, size);
+	if(trans0)
 	{
-		_sp_transmit_module_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, -1);
+		_sp_transmit_module_selected_fill(&ui->regs, &ui->forge, trans0, size, mod->uid, -1);
 		_sp_ui_to_app_advance(ui, size);
 	}
 
@@ -571,22 +571,22 @@ _ui_mod_selected_request(mod_t *mod)
 
 		// request port selected state
 		{
-			size_t size = sizeof(transmit_port_selected_t);
-			transmit_port_selected_t *trans = _sp_ui_to_app_request(ui, size);
-			if(trans)
+			size = sizeof(transmit_port_selected_t);
+			transmit_port_selected_t *trans1 = _sp_ui_to_app_request(ui, size);
+			if(trans1)
 			{
-				_sp_transmit_port_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, -1);
+				_sp_transmit_port_selected_fill(&ui->regs, &ui->forge, trans1, size, mod->uid, port->index, -1);
 				_sp_ui_to_app_advance(ui, size);
 			}
 		}
 
 		// request port monitored state
 		{
-			size_t size = sizeof(transmit_port_monitored_t);
-			transmit_port_monitored_t *trans = _sp_ui_to_app_request(ui, size);
-			if(trans)
+			size = sizeof(transmit_port_monitored_t);
+			transmit_port_monitored_t *trans2 = _sp_ui_to_app_request(ui, size);
+			if(trans2)
 			{
-				_sp_transmit_port_monitored_fill(&ui->regs, &ui->forge, trans, size, mod->uid, port->index, -1);
+				_sp_transmit_port_monitored_fill(&ui->regs, &ui->forge, trans2, size, mod->uid, port->index, -1);
 				_sp_ui_to_app_advance(ui, size);
 			}
 		}
@@ -1687,9 +1687,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 					const char *required_feature_uri = lilv_node_as_uri(required_feature);
 					missing_required_feature = 1;
 
-					for(int i=0; i<nfeatures; i++)
+					for(int f=0; f<nfeatures; f++)
 					{
-						if(!strcmp(mod->feature_list[i].URI, required_feature_uri))
+						if(!strcmp(mod->feature_list[f].URI, required_feature_uri))
 						{
 							missing_required_feature = 0;
 							break;
