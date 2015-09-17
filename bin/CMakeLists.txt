@@ -1,4 +1,5 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/lib/cjson)
 include_directories(${PROJECT_SOURCE_DIR}/libosc) # osc.h
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/system_port.lv2)
@@ -85,7 +86,8 @@ if(BUILD_ALSA)
 		pcmi.cpp
 		synthpod_alsa.c
 		synthpod_nsm.c
-		ext_urid.c)
+		ext_urid.c
+		../lib/cjson/cJSON.c)
 	target_link_libraries(synthpod.alsa
 		${ECORE_CON_LDFLAGS}
 		"-lasound" #FIXME

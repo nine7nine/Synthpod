@@ -22,6 +22,7 @@
 
 #include <asoundlib.h>
 #include <pcmi.h>
+#include <cJSON.h>
 
 #include <synthpod_bin.h>
 
@@ -675,6 +676,90 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 	return timestamp;
 }
 
+static cJSON *
+_read_config(prog_t *handle)
+{
+	cJSON *root_json = NULL;
+
+	efreet_init();
+
+	const char *config_home_dir = efreet_config_home_get();
+	if(config_home_dir)
+	{
+		char *config_home_file;
+		asprintf(&config_home_file, "%s/synthpod_alsa.json", config_home_dir);
+
+		if(config_home_file)
+		{
+			FILE *f = fopen(config_home_file, "rb");
+			if(f)
+			{
+				fseek(f, 0, SEEK_END);
+				const size_t fsize = ftell(f);
+				fseek(f, 0, SEEK_SET);
+						
+				char *root_str = malloc(fsize + 1);
+				if(root_str)
+				{
+					if(fread(root_str, fsize, 1, f) == 1)
+					{
+						root_str[fsize] = '\0';
+					}
+					else // read failed
+					{
+						free(root_str);
+						root_str = NULL;
+					}
+				}
+				fclose(f);
+
+				if(root_str)
+				{
+					root_json = cJSON_Parse(root_str);
+					free(root_str);
+
+					if(root_json)
+					{
+						const cJSON *obj_json;
+						if((obj_json = cJSON_GetObjectItem(root_json, "disable-gui")))
+							handle->bin.has_gui = !obj_json->valueint;
+						if((obj_json = cJSON_GetObjectItem(root_json, "disable-playback")))
+							handle->do_play = !obj_json->valueint;
+						if((obj_json = cJSON_GetObjectItem(root_json, "disable-capture")))
+							handle->do_capt = !obj_json->valueint;
+						if((obj_json = cJSON_GetObjectItem(root_json, "force-two-channel")))
+							handle->twochan = obj_json->valueint;
+						if((obj_json = cJSON_GetObjectItem(root_json, "notify-xruns")))
+							handle->debug = obj_json->valueint;
+
+						if((obj_json = cJSON_GetObjectItem(root_json, "device")))
+							handle->io_name = obj_json->valuestring;
+						if((obj_json = cJSON_GetObjectItem(root_json, "capture-device")))
+							handle->capt_name = obj_json->valuestring;
+						if((obj_json = cJSON_GetObjectItem(root_json, "playback-device")))
+							handle->play_name = obj_json->valuestring;
+
+						if((obj_json = cJSON_GetObjectItem(root_json, "sample-rate")))
+							handle->srate = obj_json->valueint;
+						if((obj_json = cJSON_GetObjectItem(root_json, "sample-period")))
+							handle->frsize = obj_json->valueint;
+						if((obj_json = cJSON_GetObjectItem(root_json, "period-number")))
+							handle->nfrags = obj_json->valueint;
+						if((obj_json = cJSON_GetObjectItem(root_json, "sequence-size")))
+							handle->seq_size = obj_json->valueint;
+					} // root_json
+
+					free(config_home_file);
+				} // root_str
+			} //f
+		} // config_home_file
+	} // config_home_dir
+
+	efreet_shutdown();
+
+	return root_json;
+}
+
 EAPI_MAIN int
 elm_main(int argc, char **argv);
 	
@@ -699,6 +784,9 @@ elm_main(int argc, char **argv)
 	handle.capt_name = NULL;
 
 	bin->has_gui = true;
+
+	// read local configuration if present
+	cJSON *root_json = _read_config(&handle);
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -838,6 +926,9 @@ elm_main(int argc, char **argv)
 
 	// deinit
 	bin_deinit(bin);
+
+	if(root_json)
+		cJSON_Delete(root_json);
 
 	return 0;
 }
