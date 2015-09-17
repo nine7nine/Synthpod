@@ -61,7 +61,6 @@ EVAS_SMART_SUBCLASS_NEW(SMART_SPINNER_TYPE, _smart_spinner,
 static void
 _smart_spinner_smart_init(Evas_Object *o)
 {
-	Evas *e = evas_object_evas_get(o);
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
 
 	priv->elmnts = NULL;
@@ -239,8 +238,6 @@ _smart_spinner_smart_add(Evas_Object *o)
 static void
 _smart_spinner_smart_del(Evas_Object *o)
 {
-	smart_spinner_t *priv = evas_object_smart_data_get(o);
-
 	_smart_spinner_smart_deinit(o);
 	_smart_spinner_parent_sc->del(o);
 }
@@ -248,7 +245,6 @@ _smart_spinner_smart_del(Evas_Object *o)
 static void
 _smart_spinner_smart_resize(Evas_Object *o, Evas_Coord w, Evas_Coord h)
 {
-	smart_spinner_t *priv = evas_object_smart_data_get(o);
 	Evas_Coord ow, oh;
 
 	evas_object_geometry_get(o, NULL, NULL, &ow, &oh);
@@ -350,7 +346,6 @@ smart_spinner_value_set(Evas_Object *o, float value)
 	}
 
 	itr -= 1;
-	elmnt = eina_list_nth(priv->elmnts, itr);
 
 	priv->drag = 1.f / (priv->count - 1) * itr;
 	priv->value = INT_MAX;

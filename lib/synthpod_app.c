@@ -781,13 +781,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	mod->sys.iface = lilv_instance_get_extension_data(mod->inst,
 		SYSTEM_PORT__interface);
 
-	int system_source = 0;
-	int system_sink = 0;
-	if(!strcmp(uri, SYNTHPOD_PREFIX"source"))
-		system_source = 1;
-	else if(!strcmp(uri, SYNTHPOD_PREFIX"sink"))
-		system_sink = 1;
-
 	// clear pool sizes
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
 		mod->pools[pool].size = 0;
@@ -3396,7 +3389,8 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 					}};
 
 					// notify new minimalBlockLength
-					uint32_t ret = mod->opts.iface->set(mod->handle, options); // TODO check
+					if(mod->opts.iface->set(mod->handle, options) != LV2_OPTIONS_SUCCESS)
+						fprintf(stderr, "option setting of min_block_size failed\n");
 				}
 
 				const int32_t nominal_block_length = nsamples;
@@ -3414,7 +3408,8 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 				}};
 
 				// notify new nominalBlockLength
-				uint32_t ret = mod->opts.iface->set(mod->handle, options); // TODO check
+				if(mod->opts.iface->set(mod->handle, options) != LV2_OPTIONS_SUCCESS)
+					fprintf(stderr, "option setting of min_block_size failed\n");
 			}
 		}
 	}

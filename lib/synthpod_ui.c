@@ -423,7 +423,6 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 			if(property && value)
 			{
-				LV2_URID subject_val = subject ? subject->body : 0;
 				LV2_URID property_val = property->body;
 
 				//printf("ui got patch:Set: %u %u %s\n",
@@ -499,7 +498,6 @@ _eo_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_t *mod = handle;
-	sp_ui_t *ui = mod->ui;
 
 	//printf("_eo_port_event: %u %u %u\n", index, size, protocol);
 
@@ -568,7 +566,6 @@ _port_subscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol,
 	const LV2_Feature *const *features)
 {
 	mod_t *mod = handle;
-	sp_ui_t *ui = mod->ui;
 
 	_port_subscription_set(mod, index, protocol, 1);
 
@@ -580,7 +577,6 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	const LV2_Feature *const *features)
 {
 	mod_t *mod = handle;
-	sp_ui_t *ui = mod->ui;
 
 	_port_subscription_set(mod, index, protocol, 0);
 
@@ -904,10 +900,12 @@ _show_ui_hide(mod_t *mod)
 	// hide UI
 	int res = 0;
 	if(mod->show.show_iface && mod->show.show_iface->hide && mod->show.handle)
-		res = mod->show.show_iface->hide(mod->show.handle);
-	//TODO handle res != 0
-
-	mod->show.visible = 0; // toggle visibility flag
+	{
+		if(mod->show.show_iface->hide(mod->show.handle))
+			fprintf(stderr, "show_iface->hide failed\n");
+		else
+			mod->show.visible = 0; // toggle visibility flag
+	}
 
 	// unsubscribe all ports
 	for(int i=0; i<mod->num_ports; i++)
@@ -995,12 +993,13 @@ _show_ui_show(mod_t *mod)
 		return;
 
 	// show UI
-	int res = 0;
 	if(mod->show.show_iface && mod->show.show_iface->show && mod->show.handle)
-		res = mod->show.show_iface->show(mod->show.handle);
-	//TODO handle res != 0
-
-	mod->show.visible = 1; // toggle visibility flag
+	{
+		if(mod->show.show_iface->show(mod->show.handle))
+			fprintf(stderr, "show_iface->show failed\n");
+		else
+			mod->show.visible = 1; // toggle visibility flag
+	}
 
 	// get idle iface if any
 	if(mod->show.descriptor->extension_data)
@@ -2270,7 +2269,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			if(mod->system.sink && (port->direction == PORT_DIRECTION_OUTPUT) )
 				continue;
 
-			Elm_Object_Item *parent = itm;
+			Elm_Object_Item *parent;
 			if(port->group)
 			{
 				const char *group_lbl = lilv_node_as_string(port->group);
@@ -2918,7 +2917,7 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 				&ui->forge, trans, mod->uid, index, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
-				strcpy(LV2_ATOM_BODY(atom), entered);
+				strncpy(LV2_ATOM_BODY(atom), entered, strsize-1);
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
@@ -3469,11 +3468,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		Evas_Object *child = NULL;
 		if(port->type == PORT_TYPE_CONTROL)
 		{
-			float step_val = port->integer
-				? 1.f / (port->max - port->min)
-				: 0.001; // use 1000 steps for continuous values
-			float val = port->dflt;
-
 			if(port->toggled)
 			{
 				Evas_Object *check = smart_toggle_add(evas_object_evas_get(lay));
@@ -3583,7 +3577,6 @@ _modlist_psets_content_get(void *data, Evas_Object *obj, const char *part)
 		return NULL;
 
 	mod_t *mod = data;
-	sp_ui_t *ui = mod->ui;
 
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
@@ -4717,7 +4710,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 							for(int t=0; t<PORT_TYPE_NUM; t++)
 							{
-								Elm_Object_Item *itm = elm_gengrid_item_append(ui->patchgrid, ui->patchitc,
+								elm_gengrid_item_append(ui->patchgrid, ui->patchitc,
 									&ui->matrix[t], NULL, NULL);
 							}
 						} // patchgrid

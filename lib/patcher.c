@@ -602,8 +602,6 @@ _patcher_smart_add(Evas_Object *o)
 static void
 _patcher_smart_del(Evas_Object *o)
 {
-	patcher_t *priv = evas_object_smart_data_get(o);
-
 	_patcher_smart_deinit(o);
 
 	_patcher_parent_sc->del(o);
@@ -612,7 +610,6 @@ _patcher_smart_del(Evas_Object *o)
 static void
 _patcher_smart_resize(Evas_Object *o, Evas_Coord w, Evas_Coord h)
 {
-	patcher_t *priv = evas_object_smart_data_get(o);
 	Evas_Coord ow, oh;
 
 	evas_object_geometry_get(o, NULL, NULL, &ow, &oh);

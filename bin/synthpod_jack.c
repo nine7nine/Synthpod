@@ -177,14 +177,14 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 		{
 			case 'i':
 			{
-				int32_t i;
+				int32_t i = 0;
 				ptr = osc_get_int32(ptr, &i);
 				osc_forge_int32(&handle->oforge, forge, i);
 				break;
 			}
 			case 'f':
 			{
-				float f;
+				float f = 0.f;
 				ptr = osc_get_float(ptr, &f);
 				osc_forge_float(&handle->oforge, forge, f);
 				break;
@@ -192,14 +192,14 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 			case 's':
 			case 'S':
 			{
-				const char *s;
+				const char *s = "";
 				ptr = osc_get_string(ptr, &s);
 				osc_forge_string(&handle->oforge, forge, s);
 				break;
 			}
 			case 'b':
 			{
-				osc_blob_t b;
+				osc_blob_t b = {.size = 0, .payload=NULL};
 				ptr = osc_get_blob(ptr, &b);
 				osc_forge_blob(&handle->oforge, forge, b.size, b.payload);
 				break;
@@ -207,21 +207,21 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 
 			case 'h':
 			{
-				int64_t h;
+				int64_t h = 0;
 				ptr = osc_get_int64(ptr, &h);
 				osc_forge_int64(&handle->oforge, forge, h);
 				break;
 			}
 			case 'd':
 			{
-				double d;
+				double d = 0.f;
 				ptr = osc_get_double(ptr, &d);
 				osc_forge_double(&handle->oforge, forge, d);
 				break;
 			}
 			case 't':
 			{
-				uint64_t t;
+				uint64_t t = 0;
 				ptr = osc_get_timetag(ptr, &t);
 				osc_forge_timestamp(&handle->oforge, forge, t);
 				break;
@@ -237,14 +237,14 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 
 			case 'c':
 			{
-				char c;
+				char c = '\0';
 				ptr = osc_get_char(ptr, &c);
 				osc_forge_char(&handle->oforge, forge, c);
 				break;
 			}
 			case 'm':
 			{
-				const uint8_t *m;
+				const uint8_t *m = NULL;
 				ptr = osc_get_midi(ptr, &m);
 				osc_forge_midi(&handle->oforge, forge, 3, m + 1); // skip port byte
 				break;
@@ -1135,7 +1135,6 @@ elm_main(int argc, char **argv)
 	bin_init(bin);
 
 	LV2_URID_Map *map = ext_urid_map_get(bin->ext_urid);
-	LV2_URID_Unmap *unmap = ext_urid_unmap_get(bin->ext_urid);
 
 	lv2_atom_forge_init(&handle.forge, map);
 	osc_forge_init(&handle.oforge, map);

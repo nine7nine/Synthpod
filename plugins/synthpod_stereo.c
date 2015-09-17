@@ -529,7 +529,6 @@ static void
 connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
 	plughandle_t *handle = instance;
-	sp_app_t *app = handle->app;
 
 	switch(port)
 	{

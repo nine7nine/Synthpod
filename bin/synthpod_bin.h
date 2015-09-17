@@ -400,7 +400,9 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 
 	// threads init
 	Eina_Bool status = eina_thread_create(&bin->worker_thread,
-		EINA_THREAD_URGENT, -1, _worker_thread, bin); //TODO
+		EINA_THREAD_URGENT, -1, _worker_thread, bin);
+	if(!status)
+		fprintf(stderr, "creation of worker thread failed\n");
 
 	// main loop
 	elm_run();

@@ -50,7 +50,6 @@ EVAS_SMART_SUBCLASS_NEW(SMART_TOGGLE_TYPE, _smart_toggle,
 static void
 _smart_toggle_smart_init(Evas_Object *o)
 {
-	Evas *e = evas_object_evas_get(o);
 	smart_toggle_t *priv = evas_object_smart_data_get(o);
 
 	priv->value = 0;
@@ -63,8 +62,6 @@ _smart_toggle_smart_init(Evas_Object *o)
 static void
 _smart_toggle_smart_deinit(Evas_Object *o)
 {
-	smart_toggle_t *priv = evas_object_smart_data_get(o);
-
 	//TODO
 }
 
@@ -149,8 +146,6 @@ _smart_toggle_smart_add(Evas_Object *o)
 static void
 _smart_toggle_smart_del(Evas_Object *o)
 {
-	smart_toggle_t *priv = evas_object_smart_data_get(o);
-
 	_smart_toggle_smart_deinit(o);
 	_smart_toggle_parent_sc->del(o);
 }
@@ -158,7 +153,6 @@ _smart_toggle_smart_del(Evas_Object *o)
 static void
 _smart_toggle_smart_resize(Evas_Object *o, Evas_Coord w, Evas_Coord h)
 {
-	smart_toggle_t *priv = evas_object_smart_data_get(o);
 	Evas_Coord ow, oh;
 
 	evas_object_geometry_get(o, NULL, NULL, &ow, &oh);

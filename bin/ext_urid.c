@@ -101,7 +101,6 @@ _urid_map(LV2_URID_Map_Handle handle, const char *uri)
 			else
 			{
 				eina_hash_del(uri_hash->uris, uri_dup, urid);
-				eina_lock_release(&uri_hash->mutex);
 			}
 		}
 

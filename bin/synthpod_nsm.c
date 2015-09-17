@@ -54,14 +54,14 @@ _reply(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf
 {
 	synthpod_nsm_t *nsm = data;	
 
-	const char *target;
+	const char *target = NULL;
 
 	const osc_data_t *ptr = buf;
 	ptr = osc_get_string(ptr, &target);
 
 	//fprintf(stdout, "synthpod_nsm reply: %s\n", target);
 
-	if(!strcmp(target, "/nsm/server/announce"))
+	if(target && !strcmp(target, "/nsm/server/announce"))
 	{
 		const char *message;
 		const char *manager;
@@ -69,7 +69,7 @@ _reply(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf
 
 		ptr = osc_get_string(ptr, &message);
 		ptr = osc_get_string(ptr, &manager);
-		ptr = osc_get_string(ptr, &capabilities);
+		osc_get_string(ptr, &capabilities);
 
 		//TODO, e.g. toggle SM LED
 	}
@@ -83,14 +83,14 @@ _error(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf
 {
 	synthpod_nsm_t *nsm = data;	
 
-	const char *msg;
-	int32_t code;
-	const char *err;
+	const char *msg = NULL;
+	int32_t code = 0;
+	const char *err = NULL;
 
 	const osc_data_t *ptr = buf;
 	ptr = osc_get_string(ptr, &msg);
 	ptr = osc_get_int32(ptr, &code);
-	ptr = osc_get_string(ptr, &err);
+	osc_get_string(ptr, &err);
 
 	fprintf(stderr, "synthpod_nsm error: #%i in %s: %s\n", code, msg, err);
 
@@ -103,17 +103,18 @@ _client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_
 {
 	synthpod_nsm_t *nsm = data;	
 	
-	const char *dir;
-	const char *name;
-	const char *id;
+	const char *dir = NULL;
+	const char *name = NULL;
+	const char *id = NULL;
 
 	const osc_data_t *ptr = buf;
 	ptr = osc_get_string(ptr, &path);
 	ptr = osc_get_string(ptr, &name);
-	ptr = osc_get_string(ptr, &id);
+	osc_get_string(ptr, &id);
 
 	// open/create app
-	int ret = nsm->driver->open(path, name, id, nsm->data); //TODO check
+	if(nsm->driver->open(path, name, id, nsm->data))
+		fprintf(stderr, "NSM load failed\n");
 
 	return 1;
 }
@@ -126,7 +127,8 @@ _client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	const osc_data_t *ptr;
 	
 	// save app
-	int ret = nsm->driver->save(nsm->data); //TODO check
+	if(nsm->driver->save(nsm->data))
+		fprintf(stderr, "NSM save failed\n");
 
 	return 1;
 }
@@ -138,7 +140,11 @@ _client_show_optional_gui(osc_time_t time, const char *path, const char *fmt, co
 	synthpod_nsm_t *nsm = data;	
 
 	// show gui
-	int ret = nsm->driver->show(nsm->data); //TODO check
+	if(nsm->driver->show(nsm->data))
+	{
+		fprintf(stderr, "NSM show GUI failed\n");
+		return 1;
+	}
 
 	// reply
 	const osc_data_t *ptr;
@@ -162,7 +168,11 @@ _client_hide_optional_gui(osc_time_t time, const char *path, const char *fmt, co
 	synthpod_nsm_t *nsm = data;	
 
 	// hide gui
-	int ret = nsm->driver->hide(nsm->data); //TODO check
+	if(nsm->driver->hide(nsm->data))
+	{
+		fprintf(stderr, "NSM hide GUI failed\n");
+		return 1;
+	}
 
 	// reply
 	const osc_data_t *ptr;

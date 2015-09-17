@@ -62,7 +62,6 @@ EVAS_SMART_SUBCLASS_NEW(SMART_SLIDER_TYPE, _smart_slider,
 static void
 _smart_slider_smart_init(Evas_Object *o)
 {
-	Evas *e = evas_object_evas_get(o);
 	smart_slider_t *priv = evas_object_smart_data_get(o);
 	Evas_Object *elmnt;
 
@@ -87,8 +86,6 @@ _smart_slider_smart_init(Evas_Object *o)
 static void
 _smart_slider_smart_deinit(Evas_Object *o)
 {
-	smart_slider_t *priv = evas_object_smart_data_get(o);
-
 	//TODO
 }
 
@@ -257,8 +254,6 @@ _smart_slider_smart_add(Evas_Object *o)
 static void
 _smart_slider_smart_del(Evas_Object *o)
 {
-	smart_slider_t *priv = evas_object_smart_data_get(o);
-
 	_smart_slider_smart_deinit(o);
 	_smart_slider_parent_sc->del(o);
 }
@@ -266,7 +261,6 @@ _smart_slider_smart_del(Evas_Object *o)
 static void
 _smart_slider_smart_resize(Evas_Object *o, Evas_Coord w, Evas_Coord h)
 {
-	smart_slider_t *priv = evas_object_smart_data_get(o);
 	Evas_Coord ow, oh;
 
 	evas_object_geometry_get(o, NULL, NULL, &ow, &oh);
