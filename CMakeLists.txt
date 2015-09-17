@@ -26,8 +26,8 @@ set(SYNTHPOD_MICRO_VERSION 1)
 set(SYNTHPOD_VERSION "${SYNTHPOD_MAJOR_VERSION}.${SYNTHPOD_MINOR_VERSION}.${SYNTHPOD_MICRO_VERSION}")
 add_definitions("-DSYNTHPOD_VERSION=\"${SYNTHPOD_VERSION}\"")
 
-set(CMAKE_C_FLAGS "-std=gnu11 -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
-set(CMAKE_CXX_FLAGS "-std=gnu++11 -ffast-math -fvisibility=hidden ${CMAKE_CXX_FLAGS}")
+set(CMAKE_C_FLAGS "-std=gnu11 -Wall -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "-std=gnu++11 -Wall -ffast-math -fvisibility=hidden ${CMAKE_CXX_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
 
 # options

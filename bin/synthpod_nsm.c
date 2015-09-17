@@ -52,8 +52,6 @@ static int
 _reply(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
 	size_t size, void *data)
 {
-	synthpod_nsm_t *nsm = data;	
-
 	const char *target = NULL;
 
 	const osc_data_t *ptr = buf;
@@ -81,8 +79,6 @@ static int
 _error(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
 	size_t size, void *data)
 {
-	synthpod_nsm_t *nsm = data;	
-
 	const char *msg = NULL;
 	int32_t code = 0;
 	const char *err = NULL;
@@ -108,12 +104,12 @@ _client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	const char *id = NULL;
 
 	const osc_data_t *ptr = buf;
-	ptr = osc_get_string(ptr, &path);
+	ptr = osc_get_string(ptr, &dir);
 	ptr = osc_get_string(ptr, &name);
 	osc_get_string(ptr, &id);
 
 	// open/create app
-	if(nsm->driver->open(path, name, id, nsm->data))
+	if(nsm->driver->open(dir, name, id, nsm->data))
 		fprintf(stderr, "NSM load failed\n");
 
 	return 1;
@@ -124,7 +120,6 @@ _client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;	
-	const osc_data_t *ptr;
 	
 	// save app
 	if(nsm->driver->save(nsm->data))
@@ -241,7 +236,6 @@ static Eina_Bool
 _con_add(void *data, int type, void *info)
 {
 	synthpod_nsm_t *nsm = data;
-	Ecore_Con_Event_Client_Add *ev = info;
 
 	assert(type == ECORE_CON_EVENT_SERVER_ADD);
 
@@ -256,9 +250,6 @@ _con_add(void *data, int type, void *info)
 static Eina_Bool
 _con_del(void *data, int type, void *info)
 {
-	synthpod_nsm_t *nsm = data;
-	Ecore_Con_Event_Client_Del *ev = info;
-
 	assert(type == ECORE_CON_EVENT_SERVER_DEL);
 	
 	//printf("_client_del\n");

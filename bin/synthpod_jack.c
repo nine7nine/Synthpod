@@ -854,8 +854,6 @@ _system_port_del(void *data, void *sys_port)
 static void
 _shutdown_async(void *data)
 {
-	prog_t *handle = data;
-
 	elm_exit();
 }
 
@@ -871,8 +869,6 @@ _shutdown(void *data)
 static void
 _xrun_async(void *data)
 {
-	prog_t *handle = data;
-
 	fprintf(stderr, "JACK XRun\n");
 }
 

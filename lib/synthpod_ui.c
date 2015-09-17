@@ -323,38 +323,6 @@ _sp_ui_to_app_advance(sp_ui_t *ui, size_t size)
 		ui->driver->to_app_advance(size, ui->data);
 }
 
-static inline int
-_match_port_protocol(port_t *port, uint32_t protocol, uint32_t size)
-{
-	mod_t *mod = port->mod;
-	sp_ui_t *ui = mod->ui;
-
-	if(  (protocol == ui->regs.port.float_protocol.urid)
-		&& (port->type == PORT_TYPE_CONTROL)
-		&& (size == sizeof(float)) )
-	{
-		return 1;
-	}
-	else if ( (protocol == ui->regs.port.peak_protocol.urid)
-		&& ((port->type == PORT_TYPE_AUDIO) || (port->type == PORT_TYPE_CV)) )
-	{
-		return 1;
-	}
-	else if( (protocol == ui->regs.port.atom_transfer.urid)
-				&& (port->type == PORT_TYPE_ATOM) )
-	{
-		return 1;
-	}
-	else if( (protocol == ui->regs.port.event_transfer.urid)
-				&& (port->type == PORT_TYPE_ATOM)
-				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
-	{
-		return 1;
-	}
-
-	return 0;
-}
-
 static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -898,7 +866,6 @@ _show_ui_hide(mod_t *mod)
 	}
 
 	// hide UI
-	int res = 0;
 	if(mod->show.show_iface && mod->show.show_iface->hide && mod->show.handle)
 	{
 		if(mod->show.show_iface->hide(mod->show.handle))
@@ -3345,7 +3312,6 @@ _check_changed(void *data, Evas_Object *obj, void *event)
 static void
 _spinner_changed(void *data, Evas_Object *obj, void *event)
 {
-	Elm_Object_Item *itm = event;
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	sp_ui_t *ui = mod->ui;
@@ -3615,8 +3581,6 @@ _modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
 static void
 _pset_markup(void *data, Evas_Object *obj, char **txt)
 {
-	mod_t *mod = data;
-
 	// intercept enter
 	if(!strcmp(*txt, "<tab/>") || !strcmp(*txt, " "))
 	{
@@ -4043,10 +4007,6 @@ _theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 static void
 _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	sp_ui_t *ui = data;
-
-	Evas_Event_Key_Down *ev = event_info;
-
 	//printf("_theme_key_down: %s\n", ev->key);
 	//FIXME new/open/save/exit callbacks
 }

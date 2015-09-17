@@ -63,7 +63,6 @@ static void
 _smart_slider_smart_init(Evas_Object *o)
 {
 	smart_slider_t *priv = evas_object_smart_data_get(o);
-	Evas_Object *elmnt;
 
 	priv->min = 0.f;
 	priv->max = 1.f;
@@ -126,16 +125,12 @@ _smart_slider_value_flush(Evas_Object *o)
 static void
 _mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	smart_slider_t *priv = data;
-
 	evas_object_smart_callback_call(obj, SMART_SLIDER_MOUSE_IN, NULL);
 }
 
 static void
 _mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	smart_slider_t *priv = data;
-
 	evas_object_smart_callback_call(obj, SMART_SLIDER_MOUSE_OUT, NULL);
 }
 
@@ -143,7 +138,6 @@ static void
 _mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_slider_t *priv = data;
-	Evas_Event_Mouse_Down *ev = event_info;
 
 	if(priv->disabled)
 		return;
@@ -155,7 +149,6 @@ static void
 _mouse_up(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_slider_t *priv = data;
-	Evas_Event_Mouse_Up *ev = event_info;
 
 	if(priv->disabled)
 		return;

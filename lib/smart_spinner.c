@@ -120,16 +120,12 @@ _smart_spinner_value_flush(Evas_Object *o)
 static void
 _mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	smart_spinner_t *priv = data;
-
 	evas_object_smart_callback_call(obj, SMART_SPINNER_MOUSE_IN, NULL);
 }
 
 static void
 _mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	smart_spinner_t *priv = data;
-
 	evas_object_smart_callback_call(obj, SMART_SPINNER_MOUSE_OUT, NULL);
 }
 
@@ -137,7 +133,6 @@ static void
 _mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_spinner_t *priv = data;
-	Evas_Event_Mouse_Down *ev = event_info;
 
 	if(priv->disabled)
 		return;
@@ -149,7 +144,6 @@ static void
 _mouse_up(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_spinner_t *priv = data;
-	Evas_Event_Mouse_Up *ev = event_info;
 
 	if(priv->disabled)
 		return;

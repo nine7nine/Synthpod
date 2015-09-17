@@ -1167,7 +1167,6 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	sp_regs_init(&app->regs, app->world, app->driver->map);
 
 	const char *uri_str;
-	size_t size;
 	mod_t *mod;
 
 	app->uid = 1;

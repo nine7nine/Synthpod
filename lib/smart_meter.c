@@ -40,7 +40,6 @@ static void
 _smart_meter_smart_init(Evas_Object *o)
 {
 	smart_meter_t *priv = evas_object_smart_data_get(o);
-	Evas_Object *elmnt;
 
 	priv->value = 0.f;
 

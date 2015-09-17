@@ -103,26 +103,8 @@ query(LV2_Handle instance, uint32_t port)
 }
 
 static void
-activate(LV2_Handle instance)
-{
-	//plughandle_t *handle = instance;
-	
-	// nothing
-}
-
-static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
-	plughandle_t *handle = instance;
-
-	// nothing
-}
-
-static void
-deactivate(LV2_Handle instance)
-{
-	plughandle_t *handle = instance;
-
 	// nothing
 }
 
@@ -151,9 +133,9 @@ const LV2_Descriptor synthpod_source = {
 	.URI						= SYNTHPOD_SOURCE_URI,
 	.instantiate		= instantiate,
 	.connect_port		= connect_port,
-	.activate				= activate,
+	.activate				= NULL,
 	.run						= run,
-	.deactivate			= deactivate,
+	.deactivate			= NULL,
 	.cleanup				= cleanup,
 	.extension_data	= extension_data
 };

@@ -77,16 +77,12 @@ _smart_toggle_value_flush(Evas_Object *o)
 static void
 _mouse_in(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	smart_toggle_t *priv = data;
-
 	evas_object_smart_callback_call(obj, SMART_TOGGLE_MOUSE_IN, NULL);
 }
 
 static void
 _mouse_out(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
-	smart_toggle_t *priv = data;
-
 	evas_object_smart_callback_call(obj, SMART_TOGGLE_MOUSE_OUT, NULL);
 }
 
@@ -94,7 +90,6 @@ static void
 _mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_toggle_t *priv = data;
-	Evas_Event_Mouse_Down *ev = event_info;
 
 	if(priv->disabled)
 		return;
@@ -110,7 +105,6 @@ static void
 _mouse_wheel(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	smart_toggle_t *priv = data;
-	Evas_Event_Mouse_Wheel *ev = event_info;
 
 	if(priv->disabled)
 		return;

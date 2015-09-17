@@ -150,7 +150,6 @@ _rt_thread(void *data, Eina_Thread thread)
 	}
 		
 	const uint32_t nsamples = handle->frsize;
-	const size_t sample_buf_size = sizeof(float) * nsamples;
 	int nplay = pcmi_nplay(pcmi);
 	int ncapt = pcmi_ncapt(pcmi);
 	int play_num;
@@ -285,7 +284,7 @@ _rt_thread(void *data, Eina_Thread thread)
 							}
 							*/
 
-							lv2_atom_forge_frame_time(forge, 0);
+							lv2_atom_forge_frame_time(forge, frames);
 							lv2_atom_forge_atom(forge, len, handle->midi_MidiEvent);
 							lv2_atom_forge_raw(forge, handle->m, len);
 							lv2_atom_forge_pad(forge, len);
@@ -598,6 +597,8 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// alsa activate
 	Eina_Bool status = eina_thread_create(&handle->thread,
 		EINA_THREAD_URGENT, -1, _rt_thread, handle); //TODO
+	if(!status)
+		fprintf(stderr, "creation of rt thread failed\n");
 
 	sp_ui_bundle_load(bin->ui, bin->path, 1);
 
@@ -801,7 +802,6 @@ elm_main(int argc, char **argv)
 	bin_init(bin);
 	
 	LV2_URID_Map *map = ext_urid_map_get(bin->ext_urid);
-	LV2_URID_Unmap *unmap = ext_urid_unmap_get(bin->ext_urid);
 	
 	lv2_atom_forge_init(&handle.forge, map);
 	
