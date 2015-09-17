@@ -485,7 +485,7 @@ _system_port_del(void *data, void *sys_port)
 
 	chan_t *chan = sys_port;
 
-	if(!chan || !handle->seq)
+	if(!chan)
 		return;
 
 	switch(chan->type)
@@ -499,7 +499,8 @@ _system_port_del(void *data, void *sys_port)
 		case CHAN_TYPE_MIDI:
 		{
 			snd_midi_event_free(chan->midi.trans);
-			snd_seq_delete_simple_port(handle->seq, chan->midi.port);
+			if(handle->seq)
+				snd_seq_delete_simple_port(handle->seq, chan->midi.port);
 
 			break;
 		}

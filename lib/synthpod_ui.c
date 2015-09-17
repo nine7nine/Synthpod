@@ -458,7 +458,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		}
 	}
 	else
-		; //TODO atom
+		fprintf(stderr, "unknown protocol\n");
 }
 
 static inline void
@@ -1801,6 +1801,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	if(mod->ports)
 		free(mod->ports);
 
+	if(mod->presets)
+		lilv_nodes_free(mod->presets);
+
 	if(mod->std.itm == ui->sink_itm)
 		ui->sink_itm = 0;
 
@@ -2765,8 +2768,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 				elm_layout_content_set(lay, "elm.swallow.end", icon);
 			} // icon
 		}
-		else
-			; // system mods cannot be removed
+		// system mods cannot be removed
 
 		if(mod->show.ui || mod->kx.ui || mod->eo.ui || mod->x11.ui) //TODO also check for descriptor
 		{
@@ -3424,11 +3426,12 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			}
 		} // dir
 
-		const LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
+		LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 		if(name_node)
 		{
 			const char *type_str = lilv_node_as_string(name_node);
 			elm_layout_text_set(lay, "elm.text", type_str);
+			lilv_node_free(name_node);
 		}
 
 		Evas_Object *child = NULL;

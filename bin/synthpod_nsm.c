@@ -151,7 +151,7 @@ _client_show_optional_gui(osc_time_t time, const char *path, const char *fmt, co
 	if(written)
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
-		; //TODO
+		fprintf(stderr, "OSC sending failed\n");
 
 	return 1;
 }
@@ -179,7 +179,7 @@ _client_hide_optional_gui(osc_time_t time, const char *path, const char *fmt, co
 	if(written)
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
-		; //TODO
+		fprintf(stderr, "OSC sending failed\n");
 
 	return 1;
 }
@@ -217,7 +217,7 @@ _announce(synthpod_nsm_t *nsm)
 	if(written)
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
-		; //TODO
+		fprintf(stderr, "OSC sending failed\n");
 }
 
 static const osc_method_t methods [] = {
@@ -431,7 +431,7 @@ synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
 	if(written)
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
-		; //TODO
+		fprintf(stderr, "OSC sending failed\n");
 }
 
 void
@@ -458,7 +458,7 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 	if(written)
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
-		; //TODO
+		fprintf(stderr, "OSC sending failed\n");
 }
 
 int

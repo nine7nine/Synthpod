@@ -422,7 +422,7 @@ _process(jack_nframes_t nsamples, void *data)
 
 	// get transport position
 	jack_position_t pos;
-	int rolling = jack_transport_query(handle->client, &pos) == JackTransportRolling;
+	jack_transport_state_t rolling = jack_transport_query(handle->client, &pos) == JackTransportRolling;
 	int trans_changed = (rolling != handle->trans.rolling)
 		|| (pos.frame != handle->trans.frame)
 		|| (pos.beats_per_bar != handle->trans.beats_per_bar)

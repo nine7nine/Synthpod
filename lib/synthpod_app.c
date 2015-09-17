@@ -592,7 +592,7 @@ _mod_slice_pool(mod_t *mod, port_type_t type)
 
 // non-rt worker-thread
 static inline mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
+_sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 {
 	LilvNode *uri_node = lilv_new_uri(app->world, uri);
 	if(!uri_node)
@@ -811,12 +811,17 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 				//FIXME check lilv returns
 				char *short_name = NULL;
 				char *pretty_name = NULL;
+				const LilvNode *port_symbol_node = lilv_port_get_symbol(plug, port);
+				LilvNode *port_name_node = lilv_port_get_name(plug, port);
+
 				asprintf(&short_name, "plugin_%u_%s",
-					mod->uid, lilv_node_as_string(lilv_port_get_symbol(plug, port)));
+					mod->uid, lilv_node_as_string(port_symbol_node));
 				asprintf(&pretty_name, "Plugin %u - %s",
-					mod->uid, lilv_node_as_string(lilv_port_get_name(plug, port)));
+					mod->uid, lilv_node_as_string(port_name_node));
 				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
 					short_name, pretty_name, tar->direction == PORT_DIRECTION_OUTPUT);
+
+				lilv_node_free(port_name_node);
 				free(short_name);
 				free(pretty_name);
 			}
@@ -885,7 +890,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 			tar->selected = control_port == port; // only select control ports by default
 		}
 		else
-			; //TODO
+			fprintf(stderr, "unknown port type\n");
 		
 		// get minimum port size if specified
 		LilvNode *minsize = lilv_port_get(plug, port, app->regs.port.minimum_size.node);
@@ -1180,7 +1185,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		app->num_mods += 1;
 	}
 	else
-		; //TODO report
+		fprintf(stderr, "failed to create system source\n");
 
 	// inject sink mod
 	uri_str = SYNTHPOD_PREFIX"sink";
@@ -1191,7 +1196,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		app->num_mods += 1;
 	}
 	else
-		; //TODO report
+		fprintf(stderr, "failed to create system sink\n");
 
 	app->fps.bound = driver->sample_rate / 24; //TODO make this configurable
 	app->fps.counter = 0;
@@ -2740,6 +2745,11 @@ sp_app_free(sp_app_t *app)
 	if(!app->embedded)
 		lilv_world_free(app->world);
 
+	if(app->bundle_path)
+		free(app->bundle_path);
+	if(app->bundle_filename)
+		free(app->bundle_filename);
+
 	eina_semaphore_free(&app->bypass_sem);
 
 	free(app);
@@ -3158,7 +3168,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
 		}
 		else
-			; //TODO
+			fprintf(stderr, "failed to load state from file\n");
 
 		lilv_state_free(state);
 		free(path);
