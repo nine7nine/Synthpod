@@ -116,7 +116,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_set_buffer(forge, (uint8_t *)handle->atom_out, capacity);
 	lv2_atom_forge_sequence_head(forge, &frame, 0);
 
-	for(int f=0; f<nsamples; f++)
+	for(uint32_t f=0; f<nsamples; f++)
 	{
 		for(int i=0; i<MAX_INPUTS; i++)
 		{

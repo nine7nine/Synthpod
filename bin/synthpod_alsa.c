@@ -162,7 +162,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	pcmi_pcm_start(handle->pcmi);
 	while(!handle->kill)
 	{
-		int na = pcmi_pcm_wait(pcmi);
+		uint32_t na = pcmi_pcm_wait(pcmi);
 
 		// current time is next time from last cycle
 		_ntp_clone(&handle->cur_ntp, &handle->nxt_ntp);
@@ -673,6 +673,9 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 
 	return timestamp;
 }
+
+EAPI_MAIN int
+elm_main(int argc, char **argv);
 	
 EAPI_MAIN int
 elm_main(int argc, char **argv)

@@ -106,7 +106,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			{
 				float min = 1.f;
 
-				for(int f=0; f<nsamples; f++)
+				for(uint32_t f=0; f<nsamples; f++)
 				{
 					const float *val = &handle->cv_in[i][f];
 					if(*val < min)
@@ -121,7 +121,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			{
 				float sum = 0.f;
 
-				for(int f=0; f<nsamples; f++)
+				for(uint32_t f=0; f<nsamples; f++)
 				{
 					const float *val = &handle->cv_in[i][f];
 					sum += *val;
@@ -135,7 +135,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			{
 				float max = 0.f;
 
-				for(int f=0; f<nsamples; f++)
+				for(uint32_t f=0; f<nsamples; f++)
 				{
 					const float *val = &handle->cv_in[i][f];
 					if(*val > max)

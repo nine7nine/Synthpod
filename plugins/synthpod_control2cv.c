@@ -94,7 +94,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	for(int i=0; i<MAX_PORTS; i++)
 	{
-		for(int f=0; f<nsamples; f++)
+		for(uint32_t f=0; f<nsamples; f++)
 			handle->cv_out[i][f] = *handle->input[i];
 	}
 }

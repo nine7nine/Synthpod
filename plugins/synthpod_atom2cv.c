@@ -111,7 +111,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	int offset = floor(*handle->offset);
 	int bound = offset + MAX_OUTPUTS;
 
-	int f [MAX_OUTPUTS];
+	uint32_t f [MAX_OUTPUTS];
 	for(int i=0; i<MAX_OUTPUTS; i++)
 		f[i] = 0;
 

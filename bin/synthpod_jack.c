@@ -1051,6 +1051,9 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 #endif // JACK_HAS_CYCLE_TIMES
 
 EAPI_MAIN int
+elm_main(int argc, char **argv);
+
+EAPI_MAIN int
 elm_main(int argc, char **argv)
 {
 	static prog_t handle;

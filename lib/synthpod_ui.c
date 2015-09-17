@@ -86,7 +86,7 @@ struct _mod_t {
 	LV2_URID subject;
 
 	// ports
-	uint32_t num_ports;
+	unsigned num_ports;
 	port_t *ports;
 
 	// properties
@@ -565,7 +565,7 @@ _ui_mod_selected_request(mod_t *mod)
 		_sp_ui_to_app_advance(ui, size);
 	}
 
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 
@@ -875,7 +875,7 @@ _show_ui_hide(mod_t *mod)
 	}
 
 	// unsubscribe all ports
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 
@@ -928,7 +928,7 @@ _show_ui_show(mod_t *mod)
 		return;
 
 	// subscribe to ports
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 		if(port->type == PORT_TYPE_CONTROL)
@@ -990,7 +990,7 @@ _kx_ui_cleanup(mod_t *mod)
 	}
 
 	// unsubscribe all ports
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 
@@ -1041,7 +1041,7 @@ _kx_ui_show(mod_t *mod)
 		return;
 
 	// subscribe to ports
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 		if(port->type == PORT_TYPE_CONTROL)
@@ -1130,7 +1130,7 @@ _x11_ui_hide(mod_t *mod)
 	}
 
 	// unsubscribe all ports
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 
@@ -1187,7 +1187,7 @@ _x11_ui_show(mod_t *mod)
 		return;
 
 	// subscribe to ports
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 		if(port->type == PORT_TYPE_CONTROL)
@@ -1509,7 +1509,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
 	if(mod->ports)
 	{
-		for(uint32_t i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *tar = &mod->ports[i];
 			const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
@@ -1782,10 +1782,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	return mod;
 }
 
-void
+static void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
-	for(int p=0; p<mod->num_ports; p++)
+	for(unsigned p=0; p<mod->num_ports; p++)
 	{
 		port_t *port = &mod->ports[p];
 
@@ -2111,7 +2111,7 @@ _patches_update(sp_ui_t *ui)
 		if(!mod || !mod->selected)
 			continue; // ignore unselected mods
 
-		for(int i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
 			if(!port->selected)
@@ -2148,7 +2148,7 @@ _patches_update(sp_ui_t *ui)
 		if(!mod || !mod->selected)
 			continue; // ignore unselected mods
 
-		for(int i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
 			if(!port->selected)
@@ -2200,7 +2200,7 @@ _patches_update(sp_ui_t *ui)
 	}
 }
 
-Eina_Bool
+static Eina_Bool
 _groups_foreach(const Eina_Hash *hash, const void *key, void *data, void *fdata)
 {
 	Elm_Object_Item *parent = data;
@@ -2226,7 +2226,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		mod->groups = eina_hash_string_superfast_new(NULL); //TODO check
 
 		// port entries
-		for(int i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
 
@@ -2540,7 +2540,7 @@ _eo_widget_create(Evas_Object *parent, mod_t *mod)
 		bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
 
 	// subscribe automatically to all non-atom ports by default
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 
@@ -2824,7 +2824,7 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 	size_t strsize = strlen(path) + 1 + 7; // strlen("file://") == 7
 	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
 
-	for(uint32_t index=0; index<mod->num_ports; index++)
+	for(unsigned index=0; index<mod->num_ports; index++)
 	{
 		port_t *port = &mod->ports[index];
 
@@ -2865,7 +2865,7 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 	size_t strsize = strlen(entered) + 1;
 	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
 
-	for(uint32_t index=0; index<mod->num_ports; index++)
+	for(unsigned index=0; index<mod->num_ports; index++)
 	{
 		port_t *port = &mod->ports[index];
 
@@ -2914,7 +2914,7 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 
 	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
 
-	for(uint32_t index=0; index<mod->num_ports; index++)
+	for(unsigned index=0; index<mod->num_ports; index++)
 	{
 		port_t *port = &mod->ports[index];
 
@@ -2962,7 +2962,7 @@ _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 	size_t body_size = sizeof(int32_t);
 	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
 
-	for(uint32_t index=0; index<mod->num_ports; index++)
+	for(unsigned index=0; index<mod->num_ports; index++)
 	{
 		port_t *port = &mod->ports[index];
 
@@ -3146,7 +3146,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 
 		// send patch:Get
 		size_t len = sizeof(transfer_patch_get_t);
-		for(uint32_t index=0; index<mod->num_ports; index++)
+		for(unsigned index=0; index<mod->num_ports; index++)
 		{
 			port_t *port = &mod->ports[index];
 
@@ -3808,7 +3808,7 @@ _modgrid_del(void *data, Evas_Object *obj)
 		return;
 
 	// unsubscribe from all ports
-	for(int i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 

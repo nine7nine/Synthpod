@@ -141,7 +141,7 @@ struct _mod_t {
 	char *uri_str;
 
 	// ports
-	uint32_t num_ports;
+	unsigned num_ports;
 	port_t *ports;
 
 	pool_t pools [PORT_TYPE_NUM];
@@ -219,7 +219,7 @@ struct _sp_app_t {
 	reg_t regs;
 	LV2_Atom_Forge forge;
 
-	uint32_t num_mods;
+	unsigned num_mods;
 	mod_t *mods [MAX_MODS];
 
 	sp_app_system_source_t system_sources [128]; //FIXME, how many?
@@ -236,9 +236,9 @@ struct _sp_app_t {
 	char *bundle_filename;
 
 	struct {
-		uint32_t period_cnt;
-		uint32_t bound;
-		uint32_t counter;
+		unsigned period_cnt;
+		unsigned bound;
+		unsigned counter;
 	} fps;
 
 	int ramp_samples;
@@ -358,14 +358,14 @@ _sp_app_update_system_sources(sp_app_t *app)
 {
 	int num_system_sources = 0;
 
-	for(uint32_t m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
 		if(!mod->sys.iface) // has system ports?
 			continue; // skip
 
-		for(uint32_t p=0; p<mod->num_ports; p++)
+		for(unsigned p=0; p<mod->num_ports; p++)
 		{
 			port_t *port = &mod->ports[p];
 
@@ -394,14 +394,14 @@ _sp_app_update_system_sinks(sp_app_t *app)
 {
 	int num_system_sinks = 0;
 
-	for(uint32_t m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
 		if(!mod->sys.iface) // has system ports?
 			continue;
 
-		for(uint32_t p=0; p<mod->num_ports; p++)
+		for(unsigned p=0; p<mod->num_ports; p++)
 		{
 			port_t *port = &mod->ports[p];
 
@@ -567,7 +567,7 @@ _mod_slice_pool(mod_t *mod, port_type_t type)
 
 	for(port_direction_t dir=0; dir<PORT_DIRECTION_NUM; dir++)
 	{
-		for(uint32_t i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *tar = &mod->ports[i];
 
@@ -786,7 +786,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 		mod->pools[pool].size = 0;
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
-	for(uint32_t i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *tar = &mod->ports[i];
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
@@ -927,7 +927,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, uint32_t uid)
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
 		_mod_slice_pool(mod, pool);
 
-	for(uint32_t i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *tar = &mod->ports[i];
 
@@ -960,7 +960,7 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 		_mod_free_pool(&mod->pools[pool]);
 
 	// unregister system ports
-	for(uint32_t i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *port = &mod->ports[i];
 
@@ -983,7 +983,7 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 static inline mod_t *
 _sp_app_mod_get(sp_app_t *app, u_id_t uid)
 {
-	for(int i=0; i<app->num_mods; i++)
+	for(unsigned i=0; i<app->num_mods; i++)
 	{
 		mod_t *mod = app->mods[i];
 		if(mod->uid == uid)
@@ -1276,7 +1276,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	else if(protocol == app->regs.synthpod.module_list.urid)
 	{
 		// iterate over existing modules and send module_add_t
-		for(int m=0; m<app->num_mods; m++)
+		for(unsigned m=0; m<app->num_mods; m++)
 		{
 			mod_t *mod = app->mods[m];
 
@@ -1324,7 +1324,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		// eject module from graph
 		app->num_mods -= 1;
-		for(int m=0, offset=0; m<app->num_mods; m++)
+		for(unsigned m=0, offset=0; m<app->num_mods; m++)
 		{
 			if(app->mods[m] == mod)
 				offset += 1;
@@ -1332,7 +1332,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		}
 
 		// disconnect all ports
-		for(int p1=0; p1<mod->num_ports; p1++)
+		for(unsigned p1=0; p1<mod->num_ports; p1++)
 		{
 			port_t *port = &mod->ports[p1];
 
@@ -1341,8 +1341,8 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 				_sp_app_port_disconnect(app, port->sources[s].port, port);
 
 			// disconnect sinks
-			for(int m=0; m<app->num_mods; m++)
-				for(int p2=0; p2<app->mods[m]->num_ports; p2++)
+			for(unsigned m=0; m<app->num_mods; m++)
+				for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
 					_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]); //FIXME ramp
 		}
 
@@ -1377,12 +1377,12 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(!mod || !prev)
 			return;
 
-		int mod_idx;
+		uint32_t mod_idx;
 		for(mod_idx=0; mod_idx<app->num_mods; mod_idx++)
 			if(app->mods[mod_idx] == mod)
 				break;
 
-		int prev_idx;
+		uint32_t prev_idx;
 		for(prev_idx=0; prev_idx<app->num_mods; prev_idx++)
 			if(app->mods[prev_idx] == prev)
 				break;
@@ -1390,7 +1390,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(mod_idx < prev_idx)
 		{
 			// forward loop
-			for(int i=mod_idx, j=i; i<app->num_mods; i++)
+			for(unsigned i=mod_idx, j=i; i<app->num_mods; i++)
 			{
 				if(app->mods[i] == mod)
 					continue;
@@ -1536,7 +1536,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		}
 		else
 		{
-			for(int m=0; m<app->num_mods; m++)
+			for(unsigned m=0; m<app->num_mods; m++)
 			{
 				if(app->mods[m] == src_port->mod)
 				{
@@ -1849,7 +1849,7 @@ _sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
 }
 
 // non-rt
-const LilvNode *
+static const LilvNode *
 _mod_preset_get(mod_t *mod, const char *label)
 {
 	sp_app_t *app = mod->app;
@@ -2297,7 +2297,7 @@ void
 sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 {
 	// iterate over all modules
-	for(int m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
@@ -2308,7 +2308,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			mod->worker.iface->end_run(mod->handle);
 	
 		// clear atom sequence input buffers
-		for(int p=0; p<mod->num_ports; p++)
+		for(unsigned p=0; p<mod->num_ports; p++)
 		{
 			port_t *port = &mod->ports[p];
 
@@ -2369,7 +2369,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	}
 
 	// iterate over all modules
-	for(int m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
@@ -2396,7 +2396,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		}
 	
 		// multiplex multiple sources to single sink where needed
-		for(int p=0; p<mod->num_ports; p++)
+		for(unsigned p=0; p<mod->num_ports; p++)
 		{
 			port_t *port = &mod->ports[p];
 
@@ -2428,7 +2428,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 						if(source->ramp.state != RAMP_STATE_NONE)
 						{
 							float *src = PORT_BUF_ALIGNED(source->port);
-							for(int j=0; j<nsamples; j++)
+							for(uint32_t j=0; j<nsamples; j++)
 								val[j] += src[j] * source->ramp.value;
 
 							_update_ramp(app, source, port, nsamples);
@@ -2436,7 +2436,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 						else // RAMP_STATE_NONE
 						{
 							float *src = PORT_BUF_ALIGNED(source->port);
-							for(int j=0; j<nsamples; j++)
+							for(uint32_t j=0; j<nsamples; j++)
 								val[j] += src[j];
 						}
 					}
@@ -2540,7 +2540,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					if(source->ramp.state != RAMP_STATE_NONE)
 					{
 						float *src = PORT_BUF_ALIGNED(source->port);
-						for(int j=0; j<nsamples; j++)
+						for(uint32_t j=0; j<nsamples; j++)
 							src[j] *= source->ramp.value;
 
 						_update_ramp(app, source, port, nsamples);
@@ -2550,7 +2550,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		}
 
 		// clear atom sequence output buffers
-		for(int i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
 
@@ -2584,7 +2584,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		}
 
 		// handle mod ui post
-		for(int i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
 
@@ -2631,7 +2631,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 					// find peak value in current period
 					float peak = 0.f;
-					for(int j=0; j<nsamples; j++)
+					for(uint32_t j=0; j<nsamples; j++)
 					{
 						float val = fabs(vec[j]);
 						if(val > peak)
@@ -2732,7 +2732,7 @@ sp_app_free(sp_app_t *app)
 		return;
 
 	// free mods
-	for(int m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 		_sp_app_mod_del(app, app->mods[m]);
 
 	sp_regs_deinit(&app->regs);
@@ -2871,11 +2871,11 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	}
 
 	// cleanup state module trees
-	for(uint32_t uid=0; uid<app->uid; uid++)
+	for(int uid=0; uid<app->uid; uid++)
 	{
 		int exists = 0;
 
-		for(int m=0; m<app->num_mods; m++)
+		for(unsigned m=0; m<app->num_mods; m++)
 		{
 			mod_t *mod = app->mods[m];
 
@@ -2917,7 +2917,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	cJSON *arr_json = cJSON_CreateArray();
 	cJSON_AddItemToObject(root_json, "items", arr_json);
 	
-	for(int m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
@@ -2944,7 +2944,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		cJSON *mod_selected_json = cJSON_CreateBool(mod->selected);
 		cJSON *mod_ports_json = cJSON_CreateArray();
 
-		for(int i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
 
@@ -3190,7 +3190,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 			const char *port_symbol_str = port_symbol_json->valuestring;
 
-			for(int i=0; i<mod->num_ports; i++)
+			for(unsigned i=0; i<mod->num_ports; i++)
 			{
 				port_t *port = &mod->ports[i];
 				const LilvNode *port_symbol_node = lilv_port_get_symbol(mod->plug, port->tar);
@@ -3226,7 +3226,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 					if(!source)
 						continue;
 				
-					for(int j=0; j<source->num_ports; j++)
+					for(unsigned j=0; j<source->num_ports; j++)
 					{
 						port_t *tar = &source->ports[j];
 						const LilvNode *source_symbol_node = lilv_port_get_symbol(source->plug, tar->tar);
@@ -3281,7 +3281,7 @@ sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options)
 {
 	LV2_Options_Status status = LV2_OPTIONS_SUCCESS;
 
-	for(int m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
@@ -3296,7 +3296,7 @@ sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options)
 static void
 _sp_app_reinitialize(sp_app_t *app)
 {
-	for(int m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 	
@@ -3319,7 +3319,7 @@ _sp_app_reinitialize(sp_app_t *app)
 		mod->pools[PORT_TYPE_AUDIO].size = 0;
 		mod->pools[PORT_TYPE_CV].size = 0;
 	
-		for(uint32_t i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *tar = &mod->ports[i];
 
@@ -3339,11 +3339,11 @@ _sp_app_reinitialize(sp_app_t *app)
 	}
 
 	// refresh all connections
-	for(int m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
-		for(uint32_t i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *tar = &mod->ports[i];
 
@@ -3364,7 +3364,7 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 {
 	if(nsamples <= app->driver->max_block_size)
 	{
-		for(int m=0; m<app->num_mods; m++)
+		for(unsigned m=0; m<app->num_mods; m++)
 		{
 			mod_t *mod = app->mods[m];
 

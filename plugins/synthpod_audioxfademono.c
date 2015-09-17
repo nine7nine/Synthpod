@@ -89,7 +89,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	const float b = *handle->xfade;
 	const float a = 1.f - b;
 
-	for(int i=0; i<nsamples; i++)
+	for(uint32_t i=0; i<nsamples; i++)
 	{
 		const float x = handle->audio_in[0][i];
 		const float y = handle->audio_in[1][i];

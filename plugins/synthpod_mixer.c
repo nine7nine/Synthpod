@@ -124,7 +124,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		}
 	}
 
-	for(int i=0; i<nsamples; i++)
+	for(uint32_t i=0; i<nsamples; i++)
 	{
 		handle->audio_out[0][i] = handle->audio_in[0][i] * handle->gain[0];
 		handle->audio_out[1][i] = handle->audio_in[1][i] * handle->gain[1];
