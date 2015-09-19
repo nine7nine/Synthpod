@@ -1222,8 +1222,6 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 static void
 _eject_module(sp_app_t *app, mod_t *mod)
 {
-	printf("ejecting module\n");
-
 	// eject module from graph
 	app->num_mods -= 1;
 	for(unsigned m=0, offset=0; m<app->num_mods; m++)
@@ -1416,8 +1414,6 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		if(!needs_ramping)
 			_eject_module(app, mod);
-		else
-			printf("needs ramping before removal\n");
 	}
 	else if(protocol == app->regs.synthpod.module_move.urid)
 	{
@@ -2358,7 +2354,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		{
 			del_me = mod;
 			mod->delete_request = 0;
-			printf("delete request\n");
 		}
 
 		// handle end of work
@@ -2411,7 +2406,6 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 		{
 			_sp_app_port_disconnect(app, source->port, port);
 			source->port->mod->delete_request = 1; // mark module for removal
-			printf("requesting deletion\n");
 		}
 		source->ramp.state = RAMP_STATE_NONE; // ramp is complete
 	}
