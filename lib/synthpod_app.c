@@ -60,7 +60,8 @@ enum _bypass_state_t {
 enum _ramp_state_t {
 	RAMP_STATE_NONE = 0,
 	RAMP_STATE_UP,
-	RAMP_STATE_DOWN
+	RAMP_STATE_DOWN,
+	RAMP_STATE_DOWN_DEL
 };
 
 enum _job_type_t {
@@ -96,6 +97,8 @@ struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
 	int selected;
+
+	int delete_request;
 
 	volatile bypass_state_t bypass_state;
 	Eina_Semaphore bypass_sem;
@@ -1088,12 +1091,12 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	}
 }
 
-static inline void
-_sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_port)
+static inline int
+_sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
+	ramp_state_t ramp_state)
 {
-	// only audio output ports need to be ramped to be clickless
-	if(  (src_port->type == PORT_TYPE_AUDIO)
-		&& (src_port->direction == PORT_DIRECTION_OUTPUT) )
+	if(  (src_port->direction == PORT_DIRECTION_OUTPUT)
+		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
 	{
 		source_t *conn = NULL;
 	
@@ -1109,15 +1112,24 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 
 		if(conn)
 		{
-			conn->ramp.samples = app->ramp_samples;
-			conn->ramp.state = RAMP_STATE_DOWN;
-			conn->ramp.value = 1.f;
+			if(src_port->type == PORT_TYPE_AUDIO)
+			{
+				// only audio output ports need to be ramped to be clickless
+				conn->ramp.samples = app->ramp_samples;
+				conn->ramp.state = ramp_state;
+				conn->ramp.value = 1.f;
+
+				return 1; // needs ramping
+			}
+			else // !AUDIO
+			{
+				// disconnect immediately
+				_sp_app_port_disconnect(app, src_port, snk_port);
+			}
 		}
 	}
-	else // disconnect immediately
-	{
-		_sp_app_port_disconnect(app, src_port, snk_port);
-	}
+
+	return 0; // not connected
 }
 
 // non-rt
@@ -1204,6 +1216,59 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s
 	
 	return app;
+}
+
+// rt
+static void
+_eject_module(sp_app_t *app, mod_t *mod)
+{
+	printf("ejecting module\n");
+
+	// eject module from graph
+	app->num_mods -= 1;
+	for(unsigned m=0, offset=0; m<app->num_mods; m++)
+	{
+		if(app->mods[m] == mod)
+			offset += 1;
+		app->mods[m] = app->mods[m+offset];
+	}
+
+	// disconnect all ports
+	for(unsigned p1=0; p1<mod->num_ports; p1++)
+	{
+		port_t *port = &mod->ports[p1];
+
+		// disconnect sources
+		for(int s=0; s<port->num_sources; s++)
+			_sp_app_port_disconnect(app, port->sources[s].port, port);
+
+		// disconnect sinks
+		for(unsigned m=0; m<app->num_mods; m++)
+			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
+				_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]);
+	}
+
+	// send request to worker thread
+	size_t size = sizeof(work_t) + sizeof(job_t);
+	work_t *work = _sp_app_to_worker_request(app, size);
+	if(work)
+	{
+		work->target = app;
+		work->size = size - sizeof(work_t);
+		job_t *job = (job_t *)work->payload;
+		job->type = JOB_TYPE_MODULE_DEL;
+		job->mod = mod;
+		_sp_app_to_worker_advance(app, size);
+	}
+
+	// signal to ui
+	size = sizeof(transmit_module_del_t);
+	transmit_module_del_t *trans = _sp_app_to_ui_request(app, size);
+	if(trans)
+	{
+		_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uid);
+		_sp_app_to_ui_advance(app, size);
+	}
 }
 
 // rt
@@ -1327,51 +1392,32 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(!mod) // mod not found
 			return;
 
-		// eject module from graph
-		app->num_mods -= 1;
-		for(unsigned m=0, offset=0; m<app->num_mods; m++)
-		{
-			if(app->mods[m] == mod)
-				offset += 1;
-			app->mods[m] = app->mods[m+offset];
-		}
+		int needs_ramping = 0;
 
-		// disconnect all ports
 		for(unsigned p1=0; p1<mod->num_ports; p1++)
 		{
 			port_t *port = &mod->ports[p1];
 
 			// disconnect sources
 			for(int s=0; s<port->num_sources; s++)
-				_sp_app_port_disconnect(app, port->sources[s].port, port);
+			{
+				_sp_app_port_disconnect_request(app,
+					port->sources[s].port, port, RAMP_STATE_DOWN);
+			}
 
 			// disconnect sinks
 			for(unsigned m=0; m<app->num_mods; m++)
 				for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
-					_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]); //FIXME ramp
+				{
+					 needs_ramping = needs_ramping || _sp_app_port_disconnect_request(app,
+						port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DEL);
+				}
 		}
 
-		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t);
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
-		{
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_MODULE_DEL;
-			job->mod = mod;
-			_sp_app_to_worker_advance(app, size);
-		}
-
-		// signal to ui
-		size = sizeof(transmit_module_del_t);
-		transmit_module_del_t *trans = _sp_app_to_ui_request(app, size);
-		if(trans)
-		{
-			_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uid);
-			_sp_app_to_ui_advance(app, size);
-		}
+		if(!needs_ramping)
+			_eject_module(app, mod);
+		else
+			printf("needs ramping before removal\n");
 	}
 	else if(protocol == app->regs.synthpod.module_move.urid)
 	{
@@ -1523,7 +1569,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			}
 			case 0: // disconnect
 			{
-				_sp_app_port_disconnect_request(app, src_port, snk_port);
+				_sp_app_port_disconnect_request(app, src_port, snk_port, RAMP_STATE_DOWN);
 				state = 0;
 				break;
 			}
@@ -2301,10 +2347,19 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 void
 sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 {
+	mod_t *del_me = NULL;
+
 	// iterate over all modules
 	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
+
+		if(mod->delete_request)
+		{
+			del_me = mod;
+			mod->delete_request = 0;
+			printf("delete request\n");
+		}
 
 		// handle end of work
 		if(mod->zero.iface && mod->zero.iface->end)
@@ -2337,6 +2392,9 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			}
 		}
 	}
+
+	if(del_me)
+		_eject_module(app, del_me);
 }
 
 // rt
@@ -2349,6 +2407,12 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 	{
 		if(source->ramp.state == RAMP_STATE_DOWN)
 			_sp_app_port_disconnect(app, source->port, port);
+		else if(source->ramp.state == RAMP_STATE_DOWN_DEL)
+		{
+			_sp_app_port_disconnect(app, source->port, port);
+			source->port->mod->delete_request = 1; // mark module for removal
+			printf("requesting deletion\n");
+		}
 		source->ramp.state = RAMP_STATE_NONE; // ramp is complete
 	}
 	else
