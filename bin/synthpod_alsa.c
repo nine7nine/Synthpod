@@ -689,36 +689,38 @@ _read_config(prog_t *handle)
 		if(config_home_file)
 		{
 			ini = efreet_ini_new(config_home_file);
-			if(ini)
+			if(ini && ini->data)
 			{
 				unsigned valueboolean;
 				int valueint;
 				const char *valuestring;
 				
-				if(!efreet_ini_section_set(ini, "synthpod_alsa"))
-					fprintf(stderr, "section does not exists");
-				
-				handle->bin.has_gui = !efreet_ini_boolean_get(ini, "disable-gui");
-				handle->do_play = !efreet_ini_boolean_get(ini, "disable-playback");
-				handle->do_capt = !efreet_ini_boolean_get(ini, "disable-capture");
-				handle->twochan = efreet_ini_boolean_get(ini, "force-two-channel");
-				handle->debug = efreet_ini_boolean_get(ini, "notify-xruns");
+				if(efreet_ini_section_set(ini, "synthpod_alsa"))
+				{
+					handle->bin.has_gui = !efreet_ini_boolean_get(ini, "disable-gui");
+					handle->do_play = !efreet_ini_boolean_get(ini, "disable-playback");
+					handle->do_capt = !efreet_ini_boolean_get(ini, "disable-capture");
+					handle->twochan = efreet_ini_boolean_get(ini, "force-two-channel");
+					handle->debug = efreet_ini_boolean_get(ini, "notify-xruns");
 
-				if((valuestring = efreet_ini_string_get(ini, "device")))
-					handle->io_name = valuestring;
-				if((valuestring = efreet_ini_string_get(ini, "capture-device")))
-					handle->capt_name = valuestring;
-				if((valuestring = efreet_ini_string_get(ini, "playback-device")))
-					handle->play_name = valuestring;
-				
-				if((valueint = efreet_ini_int_get(ini, "sample-rate")) != -1)
-					handle->srate = valueint;
-				if((valueint = efreet_ini_int_get(ini, "sample-period")) != -1)
-					handle->frsize = valueint;
-				if((valueint = efreet_ini_int_get(ini, "period-number")) != -1)
-					handle->nfrags = valueint;
-				if((valueint = efreet_ini_int_get(ini, "sequence-size")) != -1)
-					handle->seq_size = valueint;
+					if((valuestring = efreet_ini_string_get(ini, "device")))
+						handle->io_name = valuestring;
+					if((valuestring = efreet_ini_string_get(ini, "capture-device")))
+						handle->capt_name = valuestring;
+					if((valuestring = efreet_ini_string_get(ini, "playback-device")))
+						handle->play_name = valuestring;
+					
+					if((valueint = efreet_ini_int_get(ini, "sample-rate")) != -1)
+						handle->srate = valueint;
+					if((valueint = efreet_ini_int_get(ini, "sample-period")) != -1)
+						handle->frsize = valueint;
+					if((valueint = efreet_ini_int_get(ini, "period-number")) != -1)
+						handle->nfrags = valueint;
+					if((valueint = efreet_ini_int_get(ini, "sequence-size")) != -1)
+						handle->seq_size = valueint;
+				}
+				else
+					fprintf(stderr, "section 'synthpod_alsa' does not exists\n");
 			}
 
 			free(config_home_file);
@@ -753,13 +755,13 @@ elm_main(int argc, char **argv)
 
 	bin->has_gui = true;
 
-	// read local configuration if present
-	Efreet_Ini *ini = _read_config(&handle);
-
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
 		"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
+
+	// read local configuration if present
+	Efreet_Ini *ini = _read_config(&handle);
 	
 	int c;
 	while((c = getopt(argc, argv, "vhGIO2xd:i:o:r:p:n:s:")) != -1)
