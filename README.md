@@ -8,6 +8,8 @@
 
 ### About
 
+Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/#](http://open-music-kontrollers.ch/lv2/synthpod/#).
+
 ### Dependencies
 
 * [LV2](http://lv2plug.in) (LV2 plugin specification)
@@ -35,9 +37,9 @@
 #### Debian (>= jessie) and derivatives (Ubuntu, Mint, ...)
 
 	# build dependencies
-	sudo apt-get install cmake lv2-dev liblilv-dev libelementary-dev libjack-dev libasound2-dev portaudio19-dev
+	sudo apt-get install cmake lv2-dev liblilv-dev libelementary-dev libjack-dev libasound2-dev libzita-alsa-pcmi-dev
 	# runtime dependencies
-	sudo apt-get install libevas1-engine-software-x11 libevas1-engine-gl-x11 libelementary2 jackd
+	sudo apt-get install libevas1-engine-software-x11 libevas1-engine-gl-x11 libelementary2 jackd libzita-alsa-pcmi0
 
 #### Ubuntu (<= 14.04)
 
