@@ -22,7 +22,6 @@ add_library(synthpod_bundle.lv2 MODULE
 	synthpod_audio_source.c
 	synthpod_midi_sink.c
 	synthpod_midi_source.c)
-target_link_libraries(synthpod_bundle.lv2 synthpod.lib)
 set_target_properties(synthpod_bundle.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_bundle")
 install(TARGETS synthpod_bundle.lv2 DESTINATION ${SYNTHPOD_BUNDLE_DIR})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod_bundle.ttl DESTINATION ${SYNTHPOD_BUNDLE_DIR})
