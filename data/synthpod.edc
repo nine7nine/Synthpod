@@ -15,6 +15,7 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#if 1
 #define COLORS_MAX "20"
 #define COL00    0    0    0  255 // Black
 #define COL01  255  179    0  255 // Vivid Yellow
@@ -37,6 +38,40 @@
 #define COL18   89   51   21  255 // Deep Yellowish Brown
 #define COL19  241   58   19  255 // Vivid Reddish Orange
 #define COL20   35   44   22  255 // Dark Olive Green
+#endif
+
+#if 0
+// P. Green-Armytage (2010): A Colour Alphabet and the Limits of Colour Coding.
+// Colour: Design & Creativity (5) (2010): 10, 1-23
+#define COLORS_MAX "20"
+#define COL00 0 0 0 255
+#define COL01 240 163 255 255
+#define COL02 0 117 220 255
+#define COL03 153 63 0 255
+#define COL04 76 0 92 255
+#define COL05 25 25 25 255
+#define COL06 0 92 49 255
+#define COL07 43 206 72 255
+#define COL08 255 204 153 255
+#define COL09 128 128 128 255
+#define COL10 148 255 181 255
+#define COL11 143 124 0 255
+#define COL12 157 204 0 255
+#define COL13 194 0 136 255
+#define COL14 0 51 128 255
+#define COL15 255 164 5 255
+#define COL16 255 168 187 255
+#define COL17 66 102 0 255
+#define COL18 255 0 16 255
+#define COL19 94 241 242 255
+#define COL20 0 153 143 255
+#define COL21 224 255 102 255
+#define COL22 116 10 255 255
+#define COL23 153 0 0 255
+#define COL24 255 255 128 255
+#define COL25 255 255 0 255
+#define COL26 255 80 5 255
+#endif
 
 collections {
 #include <theme.edc>
