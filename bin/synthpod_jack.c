@@ -885,7 +885,7 @@ _xrun(void *data)
 static int
 _jack_init(prog_t *handle, const char *id)
 {
-	jack_options_t opts = JackNullOption;
+	jack_options_t opts = JackNullOption | JackNoStartServer;
 	if(handle->server_name)
 		opts |= JackServerName;
 	if(handle->session_id)
@@ -959,7 +959,10 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	// jack init
 	if(_jack_init(handle, id))
+	{
+		bin->ui_driver.close(bin);
 		return -1;
+	}
 
 	// synthpod init
 	bin->app_driver.sample_rate = jack_get_sample_rate(handle->client);

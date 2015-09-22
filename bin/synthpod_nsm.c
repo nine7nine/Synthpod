@@ -110,7 +110,7 @@ _client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_
 
 	// open/create app
 	if(nsm->driver->open(dir, name, id, nsm->data))
-		fprintf(stderr, "NSM load failed\n");
+		fprintf(stderr, "NSM load failed: '%s'\n", dir);
 
 	return 1;
 }
@@ -123,7 +123,7 @@ _client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	
 	// save app
 	if(nsm->driver->save(nsm->data))
-		fprintf(stderr, "NSM save failed\n");
+		fprintf(stderr, "NSM save failed:\n");
 
 	return 1;
 }
@@ -328,7 +328,7 @@ synthpod_nsm_new(const char *exe, const char *path,
 		if(sscanf(dst, "%hu", &port) != 1)
 			goto fail;
 		
-		printf("addr: %s, dst: %hu\n", addr, port);
+		printf("NSM URL: %s, dst: %hu\n", addr, port);
 
 		nsm->serv = ecore_con_server_connect(type,
 			addr, port, nsm);
@@ -348,7 +348,8 @@ synthpod_nsm_new(const char *exe, const char *path,
 
 		if(path)
 		{
-			nsm->driver->open(path, nsm->call, nsm->exe, nsm->data);
+			if(nsm->driver->open(path, nsm->call, nsm->exe, nsm->data))
+				fprintf(stderr, "NSM load failed: '%s'\n", path);
 		}
 		else
 		{
@@ -360,8 +361,8 @@ synthpod_nsm_new(const char *exe, const char *path,
 			{
 				ecore_file_mkpath(synthpod_dir);
 
-				nsm->driver->open(synthpod_dir,
-					nsm->call, nsm->exe, nsm->data);
+				if(nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
+					fprintf(stderr, "NSM load failed: '%s'\n", synthpod_dir);
 
 				free(synthpod_dir);
 			}

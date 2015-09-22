@@ -4724,14 +4724,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			if(ui->statusline)
 			{
 				//TODO use
-				elm_object_text_set(ui->statusline, "[status]");
+				elm_object_text_set(ui->statusline, "");
 				evas_object_size_hint_weight_set(ui->statusline, EVAS_HINT_EXPAND, 0.f);
 				evas_object_size_hint_align_set(ui->statusline, 0.f, 1.f);
 				evas_object_show(ui->statusline);
 				elm_table_pack(ui->table, ui->statusline, 0, 2, 1, 1);
 			} // statusline
-
-			//TODO add info button
 		} // theme
 	}
 

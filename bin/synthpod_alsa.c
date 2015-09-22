@@ -554,21 +554,32 @@ _alsa_init(prog_t *handle, const char *id)
 static void
 _alsa_deinit(prog_t *handle)
 {
-	handle->kill = 1;
-	eina_thread_join(handle->thread);
+	if(handle->thread)
+	{
+		handle->kill = 1;
+		eina_thread_join(handle->thread);
+	}
 
-	pcmi_free(handle->pcmi);
-	handle->pcmi = NULL;
-				
-	if(snd_seq_drain_output(handle->seq))
-		fprintf(stderr, "draining output failed\n");
-	snd_seq_stop_queue(handle->seq, handle->queue, NULL);
-	if(snd_seq_free_queue(handle->seq, handle->queue))
-		fprintf(stderr, "freeing queue failed\n");
-	if(snd_seq_close(handle->seq))
-		fprintf(stderr, "close sequencer failed\n");
-	handle->seq = NULL;
-	handle->queue = 0;
+	if(handle->pcmi)
+	{
+		pcmi_free(handle->pcmi);
+
+		handle->pcmi = NULL;
+	}
+	
+	if(handle->seq)
+	{
+		if(snd_seq_drain_output(handle->seq))
+			fprintf(stderr, "draining output failed\n");
+		snd_seq_stop_queue(handle->seq, handle->queue, NULL);
+		if(snd_seq_free_queue(handle->seq, handle->queue))
+			fprintf(stderr, "freeing queue failed\n");
+		if(snd_seq_close(handle->seq))
+			fprintf(stderr, "close sequencer failed\n");
+
+		handle->seq = NULL;
+		handle->queue = 0;
+	}
 }
 
 static int 
@@ -584,7 +595,10 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	// alsa init
 	if(_alsa_init(handle, id))
+	{
+		bin->ui_driver.close(bin);
 		return -1;
+	}
 
 	// synthpod init
 	bin->app_driver.sample_rate = handle->srate;
