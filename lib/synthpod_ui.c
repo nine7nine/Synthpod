@@ -2233,12 +2233,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		{
 			port_t *port = &mod->ports[i];
 
-			// ignore dummy system ports
-			if(mod->system.source && (port->direction == PORT_DIRECTION_INPUT) )
-				continue;
-			if(mod->system.sink && (port->direction == PORT_DIRECTION_OUTPUT) )
-				continue;
-
 			Elm_Object_Item *parent;
 			if(port->group)
 			{
@@ -4079,6 +4073,7 @@ static void
 _modlist_clear(sp_ui_t *ui, int clear_system_ports)
 {
 	if(!ui || !ui->modlist)
+		return;
 
 	// iterate over all registered modules
 	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
