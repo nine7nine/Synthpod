@@ -98,11 +98,29 @@ Default bundle state directory
 .I $HOME/.lv2
 Default LV2 preset directory
 .TP
-.I $XDG_CONFIG_HOME/synthpod_alsa.json $HOME/.config/synthpod_alsa.json
+.I $XDG_CONFIG_HOME/synthpod_alsa.ini $HOME/.config/synthpod_alsa.ini
 Default config file
+
+.SH CONFIGURATION
+.nf
+[synthpod_alsa]
+disable-gui=false
+disable-playback=false
+disable-capture=false
+force-two-channel=false
+notify-xruns=true
+device=hw:0
+sample-rate=48000
+sample-period=1024
+period-number=3
+sequence-size=8192
+.fi
 
 .SH LICENSE
 Artistic License 2.0.
 
 .SH AUTHOR
 Hanspeter Portner (dev@open-music-kontrollers.ch).
+
+.SH SEE ALSO
+synthpod_jack(1)
