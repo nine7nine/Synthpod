@@ -91,3 +91,28 @@ add_subdirectory(plugins)
 add_subdirectory(data)
 add_subdirectory(state)
 add_subdirectory(bundle)
+
+# CPack
+set(CPACK_GENERATOR "TBZ2;DEB")
+
+set(CPACK_PACKAGE_NAME "synthpod")
+set(CPACK_PACKER_VERSION "${SYNTHPOD_VERSION}")
+set(CPACK_PACKAGE_CONTACT "Hanspeter Portner <dev@open-music-kontrollers.ch>")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Non-linear plugin container")
+SET(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
+SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
+SET(CPACK_STRIP_FILES "lib/libsynthpod.so;lib/libsynthpod_ui.so;lib/synthpod/synthpod_bundle.so;lib/lv2/synthpod.lv2/synthpod.so;lib/lv2/synthpod.lv2/synthpod_ui.so")
+
+# Debian
+set(CPACK_DEBIAN_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
+set(CPACK_DEBIAN_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION})
+set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+set(CPACK_DEBIAN_PACKAGE_BUILD_DEPENDS "lv2core (>= 4.0-4~), lv2-extensions-good, libelementary-dev, libzita-alsa-pcmi-dev, libjack-dev, libasound2-dev")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libelementary2, libevas1-engine-software-x11, libevas1-engine-gl-x11, jackd, libzita-alsa-pcmi0")
+set(CPACK_DEBIAN_PACKAGE_PROVIDES "lv2-plugin")
+set(CPACK_DEBIAN_PACKAGE_MAINAINER ${CPACK_PACKAGE_CONTACT})
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "http://open-music-kontrollers.ch/lv2/moony/")
+set(CPACK_DEBIAN_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY})
+set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+
+include(CPack)
