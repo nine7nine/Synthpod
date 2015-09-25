@@ -1,0 +1,5 @@
+@CPACK_PACKAGE_NAME@ (@SYNTHPOD_VERSION@) stable; urgency=low
+
+  * Initial release
+
+  -- @CPACK_DEBIAN_PACKAGE_MAINTAINER@  Fri, 25 Sep 2015 00:00:00 +0100

@@ -7,6 +7,7 @@ find_package(PkgConfig REQUIRED)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckSymbolExists)
+include(FindUnixCommands)
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
@@ -98,12 +99,17 @@ add_subdirectory(bundle)
 set(CPACK_GENERATOR "TBZ2;DEB")
 
 set(CPACK_PACKAGE_NAME "synthpod")
-set(CPACK_PACKER_VERSION "${SYNTHPOD_VERSION}")
+set(CPACK_PACKAGE_VERSION "${SYNTHPOD_VERSION}")
+SET(CPACK_PACKAGE_VERSION_MAJOR ${SYNTHPOD_MAJOR_VERSION})
+SET(CPACK_PACKAGE_VERSION_MINOR ${SYNTHPOD_MINOR_VERSION})
+SET(CPACK_PACKAGE_VERSION_PATCH ${SYNTHPOD_PATCH_VERSION})
 set(CPACK_PACKAGE_CONTACT "Hanspeter Portner <dev@open-music-kontrollers.ch>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Non-linear plugin container")
+set(CPACK_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY})
 SET(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
 SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
-SET(CPACK_STRIP_FILES TRUE)
+SET(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+SET(CPACK_STRIP_FILES ON)
 
 # Debian
 set(CPACK_DEBIAN_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
@@ -112,27 +118,24 @@ set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
 
 set(CPACK_DEBIAN_PACKAGE_BUILD_DEPENDS "cmake, libasound2-dev, libelementary-dev, liblilv-dev, libjack-dev, libzita-alsa-pcmi-dev, lv2-dev")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libasound2, libelementary2, libevas1-engines-x, liblilv-0-0, jackd, libzita-alsa-pcmi0")
-set(CPACK_DEBIAN_PACKAGE_PROVIDES "lv2-plugin")
-set(CPACK_DEBIAN_PACKAGE_MAINAINER ${CPACK_PACKAGE_CONTACT})
+set(CPACK_DEBIAN_PACKAGE_PROVIDES "lv2-plugin, lv2-host")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER ${CPACK_PACKAGE_CONTACT})
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "http://open-music-kontrollers.ch/lv2/moony/")
-set(CPACK_DEBIAN_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY})
 set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+SET(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
 
-file(WRITE "${CMAKE_BINARY_DIR}/copyright"
-"Copyright (c) 2015 ${CPACK_DEBIAN_PACKAGE_MAINTAINER}
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/copyright.in ${PROJECT_BINARY_DIR}/copyright)
+install(FILES "${PROJECT_BINARY_DIR}/copyright" DESTINATION "share/doc/${CPACK_DEBIAN_PACKAGE_NAME}")
 
-This is free software: you can redistribute it and/or modify
-it under the terms of the Artistic License 2.0 as published by
-The Perl Foundation.
-
-This source is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-Artistic License 2.0 for more details.
-
-You should have received a copy of the Artistic License 2.0
-along the source as a COPYING file. If not, obtain it from
-http://www.perlfoundation.org/artistic_license_2_0.")
-install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION "share/doc/${CPACK_DEBIAN_PACKAGE_NAME}")
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/changelog.in ${PROJECT_BINARY_DIR}/changelog)
+add_custom_command(
+	OUTPUT ${PROJECT_BINARY_DIR}/changelog.gz
+	COMMAND ${GZIP} ARGS
+		"-c9" ${PROJECT_BINARY_DIR}/changelog
+		">" ${PROJECT_BINARY_DIR}/changelog.gz
+	DEPENDS
+		${PROJECT_BINARY_DIR}/changelog)
+add_custom_target(CHANGELOG ALL DEPENDS ${PROJECT_BINARY_DIR}/changelog.gz)
+install(FILES "${PROJECT_BINARY_DIR}/changelog.gz" DESTINATION "share/doc/${CPACK_DEBIAN_PACKAGE_NAME}")
 
 include(CPack)

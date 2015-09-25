@@ -19,7 +19,12 @@
 
 #include <synthpod_lv2.h>
 
-LV2_SYMBOL_EXPORT const LV2UI_Descriptor*
+#ifdef _WIN32
+__declspec(dllexport)
+#else
+__attribute__((visibility("default")))
+#endif
+const LV2UI_Descriptor*
 lv2ui_descriptor(uint32_t index)
 {
 	switch(index)
