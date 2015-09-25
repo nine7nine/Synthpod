@@ -28,7 +28,10 @@ target_link_libraries(synthpod.lib
 	${EFREET_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS})
-set_target_properties(synthpod.lib PROPERTIES OUTPUT_NAME "synthpod")
+set_target_properties(synthpod.lib PROPERTIES
+	OUTPUT_NAME "synthpod"
+	VERSION "${SYNTHPOD_VERSION}"
+	SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
 install(TARGETS synthpod.lib DESTINATION lib)
 
 # synthpod_ui
@@ -43,5 +46,8 @@ target_link_libraries(synthpod_ui.lib
 	${ELM_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS})
-set_target_properties(synthpod_ui.lib PROPERTIES OUTPUT_NAME "synthpod_ui")
+set_target_properties(synthpod_ui.lib PROPERTIES
+	OUTPUT_NAME "synthpod_ui"
+	VERSION "${SYNTHPOD_VERSION}"
+	SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
 install(TARGETS synthpod_ui.lib DESTINATION lib)

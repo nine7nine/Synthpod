@@ -12,12 +12,12 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 ### Dependencies
 
-* [LV2](http://lv2plug.in) (LV2 plugin specification)
+* [ALSA](http://alsa-project.org) (Advanced Linux Sound Architecture)
+* [Elementary](http://docs.enlightenment.org/auto/elementary/) (EFL UI toolkit)
 * [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
 * [JACK](http://jackaudio.org/) (JACK audio connection kit)
-* [Elementary](http://docs.enlightenment.org/auto/elementary/) (EFL UI toolkit)
-* [ALSA](http://alsa-project.org) (Advanced Linux Sound Architecture)
 * [zita-alsa-pcmi](http://kokkinizita.linuxaudio.org/linuxaudio/) (ALSA PCM high-level API)
+* [LV2](http://lv2plug.in) (LV2 plugin specification)
 
 ### Build / install
 
@@ -32,14 +32,14 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 #### ArchLinux
 
 	# build/runtime dependencies
-	sudo pacman -S cmake lv2 lilv elementary jack zita-alsa-pcmi
+	sudo pacman -S cmake alsa elementary lilv jack zita-alsa-pcmi lv2
 
 #### Debian (>= jessie) and derivatives (Ubuntu, Mint, ...)
 
 	# build dependencies
-	sudo apt-get install cmake lv2-dev liblilv-dev libelementary-dev libjack-dev libasound2-dev libzita-alsa-pcmi-dev
+	sudo apt-get install cmake libasound2-dev libelementary-dev liblilv-dev libjack-dev libzita-alsa-pcmi-dev lv2-dev
 	# runtime dependencies
-	sudo apt-get install libevas1-engine-software-x11 libevas1-engine-gl-x11 libelementary2 jackd libzita-alsa-pcmi0
+	sudo apt-get install libasound2 libelementary2 libevas1-engines-x liblilv-0-0 jackd libzita-alsa-pcmi0
 
 #### Ubuntu (<= 14.04)
 

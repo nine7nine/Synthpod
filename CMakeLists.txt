@@ -101,18 +101,36 @@ set(CPACK_PACKAGE_CONTACT "Hanspeter Portner <dev@open-music-kontrollers.ch>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Non-linear plugin container")
 SET(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
 SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
-SET(CPACK_STRIP_FILES "lib/libsynthpod.so;lib/libsynthpod_ui.so;lib/synthpod/synthpod_bundle.so;lib/lv2/synthpod.lv2/synthpod.so;lib/lv2/synthpod.lv2/synthpod_ui.so")
+SET(CPACK_STRIP_FILES TRUE)
 
 # Debian
 set(CPACK_DEBIAN_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
 set(CPACK_DEBIAN_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION})
 set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
-set(CPACK_DEBIAN_PACKAGE_BUILD_DEPENDS "lv2core (>= 4.0-4~), lv2-extensions-good, libelementary-dev, libzita-alsa-pcmi-dev, libjack-dev, libasound2-dev")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libelementary2, libevas1-engine-software-x11, libevas1-engine-gl-x11, jackd, libzita-alsa-pcmi0")
+
+set(CPACK_DEBIAN_PACKAGE_BUILD_DEPENDS "cmake, libasound2-dev, libelementary-dev, liblilv-dev, libjack-dev, libzita-alsa-pcmi-dev, lv2-dev")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libasound2, libelementary2, libevas1-engines-x, liblilv-0-0, jackd, libzita-alsa-pcmi0")
 set(CPACK_DEBIAN_PACKAGE_PROVIDES "lv2-plugin")
 set(CPACK_DEBIAN_PACKAGE_MAINAINER ${CPACK_PACKAGE_CONTACT})
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "http://open-music-kontrollers.ch/lv2/moony/")
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY})
 set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+
+file(WRITE "${CMAKE_BINARY_DIR}/copyright"
+"Copyright (c) 2015 ${CPACK_DEBIAN_PACKAGE_MAINTAINER}
+
+This is free software: you can redistribute it and/or modify
+it under the terms of the Artistic License 2.0 as published by
+The Perl Foundation.
+
+This source is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+Artistic License 2.0 for more details.
+
+You should have received a copy of the Artistic License 2.0
+along the source as a COPYING file. If not, obtain it from
+http://www.perlfoundation.org/artistic_license_2_0.")
+install(FILES "${CMAKE_BINARY_DIR}/copyright" DESTINATION "share/doc/${CPACK_DEBIAN_PACKAGE_NAME}")
 
 include(CPack)
