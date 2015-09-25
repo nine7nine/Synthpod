@@ -198,7 +198,8 @@ _announce(synthpod_nsm_t *nsm)
 	osc_data_t *buf0 = nsm->send;
 	osc_data_t *ptr = buf0;
 	osc_data_t *end = buf0 + 512;
-	osc_data_t *bndl, *itm;
+	osc_data_t *bndl = NULL;
+	osc_data_t *itm = NULL;
 
 	ptr = osc_start_bundle(ptr, end, OSC_IMMEDIATE, &bndl);
 	ptr = osc_start_bundle_item(ptr, end, &itm);

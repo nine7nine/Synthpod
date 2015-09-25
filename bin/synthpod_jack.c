@@ -292,7 +292,7 @@ _message_cb(const char *path, const char *fmt, const LV2_Atom_Tuple *body,
 	osc_data_t *ptr = handle->osc_ptr;
 	const osc_data_t *end = handle->osc_end;
 
-	osc_data_t *itm;
+	osc_data_t *itm = NULL;
 	if(handle->bndl_cnt)
 		ptr = osc_start_bundle_item(ptr, end, &itm);
 
