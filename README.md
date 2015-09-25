@@ -31,20 +31,32 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 #### ArchLinux
 
-	# build/runtime dependencies
+	# build dependencies
 	sudo pacman -S cmake alsa elementary lilv jack zita-alsa-pcmi lv2
 
-#### Debian (>= jessie) and derivatives (Ubuntu, Mint, ...)
+#### Debian Jessie, Ubuntu Vivid and derivatives
 
 	# build dependencies
-	sudo apt-get install cmake libasound2-dev libelementary-dev liblilv-dev libjack-dev libzita-alsa-pcmi-dev lv2-dev
-	# runtime dependencies
-	sudo apt-get install libasound2 libelementary2 libevas1-engines-x liblilv-0-0 jackd libzita-alsa-pcmi0
+	sudo apt-get install cmake git libasound2-dev libelementary-dev libevas1-engines-x liblilv-dev libjack-dev libzita-alsa-pcmi-dev lv2-dev
 
 #### Ubuntu (<= 14.04)
 
 	# synthpod needs libefl(>=1.8) and libelementary(>=1.8), you may thus need to add a ppa
 	sudo add-apt-repository -y ppa:enlightenment-git/ppa
+
+#### Fedora 22 and derivatives
+
+	# build dependencies
+	sudo dnf install dnf-plugins-core
+	sudo dnf config-manager --add-repo http://download.opensuse.org/repositories/home:/edogawa/Fedora_22/home:edogawa.repo
+	sudo dnf install alsa-lib-devel cmake elementary-devel gcc gcc-c++ git lilv-devel lv2-devel make jack-audio-connection-kit-devel libzita-alsa-pcmi0-devel
+
+#### OpenSuse 13.2
+	
+	# build dependencies
+	zypper addrepo http://download.opensuse.org/repositories/home:/edogawa/openSUSE_13.2/home:edogawa.repo
+	zypper addrepo http://download.opensuse.org/repositories/home:/rncbc/openSUSE_13.2/home:rncbc.repo
+	zypper install cmake gcc gcc-c++ git alsa-devel elementary-devel liblilv-devel libjack-devel libzita-alsa-pcmi0-devel lv2-devel pkg-config
 
 ### License
 
