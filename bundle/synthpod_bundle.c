@@ -19,6 +19,153 @@
 
 #include <synthpod_bundle.h>
 
+typedef struct _plughandle_t plughandle_t;
+
+struct _plughandle_t {
+	int dummy;
+};
+
+static LV2_Handle
+instantiate(const LV2_Descriptor* descriptor, double rate,
+	const char *bundle_path, const LV2_Feature *const *features)
+{
+	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
+	if(!handle)
+		return NULL;
+
+	return handle;
+}
+
+static void
+connect_port(LV2_Handle instance, uint32_t port, void *data)
+{
+	// nothing
+}
+
+static void
+run(LV2_Handle instance, uint32_t nsamples)
+{
+	// nothing
+}
+
+static void
+cleanup(LV2_Handle instance)
+{
+	plughandle_t *handle = instance;
+
+	free(handle);
+}
+
+static const LV2_Descriptor synthpod_audio_sink = {
+	.URI						= SYNTHPOD_AUDIO_SINK_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_audio_source = {
+	.URI						= SYNTHPOD_AUDIO_SOURCE_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_cv_sink = {
+	.URI						= SYNTHPOD_CV_SINK_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_cv_source = {
+	.URI						= SYNTHPOD_CV_SOURCE_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_midi_sink = {
+	.URI						= SYNTHPOD_MIDI_SINK_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_midi_source = {
+	.URI						= SYNTHPOD_MIDI_SOURCE_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_osc_sink = {
+	.URI						= SYNTHPOD_OSC_SINK_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_osc_source = {
+	.URI						= SYNTHPOD_OSC_SOURCE_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_sink = {
+	.URI						= SYNTHPOD_SINK_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
+static const LV2_Descriptor synthpod_source = {
+	.URI						= SYNTHPOD_SOURCE_URI,
+	.instantiate		= instantiate,
+	.connect_port		= connect_port,
+	.activate				= NULL,
+	.run						= run,
+	.deactivate			= NULL,
+	.cleanup				= cleanup,
+	.extension_data	= NULL
+};
+
 #ifdef _WIN32
 __declspec(dllexport)
 #else

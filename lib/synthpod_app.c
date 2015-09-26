@@ -116,9 +116,7 @@ struct _mod_t {
 	} zero;
 
 	// system_port
-	struct {
-		const System_Port_Interface *iface;	
-	} sys;
+	bool system_ports;	
 
 	// log
 	LV2_Log_Log log;
@@ -196,7 +194,7 @@ struct _port_t {
 
 	// system_port iface
 	struct {
-		System_Port_Type type;
+		system_port_t type;
 		void *data;
 	} sys;
 };
@@ -365,7 +363,7 @@ _sp_app_update_system_sources(sp_app_t *app)
 	{
 		mod_t *mod = app->mods[m];
 
-		if(!mod->sys.iface) // has system ports?
+		if(!mod->system_ports) // has system ports?
 			continue; // skip
 
 		for(unsigned p=0; p<mod->num_ports; p++)
@@ -401,7 +399,7 @@ _sp_app_update_system_sinks(sp_app_t *app)
 	{
 		mod_t *mod = app->mods[m];
 
-		if(!mod->sys.iface) // has system ports?
+		if(!mod->system_ports) // has system ports?
 			continue;
 
 		for(unsigned p=0; p<mod->num_ports; p++)
@@ -717,7 +715,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 	if(app->driver->system_port_add && app->driver->system_port_del)
 	{
-		mod->feature_list[nfeatures].URI = SYSTEM_PORT__dynamicPorts;
+		mod->feature_list[nfeatures].URI = SYNTHPOD_PREFIX"systemPorts";
 		mod->feature_list[nfeatures++].data = NULL;
 	}
 
@@ -781,8 +779,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		ZERO_WORKER__interface);
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_OPTIONS__interface);
-	mod->sys.iface = lilv_instance_get_extension_data(mod->inst,
-		SYSTEM_PORT__interface);
+	mod->system_ports = lilv_plugin_has_feature(plug, app->regs.synthpod.system_ports.node);
 
 	// clear pool sizes
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
@@ -805,9 +802,20 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 			: PORT_DIRECTION_OUTPUT;
 
 		// register system ports
-		if(mod->sys.iface)
+		if(mod->system_ports)
 		{
-			tar->sys.type = mod->sys.iface->query(mod->inst, i);
+			if(lilv_port_is_a(plug, port, app->regs.synthpod.control_port.node))
+				tar->sys.type = SYSTEM_PORT_CONTROL;
+			else if(lilv_port_is_a(plug, port, app->regs.synthpod.audio_port.node))
+				tar->sys.type = SYSTEM_PORT_AUDIO;
+			else if(lilv_port_is_a(plug, port, app->regs.synthpod.cv_port.node))
+				tar->sys.type = SYSTEM_PORT_CV;
+			else if(lilv_port_is_a(plug, port, app->regs.synthpod.midi_port.node))
+				tar->sys.type = SYSTEM_PORT_MIDI;
+			else if(lilv_port_is_a(plug, port, app->regs.synthpod.osc_port.node))
+				tar->sys.type = SYSTEM_PORT_OSC;
+			else
+				tar->sys.type = SYSTEM_PORT_NONE;
 
 			if(app->driver->system_port_add)
 			{
@@ -2620,7 +2628,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
 				&& (port->direction == PORT_DIRECTION_OUTPUT)
-				&& (!mod->sys.iface) ) // don't overwrite source buffer events
+				&& (!mod->system_ports) ) // don't overwrite source buffer events
 			{
 				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;

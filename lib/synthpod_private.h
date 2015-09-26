@@ -252,6 +252,13 @@ struct _reg_t {
 		reg_item_t port_selected;
 		reg_item_t bundle_load;
 		reg_item_t bundle_save;
+
+		reg_item_t system_ports;
+		reg_item_t control_port;
+		reg_item_t audio_port;
+		reg_item_t cv_port;
+		reg_item_t midi_port;
+		reg_item_t osc_port;
 	} synthpod;
 };
 
@@ -394,6 +401,13 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.port_selected, world, map, SYNTHPOD_PREFIX"portSelect");
 	_register(&regs->synthpod.bundle_load, world, map, SYNTHPOD_PREFIX"bundleLoad");
 	_register(&regs->synthpod.bundle_save, world, map, SYNTHPOD_PREFIX"bundleSave");
+	
+	_register(&regs->synthpod.system_ports, world, map, SYNTHPOD_PREFIX"systemPorts");
+	_register(&regs->synthpod.control_port, world, map, SYNTHPOD_PREFIX"ControlPort");
+	_register(&regs->synthpod.audio_port, world, map, SYNTHPOD_PREFIX"AudioPort");
+	_register(&regs->synthpod.cv_port, world, map, SYNTHPOD_PREFIX"CVPort");
+	_register(&regs->synthpod.midi_port, world, map, SYNTHPOD_PREFIX"MIDIPort");
+	_register(&regs->synthpod.osc_port, world, map, SYNTHPOD_PREFIX"OSCPort");
 }
 
 static inline void
@@ -521,6 +535,13 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.port_selected);
 	_unregister(&regs->synthpod.bundle_load);
 	_unregister(&regs->synthpod.bundle_save);
+	
+	_unregister(&regs->synthpod.system_ports);
+	_unregister(&regs->synthpod.control_port);
+	_unregister(&regs->synthpod.audio_port);
+	_unregister(&regs->synthpod.cv_port);
+	_unregister(&regs->synthpod.midi_port);
+	_unregister(&regs->synthpod.osc_port);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))

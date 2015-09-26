@@ -400,7 +400,7 @@ _rt_thread(void *data, Eina_Thread thread)
 }
 
 static void *
-_system_port_add(void *data, System_Port_Type type, const char *short_name,
+_system_port_add(void *data, system_port_t type, const char *short_name,
 	const char *pretty_name, int input)
 {
 	bin_t *bin = data;

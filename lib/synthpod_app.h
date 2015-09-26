@@ -31,8 +31,9 @@
 #include <lilv/lilv.h>
 
 #include <synthpod_common.h>
-#include <system_port.h>
 #include <lv2_osc.h>
+
+typedef enum _system_port_t system_port_t;
 
 typedef struct _sp_app_t sp_app_t;
 typedef struct _sp_app_system_source_t sp_app_system_source_t;
@@ -45,18 +46,27 @@ typedef void (*sp_to_advance_t)(size_t size, void *data);
 typedef int (*sp_printf)(void *data, LV2_URID type, const char *fmt, ...);
 typedef int (*sp_vprintf)(void *data, LV2_URID type, const char *fmt, va_list args);
 
-typedef void *(*sp_system_port_add)(void *data, System_Port_Type type,
+typedef void *(*sp_system_port_add)(void *data, system_port_t type,
 	const char *short_name, const char *pretty_name, int input);
 typedef void (*sp_system_port_del)(void *data, void *sys_port);
 
+enum _system_port_t {
+	SYSTEM_PORT_NONE = 0,
+	SYSTEM_PORT_CONTROL,
+	SYSTEM_PORT_AUDIO,
+	SYSTEM_PORT_CV,
+	SYSTEM_PORT_MIDI,
+	SYSTEM_PORT_OSC
+};
+
 struct _sp_app_system_source_t {
-	System_Port_Type type;
+	system_port_t type;
 	void *sys_port;
 	void *buf;
 };
 
 struct _sp_app_system_sink_t {
-	System_Port_Type type;
+	system_port_t type;
 	void *sys_port;
 	const void *buf;
 };

@@ -15,6 +15,7 @@
 
 @prefix foaf:	<http://xmlns.com/foaf/0.1/> .
 @prefix doap:	<http://usefulinc.com/ns/doap#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix lv2:	<http://lv2plug.in/ns/lv2core#> .
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
 @prefix time: <http://lv2plug.in/ns/ext/time#> .
@@ -22,7 +23,6 @@
 @prefix bufsz: <http://lv2plug.in/ns/ext/buf-size#> .
 @prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
-@prefix sys:	<http://open-music-kontrollers.ch/lv2/system-port#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -30,10 +30,28 @@
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
 
 # system-port definitions
-sys:interface
-	a lv2:ExtensionData .
-sys:dynamicPorts
+synthpod:systemPorts
 	a lv2:Feature .
+
+synthpod:ControlPort
+	a rdfs:Class ;
+	rdfs:subClassOf lv2:Port .
+
+synthpod:AudioPort
+	a rdfs:Class ;
+	rdfs:subClassOf lv2:Port .
+
+synthpod:CVPort
+	a rdfs:Class ;
+	rdfs:subClassOf lv2:Port .
+
+synthpod:MIDIPort
+	a rdfs:Class ;
+	rdfs:subClassOf lv2:Port .
+
+synthpod:OSCPort
+	a rdfs:Class ;
+	rdfs:subClassOf lv2:Port .
 
 # Maintainer
 omk:me
@@ -68,13 +86,13 @@ synthpod:sink
 	doap:name "Synthpod System Sink" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 		# event in
 	  a lv2:InputPort ,
+			synthpod:MIDIPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
@@ -89,6 +107,7 @@ synthpod:sink
 	] , [
 		# audio in 1
 	  a lv2:InputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 1 ;
 		lv2:symbol "audio_sink_1" ;
@@ -98,6 +117,7 @@ synthpod:sink
 	] , [
 		# audio in 2
 	  a lv2:InputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 2 ;
 		lv2:symbol "audio_sink_2" ;
@@ -107,6 +127,7 @@ synthpod:sink
 	] , [
 		# control in
 	  a lv2:InputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 3 ;
 		lv2:symbol "control_sink_1" ;
@@ -114,6 +135,7 @@ synthpod:sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 4 ;
 		lv2:symbol "control_sink_2" ;
@@ -121,6 +143,7 @@ synthpod:sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 5 ;
 		lv2:symbol "control_sink_3" ;
@@ -128,6 +151,7 @@ synthpod:sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 6 ;
 		lv2:symbol "control_sink_4" ;
@@ -142,13 +166,13 @@ synthpod:source
 	doap:name "Synthpod System Source" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 		# event in
 	  a lv2:OutputPort ,
+			synthpod:MIDIPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
@@ -163,6 +187,7 @@ synthpod:source
 	] , [
 		# audio in 1
 	  a lv2:OutputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 1 ;
 		lv2:symbol "audio_source_1" ;
@@ -172,6 +197,7 @@ synthpod:source
 	] , [
 		# audio in 2
 	  a lv2:OutputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 2 ;
 		lv2:symbol "audio_source_2" ;
@@ -181,6 +207,7 @@ synthpod:source
 	] , [
 		# control in
 	  a lv2:OutputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 3 ;
 		lv2:symbol "control_source_1" ;
@@ -188,6 +215,7 @@ synthpod:source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 4 ;
 		lv2:symbol "control_source_2" ;
@@ -195,6 +223,7 @@ synthpod:source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 5 ;
 		lv2:symbol "control_source_3" ;
@@ -202,6 +231,7 @@ synthpod:source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:ControlPort ,
 			lv2:ControlPort ;
 		lv2:index 6 ;
 		lv2:symbol "control_source_4" ;
@@ -216,12 +246,12 @@ synthpod:midi_sink
 	doap:name "Synthpod MIDI Sink" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:InputPort ,
+			synthpod:MIDIPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
@@ -231,6 +261,7 @@ synthpod:midi_sink
 		lv2:designation lv2:control ;
 		pg:group synthpod:group_sink ;
 	] .
+
 # MIDI Source Plugin
 synthpod:midi_source
 	a lv2:Plugin ,
@@ -238,12 +269,12 @@ synthpod:midi_source
 	doap:name "Synthpod MIDI Source" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:OutputPort ,
+			synthpod:MIDIPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
@@ -261,12 +292,12 @@ synthpod:osc_sink
 	doap:name "Synthpod OSC Sink" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:InputPort ,
+			synthpod:OSCPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
@@ -276,6 +307,7 @@ synthpod:osc_sink
 		lv2:designation lv2:control ;
 		pg:group synthpod:group_sink ;
 	] .
+
 # OSC Source Plugin
 synthpod:osc_source
 	a lv2:Plugin ,
@@ -283,12 +315,12 @@ synthpod:osc_source
 	doap:name "Synthpod OSC Source" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:OutputPort ,
+			synthpod:OSCPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
@@ -306,12 +338,12 @@ synthpod:cv_sink
 	doap:name "Synthpod CV Sink" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:InputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 0 ;
 		lv2:symbol "cv_sink_1" ;
@@ -319,6 +351,7 @@ synthpod:cv_sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 1 ;
 		lv2:symbol "cv_sink_2" ;
@@ -326,6 +359,7 @@ synthpod:cv_sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 2 ;
 		lv2:symbol "cv_sink_3" ;
@@ -333,12 +367,14 @@ synthpod:cv_sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 3 ;
 		lv2:symbol "cv_sink_4" ;
 		lv2:name "CV Sink 4" ;
 		pg:group synthpod:group_sink ;
 	] .
+
 # CV Source Plugin
 synthpod:cv_source
 	a lv2:Plugin ,
@@ -346,12 +382,12 @@ synthpod:cv_source
 	doap:name "Synthpod CV Source" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:OutputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 0 ;
 		lv2:symbol "cv_source_1" ;
@@ -359,6 +395,7 @@ synthpod:cv_source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 1 ;
 		lv2:symbol "cv_source_2" ;
@@ -366,6 +403,7 @@ synthpod:cv_source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 2 ;
 		lv2:symbol "cv_source_3" ;
@@ -373,6 +411,7 @@ synthpod:cv_source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:CVPort ,
 			lv2:CVPort ;
 		lv2:index 3 ;
 		lv2:symbol "cv_source_4" ;
@@ -387,12 +426,12 @@ synthpod:audio_sink
 	doap:name "Synthpod Audio Sink" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:InputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 0 ;
 		lv2:symbol "audio_sink_1" ;
@@ -400,6 +439,7 @@ synthpod:audio_sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 1 ;
 		lv2:symbol "audio_sink_2" ;
@@ -407,6 +447,7 @@ synthpod:audio_sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 2 ;
 		lv2:symbol "audio_sink_3" ;
@@ -414,12 +455,14 @@ synthpod:audio_sink
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 3 ;
 		lv2:symbol "audio_sink_4" ;
 		lv2:name "Audio Sink 4" ;
 		pg:group synthpod:group_sink ;
 	] .
+
 # AudioSource Plugin
 synthpod:audio_source
 	a lv2:Plugin ,
@@ -427,12 +470,12 @@ synthpod:audio_source
 	doap:name "Synthpod Audio Source" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, sys:dynamicPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData sys:interface ;
 
 	lv2:port [
 	  a lv2:OutputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 0 ;
 		lv2:symbol "audio_source_1" ;
@@ -440,6 +483,7 @@ synthpod:audio_source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 1 ;
 		lv2:symbol "audio_source_2" ;
@@ -447,6 +491,7 @@ synthpod:audio_source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 2 ;
 		lv2:symbol "audio_source_3" ;
@@ -454,6 +499,7 @@ synthpod:audio_source
 		pg:group synthpod:group_source ;
 	] , [
 	  a lv2:OutputPort ,
+			synthpod:AudioPort ,
 			lv2:AudioPort ;
 		lv2:index 3 ;
 		lv2:symbol "audio_source_4" ;
