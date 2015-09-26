@@ -99,7 +99,7 @@ _smart_slider_value_flush(Evas_Object *o)
 	double drag_x;
 	if(priv->integer)
 	{
-		new_value = floor(new_value);
+		new_value = round(new_value);
 		drag_x = (new_value - priv->min) * priv->scale;
 	}
 	else

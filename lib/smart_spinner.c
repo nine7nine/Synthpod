@@ -95,7 +95,7 @@ _smart_spinner_value_flush(Evas_Object *o)
 	smart_spinner_t *priv = evas_object_smart_data_get(o);
 
 	// calculate exact value
-	float new_value = floor(priv->drag * (priv->count - 1));
+	float new_value = round(priv->drag * (priv->count - 1));
 
 	double drag_x = new_value / (priv->count - 1);
 
