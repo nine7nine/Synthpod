@@ -4671,6 +4671,10 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 								elm_gengrid_item_append(ui->patchgrid, ui->patchitc,
 									&ui->matrix[t], NULL, NULL);
 							}
+
+							// scroll to first item
+							elm_gengrid_item_show(elm_gengrid_nth_item_get(ui->patchgrid, 0),
+								ELM_GENGRID_ITEM_SCROLLTO_NONE);
 						} // patchgrid
 					} // plugpane
 
