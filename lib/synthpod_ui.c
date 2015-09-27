@@ -3990,25 +3990,6 @@ _patchgrid_content_get(void *data, Evas_Object *obj, const char *part)
 }
 
 static void
-_theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	sp_ui_t *ui = data;
-
-	Evas_Coord w, h;
-	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
-
-	if(ui->table)
-		evas_object_resize(ui->table, w, h);
-}
-
-static void
-_theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	//printf("_theme_key_down: %s\n", ev->key);
-	//FIXME new/open/save/exit callbacks
-}
-
-static void
 _pluglist_populate(sp_ui_t *ui, const char *match)
 {
 	if(!ui || !ui->plugs || !ui->pluglist || !ui->plugitc)
@@ -4161,6 +4142,73 @@ _menu_about(void *data, Evas_Object *obj, void *event_info)
 		evas_object_hide(ui->popup);
 	else
 		evas_object_show(ui->popup);
+}
+
+static void
+_theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	Evas_Coord w, h;
+	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
+
+	if(ui->table)
+		evas_object_resize(ui->table, w, h);
+}
+
+static void
+_theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+	const Evas_Event_Key_Down *ev = event_info;
+
+	const Eina_Bool cntrl = evas_key_modifier_is_set(ev->modifiers, "Control");
+	const Eina_Bool shift = evas_key_modifier_is_set(ev->modifiers, "Shift");
+	
+	//printf("_theme_key_down: %s %i %i\n", ev->key, cntrl, shift);
+
+	if(cntrl)
+	{
+		if(!strcmp(ev->key, "n")
+			&& (ui->driver->features & SP_UI_FEATURE_NEW) )
+		{
+			_menu_new(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "o")
+			&& (ui->driver->features & SP_UI_FEATURE_OPEN) )
+		{
+			evas_object_smart_callback_call(ui->load_but, "clicked", NULL);
+		}
+		else if(!strcmp(ev->key, "i")
+			&& (ui->driver->features & SP_UI_FEATURE_IMPORT_FROM) )
+		{
+			evas_object_smart_callback_call(ui->load_but, "clicked", NULL);
+		}
+		else if(!strcmp(ev->key, "s")
+			&& (ui->driver->features & SP_UI_FEATURE_SAVE) )
+		{
+			_menu_save(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "S")
+			&& (ui->driver->features & SP_UI_FEATURE_SAVE_AS) )
+		{
+			evas_object_smart_callback_call(ui->save_as_but, "clicked", NULL);
+		}
+		else if(!strcmp(ev->key, "e")
+			&& (ui->driver->features & SP_UI_FEATURE_EXPORT_TO) )
+		{
+			evas_object_smart_callback_call(ui->save_as_but, "clicked", NULL);
+		}
+		else if(!strcmp(ev->key, "q")
+			&& (ui->driver->features & SP_UI_FEATURE_CLOSE) )
+		{
+			_menu_close(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "h"))
+		{
+			_menu_about(ui, NULL, NULL);
+		}
+	}
 }
 
 sp_ui_t *
@@ -4344,6 +4392,33 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down, ui);
 
+			const Eina_Bool exclusive = EINA_TRUE;
+			const Evas_Modifier_Mask ctrl_mask = evas_key_modifier_mask_get(
+				evas_object_evas_get(ui->win), "Control");
+			const Evas_Modifier_Mask shift_mask = evas_key_modifier_mask_get(
+				evas_object_evas_get(ui->win), "Shift");
+			// new
+			if(!evas_object_key_grab(ui->win, "n", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'n' key\n");
+			// open
+			if(!evas_object_key_grab(ui->win, "o", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'o' key\n");
+			// save and save-as
+			if(!evas_object_key_grab(ui->win, "s", ctrl_mask | shift_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 's' key\n");
+			// import
+			if(!evas_object_key_grab(ui->win, "i", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'i' key\n");
+			// export
+			if(!evas_object_key_grab(ui->win, "e", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'e' key\n");
+			// quit
+			if(!evas_object_key_grab(ui->win, "q", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'q' key\n");
+			// about
+			if(!evas_object_key_grab(ui->win, "h", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'h' key\n");
+
 			ui->mainmenu = elm_box_add(ui->table);
 			if(ui->mainmenu)
 			{
@@ -4386,16 +4461,21 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_fileselector_button_add(ui->mainmenu);
 					if(but)
 					{
-						elm_object_tooltip_text_set(but, "Ctrl+O");
 #if defined(ELM_1_10)
 						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
 #endif
 						elm_fileselector_is_save_set(but, EINA_FALSE);
 						elm_fileselector_folder_only_set(but, EINA_TRUE);
 						if(ui->driver->features & SP_UI_FEATURE_OPEN)
+						{
 							elm_object_text_set(but, "Open");
+							elm_object_tooltip_text_set(but, "Ctrl+O");
+						}
 						else if(ui->driver->features & SP_UI_FEATURE_IMPORT_FROM)
+						{
 							elm_object_text_set(but, "Import");
+							elm_object_tooltip_text_set(but, "Ctrl+I");
+						}
 						evas_object_smart_callback_add(but, "file,chosen", _menu_open, ui);
 						evas_object_show(but);
 						elm_box_pack_end(ui->mainmenu, but);
@@ -4446,16 +4526,21 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_fileselector_button_add(ui->mainmenu);
 					if(but)
 					{
-						elm_object_tooltip_text_set(but, "Ctrl+Shift+S");
 #if defined(ELM_1_10)
 						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
 #endif
 						elm_fileselector_is_save_set(but, EINA_TRUE);
 						elm_fileselector_folder_only_set(but, EINA_TRUE);
 						if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
+						{
 							elm_object_text_set(but, "Save as");
+							elm_object_tooltip_text_set(but, "Ctrl+Shift+S");
+						}
 						else if(ui->driver->features & SP_UI_FEATURE_EXPORT_TO)
+						{
 							elm_object_text_set(but, "Export");
+							elm_object_tooltip_text_set(but, "Ctrl+E");
+						}
 						evas_object_smart_callback_add(but, "file,chosen", _menu_save_as, ui);
 						evas_object_show(but);
 						elm_box_pack_end(ui->mainmenu, but);
@@ -4504,7 +4589,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				but = elm_button_add(ui->mainmenu);
 				if(but)
 				{
-						elm_object_tooltip_text_set(but, "Ctrl+?");
+						elm_object_tooltip_text_set(but, "Ctrl+H");
 #if defined(ELM_1_10)
 						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
 #endif
