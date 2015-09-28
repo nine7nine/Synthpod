@@ -34,7 +34,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 14
+#define NUM_FEATURES 13
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -728,9 +728,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		mod->feature_list[nfeatures].URI = LV2_BUF_SIZE__powerOf2BlockLength;
 		mod->feature_list[nfeatures++].data = NULL;
 	}
-		
-	mod->feature_list[nfeatures].URI = SYNTHPOD_PREFIX"systemPorts";
-	mod->feature_list[nfeatures++].data = NULL;
 
 	assert(nfeatures <= NUM_FEATURES);
 

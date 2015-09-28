@@ -86,8 +86,8 @@ synthpod:sink
 	doap:name "Synthpod System Sink" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
-	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, synthpod:systemPorts ;
 
 	lv2:port [
 		# event in
@@ -166,8 +166,8 @@ synthpod:source
 	doap:name "Synthpod System Source" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
-	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, synthpod:systemPorts ;
 
 	lv2:port [
 		# event in
