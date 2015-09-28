@@ -74,7 +74,7 @@ _note_on(plughandle_t *handle)
 	else
 		evas_object_color_set(handle->obj, 0x80, 0x80, 0x80, 0xff);
 
-	midi_atom_t midi_atom = {
+	const midi_atom_t midi_atom = {
 		.atom.size = 3,
 		.atom.type = handle->uri.midi_event,
 		.midi[0] = 0x90,
@@ -99,12 +99,34 @@ _note_off(plughandle_t *handle)
 	else
 		evas_object_color_set(handle->obj, 0x00, 0x00, 0x00, 0xff);
 
-	midi_atom_t midi_atom = {
+	const midi_atom_t midi_atom = {
 		.atom.size = 3,
 		.atom.type = handle->uri.midi_event,
 		.midi[0] = 0x80,
 		.midi[1] = *handle->key,
 		.midi[2] = 0x7f
+	};
+
+	handle->write_function(handle->controller, 0, sizeof(LV2_Atom) + 3,
+		handle->uri.event_transfer, &midi_atom);
+}
+
+static void
+_note_pressure(plughandle_t *handle, int Y)
+{
+	if(!handle->obj || !handle->key)
+		return;
+
+	int x, y, w, h;
+	evas_object_geometry_get(handle->obj, &x, &y, &w, &h);
+	const uint8_t touch = (Y - y) * 0x7f / h;
+
+	const midi_atom_t midi_atom = {
+		.atom.size = 3,
+		.atom.type = handle->uri.midi_event,
+		.midi[0] = 0xa0,
+		.midi[1] = *handle->key,
+		.midi[2] = touch
 	};
 
 	handle->write_function(handle->controller, 0, sizeof(LV2_Atom) + 3,
@@ -160,6 +182,10 @@ _mouse_move(void *data, Evas *e, Evas_Object *obj, void *event_info)
 			handle->key = key;
 			handle->obj = itm;
 			_note_on(handle);
+		}
+		else
+		{
+			_note_pressure(handle, y);
 		}
 
 		break;

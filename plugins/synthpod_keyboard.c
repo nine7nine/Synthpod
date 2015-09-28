@@ -38,8 +38,21 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 
 	const LV2_Atom_Sequence *event_in;
-	const float *octave;
 	LV2_Atom_Sequence *event_out;
+	const float *octave;
+	const float *channel;
+	const float *velocity;
+	const float *controller_id;
+	const float *controller_val;
+	const float *program_change;
+	const float *channel_pressure;
+	const float *bender;
+
+	uint8_t _controller_id;
+	uint8_t _controller_val;
+	uint8_t _program_change;
+	uint8_t _channel_pressure;
+	uint16_t _bender;
 };
 
 static LV2_Handle
@@ -86,6 +99,27 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 		case 2:
 			handle->octave = (const float *)data;
 			break;
+		case 3:
+			handle->channel = (const float *)data;
+			break;
+		case 4:
+			handle->velocity = (const float *)data;
+			break;
+		case 5:
+			handle->controller_id = (const float *)data;
+			break;
+		case 6:
+			handle->controller_val = (const float *)data;
+			break;
+		case 7:
+			handle->program_change = (const float *)data;
+			break;
+		case 8:
+			handle->channel_pressure = (const float *)data;
+			break;
+		case 9:
+			handle->bender = (const float *)data;
+			break;
 		default:
 			break;
 	}
@@ -104,7 +138,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 
-	uint8_t offset = floor(*handle->octave) * 12;
+	const uint8_t offset = floor(*handle->octave) * 12;
+	const uint8_t channel = floor(*handle->channel);
+	const uint8_t velocity = floor(*handle->velocity);
+	const uint8_t controller_id = floor(*handle->controller_id);
+	const uint8_t controller_val = floor(*handle->controller_val);
+	const uint8_t program_change = floor(*handle->program_change);
+	const uint8_t channel_pressure = floor(*handle->channel_pressure);
+	const uint16_t bender = floor(*handle->bender);
 
 	uint32_t capacity = handle->event_out->atom.size;
 	LV2_Atom_Forge *forge = &handle->forge;
@@ -120,16 +161,26 @@ run(LV2_Handle instance, uint32_t nsamples)
 		{
 			const uint8_t *midi = LV2_ATOM_BODY_CONST(atom);
 
-			uint8_t cmnd = midi[0] & 0xf0;
+			const uint8_t cmnd = midi[0] & 0xf0;
+			const uint8_t sys = cmnd | channel;
 
 			lv2_atom_forge_frame_time(forge, ev->time.frames);
 			lv2_atom_forge_atom(forge, atom->size, handle->uri.midi_event);
 			if( (cmnd == 0x90) || (cmnd == 0x80) )
 			{
-				uint8_t offset_midi [3] = {
-					[0] = midi[0],
+				const uint8_t offset_midi [3] = {
+					[0] = sys,
 					[1] = midi[1] + offset,
-					[2] = midi[2]
+					[2] = velocity
+				};
+				lv2_atom_forge_raw(forge, offset_midi, atom->size);
+			}
+			else if(cmnd == 0xa0)
+			{
+				const uint8_t offset_midi [3] = {
+					[0] = sys,
+					[1] = midi[1] + offset,
+					[2] = midi[2] 
 				};
 				lv2_atom_forge_raw(forge, offset_midi, atom->size);
 			}
@@ -139,6 +190,70 @@ run(LV2_Handle instance, uint32_t nsamples)
 			}
 			lv2_atom_forge_pad(forge, atom->size);
 		}
+	}
+
+	if(  (handle->_controller_id != controller_id)
+		|| (handle->_controller_val != controller_val) )
+	{
+		handle->_controller_id = controller_id;
+		handle->_controller_val = controller_val;
+
+		const uint8_t offset_midi [3] = {
+			[0] = 0xb0 | channel,
+			[1] = controller_id,
+			[2] = controller_val
+		};
+
+		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_atom(forge, 3, handle->uri.midi_event);
+		lv2_atom_forge_raw(forge, offset_midi, 3);
+		lv2_atom_forge_pad(forge, 3);
+	}
+	
+	if(handle->_program_change != program_change)
+	{
+		handle->_program_change = program_change;
+
+		const uint8_t offset_midi [2] = {
+			[0] = 0xc0 | channel,
+			[1] = program_change
+		};
+
+		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_atom(forge, 2, handle->uri.midi_event);
+		lv2_atom_forge_raw(forge, offset_midi, 2);
+		lv2_atom_forge_pad(forge, 2);
+	}
+	
+	if(handle->_channel_pressure != channel_pressure)
+	{
+		handle->_channel_pressure = channel_pressure;
+
+		const uint8_t offset_midi [2] = {
+			[0] = 0xd0 | channel,
+			[1] = channel_pressure
+		};
+
+		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_atom(forge, 2, handle->uri.midi_event);
+		lv2_atom_forge_raw(forge, offset_midi, 2);
+		lv2_atom_forge_pad(forge, 2);
+	}
+
+	if(handle->_bender != bender)
+	{
+		handle->_bender = bender;
+
+		const uint8_t offset_midi [3] = {
+			[0] = 0xe0 | channel,
+			[1] = bender & 0x7f,
+			[2] = bender >> 7
+		};
+
+		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_atom(forge, 3, handle->uri.midi_event);
+		lv2_atom_forge_raw(forge, offset_midi, 3);
+		lv2_atom_forge_pad(forge, 3);
 	}
 
 	lv2_atom_forge_pop(forge, &frame);

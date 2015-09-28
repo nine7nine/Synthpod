@@ -35,6 +35,7 @@
 @prefix urid: <http://lv2plug.in/ns/ext/urid#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
 @prefix opts: <http://lv2plug.in/ns/ext/options#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -342,6 +343,152 @@ synthpod:keyboard
 		lv2:maximum 6 ;
 		lv2:portProperty lv2:integer ;
 		units:unit units:oct ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "channel" ;
+		lv2:name "Channel" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 7 ;
+		lv2:portProperty lv2:integer ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "velocity" ;
+		lv2:name "Velocity" ;
+		lv2:default 64 ;
+		lv2:minimum 0 ;
+		lv2:maximum 127 ;
+		lv2:portProperty lv2:integer ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "controller_id" ;
+		lv2:name "Controller ID" ;
+		lv2:default 7 ;
+		lv2:minimum 0 ;
+		lv2:maximum 127 ;
+		lv2:portProperty lv2:integer, lv2:enumeration ;
+		lv2:scalePoint [ rdf:value 0 ; rdfs:label "Bank Selection MSB" ] ;
+		lv2:scalePoint [ rdf:value 1 ; rdfs:label "Modulation MSB" ] ;
+		lv2:scalePoint [ rdf:value 2 ; rdfs:label "Breath MSB" ] ;
+		lv2:scalePoint [ rdf:value 4 ; rdfs:label "Foot MSB" ] ;
+		lv2:scalePoint [ rdf:value 5 ; rdfs:label "Portamento Time MSB" ] ;
+		lv2:scalePoint [ rdf:value 6 ; rdfs:label "Data Entry MSB" ] ;
+		lv2:scalePoint [ rdf:value 7 ; rdfs:label "Main Volume MSB" ] ;
+		lv2:scalePoint [ rdf:value 8 ; rdfs:label "Balance MSB" ] ;
+		lv2:scalePoint [ rdf:value 10 ; rdfs:label "Panpot MSB" ] ;
+		lv2:scalePoint [ rdf:value 11 ; rdfs:label "Expression MSB" ] ;
+		lv2:scalePoint [ rdf:value 12 ; rdfs:label "Effect1 MSB" ] ;
+		lv2:scalePoint [ rdf:value 13 ; rdfs:label "Effect2 MSB" ] ;
+		lv2:scalePoint [ rdf:value 16 ; rdfs:label "General Purpose 1 MSB" ] ;
+		lv2:scalePoint [ rdf:value 17 ; rdfs:label "General Purpose 2 MSB" ] ;
+		lv2:scalePoint [ rdf:value 18 ; rdfs:label "General Purpose 3 MSB" ] ;
+		lv2:scalePoint [ rdf:value 19 ; rdfs:label "General Purpose 4 MSB" ] ;
+
+		lv2:scalePoint [ rdf:value 32 ; rdfs:label "Bank Selection LSB" ] ;
+		lv2:scalePoint [ rdf:value 33 ; rdfs:label "Modulation LSB" ] ;
+		lv2:scalePoint [ rdf:value 34 ; rdfs:label "Breath LSB" ] ;
+		lv2:scalePoint [ rdf:value 36 ; rdfs:label "Foot LSB" ] ;
+		lv2:scalePoint [ rdf:value 37 ; rdfs:label "Portamento Time LSB" ] ;
+		lv2:scalePoint [ rdf:value 38 ; rdfs:label "Data Entry LSB" ] ;
+		lv2:scalePoint [ rdf:value 39 ; rdfs:label "Main Volume LSB" ] ;
+		lv2:scalePoint [ rdf:value 40 ; rdfs:label "Balance LSB" ] ;
+		lv2:scalePoint [ rdf:value 42 ; rdfs:label "Panpot LSB" ] ;
+		lv2:scalePoint [ rdf:value 43 ; rdfs:label "Expression LSB" ] ;
+		lv2:scalePoint [ rdf:value 44 ; rdfs:label "Effect1 LSB" ] ;
+		lv2:scalePoint [ rdf:value 45 ; rdfs:label "Effect2 LSB" ] ;
+		lv2:scalePoint [ rdf:value 48 ; rdfs:label "General Purpose 1 LSB" ] ;
+		lv2:scalePoint [ rdf:value 49 ; rdfs:label "General Purpose 2 LSB" ] ;
+		lv2:scalePoint [ rdf:value 50 ; rdfs:label "General Purpose 3 LSB" ] ;
+		lv2:scalePoint [ rdf:value 51 ; rdfs:label "General Purpose 4 LSB" ] ;
+
+		lv2:scalePoint [ rdf:value 64 ; rdfs:label "Sustain Pedal" ] ;
+		lv2:scalePoint [ rdf:value 65 ; rdfs:label "Portamento" ] ;
+		lv2:scalePoint [ rdf:value 66 ; rdfs:label "Sostenuto" ] ;
+		lv2:scalePoint [ rdf:value 67 ; rdfs:label "Soft Pedal" ] ;
+		lv2:scalePoint [ rdf:value 68 ; rdfs:label "Legato Foot Switch" ] ;
+		lv2:scalePoint [ rdf:value 69 ; rdfs:label "Hold2" ] ;
+		lv2:scalePoint [ rdf:value 70 ; rdfs:label "SC1 Sound Variation" ] ;
+		lv2:scalePoint [ rdf:value 71 ; rdfs:label "SC2 Timbre" ] ;
+		lv2:scalePoint [ rdf:value 72 ; rdfs:label "SC3 Release Time" ] ;
+		lv2:scalePoint [ rdf:value 73 ; rdfs:label "SC4 Attack Time" ] ;
+		lv2:scalePoint [ rdf:value 74 ; rdfs:label "SC5 Brightness" ] ;
+		lv2:scalePoint [ rdf:value 75 ; rdfs:label "SC6" ] ;
+		lv2:scalePoint [ rdf:value 76 ; rdfs:label "SC7" ] ;
+		lv2:scalePoint [ rdf:value 77 ; rdfs:label "SC8" ] ;
+		lv2:scalePoint [ rdf:value 78 ; rdfs:label "SC9" ] ;
+		lv2:scalePoint [ rdf:value 79 ; rdfs:label "SC10" ] ;
+		lv2:scalePoint [ rdf:value 80 ; rdfs:label "General Purpose 5" ] ;
+		lv2:scalePoint [ rdf:value 81 ; rdfs:label "General Purpose 6" ] ;
+		lv2:scalePoint [ rdf:value 82 ; rdfs:label "General Purpose 7" ] ;
+		lv2:scalePoint [ rdf:value 83 ; rdfs:label "General Purpose 8" ] ;
+		lv2:scalePoint [ rdf:value 84 ; rdfs:label "Portamento Control" ] ;
+		lv2:scalePoint [ rdf:value 91 ; rdfs:label "E1 Reverb Depth" ] ;
+		lv2:scalePoint [ rdf:value 92 ; rdfs:label "E2 Tremolo Depth" ] ;
+		lv2:scalePoint [ rdf:value 93 ; rdfs:label "E3 Chorus Depth" ] ;
+		lv2:scalePoint [ rdf:value 94 ; rdfs:label "E4 Detune Depth" ] ;
+		lv2:scalePoint [ rdf:value 95 ; rdfs:label "E5 Phaser Depth" ] ;
+		lv2:scalePoint [ rdf:value 96 ; rdfs:label "Data Increment" ] ;
+		lv2:scalePoint [ rdf:value 97 ; rdfs:label "Data Decrement" ] ;
+
+		lv2:scalePoint [ rdf:value 98 ; rdfs:label "Non-registered Parameter Number LSB" ] ;
+		lv2:scalePoint [ rdf:value 99 ; rdfs:label "Non-registered Parameter Number MSB" ] ;
+		lv2:scalePoint [ rdf:value 100 ; rdfs:label "Registered Parameter Number LSB" ] ;
+		lv2:scalePoint [ rdf:value 101 ; rdfs:label "Registered Parameter Number MSB" ] ;
+
+		lv2:scalePoint [ rdf:value 120 ; rdfs:label "All Sounds Off" ] ;
+		lv2:scalePoint [ rdf:value 121 ; rdfs:label "Reset Controllers" ] ;
+		lv2:scalePoint [ rdf:value 122 ; rdfs:label "Local Control Switch" ] ;
+		lv2:scalePoint [ rdf:value 123 ; rdfs:label "All Notes Off" ] ;
+		lv2:scalePoint [ rdf:value 124 ; rdfs:label "Omni Off" ] ;
+		lv2:scalePoint [ rdf:value 125 ; rdfs:label "Omni On" ] ;
+		lv2:scalePoint [ rdf:value 126 ; rdfs:label "Mono1" ] ;
+		lv2:scalePoint [ rdf:value 127 ; rdfs:label "Mono2" ] ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "controller_val" ;
+		lv2:name "Controller Value" ;
+		lv2:default 64 ;
+		lv2:minimum 0 ;
+		lv2:maximum 127 ;
+		lv2:portProperty lv2:integer ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 7 ;
+		lv2:symbol "program_change" ;
+		lv2:name "Program Change" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 127 ;
+		lv2:portProperty lv2:integer ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 8 ;
+		lv2:symbol "channel_pressure" ;
+		lv2:name "Channel Pressure" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 127 ;
+		lv2:portProperty lv2:integer ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 9 ;
+		lv2:symbol "bender" ;
+		lv2:name "Bender" ;
+		lv2:default 8192 ;
+		lv2:minimum 0 ;
+		lv2:maximum 16383 ;
+		lv2:portProperty lv2:integer ;
 	] .
 
 # CV2Control Plugin
