@@ -33,6 +33,7 @@
 #include <synthpod_common.h>
 #include <lv2_osc.h>
 
+typedef enum _sp_app_features_t sp_app_features_t;
 typedef enum _system_port_t system_port_t;
 
 typedef struct _sp_app_t sp_app_t;
@@ -49,6 +50,11 @@ typedef int (*sp_vprintf)(void *data, LV2_URID type, const char *fmt, va_list ar
 typedef void *(*sp_system_port_add)(void *data, system_port_t type,
 	const char *short_name, const char *pretty_name, int input);
 typedef void (*sp_system_port_del)(void *data, void *sys_port);
+
+enum _sp_app_features_t {
+	SP_APP_FEATURE_FIXED_BLOCK_LENGTH				= (1 << 0),
+	SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH	= (1 << 1)
+};
 
 enum _system_port_t {
 	SYSTEM_PORT_NONE = 0,
@@ -101,6 +107,8 @@ struct _sp_app_driver_t {
 
 	// clock_sync
 	osc_schedule_t *osc_sched;
+
+	sp_app_features_t features;
 };
 
 SYNTHPOD_SYMBOL_EXTERN sp_app_t *

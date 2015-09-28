@@ -412,6 +412,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.system_port_add = NULL;
 	handle->driver.system_port_del = NULL;
 	handle->driver.osc_sched = NULL;
+	handle->driver.features = 0;
 
 	const LilvWorld *world = NULL;
 
@@ -432,6 +433,10 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->zero_sched = (Zero_Worker_Schedule *)features[i]->data;
 		else if(!strcmp(features[i]->URI, OSC__schedule))
 			handle->driver.osc_sched = (osc_schedule_t *)features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_BUF_SIZE__fixedBlockLength))
+			handle->driver.features |= SP_APP_FEATURE_FIXED_BLOCK_LENGTH;
+		else if(!strcmp(features[i]->URI, LV2_BUF_SIZE__powerOf2BlockLength))
+			handle->driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
 
 	if(!handle->driver.map)
 	{

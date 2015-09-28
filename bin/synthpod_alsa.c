@@ -890,6 +890,9 @@ elm_main(int argc, char **argv)
 	handle.osc_sched.frames2osc = _osc_schedule_frames2osc;
 	handle.osc_sched.handle = &handle;
 	bin->app_driver.osc_sched = &handle.osc_sched;
+	bin->app_driver.features = SP_APP_FEATURE_FIXED_BLOCK_LENGTH; // always true for ALSA
+  if(handle.frsize && !(handle.frsize & (handle.frsize - 1))) // check for powerOf2
+		bin->app_driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
 
 	bin->ui_driver.saved = _ui_saved;
 

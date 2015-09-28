@@ -61,13 +61,13 @@ typedef void (*sp_saved_t)(void *data, int status);
 typedef void (*sp_close_t)(void *data);
 
 enum _sp_ui_features_t {
-	SP_UI_FEATURE_NEW					= 1,
-	SP_UI_FEATURE_OPEN				= 2,
-	SP_UI_FEATURE_IMPORT_FROM	= 4,
-	SP_UI_FEATURE_SAVE				= 8,
-	SP_UI_FEATURE_SAVE_AS			= 16,
-	SP_UI_FEATURE_EXPORT_TO		= 32,
-	SP_UI_FEATURE_CLOSE				= 64
+	SP_UI_FEATURE_NEW					= (1 << 0),
+	SP_UI_FEATURE_OPEN				= (1 << 1),
+	SP_UI_FEATURE_IMPORT_FROM	= (1 << 2),
+	SP_UI_FEATURE_SAVE				= (1 << 3),
+	SP_UI_FEATURE_SAVE_AS			= (1 << 4),
+	SP_UI_FEATURE_EXPORT_TO		= (1 << 5),
+	SP_UI_FEATURE_CLOSE				= (1 << 6)
 };
 
 struct _sp_ui_driver_t {

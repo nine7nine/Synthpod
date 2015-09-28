@@ -1164,6 +1164,7 @@ elm_main(int argc, char **argv)
 #else
 	bin->app_driver.osc_sched = NULL;
 #endif
+	bin->app_driver.features = SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH; // always true for JACK
 
 	bin->ui_driver.saved = _ui_saved;
 
