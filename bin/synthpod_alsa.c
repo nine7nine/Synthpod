@@ -1,18 +1,18 @@
 /*
  * Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
  *
- * This is free software: you can redistribute it and/or modify
- * it under the terms of the Artistic License 2.0 as published by
- * The Perl Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This source is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Artistic License 2.0 for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Artistic License 2.0
- * along the source as a COPYING file. If not, obtain it from
- * http://www.perlfoundation.org/artistic_license_2_0.
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see http://www.gnu.org/licenses.
  */
 
 #include <stdio.h>
@@ -772,7 +772,7 @@ elm_main(int argc, char **argv)
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
 		"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
-		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
+		"Released under GNU General Public License 3 by Open Music Kontrollers\n");
 
 	// read local configuration if present
 	Efreet_Ini *ini = _read_config(&handle);
@@ -785,18 +785,18 @@ elm_main(int argc, char **argv)
 			case 'v':
 				fprintf(stderr,
 					"--------------------------------------------------------------------\n"
-					"This is free software: you can redistribute it and/or modify\n"
-					"it under the terms of the Artistic License 2.0 as published by\n"
-					"The Perl Foundation.\n"
+					"This program is free software; you can redistribute it and/or modify\n"
+					"it under the terms of the GNU General Public License as published by\n"
+					"the Free Software Foundation; either version 3 of the License, or\n"
+					"(at your option) any later version.\n"
 					"\n"
-					"This source is distributed in the hope that it will be useful,\n"
+					"This program is distributed in the hope that it will be useful,\n"
 					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
-					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
-					"Artistic License 2.0 for more details.\n"
+					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
+					"GNU General Public License for more details.\n"
 					"\n"
-					"You should have received a copy of the Artistic License 2.0\n"
-					"along the source as a COPYING file. If not, obtain it from\n"
-					"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
+					"You should have received a copy of the GNU General Public License\n"
+					"along with this program.  If not, see http://www.gnu.org/licenses.\n\n");
 				return 0;
 			case 'h':
 				fprintf(stderr,

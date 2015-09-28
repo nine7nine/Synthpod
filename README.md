@@ -54,11 +54,11 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 #### OpenSuse 13.2
 	
 	# build dependencies
-	zypper addrepo http://download.opensuse.org/repositories/home:/edogawa/openSUSE_13.2/home:edogawa.repo
-	zypper addrepo http://download.opensuse.org/repositories/home:/rncbc/openSUSE_13.2/home:rncbc.repo
-	zypper install cmake gcc gcc-c++ git alsa-devel elementary-devel liblilv-devel libjack-devel libzita-alsa-pcmi0-devel lv2-devel pkg-config
+	sudo zypper addrepo http://download.opensuse.org/repositories/home:/edogawa/openSUSE_13.2/home:edogawa.repo
+	sudo zypper addrepo http://download.opensuse.org/repositories/home:/rncbc/openSUSE_13.2/home:rncbc.repo
+	sudo zypper install cmake gcc gcc-c++ git alsa-devel elementary-devel liblilv-devel libjack-devel libzita-alsa-pcmi0-devel lv2-devel pkg-config
 
-### License
+### License (everything but synthpod\_alsa)
 
 Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
 
@@ -74,3 +74,20 @@ Artistic License 2.0 for more details.
 You should have received a copy of the Artistic License 2.0
 along the source as a COPYING file. If not, obtain it from
 <http://www.perlfoundation.org/artistic_license_2_0>.
+
+### License (synthpod\_alsa only)
+
+Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
