@@ -2880,7 +2880,7 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 				&ui->forge, trans, mod->uid, index, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
-				strncpy(LV2_ATOM_BODY(atom), entered, strsize-1);
+				strcpy(LV2_ATOM_BODY(atom), entered);
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
