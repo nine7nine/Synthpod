@@ -4392,7 +4392,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down, ui);
 
-			const Eina_Bool exclusive = EINA_TRUE;
+			const Eina_Bool exclusive = EINA_FALSE;
 			const Evas_Modifier_Mask ctrl_mask = evas_key_modifier_mask_get(
 				evas_object_evas_get(ui->win), "Control");
 			const Evas_Modifier_Mask shift_mask = evas_key_modifier_mask_get(
