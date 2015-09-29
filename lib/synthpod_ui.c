@@ -4461,9 +4461,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_fileselector_button_add(ui->mainmenu);
 					if(but)
 					{
-#if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
 						elm_fileselector_is_save_set(but, EINA_FALSE);
 						elm_fileselector_folder_only_set(but, EINA_TRUE);
 						if(ui->driver->features & SP_UI_FEATURE_OPEN)
@@ -4476,6 +4473,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 							elm_object_text_set(but, "Import");
 							elm_object_tooltip_text_set(but, "Ctrl+I");
 						}
+#if defined(ELM_1_10)
+						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
 						evas_object_smart_callback_add(but, "file,chosen", _menu_open, ui);
 						evas_object_show(but);
 						elm_box_pack_end(ui->mainmenu, but);
@@ -4526,9 +4526,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_fileselector_button_add(ui->mainmenu);
 					if(but)
 					{
-#if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
 						elm_fileselector_is_save_set(but, EINA_TRUE);
 						elm_fileselector_folder_only_set(but, EINA_TRUE);
 						if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
@@ -4541,6 +4538,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 							elm_object_text_set(but, "Export");
 							elm_object_tooltip_text_set(but, "Ctrl+E");
 						}
+#if defined(ELM_1_10)
+						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+#endif
 						evas_object_smart_callback_add(but, "file,chosen", _menu_save_as, ui);
 						evas_object_show(but);
 						elm_box_pack_end(ui->mainmenu, but);
