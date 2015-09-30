@@ -162,4 +162,7 @@ sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options);
 SYNTHPOD_SYMBOL_EXTERN int
 sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples);
 
+SYNTHPOD_SYMBOL_EXTERN int
+sp_app_internal_event(sp_app_t *app, LV2_URID type); 
+
 #endif // _SYNTHPOD_APP_H

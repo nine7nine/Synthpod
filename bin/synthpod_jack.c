@@ -555,8 +555,24 @@ _process(jack_nframes_t nsamples, void *data)
 			{
 				void *seq_in = source->buf;
 
-				lv2_atom_sequence_clear(seq_in);
-				//FIXME add output from rt-thread
+				LV2_Atom_Forge *forge = &handle->forge;
+				LV2_Atom_Forge_Frame frame;
+				lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
+				lv2_atom_forge_sequence_head(forge, &frame, 0);
+
+				const LV2_Atom_Object *obj;
+				size_t size;
+				while((obj = varchunk_read_request(bin->app_from_comm, &size)))
+				{
+					lv2_atom_forge_frame_time(forge, 0);
+					lv2_atom_forge_raw(forge, obj, size);
+					lv2_atom_forge_pad(forge, size);
+
+					varchunk_read_advance(bin->app_from_comm);
+				}
+
+				lv2_atom_forge_pop(forge, &frame);
+
 				break;
 			}
 		}

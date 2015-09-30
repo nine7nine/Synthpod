@@ -64,6 +64,8 @@ struct _bin_t {
 	varchunk_t *app_from_worker;
 	varchunk_t *app_to_log;
 
+	varchunk_t *app_from_comm;
+
 	char *path;
 	synthpod_nsm_t *nsm;
 
@@ -183,6 +185,18 @@ static void
 _app_to_ui_advance(size_t size, void *data)
 {
 	bin_t *bin = data;
+
+	// add internal events comming from comm
+	const LV2_Atom_Object *obj = bin->app_to_ui->buf + bin->app_to_ui->head + sizeof(varchunk_elmnt_t);
+	if(sp_app_internal_event(bin->app, obj->body.otype))
+	{
+		void *dst;
+		if((dst = varchunk_write_request(bin->app_from_comm, size)))
+		{
+			memcpy(dst, obj, size);
+			varchunk_write_advance(bin->app_from_comm, size);
+		}
+	}
 
 	varchunk_write_advance(bin->app_to_ui, size);
 }
@@ -337,6 +351,7 @@ bin_init(bin_t *bin)
 	bin->app_to_worker = varchunk_new(CHUNK_SIZE);
 	bin->app_from_worker = varchunk_new(CHUNK_SIZE);
 	bin->app_to_log = varchunk_new(CHUNK_SIZE);
+	bin->app_from_comm = varchunk_new(CHUNK_SIZE);
 
 	bin->ext_urid = ext_urid_new();
 	LV2_URID_Map *map = ext_urid_map_get(bin->ext_urid);
@@ -450,6 +465,7 @@ bin_deinit(bin_t *bin)
 	varchunk_free(bin->app_to_log);
 	varchunk_free(bin->app_to_worker);
 	varchunk_free(bin->app_from_worker);
+	varchunk_free(bin->app_from_comm);
 }
 
 static inline void

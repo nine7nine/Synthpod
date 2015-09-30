@@ -3504,3 +3504,13 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 
 	return 0;
 }
+
+// rt
+int
+sp_app_internal_event(sp_app_t *app, LV2_URID type)
+{
+	return (type != app->regs.port.float_protocol.urid)
+			&& (type != app->regs.port.peak_protocol.urid)
+			&& (type != app->regs.port.atom_transfer.urid)
+			&& (type != app->regs.port.event_transfer.urid);
+}
