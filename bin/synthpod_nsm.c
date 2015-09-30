@@ -109,8 +109,12 @@ _client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_
 	osc_get_string(ptr, &id);
 
 	// open/create app
-	if(nsm->driver->open(dir, name, id, nsm->data))
+	char *synthpod_dir = ecore_file_realpath(dir);
+
+	if(nsm->driver->open(synthpod_dir, name, id, nsm->data))
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
+
+	free(synthpod_dir);
 
 	return 1;
 }
@@ -349,8 +353,13 @@ synthpod_nsm_new(const char *exe, const char *path,
 
 		if(path)
 		{
-			if(nsm->driver->open(path, nsm->call, nsm->exe, nsm->data))
+			char *synthpod_dir = ecore_file_realpath(path);
+			fprintf(stderr, "realpath: %s\n", synthpod_dir);
+
+			if(nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
 				fprintf(stderr, "NSM load failed: '%s'\n", path);
+
+			free(synthpod_dir);
 		}
 		else
 		{

@@ -3009,6 +3009,8 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		if(!path)
 			continue;
 
+		fprintf(stderr, "path is: %s\n", path);
+
 		LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
 			app->driver->map, NULL, NULL, NULL, path,
 			_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
