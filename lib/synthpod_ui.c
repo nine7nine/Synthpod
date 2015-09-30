@@ -4362,11 +4362,11 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->griditc->func.del = _modgrid_del;
 		}
 
-		ui->table = elm_table_add(ui->win);
+		ui->table = elm_box_add(ui->win);
 		if(ui->table)
 		{
-			elm_table_homogeneous_set(ui->table, EINA_FALSE);
-			elm_table_padding_set(ui->table, 0, 0);
+			elm_box_homogeneous_set(ui->table, EINA_FALSE);
+			elm_box_padding_set(ui->table, 0, 0);
 			evas_object_size_hint_weight_set(ui->table, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(ui->table, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(ui->table);
@@ -4425,17 +4425,18 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				Evas_Object *but;
 
 				elm_box_horizontal_set(ui->mainmenu, EINA_TRUE);
-				elm_box_homogeneous_set(ui->mainmenu, EINA_FALSE);
+				elm_box_homogeneous_set(ui->mainmenu, EINA_TRUE);
 				evas_object_size_hint_weight_set(ui->mainmenu, EVAS_HINT_EXPAND, 0.f);
 				evas_object_size_hint_align_set(ui->mainmenu, 0.f, 0.f);
 				evas_object_show(ui->mainmenu);
-				elm_table_pack(ui->table, ui->mainmenu, 0, 0, 1, 1);
+				elm_box_pack_end(ui->table, ui->mainmenu);
 			
 				if(ui->driver->features & SP_UI_FEATURE_NEW)
 				{
 					but = elm_button_add(ui->mainmenu);
 					if(but)
 					{
+						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
 						elm_object_tooltip_text_set(but, "Ctrl+N");
 #if defined(ELM_1_10)
 						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
@@ -4461,6 +4462,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_fileselector_button_add(ui->mainmenu);
 					if(but)
 					{
+						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
 						elm_fileselector_is_save_set(but, EINA_FALSE);
 						elm_fileselector_folder_only_set(but, EINA_TRUE);
 						if(ui->driver->features & SP_UI_FEATURE_OPEN)
@@ -4501,6 +4503,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_button_add(ui->mainmenu);
 					if(but)
 					{
+						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
 						elm_object_tooltip_text_set(but, "Ctrl+S");
 #if defined(ELM_1_10)
 						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
@@ -4526,6 +4529,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_fileselector_button_add(ui->mainmenu);
 					if(but)
 					{
+						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
 						elm_fileselector_is_save_set(but, EINA_TRUE);
 						elm_fileselector_folder_only_set(but, EINA_TRUE);
 						if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
@@ -4566,6 +4570,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					but = elm_button_add(ui->mainmenu);
 					if(but)
 					{
+						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
 						elm_object_tooltip_text_set(but, "Ctrl+Q");
 #if defined(ELM_1_10)
 						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
@@ -4589,9 +4594,10 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				but = elm_button_add(ui->mainmenu);
 				if(but)
 				{
-						elm_object_tooltip_text_set(but, "Ctrl+H");
+					evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
+					elm_object_tooltip_text_set(but, "Ctrl+H");
 #if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
+					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
 #endif
 					elm_object_text_set(but, "About");
 					evas_object_smart_callback_add(but, "clicked", _menu_about, ui);
@@ -4617,7 +4623,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 				evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 				evas_object_show(ui->mainpane);
-				elm_table_pack(ui->table, ui->mainpane, 0, 1, 1, 1);
+				elm_box_pack_end(ui->table, ui->mainpane);
 
 				ui->popup = elm_popup_add(ui->table);
 				if(ui->popup)
@@ -4812,7 +4818,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				evas_object_size_hint_weight_set(ui->statusline, EVAS_HINT_EXPAND, 0.f);
 				evas_object_size_hint_align_set(ui->statusline, 0.f, 1.f);
 				evas_object_show(ui->statusline);
-				elm_table_pack(ui->table, ui->statusline, 0, 2, 1, 1);
+				elm_box_pack_end(ui->table, ui->statusline);
 			} // statusline
 		} // theme
 	}
