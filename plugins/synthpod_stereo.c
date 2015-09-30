@@ -97,12 +97,14 @@ struct _plughandle_t {
 		LV2_Atom_Sequence *event_in;
 		float *audio_in[2];
 		float *input[4];
+		LV2_Atom_Sequence *com_in;
 	} source;
 
 	struct {
 		const LV2_Atom_Sequence *event_out;
 		const float *audio_out[2];
 		const float *output[4];
+		const LV2_Atom_Sequence *com_out;
 	} sink;
 
 	// non-rt worker-thread
@@ -639,6 +641,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 			case SYSTEM_PORT_CONTROL:
 				handle->source.input[control_ptr++] = source->buf;
 				break;
+			case SYSTEM_PORT_COM:
+				handle->source.com_in = source->buf;
+				break;
 
 			case SYSTEM_PORT_CV:
 			case SYSTEM_PORT_OSC:
@@ -647,7 +652,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		}
 	}
 
-	assert(handle->source.event_in
+	assert(handle->source.event_in && handle->source.com_in
 		&& handle->source.audio_in[0] && handle->source.audio_in[1]
 		&& handle->source.input[0] && handle->source.input[1]
 		&& handle->source.input[2] && handle->source.input[3]);
@@ -662,6 +667,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 	*handle->source.input[1] = *handle->port.input[1];
 	*handle->source.input[2] = *handle->port.input[2];
 	*handle->source.input[3] = *handle->port.input[3];
+
+	//FIXME fill handle->source.com_in
 
 	if(handle->dirty_in)
 	{
@@ -769,6 +776,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 			case SYSTEM_PORT_CONTROL:
 				handle->sink.output[control_ptr++] = sink->buf;
 				break;
+			case SYSTEM_PORT_COM:
+				handle->sink.com_out = sink->buf;
+				break;
 
 			case SYSTEM_PORT_CV:
 			case SYSTEM_PORT_OSC:
@@ -777,7 +787,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		}
 	}
 
-	assert(handle->sink.event_out
+	assert(handle->sink.event_out && handle->sink.com_out
 		&& handle->sink.audio_out[0] && handle->sink.audio_out[1]
 		&& handle->sink.output[0] && handle->sink.output[1]
 		&& handle->sink.output[2] && handle->sink.output[3]);
@@ -789,6 +799,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 	*handle->port.output[1] = *handle->sink.output[1];
 	*handle->port.output[2] = *handle->sink.output[2];
 	*handle->port.output[3] = *handle->sink.output[3];
+
+	LV2_ATOM_SEQUENCE_FOREACH(handle->sink.com_out, ev)
+	{
+		const LV2_Atom *atom = &ev->body;
+
+		sp_app_from_ui(handle->app, atom);
+		//FIXME is this the right place?
+	}
 }
 
 static void

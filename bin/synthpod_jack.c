@@ -446,6 +446,7 @@ _process(jack_nframes_t nsamples, void *data)
 			{
 				case SYSTEM_PORT_NONE:
 				case SYSTEM_PORT_CONTROL:
+				case SYSTEM_PORT_COM:
 					break;
 
 				case SYSTEM_PORT_AUDIO:
@@ -549,6 +550,15 @@ _process(jack_nframes_t nsamples, void *data)
 
 				break;
 			}
+
+			case SYSTEM_PORT_COM:
+			{
+				void *seq_in = source->buf;
+
+				lv2_atom_sequence_clear(seq_in);
+				//FIXME add output from rt-thread
+				break;
+			}
 		}
 	}
 
@@ -634,6 +644,20 @@ _process(jack_nframes_t nsamples, void *data)
 					}
 				}
 
+				break;
+			}
+
+			case SYSTEM_PORT_COM:
+			{
+				const LV2_Atom_Sequence *seq_out = sink->buf;
+
+				LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
+				{
+					const LV2_Atom *atom = (const LV2_Atom *)&ev->body;
+
+					sp_app_from_ui(bin->app, atom);
+					//FIXME is this the right place?
+				}
 				break;
 			}
 		}
@@ -816,6 +840,12 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 					"http://jackaudio.org/metadata/event-types", "OSC", "text/plain");
 			}
 #endif
+			break;
+		}
+
+		case SYSTEM_PORT_COM:
+		{
+			// unsupported, skip
 			break;
 		}
 	}

@@ -237,6 +237,15 @@ _rt_thread(void *data, Eina_Thread thread)
 
 						break;
 					}
+
+					case SYSTEM_PORT_COM:
+					{
+						LV2_Atom_Sequence *seq_in = source->buf;
+
+						lv2_atom_sequence_clear(seq_in);
+						//FIXME add output from rt-thread
+						break;
+					}
 				}
 			}
 
@@ -378,6 +387,20 @@ _rt_thread(void *data, Eina_Thread thread)
 
 						break;
 					}
+
+					case SYSTEM_PORT_COM:
+					{
+						const LV2_Atom_Sequence *seq_out = sink->buf;
+
+						LV2_ATOM_SEQUENCE_FOREACH(seq_out, ev)
+						{
+							const LV2_Atom *atom = &ev->body;
+							
+							sp_app_from_ui(bin->app, atom);
+							//FIXME is this the right place?
+						}
+						break;
+					}
 				}
 			}
 			snd_seq_drain_output(handle->seq); //TODO is this rt-safe?
@@ -468,6 +491,11 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			break;
 		}
 		case SYSTEM_PORT_OSC:
+		{
+			// unsupported, skip
+			break;
+		}
+		case SYSTEM_PORT_COM:
 		{
 			// unsupported, skip
 			break;

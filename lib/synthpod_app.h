@@ -62,7 +62,8 @@ enum _system_port_t {
 	SYSTEM_PORT_AUDIO,
 	SYSTEM_PORT_CV,
 	SYSTEM_PORT_MIDI,
-	SYSTEM_PORT_OSC
+	SYSTEM_PORT_OSC,
+	SYSTEM_PORT_COM
 };
 
 struct _sp_app_system_source_t {

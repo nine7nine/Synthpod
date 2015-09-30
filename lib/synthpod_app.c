@@ -818,6 +818,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 				tar->sys.type = SYSTEM_PORT_MIDI;
 			else if(lilv_port_is_a(plug, port, app->regs.synthpod.osc_port.node))
 				tar->sys.type = SYSTEM_PORT_OSC;
+			else if(lilv_port_is_a(plug, port, app->regs.synthpod.com_port.node))
+				tar->sys.type = SYSTEM_PORT_COM;
 			else
 				tar->sys.type = SYSTEM_PORT_NONE;
 
