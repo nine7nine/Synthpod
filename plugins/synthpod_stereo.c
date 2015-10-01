@@ -75,7 +75,7 @@ struct _plughandle_t {
 
 	struct {
 		LV2_Atom_Forge event_out;
-		LV2_Atom_Forge comm_in;
+		LV2_Atom_Forge com_in;
 		LV2_Atom_Forge notify;
 		LV2_Atom_Forge work;
 	} forge;
@@ -528,7 +528,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	}
 
 	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
-	lv2_atom_forge_init(&handle->forge.comm_in, handle->driver.map);
+	lv2_atom_forge_init(&handle->forge.com_in, handle->driver.map);
 	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);
 
 	return handle;
@@ -680,7 +680,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	struct {
 		LV2_Atom_Forge_Frame event_out;
-		LV2_Atom_Forge_Frame comm_in;
+		LV2_Atom_Forge_Frame com_in;
 		LV2_Atom_Forge_Frame notify;
 	} frame;
 
@@ -689,9 +689,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 		(uint8_t *)handle->port.event_out, handle->port.event_out->atom.size);
 	lv2_atom_forge_sequence_head(&handle->forge.event_out, &frame.event_out, 0);
 	
-	lv2_atom_forge_set_buffer(&handle->forge.comm_in,
+	lv2_atom_forge_set_buffer(&handle->forge.com_in,
 		(uint8_t *)handle->source.com_in, SEQ_SIZE);
-	lv2_atom_forge_sequence_head(&handle->forge.comm_in, &frame.comm_in, 0);
+	lv2_atom_forge_sequence_head(&handle->forge.com_in, &frame.com_in, 0);
 	
 	lv2_atom_forge_set_buffer(&handle->forge.notify,
 		(uint8_t *)handle->port.notify, handle->port.notify->atom.size);
@@ -732,19 +732,18 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 			if(atom->type == handle->forge.notify.Object)
 			{
-				if(obj->body.id == handle->uri.synthpod.event)
+				// copy com events to com buffer 
+				if(sp_app_com_event(handle->app, obj->body.id))
 				{
-					// add to ComPort
-					if(sp_app_internal_event(handle->app, obj->body.otype))
-					{
-						uint32_t size = obj->atom.size + sizeof(LV2_Atom);
-						lv2_atom_forge_frame_time(&handle->forge.comm_in, 0);
-						lv2_atom_forge_raw(&handle->forge.comm_in, obj, size);
-						lv2_atom_forge_pad(&handle->forge.comm_in, size);
-						//FIXME come up with better solution
-					}
+					uint32_t size = obj->atom.size + sizeof(LV2_Atom);
+					lv2_atom_forge_frame_time(&handle->forge.com_in, ev->time.frames);
+					lv2_atom_forge_raw(&handle->forge.com_in, obj, size);
+					lv2_atom_forge_pad(&handle->forge.com_in, size);
 
-					//printf("control: %u\n", atom->size);
+					sp_app_from_ui(app, atom);
+				}
+				else if (sp_app_transfer_event(handle->app, obj->body.id))
+				{
 					sp_app_from_ui(app, atom);
 				}
 				else if(obj->body.otype == handle->uri.patch.set)
@@ -755,7 +754,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 			}
 		}
 
-		lv2_atom_forge_pop(&handle->forge.comm_in, &frame.comm_in);
+		// finalize com buffer
+		lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
 		
 		// run app post
 		sp_app_run_post(app, nsamples);

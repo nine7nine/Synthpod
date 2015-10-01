@@ -260,8 +260,8 @@ synthpod:source
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
 		lv2:index 7 ;
-		lv2:symbol "com_sink" ;
-		lv2:name "Com Sink" ;
+		lv2:symbol "com_source" ;
+		lv2:name "Com Source" ;
 		pg:group synthpod:group_source ;
 	] .
 

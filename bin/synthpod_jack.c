@@ -562,13 +562,13 @@ _process(jack_nframes_t nsamples, void *data)
 
 				const LV2_Atom_Object *obj;
 				size_t size;
-				while((obj = varchunk_read_request(bin->app_from_comm, &size)))
+				while((obj = varchunk_read_request(bin->app_from_com, &size)))
 				{
 					lv2_atom_forge_frame_time(forge, 0);
 					lv2_atom_forge_raw(forge, obj, size);
 					lv2_atom_forge_pad(forge, size);
 
-					varchunk_read_advance(bin->app_from_comm);
+					varchunk_read_advance(bin->app_from_com);
 				}
 
 				lv2_atom_forge_pop(forge, &frame);

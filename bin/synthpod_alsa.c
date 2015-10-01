@@ -205,7 +205,7 @@ _rt_thread(void *data, Eina_Thread thread)
 				pcmi_capt_init(pcmi, nsamples);
 			capt_num = 0;
 			for(const sp_app_system_source_t *source=sources;
-				(source->type != SYSTEM_PORT_NONE) && (capt_num < ncapt);
+				source->type != SYSTEM_PORT_NONE;
 				source++)
 			{
 				chan_t *chan = source->sys_port;
@@ -221,7 +221,8 @@ _rt_thread(void *data, Eina_Thread thread)
 					case SYSTEM_PORT_AUDIO:
 					{
 
-						pcmi_capt_chan(pcmi, capt_num++, source->buf, nsamples);
+						if(capt_num < ncapt)
+							pcmi_capt_chan(pcmi, capt_num++, source->buf, nsamples);
 
 						break;
 					}
@@ -249,13 +250,13 @@ _rt_thread(void *data, Eina_Thread thread)
 
 						const LV2_Atom_Object *obj;
 						size_t size;
-						while((obj = varchunk_read_request(bin->app_from_comm, &size)))
+						while((obj = varchunk_read_request(bin->app_from_com, &size)))
 						{
 							lv2_atom_forge_frame_time(forge, 0);
 							lv2_atom_forge_raw(forge, obj, size);
 							lv2_atom_forge_pad(forge, size);
 
-							varchunk_read_advance(bin->app_from_comm);
+							varchunk_read_advance(bin->app_from_com);
 						}
 
 						lv2_atom_forge_pop(forge, &frame);
@@ -326,7 +327,7 @@ _rt_thread(void *data, Eina_Thread thread)
 			}
 						
 			for(const sp_app_system_source_t *source=sources;
-				(source->type != SYSTEM_PORT_NONE) && (capt_num < ncapt);
+				source->type != SYSTEM_PORT_NONE;
 				source++)
 			{
 				chan_t *chan = source->sys_port;
@@ -349,7 +350,7 @@ _rt_thread(void *data, Eina_Thread thread)
 				pcmi_play_init(pcmi, nsamples);
 			play_num = 0;
 			for(const sp_app_system_sink_t *sink=sinks;
-				(sink->type != SYSTEM_PORT_NONE) && (play_num < nplay);
+				sink->type != SYSTEM_PORT_NONE;
 				sink++)
 			{
 				chan_t *chan = sink->sys_port;
@@ -365,7 +366,8 @@ _rt_thread(void *data, Eina_Thread thread)
 					case SYSTEM_PORT_AUDIO:
 					{
 
-						pcmi_play_chan(pcmi, play_num++, sink->buf, nsamples);
+						if(play_num < nplay)
+							pcmi_play_chan(pcmi, play_num++, sink->buf, nsamples);
 
 						break;
 					}

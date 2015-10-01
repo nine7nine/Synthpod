@@ -3507,10 +3507,13 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 
 // rt
 int
-sp_app_internal_event(sp_app_t *app, LV2_URID type)
+sp_app_com_event(sp_app_t *app, LV2_URID id)
 {
-	return (type != app->regs.port.float_protocol.urid)
-			&& (type != app->regs.port.peak_protocol.urid)
-			&& (type != app->regs.port.atom_transfer.urid)
-			&& (type != app->regs.port.event_transfer.urid);
+	return id == app->regs.synthpod.com_event.urid ? 1 : 0;
+}
+
+int
+sp_app_transfer_event(sp_app_t *app, LV2_URID id)
+{
+	return id == app->regs.synthpod.transfer_event.urid ? 1 : 0;
 }
