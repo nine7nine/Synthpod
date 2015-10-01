@@ -265,7 +265,7 @@ struct _sp_ui_t {
 	LV2_Atom_Forge forge;
 
 	Evas_Object *win;
-	Evas_Object *table;
+	Evas_Object *vbox;
 	Evas_Object *popup;
 	Evas_Object *mainmenu;
 	Evas_Object *statusline;
@@ -4152,8 +4152,8 @@ _theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	Evas_Coord w, h;
 	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
 
-	if(ui->table)
-		evas_object_resize(ui->table, w, h);
+	if(ui->vbox)
+		evas_object_resize(ui->vbox, w, h);
 }
 
 static void
@@ -4362,17 +4362,17 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->griditc->func.del = _modgrid_del;
 		}
 
-		ui->table = elm_box_add(ui->win);
-		if(ui->table)
+		ui->vbox = elm_box_add(ui->win);
+		if(ui->vbox)
 		{
-			elm_box_homogeneous_set(ui->table, EINA_FALSE);
-			elm_box_padding_set(ui->table, 0, 0);
-			evas_object_size_hint_weight_set(ui->table, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(ui->table, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(ui->table);
+			elm_box_homogeneous_set(ui->vbox, EINA_FALSE);
+			elm_box_padding_set(ui->vbox, 0, 0);
+			evas_object_size_hint_weight_set(ui->vbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(ui->vbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(ui->vbox);
 
 			// get theme data items
-			Evas_Object *theme = elm_layout_add(ui->table);
+			Evas_Object *theme = elm_layout_add(ui->vbox);
 			if(theme)
 			{
 				elm_layout_file_set(theme, SYNTHPOD_DATA_DIR"/synthpod.edj",
@@ -4419,7 +4419,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			if(!evas_object_key_grab(ui->win, "h", ctrl_mask, 0, exclusive))
 				fprintf(stderr, "could not grab 'h' key\n");
 
-			ui->mainmenu = elm_box_add(ui->table);
+			ui->mainmenu = elm_box_add(ui->vbox);
 			if(ui->mainmenu)
 			{
 				Evas_Object *but;
@@ -4429,7 +4429,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				evas_object_size_hint_weight_set(ui->mainmenu, EVAS_HINT_EXPAND, 0.f);
 				evas_object_size_hint_align_set(ui->mainmenu, 0.f, 0.f);
 				evas_object_show(ui->mainmenu);
-				elm_box_pack_end(ui->table, ui->mainmenu);
+				elm_box_pack_end(ui->vbox, ui->mainmenu);
 			
 				if(ui->driver->features & SP_UI_FEATURE_NEW)
 				{
@@ -4615,7 +4615,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				}
 			} // mainmenu
 
-			ui->mainpane = elm_panes_add(ui->table);
+			ui->mainpane = elm_panes_add(ui->vbox);
 			if(ui->mainpane)
 			{
 				elm_panes_horizontal_set(ui->mainpane, EINA_FALSE);
@@ -4623,9 +4623,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 				evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 				evas_object_show(ui->mainpane);
-				elm_box_pack_end(ui->table, ui->mainpane);
+				elm_box_pack_end(ui->vbox, ui->mainpane);
 
-				ui->popup = elm_popup_add(ui->table);
+				ui->popup = elm_popup_add(ui->vbox);
 				if(ui->popup)
 				{
 					elm_popup_allow_events_set(ui->popup, EINA_TRUE);
@@ -4810,7 +4810,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				} // modgrid
 			} // mainpane
 			
-			ui->statusline = elm_label_add(ui->table);
+			ui->statusline = elm_label_add(ui->vbox);
 			if(ui->statusline)
 			{
 				//TODO use
@@ -4818,7 +4818,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				evas_object_size_hint_weight_set(ui->statusline, EVAS_HINT_EXPAND, 0.f);
 				evas_object_size_hint_align_set(ui->statusline, 0.f, 1.f);
 				evas_object_show(ui->statusline);
-				elm_box_pack_end(ui->table, ui->statusline);
+				elm_box_pack_end(ui->vbox, ui->statusline);
 			} // statusline
 		} // theme
 	}
@@ -4838,7 +4838,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 Evas_Object *
 sp_ui_widget_get(sp_ui_t *ui)
 {
-	return ui->table;
+	return ui->vbox;
 }
 
 static inline mod_t *
@@ -4877,7 +4877,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 
 	atom = ASSUME_ALIGNED(atom);
 	const transmit_t *transmit = (const transmit_t *)atom;
-	LV2_URID protocol = transmit->prop.key;
+	LV2_URID protocol = transmit->obj.body.otype;
 
 	if(protocol == ui->regs.synthpod.module_add.urid)
 	{
@@ -5113,8 +5113,8 @@ sp_ui_resize(sp_ui_t *ui, int w, int h)
 	if(!ui)
 		return;
 
-	if(ui->table)
-		evas_object_resize(ui->table, w, h);
+	if(ui->vbox)
+		evas_object_resize(ui->vbox, w, h);
 }
 
 void
@@ -5191,10 +5191,10 @@ sp_ui_free(sp_ui_t *ui)
 		evas_object_del(ui->mainpane);
 	if(ui->popup)
 		evas_object_del(ui->popup);
-	if(ui->table)
+	if(ui->vbox)
 	{
-		elm_table_clear(ui->table, EINA_FALSE); //TODO
-		evas_object_del(ui->table);
+		elm_box_clear(ui->vbox);
+		evas_object_del(ui->vbox);
 	}
 
 	//evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _resize);

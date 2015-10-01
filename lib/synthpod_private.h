@@ -236,6 +236,7 @@ struct _reg_t {
 	struct {
 		reg_item_t com_event;
 		reg_item_t transfer_event;
+		reg_item_t payload;
 		reg_item_t state;
 		reg_item_t json;
 
@@ -388,6 +389,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->synthpod.com_event, world, map, SYNTHPOD_PREFIX"comEvent");
 	_register(&regs->synthpod.transfer_event, world, map, SYNTHPOD_PREFIX"transferEvent");
+	_register(&regs->synthpod.payload, world, map, SYNTHPOD_PREFIX"payload");
 	_register(&regs->synthpod.state, world, map, SYNTHPOD_PREFIX"state");
 	_register(&regs->synthpod.json, world, map, SYNTHPOD_PREFIX"json");
 	_register(&regs->synthpod.module_list, world, map, SYNTHPOD_PREFIX"moduleList");
@@ -524,6 +526,7 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->synthpod.com_event);
 	_unregister(&regs->synthpod.transfer_event);
+	_unregister(&regs->synthpod.payload);
 	_unregister(&regs->synthpod.state);
 	_unregister(&regs->synthpod.json);
 	_unregister(&regs->synthpod.module_list);
@@ -731,7 +734,7 @@ _sp_transmit_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_t *trans, uint32_
 	trans->obj.body.id = event;
 	trans->obj.body.otype = protocol;
 
-	trans->prop.key = protocol;
+	trans->prop.key = regs->synthpod.payload.urid;
 	trans->prop.context = 0;
 	trans->prop.value.size = size - sizeof(transmit_t);
 	trans->prop.value.type = forge->Tuple;
