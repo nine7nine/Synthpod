@@ -92,7 +92,6 @@ struct _prog_t {
 		jack_nframes_t ref_frames;
 		jack_time_t cur_usecs;
 		jack_time_t nxt_usecs;
-		float T;
 		double dT;
 		double dTm1;
 	} cycle;
@@ -378,13 +377,6 @@ _message_cb(const char *path, const char *fmt, const LV2_Atom_Tuple *body,
 	handle->osc_ptr = ptr;
 }
 
-//FIXME
-static int64_t
-_osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp);
-static uint64_t
-_osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames);
-//FIXME
-
 // rt
 static int
 _process(jack_nframes_t nsamples, void *data)
@@ -395,29 +387,22 @@ _process(jack_nframes_t nsamples, void *data)
 
 #if defined(JACK_HAS_CYCLE_TIMES)
 	clock_gettime(CLOCK_REALTIME, &handle->ntp);
+	handle->ntp.tv_sec += JAN_1970; // convert NTP to OSC time
 	jack_nframes_t offset = jack_frames_since_cycle_start(handle->client);
 
+	float T;
 	jack_get_cycle_times(handle->client, &handle->cycle.cur_frames,
-		&handle->cycle.cur_usecs, &handle->cycle.nxt_usecs, &handle->cycle.T);
-
+		&handle->cycle.cur_usecs, &handle->cycle.nxt_usecs, &T);
+	(void)T;
+	
 	handle->cycle.ref_frames = handle->cycle.cur_frames + offset;
-	handle->ntp.tv_sec += JAN_1970; // convert NTP to OSC time
-	handle->cycle.dT = 1e6 * (double)nsamples
-		/ (double)(handle->cycle.nxt_usecs - handle->cycle.cur_usecs);
-	handle->cycle.dTm1 = 1e-6 * (double)(handle->cycle.nxt_usecs - handle->cycle.cur_usecs)
-		/ (double)nsamples;
-	/* less exact
-	handle->cycle.dT = 1e6 * (double)nsamples / (double)handle->cycle.T;
-	handle->cycle.dTm1 = 1e-6 * (double)handle->cycle.T / (double)nsamples;
-	*/
 
-	/*
-	// debug
-	int64_t frame1 = 12345678LL;
-	uint64_t osc1 = _osc_schedule_frames2osc(handle, frame1);
-	int64_t frame2 = _osc_schedule_osc2frames(handle, osc1);
-	printf("%li %li\n", frame1, frame2);
-	*/
+	// calculate apparent period
+	double diff = 1e-6 * (handle->cycle.nxt_usecs - handle->cycle.cur_usecs);
+
+	// calculate apparent samples per period
+	handle->cycle.dT = nsamples / diff;
+	handle->cycle.dTm1 = 1.0 / handle->cycle.dT;
 #endif
 
 	// get transport position
@@ -1073,7 +1058,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 		- handle->cycle.cur_frames
 		+ diff * handle->cycle.dT;
 
-	int64_t frames = round(frames_d);
+	int64_t frames = ceil(frames_d);
 
 	return frames;
 }

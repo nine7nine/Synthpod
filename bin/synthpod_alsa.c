@@ -155,7 +155,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	int play_num;
 	int capt_num;
 
-	const uint64_t nanos_per_period = nsamples * NANO_SECONDS / handle->srate;
+	const uint64_t nanos_per_period = (uint64_t)nsamples * NANO_SECONDS / handle->srate;
 	handle->cycle.cur_frames = 0; // initialize frame counter
 	_ntp_now(&handle->nxt_ntp);
 
@@ -180,9 +180,9 @@ _rt_thread(void *data, Eina_Thread thread)
 		_ntp_add_nanos(&nxt_ntp, nanos_per_period);
 		double diff = _ntp_diff(&handle->cur_ntp, &nxt_ntp);
 
-		/// calculate apparent samples per period
+		// calculate apparent samples per period
 		handle->cycle.dT = nsamples / diff;
-		handle->cycle.dTm1 = diff / nsamples;
+		handle->cycle.dTm1 = 1.0 / handle->cycle.dT;
 
 		for( ; na >= nsamples;
 				na -= nsamples,
@@ -706,7 +706,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 		- handle->cycle.cur_frames
 		+ diff * handle->cycle.dT;
 
-	int64_t frames = round(frames_d);
+	int64_t frames = ceil(frames_d);
 
 	return frames;
 }
