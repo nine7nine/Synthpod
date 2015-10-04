@@ -353,13 +353,15 @@ synthpod_nsm_new(const char *exe, const char *path,
 
 		if(path)
 		{
+			ecore_file_mkpath(path); // path may not exist yet
 			char *synthpod_dir = ecore_file_realpath(path);
-			fprintf(stderr, "realpath: %s\n", synthpod_dir);
+			if(synthpod_dir)
+			{
+				if(nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
+					fprintf(stderr, "NSM load failed: '%s'\n", path);
 
-			if(nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
-				fprintf(stderr, "NSM load failed: '%s'\n", path);
-
-			free(synthpod_dir);
+				free(synthpod_dir);
+			}
 		}
 		else
 		{
@@ -369,7 +371,7 @@ synthpod_nsm_new(const char *exe, const char *path,
 			asprintf(&synthpod_dir, "%s/synthpod", data_dir);
 			if(synthpod_dir)
 			{
-				ecore_file_mkpath(synthpod_dir);
+				ecore_file_mkpath(synthpod_dir); // path may not exist yet
 
 				if(nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
 					fprintf(stderr, "NSM load failed: '%s'\n", synthpod_dir);
