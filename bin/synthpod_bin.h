@@ -43,6 +43,7 @@
 #define SEQ_SIZE 0x2000
 #define CHUNK_SIZE 0x10000
 #define JAN_1970 (uint64_t)0x83aa7e80
+#define MAX_MSGS 10 //FIXME limit to how many events?
 
 typedef enum _save_state_t save_state_t;
 
@@ -122,7 +123,9 @@ _ui_animator(void *data)
 
 	size_t size;
 	const LV2_Atom *atom;
-	while((atom = varchunk_read_request(bin->app_to_ui, &size)))
+	unsigned n = 0;
+	while((atom = varchunk_read_request(bin->app_to_ui, &size))
+		&& (n++ < MAX_MSGS) )
 	{
 		sp_ui_from_app(bin->ui, atom);
 		varchunk_read_advance(bin->app_to_ui);
@@ -477,9 +480,9 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
 	{
 		size_t size;
 		const void *body;
-		int n = 0;
+		unsigned n = 0;
 		while((body = varchunk_read_request(bin->app_from_worker, &size))
-			&& (n++ < 10) ) //FIXME limit to how many events?
+			&& (n++ < MAX_MSGS) )
 		{
 			sp_app_from_worker(bin->app, size, body);
 			varchunk_read_advance(bin->app_from_worker);
@@ -494,9 +497,9 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
 	{
 		size_t size;
 		const LV2_Atom *atom;
-		int n = 0;
+		unsigned n = 0;
 		while((atom = varchunk_read_request(bin->app_from_ui, &size))
-			&& (n++ < 10) ) //FIXME limit to how many events?
+			&& (n++ < MAX_MSGS) )
 		{
 			sp_app_from_ui(bin->app, atom);
 			varchunk_read_advance(bin->app_from_ui);
