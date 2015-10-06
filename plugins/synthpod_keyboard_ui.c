@@ -137,11 +137,14 @@ static void
 _mouse_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	plughandle_t *handle = data;
-	//Evas_Event_Mouse_Down *ev = event_info;
+	Evas_Event_Mouse_Down *ev = event_info;
+
+	Evas_Coord y = ev->canvas.y;
 
 	handle->key = evas_object_data_get(obj, "key");
 	handle->obj = obj;
 	_note_on(handle);
+	_note_pressure(handle, y);
 }
 
 static void
