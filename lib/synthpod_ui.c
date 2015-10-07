@@ -306,6 +306,17 @@ struct _sp_ui_t {
 	volatile int dirty;
 };
 
+static Eina_Bool
+_elm_config_changed(void *data, int ev_type, void *ev)
+{
+	sp_ui_t *ui = data;
+
+	if(ui->patchgrid)
+		elm_gengrid_item_size_set(ui->patchgrid, ELM_SCALE_SIZE(400), ELM_SCALE_SIZE(400));
+
+	return ECORE_CALLBACK_PASS_ON;
+}
+
 static inline void *
 __sp_ui_to_app_request(sp_ui_t *ui, size_t size)
 {
@@ -4750,7 +4761,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 							elm_gengrid_horizontal_set(ui->patchgrid, EINA_FALSE);
 							elm_gengrid_select_mode_set(ui->patchgrid, ELM_OBJECT_SELECT_MODE_NONE);
 							elm_gengrid_reorder_mode_set(ui->patchgrid, EINA_TRUE);
-							elm_gengrid_item_size_set(ui->patchgrid, 400, 400);
+							elm_gengrid_item_size_set(ui->patchgrid, ELM_SCALE_SIZE(400), ELM_SCALE_SIZE(400));
 							evas_object_data_set(ui->patchgrid, "ui", ui);
 							evas_object_size_hint_weight_set(ui->patchgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 							evas_object_size_hint_align_set(ui->patchgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -4821,6 +4832,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				elm_box_pack_end(ui->vbox, ui->statusline);
 			} // statusline
 		} // theme
+
+		// listen for elm config changes
+		ecore_event_handler_add(ELM_EVENT_CONFIG_ALL_CHANGED, _elm_config_changed, ui);
 	}
 
 	// initialzie registry
