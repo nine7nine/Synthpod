@@ -25,7 +25,7 @@
 #define PATCHER_DISCONNECT_REQUEST "disconnect,request"
 #define PATCHER_REALIZE_REQUEST "realize,request"
 
-#define SPAN (16 + 6)
+#define SPAN (24 + 6)
 
 typedef struct _patcher_t patcher_t;
 
