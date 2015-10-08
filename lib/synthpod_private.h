@@ -192,6 +192,7 @@ struct _reg_t {
 		reg_item_t subject;
 		reg_item_t property;
 		reg_item_t value;
+		reg_item_t wildcard;
 	} patch;
 
 	struct {
@@ -354,6 +355,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.subject, world, map, LV2_PATCH__subject);
 	_register(&regs->patch.property, world, map, LV2_PATCH__property);
 	_register(&regs->patch.value, world, map, LV2_PATCH__value);
+	_register(&regs->patch.wildcard, world, map, LV2_PATCH__wildcard);
 
 	_register(&regs->group.group, world, map, LV2_PORT_GROUPS__group);
 
@@ -491,6 +493,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.subject);
 	_unregister(&regs->patch.property);
 	_unregister(&regs->patch.value);
+	_unregister(&regs->patch.wildcard);
 
 	_unregister(&regs->group.group);
 
