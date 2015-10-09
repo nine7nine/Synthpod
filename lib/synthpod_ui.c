@@ -91,7 +91,7 @@ struct _mod_t {
 
 	// properties
 	Eina_List *static_properties;
-	Eina_List *dynamic_properties; //FIXME implement
+	Eina_List *dynamic_properties;
 	LilvNodes *writs;
 	LilvNodes *reads;
 
@@ -241,14 +241,18 @@ struct _property_t {
 	int selected;
 	int editable;
 
-	const LilvNode *tar;
+	char *label;
 	LV2_URID tar_urid;
 	LV2_URID type_urid;
 
 	struct {
+		Elm_Object_Item *elmnt;
 		Evas_Object *widget;
 		Evas_Object *entry;
 	} std;
+
+	float minimum;
+	float maximum;
 };
 
 struct _sp_ui_t {
@@ -334,6 +338,32 @@ _sp_ui_to_app_advance(sp_ui_t *ui, size_t size)
 		ui->driver->to_app_advance(size, ui->data);
 }
 
+static int
+_urid_cmp(const void *data1, const void *data2)
+{
+	const property_t *prop1 = data1;
+	const property_t *prop2 = data2;
+
+	return prop1->tar_urid < prop2->tar_urid
+		? -1
+		: (prop1->tar_urid > prop2->tar_urid
+			? 1
+			: 0);
+}
+
+static int
+_urid_find(const void *data1, const void *data2)
+{
+	const property_t *prop1 = data1;
+	const LV2_URID *tar_urid = data2;
+
+	return prop1->tar_urid < *tar_urid
+		? -1
+		: (prop1->tar_urid > *tar_urid
+			? 1
+			: 0);
+}
+
 static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -407,65 +437,266 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				//printf("ui got patch:Set: %u %u %s\n",
 				//	subject_val, request_val, body_val);
 
-				Eina_List *l;
 				property_t *prop;
-				EINA_LIST_FOREACH(mod->static_properties, l, prop)
+				if(  (prop = eina_list_search_sorted(mod->static_properties, _urid_find, &property_val))
+					|| (prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &property_val)) )
 				{
-					// matching property?
-					if( (prop->tar_urid == property_val) && (prop->type_urid == value->type))
+					if(prop->std.widget && (prop->type_urid == value->type) )
 					{
-						if(prop->std.widget)
+						if(  (prop->type_urid == ui->forge.String)
+							|| (prop->type_urid == ui->forge.URI) )
 						{
-							if(  (prop->type_urid == ui->forge.String)
-								|| (prop->type_urid == ui->forge.URI) )
-							{
-								const char *val = LV2_ATOM_BODY_CONST(value);
-								if(prop->editable)
-									elm_entry_entry_set(prop->std.entry, val);
-								else
-									elm_object_text_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Path)
-							{
-								const char *val = LV2_ATOM_BODY_CONST(value);
+							const char *val = LV2_ATOM_BODY_CONST(value);
+							if(prop->editable)
+								elm_entry_entry_set(prop->std.entry, val);
+							else
 								elm_object_text_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Int)
-							{
-								int32_t val = ((const LV2_Atom_Int *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.URID)
-							{
-								uint32_t val = ((const LV2_Atom_URID *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Long)
-							{
-								int64_t val = ((const LV2_Atom_Long *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Float)
-							{
-								float val = ((const LV2_Atom_Float *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Double)
-							{
-								double val = ((const LV2_Atom_Double *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Bool)
-							{
-								int val = ((const LV2_Atom_Bool *)value)->body;
-								smart_toggle_value_set(prop->std.widget, val);
-							}
 						}
-
-						break;
+						else if(prop->type_urid == ui->forge.Path)
+						{
+							const char *val = LV2_ATOM_BODY_CONST(value);
+							elm_object_text_set(prop->std.widget, val);
+						}
+						else if(prop->type_urid == ui->forge.Int)
+						{
+							int32_t val = ((const LV2_Atom_Int *)value)->body;
+							smart_slider_value_set(prop->std.widget, val);
+						}
+						else if(prop->type_urid == ui->forge.URID)
+						{
+							uint32_t val = ((const LV2_Atom_URID *)value)->body;
+							smart_slider_value_set(prop->std.widget, val);
+						}
+						else if(prop->type_urid == ui->forge.Long)
+						{
+							int64_t val = ((const LV2_Atom_Long *)value)->body;
+							smart_slider_value_set(prop->std.widget, val);
+						}
+						else if(prop->type_urid == ui->forge.Float)
+						{
+							float val = ((const LV2_Atom_Float *)value)->body;
+							smart_slider_value_set(prop->std.widget, val);
+						}
+						else if(prop->type_urid == ui->forge.Double)
+						{
+							double val = ((const LV2_Atom_Double *)value)->body;
+							smart_slider_value_set(prop->std.widget, val);
+						}
+						else if(prop->type_urid == ui->forge.Bool)
+						{
+							int val = ((const LV2_Atom_Bool *)value)->body;
+							smart_toggle_value_set(prop->std.widget, val);
+						}
 					}
 				}
 			}
+		}
+		// check for patch:Patch
+		else if(  (obj->atom.type == ui->forge.Object)
+			&& (obj->body.otype == ui->regs.patch.patch.urid) )
+		{
+			const LV2_Atom_URID *subject = NULL;
+			const LV2_Atom_Object *add = NULL;
+			const LV2_Atom_Object *remove = NULL;
+
+			LV2_Atom_Object_Query q[] = {
+				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+				{ ui->regs.patch.add.urid, (const LV2_Atom **)&add },
+				{ ui->regs.patch.remove.urid, (const LV2_Atom **)&remove },
+				LV2_ATOM_OBJECT_QUERY_END
+			};
+			lv2_atom_object_query(obj, q);
+
+			if(subject && add && remove)
+			{
+				const char *group_lbl = "*Properties*";
+				Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
+				if(!parent)
+				{
+					group_t *group = calloc(1, sizeof(group_t));
+					if(group)
+					{
+						group->type = GROUP_TYPE_PROPERTY;
+						group->mod = mod;
+
+						parent = elm_genlist_item_append(ui->modlist,
+							ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
+						if(parent)
+							eina_hash_add(mod->groups, group_lbl, parent);
+					}
+				}
+				
+				group_t *group = elm_object_item_data_get(parent);
+
+				LV2_ATOM_OBJECT_FOREACH(remove, atom_prop)
+				{
+					if(atom_prop->key == ui->regs.patch.readable.urid)
+					{
+						const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							if(group)
+								group->children = eina_list_remove(group->children, prop);
+
+							mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
+							free(prop);
+						}
+					}
+					else if(atom_prop->key == ui->regs.patch.writable.urid)
+					{
+						const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							if(group)
+								group->children = eina_list_remove(group->children, prop);
+
+							mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
+							free(prop);
+						}
+					}
+					else if(atom_prop->key == ui->regs.rdfs.label.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop && prop->label)
+						{
+							free(prop->label);
+							prop->label = NULL;
+						}
+					}
+					else if(atom_prop->key == ui->regs.rdfs.range.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+							prop->type_urid = 0;
+					}
+					else if(atom_prop->key == ui->regs.core.minimum.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+							prop->minimum = 0.f;
+					}
+					else if(atom_prop->key == ui->regs.core.maximum.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+							prop->maximum = 1.f;
+					}
+				}
+
+				LV2_ATOM_OBJECT_FOREACH(add, atom_prop)
+				{
+					if(atom_prop->key == ui->regs.patch.readable.urid)
+					{
+						property_t *prop = calloc(1, sizeof(property_t));
+						if(prop)
+						{
+							prop->mod = mod;
+							prop->editable = 0;
+							prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+							prop->label = NULL; // not yet known
+							prop->type_urid = 0; // not yet known
+							prop->minimum = 0.f; // not yet known
+							prop->maximum = 1.f; // not yet known
+
+							mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
+
+							// append property to corresponding group
+							if(group)
+								group->children = eina_list_append(group->children, prop);
+						}
+					}
+					else if(atom_prop->key == ui->regs.patch.writable.urid)
+					{
+						property_t *prop = calloc(1, sizeof(property_t));
+						if(prop)
+						{
+							prop->mod = mod;
+							prop->editable = 1;
+							prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+							prop->label = NULL; // not yet known
+							prop->type_urid = 0; // not yet known
+							prop->minimum = 0.f; // not yet known
+							prop->maximum = 1.f; // not yet known
+
+							mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
+
+							// append property to corresponding group
+							if(group)
+								group->children = eina_list_append(group->children, prop);
+						}
+					}
+					else if(atom_prop->key == ui->regs.rdfs.label.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							prop->label = strndup(LV2_ATOM_BODY_CONST(&atom_prop->value), atom_prop->value.size);
+							if(prop->std.elmnt)
+								elm_genlist_item_update(prop->std.elmnt);
+						}
+					}
+					else if(atom_prop->key == ui->regs.rdfs.range.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							prop->type_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+							if(prop->std.elmnt)
+								elm_genlist_item_update(prop->std.elmnt);
+						}
+					}
+					else if(atom_prop->key == ui->regs.core.minimum.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							prop->minimum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+							if(prop->std.elmnt)
+								elm_genlist_item_update(prop->std.elmnt);
+						}
+					}
+					else if(atom_prop->key == ui->regs.core.maximum.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							prop->maximum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+							if(prop->std.elmnt)
+								elm_genlist_item_update(prop->std.elmnt);
+						}
+					}
+				}
+
+				// trigger update for Properties
+				if(parent)
+				{
+					evas_object_smart_callback_call(ui->modlist, "contract,request", parent);
+					evas_object_smart_callback_call(ui->modlist, "expand,request", parent);
+				}
+			}
+			else
+				fprintf(stderr, "patch:Patch one of patch:subject, patch:add, patch:add missing\n");
 		}
 	}
 	else
@@ -1358,19 +1589,6 @@ _zero_writer_advance(Zero_Writer_Handle handle, uint32_t written)
 	_sp_ui_to_app_advance(ui, len);
 }
 
-static int
-_urid_cmp(const void *data1, const void *data2)
-{
-	const property_t *prop1 = data1;
-	const property_t *prop2 = data2;
-
-	return prop1->tar_urid < prop2->tar_urid
-		? -1
-		: (prop1->tar_urid > prop2->tar_urid
-			? 1
-			: 0);
-}
-
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	data_access_t data_access)
@@ -1605,6 +1823,17 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			const LilvNode *writable = lilv_nodes_get(mod->writs, i);
 			const char *writable_str = lilv_node_as_uri(writable);
 
+			const char *label_str = NULL;
+			LilvNodes *labels = lilv_world_find_nodes(ui->world, writable,
+				ui->regs.rdfs.label.node, NULL);
+			if(labels)
+			{
+				const LilvNode *label = lilv_nodes_get_first(labels);
+				label_str = lilv_node_as_string(label);
+
+				lilv_nodes_free(labels);
+			}
+
 			//printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
 
 			property_t *prop = calloc(1, sizeof(property_t));
@@ -1612,9 +1841,11 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				continue;
 			prop->mod = mod;
 			prop->editable = 1;
-			prop->tar = writable;
+			prop->label = (char *)label_str; //TODO is a bit dangerous
 			prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, writable_str);
 			prop->type_urid = 0; // invalid type
+			prop->minimum = 0.f; // not yet known
+			prop->maximum = 1.f; // not yet known
 
 			// get type of patch:writable
 			LilvNodes *types = lilv_world_find_nodes(ui->world, writable,
@@ -1628,6 +1859,28 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
 				lilv_nodes_free(types);
+			}
+
+			// get lv2:minimum
+			LilvNodes *minimums = lilv_world_find_nodes(ui->world, writable,
+				ui->regs.core.minimum.node, NULL);
+			if(minimums)
+			{
+				const LilvNode *minimum = lilv_nodes_get_first(minimums);
+				prop->minimum = lilv_node_as_float(minimum);
+
+				lilv_nodes_free(minimums);
+			}
+
+			// get lv2:maximum
+			LilvNodes *maximums = lilv_world_find_nodes(ui->world, writable,
+				ui->regs.core.maximum.node, NULL);
+			if(maximums)
+			{
+				const LilvNode *maximum = lilv_nodes_get_first(maximums);
+				prop->maximum = lilv_node_as_float(maximum);
+
+				lilv_nodes_free(maximums);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -1644,6 +1897,17 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			const LilvNode *readable = lilv_nodes_get(mod->reads, i);
 			const char *readable_str = lilv_node_as_uri(readable);
 
+			const char *label_str = NULL;
+			LilvNodes *labels = lilv_world_find_nodes(ui->world, readable,
+				ui->regs.rdfs.label.node, NULL);
+			if(labels)
+			{
+				const LilvNode *label = lilv_nodes_get_first(labels);
+				label_str = lilv_node_as_string(label);
+
+				lilv_nodes_free(labels);
+			}
+
 			//printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
 
 			property_t *prop = calloc(1, sizeof(property_t));
@@ -1651,9 +1915,11 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				continue;
 			prop->mod = mod;
 			prop->editable = 0;
-			prop->tar = readable;
+			prop->label = (char *)label_str; // is a bit dangerous
 			prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, readable_str);
 			prop->type_urid = 0; // invalid type
+			prop->minimum = 0.f; // not yet known
+			prop->maximum = 1.f; // not yet known
 
 			// get type of patch:readable
 			LilvNodes *types = lilv_world_find_nodes(ui->world, readable,
@@ -1667,6 +1933,28 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
 				lilv_nodes_free(types);
+			}
+
+			// get lv2:minimum
+			LilvNodes *minimums = lilv_world_find_nodes(ui->world, readable,
+				ui->regs.core.minimum.node, NULL);
+			if(minimums)
+			{
+				const LilvNode *minimum = lilv_nodes_get_first(minimums);
+				prop->minimum = lilv_node_as_float(minimum);
+
+				lilv_nodes_free(minimums);
+			}
+
+			// get lv2:maximum
+			LilvNodes *maximums = lilv_world_find_nodes(ui->world, readable,
+				ui->regs.core.maximum.node, NULL);
+			if(maximums)
+			{
+				const LilvNode *maximum = lilv_nodes_get_first(maximums);
+				prop->maximum = lilv_node_as_float(maximum);
+
+				lilv_nodes_free(maximums);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -1822,13 +2110,19 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	{
 		property_t *prop;
 		EINA_LIST_FREE(mod->static_properties, prop)
+		{
 			free(prop);
+		}
 	}
 	if(mod->dynamic_properties)
 	{
 		property_t *prop;
 		EINA_LIST_FREE(mod->dynamic_properties, prop)
+		{
+			if(prop->label)
+				free(prop->label); // strndup
 			free(prop);
+		}
 	}
 	if(mod->writs)
 		lilv_nodes_free(mod->writs);
@@ -2335,6 +2629,30 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 		// extract all groups by default
 		eina_hash_foreach(mod->groups, _groups_foreach, NULL);
+
+		// request all properties
+		size_t len = sizeof(transfer_patch_get_t);
+		for(unsigned index=0; index<mod->num_ports; index++)
+		{
+			port_t *port = &mod->ports[index];
+
+			// only consider event ports which support patch:Message
+			if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+				|| (port->direction != PORT_DIRECTION_INPUT)
+				|| !port->patchable)
+			{
+				continue; // skip
+			}
+
+			transfer_patch_get_t *trans = _sp_ui_to_app_request(ui, len);
+			if(trans)
+			{
+				_sp_transfer_patch_get_fill(&ui->regs,
+					&ui->forge, trans, mod->uid, index,
+					mod->subject, ui->regs.patch.wildcard.urid);
+				_sp_ui_to_app_advance(ui, len);
+			}
+		}
 	}
 	else if(class == ui->grpitc) // is group
 	{
@@ -2365,6 +2683,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 						: ELM_OBJECT_SELECT_MODE_NONE)
 					: ELM_OBJECT_SELECT_MODE_NONE;
 				elm_genlist_item_select_mode_set(elmnt, select_mode);
+				prop->std.elmnt = elmnt;
 			}
 		}
 	}
@@ -3004,17 +3323,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
 
-	// get label of patch:writable
-	const char *label_str = NULL;
-	LilvNodes *labels = lilv_world_find_nodes(ui->world, prop->tar,
-		ui->regs.rdfs.label.node, NULL);
-	if(labels)
-	{
-		const LilvNode *label = lilv_nodes_get_first(labels);
-		label_str = lilv_node_as_string(label);
-
-		lilv_nodes_free(labels);
-	}
+	if(!prop->type_urid) // type not yet set, e.g. for dynamic properties
+		return NULL;
 
 	Evas_Object *lay = elm_layout_add(obj);
 	if(lay)
@@ -3046,8 +3356,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 			}
 		} // dir
 
-		if(label_str)
-			elm_layout_text_set(lay, "elm.text", label_str);
+		if(prop->label)
+			elm_layout_text_set(lay, "elm.text", prop->label);
 
 		Evas_Object *child = NULL;
 
@@ -3118,9 +3428,9 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 				int integer = (prop->type_urid == ui->forge.Int)
 					|| (prop->type_urid == ui->forge.URID)
 					|| (prop->type_urid == ui->forge.Long);
-				double min = integer ? 0 : 0.f; //FIXME
-				double max = integer ? 100 : 1.f; //FIXME
-				double dflt = integer ? 50 : 0.5; //FIXME
+				double min = prop->minimum;
+				double max = prop->maximum;
+				double dflt = prop->minimum; //FIXME
 
 				smart_slider_range_set(child, min, max, dflt);
 				smart_slider_color_set(child, mod->col);
@@ -3148,8 +3458,6 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 				evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
 			}
 		}
-		else
-			fprintf(stderr, "property type %u not supported\n", prop->type_urid);
 
 		// send patch:Get
 		size_t len = sizeof(transfer_patch_get_t);
@@ -3181,7 +3489,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_layout_content_set(lay, "elm.swallow.content", child);
 		}
 
-		prop->std.widget = child; //FIXME reset to NULL + std.entry
+		prop->std.widget = child; //FIXME reset to NULL + std.entry + std.elmnt
 	} // lay
 
 	return lay;

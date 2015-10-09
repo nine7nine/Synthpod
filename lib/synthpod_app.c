@@ -2771,7 +2771,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 						const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
 
 						if(  (obj->atom.type != app->forge.Object)
-							|| (obj->body.otype != app->regs.patch.set.urid) ) //FIXME handle more
+							|| ( (obj->body.otype != app->regs.patch.set.urid)
+								&& (obj->body.otype != app->regs.patch.patch.urid) ) ) //FIXME handle more
 						{
 							continue; // skip this event
 						}
