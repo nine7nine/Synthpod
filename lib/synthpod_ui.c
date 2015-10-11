@@ -441,7 +441,10 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				if(  (prop = eina_list_search_sorted(mod->static_properties, _urid_find, &property_val))
 					|| (prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &property_val)) )
 				{
-					if(prop->std.widget && (prop->type_urid == value->type) )
+					if(prop->std.widget &&
+						(    (prop->type_urid == value->type)
+							|| (prop->type_urid + value->type == ui->forge.Int + ui->forge.Bool)
+						) )
 					{
 						if(  (prop->type_urid == ui->forge.String)
 							|| (prop->type_urid == ui->forge.URI) )
@@ -669,7 +672,15 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 						if(prop)
 						{
-							prop->minimum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+							if(atom_prop->value.type == ui->forge.Int)
+								prop->minimum = ((const LV2_Atom_Int *)&atom_prop->value)->body;
+							else if(atom_prop->value.type == ui->forge.Long)
+								prop->minimum = ((const LV2_Atom_Long *)&atom_prop->value)->body;
+							else if(atom_prop->value.type == ui->forge.Float)
+								prop->minimum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+							else if(atom_prop->value.type == ui->forge.Double)
+								prop->minimum = ((const LV2_Atom_Double *)&atom_prop->value)->body;
+
 							if(prop->std.elmnt)
 								elm_genlist_item_update(prop->std.elmnt);
 						}
@@ -681,7 +692,15 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 						if(prop)
 						{
-							prop->maximum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+							if(atom_prop->value.type == ui->forge.Int)
+								prop->maximum = ((const LV2_Atom_Int *)&atom_prop->value)->body;
+							else if(atom_prop->value.type == ui->forge.Long)
+								prop->maximum = ((const LV2_Atom_Long *)&atom_prop->value)->body;
+							else if(atom_prop->value.type == ui->forge.Float)
+								prop->maximum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+							else if(atom_prop->value.type == ui->forge.Double)
+								prop->maximum = ((const LV2_Atom_Double *)&atom_prop->value)->body;
+
 							if(prop->std.elmnt)
 								elm_genlist_item_update(prop->std.elmnt);
 						}
@@ -691,8 +710,9 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				// trigger update for Properties
 				if(parent)
 				{
-					evas_object_smart_callback_call(ui->modlist, "contract,request", parent);
-					evas_object_smart_callback_call(ui->modlist, "expand,request", parent);
+					//FIXME solve differently
+					//evas_object_smart_callback_call(ui->modlist, "contract,request", parent);
+					//evas_object_smart_callback_call(ui->modlist, "expand,request", parent);
 				}
 			}
 			else

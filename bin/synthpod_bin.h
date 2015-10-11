@@ -125,7 +125,11 @@ _ui_animator(void *data)
 	const LV2_Atom *atom;
 	unsigned n = 0;
 	while((atom = varchunk_read_request(bin->app_to_ui, &size))
+#if 0
 		&& (n++ < MAX_MSGS) )
+#else
+		)
+#endif
 	{
 		sp_ui_from_app(bin->ui, atom);
 		varchunk_read_advance(bin->app_to_ui);
