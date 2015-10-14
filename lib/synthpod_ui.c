@@ -278,6 +278,7 @@ struct _sp_ui_t {
 	Evas_Object *load_but;
 
 	int colors_max;
+	int *colors_vec;
 
 	Evas_Object *mainpane;
 	Evas_Object *leftpane;
@@ -1609,6 +1610,24 @@ _zero_writer_advance(Zero_Writer_Handle handle, uint32_t written)
 	_sp_ui_to_app_advance(ui, len);
 }
 
+static int
+_sp_ui_next_col(sp_ui_t *ui)
+{
+	int col = 0;
+	int count = INT_MAX;
+	for(int i=1; i<ui->colors_max; i++)
+	{
+		if(ui->colors_vec[i] < count)
+		{
+			count = ui->colors_vec[i];
+			col = i;
+		}
+	}
+
+	ui->colors_vec[col] += 1;
+	return col;
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	data_access_t data_access)
@@ -2086,7 +2105,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	if(mod->system.source || mod->system.sink)
 		mod->col = 0; // reserved color for system ports
 	else
-		mod->col = ( (mod->uid - 3) % ui->colors_max + 1);
+		mod->col = _sp_ui_next_col(ui);
 
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
@@ -2104,6 +2123,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 static void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
+	ui->colors_vec[mod->col] -= 1; // decrease color count
+
 	for(unsigned p=0; p<mod->num_ports; p++)
 	{
 		port_t *port = &mod->ports[p];
@@ -4719,6 +4740,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 				const char *colors_max = elm_layout_data_get(theme, "colors_max");
 				ui->colors_max = colors_max ? atoi(colors_max) : 20;
+				ui->colors_vec = calloc(ui->colors_max, sizeof(int));
 
 				evas_object_del(theme);
 			}
@@ -5491,6 +5513,9 @@ sp_ui_free(sp_ui_t *ui)
 {
 	if(!ui)
 		return;
+
+	if(ui->colors_vec)
+		free(ui->colors_vec);
 
 	if(ui->bundle_path)
 		free(ui->bundle_path);
