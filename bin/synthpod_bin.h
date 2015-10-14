@@ -431,6 +431,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	elm_run();
 
 	// ui deinit
+	sp_ui_del(bin->ui, true);
 	sp_ui_free(bin->ui);
 
 	if(bin->win)

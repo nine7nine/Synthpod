@@ -58,6 +58,14 @@ _content_free(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	sp_ui_free(handle->ui);
 }
 
+static void
+_content_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	plughandle_t *handle = data;
+
+	sp_ui_del(handle->ui, false);
+}
+
 static void *
 _to_app_request(size_t size, void *data)
 {
@@ -102,8 +110,8 @@ _content_get(eo_ui_t *eoui)
 	sp_ui_refresh(handle->ui); // get everything from app
 
 	Evas_Object *widg = sp_ui_widget_get(handle->ui);
-	//evas_object_event_callback_add(widg, EVAS_CALLBACK_FREE, _content_free, handle);
-	evas_object_event_callback_add(widg, EVAS_CALLBACK_DEL, _content_free, handle);
+	evas_object_event_callback_add(widg, EVAS_CALLBACK_FREE, _content_free, handle);
+	evas_object_event_callback_add(widg, EVAS_CALLBACK_DEL, _content_del, handle);
 
 	return widg;
 }

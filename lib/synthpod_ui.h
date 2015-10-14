@@ -120,4 +120,7 @@ sp_ui_run(sp_ui_t *ui);
 SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_free(sp_ui_t *ui);
 
+SYNTHPOD_SYMBOL_EXTERN void
+sp_ui_del(sp_ui_t *ui, bool delete_self);
+
 #endif // _SYNTHPOD_UI_H

@@ -5520,6 +5520,41 @@ sp_ui_free(sp_ui_t *ui)
 	if(ui->bundle_path)
 		free(ui->bundle_path);
 
+	evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize);
+	evas_object_event_callback_del(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down);
+
+	if(ui->plugitc)
+		elm_genlist_item_class_free(ui->plugitc);
+	if(ui->griditc)
+		elm_gengrid_item_class_free(ui->griditc);
+	if(ui->moditc)
+		elm_genlist_item_class_free(ui->moditc);
+	if(ui->stditc)
+		elm_genlist_item_class_free(ui->stditc);
+	if(ui->psetitc)
+		elm_genlist_item_class_free(ui->psetitc);
+	if(ui->psetitmitc)
+		elm_genlist_item_class_free(ui->psetitmitc);
+	if(ui->psetsaveitc)
+		elm_genlist_item_class_free(ui->psetsaveitc);
+	if(ui->patchitc)
+		elm_gengrid_item_class_free(ui->patchitc);
+	if(ui->propitc)
+		elm_gengrid_item_class_free(ui->propitc);
+	if(ui->grpitc)
+		elm_gengrid_item_class_free(ui->grpitc);
+
+	sp_regs_deinit(&ui->regs);
+
+	if(!ui->embedded)
+		lilv_world_free(ui->world);
+
+	free(ui);
+}
+
+void
+sp_ui_del(sp_ui_t *ui, bool delete_self)
+{
 	if(ui->modgrid)
 	{
 		elm_gengrid_clear(ui->modgrid);
@@ -5561,38 +5596,9 @@ sp_ui_free(sp_ui_t *ui)
 	if(ui->vbox)
 	{
 		elm_box_clear(ui->vbox);
-		evas_object_del(ui->vbox);
+		if(delete_self)
+			evas_object_del(ui->vbox);
 	}
-
-	//evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _resize);
-
-	if(ui->plugitc)
-		elm_genlist_item_class_free(ui->plugitc);
-	if(ui->griditc)
-		elm_gengrid_item_class_free(ui->griditc);
-	if(ui->moditc)
-		elm_genlist_item_class_free(ui->moditc);
-	if(ui->stditc)
-		elm_genlist_item_class_free(ui->stditc);
-	if(ui->psetitc)
-		elm_genlist_item_class_free(ui->psetitc);
-	if(ui->psetitmitc)
-		elm_genlist_item_class_free(ui->psetitmitc);
-	if(ui->psetsaveitc)
-		elm_genlist_item_class_free(ui->psetsaveitc);
-	if(ui->patchitc)
-		elm_gengrid_item_class_free(ui->patchitc);
-	if(ui->propitc)
-		elm_gengrid_item_class_free(ui->propitc);
-	if(ui->grpitc)
-		elm_gengrid_item_class_free(ui->grpitc);
-
-	sp_regs_deinit(&ui->regs);
-
-	if(!ui->embedded)
-		lilv_world_free(ui->world);
-
-	free(ui);
 }
 
 void

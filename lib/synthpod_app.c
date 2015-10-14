@@ -1291,8 +1291,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	const transmit_t *transmit = (const transmit_t *)atom;
 
 	// check for correct atom object type
-	assert( (transmit->obj.atom.type == app->forge.Object)
-		&& (transmit->obj.body.id == app->regs.synthpod.event.urid) );
+	assert( (transmit->obj.atom.type == app->forge.Object) );
 
 	LV2_URID protocol = transmit->obj.body.otype;
 
