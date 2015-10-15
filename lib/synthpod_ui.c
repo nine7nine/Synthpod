@@ -36,6 +36,7 @@ typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
 typedef struct _group_t group_t;
 typedef struct _property_t property_t;
+typedef struct _point_t point_t;
 
 typedef enum _plug_info_type_t plug_info_type_t;
 typedef enum _group_type_t group_type_t;
@@ -236,6 +237,14 @@ struct _port_t {
 	} std;
 };
 
+struct _point_t {
+	char *label;
+	union {
+		char *s;
+		double *d;
+	};
+};
+
 struct _property_t {
 	mod_t *mod;
 	int selected;
@@ -253,6 +262,8 @@ struct _property_t {
 
 	float minimum;
 	float maximum;
+
+	Eina_List *scale_points;
 };
 
 struct _sp_ui_t {
@@ -447,49 +458,80 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							|| (prop->type_urid + value->type == ui->forge.Int + ui->forge.Bool)
 						) )
 					{
-						if(  (prop->type_urid == ui->forge.String)
-							|| (prop->type_urid == ui->forge.URI) )
+						if(prop->scale_points)
 						{
-							const char *val = LV2_ATOM_BODY_CONST(value);
-							if(prop->editable)
-								elm_entry_entry_set(prop->std.entry, val);
-							else
+							if(prop->type_urid == ui->forge.String)
+							{
+								smart_spinner_key_set(prop->std.widget, LV2_ATOM_BODY_CONST(value));
+							}
+							else if(prop->type_urid == ui->forge.Int)
+							{
+								int32_t val = ((const LV2_Atom_Int *)value)->body;
+								smart_spinner_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Float)
+							{
+								float val = ((const LV2_Atom_Float *)value)->body;
+								smart_spinner_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Long)
+							{
+								int64_t val = ((const LV2_Atom_Long *)value)->body;
+								smart_spinner_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Double)
+							{
+								double val = ((const LV2_Atom_Double *)value)->body;
+								smart_spinner_value_set(prop->std.widget, val);
+							}
+							//TODO do other types
+						}
+						else // !scale_points
+						{
+							if(  (prop->type_urid == ui->forge.String)
+								|| (prop->type_urid == ui->forge.URI) )
+							{
+								const char *val = LV2_ATOM_BODY_CONST(value);
+								if(prop->editable)
+									elm_entry_entry_set(prop->std.entry, val);
+								else
+									elm_object_text_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Path)
+							{
+								const char *val = LV2_ATOM_BODY_CONST(value);
 								elm_object_text_set(prop->std.widget, val);
-						}
-						else if(prop->type_urid == ui->forge.Path)
-						{
-							const char *val = LV2_ATOM_BODY_CONST(value);
-							elm_object_text_set(prop->std.widget, val);
-						}
-						else if(prop->type_urid == ui->forge.Int)
-						{
-							int32_t val = ((const LV2_Atom_Int *)value)->body;
-							smart_slider_value_set(prop->std.widget, val);
-						}
-						else if(prop->type_urid == ui->forge.URID)
-						{
-							uint32_t val = ((const LV2_Atom_URID *)value)->body;
-							smart_slider_value_set(prop->std.widget, val);
-						}
-						else if(prop->type_urid == ui->forge.Long)
-						{
-							int64_t val = ((const LV2_Atom_Long *)value)->body;
-							smart_slider_value_set(prop->std.widget, val);
-						}
-						else if(prop->type_urid == ui->forge.Float)
-						{
-							float val = ((const LV2_Atom_Float *)value)->body;
-							smart_slider_value_set(prop->std.widget, val);
-						}
-						else if(prop->type_urid == ui->forge.Double)
-						{
-							double val = ((const LV2_Atom_Double *)value)->body;
-							smart_slider_value_set(prop->std.widget, val);
-						}
-						else if(prop->type_urid == ui->forge.Bool)
-						{
-							int val = ((const LV2_Atom_Bool *)value)->body;
-							smart_toggle_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Int)
+							{
+								int32_t val = ((const LV2_Atom_Int *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.URID)
+							{
+								uint32_t val = ((const LV2_Atom_URID *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Long)
+							{
+								int64_t val = ((const LV2_Atom_Long *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Float)
+							{
+								float val = ((const LV2_Atom_Float *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Double)
+							{
+								double val = ((const LV2_Atom_Double *)value)->body;
+								smart_slider_value_set(prop->std.widget, val);
+							}
+							else if(prop->type_urid == ui->forge.Bool)
+							{
+								int val = ((const LV2_Atom_Bool *)value)->body;
+								smart_toggle_value_set(prop->std.widget, val);
+							}
 						}
 					}
 				}
@@ -598,6 +640,22 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						if(prop)
 							prop->maximum = 1.f;
 					}
+					else if(atom_prop->key == ui->regs.core.scale_point.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							point_t *p;
+							EINA_LIST_FREE(prop->scale_points, p)
+							{
+								free(p->label);
+								free(p->s);
+								free(p);
+							}
+						}
+					}
 				}
 
 				LV2_ATOM_OBJECT_FOREACH(add, atom_prop)
@@ -704,6 +762,62 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 							if(prop->std.elmnt)
 								elm_genlist_item_update(prop->std.elmnt);
+						}
+					}
+					else if(atom_prop->key == ui->regs.core.scale_point.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							const LV2_Atom_Object *point_obj = (const LV2_Atom_Object *)&atom_prop->value;
+
+							const LV2_Atom_String *point_label = NULL;
+							const LV2_Atom *point_value = NULL;
+
+							LV2_Atom_Object_Query point_q[] = {
+								{ ui->regs.rdfs.label.urid, (const LV2_Atom **)&point_label },
+								{ ui->regs.rdf.value.urid, (const LV2_Atom **)&point_value },
+								LV2_ATOM_OBJECT_QUERY_END
+							};
+							lv2_atom_object_query(point_obj, point_q);
+
+							if(point_label && point_value)
+							{
+								point_t *p = calloc(1, sizeof(point_t));
+								p->label = strndup(LV2_ATOM_BODY_CONST(point_label), point_label->atom.size);
+								if(point_value->type == ui->forge.Int)
+								{
+									p->d = calloc(1, sizeof(double));
+									*p->d = ((const LV2_Atom_Int *)point_value)->body;
+								}
+								else if(point_value->type == ui->forge.Float)
+								{
+									p->d = calloc(1, sizeof(double));
+									*p->d = ((const LV2_Atom_Float *)point_value)->body;
+								}
+								else if(point_value->type == ui->forge.Long)
+								{
+									p->d = calloc(1, sizeof(double));
+									*p->d = ((const LV2_Atom_Long *)point_value)->body;
+								}
+								else if(point_value->type == ui->forge.Double)
+								{
+									p->d = calloc(1, sizeof(double));
+									*p->d = ((const LV2_Atom_Double *)point_value)->body;
+								}
+								//FIXME do other types
+								else if(point_value->type == ui->forge.String)
+								{
+									p->s = strndup(LV2_ATOM_BODY_CONST(point_value), point_value->size);
+								}
+
+								prop->scale_points = eina_list_append(prop->scale_points, p);
+
+								if(prop->std.elmnt)
+									elm_genlist_item_update(prop->std.elmnt);
+							}
 						}
 					}
 				}
@@ -2162,6 +2276,13 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 		{
 			if(prop->label)
 				free(prop->label); // strndup
+			point_t *p;
+			EINA_LIST_FREE(prop->scale_points, p)
+			{
+				free(p->label);
+				free(p->s);
+				free(p);
+			}
 			free(prop);
 		}
 	}
@@ -3354,6 +3475,72 @@ _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 	}
 }
 
+static void
+_property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+
+	const char *key = NULL;
+	float value = 0.f;
+
+	if(prop->type_urid == ui->forge.String)
+		key = smart_spinner_key_get(obj);
+	else
+		value = smart_spinner_value_get(obj);
+
+	size_t body_size = 0;
+	if(prop->type_urid == ui->forge.String)
+		body_size = strlen(key) + 1;
+	else if(prop->type_urid == ui->forge.Int)
+		body_size = sizeof(int32_t);
+	else if(prop->type_urid == ui->forge.Float)
+		body_size = sizeof(float);
+	else if(prop->type_urid == ui->forge.Long)
+		body_size = sizeof(int64_t);
+	else if(prop->type_urid == ui->forge.Double)
+		body_size = sizeof(double);
+	//TODO do other types
+	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
+
+	for(unsigned index=0; index<mod->num_ports; index++)
+	{
+		port_t *port = &mod->ports[index];
+
+		// only consider event ports which support patch:Message
+		if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+			|| (port->direction != PORT_DIRECTION_INPUT)
+			|| !port->patchable)
+		{
+			continue; // skip
+		}
+
+		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
+		{
+			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
+				&ui->forge, trans, mod->uid, index, body_size,
+				mod->subject, prop->tar_urid, prop->type_urid);
+			if(atom)
+			{
+				if(prop->type_urid == ui->forge.String)
+					strncpy(LV2_ATOM_BODY(atom), key, body_size);
+				else if(prop->type_urid == ui->forge.Int)
+					((LV2_Atom_Int *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Float)
+					((LV2_Atom_Float *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Long)
+					((LV2_Atom_Long *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Double)
+					((LV2_Atom_Double *)atom)->body = value;
+				//TODO do other types
+			}
+			_sp_ui_to_app_advance(ui, len);
+		}
+	}
+}
+
 static Evas_Object *
 _property_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -3402,99 +3589,124 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 
 		Evas_Object *child = NULL;
 
-		if(  (prop->type_urid == ui->forge.String)
-			|| (prop->type_urid == ui->forge.URI) )
+		if(!prop->scale_points)
 		{
-			if(prop->editable)
+			if(  (prop->type_urid == ui->forge.String)
+				|| (prop->type_urid == ui->forge.URI) )
 			{
-				child = elm_layout_add(lay);
-				if(child)
+				if(prop->editable)
 				{
-					elm_layout_file_set(child, SYNTHPOD_DATA_DIR"/synthpod.edj",
-						"/synthpod/entry/theme");
-					char col [7];
-					sprintf(col, "col,%02i", mod->col);
-					elm_layout_signal_emit(child, col, "/synthpod/entry/ui");
-
-					prop->std.entry = elm_entry_add(child);
-					if(prop->std.entry)
+					child = elm_layout_add(lay);
+					if(child)
 					{
-						elm_entry_single_line_set(prop->std.entry, EINA_TRUE);
-						evas_object_smart_callback_add(prop->std.entry, "activated",
-							_property_string_activated, prop);
-						evas_object_show(prop->std.entry);
-						elm_layout_content_set(child, "elm.swallow.content", prop->std.entry);
+						elm_layout_file_set(child, SYNTHPOD_DATA_DIR"/synthpod.edj",
+							"/synthpod/entry/theme");
+						char col [7];
+						sprintf(col, "col,%02i", mod->col);
+						elm_layout_signal_emit(child, col, "/synthpod/entry/ui");
+
+						prop->std.entry = elm_entry_add(child);
+						if(prop->std.entry)
+						{
+							elm_entry_single_line_set(prop->std.entry, EINA_TRUE);
+							evas_object_smart_callback_add(prop->std.entry, "activated",
+								_property_string_activated, prop);
+							evas_object_show(prop->std.entry);
+							elm_layout_content_set(child, "elm.swallow.content", prop->std.entry);
+						}
 					}
 				}
-			}
-			else // !editable
-			{
-				child = elm_label_add(lay);
-				if(child)
-					evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
-			}
-		}
-		else if(prop->type_urid == ui->forge.Path)
-		{
-			if(prop->editable)
-			{
-				child = elm_fileselector_button_add(lay);
-				if(child)
+				else // !editable
 				{
-					elm_fileselector_button_inwin_mode_set(child, EINA_FALSE);
-					elm_fileselector_button_window_title_set(child, "Select file");
-					elm_fileselector_is_save_set(child, EINA_FALSE);
-					elm_object_part_text_set(child, "default", "Select file");
-					evas_object_smart_callback_add(child, "file,chosen",
-						_property_path_chosen, prop);
-					//TODO MIME type
+					child = elm_label_add(lay);
+					if(child)
+						evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
 				}
 			}
-			else // !editable
+			else if(prop->type_urid == ui->forge.Path)
 			{
-				child = elm_label_add(lay);
+				if(prop->editable)
+				{
+					child = elm_fileselector_button_add(lay);
+					if(child)
+					{
+						elm_fileselector_button_inwin_mode_set(child, EINA_FALSE);
+						elm_fileselector_button_window_title_set(child, "Select file");
+						elm_fileselector_is_save_set(child, EINA_FALSE);
+						elm_object_part_text_set(child, "default", "Select file");
+						evas_object_smart_callback_add(child, "file,chosen",
+							_property_path_chosen, prop);
+						//TODO MIME type
+					}
+				}
+				else // !editable
+				{
+					child = elm_label_add(lay);
+					if(child)
+						evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
+				}
+			}
+			else if( (prop->type_urid == ui->forge.Int)
+				|| (prop->type_urid == ui->forge.URID)
+				|| (prop->type_urid == ui->forge.Long)
+				|| (prop->type_urid == ui->forge.Float)
+				|| (prop->type_urid == ui->forge.Double) )
+			{
+				child = smart_slider_add(evas_object_evas_get(lay));
 				if(child)
-					evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
-			}
-		}
-		else if( (prop->type_urid == ui->forge.Int)
-			|| (prop->type_urid == ui->forge.URID)
-			|| (prop->type_urid == ui->forge.Long)
-			|| (prop->type_urid == ui->forge.Float)
-			|| (prop->type_urid == ui->forge.Double) )
-		{
-			child = smart_slider_add(evas_object_evas_get(lay));
-			if(child)
-			{
-				int integer = (prop->type_urid == ui->forge.Int)
-					|| (prop->type_urid == ui->forge.URID)
-					|| (prop->type_urid == ui->forge.Long);
-				double min = prop->minimum;
-				double max = prop->maximum;
-				double dflt = prop->minimum; //FIXME
+				{
+					int integer = (prop->type_urid == ui->forge.Int)
+						|| (prop->type_urid == ui->forge.URID)
+						|| (prop->type_urid == ui->forge.Long);
+					double min = prop->minimum;
+					double max = prop->maximum;
+					double dflt = prop->minimum; //FIXME
 
-				smart_slider_range_set(child, min, max, dflt);
-				smart_slider_color_set(child, mod->col);
-				smart_slider_integer_set(child, integer);
-				smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s");
-				smart_slider_disabled_set(child, !prop->editable);
-				//if(prop->unit) //FIXME
-				//	smart_slider_unit_set(child, port->unit);
-				if(prop->editable)
-					evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
-				evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
-				evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
+					smart_slider_range_set(child, min, max, dflt);
+					smart_slider_color_set(child, mod->col);
+					smart_slider_integer_set(child, integer);
+					smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s");
+					smart_slider_disabled_set(child, !prop->editable);
+					//if(prop->unit) //FIXME
+					//	smart_slider_unit_set(child, port->unit);
+					if(prop->editable)
+						evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
+					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
+					evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
+				}
+			}
+			else if(prop->type_urid == ui->forge.Bool)
+			{
+				child = smart_toggle_add(evas_object_evas_get(lay));
+				if(child)
+				{
+					smart_toggle_color_set(child, mod->col);
+					smart_toggle_disabled_set(child, !prop->editable);
+					if(prop->editable)
+						evas_object_smart_callback_add(child, "changed", _property_check_changed, prop);
+					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
+					evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
+				}
 			}
 		}
-		else if(prop->type_urid == ui->forge.Bool)
+		else // scale_points
 		{
-			child = smart_toggle_add(evas_object_evas_get(lay));
+			child = smart_spinner_add(evas_object_evas_get(lay));
 			if(child)
 			{
-				smart_toggle_color_set(child, mod->col);
-				smart_toggle_disabled_set(child, !prop->editable);
+				smart_spinner_color_set(child, mod->col);
+				smart_spinner_disabled_set(child, !prop->editable);
+				Eina_List *l;
+				point_t *p;
+				EINA_LIST_FOREACH(prop->scale_points, l, p)
+				{
+					if(prop->type_urid == ui->forge.String)
+						smart_spinner_key_add(child, p->s, p->label);
+					else
+						smart_spinner_value_add(child, *p->d, p->label);
+				}
 				if(prop->editable)
-					evas_object_smart_callback_add(child, "changed", _property_check_changed, prop);
+					evas_object_smart_callback_add(child, "changed", _property_spinner_changed, prop);
 				evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
 				evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
 			}

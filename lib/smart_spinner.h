@@ -27,11 +27,17 @@ smart_spinner_add(Evas *e);
 
 void
 smart_spinner_value_add(Evas_Object *o, float value, const char *label);
-
 void
 smart_spinner_value_set(Evas_Object *o, float value);
 float
 smart_spinner_value_get(Evas_Object *o);
+
+void
+smart_spinner_key_add(Evas_Object *o, const char *key, const char *label);
+void
+smart_spinner_key_set(Evas_Object *o, const char *key);
+const char *
+smart_spinner_key_get(Evas_Object *o);
 
 void
 smart_spinner_color_set(Evas_Object *o, int col);

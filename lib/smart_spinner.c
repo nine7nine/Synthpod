@@ -31,8 +31,9 @@ typedef struct _elmnt_t elmnt_t;
 typedef struct _smart_spinner_t smart_spinner_t;
 
 struct _elmnt_t {
-	float value;
 	char *label;
+	float value;
+	char *key;
 };
 
 struct _smart_spinner_t {
@@ -284,11 +285,18 @@ _cmp(const void *data1, const void *data2)
 	const elmnt_t *elmnt1 = data1;
 	const elmnt_t *elmnt2 = data2;
 
-	return elmnt1->value < elmnt2->value
-		? -1
-		: (elmnt1->value > elmnt2->value
-			? 1
-			: 0);
+	if(elmnt1->key && elmnt2->key)
+	{
+		return strcmp(elmnt1->key, elmnt2->key);
+	}
+	else
+	{
+		return elmnt1->value < elmnt2->value
+			? -1
+			: (elmnt1->value > elmnt2->value
+				? 1
+				: 0);
+	}
 }
 
 void
@@ -299,8 +307,8 @@ smart_spinner_value_add(Evas_Object *o, float value, const char *label)
 		return;
 
 	elmnt_t *elmnt = calloc(1, sizeof(elmnt_t));
-	elmnt->value = value;
 	elmnt->label = label ? strdup(label) : NULL;
+	elmnt->value = value;
 
 	priv->elmnts = eina_list_sorted_insert(priv->elmnts, _cmp, elmnt);
 	priv->count = eina_list_count(priv->elmnts);
@@ -359,6 +367,70 @@ smart_spinner_value_get(Evas_Object *o)
 	return elmnt
 		? elmnt->value
 		: 0.f;
+}
+
+void
+smart_spinner_key_add(Evas_Object *o, const char *key, const char *label)
+{
+	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
+
+	elmnt_t *elmnt = calloc(1, sizeof(elmnt_t));
+	elmnt->label = label ? strdup(label) : NULL;
+	elmnt->key = key ? strdup(key) : NULL;
+
+	priv->elmnts = eina_list_sorted_insert(priv->elmnts, _cmp, elmnt);
+	priv->count = eina_list_count(priv->elmnts);
+			
+	double size_x = 1.f / priv->count;
+	edje_object_part_drag_size_set(priv->theme, "drag", size_x, 1.f);
+	
+	//_smart_spinner_value_flush(o);
+}
+
+void
+smart_spinner_key_set(Evas_Object *o, const char *key)
+{
+	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
+	
+	Eina_List *l;
+	elmnt_t *elmnt;
+	
+	int itr = 0;
+
+	EINA_LIST_FOREACH(priv->elmnts, l, elmnt)
+	{
+		if(strcmp(elmnt->key, key) < 0)
+		{
+			itr += 1;
+
+			continue;
+		}
+
+		break;
+	}
+
+	priv->drag = 1.f / (priv->count - 1) * itr;
+	priv->value = INT_MAX;
+
+	_smart_spinner_value_flush(o);
+}
+
+const char *
+smart_spinner_key_get(Evas_Object *o)
+{
+	smart_spinner_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return NULL;
+
+	elmnt_t *elmnt = eina_list_nth(priv->elmnts, priv->value);
+
+	return elmnt
+		? elmnt->key
+		: NULL;
 }
 
 void

@@ -156,6 +156,10 @@ struct _reg_t {
 	} pset;
 
 	struct {
+		reg_item_t value;
+	} rdf;
+
+	struct {
 		reg_item_t label;
 		reg_item_t range;
 	} rdfs;
@@ -176,6 +180,7 @@ struct _reg_t {
 		reg_item_t index;
 		reg_item_t minimum;
 		reg_item_t maximum;
+		reg_item_t scale_point;
 	} core;
 
 	struct {
@@ -331,6 +336,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.protocol, world, map, LV2_UI_PREFIX"protocol");
 
 	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
+	
+	_register(&regs->rdf.value, world, map, LILV_NS_RDF"value");
 
 	_register(&regs->rdfs.label, world, map, LILV_NS_RDFS"label");
 	_register(&regs->rdfs.range, world, map, LILV_NS_RDFS"range");
@@ -348,6 +355,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.index, world, map, LV2_CORE__index);
 	_register(&regs->core.minimum, world, map, LV2_CORE__minimum);
 	_register(&regs->core.maximum, world, map, LV2_CORE__maximum);
+	_register(&regs->core.scale_point, world, map, LV2_CORE__scalePoint);
 
 	_register(&regs->bufsz.nominal_block_length, world, map, LV2_BUF_SIZE_PREFIX "nominalBlockLength");
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
@@ -474,6 +482,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->ui.protocol);
 
 	_unregister(&regs->pset.preset);
+	
+	_unregister(&regs->rdf.value);
 
 	_unregister(&regs->rdfs.label);
 	_unregister(&regs->rdfs.range);
@@ -491,6 +501,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.index);
 	_unregister(&regs->core.minimum);
 	_unregister(&regs->core.maximum);
+	_unregister(&regs->core.scale_point);
 
 	_unregister(&regs->bufsz.nominal_block_length);
 	_unregister(&regs->bufsz.max_block_length);
