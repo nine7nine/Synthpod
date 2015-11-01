@@ -1295,14 +1295,18 @@ _show_ui_show(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
 
+	if(!mod->show.descriptor)
+		return;
+
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 
 	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->show.ui);
+#if defined(LILV_0_22)
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
+#else
 	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
-
-	if(!mod->show.descriptor)
-		return;
+#endif
 
 	// subscribe to ports
 	for(unsigned i=0; i<mod->num_ports; i++)
@@ -1325,6 +1329,10 @@ _show_ui_show(mod_t *mod)
 		mod,
 		&dummy,
 		mod->features);
+
+#if defined(LILV_0_22)
+	lilv_free(bundle_path);
+#endif
 
 	if(!mod->show.handle)
 		return;
@@ -1408,14 +1416,18 @@ _kx_ui_show(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
 
+	if(!mod->kx.descriptor)
+		return;
+
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 
 	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->kx.ui);
+#if defined(LILV_0_22)
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
+#else
 	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
-
-	if(!mod->kx.descriptor)
-		return;
+#endif
 
 	// subscribe to ports
 	for(unsigned i=0; i<mod->num_ports; i++)
@@ -1437,6 +1449,10 @@ _kx_ui_show(mod_t *mod)
 		mod,
 		(void **)&mod->kx.widget,
 		mod->features);
+
+#if defined(LILV_0_22)
+	lilv_free(bundle_path);
+#endif
 
 	if(!mod->kx.handle)
 		return;
@@ -1554,14 +1570,18 @@ _x11_ui_show(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
 
+	if(!mod->x11.descriptor)
+		return;
+
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 
 	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->x11.ui);
+#if defined(LILV_0_22)
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
+#else
 	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
-
-	if(!mod->x11.descriptor)
-		return;
+#endif
 
 	// subscribe to ports
 	for(unsigned i=0; i<mod->num_ports; i++)
@@ -1592,6 +1612,10 @@ _x11_ui_show(mod_t *mod)
 		mod,
 		&dummy,
 		mod->features);
+
+#if defined(LILV_0_22)
+	lilv_free(bundle_path);
+#endif
 
 	mod->feature_list[2].data = NULL;
 
@@ -1626,11 +1650,20 @@ _ui_dlopen(const LilvUI *ui, Eina_Module **lib)
 		return NULL;
 
 	const char *ui_string = lilv_node_as_string(ui_uri);
+#if defined(LILV_0_22)
+	char *binary_path = lilv_file_uri_parse(lilv_node_as_string(binary_uri), NULL);
+#else
 	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
+#endif
 	if(!ui_string || !binary_path)
 		return NULL;
 
 	*lib = eina_module_new(binary_path);
+
+#if defined(LILV_0_22)
+	lilv_free(binary_path);
+#endif
+
 	if(!*lib)
 		return NULL;
 
@@ -3024,9 +3057,11 @@ _eo_widget_create(Evas_Object *parent, mod_t *mod)
 		plugin_string = lilv_node_as_string(plugin_uri);
 
 	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->eo.ui);
-	const char *bundle_path = NULL;
-	if(bundle_uri)
-		bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
+#if defined(LILV_0_22)
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
+#else
+	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
+#endif
 
 	// subscribe automatically to all non-atom ports by default
 	for(unsigned i=0; i<mod->num_ports; i++)
@@ -3058,6 +3093,10 @@ _eo_widget_create(Evas_Object *parent, mod_t *mod)
 
 		mod->feature_list[2].data = NULL;
 	}
+
+#if defined(LILV_0_22)
+	lilv_free(bundle_path);
+#endif
 
 	if(!mod->eo.handle || !mod->eo.widget)
 		return NULL;

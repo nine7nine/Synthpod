@@ -73,6 +73,9 @@ include_directories(${ECORE_FILE_INCLUDE_DIRS})
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
 include_directories(${LILV_INCLUDE_DIRS})
+if((${LILV_VERSION} VERSION_EQUAL "0.22.0") OR (${LILV_VERSION} VERSION_GREATER "0.22.0"))
+	add_definitions("-DLILV_0_22")
+endif()
 
 # lv2
 pkg_search_module(LV2 REQUIRED lv2>=1.10)
