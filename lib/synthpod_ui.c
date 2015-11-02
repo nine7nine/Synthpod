@@ -2010,16 +2010,13 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			const char *writable_str = lilv_node_as_uri(writable);
 
 			const char *label_str = NULL;
-			LilvNodes *labels = lilv_world_find_nodes(ui->world, writable,
+			LilvNode *label = lilv_world_get(ui->world, writable,
 				ui->regs.rdfs.label.node, NULL);
-			if(labels)
+			if(label)
 			{
-				const LilvNode *label = lilv_nodes_get_first(labels);
 				label_str = lilv_node_as_string(label);
-
-				lilv_nodes_free(labels);
+				lilv_free(label);
 			}
-
 			//printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
 
 			property_t *prop = calloc(1, sizeof(property_t));
@@ -2034,39 +2031,36 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			prop->maximum = 1.f; // not yet known
 
 			// get type of patch:writable
-			LilvNodes *types = lilv_world_find_nodes(ui->world, writable,
+			LilvNode *type = lilv_world_get(ui->world, writable,
 				ui->regs.rdfs.range.node, NULL);
-			if(types)
+			if(type)
 			{
-				const LilvNode *type = lilv_nodes_get_first(types);
 				const char *type_str = lilv_node_as_string(type);
 
 				//printf("with type: %s\n", type_str);
 				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
-				lilv_nodes_free(types);
+				lilv_free(type);
 			}
 
 			// get lv2:minimum
-			LilvNodes *minimums = lilv_world_find_nodes(ui->world, writable,
+			LilvNode *minimum = lilv_world_get(ui->world, writable,
 				ui->regs.core.minimum.node, NULL);
-			if(minimums)
+			if(minimum)
 			{
-				const LilvNode *minimum = lilv_nodes_get_first(minimums);
 				prop->minimum = lilv_node_as_float(minimum);
 
-				lilv_nodes_free(minimums);
+				lilv_free(minimum);
 			}
 
 			// get lv2:maximum
-			LilvNodes *maximums = lilv_world_find_nodes(ui->world, writable,
+			LilvNode *maximum = lilv_world_get(ui->world, writable,
 				ui->regs.core.maximum.node, NULL);
-			if(maximums)
+			if(maximum)
 			{
-				const LilvNode *maximum = lilv_nodes_get_first(maximums);
 				prop->maximum = lilv_node_as_float(maximum);
 
-				lilv_nodes_free(maximums);
+				lilv_free(maximum);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -2084,14 +2078,13 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			const char *readable_str = lilv_node_as_uri(readable);
 
 			const char *label_str = NULL;
-			LilvNodes *labels = lilv_world_find_nodes(ui->world, readable,
+			LilvNode *label = lilv_world_get(ui->world, readable,
 				ui->regs.rdfs.label.node, NULL);
-			if(labels)
+			if(label)
 			{
-				const LilvNode *label = lilv_nodes_get_first(labels);
 				label_str = lilv_node_as_string(label);
 
-				lilv_nodes_free(labels);
+				lilv_free(label);
 			}
 
 			//printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
@@ -2108,39 +2101,36 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			prop->maximum = 1.f; // not yet known
 
 			// get type of patch:readable
-			LilvNodes *types = lilv_world_find_nodes(ui->world, readable,
+			LilvNode *type = lilv_world_get(ui->world, readable,
 				ui->regs.rdfs.range.node, NULL);
-			if(types)
+			if(type)
 			{
-				const LilvNode *type = lilv_nodes_get_first(types);
 				const char *type_str = lilv_node_as_string(type);
 
 				//printf("with type: %s\n", type_str);
 				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
-				lilv_nodes_free(types);
+				lilv_free(type);
 			}
 
 			// get lv2:minimum
-			LilvNodes *minimums = lilv_world_find_nodes(ui->world, readable,
+			LilvNode *minimum = lilv_world_get(ui->world, readable,
 				ui->regs.core.minimum.node, NULL);
-			if(minimums)
+			if(minimum)
 			{
-				const LilvNode *minimum = lilv_nodes_get_first(minimums);
 				prop->minimum = lilv_node_as_float(minimum);
 
-				lilv_nodes_free(minimums);
+				lilv_free(minimum);
 			}
 
 			// get lv2:maximum
-			LilvNodes *maximums = lilv_world_find_nodes(ui->world, readable,
+			LilvNode *maximum = lilv_world_get(ui->world, readable,
 				ui->regs.core.maximum.node, NULL);
-			if(maximums)
+			if(maximum)
 			{
-				const LilvNode *maximum = lilv_nodes_get_first(maximums);
 				prop->maximum = lilv_node_as_float(maximum);
 
-				lilv_nodes_free(maximums);
+				lilv_free(maximum);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -2204,19 +2194,16 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 			// test for show UI
 			{ //TODO add to reg_t
-				LilvNodes* has_idle_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
+				bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
 					ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
-				LilvNodes* has_show_iface = lilv_world_find_nodes(ui->world, ui_uri_node,
+				bool has_show_iface = lilv_world_ask(ui->world, ui_uri_node,
 					ui->regs.core.extension_data.node, ui->regs.ui.show_interface.node);
 
-				if(lilv_nodes_size(has_show_iface)) // idle_iface is implicitely included
+				if(has_show_iface)
 				{
 					mod->show.ui = lui;
 					//printf("has show UI\n");
 				}
-
-				lilv_nodes_free(has_show_iface);
-				lilv_nodes_free(has_idle_iface);
 			}
 
 			// test for kxstudio kx_ui
@@ -2256,6 +2243,23 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
+
+	// preset banks
+	LILV_FOREACH(nodes, i, mod->presets)
+	{
+		const LilvNode* preset = lilv_nodes_get(mod->presets, i);
+		if(!preset)
+			continue;
+	
+		lilv_world_load_resource(ui->world, preset);
+
+		if(lilv_world_ask(ui->world, preset, ui->regs.pset.preset_bank.node, NULL))
+			printf("belongs to preset bank\n");
+		else
+			printf("no bank\n");
+		
+		//lilv_world_unload_resource(ui->world, preset);
+	}
 
 	// request selected state
 	_ui_mod_selected_request(mod);
@@ -3812,17 +3816,16 @@ _group_content_get(void *data, Evas_Object *obj, const char *part)
 
 		if(group->node)
 		{
-			LilvNodes *labels = lilv_world_find_nodes(ui->world, group->node,
+			LilvNode *label = lilv_world_get(ui->world, group->node,
 				ui->regs.core.name.node, NULL);
-			if(labels)
+			if(label)
 			{
-				const LilvNode *label = lilv_nodes_get_first(labels);
 				const char *label_str = lilv_node_as_string(label);
 
 				if(label_str)
 					elm_object_part_text_set(lay, "elm.text", label_str);
 
-				lilv_nodes_free(labels);
+				lilv_free(label);
 			}
 		}
 		else

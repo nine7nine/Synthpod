@@ -153,6 +153,8 @@ struct _reg_t {
 
 	struct {
 		reg_item_t preset;
+		reg_item_t preset_bank;
+		reg_item_t bank;
 	} pset;
 
 	struct {
@@ -336,6 +338,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.protocol, world, map, LV2_UI_PREFIX"protocol");
 
 	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
+	_register(&regs->pset.preset_bank, world, map, LV2_PRESETS__bank);
+	_register(&regs->pset.bank, world, map, LV2_PRESETS__Bank);
 	
 	_register(&regs->rdf.value, world, map, LILV_NS_RDF"value");
 
@@ -482,6 +486,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->ui.protocol);
 
 	_unregister(&regs->pset.preset);
+	_unregister(&regs->pset.preset_bank);
+	_unregister(&regs->pset.bank);
 	
 	_unregister(&regs->rdf.value);
 
@@ -1250,13 +1256,11 @@ static const char *
 _preset_label_get(LilvWorld *world, reg_t *regs, const LilvNode *preset)
 {
 	lilv_world_load_resource(world, preset);
-	LilvNodes* labels = lilv_world_find_nodes(world, preset,
-		regs->rdfs.label.node, NULL);
-	if(labels)
+	LilvNode *label = lilv_world_get(world, preset, regs->rdfs.label.node, NULL);
+	if(label)
 	{
-		const LilvNode *label = lilv_nodes_get_first(labels);
 		const char *lbl = lilv_node_as_string(label);
-		lilv_nodes_free(labels);
+		lilv_free(label);
 
 		return lbl;
 	}
