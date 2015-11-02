@@ -1486,7 +1486,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return;
 
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
+		size_t size = sizeof(work_t) + sizeof(job_t) + pset->uri.atom.size;
 		work_t *work = _sp_app_to_worker_request(app, size);
 		if(work)
 		{
@@ -1495,7 +1495,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			job_t *job = (job_t *)work->payload;
 			job->type = JOB_TYPE_PRESET_LOAD;
 			job->mod = mod;
-			memcpy(job->uri, pset->label_str, pset->label.atom.size);
+			memcpy(job->uri, pset->uri_str, pset->uri.atom.size);
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
@@ -1908,27 +1908,6 @@ _sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
 	return ZERO_WORKER_SUCCESS;
 }
 
-// non-rt
-static const LilvNode *
-_mod_preset_get(mod_t *mod, const char *label)
-{
-	sp_app_t *app = mod->app;
-
-	LILV_FOREACH(nodes, i, mod->presets)
-	{
-		const LilvNode* preset = lilv_nodes_get(mod->presets, i);
-		const char *lab = _preset_label_get(app->world, &app->regs, preset);
-
-		// test for matching preset label
-		if(!lab || strcmp(lab, label))
-			continue;
-
-		return preset;
-	}
-
-	return NULL;
-}
-
 static char *
 _abstract_path(LV2_State_Map_Path_Handle instance, const char *absolute_path)
 {
@@ -1999,16 +1978,26 @@ _state_features(sp_app_t *app, void *data)
 
 // non-rt
 static inline void
-_preset_load(sp_app_t *app, mod_t *mod, const char *target)
+_preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 {
-	const LilvNode *preset = _mod_preset_get(mod, target);
+	LilvNode *preset = lilv_new_uri(app->world, uri);
 
 	if(!preset) // preset not existing
 		return;
 
+	// load preset resource
+	lilv_world_load_resource(app->world, preset);
+
 	// load preset
 	LilvState *state = lilv_state_new_from_world(app->world, app->driver->map,
 		preset);
+
+	// unload preset resource
+	lilv_world_unload_resource(app->world, preset);
+
+	// free preset node
+	lilv_free(preset);
+
 	if(!state)
 		return;
 
@@ -2029,11 +2018,6 @@ _preset_load(sp_app_t *app, mod_t *mod, const char *target)
 static inline void
 _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 {
-	const LilvNode *preset = _mod_preset_get(mod, target);
-
-	if(preset) // exists already TODO overwrite?
-		return;
-
 	const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
 	if(!name_node)
 		return;

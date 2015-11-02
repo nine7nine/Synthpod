@@ -2245,12 +2245,13 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
 
 	// preset banks
+	/* TODO
 	LILV_FOREACH(nodes, i, mod->presets)
 	{
 		const LilvNode* preset = lilv_nodes_get(mod->presets, i);
 		if(!preset)
 			continue;
-	
+
 		lilv_world_load_resource(ui->world, preset);
 
 		if(lilv_world_ask(ui->world, preset, ui->regs.pset.preset_bank.node, NULL))
@@ -2258,8 +2259,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		else
 			printf("no bank\n");
 		
-		//lilv_world_unload_resource(ui->world, preset);
+		lilv_world_unload_resource(ui->world, preset);
 	}
+	*/
 
 	// request selected state
 	_ui_mod_selected_request(mod);
@@ -2948,17 +2950,17 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 		if(!preset)
 			return;
 
-		const char *label = _preset_label_get(ui->world, &ui->regs, preset);
-		if(!label)
+		const char *uri = lilv_node_as_uri(preset);
+		if(!uri)
 			return;
 
 		// signal app
 		size_t size = sizeof(transmit_module_preset_load_t)
-			+ lv2_atom_pad_size(strlen(label) + 1);
+			+ lv2_atom_pad_size(strlen(uri) + 1);
 		transmit_module_preset_load_t *trans = _sp_ui_to_app_request(ui, size);
 		if(trans)
 		{
-			_sp_transmit_module_preset_load_fill(&ui->regs, &ui->forge, trans, size, mod->uid, label);
+			_sp_transmit_module_preset_load_fill(&ui->regs, &ui->forge, trans, size, mod->uid, uri);
 			_sp_ui_to_app_advance(ui, size);
 		}
 
@@ -4184,7 +4186,23 @@ _modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
 		return NULL;
 
 	if(!strcmp(part, "elm.text"))
-		return strdup(_preset_label_get(ui->world, &ui->regs, preset));
+	{
+		char *lbl = NULL;
+
+		lilv_world_load_resource(ui->world, preset);
+		LilvNode *label = lilv_world_get(ui->world, preset,
+			ui->regs.rdfs.label.node, NULL);
+		if(label)
+		{
+			const char *label_str = lilv_node_as_string(label);
+			if(label_str)
+				lbl = strdup(label_str);
+			lilv_free(label);
+		}
+		lilv_world_unload_resource(ui->world, preset);
+
+		return lbl;
+	}
 
 	return NULL;
 }

@@ -643,8 +643,8 @@ struct _transmit_module_move_t {
 struct _transmit_module_preset_load_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
-	LV2_Atom_String label _ATOM_ALIGNED;
-		char label_str [0] _ATOM_ALIGNED;
+	LV2_Atom_String uri _ATOM_ALIGNED;
+		char uri_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_module_preset_save_t {
@@ -858,7 +858,7 @@ _sp_transmit_module_move_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 static inline void
 _sp_transmit_module_preset_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
-	transmit_module_preset_load_t *trans, uint32_t size, u_id_t module_uid, const char *label)
+	transmit_module_preset_load_t *trans, uint32_t size, u_id_t module_uid, const char *uri)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -869,13 +869,13 @@ _sp_transmit_module_preset_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
 
-	trans->label.atom.size = label
-		? strlen(label) + 1
+	trans->uri.atom.size = uri
+		? strlen(uri) + 1
 		: 0;
-	trans->label.atom.type = forge->String;
+	trans->uri.atom.type = forge->String;
 
-	if(label)
-		strcpy(trans->label_str, label);
+	if(uri)
+		strcpy(trans->uri_str, uri);
 }
 
 static inline void
@@ -1256,22 +1256,6 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->prop_val = property;
 }
 
-static const char *
-_preset_label_get(LilvWorld *world, reg_t *regs, const LilvNode *preset)
-{
-	lilv_world_load_resource(world, preset);
-	LilvNode *label = lilv_world_get(world, preset, regs->rdfs.label.node, NULL);
-	if(label)
-	{
-		const char *lbl = lilv_node_as_string(label);
-		lilv_free(label);
-
-		return lbl;
-	}
-
-	return NULL;
-}
-
 // non-rt
 static LilvNodes *
 _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
@@ -1279,14 +1263,7 @@ _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 {
 	// unload presets for this module
 	if(presets)
-	{
-		LILV_FOREACH(nodes, i, presets)
-		{
-			const LilvNode *preset = lilv_nodes_get(presets, i);
-			lilv_world_unload_resource(world, preset);
-		}
 		lilv_nodes_free(presets);
-	}
 
 	char *bndl_path;
 	asprintf(&bndl_path, "file://%s", bndl); // convert absolute path to proper URI
