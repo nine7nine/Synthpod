@@ -28,6 +28,10 @@
 #	define ASSUME_ALIGNED(PTR) (PTR)
 #endif
 
+#if !defined(LILV_0_22)
+#	define lilv_free free
+#endif
+
 #include <lilv/lilv.h>
 
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
