@@ -2288,8 +2288,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		//lilv_world_unload_resource(ui->world, preset); //FIXME
 	}
 
-	printf("banks: %i\n", eina_list_count(mod->banks));
-
 	// request selected state
 	_ui_mod_selected_request(mod);
 
@@ -2771,7 +2769,7 @@ _preset_label_cmp(mod_t *mod, const LilvNode *pset1, const LilvNode *pset2)
 	const char *uri2 = lilv_node_as_string(lbl2);
 
 	int res = uri1 && uri2
-		? strcmp(uri1, uri2)
+		? strcasecmp(uri1, uri2)
 		: 1;
 
 	lilv_node_free(lbl1);
@@ -3002,8 +3000,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			LilvNode *bank;
 			EINA_LIST_FOREACH(mod->banks, l, bank)
 			{
-				elmnt = elm_genlist_item_append(ui->modlist, ui->psetbnkitc, bank, itm,
-					ELM_GENLIST_ITEM_TREE, NULL, NULL);
+				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetbnkitc, bank, itm,
+				ELM_GENLIST_ITEM_TREE, _itmitc_cmp, NULL, NULL);
 				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 			}
 		}
@@ -3095,9 +3093,18 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 	if(class == ui->psetitmitc) // is presets item
 	{
 		// get parent item
-		Elm_Object_Item *parent = elm_genlist_item_parent_get(itm);
+		Elm_Object_Item *parent = elm_genlist_item_parent_get(itm); // psetbnkitc || psetitc
 		if(!parent)
 			return;
+
+		const Elm_Genlist_Item_Class *parent_class = elm_genlist_item_item_class_get(parent);
+		if(parent_class == ui->psetbnkitc)
+		{
+			parent = elm_genlist_item_parent_get(parent); // psetitc
+
+			if(!parent)
+				return;
+		}
 
 		mod_t *mod = elm_object_item_data_get(parent);
 		if(!mod)
@@ -3122,7 +3129,7 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 		}
 
 		// contract parent list item
-		evas_object_smart_callback_call(obj, "contract,request", parent);
+		//evas_object_smart_callback_call(obj, "contract,request", parent);
 	}
 
 	//TODO toggle checkboxes on modules and ports
