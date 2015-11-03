@@ -1996,7 +1996,7 @@ _preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 	lilv_world_unload_resource(app->world, preset);
 
 	// free preset node
-	lilv_free(preset);
+	lilv_node_free(preset);
 
 	if(!state)
 		return;

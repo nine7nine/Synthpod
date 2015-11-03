@@ -85,6 +85,7 @@ struct _mod_t {
 	LilvUIs *all_uis;
 	LilvNodes *presets;
 	LV2_URID subject;
+	Eina_List *banks;
 
 	// ports
 	unsigned num_ports;
@@ -310,6 +311,7 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *moditc;
 	Elm_Genlist_Item_Class *stditc;
 	Elm_Genlist_Item_Class *psetitc;
+	Elm_Genlist_Item_Class *psetbnkitc;
 	Elm_Genlist_Item_Class *psetitmitc;
 	Elm_Genlist_Item_Class *psetsaveitc;
 	Elm_Gengrid_Item_Class *griditc;
@@ -1775,6 +1777,17 @@ _sp_ui_next_col(sp_ui_t *ui)
 	return col;
 }
 
+static int
+_bank_cmp(const void *data1, const void *data2)
+{
+	const LilvNode *node1 = data1;
+	const LilvNode *node2 = data2;
+
+	return lilv_node_equals(node1, node2)
+		? 0
+		: -1;
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	data_access_t data_access)
@@ -2015,7 +2028,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			if(label)
 			{
 				label_str = lilv_node_as_string(label);
-				lilv_free(label);
+				lilv_node_free(label);
 			}
 			//printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
 
@@ -2040,7 +2053,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				//printf("with type: %s\n", type_str);
 				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
-				lilv_free(type);
+				lilv_node_free(type);
 			}
 
 			// get lv2:minimum
@@ -2050,7 +2063,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			{
 				prop->minimum = lilv_node_as_float(minimum);
 
-				lilv_free(minimum);
+				lilv_node_free(minimum);
 			}
 
 			// get lv2:maximum
@@ -2060,7 +2073,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			{
 				prop->maximum = lilv_node_as_float(maximum);
 
-				lilv_free(maximum);
+				lilv_node_free(maximum);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -2084,7 +2097,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			{
 				label_str = lilv_node_as_string(label);
 
-				lilv_free(label);
+				lilv_node_free(label);
 			}
 
 			//printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
@@ -2110,7 +2123,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				//printf("with type: %s\n", type_str);
 				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
 
-				lilv_free(type);
+				lilv_node_free(type);
 			}
 
 			// get lv2:minimum
@@ -2120,7 +2133,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			{
 				prop->minimum = lilv_node_as_float(minimum);
 
-				lilv_free(minimum);
+				lilv_node_free(minimum);
 			}
 
 			// get lv2:maximum
@@ -2130,7 +2143,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			{
 				prop->maximum = lilv_node_as_float(maximum);
 
-				lilv_free(maximum);
+				lilv_node_free(maximum);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -2244,8 +2257,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
 
-	// preset banks
-	/* TODO
+	// load preset banks
+	mod->banks = NULL;
 	LILV_FOREACH(nodes, i, mod->presets)
 	{
 		const LilvNode* preset = lilv_nodes_get(mod->presets, i);
@@ -2254,14 +2267,28 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 		lilv_world_load_resource(ui->world, preset);
 
-		if(lilv_world_ask(ui->world, preset, ui->regs.pset.preset_bank.node, NULL))
-			printf("belongs to preset bank\n");
-		else
-			printf("no bank\n");
+		LilvNodes *preset_banks = lilv_world_find_nodes(ui->world,
+			preset, ui->regs.pset.preset_bank.node, NULL);
+
+		LILV_FOREACH(nodes, j, preset_banks)
+		{
+			const LilvNode *bank = lilv_nodes_get(preset_banks, j);
+			if(!bank)
+				continue;
+
+			LilvNode *bank_dup = eina_list_search_unsorted(mod->banks, _bank_cmp, bank);
+			if(!bank_dup)
+			{
+				bank_dup = lilv_node_duplicate(bank); //TODO
+				mod->banks = eina_list_append(mod->banks, bank_dup);
+			}
+		}
+		lilv_nodes_free(preset_banks);
 		
-		lilv_world_unload_resource(ui->world, preset);
+		//lilv_world_unload_resource(ui->world, preset); //FIXME
 	}
-	*/
+
+	printf("banks: %i\n", eina_list_count(mod->banks));
 
 	// request selected state
 	_ui_mod_selected_request(mod);
@@ -2293,6 +2320,10 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	}
 	if(mod->ports)
 		free(mod->ports);
+
+	LilvNode *bank;
+	EINA_LIST_FREE(mod->banks, bank)
+		lilv_node_free(bank);
 
 	if(mod->presets)
 		lilv_nodes_free(mod->presets);
@@ -2718,6 +2749,79 @@ _groups_foreach(const Eina_Hash *hash, const void *key, void *data, void *fdata)
 	return EINA_TRUE;
 }
 
+static int
+_preset_label_cmp(mod_t *mod, const LilvNode *pset1, const LilvNode *pset2)
+{
+	if(!pset1 || !pset2 || !mod)
+		return 1;
+
+	sp_ui_t *ui = mod->ui;
+	LilvNode *lbl1 = lilv_world_get(ui->world, pset1, ui->regs.rdfs.label.node, NULL);
+	if(!lbl1)
+		return 1;
+
+	LilvNode *lbl2 = lilv_world_get(ui->world, pset2, ui->regs.rdfs.label.node, NULL);
+	if(!lbl2)
+	{
+		lilv_node_free(lbl1);
+		return 1;
+	}
+
+	const char *uri1 = lilv_node_as_string(lbl1);
+	const char *uri2 = lilv_node_as_string(lbl2);
+
+	int res = uri1 && uri2
+		? strcmp(uri1, uri2)
+		: 1;
+
+	lilv_node_free(lbl1);
+	lilv_node_free(lbl2);
+
+	return res;
+}
+
+static int
+_itmitc_cmp(const void *data1, const void *data2)
+{
+	const Elm_Object_Item *itm1 = data1;
+	const Elm_Object_Item *itm2 = data2;
+	if(!itm1 || !itm2)
+		return 1;
+
+	const Elm_Object_Item *par2 = elm_genlist_item_parent_get(itm1); // psetitc
+	if(!par2)
+		return 1;
+
+	const LilvNode *pset1 = elm_object_item_data_get(itm1);
+	const LilvNode *pset2 = elm_object_item_data_get(itm2);
+	mod_t *mod = elm_object_item_data_get(par2);
+
+	return _preset_label_cmp(mod, pset1, pset2);
+}
+
+static int
+_bnkitc_cmp(const void *data1, const void *data2)
+{
+	const Elm_Object_Item *itm1 = data1;
+	const Elm_Object_Item *itm2 = data2;
+	if(!itm1 || !itm2)
+		return 1;
+
+	const Elm_Object_Item *par1 = elm_genlist_item_parent_get(itm1); // bnkitc
+	if(!par1)
+		return 1;
+
+	const Elm_Object_Item *par2 = elm_genlist_item_parent_get(par1); // psetitc
+	if(!par2)
+		return 1;
+
+	const LilvNode *pset1 = elm_object_item_data_get(itm1);
+	const LilvNode *pset2 = elm_object_item_data_get(itm2);
+	mod_t *mod = elm_object_item_data_get(par2);
+
+	return _preset_label_cmp(mod, pset1, pset2);
+}
+
 static void
 _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 {
@@ -2892,20 +2996,73 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 	{
 		mod_t *mod = elm_object_item_data_get(itm);
 
+		if(mod->banks)
+		{
+			Eina_List *l;
+			LilvNode *bank;
+			EINA_LIST_FOREACH(mod->banks, l, bank)
+			{
+				elmnt = elm_genlist_item_append(ui->modlist, ui->psetbnkitc, bank, itm,
+					ELM_GENLIST_ITEM_TREE, NULL, NULL);
+				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
+			}
+		}
+
 		LILV_FOREACH(nodes, i, mod->presets)
 		{
 			const LilvNode* preset = lilv_nodes_get(mod->presets, i);
 			if(!preset)
 				continue;
 
-			elmnt = elm_genlist_item_append(ui->modlist, ui->psetitmitc, preset, itm,
-				ELM_GENLIST_ITEM_NONE, NULL, NULL);
+			LilvNode *bank = lilv_world_get(ui->world, preset,
+				ui->regs.pset.preset_bank.node, NULL);
+			if(bank)
+			{
+				lilv_node_free(bank);
+				continue; // ignore presets which are part of a bank
+			}
+
+			elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetitmitc, preset, itm,
+				ELM_GENLIST_ITEM_NONE, _itmitc_cmp, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 		}
 
 		elmnt = elm_genlist_item_append(ui->modlist, ui->psetsaveitc, mod, itm,
 			ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
+	}
+	else if(class == ui->psetbnkitc) // is preset bank item
+	{
+		LilvNode *bank = elm_object_item_data_get(itm);
+		Elm_Object_Item *parent = elm_genlist_item_parent_get(itm); // psetitc
+		mod_t *mod = elm_object_item_data_get(parent);
+
+		LilvNodes *presets = lilv_world_find_nodes(ui->world, NULL,
+			ui->regs.pset.preset_bank.node, bank);
+		LILV_FOREACH(nodes, i, presets)
+		{
+			const LilvNode *preset = lilv_nodes_get(presets, i);
+
+			// lookup and reference corresponding preset in mod->presets
+			const LilvNode *ref = NULL;
+			LILV_FOREACH(nodes, j, mod->presets)
+			{
+				const LilvNode *_preset = lilv_nodes_get(mod->presets, j);
+				if(lilv_node_equals(preset, _preset))
+				{
+					ref = _preset;
+					break;
+				}
+			}
+
+			if(ref)
+			{
+				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetitmitc, ref, itm,
+					ELM_GENLIST_ITEM_NONE, _bnkitc_cmp, NULL, NULL);
+				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
+			}
+		}
+		lilv_nodes_free(presets);
 	}
 }
 
@@ -3827,7 +3984,7 @@ _group_content_get(void *data, Evas_Object *obj, const char *part)
 				if(label_str)
 					elm_object_part_text_set(lay, "elm.text", label_str);
 
-				lilv_free(label);
+				lilv_node_free(label);
 			}
 		}
 		else
@@ -4178,6 +4335,36 @@ _modlist_psets_content_get(void *data, Evas_Object *obj, const char *part)
 }
 
 static char * 
+_modlist_bank_label_get(void *data, Evas_Object *obj, const char *part)
+{
+	const LilvNode* bank = data;
+	sp_ui_t *ui = evas_object_data_get(obj, "ui");
+	if(!ui)
+		return NULL;
+
+	if(!strcmp(part, "elm.text"))
+	{
+		char *lbl = NULL;
+
+		//lilv_world_load_resource(ui->world, bank); //FIXME
+		LilvNode *label = lilv_world_get(ui->world, bank,
+			ui->regs.rdfs.label.node, NULL);
+		if(label)
+		{
+			const char *label_str = lilv_node_as_string(label);
+			if(label_str)
+				lbl = strdup(label_str);
+			lilv_node_free(label);
+		}
+		//lilv_world_unload_resource(ui->world, bank); //FIXME
+
+		return lbl;
+	}
+
+	return NULL;
+}
+
+static char * 
 _modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
 {
 	const LilvNode* preset = data;
@@ -4189,7 +4376,7 @@ _modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
 	{
 		char *lbl = NULL;
 
-		lilv_world_load_resource(ui->world, preset);
+		//lilv_world_load_resource(ui->world, preset); //FIXME
 		LilvNode *label = lilv_world_get(ui->world, preset,
 			ui->regs.rdfs.label.node, NULL);
 		if(label)
@@ -4197,9 +4384,9 @@ _modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
 			const char *label_str = lilv_node_as_string(label);
 			if(label_str)
 				lbl = strdup(label_str);
-			lilv_free(label);
+			lilv_node_free(label);
 		}
-		lilv_world_unload_resource(ui->world, preset);
+		//lilv_world_unload_resource(ui->world, preset); //FIXME
 
 		return lbl;
 	}
@@ -4962,6 +5149,16 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->psetitc->func.content_get = _modlist_psets_content_get;
 			ui->psetitc->func.state_get = NULL;
 			ui->psetitc->func.del = NULL;
+		}
+
+		ui->psetbnkitc = elm_genlist_item_class_new();
+		if(ui->psetbnkitc)
+		{
+			ui->psetbnkitc->item_style = "default";
+			ui->psetbnkitc->func.text_get = _modlist_bank_label_get;
+			ui->psetbnkitc->func.content_get = NULL;
+			ui->psetbnkitc->func.state_get = NULL;
+			ui->psetbnkitc->func.del = NULL;
 		}
 
 		ui->psetitmitc = elm_genlist_item_class_new();
@@ -5805,6 +6002,8 @@ sp_ui_free(sp_ui_t *ui)
 		elm_genlist_item_class_free(ui->stditc);
 	if(ui->psetitc)
 		elm_genlist_item_class_free(ui->psetitc);
+	if(ui->psetbnkitc)
+		elm_genlist_item_class_free(ui->psetbnkitc);
 	if(ui->psetitmitc)
 		elm_genlist_item_class_free(ui->psetitmitc);
 	if(ui->psetsaveitc)
