@@ -69,7 +69,7 @@ if(BUILD_JACK)
 		DEPENDS
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod_jack.1)
 	add_custom_target(SYNTHPOD_JACK_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_jack.1.gz)
-	install(FILES "${PROJECT_BINARY_DIR}/synthpod_jack.1.gz" DESTINATION man/man1)
+	install(FILES "${PROJECT_BINARY_DIR}/synthpod_jack.1.gz" DESTINATION share/man/man1)
 endif()
 
 if(BUILD_ALSA)
@@ -117,5 +117,5 @@ if(BUILD_ALSA)
 		DEPENDS
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod_alsa.1)
 	add_custom_target(SYNTHPOD_ALSA_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_alsa.1.gz)
-	install(FILES "${PROJECT_BINARY_DIR}/synthpod_alsa.1.gz" DESTINATION man/man1)
+	install(FILES "${PROJECT_BINARY_DIR}/synthpod_alsa.1.gz" DESTINATION share/man/man1)
 endif()
