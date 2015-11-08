@@ -28,7 +28,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 16
+#define NUM_UI_FEATURES 17
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -1878,6 +1878,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = LV2_EXTERNAL_UI__Host;
 	mod->feature_list[nfeatures++].data = &mod->kx.host;
+
+	mod->feature_list[nfeatures].URI = LV2_EXTERNAL_UI__Widget;
+	mod->feature_list[nfeatures++].data = NULL;
 
 	mod->feature_list[nfeatures].URI = LV2_EXTERNAL_UI_DEPRECATED_URI;
 	mod->feature_list[nfeatures++].data = &mod->kx.host;
