@@ -654,21 +654,23 @@ run(LV2_Handle instance, uint32_t nsamples)
 		}
 	}
 
-	assert(handle->source.event_in && handle->source.com_in
-		&& handle->source.audio_in[0] && handle->source.audio_in[1]
-		&& handle->source.input[0] && handle->source.input[1]
-		&& handle->source.input[2] && handle->source.input[3]);
-
 	//TODO use __builtin_assume_aligned
 
 	// fill input buffers
-	memcpy(handle->source.event_in, handle->port.event_in, SEQ_SIZE);
-	memcpy(handle->source.audio_in[0], handle->port.audio_in[0], sample_buf_size);
-	memcpy(handle->source.audio_in[1], handle->port.audio_in[1], sample_buf_size);
-	*handle->source.input[0] = *handle->port.input[0];
-	*handle->source.input[1] = *handle->port.input[1];
-	*handle->source.input[2] = *handle->port.input[2];
-	*handle->source.input[3] = *handle->port.input[3];
+	if(handle->source.event_in)
+		memcpy(handle->source.event_in, handle->port.event_in, SEQ_SIZE);
+	if(handle->source.audio_in[0])
+		memcpy(handle->source.audio_in[0], handle->port.audio_in[0], sample_buf_size);
+	if(handle->source.audio_in[1])
+		memcpy(handle->source.audio_in[1], handle->port.audio_in[1], sample_buf_size);
+	if(handle->source.input[0])
+		*handle->source.input[0] = *handle->port.input[0];
+	if(handle->source.input[1])
+		*handle->source.input[1] = *handle->port.input[1];
+	if(handle->source.input[2])
+		*handle->source.input[2] = *handle->port.input[2];
+	if(handle->source.input[3])
+		*handle->source.input[3] = *handle->port.input[3];
 
 	if(handle->dirty_in)
 	{
@@ -804,25 +806,35 @@ run(LV2_Handle instance, uint32_t nsamples)
 		}
 	}
 
-	assert(handle->sink.event_out && handle->sink.com_out
-		&& handle->sink.audio_out[0] && handle->sink.audio_out[1]
-		&& handle->sink.output[0] && handle->sink.output[1]
-		&& handle->sink.output[2] && handle->sink.output[3]);
+	if(handle->sink.event_out)
+		memcpy(handle->port.event_out, handle->sink.event_out, SEQ_SIZE);
+	else
+		memset(handle->port.event_out, 0x0, SEQ_SIZE);
 
-	memcpy(handle->port.event_out, handle->sink.event_out, SEQ_SIZE);
-	memcpy(handle->port.audio_out[0], handle->sink.audio_out[0], sample_buf_size);
-	memcpy(handle->port.audio_out[1], handle->sink.audio_out[1], sample_buf_size);
-	*handle->port.output[0] = *handle->sink.output[0];
-	*handle->port.output[1] = *handle->sink.output[1];
-	*handle->port.output[2] = *handle->sink.output[2];
-	*handle->port.output[3] = *handle->sink.output[3];
+	if(handle->sink.audio_out[0])
+		memcpy(handle->port.audio_out[0], handle->sink.audio_out[0], sample_buf_size);
+	else
+		memset(handle->port.audio_out[0], 0x0, sample_buf_size);
 
-	LV2_ATOM_SEQUENCE_FOREACH(handle->sink.com_out, ev)
+	if(handle->sink.audio_out[1])
+		memcpy(handle->port.audio_out[1], handle->sink.audio_out[1], sample_buf_size);
+	else
+		memset(handle->port.audio_out[1], 0x0, sample_buf_size);
+
+	*handle->port.output[0] = handle->sink.output[0] ? *handle->sink.output[0] : 0.f;
+	*handle->port.output[1] = handle->sink.output[1] ? *handle->sink.output[1] : 0.f;
+	*handle->port.output[2] = handle->sink.output[2] ? *handle->sink.output[2] : 0.f;
+	*handle->port.output[3] = handle->sink.output[3] ? *handle->sink.output[3] : 0.f;
+
+	if(handle->sink.com_out)
 	{
-		const LV2_Atom *atom = &ev->body;
+		LV2_ATOM_SEQUENCE_FOREACH(handle->sink.com_out, ev)
+		{
+			const LV2_Atom *atom = &ev->body;
 
-		sp_app_from_ui(handle->app, atom);
-		//FIXME is this the right place?
+			sp_app_from_ui(handle->app, atom);
+			//FIXME is this the right place?
+		}
 	}
 }
 

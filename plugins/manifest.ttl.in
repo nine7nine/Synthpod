@@ -40,7 +40,7 @@ synthpod:stereo
 	@EO_UI_WRAP@ui:ui synthpod:common_eo ;
 	@UI_UI_WRAP@ui:ui synthpod:common_ui ;
 	@KX_UI_WRAP@ui:ui synthpod:common_kx ;
-	#@X11_UI_WRAP@ui:ui synthpod:common_x11 ;
+	@X11_UI_WRAP@ui:ui synthpod:common_x11 ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_eo
