@@ -20,12 +20,13 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef void pcmi_t;
 
 pcmi_t *
 pcmi_new(const char *play_name, const char *capt_name, uint32_t srate,
-	uint32_t frsize, uint32_t nfrags, int twochan, int debug);
+	uint32_t frsize, uint32_t nfrags, bool twochan, bool debug);
 
 void
 pcmi_free(pcmi_t *pcmi);

@@ -1109,7 +1109,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhGn:u:s:")) != -1)
+	while((c = getopt(argc, argv, "vhgGn:u:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -1138,12 +1138,16 @@ elm_main(int argc, char **argv)
 					"OPTIONS\n"
 					"   [-v]                 print version and full license information\n"
 					"   [-h]                 print usage information\n"
+					"   [-g]                 enable GUI (default)\n"
 					"   [-G]                 disable GUI\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-u] client-uuid     client UUID for JACK session management\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
 					, argv[0]);
 				return 0;
+			case 'g':
+				bin->has_gui = true;
+				break;
 			case 'G':
 				bin->has_gui = false;
 				break;

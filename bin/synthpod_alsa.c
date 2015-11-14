@@ -72,10 +72,10 @@ struct _prog_t {
 	uint32_t srate;
 	uint32_t frsize;
 	uint32_t nfrags;
-	int twochan;
-	int debug;
-	int do_play;
-	int do_capt;
+	bool twochan;
+	bool debug;
+	bool do_play;
+	bool do_capt;
 	uint32_t seq_size;
 
 	const char *io_name;
@@ -802,10 +802,10 @@ elm_main(int argc, char **argv)
 	handle.srate = 48000;
 	handle.frsize = 1024;
 	handle.nfrags = 3;
-	handle.twochan = 0;
-	handle.debug = 0;
-	handle.do_play = 1;
-	handle.do_capt = 1;
+	handle.twochan = false;
+	handle.debug = false;
+	handle.do_play = true;
+	handle.do_capt = true;
 	handle.seq_size = SEQ_SIZE;
 
 	const char *def = "hw:0";
@@ -824,7 +824,7 @@ elm_main(int argc, char **argv)
 	Efreet_Ini *ini = _read_config(&handle);
 	
 	int c;
-	while((c = getopt(argc, argv, "vhGIO2xd:i:o:r:p:n:s:")) != -1)
+	while((c = getopt(argc, argv, "vhgGIOtTxXd:i:o:r:p:n:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -853,11 +853,15 @@ elm_main(int argc, char **argv)
 					"OPTIONS\n"
 					"   [-v]                 print version and full license information\n"
 					"   [-h]                 print usage information\n"
+					"   [-g]                 enable GUI (default)\n"
 					"   [-G]                 disable GUI\n"
 					"   [-I]                 disable capture\n"
 					"   [-O]                 disable playback\n"
-					"   [-2]                 force 2 channel mode\n"
-					"   [-d]                 enable debugging\n"
+					"   [-t]                 force 2 channel mode\n"
+					"   [-T]                 do NOT force 2 channel mode (default)\n"
+					"   [-x]                 notify about XRuns\n"
+					"   [-X]                 do NOT notify about XRuns (default)\n"
+					"   [-d] device          capture/playback device (\"hw:0\")\n"
 					"   [-i] capture-device  capture device (\"hw:0\")\n"
 					"   [-o] playback-device playback device (\"hw:0\")\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
@@ -866,28 +870,39 @@ elm_main(int argc, char **argv)
 					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
 					, argv[0]);
 				return 0;
+			case 'g':
+				bin->has_gui = true;
+				break;
 			case 'G':
 				bin->has_gui = false;
 				break;
 			case 'I':
-				handle.do_capt = 0;
+				handle.do_capt = false;
 				break;
 			case 'O':
-				handle.do_play = 0;
+				handle.do_play = false;
 				break;
-			case '2':
-				handle.twochan = 1;
+			case 't':
+				handle.twochan = true;
+				break;
+			case 'T':
+				handle.twochan = false;
 				break;
 			case 'x':
-				handle.debug = 1;
+				handle.debug = true;
+				break;
+			case 'X':
+				handle.debug = false;
 				break;
 			case 'd':
 				handle.io_name = optarg;
 				break;
 			case 'i':
+				handle.do_capt = optarg != NULL;
 				handle.capt_name = optarg;
 				break;
 			case 'o':
+				handle.do_play = optarg != NULL;
 				handle.play_name = optarg;
 				break;
 			case 'r':
