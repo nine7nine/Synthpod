@@ -119,12 +119,6 @@ synthpod:common_kx
 	lv2:optionalFeature inst:, zwrite:schedule ;
 	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
 
-# Synthpod Properties
-synthpod:presetBundle
-	a lv2:Parameter ;
-	rdfs:label "Preset Bundle" ;
-	rdfs:range atom:Path .
-
 # Stereo Plugin
 synthpod:stereo
 	a lv2:Plugin ,
@@ -135,8 +129,6 @@ synthpod:stereo
 	lv2:extensionData work:interface , state:interface, zwork:interface, opts:interface ;
 	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
-
-	patch:writable synthpod:presetBundle ;
 
 	lv2:port [
 		# event in
