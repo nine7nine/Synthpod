@@ -71,6 +71,8 @@ struct _mod_t {
 	u_id_t uid;
 	int selected;
 
+	char *name;
+
 	char *pset_label;
 
 	// features
@@ -1567,6 +1569,30 @@ _x11_ui_client_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	mod->x11.client_resize_iface->ui_resize(mod->x11.handle, w, h);
 }
 
+static inline char *
+_mod_get_name(mod_t *mod)
+{
+	const LilvPlugin *plug = mod->plug;
+	if(plug)
+	{
+		LilvNode *name_node = lilv_plugin_get_name(plug);
+		if(name_node)
+		{
+			const char *name_str = lilv_node_as_string(name_node);
+
+			char *dup = NULL;
+			if(name_str)
+				asprintf(&dup, "%s (#%u)", name_str, mod->uid);
+			
+			lilv_node_free(name_node);
+
+			return dup; //XXX needs to be freed
+		}
+	}
+
+	return NULL;
+}
+
 static void
 _x11_ui_show(mod_t *mod)
 {
@@ -1596,11 +1622,15 @@ _x11_ui_show(mod_t *mod)
 	// subscribe to notifications
 	_mod_subscription_set(mod, mod->x11.ui, 1);
 
-	mod->x11.win = elm_win_add(ui->win, plugin_string, ELM_WIN_BASIC);
-	evas_object_smart_callback_add(mod->x11.win, "delete,request", _x11_delete_request, mod);
-	evas_object_resize(mod->x11.win, 400, 400);
-	evas_object_show(mod->x11.win);
-	mod->x11.xwin = elm_win_xwindow_get(mod->x11.win);
+	mod->x11.win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
+	if(mod->x11.win)
+	{
+		elm_win_title_set(mod->x11.win, mod->name);
+		evas_object_smart_callback_add(mod->x11.win, "delete,request", _x11_delete_request, mod);
+		evas_object_resize(mod->x11.win, 400, 400);
+		evas_object_show(mod->x11.win);
+		mod->x11.xwin = elm_win_xwindow_get(mod->x11.win);
+	}
 
 	void *dummy;
 	mod->feature_list[2].data = (void *)((uintptr_t)mod->x11.xwin);
@@ -1815,6 +1845,14 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->pset_label = strdup("unnamed"); // TODO check
 
+	mod->ui = ui;
+	mod->uid = uid;
+	mod->plug = plug;
+	mod->num_ports = lilv_plugin_get_num_ports(plug);
+	mod->subject = ui->driver->map->map(ui->driver->map->handle, plugin_string);
+
+	mod->name = _mod_get_name(mod);
+
 	// populate port_map
 	mod->port_map.handle = mod;
 	mod->port_map.port_index = _port_index;
@@ -1831,7 +1869,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	// populate external_ui_host
 	mod->kx.host.ui_closed = _kx_ui_closed;
-	mod->kx.host.plugin_human_id = "Synthpod"; //TODO provide something here?
+	mod->kx.host.plugin_human_id = mod->name;
 
 	// populate extension_data
 	mod->ext_data.data_access = data_access;
@@ -1849,7 +1887,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->opts.options[0].key = ui->regs.ui.window_title.urid;
 	mod->opts.options[0].size = 8;
 	mod->opts.options[0].type = ui->forge.String;
-	mod->opts.options[0].value = "Synthpod";
+	mod->opts.options[0].value = mod->name;
 
 	//TODO provide sample rate, buffer size, etc
 
@@ -1924,12 +1962,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	for(int i=0; i<nfeatures; i++)
 		mod->features[i] = &mod->feature_list[i];
 	mod->features[nfeatures] = NULL; // sentinel
-
-	mod->ui = ui;
-	mod->uid = uid;
-	mod->plug = plug;
-	mod->num_ports = lilv_plugin_get_num_ports(plug);
-	mod->subject = ui->driver->map->map(ui->driver->map->handle, plugin_string);
 
 	// discover system modules
 	if(!strcmp(uri, SYNTHPOD_PREFIX"source"))
@@ -2385,6 +2417,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 		eina_module_unload(mod->x11.lib);
 		eina_module_free(mod->x11.lib);
 	}
+
+	if(mod->name)
+		free(mod->name);
 
 	if(mod->pset_label)
 		free(mod->pset_label);
@@ -3324,11 +3359,10 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 				plugin_string = lilv_node_as_string(plugin_uri);
 
 			// add fullscreen EoUI
-			Evas_Object *win = elm_win_add(ui->win, plugin_string, ELM_WIN_BASIC);
+			Evas_Object *win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
 			if(win)
 			{
-				if(plugin_string)
-					elm_win_title_set(win, plugin_string);
+				elm_win_title_set(win, mod->name);
 				evas_object_smart_callback_add(win, "delete,request", _full_delete_request, mod);
 				evas_object_resize(win, 800, 450);
 				evas_object_show(win);
@@ -3429,16 +3463,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(lay);
 
-		LilvNode *name_node = lilv_plugin_get_name(mod->plug);
-		if(name_node)
-		{
-			const char *name_str = lilv_node_as_string(name_node);
-			lilv_node_free(name_node);
-			char *title = NULL;
-			asprintf(&title, "%s (%u)", name_str, mod->uid);
-			elm_layout_text_set(lay, "elm.text", title ? title : name_str);
-			free(title);
-		}
+		elm_layout_text_set(lay, "elm.text", mod->name);
 
 		char col [7];
 		sprintf(col, "col,%02i", mod->col);
@@ -4548,16 +4573,9 @@ _modgrid_label_get(void *data, Evas_Object *obj, const char *part)
 	if(!plug)
 		return NULL;
 
-	if(!strcmp(part, "elm.text"))
+	if(!strcmp(part, "elm.text") && mod->name)
 	{
-		LilvNode *name_node = lilv_plugin_get_name(plug);
-		if(name_node)
-		{
-			const char *name_str = lilv_node_as_string(name_node);
-			lilv_node_free(name_node);
-
-			return strdup(name_str);
-		}
+		return strdup(mod->name);
 	}
 
 	return NULL;
