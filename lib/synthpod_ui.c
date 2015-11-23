@@ -3227,7 +3227,7 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_modlist_icon_clicked(void *data, Evas_Object *obj, void *event_info)
+_mod_close_click(void *data, Evas_Object *lay, const char *emission, const char *source)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
@@ -3329,7 +3329,7 @@ _full_delete_request(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
+_mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *source)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
@@ -3428,12 +3428,14 @@ _modlist_toggle_clicked(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_modlist_selected_changed(void *data, Evas_Object *obj, void *event_info)
+_mod_link_toggle(void *data, Evas_Object *lay, const char *emission, const char *source)
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	mod->selected = elm_check_state_get(obj);
+	mod->selected ^= 1; // toggle
+	elm_layout_signal_emit(lay, mod->selected ? "link,on" : "link,off", "");
+
 	_patches_update(ui);
 
 	// signal app
@@ -3469,41 +3471,31 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		sprintf(col, "col,%02i", mod->col);
 		elm_layout_signal_emit(lay, col, MODLIST_UI);
 
-		Evas_Object *check = elm_check_add(lay);
-		if(check)
-		{
-			elm_check_state_set(check, mod->selected);
-			evas_object_smart_callback_add(check, "changed", _modlist_selected_changed, mod);
-			evas_object_show(check);
-			elm_layout_icon_set(lay, check);
-			elm_layout_content_set(lay, "elm.swallow.icon", check);
-		}
+		// link
+		elm_layout_signal_callback_add(lay, "link,toggle", "", _mod_link_toggle, mod);
+		elm_layout_signal_emit(lay, mod->selected ? "link,on" : "link,off", "");
 
+		// close
 		if(!mod->system.source && !mod->system.sink)
 		{
-			Evas_Object *icon = elm_icon_add(lay);
-			if(icon)
-			{
-				elm_image_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
-					"/synthpod/modlist/close");
-				evas_object_smart_callback_add(icon, "clicked", _modlist_icon_clicked, mod);
-				evas_object_show(icon);
-				elm_layout_content_set(lay, "elm.swallow.end", icon);
-			} // icon
+			elm_layout_signal_callback_add(lay, "close,click", "", _mod_close_click, mod);
+			elm_layout_signal_emit(lay, "close,show", "");
 		}
-		// system mods cannot be removed
+		else
+		{
+			// system mods cannot be removed
+			elm_layout_signal_emit(lay, "close,hide", "");
+		}
 
+		// window
 		if(mod->show.ui || mod->kx.ui || mod->eo.ui || mod->x11.ui) //TODO also check for descriptor
 		{
-			Evas_Object *icon = elm_icon_add(lay);
-			if(icon)
-			{
-				elm_image_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
-					"/synthpod/modlist/expand");
-				evas_object_smart_callback_add(icon, "clicked", _modlist_toggle_clicked, mod);
-				evas_object_show(icon);
-				elm_layout_content_set(lay, "elm.swallow.preend", icon);
-			} // icon
+			elm_layout_signal_callback_add(lay, "ui,toggle", "", _mod_ui_toggle, mod);
+			elm_layout_signal_emit(lay, "ui,show", "");
+		}
+		else
+		{
+			elm_layout_signal_emit(lay, "ui,hide", "");
 		}
 	} // lay
 
@@ -3800,26 +3792,27 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(lay);
 
-		Evas_Object *dir = edje_object_add(evas_object_evas_get(lay));
-		if(dir)
+		// link
+		elm_layout_signal_emit(lay, "link,hide", ""); //TODO or "link,on"
+
+		// monitor
+		elm_layout_signal_emit(lay, "monitor,hide", ""); //TODO or "monitor,on"
+
+		char col [7];
+		sprintf(col, "col,%02i", mod->col);
+
+		// source/sink
+		elm_layout_signal_emit(lay, col, MODLIST_UI);
+		if(!prop->editable)
 		{
-			edje_object_file_set(dir, SYNTHPOD_DATA_DIR"/synthpod.edj",
-				"/synthpod/patcher/port");
-			char col [7];
-			sprintf(col, "col,%02i", mod->col);
-			edje_object_signal_emit(dir, col, PATCHER_UI);
-			evas_object_show(dir);
-			if(!prop->editable)
-			{
-				edje_object_signal_emit(dir, "source", PATCHER_UI);
-				elm_layout_content_set(lay, "elm.swallow.source", dir);
-			}
-			else
-			{
-				edje_object_signal_emit(dir, "sink", PATCHER_UI);
-				elm_layout_content_set(lay, "elm.swallow.sink", dir);
-			}
-		} // dir
+			elm_layout_signal_emit(lay, "source,show", "");
+			elm_layout_signal_emit(lay, "sink,hide", "");
+		}
+		else
+		{
+			elm_layout_signal_emit(lay, "source,hide", "");
+			elm_layout_signal_emit(lay, "sink,show", "");
+		}
 
 		if(prop->label)
 			elm_layout_text_set(lay, "elm.text", prop->label);
@@ -3838,8 +3831,6 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					{
 						elm_layout_file_set(child, SYNTHPOD_DATA_DIR"/synthpod.edj",
 							"/synthpod/entry/theme");
-						char col [7];
-						sprintf(col, "col,%02i", mod->col);
 						elm_layout_signal_emit(child, col, "/synthpod/entry/ui");
 
 						prop->std.entry = elm_entry_add(child);
@@ -4048,13 +4039,15 @@ _group_del(void *data, Evas_Object *obj)
 }
 
 static void
-_selected_changed(void *data, Evas_Object *obj, void *event)
+_port_link_toggle(void *data, Evas_Object *lay, const char *emission, const char *source)
 {
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	sp_ui_t *ui = mod->ui;
 
-	port->selected = elm_check_state_get(obj);
+	port->selected ^= 1; // toggle
+	elm_layout_signal_emit(lay, port->selected ? "link,on" : "link,off", "");
+
 	_patches_update(ui);
 
 	size_t size = sizeof(transmit_port_selected_t);
@@ -4067,13 +4060,14 @@ _selected_changed(void *data, Evas_Object *obj, void *event)
 }
 
 static void
-_monitored_changed(void *data, Evas_Object *obj, void *event)
+_port_monitor_toggle(void *data, Evas_Object *lay, const char *emission, const char *source)
 {
 	port_t *port = data;
 	mod_t *mod = port->mod;
 	sp_ui_t *ui = mod->ui;
 
-	port->std.monitored = elm_check_state_get(obj);
+	port->std.monitored ^= 1; // toggle
+	elm_layout_signal_emit(lay, port->std.monitored ? "monitor,on" : "monitor,off", "");
 
 	// subsribe or unsubscribe, depending on monitored state
 	{
@@ -4189,44 +4183,36 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_event_callback_add(lay, EVAS_CALLBACK_DEL, _modlist_std_del, port);
 		evas_object_show(lay);
 
-		Evas_Object *patched = elm_check_add(lay);
-		if(patched)
-		{
-			elm_check_state_set(patched, port->selected ? EINA_TRUE : EINA_FALSE);
-			evas_object_smart_callback_add(patched, "changed", _selected_changed, port);
-			evas_object_show(patched);
-			elm_layout_content_set(lay, "elm.swallow.icon", patched);
-		} // patched
+		// link
+		elm_layout_signal_callback_add(lay, "link,toggle", "", _port_link_toggle, port);
+		elm_layout_signal_emit(lay, port->selected ? "link,on" : "link,off", "");
 
-		Evas_Object *monitored = elm_check_add(lay);
-		if(monitored && (port->type != PORT_TYPE_ATOM) )
+		// monitor
+		if(port->type != PORT_TYPE_ATOM)
 		{
-			elm_check_state_set(monitored, port->std.monitored ? EINA_TRUE : EINA_FALSE);
-			evas_object_smart_callback_add(monitored, "changed", _monitored_changed, port);
-			evas_object_show(monitored);
-			elm_layout_content_set(lay, "elm.swallow.end", monitored);
-		} // monitored
+			elm_layout_signal_callback_add(lay, "monitor,toggle", "", _port_monitor_toggle, port);
+			elm_layout_signal_emit(lay, port->std.monitored ? "monitor,on" : "monitor,off", "");
+		}
+		else
+		{
+			elm_layout_signal_emit(lay, "monitor,hide", "");
+		}
 
-		Evas_Object *dir = edje_object_add(evas_object_evas_get(lay));
-		if(dir)
+		char col [7];
+		sprintf(col, "col,%02i", mod->col);
+
+		// source/sink
+		elm_layout_signal_emit(lay, col, MODLIST_UI);
+		if(port->direction == PORT_DIRECTION_OUTPUT)
 		{
-			edje_object_file_set(dir, SYNTHPOD_DATA_DIR"/synthpod.edj",
-				"/synthpod/patcher/port");
-			char col [7];
-			sprintf(col, "col,%02i", mod->col);
-			edje_object_signal_emit(dir, col, PATCHER_UI);
-			evas_object_show(dir);
-			if(port->direction == PORT_DIRECTION_OUTPUT)
-			{
-				edje_object_signal_emit(dir, "source", PATCHER_UI);
-				elm_layout_content_set(lay, "elm.swallow.source", dir);
-			}
-			else
-			{
-				edje_object_signal_emit(dir, "sink", PATCHER_UI);
-				elm_layout_content_set(lay, "elm.swallow.sink", dir);
-			}
-		} // dir
+			elm_layout_signal_emit(lay, "source,show", "");
+			elm_layout_signal_emit(lay, "sink,hide", "");
+		}
+		else
+		{
+			elm_layout_signal_emit(lay, "source,hide", "");
+			elm_layout_signal_emit(lay, "sink,show", "");
+		}
 
 		LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 		if(name_node)
@@ -4917,7 +4903,7 @@ _modlist_clear(sp_ui_t *ui, int clear_system_ports)
 		if(!clear_system_ports && (mod->system.source || mod->system.sink) )
 			continue; // skip
 
-		_modlist_icon_clicked(mod, ui->modlist, NULL); //TODO rename
+		_mod_close_click(mod, ui->modlist, NULL, NULL);
 	}
 }
 

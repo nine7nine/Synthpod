@@ -19,47 +19,13 @@
 
 images {
 	image: "icon_arrow_up_right.png" COMP;
+	image: "icon_arrow_up.png" COMP;
+	image: "icon_arrow_right.png" COMP;
 	image: "icon_close.png" COMP;
-}
-
-group {
-	name: "/synthpod/modlist/expand";
-
-	parts {
-		part {
-			name: "ev";
-			type: IMAGE;
-			mouse_events: 1;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				image {
-					normal: "icon_arrow_up_right.png";
-					scale_hint: STATIC;
-				}
-			}
-		}
-	}
-}
-
-group {
-	name: "/synthpod/modlist/close";
-
-	parts {
-		part {
-			name: "ev";
-			type: IMAGE;
-			mouse_events: 1;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				image {
-					normal: "icon_close.png";
-					scale_hint: STATIC;
-				}
-			}
-		}
-	}
+	image: "monitor_on.png" COMP;
+	image: "monitor_off.png" COMP;
+	image: "link_on.png" COMP;
+	image: "link_off.png" COMP;
 }
 
 group {
@@ -93,8 +59,8 @@ group {
 			description { state: "default" 0.20; fixed: 1 1; color: COL20; }
 		}
 		part {
-			name: "elm.swallow.icon";
-			type: SWALLOW;
+			name: "link";
+			type: IMAGE;
 			mouse_events: 1;
 			description {
 				state: "default" 0.0;
@@ -104,6 +70,13 @@ group {
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
 				min: 16 16;
+				image.normal: "link_off.png";
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
+				image.normal: "link_on.png";
 			}
 		}
 		part {
@@ -115,9 +88,9 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.to_x: "elm.swallow.icon";
+				rel1.to_x: "link";
 				rel1.relative: 1 0;
-				rel2.to_x: "elm.swallow.preend";
+				rel2.to_x: "ui";
 				rel2.relative: 0 1;
 				text {
 					text: "";
@@ -129,24 +102,31 @@ group {
 			}
 		}
 		part {
-			name: "elm.swallow.preend";
-			type: SWALLOW;
+			name: "ui";
+			type: IMAGE;
 			mouse_events: 1;
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
 				align: 1.0 0.5;
 				aspect: 1.0 1.0;
-				rel1.to_x: "elm.swallow.end";
+				rel1.to_x: "close";
 				rel1.relative: -1 0;
-				rel2.to_x: "elm.swallow.end";
+				rel2.to_x: "close";
 				rel2.relative: 0 1;
 				min: 16 16;
+				image.normal: "icon_arrow_up_right.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
 			}
 		}
 		part {
-			name: "elm.swallow.end";
-			type: SWALLOW;
+			name: "close";
+			type: IMAGE;
 			mouse_events: 1;
 			description {
 				state: "default" 0.0;
@@ -156,6 +136,13 @@ group {
 				rel1.relative: 1 0;
 				rel2.relative: 1 1;
 				min: 16 16;
+				image.normal: "icon_close.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
 			}
 		}
 	}
@@ -182,6 +169,54 @@ group {
 		program { signal: "col,18"; source: MODLIST_UI; action: STATE_SET "default" 0.18; target: "clip"; }
 		program { signal: "col,19"; source: MODLIST_UI; action: STATE_SET "default" 0.19; target: "clip"; }
 		program { signal: "col,20"; source: MODLIST_UI; action: STATE_SET "default" 0.20; target: "clip"; }
+
+		program {
+			signal: "link,on";
+			action: STATE_SET "default" 1.0;
+			target: "link";
+		}
+		program {
+			signal: "link,off";
+			action: STATE_SET "default" 0.0;
+			target: "link";
+		}
+		program {
+			signal: "mouse,down,*";
+			source: "link";
+			action: SIGNAL_EMIT "link,toggle" "";
+		}
+
+		program {
+			signal: "close,show";
+			action: STATE_SET "default" 1.0;
+			target: "close";
+		}
+		program {
+			signal: "close,hide";
+			action: STATE_SET "default" 0.0;
+			target: "close";
+		}
+		program {
+			signal: "mouse,down,*";
+			source: "close";
+			action: SIGNAL_EMIT "close,click" "";
+		}
+
+		program {
+			signal: "ui,show";
+			action: STATE_SET "default" 1.0;
+			target: "ui";
+		}
+		program {
+			signal: "ui,hide";
+			action: STATE_SET "default" 0.0;
+			target: "ui";
+		}
+		program {
+			signal: "mouse,down,*";
+			source: "ui";
+			action: SIGNAL_EMIT "ui,toggle" "";
+		}
 	}
 }
 
@@ -190,9 +225,36 @@ group {
 
 	parts {
 		part {
-			name: "elm.swallow.icon";
-			type: SWALLOW;
-			mouse_events: 1;
+			name: "clip";
+			type: RECT;
+			mouse_events: 0;
+			description { state: "default" 0.00; fixed: 1 1; color: COL00; }
+			description { state: "default" 0.01; fixed: 1 1; color: COL01; }
+			description { state: "default" 0.02; fixed: 1 1; color: COL02; }
+			description { state: "default" 0.03; fixed: 1 1; color: COL03; }
+			description { state: "default" 0.04; fixed: 1 1; color: COL04; }
+			description { state: "default" 0.05; fixed: 1 1; color: COL05; }
+			description { state: "default" 0.06; fixed: 1 1; color: COL06; }
+			description { state: "default" 0.07; fixed: 1 1; color: COL07; }
+			description { state: "default" 0.08; fixed: 1 1; color: COL08; }
+			description { state: "default" 0.09; fixed: 1 1; color: COL09; }
+			description { state: "default" 0.10; fixed: 1 1; color: COL10; }
+			description { state: "default" 0.11; fixed: 1 1; color: COL11; }
+			description { state: "default" 0.12; fixed: 1 1; color: COL12; }
+			description { state: "default" 0.13; fixed: 1 1; color: COL13; }
+			description { state: "default" 0.14; fixed: 1 1; color: COL14; }
+			description { state: "default" 0.15; fixed: 1 1; color: COL15; }
+			description { state: "default" 0.16; fixed: 1 1; color: COL16; }
+			description { state: "default" 0.17; fixed: 1 1; color: COL17; }
+			description { state: "default" 0.18; fixed: 1 1; color: COL18; }
+			description { state: "default" 0.19; fixed: 1 1; color: COL19; }
+			description { state: "default" 0.20; fixed: 1 1; color: COL20; }
+		}
+		part {
+			name: "sink";
+			type: IMAGE;
+			mouse_events: 0;
+			clip_to: "clip";
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
@@ -201,22 +263,43 @@ group {
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
 				min: 16 16;
+				image.normal: "icon_arrow_right.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
 			}
 		}
 		part {
-			name: "elm.swallow.sink";
-			type: SWALLOW;
-			mouse_events: 0;
+			name: "link";
+			type: IMAGE;
+			mouse_events: 1;
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
 				align: 0.0 0.5;
 				aspect: 1.0 1.0;
-				rel1.to_x: "elm.swallow.icon";
+				rel1.to_x: "sink";
 				rel1.relative: 1 0;
-				rel2.to_x: "elm.swallow.icon";
+				rel2.to_x: "sink";
 				rel2.relative: 1 1;
 				min: 16 16;
+				image.normal: "link_off.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 0.5;
+				inherit: "default" 0.0;
+				image.normal: "link_off.png";
+				color: 255 255 255 255;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				image.normal: "link_on.png";
+				color: 255 255 255 255;
 			}
 		}
 		part {
@@ -227,7 +310,7 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.to_x: "elm.swallow.sink";
+				rel1.to_x: "link";
 				rel1.relative: 1 0;
 				rel2.relative: 0.4 1;
 				text {
@@ -245,30 +328,45 @@ group {
 				state: "default" 0.0;
 				fixed: 1 1;
 				rel1.relative: 0.4 0;
-				rel2.to_x: "elm.swallow.source";
+				rel2.to_x: "monitor";
 				rel2.relative: 0 1;
 			}
 		}
 		part {
-			name: "elm.swallow.source";
-			type: SWALLOW;
-			mouse_events: 0;
+			name: "monitor";
+			type: IMAGE;
+			mouse_events: 1;
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
 				align: 1.0 0.5;
 				aspect: 1.0 1.0;
 				rel1.relative: -1 0;
-				rel1.to_x: "elm.swallow.end";
+				rel1.to_x: "source";
 				rel2.relative: 0 1;
-				rel2.to_x: "elm.swallow.end";
+				rel2.to_x: "source";
 				min: 16 16;
+				image.normal: "monitor_off.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 0.5;
+				inherit: "default" 0.0;
+				image.normal: "monitor_off.png";
+				color: 255 255 255 255;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				image.normal: "monitor_on.png";
+				color: 255 255 255 255;
 			}
 		}
 		part {
-			name: "elm.swallow.end";
-			type: SWALLOW;
-			mouse_events: 1;
+			name: "source";
+			type: IMAGE;
+			mouse_events: 0;
+			clip_to: "clip";
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
@@ -277,7 +375,102 @@ group {
 				rel1.relative: 1 0;
 				rel2.relative: 1 1;
 				min: 16 16;
+				image.normal: "icon_arrow_up.png";
+				color: 255 255 255 0;
 			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
+			}
+		}
+	}
+
+	programs {
+		program { signal: "col,00"; source: MODLIST_UI; action: STATE_SET "default" 0.00; target: "clip"; }
+		program { signal: "col,01"; source: MODLIST_UI; action: STATE_SET "default" 0.01; target: "clip"; }
+		program { signal: "col,02"; source: MODLIST_UI; action: STATE_SET "default" 0.02; target: "clip"; }
+		program { signal: "col,03"; source: MODLIST_UI; action: STATE_SET "default" 0.03; target: "clip"; }
+		program { signal: "col,04"; source: MODLIST_UI; action: STATE_SET "default" 0.04; target: "clip"; }
+		program { signal: "col,05"; source: MODLIST_UI; action: STATE_SET "default" 0.05; target: "clip"; }
+		program { signal: "col,06"; source: MODLIST_UI; action: STATE_SET "default" 0.06; target: "clip"; }
+		program { signal: "col,07"; source: MODLIST_UI; action: STATE_SET "default" 0.07; target: "clip"; }
+		program { signal: "col,08"; source: MODLIST_UI; action: STATE_SET "default" 0.08; target: "clip"; }
+		program { signal: "col,09"; source: MODLIST_UI; action: STATE_SET "default" 0.09; target: "clip"; }
+		program { signal: "col,10"; source: MODLIST_UI; action: STATE_SET "default" 0.10; target: "clip"; }
+		program { signal: "col,11"; source: MODLIST_UI; action: STATE_SET "default" 0.11; target: "clip"; }
+		program { signal: "col,12"; source: MODLIST_UI; action: STATE_SET "default" 0.12; target: "clip"; }
+		program { signal: "col,13"; source: MODLIST_UI; action: STATE_SET "default" 0.13; target: "clip"; }
+		program { signal: "col,14"; source: MODLIST_UI; action: STATE_SET "default" 0.14; target: "clip"; }
+		program { signal: "col,15"; source: MODLIST_UI; action: STATE_SET "default" 0.15; target: "clip"; }
+		program { signal: "col,16"; source: MODLIST_UI; action: STATE_SET "default" 0.16; target: "clip"; }
+		program { signal: "col,17"; source: MODLIST_UI; action: STATE_SET "default" 0.17; target: "clip"; }
+		program { signal: "col,18"; source: MODLIST_UI; action: STATE_SET "default" 0.18; target: "clip"; }
+		program { signal: "col,19"; source: MODLIST_UI; action: STATE_SET "default" 0.19; target: "clip"; }
+		program { signal: "col,20"; source: MODLIST_UI; action: STATE_SET "default" 0.20; target: "clip"; }
+
+		program {
+			signal: "link,hide";
+			action: STATE_SET "default" 0.0;
+			target: "link";
+		}
+		program {
+			signal: "link,on";
+			action: STATE_SET "default" 1.0;
+			target: "link";
+		}
+		program {
+			signal: "link,off";
+			action: STATE_SET "default" 0.5;
+			target: "link";
+		}
+		program {
+			signal: "mouse,down,*";
+			source: "link";
+			action: SIGNAL_EMIT "link,toggle" "";
+		}
+
+		program {
+			signal: "monitor,hide";
+			action: STATE_SET "default" 0.0;
+			target: "monitor";
+		}
+		program {
+			signal: "monitor,on";
+			action: STATE_SET "default" 1.0;
+			target: "monitor";
+		}
+		program {
+			signal: "monitor,off";
+			action: STATE_SET "default" 0.5;
+			target: "monitor";
+		}
+		program {
+			signal: "mouse,down,*";
+			source: "monitor";
+			action: SIGNAL_EMIT "monitor,toggle" "";
+		}
+		
+		program {
+			signal: "source,show";
+			action: STATE_SET "default" 1.0;
+			target: "source";
+		}
+		program {
+			signal: "source,hide";
+			action: STATE_SET "default" 0.0;
+			target: "source";
+		}
+
+		program {
+			signal: "sink,show";
+			action: STATE_SET "default" 1.0;
+			target: "sink";
+		}
+		program {
+			signal: "sink,hide";
+			action: STATE_SET "default" 0.0;
+			target: "sink";
 		}
 	}
 }
