@@ -3353,11 +3353,6 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 			// remove EoUI from modgrid
 			elm_object_item_del(mod->eo.embedded.itm);
 
-			const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
-			const char *plugin_string = NULL;
-			if(plugin_uri)
-				plugin_string = lilv_node_as_string(plugin_uri);
-
 			// add fullscreen EoUI
 			Evas_Object *win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
 			if(win)
@@ -3754,7 +3749,7 @@ _property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
 			if(atom)
 			{
 				if(prop->type_urid == ui->forge.String)
-					strncpy(LV2_ATOM_BODY(atom), key, body_size);
+					strcpy(LV2_ATOM_BODY(atom), key);
 				else if(prop->type_urid == ui->forge.Int)
 					((LV2_Atom_Int *)atom)->body = value;
 				else if(prop->type_urid == ui->forge.Float)
@@ -4835,24 +4830,24 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 			continue;
 
 		LilvNode *name_node = lilv_plugin_get_name(plug);
-		if(!name_node)
-			continue;
-
-		const char *name_str = lilv_node_as_string(name_node);
-
-		if(strcasestr(name_str, match))
+		if(name_node)
 		{
-			plug_info_t *info = calloc(1, sizeof(plug_info_t));
-			if(info)
-			{
-				info->type = PLUG_INFO_TYPE_NAME;
-				info->plug = plug;
-				elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
-					ELM_GENLIST_ITEM_TREE, NULL, NULL);
-			}
-		}
+			const char *name_str = lilv_node_as_string(name_node);
 
-		lilv_node_free(name_node);
+			if(strcasestr(name_str, match))
+			{
+				plug_info_t *info = calloc(1, sizeof(plug_info_t));
+				if(info)
+				{
+					info->type = PLUG_INFO_TYPE_NAME;
+					info->plug = plug;
+					elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
+						ELM_GENLIST_ITEM_TREE, NULL, NULL);
+				}
+			}
+
+			lilv_node_free(name_node);
+		}
 	}
 }
 
@@ -4997,6 +4992,7 @@ _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 
 	const Eina_Bool cntrl = evas_key_modifier_is_set(ev->modifiers, "Control");
 	const Eina_Bool shift = evas_key_modifier_is_set(ev->modifiers, "Shift");
+	(void)shift;
 	
 	//printf("_theme_key_down: %s %i %i\n", ev->key, cntrl, shift);
 
