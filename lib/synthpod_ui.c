@@ -57,8 +57,8 @@ enum _plug_info_type_t {
 };
 
 enum _group_type_t {
-	GROUP_TYPE_PORT,
-	GROUP_TYPE_PROPERTY
+	GROUP_TYPE_PORT			= -2,
+	GROUP_TYPE_PROPERTY	= -1
 };
 
 struct _plug_info_t {
@@ -67,8 +67,9 @@ struct _plug_info_t {
 };
 
 struct _mod_t {
-	sp_ui_t *ui;
 	u_id_t uid;
+
+	sp_ui_t *ui;
 	int selected;
 
 	char *name;
@@ -380,6 +381,61 @@ _urid_find(const void *data1, const void *data2)
 			: 0);
 }
 
+static int
+_grpitc_cmp(const void *data1, const void *data2)
+{
+	const Elm_Object_Item *itm1 = data1;
+	const Elm_Object_Item *itm2 = data2;
+
+	group_t *grp1 = elm_object_item_data_get(itm1);
+	group_t *grp2 = elm_object_item_data_get(itm2);
+
+	// handle comparison with separators 
+	if(grp1 && !grp2)
+		return -1;
+	else if(!grp1 && grp2)
+		return 1;
+	else if(!grp1 && !grp2)
+		return 0;
+
+	// compare group type or property module uid
+	return grp1->type < grp2->type
+		? -1
+		: (grp1->type > grp2->type
+			? 1
+			: 0);
+}
+
+static int
+_stditc_cmp(const void *data1, const void *data2)
+{
+	const Elm_Object_Item *itm1 = data1;
+	const Elm_Object_Item *itm2 = data2;
+
+	port_t *port1 = elm_object_item_data_get(itm1);
+	port_t *port2 = elm_object_item_data_get(itm2);
+
+	// compare port indeces
+	return port1->index < port2->index
+		? -1
+		: (port1->index > port2->index
+			? 1
+			: 0);
+}
+
+static int
+_propitc_cmp(const void *data1, const void *data2)
+{
+	const Elm_Object_Item *itm1 = data1;
+	const Elm_Object_Item *itm2 = data2;
+
+	property_t *prop1 = elm_object_item_data_get(itm1);
+	property_t *prop2 = elm_object_item_data_get(itm2);
+
+	// compare property labels (case insensitive)
+	return strcasecmp(prop1->label, prop2->label);
+}
+
 static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -569,8 +625,8 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						group->type = GROUP_TYPE_PROPERTY;
 						group->mod = mod;
 
-						parent = elm_genlist_item_append(ui->modlist,
-							ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+						parent = elm_genlist_item_sorted_insert(ui->modlist,
+							ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);	
 						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 						if(parent)
 							eina_hash_add(mod->groups, group_lbl, parent);
@@ -2894,8 +2950,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 						group->mod = mod;
 						group->node = port->group;
 
-						parent = elm_genlist_item_append(ui->modlist,
-							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+						parent = elm_genlist_item_sorted_insert(ui->modlist,
+							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
 						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 						if(parent)
 							eina_hash_add(mod->groups, group_lbl, parent);
@@ -2916,8 +2972,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 						group->mod = mod;
 						group->node = NULL;
 
-						parent = elm_genlist_item_append(ui->modlist,
-							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+						parent = elm_genlist_item_sorted_insert(ui->modlist,
+							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
 						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 						if(parent)
 							eina_hash_add(mod->groups, group_lbl, parent);
@@ -2945,8 +3001,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 					group->type = GROUP_TYPE_PROPERTY;
 					group->mod = mod;
 
-					parent = elm_genlist_item_append(ui->modlist,
-						ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+					parent = elm_genlist_item_sorted_insert(ui->modlist,
+						ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
 					elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
 					if(parent)
 						eina_hash_add(mod->groups, group_lbl, parent);
@@ -2959,13 +3015,13 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		}
 
 		// presets
-		elmnt = elm_genlist_item_append(ui->modlist, ui->psetitc, mod, itm,
-			ELM_GENLIST_ITEM_TREE, NULL, NULL);
+		elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetitc, mod, itm,
+			ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 
 		// separator
-		elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, NULL, itm,
-			ELM_GENLIST_ITEM_NONE, NULL, NULL);
+		elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->stditc, NULL, itm,
+			ELM_GENLIST_ITEM_NONE, _grpitc_cmp, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 
 		// extract all groups by default
@@ -3005,8 +3061,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			port_t *port;
 			EINA_LIST_FOREACH(group->children, l, port)
 			{
-				elmnt = elm_genlist_item_append(ui->modlist, ui->stditc, port, itm,
-					ELM_GENLIST_ITEM_NONE, NULL, NULL);
+				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->stditc, port, itm,
+					ELM_GENLIST_ITEM_NONE, _stditc_cmp, NULL, NULL);
 				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 			}
 		}
@@ -3016,8 +3072,8 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			property_t *prop;
 			EINA_LIST_FOREACH(group->children, l, prop)
 			{
-				elmnt = elm_genlist_item_append(ui->modlist, ui->propitc, prop, itm,
-					ELM_GENLIST_ITEM_NONE, NULL, NULL);
+				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->propitc, prop, itm,
+					ELM_GENLIST_ITEM_NONE, _propitc_cmp, NULL, NULL);
 				int select_mode = prop->editable
 					? ( (prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
 						? ELM_OBJECT_SELECT_MODE_DEFAULT
