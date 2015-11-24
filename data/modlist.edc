@@ -26,6 +26,7 @@ images {
 	image: "monitor_off.png" COMP;
 	image: "link_on.png" COMP;
 	image: "link_off.png" COMP;
+	image: "module_border.png" COMP;
 }
 
 group {
@@ -59,6 +60,46 @@ group {
 			description { state: "default" 0.20; fixed: 1 1; color: COL20; }
 		}
 		part {
+			name: "text.left";
+			type: RECT;
+			mouse_events: 0;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				rel1.to: "link";
+				rel2.to: "link";
+			}
+		}
+		part {
+			name: "text.right";
+			type: RECT;
+			mouse_events: 0;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				rel1.to: "ui";
+				rel2.to: "close";
+			}
+		}
+		part {
+			name: "text.border";
+			type: IMAGE;
+			mouse_events: 0;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				rel1.to: "link";
+				rel1.relative: 1 0;
+				rel2.to: "ui";
+				rel2.relative: 0 1;
+				image {
+					normal: "module_border.png";
+					border: 6 6 6 6;
+					middle: 0;
+				}
+			}
+		}
+		part {
 			name: "link";
 			type: IMAGE;
 			mouse_events: 1;
@@ -82,7 +123,7 @@ group {
 		part {
 			name: "elm.text";
 			type: TEXT;
-			effect: OUTLINE;
+			effect: SHADOW;
 			mouse_events: 0;
 			scale: 1;
 			description {
@@ -90,6 +131,7 @@ group {
 				fixed: 1 1;
 				rel1.to_x: "link";
 				rel1.relative: 1 0;
+				rel1.offset: 6 0; // from text.border
 				rel2.to_x: "ui";
 				rel2.relative: 0 1;
 				text {
@@ -98,7 +140,7 @@ group {
 					align: 0.0 0.5;
 				};
 				color: 255 255 255 255;
-				color2: 255 255 255 96;
+				color3: 0 0 0 128;
 			}
 		}
 		part {
