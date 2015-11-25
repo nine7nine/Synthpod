@@ -819,8 +819,11 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			if(jack_port)
 			{
 				jack_uuid_t uuid = jack_port_uuid(jack_port);
-				jack_set_property(handle->client, uuid,
-					"http://jackaudio.org/metadata/signal-type", "CV", "text/plain");
+				if(!jack_uuid_empty(uuid))
+				{
+					jack_set_property(handle->client, uuid,
+						"http://jackaudio.org/metadata/signal-type", "CV", "text/plain");
+				}
 			}
 #endif
 			break;
@@ -841,8 +844,11 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			if(jack_port)
 			{
 				jack_uuid_t uuid = jack_port_uuid(jack_port);
-				jack_set_property(handle->client, uuid,
-					"http://jackaudio.org/metadata/event-types", "OSC", "text/plain");
+				if(!jack_uuid_empty(uuid))
+				{
+					jack_set_property(handle->client, uuid,
+						"http://jackaudio.org/metadata/event-types", "OSC", "text/plain");
+				}
 			}
 #endif
 			break;
@@ -859,8 +865,11 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 	if(jack_port && pretty_name)
 	{
 		jack_uuid_t uuid = jack_port_uuid(jack_port);
-		jack_set_property(handle->client, uuid,
-			JACK_METADATA_PRETTY_NAME, pretty_name, "text/plain");
+		if(!jack_uuid_empty(uuid))
+		{
+			jack_set_property(handle->client, uuid,
+				JACK_METADATA_PRETTY_NAME, pretty_name, "text/plain");
+		}
 	}
 #endif
 
@@ -880,7 +889,8 @@ _system_port_del(void *data, void *sys_port)
 
 #if defined(JACK_HAS_METADATA_API)
 	jack_uuid_t uuid = jack_port_uuid(jack_port);
-	jack_remove_properties(handle->client, uuid);
+	if(!jack_uuid_empty(uuid))
+		jack_remove_properties(handle->client, uuid);
 #endif
 			
 	jack_port_unregister(handle->client, jack_port);
@@ -941,9 +951,16 @@ _jack_init(prog_t *handle, const char *id)
 	jack_uuid_t uuid;
 	const char *client_name = jack_get_client_name(handle->client);
 	const char *uuid_str = jack_get_uuid_for_client_name(handle->client, client_name);
-	jack_uuid_parse(uuid_str, &uuid);
-	jack_set_property(handle->client, uuid,
-		JACK_METADATA_PRETTY_NAME, "Synthpod", "text/plain");
+	if(uuid_str)
+		jack_uuid_parse(uuid_str, &uuid);
+	else
+		jack_uuid_clear(&uuid);
+
+	if(!jack_uuid_empty(uuid))
+	{
+		jack_set_property(handle->client, uuid,
+			JACK_METADATA_PRETTY_NAME, "Synthpod", "text/plain");
+	}
 #endif
 
 	// set client process callback
@@ -971,8 +988,13 @@ _jack_deinit(prog_t *handle)
 		jack_uuid_t uuid;
 		const char *client_name = jack_get_client_name(handle->client);
 		const char *uuid_str = jack_get_uuid_for_client_name(handle->client, client_name);
-		jack_uuid_parse(uuid_str, &uuid);
-		jack_remove_properties(handle->client, uuid);
+		if(uuid_str)
+			jack_uuid_parse(uuid_str, &uuid);
+		else
+			jack_uuid_clear(&uuid);
+
+		if(!jack_uuid_empty(uuid))
+			jack_remove_properties(handle->client, uuid);
 #endif
 
 		jack_deactivate(handle->client);
