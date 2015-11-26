@@ -303,8 +303,14 @@ struct _sp_ui_t {
 	Evas_Object *plugentry;
 	Evas_Object *pluglist;
 
-	Evas_Object *patchgrid;
-	Evas_Object *matrix[PORT_TYPE_NUM];
+	Evas_Object *patchbox;
+	Evas_Object *patchbar;
+	Evas_Object *matrix;
+	port_type_t matrix_type;
+	Elm_Object_Item *matrix_audio;
+	Elm_Object_Item *matrix_atom;
+	Elm_Object_Item *matrix_control;
+	Elm_Object_Item *matrix_cv;
 
 	Evas_Object *modlist;
 
@@ -318,7 +324,6 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *psetitmitc;
 	Elm_Genlist_Item_Class *psetsaveitc;
 	Elm_Gengrid_Item_Class *griditc;
-	Elm_Genlist_Item_Class *patchitc;
 	Elm_Genlist_Item_Class *propitc;
 	Elm_Genlist_Item_Class *grpitc;
 
@@ -332,8 +337,10 @@ _elm_config_changed(void *data, int ev_type, void *ev)
 {
 	sp_ui_t *ui = data;
 
+	/* FIXME
 	if(ui->patchgrid)
 		elm_gengrid_item_size_set(ui->patchgrid, ELM_SCALE_SIZE(360), ELM_SCALE_SIZE(360));
+	*/
 
 	return ECORE_CALLBACK_PASS_ON;
 }
@@ -2754,14 +2761,11 @@ _patches_update(sp_ui_t *ui)
 	}
 
 	// set dimension of patchers
-	for(int t=0; t<PORT_TYPE_NUM; t++)
+	if(ui->matrix)
 	{
-		if(!ui->matrix[t])
-			continue;
-
-		patcher_object_dimension_set(ui->matrix[t], 
-			count[PORT_DIRECTION_OUTPUT][t], // sources
-			count[PORT_DIRECTION_INPUT][t]); // sinks
+		patcher_object_dimension_set(ui->matrix, 
+			count[PORT_DIRECTION_OUTPUT][ui->matrix_type], // sources
+			count[PORT_DIRECTION_INPUT][ui->matrix_type]); // sinks
 	}
 
 	// clear counters
@@ -2785,6 +2789,8 @@ _patches_update(sp_ui_t *ui)
 			port_t *port = &mod->ports[i];
 			if(!port->selected)
 				continue; // ignore unselected ports
+			if(port->type != ui->matrix_type)
+				continue; // ignore unselected port types
 
 			LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 			const char *name_str = NULL;
@@ -2796,25 +2802,25 @@ _patches_update(sp_ui_t *ui)
 
 			if(port->direction == PORT_DIRECTION_OUTPUT) // source
 			{
-				if(ui->matrix[port->type])
+				if(ui->matrix)
 				{
-					patcher_object_source_data_set(ui->matrix[port->type],
+					patcher_object_source_data_set(ui->matrix,
 						count[port->direction][port->type], port);
-					patcher_object_source_color_set(ui->matrix[port->type],
+					patcher_object_source_color_set(ui->matrix,
 						count[port->direction][port->type], mod->col);
-					patcher_object_source_label_set(ui->matrix[port->type],
+					patcher_object_source_label_set(ui->matrix,
 						count[port->direction][port->type], name_str);
 				}
 			}
 			else // sink
 			{
-				if(ui->matrix[port->type])
+				if(ui->matrix)
 				{
-					patcher_object_sink_data_set(ui->matrix[port->type],
+					patcher_object_sink_data_set(ui->matrix,
 						count[port->direction][port->type], port);
-					patcher_object_sink_color_set(ui->matrix[port->type],
+					patcher_object_sink_color_set(ui->matrix,
 						count[port->direction][port->type], mod->col);
-					patcher_object_sink_label_set(ui->matrix[port->type],
+					patcher_object_sink_label_set(ui->matrix,
 						count[port->direction][port->type], name_str);
 				}
 			}
@@ -2823,13 +2829,8 @@ _patches_update(sp_ui_t *ui)
 		}
 	}
 
-	for(int t=0; t<PORT_TYPE_NUM; t++)
-	{
-		if(!ui->matrix[t])
-			continue;
-
-		patcher_object_realize(ui->matrix[t]);
-	}
+	if(ui->matrix)
+		patcher_object_realize(ui->matrix);
 }
 
 static Eina_Bool
@@ -4801,78 +4802,6 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 	}
 }
 
-static char *
-_patchgrid_label_get(void *data, Evas_Object *obj, const char *part)
-{
-	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	Evas_Object **matrix = data;
-	if(!ui || !matrix)
-		return NULL;
-
-	port_type_t type = matrix - ui->matrix;
-
-	if(!strcmp(part, "elm.text"))
-	{
-		switch(type)
-		{
-			case PORT_TYPE_AUDIO:
-				return strdup("Audio Ports");
-			case PORT_TYPE_ATOM:
-				return strdup("Atom Ports");
-			case PORT_TYPE_CONTROL:
-				return strdup("Control Ports");
-			case PORT_TYPE_CV:
-				return strdup("CV Ports");
-			default:
-				break;
-		}
-	}
-
-	return NULL;
-}
-
-static void
-_patchgrid_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	Evas_Object **matrix = data;
-
-	if(matrix)
-		*matrix = NULL;
-}
-
-static Evas_Object *
-_patchgrid_content_get(void *data, Evas_Object *obj, const char *part)
-{
-	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	Evas_Object **matrix = data;
-	if(!ui || !ui->patchgrid || !matrix)
-		return NULL;
-
-	if(!strcmp(part, "elm.swallow.icon"))
-	{
-		*matrix = patcher_object_add(ui->patchgrid);
-		if(*matrix)
-		{
-			evas_object_smart_callback_add(*matrix, "connect,request",
-				_matrix_connect_request, ui);
-			evas_object_smart_callback_add(*matrix, "disconnect,request",
-				_matrix_disconnect_request, ui);
-			evas_object_smart_callback_add(*matrix, "realize,request",
-				_matrix_realize_request, ui);
-			evas_object_event_callback_add(*matrix, EVAS_CALLBACK_DEL, _patchgrid_del, matrix);
-			evas_object_size_hint_weight_set(*matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(*matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(*matrix);
-
-			_patches_update(ui);
-		}
-
-		return *matrix;
-	}
-
-	return NULL;
-}
-
 static void
 _pluglist_populate(sp_ui_t *ui, const char *match)
 {
@@ -5096,6 +5025,26 @@ _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	}
 }
 
+static void
+_patchbar_selected(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+	Elm_Object_Item *itm = event_info;
+
+	if(itm == ui->matrix_audio)
+		ui->matrix_type = PORT_TYPE_AUDIO;
+	else if(itm == ui->matrix_atom)
+		ui->matrix_type = PORT_TYPE_ATOM;
+	else if(itm == ui->matrix_control)
+		ui->matrix_type = PORT_TYPE_CONTROL;
+	else if(itm == ui->matrix_cv)
+		ui->matrix_type = PORT_TYPE_CV;
+	else
+		return;
+	
+	_patches_update(ui);
+}
+
 sp_ui_t *
 sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	void *data, int show_splash)
@@ -5155,16 +5104,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->plugitc->func.content_get = NULL;
 			ui->plugitc->func.state_get = NULL;
 			ui->plugitc->func.del = _pluglist_del;
-		}
-
-		ui->patchitc = elm_gengrid_item_class_new();
-		if(ui->patchitc)
-		{
-			ui->patchitc->item_style = "default";
-			ui->patchitc->func.text_get = _patchgrid_label_get;
-			ui->patchitc->func.content_get = _patchgrid_content_get;
-			ui->patchitc->func.state_get = NULL;
-			ui->patchitc->func.del = NULL;
 		}
 
 		ui->propitc = elm_gengrid_item_class_new();
@@ -5586,7 +5525,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					if(ui->plugpane)
 					{
 						elm_panes_horizontal_set(ui->plugpane, EINA_TRUE);
-						elm_panes_content_left_size_set(ui->plugpane, 0.33);
+						elm_panes_content_left_size_set(ui->plugpane, 0.4);
 						evas_object_size_hint_weight_set(ui->plugpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 						evas_object_size_hint_align_set(ui->plugpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 						evas_object_show(ui->plugpane);
@@ -5639,30 +5578,59 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 								elm_box_pack_end(ui->plugbox, ui->pluglist);
 							} // pluglist
 						} // plugbox
-
-						ui->patchgrid = elm_gengrid_add(ui->plugpane);
-						if(ui->patchgrid)
+						
+						ui->patchbox = elm_box_add(ui->plugpane);
+						if(ui->patchbox)
 						{
-							elm_gengrid_horizontal_set(ui->patchgrid, EINA_FALSE);
-							elm_gengrid_select_mode_set(ui->patchgrid, ELM_OBJECT_SELECT_MODE_NONE);
-							elm_gengrid_reorder_mode_set(ui->patchgrid, EINA_TRUE);
-							elm_gengrid_item_size_set(ui->patchgrid, ELM_SCALE_SIZE(360), ELM_SCALE_SIZE(360));
-							evas_object_data_set(ui->patchgrid, "ui", ui);
-							evas_object_size_hint_weight_set(ui->patchgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-							evas_object_size_hint_align_set(ui->patchgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
-							evas_object_show(ui->patchgrid);
-							elm_object_part_content_set(ui->plugpane, "right", ui->patchgrid);
+							elm_box_horizontal_set(ui->patchbox, EINA_FALSE);
+							elm_box_homogeneous_set(ui->patchbox, EINA_FALSE);
+							evas_object_data_set(ui->patchbox, "ui", ui);
+							evas_object_size_hint_weight_set(ui->patchbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+							evas_object_size_hint_align_set(ui->patchbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+							evas_object_show(ui->patchbox);
+							elm_object_part_content_set(ui->plugpane, "right", ui->patchbox);
 
-							for(int t=0; t<PORT_TYPE_NUM; t++)
+							ui->patchbar = elm_toolbar_add(ui->patchbox);
+							if(ui->patchbar)
 							{
-								elm_gengrid_item_append(ui->patchgrid, ui->patchitc,
-									&ui->matrix[t], NULL, NULL);
-							}
+								elm_toolbar_horizontal_set(ui->patchbar, EINA_TRUE);
+								elm_toolbar_homogeneous_set(ui->patchbar, EINA_TRUE);
+								elm_toolbar_align_set(ui->patchbar, 0.f);
+								elm_toolbar_select_mode_set(ui->patchbar, ELM_OBJECT_SELECT_MODE_ALWAYS);
+								evas_object_smart_callback_add(ui->patchbar, "selected", _patchbar_selected, ui);
+								evas_object_size_hint_weight_set(ui->patchbar, EVAS_HINT_EXPAND, 0.f);
+								evas_object_size_hint_align_set(ui->patchbar, EVAS_HINT_FILL, 0.f);
+								evas_object_show(ui->patchbar);
+								elm_box_pack_end(ui->patchbox, ui->patchbar);
 
-							// scroll to first item
-							elm_gengrid_item_show(elm_gengrid_nth_item_get(ui->patchgrid, 0),
-								ELM_GENGRID_ITEM_SCROLLTO_NONE);
-						} // patchgrid
+								ui->matrix_audio = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/audio.png", "AUDIO", NULL, NULL);
+								elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
+								ui->matrix_atom = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/atom.png", "ATOM", NULL, NULL);
+								ui->matrix_control = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/control.png", "CONTROL", NULL, NULL);
+								ui->matrix_cv = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/cv.png", "CV", NULL, NULL);
+							} // patchbar
+
+							ui->matrix = patcher_object_add(ui->patchbox);
+							if(ui->matrix)
+							{
+								evas_object_smart_callback_add(ui->matrix, "connect,request",
+									_matrix_connect_request, ui);
+								evas_object_smart_callback_add(ui->matrix, "disconnect,request",
+									_matrix_disconnect_request, ui);
+								evas_object_smart_callback_add(ui->matrix, "realize,request",
+									_matrix_realize_request, ui);
+								evas_object_size_hint_weight_set(ui->matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+								evas_object_size_hint_align_set(ui->matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
+								evas_object_show(ui->matrix);
+								elm_box_pack_end(ui->patchbox, ui->matrix);
+
+								_patches_update(ui);
+							} // matrix
+						} // patchbox
 					} // plugpane
 
 					ui->modlist = elm_genlist_add(ui->leftpane);
@@ -5879,10 +5847,9 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		if(!src || !snk)
 			return;
 
-		Evas_Object *matrix = ui->matrix[src->type];
-		if(matrix)
+		if(ui->matrix && (src->type == ui->matrix_type))
 		{
-			patcher_object_connected_set(matrix, src, snk,
+			patcher_object_connected_set(ui->matrix, src, snk,
 				trans->state.body ? EINA_TRUE : EINA_FALSE,
 				trans->indirect.body);
 		}
@@ -6074,8 +6041,6 @@ sp_ui_free(sp_ui_t *ui)
 		elm_genlist_item_class_free(ui->psetitmitc);
 	if(ui->psetsaveitc)
 		elm_genlist_item_class_free(ui->psetsaveitc);
-	if(ui->patchitc)
-		elm_gengrid_item_class_free(ui->patchitc);
 	if(ui->propitc)
 		elm_gengrid_item_class_free(ui->propitc);
 	if(ui->grpitc)
@@ -6116,11 +6081,8 @@ sp_ui_del(sp_ui_t *ui, bool delete_self)
 	if(ui->plugbox)
 		evas_object_del(ui->plugbox);
 
-	if(ui->patchgrid)
-	{
-		elm_gengrid_clear(ui->patchgrid);
-		evas_object_del(ui->patchgrid);
-	}
+	if(ui->patchbox)
+		evas_object_del(ui->patchbox);
 
 	if(ui->plugpane)
 		evas_object_del(ui->plugpane);

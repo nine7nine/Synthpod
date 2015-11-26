@@ -25,7 +25,8 @@
 #define PATCHER_DISCONNECT_REQUEST "disconnect,request"
 #define PATCHER_REALIZE_REQUEST "realize,request"
 
-#define SPAN (24 + 6)
+#define LEN 8
+#define SPAN (24 + LEN)
 
 typedef struct _patcher_t patcher_t;
 
@@ -517,7 +518,7 @@ _patcher_smart_init(Evas_Object *o)
 		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(elmnt);
-		evas_object_table_pack(priv->matrix, elmnt, src, priv->max + 1, 1, 6);
+		evas_object_table_pack(priv->matrix, elmnt, src, priv->max + 1, 1, LEN);
 	}
 
 	// create sink ports & labels
@@ -541,7 +542,7 @@ _patcher_smart_init(Evas_Object *o)
 		evas_object_size_hint_weight_set(elmnt, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(elmnt, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(elmnt);
-		evas_object_table_pack(priv->matrix, elmnt, priv->max + 1, snk, 6, 1);
+		evas_object_table_pack(priv->matrix, elmnt, priv->max + 1, snk, LEN, 1);
 	}
 
 	elmnt = evas_object_rectangle_add(e);
@@ -664,7 +665,7 @@ patcher_object_dimension_set(Evas_Object *o, int sources, int sinks)
 
 	priv->sources = sources;
 	priv->sinks = sinks;
-	priv->max = SPAN - 6;
+	priv->max = SPAN - LEN;
 
 	_patcher_smart_init(o);
 }
