@@ -683,7 +683,9 @@ _session_async(void *data)
 		ev->session_dir, ev->client_uuid, ev->command_line);
 	*/
 
+	ecore_file_mkpath(ev->session_dir); // path may not exist yet
 	char *synthpod_dir = ecore_file_realpath(ev->session_dir);
+	const char *realpath = synthpod_dir && synthpod_dir[0] ? synthpod_dir : ev->session_dir;
 
 	asprintf(&ev->command_line, "synthpod_jack -u %s ${SESSION_DIR}",
 		ev->client_uuid);
@@ -695,16 +697,17 @@ _session_async(void *data)
 			// fall-through
 		case JackSessionSave:
 			handle->save_state = SAVE_STATE_JACK;
-			sp_ui_bundle_save(bin->ui, synthpod_dir, 1);
+			sp_ui_bundle_save(bin->ui, realpath, 1);
 			break;
 		case JackSessionSaveTemplate:
 			handle->save_state = SAVE_STATE_JACK;
 			sp_ui_bundle_new(bin->ui);
-			sp_ui_bundle_save(bin->ui, synthpod_dir, 1);
+			sp_ui_bundle_save(bin->ui, realpath, 1);
 			break;
 	}
 
-	free(synthpod_dir);
+	if(synthpod_dir)
+		free(synthpod_dir);
 }
 
 // non-rt
