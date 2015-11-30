@@ -831,9 +831,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 				const LilvNode *port_symbol_node = lilv_port_get_symbol(plug, port);
 				LilvNode *port_name_node = lilv_port_get_name(plug, port);
 
-				asprintf(&short_name, "plugin_%u_%s",
+				asprintf(&short_name, "#%u_%s",
 					mod->uid, lilv_node_as_string(port_symbol_node));
-				asprintf(&pretty_name, "Plugin %u - %s",
+				asprintf(&pretty_name, "#%u - %s",
 					mod->uid, lilv_node_as_string(port_name_node));
 				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
 					short_name, pretty_name, tar->direction == PORT_DIRECTION_OUTPUT);
