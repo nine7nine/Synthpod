@@ -367,6 +367,8 @@ _urid_cmp(const void *data1, const void *data2)
 {
 	const property_t *prop1 = data1;
 	const property_t *prop2 = data2;
+	if(!prop1 || !prop2)
+		return 1;
 
 	return prop1->tar_urid < prop2->tar_urid
 		? -1
@@ -418,9 +420,13 @@ _stditc_cmp(const void *data1, const void *data2)
 {
 	const Elm_Object_Item *itm1 = data1;
 	const Elm_Object_Item *itm2 = data2;
+	if(!itm1 || !itm2)
+		return 1;
 
 	port_t *port1 = elm_object_item_data_get(itm1);
 	port_t *port2 = elm_object_item_data_get(itm2);
+	if(!port1 || !port2)
+		return 1;
 
 	// compare port indeces
 	return port1->index < port2->index
@@ -435,9 +441,13 @@ _propitc_cmp(const void *data1, const void *data2)
 {
 	const Elm_Object_Item *itm1 = data1;
 	const Elm_Object_Item *itm2 = data2;
+	if(!itm1 || !itm2)
+		return 1;
 
 	property_t *prop1 = elm_object_item_data_get(itm1);
 	property_t *prop2 = elm_object_item_data_get(itm2);
+	if(!prop1 || !prop2)
+		return 1;
 
 	// compare property labels (case insensitive)
 	return strcasecmp(prop1->label, prop2->label);
@@ -1875,6 +1885,8 @@ _bank_cmp(const void *data1, const void *data2)
 {
 	const LilvNode *node1 = data1;
 	const LilvNode *node2 = data2;
+	if(!node1 || !node2)
+		return 1;
 
 	return lilv_node_equals(node1, node2)
 		? 0
