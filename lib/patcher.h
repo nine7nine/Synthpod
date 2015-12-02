@@ -55,7 +55,7 @@ void
 patcher_object_source_label_set(Evas_Object *o, int source, const char *label);
 
 void
-patcher_object_sink_label_set(Evas_Object *o, int source, const char *label);
+patcher_object_sink_label_set(Evas_Object *o, int sink, const char *label);
 
 void
 patcher_object_realize(Evas_Object *o);
