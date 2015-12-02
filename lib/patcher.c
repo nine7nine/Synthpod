@@ -657,26 +657,26 @@ _patcher_smart_del(Evas_Object *o)
 }
 
 static void
-_patcher_smart_move(Evas_Object *o, Evas_Coord x, Evas_Coord y)
+_patcher_smart_move(Evas_Object *o, Evas_Coord ox, Evas_Coord oy)
 {
-	//patcyer_t *priv = evas_object_smart_data_get(o);
-	Evas_Coord ox, oy;
+	patcher_t *priv = evas_object_smart_data_get(o);
+	Evas_Coord ix, iy;
 
-	evas_object_geometry_get(o, NULL, NULL, &ox, &oy);
-	if( (ox == x) && (oy == y) )
+	evas_object_geometry_get(o, &ix, &iy, NULL, NULL);
+	if( (ix == ox) && (iy == oy) )
 		return;
 
-	evas_object_smart_changed(o);
+	evas_object_move(priv->matrix, ox, oy);
 }
 
 static void
-_patcher_smart_resize(Evas_Object *o, Evas_Coord w, Evas_Coord h)
+_patcher_smart_resize(Evas_Object *o, Evas_Coord ow, Evas_Coord oh)
 {
 	//patcher_t *priv = evas_object_smart_data_get(o);
-	Evas_Coord ow, oh;
+	Evas_Coord iw, ih;
 
-	evas_object_geometry_get(o, NULL, NULL, &ow, &oh);
-	if( (ow == w) && (oh == h) )
+	evas_object_geometry_get(o, NULL, NULL, &iw, &ih);
+	if( (iw == ow) && (ih == oh) )
 		return;
 
 	evas_object_smart_changed(o);
@@ -686,17 +686,27 @@ static void
 _patcher_smart_calculate(Evas_Object *o)
 {
 	patcher_t *priv = evas_object_smart_data_get(o);
-	Evas_Coord x, y, w, h;
+	Evas_Coord ix, iy, iw, ih;
+	Evas_Coord ow, oh;
 
-	evas_object_geometry_get(o, &x, &y, &w, &h);
-	float dw = (float)w / priv->max;
-	float dh = (float)h / priv->max;
+	evas_object_geometry_get(o, &ix, &iy, &iw, &ih);
+	float dw = (float)iw / priv->max;
+	float dh = (float)ih / priv->max;
 	if(dw < dh)
-		h = dw * priv->max;
+	{
+		ow = iw;
+		oh = dw * priv->max;
+	}
 	else // dw >= dh
-		w = dh * priv->max;
-	evas_object_resize(priv->matrix, w, h);
-	evas_object_move(priv->matrix, x, y);
+	{
+		ow = dh * priv->max;
+		oh = ih;
+	}
+
+	if( (iw == ow) && (ih == oh) )
+		return;
+
+	evas_object_resize(priv->matrix, ow, oh);
 }
 
 static void
@@ -893,4 +903,6 @@ patcher_object_realize(Evas_Object *o)
 
 			evas_object_smart_callback_call(o, PATCHER_REALIZE_REQUEST, (void *)ev);
 		}
+
+	evas_object_smart_changed(o);
 }
