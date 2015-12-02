@@ -449,8 +449,12 @@ _propitc_cmp(const void *data1, const void *data2)
 	if(!prop1 || !prop2)
 		return 1;
 
-	// compare property labels (case insensitive)
-	return strcasecmp(prop1->label, prop2->label);
+	// compare property URIDs
+	return prop1->tar_urid < prop2->tar_urid
+		? -1
+		: (prop1->tar_urid > prop2->tar_urid
+			? 1
+			: 0);
 }
 
 static inline void
@@ -755,6 +759,17 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							// append property to corresponding group
 							if(group)
 								group->children = eina_list_append(group->children, prop);
+
+							// append property to UI
+							if(parent) //TODO remove duplicate code
+							{
+								Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
+									ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
+									NULL, NULL);
+								int select_mode = ELM_OBJECT_SELECT_MODE_NONE;
+								elm_genlist_item_select_mode_set(elmnt, select_mode);
+								prop->std.elmnt = elmnt;
+							}
 						}
 					}
 					else if(atom_prop->key == ui->regs.patch.writable.urid)
@@ -775,11 +790,26 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							// append property to corresponding group
 							if(group)
 								group->children = eina_list_append(group->children, prop);
+
+							// append property to UI
+							if(parent) //TODO remove duplicate code
+							{
+								Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
+									ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
+									NULL, NULL);
+								int select_mode = (prop->type_urid == ui->forge.String)
+									|| (prop->type_urid == ui->forge.URI)
+										? ELM_OBJECT_SELECT_MODE_DEFAULT
+										: ELM_OBJECT_SELECT_MODE_NONE;
+								elm_genlist_item_select_mode_set(elmnt, select_mode);
+								prop->std.elmnt = elmnt;
+							}
 						}
 					}
 					else if(atom_prop->key == ui->regs.rdfs.label.urid)
 					{
 						const LV2_URID tar_urid = subject->body;
+
 						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 						if(prop)
@@ -792,6 +822,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					else if(atom_prop->key == ui->regs.rdfs.range.urid)
 					{
 						const LV2_URID tar_urid = subject->body;
+
 						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 						if(prop)
@@ -804,6 +835,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					else if(atom_prop->key == ui->regs.core.minimum.urid)
 					{
 						const LV2_URID tar_urid = subject->body;
+
 						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 						if(prop)
@@ -824,6 +856,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					else if(atom_prop->key == ui->regs.core.maximum.urid)
 					{
 						const LV2_URID tar_urid = subject->body;
+
 						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 						if(prop)
@@ -844,6 +877,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					else if(atom_prop->key == ui->regs.core.scale_point.urid)
 					{
 						const LV2_URID tar_urid = subject->body;
+
 						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 						if(prop)
@@ -897,14 +931,6 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							}
 						}
 					}
-				}
-
-				// trigger update for Properties
-				if(parent)
-				{
-					//FIXME solve differently
-					//evas_object_smart_callback_call(ui->modlist, "contract,request", parent);
-					//evas_object_smart_callback_call(ui->modlist, "expand,request", parent);
 				}
 			}
 			else
