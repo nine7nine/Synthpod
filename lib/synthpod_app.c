@@ -39,7 +39,8 @@
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
-typedef enum _job_type_t job_type_t;
+typedef enum _job_type_request_t job_type_request_t;
+typedef enum _job_type_reply_t job_type_reply_t;
 typedef enum _bypass_state_t bypass_state_t;
 typedef enum _ramp_state_t ramp_state_t;
 
@@ -65,17 +66,29 @@ enum _ramp_state_t {
 	RAMP_STATE_DOWN_DEL
 };
 
-enum _job_type_t {
-	JOB_TYPE_MODULE_ADD,
-	JOB_TYPE_MODULE_DEL,
-	JOB_TYPE_PRESET_LOAD,
-	JOB_TYPE_PRESET_SAVE,
-	JOB_TYPE_BUNDLE_LOAD,
-	JOB_TYPE_BUNDLE_SAVE
+enum _job_type_request_t {
+	JOB_TYPE_REQUEST_MODULE_ADD,
+	JOB_TYPE_REQUEST_MODULE_DEL,
+	JOB_TYPE_REQUEST_PRESET_LOAD,
+	JOB_TYPE_REQUEST_PRESET_SAVE,
+	JOB_TYPE_REQUEST_BUNDLE_LOAD,
+	JOB_TYPE_REQUEST_BUNDLE_SAVE
+};
+
+enum _job_type_reply_t {
+	JOB_TYPE_REPLY_MODULE_ADD,
+	JOB_TYPE_REPLY_MODULE_DEL,
+	JOB_TYPE_REPLY_PRESET_LOAD,
+	JOB_TYPE_REPLY_PRESET_SAVE,
+	JOB_TYPE_REPLY_BUNDLE_LOAD,
+	JOB_TYPE_REPLY_BUNDLE_SAVE
 };
 
 struct _job_t {
-	job_type_t type;
+	union {
+		job_type_request_t request;
+		job_type_reply_t reply;
+	};
 	union {
 		mod_t *mod;
 		int32_t status;
@@ -970,7 +983,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 }
 
 // non-rt worker-thread
-static inline void
+static inline int
 _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 {
 	// deinit instance
@@ -1001,6 +1014,8 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	eina_semaphore_free(&mod->bypass_sem);
 
 	free(mod);
+
+	return 0; //success
 }
 
 static inline mod_t *
@@ -1270,7 +1285,7 @@ _eject_module(sp_app_t *app, mod_t *mod)
 		work->target = app;
 		work->size = size - sizeof(work_t);
 		job_t *job = (job_t *)work->payload;
-		job->type = JOB_TYPE_MODULE_DEL;
+		job->request = JOB_TYPE_REQUEST_MODULE_DEL;
 		job->mod = mod;
 		_sp_app_to_worker_advance(app, size);
 	}
@@ -1391,7 +1406,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			work->target = app;
 			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_MODULE_ADD;
+			job->request = JOB_TYPE_REQUEST_MODULE_ADD;
 			memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
 			_sp_app_to_worker_advance(app, size);
 		}
@@ -1495,7 +1510,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			work->target = app;
 			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_PRESET_LOAD;
+			job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
 			job->mod = mod;
 			memcpy(job->uri, pset->uri_str, pset->uri.atom.size);
 			_sp_app_to_worker_advance(app, size);
@@ -1517,7 +1532,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			work->target = app;
 			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_PRESET_SAVE;
+			job->request = JOB_TYPE_REQUEST_PRESET_SAVE;
 			job->mod = mod;
 			memcpy(job->uri, pset->label_str, pset->label.atom.size);
 			_sp_app_to_worker_advance(app, size);
@@ -1730,7 +1745,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			work->target = app;
 			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_BUNDLE_LOAD;
+			job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
 			job->status = load->status.body;
 			memcpy(job->uri, load->path_str, load->path.atom.size);
 			_sp_app_to_worker_advance(app, size);
@@ -1750,7 +1765,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			work->target = app;
 			work->size = size - sizeof(work_t);
 			job_t *job = (job_t *)work->payload;
-			job->type = JOB_TYPE_BUNDLE_SAVE;
+			job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
 			job->status = save->status.body;
 			memcpy(job->uri, save->path_str, save->path.atom.size);
 			_sp_app_to_worker_advance(app, size);
@@ -1768,9 +1783,9 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 	{
 		const job_t *job = (const job_t *)work->payload;
 
-		switch(job->type)
+		switch(job->reply)
 		{
-			case JOB_TYPE_MODULE_ADD:
+			case JOB_TYPE_REPLY_MODULE_ADD:
 			{
 				mod_t *mod = job->mod;
 
@@ -1799,7 +1814,22 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 
 				break;
 			}
-			case JOB_TYPE_BUNDLE_LOAD:
+			case JOB_TYPE_REPLY_MODULE_DEL:
+			{
+				//FIXME
+				break;
+			}
+			case JOB_TYPE_REPLY_PRESET_LOAD:
+			{
+				//FIXME
+				break;
+			}
+			case JOB_TYPE_REPLY_PRESET_SAVE:
+			{
+				//FIXME
+				break;
+			}
+			case JOB_TYPE_REPLY_BUNDLE_LOAD:
 			{
 				//printf("app: bundle loaded\n");
 
@@ -1815,7 +1845,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 
 				break;
 			}
-			case JOB_TYPE_BUNDLE_SAVE:
+			case JOB_TYPE_REPLY_BUNDLE_SAVE:
 			{
 				//printf("app: bundle saved\n");
 
@@ -1831,8 +1861,6 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 
 				break;
 			}
-			default:
-				break; // never reached
 		}
 	}
 	else // work is for module
@@ -1979,13 +2007,13 @@ _state_features(sp_app_t *app, void *data)
 }
 
 // non-rt
-static inline void
+static inline int
 _preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 {
 	LilvNode *preset = lilv_new_uri(app->world, uri);
 
 	if(!preset) // preset not existing
-		return;
+		return -1;
 
 	// load preset resource
 	lilv_world_load_resource(app->world, preset);
@@ -2001,7 +2029,7 @@ _preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 	lilv_node_free(preset);
 
 	if(!state)
-		return;
+		return -1;
 
 	//enable bypass
 	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_PAUSE_REQUESTED, memory_order_relaxed);
@@ -2014,15 +2042,17 @@ _preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	lilv_state_free(state);
+
+	return 0; // success
 }
 
 // non-rt
-static inline void
+static inline int
 _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 {
 	const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
 	if(!name_node)
-		return;
+		return -1;
 
 	const char *name = lilv_node_as_string(name_node);
 	char *dir = NULL;
@@ -2032,7 +2062,7 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	// create bundle path
 	asprintf(&dir, "%s/.lv2/%s_%s.lv2", app->dir.home, name, target);
 	if(!dir)
-		return;
+		return -1;
 
 	// replace spaces with underscore
 	for(char *c = strstr(dir, ".lv2"); *c; c++)
@@ -2045,7 +2075,7 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	if(!filename)
 	{
 		free(dir);
-		return;
+		return -1;
 	}
 	
 	// create bundle path URI
@@ -2054,7 +2084,7 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	{
 		free(dir);
 		free(filename);
-		return;
+		return -1;
 	}
 	
 	//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
@@ -2099,6 +2129,8 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	free(dir);
 	free(filename);
 	free(bndl);
+
+	return 0; // success
 }
 
 // non-rt / rt
@@ -2233,9 +2265,9 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 	{
 		const job_t *job = (const job_t *)work0->payload;
 
-		switch(job->type)
+		switch(job->request)
 		{
-			case JOB_TYPE_MODULE_ADD:
+			case JOB_TYPE_REQUEST_MODULE_ADD:
 			{
 				mod_t *mod = _sp_app_mod_add(app, job->uri, 0);
 				if(!mod)
@@ -2249,34 +2281,71 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 						work->target = app;
 						work->size = sizeof(job_t);
 					job_t *job1 = (job_t *)work->payload;
-						job1->type = JOB_TYPE_MODULE_ADD;
+						job1->reply = JOB_TYPE_REPLY_MODULE_ADD;
 						job1->mod = mod;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
 				break;
 			}
-			case JOB_TYPE_MODULE_DEL:
+			case JOB_TYPE_REQUEST_MODULE_DEL:
 			{
-				_sp_app_mod_del(app, job->mod);
+				int status = _sp_app_mod_del(app, job->mod);
 
-				//TODO signal to ui?
+				// signal to ui
+				size_t work_size = sizeof(work_t) + sizeof(job_t);
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+				if(work)
+				{
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job1 = (job_t *)work->payload;
+						job1->reply = JOB_TYPE_REPLY_MODULE_DEL;
+						job1->status = status; //TODO makes not much sense, does it?
+					_sp_worker_to_app_advance(app, work_size);
+				}
 
 				break;
 			}
-			case JOB_TYPE_PRESET_LOAD:
+			case JOB_TYPE_REQUEST_PRESET_LOAD:
 			{
-				_preset_load(app, job->mod, job->uri);
+				int status = _preset_load(app, job->mod, job->uri);
+
+				// signal to ui
+				size_t work_size = sizeof(work_t) + sizeof(job_t);
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+				if(work)
+				{
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job1 = (job_t *)work->payload;
+						job1->reply = JOB_TYPE_REPLY_PRESET_LOAD;
+						job1->status = status;
+					_sp_worker_to_app_advance(app, work_size);
+				}
 
 				break;
 			}
-			case JOB_TYPE_PRESET_SAVE:
+			case JOB_TYPE_REQUEST_PRESET_SAVE:
 			{
-				_preset_save(app, job->mod, job->uri);
+				int status = _preset_save(app, job->mod, job->uri);
+
+				// signal to ui
+				size_t work_size = sizeof(work_t) + sizeof(job_t);
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+				if(work)
+				{
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job1 = (job_t *)work->payload;
+						job1->reply = JOB_TYPE_REPLY_PRESET_SAVE;
+						job1->status = status;
+					_sp_worker_to_app_advance(app, work_size);
+				}
 
 				break;
 			}
-			case JOB_TYPE_BUNDLE_LOAD:
+			case JOB_TYPE_REQUEST_BUNDLE_LOAD:
 			{
 				int status = _bundle_load(app, job->uri);
 
@@ -2288,14 +2357,14 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 						work->target = app;
 						work->size = sizeof(job_t);
 					job_t *job1 = (job_t *)work->payload;
-						job1->type = JOB_TYPE_BUNDLE_LOAD;
+						job1->reply = JOB_TYPE_REPLY_BUNDLE_LOAD;
 						job1->status = status;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
 				break;
 			}
-			case JOB_TYPE_BUNDLE_SAVE:
+			case JOB_TYPE_REQUEST_BUNDLE_SAVE:
 			{
 				int status = _bundle_save(app, job->uri);
 
@@ -2307,7 +2376,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 						work->target = app;
 						work->size = sizeof(job_t);
 					job_t *job1 = (job_t *)work->payload;
-						job1->type = JOB_TYPE_BUNDLE_SAVE;
+						job1->reply = JOB_TYPE_REPLY_BUNDLE_SAVE;
 						job1->status = status;
 					_sp_worker_to_app_advance(app, work_size);
 				}
