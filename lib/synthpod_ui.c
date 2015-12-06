@@ -329,7 +329,7 @@ struct _sp_ui_t {
 
 	Elm_Object_Item *sink_itm;
 
-	volatile int dirty;
+	int dirty;
 };
 
 static Eina_Bool

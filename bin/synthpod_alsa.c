@@ -66,7 +66,7 @@ struct _prog_t {
 	uint8_t m [MIDI_SEQ_SIZE];
 
 	save_state_t save_state;
-	volatile int kill;
+	_Atomic int kill;
 	Eina_Thread thread;
 
 	uint32_t srate;
@@ -160,7 +160,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	_ntp_now(&handle->nxt_ntp);
 
 	pcmi_pcm_start(handle->pcmi);
-	while(!handle->kill)
+	while(!atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
 		uint32_t na = pcmi_pcm_wait(pcmi);
 
@@ -568,7 +568,7 @@ _ui_saved(void *data, int status)
 	}
 	handle->save_state = SAVE_STATE_INTERNAL;
 
-	if(handle->kill)
+	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
 		elm_exit();
 	}
@@ -602,7 +602,7 @@ _alsa_deinit(prog_t *handle)
 {
 	if(handle->thread)
 	{
-		handle->kill = 1;
+		atomic_store_explicit(&handle->kill, 1, memory_order_relaxed);
 		eina_thread_join(handle->thread);
 	}
 
@@ -656,6 +656,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
 
 	// alsa activate
+	atomic_init(&handle->kill, 0);
 	Eina_Bool status = eina_thread_create(&handle->thread,
 		EINA_THREAD_URGENT, -1, _rt_thread, handle); //TODO
 	if(!status)
@@ -697,7 +698,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 	uint64_t time_sec = timestamp >> 32;
 	uint64_t time_frac = timestamp & 0xffffffff;
 
-	volatile double diff = time_sec;
+	double diff = time_sec;
 	diff -= handle->cur_ntp.tv_sec;
 	diff += time_frac * 0x1p-32;
 	diff -= handle->cur_ntp.tv_nsec * 1e-9;
@@ -717,7 +718,7 @@ _osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
 {
 	prog_t *handle = instance;
 
-	volatile double diff = (double)(frames - handle->cycle.ref_frames + handle->cycle.cur_frames)
+	double diff = (double)(frames - handle->cycle.ref_frames + handle->cycle.cur_frames)
 		* handle->cycle.dTm1;
 	diff += handle->cur_ntp.tv_nsec * 1e-9;
 	diff += handle->cur_ntp.tv_sec;

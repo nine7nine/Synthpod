@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <stdatomic.h>
 
 #include <synthpod_lv2.h>
 #include <synthpod_app.h>
@@ -48,8 +49,8 @@ struct _plughandle_t {
 	LV2_Log_Log *log;
 	LV2_Options_Option *opts;
 
-	volatile int working;
-	volatile int dirty_in;
+	_Atomic int working;
+	_Atomic int dirty_in;
 
 	struct {
 		struct {
@@ -191,7 +192,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
 
-	handle->dirty_in = 1;
+	atomic_store_explicit(&handle->dirty_in, 1, memory_order_relaxed);
 
 	return sp_app_restore(app, retrieve, state, flags, features);
 }
@@ -241,8 +242,8 @@ static LV2_Worker_Status
 _end_run(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
-	
-	handle->working = 0;
+
+	atomic_store_explicit(&handle->working, 0, memory_order_relaxed);
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -294,7 +295,7 @@ _zero_end(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 	
-	handle->working = 0;
+	atomic_store_explicit(&handle->working, 0, memory_order_relaxed);
 
 	return ZERO_WORKER_SUCCESS;
 }
@@ -351,7 +352,7 @@ _to_worker_advance(size_t size, void *data)
 	
 	//printf("_to_worker_advance: %zu\n", size);
 	
-	handle->working = 1;
+	atomic_store_explicit(&handle->working, 1, memory_order_relaxed);
 
 	if(handle->zero_sched)
 	{
@@ -403,6 +404,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
+
+	atomic_init(&handle->working, 0);	
+	atomic_init(&handle->dirty_in, 0);	
 
 	handle->driver.sample_rate = rate;
 	handle->driver.seq_size = SEQ_SIZE;
@@ -665,12 +669,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(handle->source.input[3])
 		*handle->source.input[3] = *handle->port.input[3];
 
-	if(handle->dirty_in)
+	if(atomic_load_explicit(&handle->dirty_in, memory_order_relaxed))
 	{
 		//printf("dirty\n");
 		//TODO refresh UI
 
-		handle->dirty_in = 0;
+		atomic_store_explicit(&handle->dirty_in, 0, memory_order_relaxed);
 	}
 
 	struct {
@@ -692,7 +696,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		(uint8_t *)handle->port.notify, handle->port.notify->atom.size);
 	lv2_atom_forge_sequence_head(&handle->forge.notify, &frame.notify, 0);
 
-	if(!handle->working)
+	if(!atomic_load_explicit(&handle->working, memory_order_relaxed))
 	{
 		if(handle->forge.work.offset > 0)
 		{

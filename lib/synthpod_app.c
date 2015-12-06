@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 #include <ctype.h> // isspace
 #include <math.h>
 
@@ -100,7 +101,7 @@ struct _mod_t {
 
 	int delete_request;
 
-	volatile bypass_state_t bypass_state;
+	_Atomic bypass_state_t bypass_state;
 	Eina_Semaphore bypass_sem;
 	
 	// worker
@@ -203,9 +204,9 @@ struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
 
-	volatile bypass_state_t bypass_state;
+	_Atomic bypass_state_t bypass_state;
 	Eina_Semaphore bypass_sem;
-	volatile int dirty;
+	_Atomic int dirty;
 
 	struct {
 		const char *home;
@@ -609,7 +610,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	if(!mod)
 		return NULL;
 
-	mod->bypass_state = BYPASS_STATE_RUNNING;
+	atomic_init(&mod->bypass_state, BYPASS_STATE_RUNNING);
 	eina_semaphore_new(&mod->bypass_sem, 0);
 
 	// populate worker schedule
@@ -1159,9 +1160,10 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	sp_app_t *app = calloc(1, sizeof(sp_app_t));
 	if(!app)
 		return NULL;
-	
-	app->bypass_state = BYPASS_STATE_RUNNING;
+
+	atomic_init(&app->bypass_state, BYPASS_STATE_RUNNING);
 	eina_semaphore_new(&app->bypass_sem, 0);
+	atomic_init(&app->dirty, 0);
 
 #if !defined(_WIN32)
 	app->dir.home = getenv("HOME");
@@ -2002,14 +2004,14 @@ _preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 		return;
 
 	//enable bypass
-	mod->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_PAUSE_REQUESTED, memory_order_relaxed);
 	eina_semaphore_lock(&mod->bypass_sem);
 
 	lilv_state_restore(state, mod->inst, _state_set_value, mod,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 
 	// disable bypass
-	mod->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	lilv_state_free(state);
 }
@@ -2058,7 +2060,7 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
 
 	// enable bypass
-	mod->bypass_state = BYPASS_STATE_LOCK_REQUESTED; // atomic instruction
+	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_LOCK_REQUESTED, memory_order_relaxed);
 	eina_semaphore_lock(&mod->bypass_sem);
 	
 	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
@@ -2067,7 +2069,7 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 		_state_features(app, dir));
 
 	// disable bypass
-	mod->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	if(state)
 	{
@@ -2180,7 +2182,7 @@ _bundle_load(sp_app_t *app, const char *bundle_path)
 		return -1;
 
 	// pause rt-thread
-	app->bypass_state = BYPASS_STATE_PAUSE_REQUESTED; // atomic instruction
+	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_PAUSE_REQUESTED, memory_order_relaxed);
 	eina_semaphore_lock(&app->bypass_sem);
 
 	// restore state
@@ -2189,7 +2191,7 @@ _bundle_load(sp_app_t *app, const char *bundle_path)
 		_state_features(app, app->bundle_path));
 
 	// resume rt-thread
-	app->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	return 0; // success
 }
@@ -2207,7 +2209,7 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 		return -1;
 
 	// pause rt-thread
-	app->bypass_state = BYPASS_STATE_LOCK_REQUESTED; // atomic instruction
+	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_LOCK_REQUESTED, memory_order_relaxed);
 	eina_semaphore_lock(&app->bypass_sem);
 
 	// store state
@@ -2216,7 +2218,7 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 		_state_features(app, app->bundle_path));
 
 	// resume rt-thread
-	app->bypass_state = BYPASS_STATE_RUNNING; // atomic instruction
+	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	return 0; // success
 }
@@ -2433,21 +2435,21 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	{
 		mod_t *mod = app->mods[m];
 
-		switch(mod->bypass_state)
+		switch(atomic_load_explicit(&mod->bypass_state, memory_order_relaxed))
 		{
 			case BYPASS_STATE_RUNNING:
 				// do nothing
 				break;
 
 			case BYPASS_STATE_PAUSE_REQUESTED:
-				mod->bypass_state = BYPASS_STATE_PAUSED;
+				atomic_store_explicit(&mod->bypass_state,  BYPASS_STATE_PAUSED, memory_order_relaxed);
 				eina_semaphore_release(&mod->bypass_sem, 1);
 				// fall-through
 			case BYPASS_STATE_PAUSED: // aka state loading
 				continue; // skip this module FIXME clear audio output buffers or xfade
 
 			case BYPASS_STATE_LOCK_REQUESTED:
-				mod->bypass_state = BYPASS_STATE_LOCKED;
+				atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_LOCKED, memory_order_relaxed);
 				eina_semaphore_release(&mod->bypass_sem, 1);
 				// fall-through
 			case BYPASS_STATE_LOCKED: // aka state saving
@@ -2629,10 +2631,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		lilv_instance_run(mod->inst, nsamples);
 		
 		// handle app ui post
-		if(app->dirty)
+		if(atomic_load_explicit(&app->dirty, memory_order_relaxed))
 		{
 			// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
-			app->dirty = 0; // reset
+			atomic_store_explicit(&app->dirty, 0, memory_order_relaxed); // reset
 
 			size_t size = sizeof(transmit_module_list_t);
 			transmit_module_list_t *trans = _sp_app_to_ui_request(app, size);
@@ -3128,7 +3130,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	if(!ecore_file_exists(absolute)) // new project?
 	{
 		// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
-		app->dirty = 1;
+		atomic_store_explicit(&app->dirty, 1, memory_order_relaxed);
 
 		return LV2_STATE_SUCCESS;
 	}
@@ -3313,7 +3315,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	cJSON_Delete(root_json);
 
 	// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
-	app->dirty = 1;
+	atomic_store_explicit(&app->dirty, 1, memory_order_relaxed);
 
 	return LV2_STATE_SUCCESS;
 }
@@ -3321,20 +3323,20 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 int
 sp_app_paused(sp_app_t *app)
 {
-	switch(app->bypass_state)
+	switch(atomic_load_explicit(&app->bypass_state, memory_order_relaxed))
 	{
 		case BYPASS_STATE_RUNNING:
 			return 0;
 
 		case BYPASS_STATE_PAUSE_REQUESTED:
-			app->bypass_state = BYPASS_STATE_PAUSED;
+			atomic_store_explicit(&app->bypass_state, BYPASS_STATE_PAUSED, memory_order_relaxed);
 			eina_semaphore_release(&app->bypass_sem, 1);
 			// fall-through
 		case BYPASS_STATE_PAUSED: // aka loading state
 			return 1;
 
 		case BYPASS_STATE_LOCK_REQUESTED:
-			app->bypass_state = BYPASS_STATE_LOCKED;
+			atomic_store_explicit(&app->bypass_state, BYPASS_STATE_LOCKED, memory_order_relaxed);
 			eina_semaphore_release(&app->bypass_sem, 1);
 			// fall-through
 		case BYPASS_STATE_LOCKED: // aka saving state

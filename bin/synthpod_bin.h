@@ -24,6 +24,8 @@
 
 #include <Eina.h>
 
+#include <stdatomic.h>
+
 #include <ext_urid.h>
 #include <varchunk.h>
 #include <lv2_osc.h>
@@ -80,7 +82,7 @@ struct _bin_t {
 	Ecore_Animator *ui_anim;
 	Evas_Object *win;
 	
-	volatile int worker_dead;
+	_Atomic int worker_dead;
 	Eina_Thread worker_thread;
 	Eina_Semaphore worker_sem;
 	bool worker_sem_needs_release;
@@ -156,7 +158,7 @@ _worker_thread(void *data, Eina_Thread thread)
 			fprintf(stderr, "pthread_setschedparam error\n");
 	}
 
-	while(!bin->worker_dead)
+	while(!atomic_load_explicit(&bin->worker_dead, memory_order_relaxed))
 	{
 		eina_semaphore_lock(&bin->worker_sem);
 
@@ -419,6 +421,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	bin->nsm = synthpod_nsm_new(exe, argv[optind], nsm_driver, bin); //TODO check
 
 	// init semaphores
+	atomic_init(&bin->worker_dead, 0);
 	eina_semaphore_new(&bin->worker_sem, 0);
 
 	// threads init
@@ -445,7 +448,7 @@ static void
 bin_stop(bin_t *bin)
 {
 	// threads deinit
-	bin->worker_dead = 1; // atomic operation
+	atomic_store_explicit(&bin->worker_dead, 1, memory_order_relaxed);
 	eina_semaphore_release(&bin->worker_sem, 1);
 	eina_thread_join(bin->worker_thread);
 
