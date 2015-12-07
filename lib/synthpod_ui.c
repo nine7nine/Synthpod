@@ -516,7 +516,9 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 				else if(prop->type_urid == ui->forge.Path)
 				{
 					const char *val = LV2_ATOM_BODY_CONST(value);
-					elm_object_text_set(prop->std.widget, val);
+					//elm_object_text_set(prop->std.widget, val); TODO ellipsis on button text
+					if(prop->editable)
+						elm_fileselector_path_set(prop->std.widget, val);
 				}
 				else if(prop->type_urid == ui->forge.Int)
 				{
@@ -638,7 +640,6 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 			LV2_ATOM_OBJECT_FOREACH(obj, prop)
 			{
-				printf("put: %u\n", prop->key);
 				_mod_set_property(mod, prop->key, &prop->value);
 			}
 		}
@@ -3975,7 +3976,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 						elm_fileselector_button_inwin_mode_set(child, EINA_FALSE);
 						elm_fileselector_button_window_title_set(child, "Select file");
 						elm_fileselector_is_save_set(child, EINA_FALSE);
-						elm_object_part_text_set(child, "default", "Select file");
+						elm_object_text_set(child, "Select file");
 						evas_object_smart_callback_add(child, "file,chosen",
 							_property_path_chosen, prop);
 						//TODO MIME type
