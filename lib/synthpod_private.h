@@ -41,6 +41,7 @@
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 #include <lv2/lv2plug.in/ns/ext/port-props/port-props.h>
 #include <lv2/lv2plug.in/ns/ext/port-groups/port-groups.h>
+#include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
@@ -247,6 +248,11 @@ struct _reg_t {
 	} units;
 
 	struct {
+		reg_item_t state;
+		reg_item_t load_default_state;
+	} state;
+
+	struct {
 		reg_item_t com_event;
 		reg_item_t transfer_event;
 		reg_item_t payload;
@@ -411,6 +417,9 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->units.s, world, map, LV2_UNITS__s);
 	_register(&regs->units.semitone12TET, world, map, LV2_UNITS__semitone12TET);
 
+	_register(&regs->state.state, world, map, LV2_STATE__state);
+	_register(&regs->state.load_default_state, world, map, LV2_STATE__loadDefaultState);
+
 	_register(&regs->synthpod.com_event, world, map, SYNTHPOD_PREFIX"comEvent");
 	_register(&regs->synthpod.transfer_event, world, map, SYNTHPOD_PREFIX"transferEvent");
 	_register(&regs->synthpod.payload, world, map, SYNTHPOD_PREFIX"payload");
@@ -558,6 +567,9 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->units.pc);
 	_unregister(&regs->units.s);
 	_unregister(&regs->units.semitone12TET);
+
+	_unregister(&regs->state.state);
+	_unregister(&regs->state.load_default_state);
 
 	_unregister(&regs->synthpod.com_event);
 	_unregister(&regs->synthpod.transfer_event);

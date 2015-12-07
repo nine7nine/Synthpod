@@ -35,7 +35,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 13
+#define NUM_FEATURES 14
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -604,6 +604,8 @@ _mod_slice_pool(mod_t *mod, port_type_t type)
 	}
 }
 
+static inline int //TODO move
+_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool init);
 
 // non-rt worker-thread
 static inline mod_t *
@@ -708,10 +710,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->feature_list[nfeatures++].data = NULL;
 	*/
 
-	/* TODO support
 	mod->feature_list[nfeatures].URI = LV2_STATE__loadDefaultState;
 	mod->feature_list[nfeatures++].data = NULL;
-	*/
 
 	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
 	mod->feature_list[nfeatures++].data = app->world;
@@ -798,6 +798,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_OPTIONS__interface);
 	mod->system_ports = lilv_plugin_has_feature(plug, app->regs.synthpod.system_ports.node);
+	bool load_default_state = lilv_plugin_has_feature(plug, app->regs.state.load_default_state.node);
 
 	// clear pool sizes
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
@@ -976,6 +977,10 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	
 	// selection
 	mod->selected = 0;
+
+	// load default state
+	if(load_default_state && _preset_load(app, mod, uri, true))
+		fprintf(stderr, "default state loading failed\n");
 
 	lilv_instance_activate(mod->inst);
 
@@ -2008,7 +2013,7 @@ _state_features(sp_app_t *app, void *data)
 
 // non-rt
 static inline int
-_preset_load(sp_app_t *app, mod_t *mod, const char *uri)
+_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool init)
 {
 	LilvNode *preset = lilv_new_uri(app->world, uri);
 
@@ -2031,15 +2036,21 @@ _preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 	if(!state)
 		return -1;
 
-	//enable bypass
-	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_PAUSE_REQUESTED, memory_order_relaxed);
-	eina_semaphore_lock(&mod->bypass_sem);
+	if(!init)
+	{
+		//enable bypass
+		atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_PAUSE_REQUESTED, memory_order_relaxed);
+		eina_semaphore_lock(&mod->bypass_sem);
+	}
 
 	lilv_state_restore(state, mod->inst, _state_set_value, mod,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 
-	// disable bypass
-	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
+	if(!init)
+	{
+		// disable bypass
+		atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
+	}
 
 	lilv_state_free(state);
 
@@ -2309,7 +2320,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			}
 			case JOB_TYPE_REQUEST_PRESET_LOAD:
 			{
-				int status = _preset_load(app, job->mod, job->uri);
+				int status = _preset_load(app, job->mod, job->uri, false);
 
 				// signal to ui
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
