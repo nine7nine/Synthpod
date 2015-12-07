@@ -457,6 +457,102 @@ _propitc_cmp(const void *data1, const void *data2)
 			: 0);
 }
 
+static void
+_mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
+{
+	sp_ui_t *ui = mod->ui;
+
+	//printf("ui got patch:Set: %u %u %s\n",
+	//	subject_val, request_val, body_val);
+
+	property_t *prop;
+	if(  (prop = eina_list_search_sorted(mod->static_properties, _urid_find, &property_val))
+		|| (prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &property_val)) )
+	{
+		if(prop->std.widget &&
+			(    (prop->type_urid == value->type)
+				|| (prop->type_urid + value->type == ui->forge.Int + ui->forge.Bool)
+			) )
+		{
+			if(prop->scale_points)
+			{
+				if(prop->type_urid == ui->forge.String)
+				{
+					smart_spinner_key_set(prop->std.widget, LV2_ATOM_BODY_CONST(value));
+				}
+				else if(prop->type_urid == ui->forge.Int)
+				{
+					int32_t val = ((const LV2_Atom_Int *)value)->body;
+					smart_spinner_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Float)
+				{
+					float val = ((const LV2_Atom_Float *)value)->body;
+					smart_spinner_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Long)
+				{
+					int64_t val = ((const LV2_Atom_Long *)value)->body;
+					smart_spinner_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Double)
+				{
+					double val = ((const LV2_Atom_Double *)value)->body;
+					smart_spinner_value_set(prop->std.widget, val);
+				}
+				//TODO do other types
+			}
+			else // !scale_points
+			{
+				if(  (prop->type_urid == ui->forge.String)
+					|| (prop->type_urid == ui->forge.URI) )
+				{
+					const char *val = LV2_ATOM_BODY_CONST(value);
+					if(prop->editable)
+						elm_entry_entry_set(prop->std.entry, val);
+					else
+						elm_object_text_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Path)
+				{
+					const char *val = LV2_ATOM_BODY_CONST(value);
+					elm_object_text_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Int)
+				{
+					int32_t val = ((const LV2_Atom_Int *)value)->body;
+					smart_slider_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.URID)
+				{
+					uint32_t val = ((const LV2_Atom_URID *)value)->body;
+					smart_slider_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Long)
+				{
+					int64_t val = ((const LV2_Atom_Long *)value)->body;
+					smart_slider_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Float)
+				{
+					float val = ((const LV2_Atom_Float *)value)->body;
+					smart_slider_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Double)
+				{
+					double val = ((const LV2_Atom_Double *)value)->body;
+					smart_slider_value_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.Bool)
+				{
+					int val = ((const LV2_Atom_Bool *)value)->body;
+					smart_toggle_value_set(prop->std.widget, val);
+				}
+			}
+		}
+	}
+}
+
 static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -511,12 +607,12 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		if(  (obj->atom.type == ui->forge.Object)
 			&& (obj->body.otype == ui->regs.patch.set.urid) )
 		{
-			const LV2_Atom_URID *subject = NULL;
+			//const LV2_Atom_URID *subject = NULL; //TODO handle subject
 			const LV2_Atom_URID *property = NULL;
 			const LV2_Atom *value = NULL;
 
 			LV2_Atom_Object_Query q[] = {
-				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+				//{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
 				{ ui->regs.patch.property.urid, (const LV2_Atom **)&property },
 				{ ui->regs.patch.value.urid, &value },
 				LV2_ATOM_OBJECT_QUERY_END
@@ -524,98 +620,26 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 			lv2_atom_object_query(obj, q);
 
 			if(property && value)
+				_mod_set_property(mod, property->body, value);
+		}
+		// check for patch:Put
+		else if(  (obj->atom.type == ui->forge.Object)
+			&& (obj->body.otype == ui->regs.patch.put.urid) )
+		{
+			/*TODO handle subject
+			const LV2_Atom_URID *subject = NULL;
+
+			LV2_Atom_Object_Query q[] = {
+				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+				LV2_ATOM_OBJECT_QUERY_END
+			};
+			lv2_atom_object_query(obj, q);
+			*/
+
+			LV2_ATOM_OBJECT_FOREACH(obj, prop)
 			{
-				LV2_URID property_val = property->body;
-
-				//printf("ui got patch:Set: %u %u %s\n",
-				//	subject_val, request_val, body_val);
-
-				property_t *prop;
-				if(  (prop = eina_list_search_sorted(mod->static_properties, _urid_find, &property_val))
-					|| (prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &property_val)) )
-				{
-					if(prop->std.widget &&
-						(    (prop->type_urid == value->type)
-							|| (prop->type_urid + value->type == ui->forge.Int + ui->forge.Bool)
-						) )
-					{
-						if(prop->scale_points)
-						{
-							if(prop->type_urid == ui->forge.String)
-							{
-								smart_spinner_key_set(prop->std.widget, LV2_ATOM_BODY_CONST(value));
-							}
-							else if(prop->type_urid == ui->forge.Int)
-							{
-								int32_t val = ((const LV2_Atom_Int *)value)->body;
-								smart_spinner_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Float)
-							{
-								float val = ((const LV2_Atom_Float *)value)->body;
-								smart_spinner_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Long)
-							{
-								int64_t val = ((const LV2_Atom_Long *)value)->body;
-								smart_spinner_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Double)
-							{
-								double val = ((const LV2_Atom_Double *)value)->body;
-								smart_spinner_value_set(prop->std.widget, val);
-							}
-							//TODO do other types
-						}
-						else // !scale_points
-						{
-							if(  (prop->type_urid == ui->forge.String)
-								|| (prop->type_urid == ui->forge.URI) )
-							{
-								const char *val = LV2_ATOM_BODY_CONST(value);
-								if(prop->editable)
-									elm_entry_entry_set(prop->std.entry, val);
-								else
-									elm_object_text_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Path)
-							{
-								const char *val = LV2_ATOM_BODY_CONST(value);
-								elm_object_text_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Int)
-							{
-								int32_t val = ((const LV2_Atom_Int *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.URID)
-							{
-								uint32_t val = ((const LV2_Atom_URID *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Long)
-							{
-								int64_t val = ((const LV2_Atom_Long *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Float)
-							{
-								float val = ((const LV2_Atom_Float *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Double)
-							{
-								double val = ((const LV2_Atom_Double *)value)->body;
-								smart_slider_value_set(prop->std.widget, val);
-							}
-							else if(prop->type_urid == ui->forge.Bool)
-							{
-								int val = ((const LV2_Atom_Bool *)value)->body;
-								smart_toggle_value_set(prop->std.widget, val);
-							}
-						}
-					}
-				}
+				printf("put: %u\n", prop->key);
+				_mod_set_property(mod, prop->key, &prop->value);
 			}
 		}
 		// check for patch:Patch

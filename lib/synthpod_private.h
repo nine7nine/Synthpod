@@ -206,6 +206,7 @@ struct _reg_t {
 		reg_item_t patch;
 		reg_item_t add;
 		reg_item_t remove;
+		reg_item_t put;
 	} patch;
 
 	struct {
@@ -384,6 +385,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.patch, world, map, LV2_PATCH__Patch);
 	_register(&regs->patch.add, world, map, LV2_PATCH__add);
 	_register(&regs->patch.remove, world, map, LV2_PATCH__remove);
+	_register(&regs->patch.put, world, map, LV2_PATCH__Put);
 
 	_register(&regs->group.group, world, map, LV2_PORT_GROUPS__group);
 
@@ -535,6 +537,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.patch);
 	_unregister(&regs->patch.add);
 	_unregister(&regs->patch.remove);
+	_unregister(&regs->patch.put);
 
 	_unregister(&regs->group.group);
 

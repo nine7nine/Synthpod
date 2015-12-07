@@ -2837,6 +2837,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 						if(  (obj->atom.type != app->forge.Object)
 							|| ( (obj->body.otype != app->regs.patch.set.urid)
+								&& (obj->body.otype != app->regs.patch.put.urid)
 								&& (obj->body.otype != app->regs.patch.patch.urid) ) ) //FIXME handle more
 						{
 							continue; // skip this event
