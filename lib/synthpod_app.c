@@ -41,7 +41,7 @@
 
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
-typedef enum _bypass_state_t bypass_state_t;
+typedef enum _blocking_state_t blocking_state_t;
 typedef enum _ramp_state_t ramp_state_t;
 
 typedef struct _mod_t mod_t;
@@ -51,12 +51,25 @@ typedef struct _job_t job_t;
 typedef struct _source_t source_t;
 typedef struct _pool_t pool_t;
 
-enum _bypass_state_t {
-	BYPASS_STATE_PAUSED	= 0,
-	BYPASS_STATE_LOCKED,
-	BYPASS_STATE_RUNNING,
-	BYPASS_STATE_PAUSE_REQUESTED,
-	BYPASS_STATE_LOCK_REQUESTED
+enum _blocking_state_t {
+	BLOCKING_STATE_RUN = 0,
+	BLOCKING_STATE_DRAIN,
+	BLOCKING_STATE_BLOCK,
+	BLOCKING_STATE_WAIT,
+};
+
+static const bool advance_ui [] = {
+	[BLOCKING_STATE_RUN]		= true,
+	[BLOCKING_STATE_DRAIN]	= false,
+	[BLOCKING_STATE_BLOCK]	= true,
+	[BLOCKING_STATE_WAIT]		= false
+};
+
+static const bool advance_work [] = {
+	[BLOCKING_STATE_RUN]		= true,
+	[BLOCKING_STATE_DRAIN]	= true,
+	[BLOCKING_STATE_BLOCK]	= true,
+	[BLOCKING_STATE_WAIT]		= true
 };
 
 enum _ramp_state_t {
@@ -72,7 +85,8 @@ enum _job_type_request_t {
 	JOB_TYPE_REQUEST_PRESET_LOAD,
 	JOB_TYPE_REQUEST_PRESET_SAVE,
 	JOB_TYPE_REQUEST_BUNDLE_LOAD,
-	JOB_TYPE_REQUEST_BUNDLE_SAVE
+	JOB_TYPE_REQUEST_BUNDLE_SAVE,
+	JOB_TYPE_REQUEST_DRAIN
 };
 
 enum _job_type_reply_t {
@@ -81,7 +95,8 @@ enum _job_type_reply_t {
 	JOB_TYPE_REPLY_PRESET_LOAD,
 	JOB_TYPE_REPLY_PRESET_SAVE,
 	JOB_TYPE_REPLY_BUNDLE_LOAD,
-	JOB_TYPE_REPLY_BUNDLE_SAVE
+	JOB_TYPE_REPLY_BUNDLE_SAVE,
+	JOB_TYPE_REPLY_DRAIN
 };
 
 struct _job_t {
@@ -113,10 +128,8 @@ struct _mod_t {
 	int selected;
 
 	int delete_request;
+	bool bypassed;
 
-	_Atomic bypass_state_t bypass_state;
-	Eina_Semaphore bypass_sem;
-	
 	// worker
 	struct {
 		const LV2_Worker_Interface *iface;
@@ -217,9 +230,10 @@ struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
 
-	_Atomic bypass_state_t bypass_state;
-	Eina_Semaphore bypass_sem;
-	_Atomic int dirty;
+	_Atomic bool dirty;
+
+	blocking_state_t block_state;
+	bool load_bundle;
 
 	struct {
 		const char *home;
@@ -605,7 +619,7 @@ _mod_slice_pool(mod_t *mod, port_type_t type)
 }
 
 static inline int //TODO move
-_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool init);
+_preset_load(sp_app_t *app, mod_t *mod, const char *uri);
 
 // non-rt worker-thread
 static inline mod_t *
@@ -624,9 +638,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 		return NULL;
-
-	atomic_init(&mod->bypass_state, BYPASS_STATE_RUNNING);
-	eina_semaphore_new(&mod->bypass_sem, 0);
 
 	// populate worker schedule
 	mod->worker.schedule.handle = mod;
@@ -979,7 +990,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->selected = 0;
 
 	// load default state
-	if(load_default_state && _preset_load(app, mod, uri, true))
+	if(load_default_state && _preset_load(app, mod, uri))
 		fprintf(stderr, "default state loading failed\n");
 
 	lilv_instance_activate(mod->inst);
@@ -1015,8 +1026,6 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 
 	if(mod->uri_str)
 		free(mod->uri_str);
-
-	eina_semaphore_free(&mod->bypass_sem);
 
 	free(mod);
 
@@ -1181,9 +1190,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	if(!app)
 		return NULL;
 
-	atomic_init(&app->bypass_state, BYPASS_STATE_RUNNING);
-	eina_semaphore_new(&app->bypass_sem, 0);
-	atomic_init(&app->dirty, 0);
+	atomic_init(&app->dirty, false);
 
 #if !defined(_WIN32)
 	app->dir.home = getenv("HOME");
@@ -1306,14 +1313,18 @@ _eject_module(sp_app_t *app, mod_t *mod)
 }
 
 // rt
-void
+bool
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 {
+	if(!advance_ui[app->block_state])
+		return false; // we are draining or waiting
+
 	atom = ASSUME_ALIGNED(atom);
 	const transmit_t *transmit = (const transmit_t *)atom;
 
 	// check for correct atom object type
-	assert( (transmit->obj.atom.type == app->forge.Object) );
+	if(transmit->obj.atom.type != app->forge.Object)
+		return advance_ui[app->block_state];
 
 	LV2_URID protocol = transmit->obj.body.otype;
 
@@ -1323,7 +1334,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
 		if(!port) // port not found
-			return;
+			return advance_ui[app->block_state];
 
 		// set port value
 		void *buf = PORT_SINK_ALIGNED(port);
@@ -1336,7 +1347,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
 		if(!port) // port not found
-			return;
+			return advance_ui[app->block_state];
 
 		// set port value
 		void *buf = PORT_SINK_ALIGNED(port);
@@ -1348,7 +1359,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
 		if(!port) // port not found
-			return;
+			return advance_ui[app->block_state];
 
 		// messages from UI are always appended to default port buffer, no matter
 		// how many sources the port may have
@@ -1423,7 +1434,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		// search mod according to its UUID
 		mod_t *mod = _sp_app_mod_get(app, module_del->uid.body);
 		if(!mod) // mod not found
-			return;
+			return advance_ui[app->block_state];
 
 		int needs_ramping = 0;
 
@@ -1457,7 +1468,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		mod_t *mod = _sp_app_mod_get(app, move->uid.body);
 		mod_t *prev = _sp_app_mod_get(app, move->prev.body);
 		if(!mod || !prev)
-			return;
+			return advance_ui[app->block_state];
 
 		uint32_t mod_idx;
 		for(mod_idx=0; mod_idx<app->num_mods; mod_idx++)
@@ -1505,20 +1516,47 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
 		if(!mod)
-			return;
+			return advance_ui[app->block_state];
 
-		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + pset->uri.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		assert( (app->block_state == BLOCKING_STATE_RUN)
+			|| (app->block_state == BLOCKING_STATE_BLOCK) );
+		if(app->block_state == BLOCKING_STATE_RUN)
 		{
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
-			job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
-			job->mod = mod;
-			memcpy(job->uri, pset->uri_str, pset->uri.atom.size);
-			_sp_app_to_worker_advance(app, size);
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t);
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_DRAIN;
+				job->status = 0;
+				_sp_app_to_worker_advance(app, size);
+			}
+		}
+		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		{
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t) + pset->uri.atom.size;
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+				mod->bypassed = true;
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
+				job->mod = mod;
+				memcpy(job->uri, pset->uri_str, pset->uri.atom.size);
+				_sp_app_to_worker_advance(app, size);
+
+				return true; // advance
+			}
 		}
 	}
 	else if(protocol == app->regs.synthpod.module_preset_save.urid)
@@ -1527,20 +1565,46 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
 		if(!mod)
-			return;
+			return advance_ui[app->block_state];
 
-		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		assert( (app->block_state == BLOCKING_STATE_RUN)
+			|| (app->block_state == BLOCKING_STATE_BLOCK) );
+		if(app->block_state == BLOCKING_STATE_RUN)
 		{
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
-			job->request = JOB_TYPE_REQUEST_PRESET_SAVE;
-			job->mod = mod;
-			memcpy(job->uri, pset->label_str, pset->label.atom.size);
-			_sp_app_to_worker_advance(app, size);
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t);
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_DRAIN;
+				job->status = 0;
+				_sp_app_to_worker_advance(app, size);
+			}
+		}
+		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		{
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_PRESET_SAVE;
+				job->mod = mod;
+				memcpy(job->uri, pset->label_str, pset->label.atom.size);
+				_sp_app_to_worker_advance(app, size);
+
+				return true; // advance
+			}
 		}
 	}
 	else if(protocol == app->regs.synthpod.module_selected.urid)
@@ -1549,7 +1613,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		mod_t *mod = _sp_app_mod_get(app, select->uid.body);
 		if(!mod)
-			return;
+			return advance_ui[app->block_state];
 
 		switch(select->state.body)
 		{
@@ -1581,7 +1645,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		port_t *src_port = _sp_app_port_get(app, conn->src_uid.body, conn->src_port.body);
 		port_t *snk_port = _sp_app_port_get(app, conn->snk_uid.body, conn->snk_port.body);
 		if(!src_port || !snk_port)
-			return;
+			return advance_ui[app->block_state];
 
 		int32_t state = 0;
 		switch(conn->state.body)
@@ -1650,7 +1714,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		port_t *port = _sp_app_port_get(app, subscribe->uid.body, subscribe->port.body);
 		if(!port)
-			return;
+			return advance_ui[app->block_state];
 
 		if(subscribe->state.body) // subscribe
 		{
@@ -1669,7 +1733,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		port_t *port = _sp_app_port_get(app, refresh->uid.body, refresh->port.body);
 		if(!port)
-			return;
+			return advance_ui[app->block_state];
 		
 		float *buf_ptr = PORT_BUF_ALIGNED(port);
 		port->last = *buf_ptr - 0.1; // will force notification
@@ -1680,7 +1744,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		port_t *port = _sp_app_port_get(app, select->uid.body, select->port.body);
 		if(!port)
-			return;
+			return advance_ui[app->block_state];
 
 		switch(select->state.body)
 		{
@@ -1711,7 +1775,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 
 		port_t *port = _sp_app_port_get(app, monitor->uid.body, monitor->port.body);
 		if(!port)
-			return;
+			return advance_ui[app->block_state];
 
 		switch(monitor->state.body)
 		{
@@ -1740,48 +1804,106 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	{
 		const transmit_bundle_load_t *load = (const transmit_bundle_load_t *)atom;
 		if(!load->path.atom.size)
-			return;
+			return advance_ui[app->block_state];
 
-		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + load->path.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		assert( (app->block_state == BLOCKING_STATE_RUN)
+			|| (app->block_state == BLOCKING_STATE_BLOCK) );
+		if(app->block_state == BLOCKING_STATE_RUN)
 		{
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
-			job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
-			job->status = load->status.body;
-			memcpy(job->uri, load->path_str, load->path.atom.size);
-			_sp_app_to_worker_advance(app, size);
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t);
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_DRAIN;
+				job->status = 0;
+				_sp_app_to_worker_advance(app, size);
+			}
+		}
+		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		{
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t) + load->path.atom.size;
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+				app->load_bundle = true; // for sp_app_bypassed
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
+				job->status = load->status.body;
+				memcpy(job->uri, load->path_str, load->path.atom.size);
+				_sp_app_to_worker_advance(app, size);
+
+				return true; // advance
+			}
 		}
 	}
 	else if(protocol == app->regs.synthpod.bundle_save.urid)
 	{
 		const transmit_bundle_save_t *save = (const transmit_bundle_save_t *)atom;
 		if(!save->path.atom.size)
-			return;
-		
-		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + save->path.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+			return advance_ui[app->block_state];
+
+		assert( (app->block_state == BLOCKING_STATE_RUN)
+			|| (app->block_state == BLOCKING_STATE_BLOCK) );
+		if(app->block_state == BLOCKING_STATE_RUN)
 		{
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
-			job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
-			job->status = save->status.body;
-			memcpy(job->uri, save->path_str, save->path.atom.size);
-			_sp_app_to_worker_advance(app, size);
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t);
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_DRAIN;
+				job->status = 0;
+				_sp_app_to_worker_advance(app, size);
+			}
+		}
+		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		{
+			// send request to worker thread
+			size_t size = sizeof(work_t) + sizeof(job_t) + save->path.atom.size;
+			work_t *work = _sp_app_to_worker_request(app, size);
+			if(work)
+			{
+				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+
+				work->target = app;
+				work->size = size - sizeof(work_t);
+				job_t *job = (job_t *)work->payload;
+				job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
+				job->status = save->status.body;
+				memcpy(job->uri, save->path_str, save->path.atom.size);
+				_sp_app_to_worker_advance(app, size);
+
+				return true; // advance
+			}
 		}
 	}
+
+	return advance_ui[app->block_state];
 }
 
 // rt
-void
+bool
 sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 {
+	if(!advance_work[app->block_state])
+		return false; // we are blocking
+
 	const work_t *work = ASSUME_ALIGNED(data);
 
 	if(work->target == app) // work is for self
@@ -1821,24 +1943,44 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			}
 			case JOB_TYPE_REPLY_MODULE_DEL:
 			{
-				//FIXME
+				//FIXME signal to UI
+
 				break;
 			}
 			case JOB_TYPE_REPLY_PRESET_LOAD:
 			{
-				//FIXME
+				//printf("app: preset loaded\n");
+				mod_t *mod = job->mod;
+
+				assert(app->block_state == BLOCKING_STATE_WAIT);
+				app->block_state = BLOCKING_STATE_RUN; // release block
+				mod->bypassed = false;
+
+				//FIXME signal to UI
+
 				break;
 			}
 			case JOB_TYPE_REPLY_PRESET_SAVE:
 			{
-				//FIXME
+				//printf("app: preset saved\n");
+
+				assert(app->block_state == BLOCKING_STATE_WAIT);
+				app->block_state = BLOCKING_STATE_RUN; // release block
+
+				//FIXME signal to UI
+
 				break;
 			}
 			case JOB_TYPE_REPLY_BUNDLE_LOAD:
 			{
 				//printf("app: bundle loaded\n");
 
-				// signal to app
+				assert(app->block_state == BLOCKING_STATE_WAIT);
+				app->block_state = BLOCKING_STATE_RUN; // releae block
+				assert(app->load_bundle == true);
+				app->load_bundle = false; // for sp_app_bypassed
+
+				// signal to UI
 				size_t size = sizeof(transmit_bundle_load_t);
 				transmit_bundle_load_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
@@ -1854,7 +1996,11 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			{
 				//printf("app: bundle saved\n");
 
-				// signal to app
+				assert(app->block_state == BLOCKING_STATE_WAIT);
+				app->block_state = BLOCKING_STATE_RUN; // release block
+				assert(app->load_bundle == false);
+
+				// signal to UI
 				size_t size = sizeof(transmit_bundle_save_t);
 				transmit_bundle_save_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
@@ -1866,13 +2012,20 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 
 				break;
 			}
+			case JOB_TYPE_REPLY_DRAIN:
+			{
+				assert(app->block_state == BLOCKING_STATE_DRAIN);
+				app->block_state = BLOCKING_STATE_BLOCK;
+
+				break;
+			}
 		}
 	}
 	else // work is for module
 	{
 		mod_t *mod = work->target;
 		if(!mod)
-			return;
+			return advance_work[app->block_state];
 
 		// zero worker takes precedence over standard worker
 		if(mod->zero.iface && mod->zero.iface->response)
@@ -1886,6 +2039,8 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			//TODO check return status
 		}
 	}
+
+	return advance_work[app->block_state];
 }
 
 // non-rt worker-thread
@@ -2013,7 +2168,7 @@ _state_features(sp_app_t *app, void *data)
 
 // non-rt
 static inline int
-_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool init)
+_preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 {
 	LilvNode *preset = lilv_new_uri(app->world, uri);
 
@@ -2036,21 +2191,8 @@ _preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool init)
 	if(!state)
 		return -1;
 
-	if(!init)
-	{
-		//enable bypass
-		atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_PAUSE_REQUESTED, memory_order_relaxed);
-		eina_semaphore_lock(&mod->bypass_sem);
-	}
-
 	lilv_state_restore(state, mod->inst, _state_set_value, mod,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
-
-	if(!init)
-	{
-		// disable bypass
-		atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
-	}
 
 	lilv_state_free(state);
 
@@ -2100,17 +2242,10 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	
 	//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
 
-	// enable bypass
-	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_LOCK_REQUESTED, memory_order_relaxed);
-	eina_semaphore_lock(&mod->bypass_sem);
-	
 	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
 		app->driver->map, NULL, NULL, NULL, dir,
 		_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
 		_state_features(app, dir));
-
-	// disable bypass
-	atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	if(state)
 	{
@@ -2224,17 +2359,10 @@ _bundle_load(sp_app_t *app, const char *bundle_path)
 	if(!app->bundle_path)
 		return -1;
 
-	// pause rt-thread
-	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_PAUSE_REQUESTED, memory_order_relaxed);
-	eina_semaphore_lock(&app->bypass_sem);
-
 	// restore state
 	sp_app_restore(app, _state_retrieve, app,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
 		_state_features(app, app->bundle_path));
-
-	// resume rt-thread
-	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	return 0; // success
 }
@@ -2251,17 +2379,10 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 	if(!app->bundle_path)
 		return -1;
 
-	// pause rt-thread
-	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_LOCK_REQUESTED, memory_order_relaxed);
-	eina_semaphore_lock(&app->bypass_sem);
-
 	// store state
 	sp_app_save(app, _state_store, app,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
 		_state_features(app, app->bundle_path));
-
-	// resume rt-thread
-	atomic_store_explicit(&app->bypass_state, BYPASS_STATE_RUNNING, memory_order_relaxed);
 
 	return 0; // success
 }
@@ -2284,7 +2405,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				if(!mod)
 					break; //TODO report
 
-				// signal to ui
+				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
 				if(work)
@@ -2303,7 +2424,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			{
 				int status = _sp_app_mod_del(app, job->mod);
 
-				// signal to ui
+				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
 				if(work)
@@ -2320,9 +2441,9 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			}
 			case JOB_TYPE_REQUEST_PRESET_LOAD:
 			{
-				int status = _preset_load(app, job->mod, job->uri, false);
+				int status = _preset_load(app, job->mod, job->uri);
 
-				// signal to ui
+				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
 				if(work)
@@ -2331,7 +2452,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 						work->size = sizeof(job_t);
 					job_t *job1 = (job_t *)work->payload;
 						job1->reply = JOB_TYPE_REPLY_PRESET_LOAD;
-						job1->status = status;
+						job1->mod = job->mod;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
@@ -2341,7 +2462,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			{
 				int status = _preset_save(app, job->mod, job->uri);
 
-				// signal to ui
+				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
 				if(work)
@@ -2350,7 +2471,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 						work->size = sizeof(job_t);
 					job_t *job1 = (job_t *)work->payload;
 						job1->reply = JOB_TYPE_REPLY_PRESET_SAVE;
-						job1->status = status;
+						job1->mod = job->mod;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
@@ -2360,7 +2481,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			{
 				int status = _bundle_load(app, job->uri);
 
-				// signal to ui
+				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
 				if(work)
@@ -2379,7 +2500,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			{
 				int status = _bundle_save(app, job->uri);
 
-				// signal to ui
+				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
 				work_t *work = _sp_worker_to_app_request(app, work_size);
 				if(work)
@@ -2389,6 +2510,23 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 					job_t *job1 = (job_t *)work->payload;
 						job1->reply = JOB_TYPE_REPLY_BUNDLE_SAVE;
 						job1->status = status;
+					_sp_worker_to_app_advance(app, work_size);
+				}
+
+				break;
+			}
+			case JOB_TYPE_REQUEST_DRAIN:
+			{
+				// signal to app
+				size_t work_size = sizeof(work_t) + sizeof(job_t);
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+				if(work)
+				{
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job1 = (job_t *)work->payload;
+						job1->reply = JOB_TYPE_REPLY_DRAIN;
+						job1->status = 0;
 					_sp_worker_to_app_advance(app, work_size);
 				}
 
@@ -2515,27 +2653,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	{
 		mod_t *mod = app->mods[m];
 
-		switch(atomic_load_explicit(&mod->bypass_state, memory_order_relaxed))
-		{
-			case BYPASS_STATE_RUNNING:
-				// do nothing
-				break;
-
-			case BYPASS_STATE_PAUSE_REQUESTED:
-				atomic_store_explicit(&mod->bypass_state,  BYPASS_STATE_PAUSED, memory_order_relaxed);
-				eina_semaphore_release(&mod->bypass_sem, 1);
-				// fall-through
-			case BYPASS_STATE_PAUSED: // aka state loading
-				continue; // skip this module FIXME clear audio output buffers or xfade
-
-			case BYPASS_STATE_LOCK_REQUESTED:
-				atomic_store_explicit(&mod->bypass_state, BYPASS_STATE_LOCKED, memory_order_relaxed);
-				eina_semaphore_release(&mod->bypass_sem, 1);
-				// fall-through
-			case BYPASS_STATE_LOCKED: // aka state saving
-				// do nothing, plugins MUST be able to save state while running
-				break;
-		}
+		if(mod->bypassed)
+			continue; // skip this plugin, it is loading a preset
 	
 		// multiplex multiple sources to single sink where needed
 		for(unsigned p=0; p<mod->num_ports; p++)
@@ -2709,21 +2828,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 		// run plugin
 		lilv_instance_run(mod->inst, nsamples);
-		
-		// handle app ui post
-		if(atomic_load_explicit(&app->dirty, memory_order_relaxed))
-		{
-			// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
-			atomic_store_explicit(&app->dirty, 0, memory_order_relaxed); // reset
-
-			size_t size = sizeof(transmit_module_list_t);
-			transmit_module_list_t *trans = _sp_app_to_ui_request(app, size);
-			if(trans)
-			{
-				_sp_transmit_module_list_fill(&app->regs, &app->forge, trans, size);
-				_sp_app_to_ui_advance(app, size);
-			}
-		}
 
 		// handle mod ui post
 		for(unsigned i=0; i<mod->num_ports; i++)
@@ -2859,6 +2963,21 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			}
 		}
 	}
+		
+	// handle app ui post
+	bool expected = true;
+	bool desired = false;
+	if(atomic_compare_exchange_weak_explicit(&app->dirty, &expected, desired,
+		memory_order_relaxed, memory_order_relaxed))
+	{
+		size_t size = sizeof(transmit_module_list_t);
+		transmit_module_list_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
+		{
+			_sp_transmit_module_list_fill(&app->regs, &app->forge, trans, size);
+			_sp_app_to_ui_advance(app, size);
+		}
+	}
 }
 
 // non-rt
@@ -2888,8 +3007,6 @@ sp_app_free(sp_app_t *app)
 		free(app->bundle_path);
 	if(app->bundle_filename)
 		free(app->bundle_filename);
-
-	eina_semaphore_free(&app->bypass_sem);
 
 	free(app);
 
@@ -3210,8 +3327,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 	if(!ecore_file_exists(absolute)) // new project?
 	{
-		// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
-		atomic_store_explicit(&app->dirty, 1, memory_order_relaxed);
+		atomic_store_explicit(&app->dirty, true, memory_order_relaxed);
 
 		return LV2_STATE_SUCCESS;
 	}
@@ -3401,28 +3517,11 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	return LV2_STATE_SUCCESS;
 }
 
-int
-sp_app_paused(sp_app_t *app)
+// rt
+bool
+sp_app_bypassed(sp_app_t *app)
 {
-	switch(atomic_load_explicit(&app->bypass_state, memory_order_relaxed))
-	{
-		case BYPASS_STATE_RUNNING:
-			return 0;
-
-		case BYPASS_STATE_PAUSE_REQUESTED:
-			atomic_store_explicit(&app->bypass_state, BYPASS_STATE_PAUSED, memory_order_relaxed);
-			eina_semaphore_release(&app->bypass_sem, 1);
-			// fall-through
-		case BYPASS_STATE_PAUSED: // aka loading state
-			return 1;
-
-		case BYPASS_STATE_LOCK_REQUESTED:
-			atomic_store_explicit(&app->bypass_state, BYPASS_STATE_LOCKED, memory_order_relaxed);
-			eina_semaphore_release(&app->bypass_sem, 1);
-			// fall-through
-		case BYPASS_STATE_LOCKED: // aka saving state
-			return 2;
-	}
+	return app->load_bundle && (app->block_state == BLOCKING_STATE_WAIT);
 }
 
 uint32_t

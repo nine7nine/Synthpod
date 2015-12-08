@@ -232,7 +232,8 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 	plughandle_t *handle = instance;
 
 	//printf("_work_response: %u\n", size);
-	sp_app_from_worker(handle->app, size, body);
+	bool advance = sp_app_from_worker(handle->app, size, body);
+	(void)advance; // only of importance in standalone clients
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -284,7 +285,8 @@ _zero_response(LV2_Handle instance, uint32_t size,
 	plughandle_t *handle = instance;
 
 	//printf("_zero_response: %u\n", size);
-	sp_app_from_worker(handle->app, size, body);
+	bool advance = sp_app_from_worker(handle->app, size, body);
+	(void)advance; // only of importance in standalone clients
 
 	return ZERO_WORKER_SUCCESS;
 }
@@ -708,7 +710,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		}
 	}
 	
-	if(sp_app_paused(app))
+	if(sp_app_bypassed(app))
 	{
 		memset(handle->port.audio_out[0], 0x0, nsamples*sizeof(float));
 		memset(handle->port.audio_out[1], 0x0, nsamples*sizeof(float));
@@ -739,11 +741,13 @@ run(LV2_Handle instance, uint32_t nsamples)
 					lv2_atom_forge_raw(&handle->forge.com_in, obj, size);
 					lv2_atom_forge_pad(&handle->forge.com_in, size);
 
-					sp_app_from_ui(app, atom);
+					bool advance = sp_app_from_ui(app, atom);
+					(void)advance; // only of importance in standalone clients
 				}
 				else if (sp_app_transfer_event(handle->app, obj->body.id))
 				{
-					sp_app_from_ui(app, atom);
+					bool advance = sp_app_from_ui(app, atom);
+					(void)advance; // only of importance in standalone clients
 				}
 			}
 		}
@@ -824,8 +828,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 		{
 			const LV2_Atom *atom = &ev->body;
 
-			sp_app_from_ui(handle->app, atom);
 			//FIXME is this the right place?
+			bool advance = sp_app_from_ui(handle->app, atom);
+			(void)advance; // only of importance in standalone clients
 		}
 	}
 }

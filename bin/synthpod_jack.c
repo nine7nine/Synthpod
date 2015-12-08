@@ -419,9 +419,10 @@ _process(jack_nframes_t nsamples, void *data)
 	const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
 	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
-	int paused = sp_app_paused(app);
-	if(paused == 1) // aka loading state
+	if(sp_app_bypassed(app)) // aka loading state
 	{
+		//fprintf(stderr, "app is bypassed\n");
+
 		// clear output buffers
 		for(const sp_app_system_sink_t *sink=sinks;
 			sink->type != SYSTEM_PORT_NONE;
@@ -450,6 +451,9 @@ _process(jack_nframes_t nsamples, void *data)
 				}
 			}
 		}
+
+		bin_process_pre(bin, nsamples);
+		bin_process_post(bin);
 
 		return 0;
 	}
@@ -573,7 +577,7 @@ _process(jack_nframes_t nsamples, void *data)
 	handle->trans.ticks_per_beat = pos.ticks_per_beat;
 	handle->trans.beats_per_minute = pos.beats_per_minute;
 
-	bin_process_pre(bin, nsamples, paused);
+	bin_process_pre(bin, nsamples);
 
 	// fill output buffers
 	for(const sp_app_system_sink_t *sink=sinks;
@@ -656,8 +660,8 @@ _process(jack_nframes_t nsamples, void *data)
 				{
 					const LV2_Atom *atom = (const LV2_Atom *)&ev->body;
 
-					sp_app_from_ui(bin->app, atom);
 					//FIXME is this the right place?
+					bool advance = sp_app_from_ui(bin->app, atom); //FIXME solve this differently
 				}
 				break;
 			}

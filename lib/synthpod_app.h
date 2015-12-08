@@ -124,10 +124,10 @@ sp_app_get_system_sources(sp_app_t *app);
 SYNTHPOD_SYMBOL_EXTERN const sp_app_system_sink_t *
 sp_app_get_system_sinks(sp_app_t *app);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SYNTHPOD_SYMBOL_EXTERN bool
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SYNTHPOD_SYMBOL_EXTERN bool
 sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data);
 
 SYNTHPOD_SYMBOL_EXTERN void
@@ -153,8 +153,8 @@ SYNTHPOD_SYMBOL_EXTERN LV2_State_Status
 sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
-SYNTHPOD_SYMBOL_EXTERN int
-sp_app_paused(sp_app_t *app);
+SYNTHPOD_SYMBOL_EXTERN bool
+sp_app_bypassed(sp_app_t *app);
 
 SYNTHPOD_SYMBOL_EXTERN uint32_t
 sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options);

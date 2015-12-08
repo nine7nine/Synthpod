@@ -481,10 +481,9 @@ bin_deinit(bin_t *bin)
 }
 
 static inline void
-bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
+bin_process_pre(bin_t *bin, uint32_t nsamples)
 {
 	// read events from worker
-	if(!paused) // aka not saving state
 	{
 		size_t size;
 		const void *body;
@@ -492,7 +491,12 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
 		while((body = varchunk_read_request(bin->app_from_worker, &size))
 			&& (n++ < MAX_MSGS) )
 		{
-			sp_app_from_worker(bin->app, size, body);
+			bool advance = sp_app_from_worker(bin->app, size, body);
+			if(!advance)
+			{
+				//fprintf(stderr, "worker is blocked\n");
+				break;
+			}
 			varchunk_read_advance(bin->app_from_worker);
 		}
 	}
@@ -501,7 +505,6 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
 	sp_app_run_pre(bin->app, nsamples);
 
 	// read events from UI
-	if(!paused) // aka not saving state
 	{
 		size_t size;
 		const LV2_Atom *atom;
@@ -509,7 +512,12 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, int paused)
 		while((atom = varchunk_read_request(bin->app_from_ui, &size))
 			&& (n++ < MAX_MSGS) )
 		{
-			sp_app_from_ui(bin->app, atom);
+			bool advance = sp_app_from_ui(bin->app, atom);
+			if(!advance)
+			{
+				//fprintf(stderr, "ui is blocked\n");
+				break;
+			}
 			varchunk_read_advance(bin->app_from_ui);
 		}
 	}

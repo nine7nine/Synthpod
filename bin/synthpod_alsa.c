@@ -192,10 +192,14 @@ _rt_thread(void *data, Eina_Thread thread)
 			const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
 			const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 	
-			int paused = sp_app_paused(app);
-			if(paused == 1) // aka loading state
+			if(sp_app_bypassed(app))
 			{
+				//fprintf(stderr, "app is bypassed\n");
+
 				pcmi_pcm_idle(pcmi, nsamples);
+
+				bin_process_pre(bin, nsamples);
+				bin_process_post(bin);
 
 				continue;
 			}
@@ -343,7 +347,7 @@ _rt_thread(void *data, Eina_Thread thread)
 			if(ncapt)
 				pcmi_capt_done(pcmi, nsamples);
 	
-			bin_process_pre(bin, nsamples, paused);
+			bin_process_pre(bin, nsamples);
 
 			// fill output buffers
 			if(nplay)
@@ -414,8 +418,8 @@ _rt_thread(void *data, Eina_Thread thread)
 						{
 							const LV2_Atom *atom = &ev->body;
 							
-							sp_app_from_ui(bin->app, atom);
 							//FIXME is this the right place?
+							bool advance = sp_app_from_ui(bin->app, atom); //FIXME solve this differently
 						}
 						break;
 					}
