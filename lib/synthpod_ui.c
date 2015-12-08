@@ -3346,12 +3346,9 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 	_patches_update(ui);
 }
 
-static void
-_mod_close_click(void *data, Evas_Object *lay, const char *emission, const char *source)
+static inline void
+_mod_del_widgets(mod_t *mod)
 {
-	mod_t *mod = data;
-	sp_ui_t *ui = mod->ui;
-
 	// close show ui
 	if(mod->show.ui && mod->show.descriptor)
 		_show_ui_hide(mod);
@@ -3361,6 +3358,14 @@ _mod_close_click(void *data, Evas_Object *lay, const char *emission, const char 
 	// close x11 ui
 	else if(mod->x11.ui && mod->x11.descriptor)
 		_x11_ui_hide(mod);
+	else if(mod->eo.embedded.itm)
+		elm_object_item_del(mod->eo.embedded.itm);
+}
+
+static inline void
+_mod_del_propagate(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
 
 	size_t size = sizeof(transmit_module_del_t);
 	transmit_module_del_t *trans = _sp_ui_to_app_request(ui, size);
@@ -3369,6 +3374,16 @@ _mod_close_click(void *data, Evas_Object *lay, const char *emission, const char 
 		_sp_transmit_module_del_fill(&ui->regs, &ui->forge, trans, size, mod->uid);
 		_sp_ui_to_app_advance(ui, size);
 	}
+}
+
+static void
+_mod_close_click(void *data, Evas_Object *lay, const char *emission, const char *source)
+{
+	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
+
+	_mod_del_widgets(mod);
+	_mod_del_propagate(mod);
 }
 
 static inline Evas_Object *
@@ -4927,7 +4942,7 @@ _plugentry_changed(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_modlist_clear(sp_ui_t *ui, int clear_system_ports)
+_modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate)
 {
 	if(!ui || !ui->modlist)
 		return;
@@ -4946,7 +4961,9 @@ _modlist_clear(sp_ui_t *ui, int clear_system_ports)
 		if(!clear_system_ports && (mod->system.source || mod->system.sink) )
 			continue; // skip
 
-		_mod_close_click(mod, ui->modlist, NULL, NULL);
+		_mod_del_widgets(mod);
+		if(propagate)
+			_mod_del_propagate(mod);
 	}
 }
 
@@ -4969,7 +4986,7 @@ _menu_open(void *data, Evas_Object *obj, void *event_info)
 	if(ui && bundle_path)
 	{
 		int update_path = ui->driver->features & SP_UI_FEATURE_OPEN ? 1 : 0;
-		_modlist_clear(ui, 1); // clear system ports
+		_modlist_clear(ui, true, false); // clear system ports
 		sp_ui_bundle_load(ui, bundle_path, update_path);
 	}
 }
@@ -6200,7 +6217,7 @@ sp_ui_bundle_new(sp_ui_t *ui)
 	if(!ui)
 		return;
 
-	_modlist_clear(ui, 0); // do not clear system ports
+	_modlist_clear(ui, false, true); // do not clear system ports
 }
 
 void
