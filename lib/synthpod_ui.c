@@ -221,6 +221,7 @@ struct _port_t {
 
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
+	port_atom_type_t atom_type; // MIDI, OSC, Time
 	port_buffer_type_t buffer_type; // none, sequence
 	int patchable; // support patch:Message
 
@@ -311,6 +312,11 @@ struct _sp_ui_t {
 	Elm_Object_Item *matrix_atom;
 	Elm_Object_Item *matrix_control;
 	Elm_Object_Item *matrix_cv;
+	port_atom_type_t matrix_atom_type;
+	Elm_Object_Item *matrix_atom_midi;
+	Elm_Object_Item *matrix_atom_osc;
+	Elm_Object_Item *matrix_atom_time;
+	Elm_Object_Item *matrix_atom_patch;
 
 	Evas_Object *modlist;
 
@@ -2155,6 +2161,16 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 				// does this port support patch:Message?
 				tar->patchable = lilv_port_supports_event(plug, port, ui->regs.patch.message.node);
+
+				tar->atom_type = 0;
+				if(lilv_port_supports_event(plug, port, ui->regs.port.midi.node))
+					tar->atom_type |= PORT_ATOM_TYPE_MIDI;
+				if(lilv_port_supports_event(plug, port, ui->regs.port.osc_event.node))
+					tar->atom_type |= PORT_ATOM_TYPE_OSC;
+				if(lilv_port_supports_event(plug, port, ui->regs.port.time_position.node))
+					tar->atom_type |= PORT_ATOM_TYPE_TIME;
+				if(lilv_port_supports_event(plug, port, ui->regs.patch.message.node))
+					tar->atom_type |= PORT_ATOM_TYPE_PATCH;
 			}
 
 			// get port unit
@@ -2819,6 +2835,11 @@ _patches_update(sp_ui_t *ui)
 			if(!port->selected)
 				continue; // ignore unselected ports
 
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (ui->matrix_atom_type != PORT_ATOM_TYPE_ALL)
+				&& !(port->atom_type & ui->matrix_atom_type))
+				continue;
+
 			count[port->direction][port->type] += 1;
 		}
 	}
@@ -2854,6 +2875,11 @@ _patches_update(sp_ui_t *ui)
 				continue; // ignore unselected ports
 			if(port->type != ui->matrix_type)
 				continue; // ignore unselected port types
+
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (ui->matrix_atom_type != PORT_ATOM_TYPE_ALL)
+				&& !(port->atom_type & ui->matrix_atom_type))
+				continue; // ignore unwanted atom types
 
 			LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 			const char *name_str = NULL;
@@ -5112,15 +5138,48 @@ _patchbar_selected(void *data, Evas_Object *obj, void *event_info)
 	Elm_Object_Item *itm = event_info;
 
 	if(itm == ui->matrix_audio)
+	{
 		ui->matrix_type = PORT_TYPE_AUDIO;
-	else if(itm == ui->matrix_atom)
-		ui->matrix_type = PORT_TYPE_ATOM;
+	}
 	else if(itm == ui->matrix_control)
+	{
 		ui->matrix_type = PORT_TYPE_CONTROL;
+	}
 	else if(itm == ui->matrix_cv)
+	{
 		ui->matrix_type = PORT_TYPE_CV;
+	}
+	else if(itm == ui->matrix_atom)
+	{
+		ui->matrix_type = PORT_TYPE_ATOM;
+		ui->matrix_atom_type = PORT_ATOM_TYPE_ALL;
+	}
+
+	else if(itm == ui->matrix_atom_midi)
+	{
+		ui->matrix_type = PORT_TYPE_ATOM;
+		ui->matrix_atom_type = PORT_ATOM_TYPE_MIDI;
+	}
+	else if(itm == ui->matrix_atom_osc)
+	{
+		ui->matrix_type = PORT_TYPE_ATOM;
+		ui->matrix_atom_type = PORT_ATOM_TYPE_OSC;
+	}
+	else if(itm == ui->matrix_atom_time)
+	{
+		ui->matrix_type = PORT_TYPE_ATOM;
+		ui->matrix_atom_type = PORT_ATOM_TYPE_TIME;
+	}
+	else if(itm == ui->matrix_atom_patch)
+	{
+		ui->matrix_type = PORT_TYPE_ATOM;
+		ui->matrix_atom_type = PORT_ATOM_TYPE_PATCH;
+	}
+
 	else
+	{
 		return;
+	}
 	
 	_patches_update(ui);
 }
@@ -5677,6 +5736,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 								elm_toolbar_homogeneous_set(ui->patchbar, EINA_TRUE);
 								elm_toolbar_align_set(ui->patchbar, 0.f);
 								elm_toolbar_select_mode_set(ui->patchbar, ELM_OBJECT_SELECT_MODE_ALWAYS);
+								elm_toolbar_shrink_mode_set(ui->patchbar, ELM_TOOLBAR_SHRINK_SCROLL);
 								evas_object_smart_callback_add(ui->patchbar, "selected", _patchbar_selected, ui);
 								evas_object_size_hint_weight_set(ui->patchbar, EVAS_HINT_EXPAND, 0.f);
 								evas_object_size_hint_align_set(ui->patchbar, EVAS_HINT_FILL, 0.f);
@@ -5684,14 +5744,27 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 								elm_box_pack_end(ui->patchbox, ui->patchbar);
 
 								ui->matrix_audio = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/audio.png", "AUDIO", NULL, NULL);
+									SYNTHPOD_DATA_DIR"/audio.png", "Audio", NULL, NULL);
 								elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
-								ui->matrix_atom = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/atom.png", "ATOM", NULL, NULL);
 								ui->matrix_control = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/control.png", "CONTROL", NULL, NULL);
+									SYNTHPOD_DATA_DIR"/control.png", "Control", NULL, NULL);
 								ui->matrix_cv = elm_toolbar_item_append(ui->patchbar,
 									SYNTHPOD_DATA_DIR"/cv.png", "CV", NULL, NULL);
+								ui->matrix_atom = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/atom.png", "Atom", NULL, NULL);
+
+								Elm_Object_Item *sep = elm_toolbar_item_append(ui->patchbar,
+									NULL, NULL, NULL, NULL);
+								elm_toolbar_item_separator_set(sep, EINA_TRUE);
+
+								ui->matrix_atom_midi = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/midi.png", "MIDI", NULL, NULL);
+								ui->matrix_atom_osc = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/osc.png", "OSC", NULL, NULL);
+								ui->matrix_atom_time = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/time.png", "Time", NULL, NULL);
+								ui->matrix_atom_patch = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/patch.png", "Patch", NULL, NULL);
 							} // patchbar
 
 							ui->matrix = patcher_object_add(ui->patchbox);

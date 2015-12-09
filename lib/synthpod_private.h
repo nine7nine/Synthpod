@@ -42,23 +42,34 @@
 #include <lv2/lv2plug.in/ns/ext/port-props/port-props.h>
 #include <lv2/lv2plug.in/ns/ext/port-groups/port-groups.h>
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
+#include <lv2/lv2plug.in/ns/ext/time/time.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 typedef enum _port_type_t port_type_t;
+typedef enum _port_atom_type_t port_atom_type_t;
 typedef enum _port_buffer_type_t port_buffer_type_t;
 typedef enum _port_direction_t port_direction_t;
 typedef enum _port_protocol_t port_protocol_t;
 
 enum _port_type_t {
 	PORT_TYPE_AUDIO,
-	PORT_TYPE_ATOM,
 	PORT_TYPE_CONTROL,
 	PORT_TYPE_CV,
+	PORT_TYPE_ATOM,
 
 	PORT_TYPE_NUM
+};
+
+enum _port_atom_type_t {
+	PORT_ATOM_TYPE_ALL		= 0,
+
+	PORT_ATOM_TYPE_MIDI		= (1 << 0),
+	PORT_ATOM_TYPE_OSC		= (1 << 1),
+	PORT_ATOM_TYPE_TIME		= (1 << 2),
+	PORT_ATOM_TYPE_PATCH	= (1 << 3)
 };
 
 enum _port_buffer_type_t {
@@ -108,6 +119,8 @@ struct _reg_t {
 
 		// atom sequence event types
 		reg_item_t midi;
+		reg_item_t osc_event;
+		reg_item_t time_position;
 
 		// control port property
 		reg_item_t integer;
@@ -312,6 +325,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->port.sequence, world, map, LV2_ATOM__Sequence);
 	_register(&regs->port.midi, world, map, LV2_MIDI__MidiEvent);
+	_register(&regs->port.osc_event, world, map, "http://open-music-kontrollers.ch/lv2/osc#Event");
+	_register(&regs->port.time_position, world, map, LV2_TIME__Position);
 
 	_register(&regs->port.integer, world, map, LV2_CORE__integer);
 	_register(&regs->port.enumeration, world, map, LV2_CORE__enumeration);
@@ -464,6 +479,8 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->port.sequence);
 	_unregister(&regs->port.midi);
+	_unregister(&regs->port.osc_event);
+	_unregister(&regs->port.time_position);
 
 	_unregister(&regs->port.integer);
 	_unregister(&regs->port.enumeration);

@@ -28,6 +28,12 @@
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:	<http://open-music-kontrollers.ch/lv2/> .
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
+@prefix osc:	<http://open-music-kontrollers.ch/lv2/osc#> .
+
+osc:Event
+	a rdfs:Class ;
+	rdfs:subClassOf atom:Object ;
+	rdfs:label "OSC Event (Bundle or Message)" .
 
 # system-port definitions
 synthpod:systemPorts
@@ -100,6 +106,7 @@ synthpod:sink
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
+		atom:supports osc:Event ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
 		atom:supports patch:Message ;
@@ -191,6 +198,7 @@ synthpod:source
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
+		atom:supports osc:Event ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
 		atom:supports patch:Message ;
@@ -326,6 +334,7 @@ synthpod:osc_sink
 			synthpod:OSCPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
+		atom:supports osc:Event ;
 		atom:supports atom:Object ;
 		lv2:index 0 ;
 		lv2:symbol "osc_sink" ;
@@ -349,6 +358,7 @@ synthpod:osc_source
 			synthpod:OSCPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
+		atom:supports osc:Event ;
 		atom:supports atom:Object ;
 		lv2:index 0 ;
 		lv2:symbol "osc_source" ;

@@ -25,7 +25,7 @@
 #define PATCHER_DISCONNECT_REQUEST "disconnect,request"
 #define PATCHER_REALIZE_REQUEST "realize,request"
 
-#define LEN 16
+#define LEN 12
 
 typedef struct _patcher_t patcher_t;
 

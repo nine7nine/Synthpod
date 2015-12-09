@@ -43,6 +43,12 @@
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
 @prefix zwork:	<http://open-music-kontrollers.ch/lv2/zero-worker#> .
 @prefix zwrite:	<http://open-music-kontrollers.ch/lv2/zero-writer#> .
+@prefix osc:	<http://open-music-kontrollers.ch/lv2/osc#> .
+
+osc:Event
+	a rdfs:Class ;
+	rdfs:subClassOf atom:Object ;
+	rdfs:label "OSC Event (Bundle or Message)" .
 
 # to please sord_validate
 zwork:interface
@@ -136,6 +142,7 @@ synthpod:stereo
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
+		atom:supports osc:Event ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
 		atom:supports patch:Message ;
@@ -150,6 +157,7 @@ synthpod:stereo
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
+		atom:supports osc:Event ;
 		atom:supports atom:Object ;
 		atom:supports time:Position ;
 		atom:supports patch:Message ;
