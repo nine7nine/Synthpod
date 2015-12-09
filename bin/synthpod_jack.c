@@ -660,8 +660,25 @@ _process(jack_nframes_t nsamples, void *data)
 				{
 					const LV2_Atom *atom = (const LV2_Atom *)&ev->body;
 
-					//FIXME is this the right place?
-					bool advance = sp_app_from_ui(bin->app, atom); //FIXME solve this differently
+					// try do process events directly
+					bin->advance_ui = sp_app_from_ui(bin->app, atom);
+					if(!bin->advance_ui) // queue event in ringbuffer instead
+					{
+						//fprintf(stderr, "plugin ui direct is blocked\n");
+
+						void *ptr;
+						size_t size = lv2_atom_total_size(atom);
+						if((ptr = varchunk_write_request(bin->app_from_app, size)))
+						{
+							memcpy(ptr, atom, size);
+							varchunk_write_advance(bin->app_from_app, size);
+						}
+						else
+						{
+							//fprintf(stderr, "app_from_ui ringbuffer full\n");
+							//FIXME
+						}
+					}
 				}
 				break;
 			}

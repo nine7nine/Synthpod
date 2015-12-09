@@ -114,6 +114,7 @@ struct _plughandle_t {
 	varchunk_t *app_to_worker;
 	varchunk_t *app_from_worker;
 	varchunk_t *app_from_ui;
+	varchunk_t *app_from_app;
 };
 
 static int
@@ -463,6 +464,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->app_to_worker = varchunk_new(CHUNK_SIZE);
 	handle->app_from_worker = varchunk_new(CHUNK_SIZE);
 	handle->app_from_ui = varchunk_new(CHUNK_SIZE);
+	handle->app_from_app = varchunk_new(CHUNK_SIZE);
 
 	handle->driver.to_ui_request = _to_ui_request;
 	handle->driver.to_ui_advance = _to_ui_advance;
@@ -606,6 +608,24 @@ _process_pre(plughandle_t *handle, uint32_t nsamples)
 		}
 	}
 
+	// drain events from feedback ringbuffer
+	{
+		const LV2_Atom *atom;
+		size_t size;
+		unsigned n = 0;
+		while((atom = varchunk_read_request(handle->app_from_app, &size))
+			&& (n++ < MAX_MSGS) )
+		{
+			handle->advance_ui = sp_app_from_ui(app, atom);
+			if(!handle->advance_ui)
+			{
+				//fprintf(stderr, "plugin feedback is blocked\n");
+				break;
+			}
+			varchunk_read_advance(handle->app_from_app);
+		}
+	}
+
 	//FIXME drain event from separate feedback ringbuffer
 
 	// handle events from UI
@@ -649,6 +669,27 @@ _process_pre(plughandle_t *handle, uint32_t nsamples)
 
 	// run app post
 	sp_app_run_post(app, nsamples);
+
+	// write com events to feedback buffer
+	if(handle->sink.com_out)
+	{
+		LV2_ATOM_SEQUENCE_FOREACH(handle->sink.com_out, ev)
+		{
+			const LV2_Atom *atom = &ev->body;
+
+			void *ptr;
+			size_t size = lv2_atom_total_size(atom);
+			if((ptr = varchunk_write_request(handle->app_from_app, size)))
+			{
+				memcpy(ptr, atom, size);
+				varchunk_write_advance(handle->app_from_app, size);
+			}
+			else
+			{
+				//FIXME
+			}
+		}
+	}
 }
 		
 static inline void
@@ -689,6 +730,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	const size_t sample_buf_size = sizeof(float) * nsamples;
 
+	// get input buffers
 	handle->source.event_in = NULL;
 	handle->source.audio_in[0] = NULL;
 	handle->source.audio_in[1] = NULL;
@@ -743,6 +785,46 @@ run(LV2_Handle instance, uint32_t nsamples)
 		*handle->source.input[2] = *handle->port.input[2];
 	if(handle->source.input[3])
 		*handle->source.input[3] = *handle->port.input[3];
+
+	// get output buffers
+	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
+
+	// fill output buffers
+	handle->sink.event_out = NULL;
+	handle->sink.audio_out[0] = NULL;
+	handle->sink.audio_out[1] = NULL;
+	handle->sink.output[0] = NULL;
+	handle->sink.output[1] = NULL;
+	handle->sink.output[2] = NULL;
+	handle->sink.output[3] = NULL;
+	
+	audio_ptr = 0;
+	control_ptr = 0;
+	for(const sp_app_system_sink_t *sink=sinks;
+		sink->type != SYSTEM_PORT_NONE;
+		sink++)
+	{
+		switch(sink->type)
+		{
+			case SYSTEM_PORT_MIDI:
+				handle->sink.event_out = sink->buf;
+				break;
+			case SYSTEM_PORT_AUDIO:
+				handle->sink.audio_out[audio_ptr++] = sink->buf;
+				break;
+			case SYSTEM_PORT_CONTROL:
+				handle->sink.output[control_ptr++] = sink->buf;
+				break;
+			case SYSTEM_PORT_COM:
+				handle->sink.com_out = sink->buf;
+				break;
+
+			case SYSTEM_PORT_CV:
+			case SYSTEM_PORT_OSC:
+			case SYSTEM_PORT_NONE:
+				break;
+		}
+	}
 
 	if(handle->dirty_in)
 	{
@@ -800,45 +882,6 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
 	lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
 	lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
-	
-	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
-
-	// fill output buffers
-	handle->sink.event_out = NULL;
-	handle->sink.audio_out[0] = NULL;
-	handle->sink.audio_out[1] = NULL;
-	handle->sink.output[0] = NULL;
-	handle->sink.output[1] = NULL;
-	handle->sink.output[2] = NULL;
-	handle->sink.output[3] = NULL;
-	
-	audio_ptr = 0;
-	control_ptr = 0;
-	for(const sp_app_system_sink_t *sink=sinks;
-		sink->type != SYSTEM_PORT_NONE;
-		sink++)
-	{
-		switch(sink->type)
-		{
-			case SYSTEM_PORT_MIDI:
-				handle->sink.event_out = sink->buf;
-				break;
-			case SYSTEM_PORT_AUDIO:
-				handle->sink.audio_out[audio_ptr++] = sink->buf;
-				break;
-			case SYSTEM_PORT_CONTROL:
-				handle->sink.output[control_ptr++] = sink->buf;
-				break;
-			case SYSTEM_PORT_COM:
-				handle->sink.com_out = sink->buf;
-				break;
-
-			case SYSTEM_PORT_CV:
-			case SYSTEM_PORT_OSC:
-			case SYSTEM_PORT_NONE:
-				break;
-		}
-	}
 
 	if(handle->sink.event_out)
 		memcpy(handle->port.event_out, handle->sink.event_out, SEQ_SIZE);
@@ -859,27 +902,6 @@ run(LV2_Handle instance, uint32_t nsamples)
 	*handle->port.output[1] = handle->sink.output[1] ? *handle->sink.output[1] : 0.f;
 	*handle->port.output[2] = handle->sink.output[2] ? *handle->sink.output[2] : 0.f;
 	*handle->port.output[3] = handle->sink.output[3] ? *handle->sink.output[3] : 0.f;
-
-	//FIXME use separate feedback ringbuffer
-	if(handle->sink.com_out)
-	{
-		LV2_ATOM_SEQUENCE_FOREACH(handle->sink.com_out, ev)
-		{
-			const LV2_Atom *atom = &ev->body;
-
-			void *ptr;
-			size_t size = lv2_atom_total_size(atom);
-			if((ptr = varchunk_write_request(handle->app_from_ui, size)))
-			{
-				memcpy(ptr, atom, size);
-				varchunk_write_advance(handle->app_from_ui, size);
-			}
-			else
-			{
-				//FIXME
-			}
-		}
-	}
 }
 
 static void
@@ -901,6 +923,7 @@ cleanup(LV2_Handle instance)
 	varchunk_free(handle->app_to_worker);
 	varchunk_free(handle->app_from_worker);
 	varchunk_free(handle->app_from_ui);
+	varchunk_free(handle->app_from_app);
 
 	eina_shutdown();
 }

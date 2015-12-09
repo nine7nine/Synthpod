@@ -69,6 +69,9 @@ struct _bin_t {
 
 	varchunk_t *app_from_com;
 
+	bool advance_ui;
+	varchunk_t *app_from_app;
+
 	char *path;
 	synthpod_nsm_t *nsm;
 
@@ -362,6 +365,7 @@ bin_init(bin_t *bin)
 	bin->app_from_worker = varchunk_new(CHUNK_SIZE);
 	bin->app_to_log = varchunk_new(CHUNK_SIZE);
 	bin->app_from_com = varchunk_new(CHUNK_SIZE);
+	bin->app_from_app = varchunk_new(CHUNK_SIZE);
 
 	bin->ext_urid = ext_urid_new();
 	LV2_URID_Map *map = ext_urid_map_get(bin->ext_urid);
@@ -478,6 +482,7 @@ bin_deinit(bin_t *bin)
 	varchunk_free(bin->app_to_worker);
 	varchunk_free(bin->app_from_worker);
 	varchunk_free(bin->app_from_com);
+	varchunk_free(bin->app_from_app);
 }
 
 static inline void
@@ -504,7 +509,7 @@ bin_process_pre(bin_t *bin, uint32_t nsamples)
 	// run synthpod app pre
 	sp_app_run_pre(bin->app, nsamples);
 
-	// read events from UI
+	// read events from UI ringbuffer
 	{
 		size_t size;
 		const LV2_Atom *atom;
@@ -512,13 +517,31 @@ bin_process_pre(bin_t *bin, uint32_t nsamples)
 		while((atom = varchunk_read_request(bin->app_from_ui, &size))
 			&& (n++ < MAX_MSGS) )
 		{
-			bool advance = sp_app_from_ui(bin->app, atom);
-			if(!advance)
+			bin->advance_ui = sp_app_from_ui(bin->app, atom);
+			if(!bin->advance_ui)
 			{
 				//fprintf(stderr, "ui is blocked\n");
 				break;
 			}
 			varchunk_read_advance(bin->app_from_ui);
+		}
+	}
+
+	// read events from feedback ringbuffer
+	{
+		size_t size;
+		const LV2_Atom *atom;
+		unsigned n = 0;
+		while((atom = varchunk_read_request(bin->app_from_app, &size))
+			&& (n++ < MAX_MSGS) )
+		{
+			bin->advance_ui = sp_app_from_ui(bin->app, atom);
+			if(!bin->advance_ui)
+			{
+				//fprintf(stderr, "ui is blocked\n");
+				break;
+			}
+			varchunk_read_advance(bin->app_from_app);
 		}
 	}
 	
