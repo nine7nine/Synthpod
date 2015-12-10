@@ -384,6 +384,9 @@ _rt_thread(void *data, Eina_Thread thread)
 						{
 							const LV2_Atom *atom = &ev->body;
 
+							if(atom->type != handle->midi_MidiEvent)
+								continue; // ignore non-MIDI events
+
 							snd_seq_event_t sev;
 							snd_seq_ev_clear(&sev);
 							if(snd_midi_event_encode(chan->midi.trans, LV2_ATOM_BODY_CONST(atom), atom->size, &sev) != atom->size)

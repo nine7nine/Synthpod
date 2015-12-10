@@ -610,6 +610,9 @@ _process(jack_nframes_t nsamples, void *data)
 					{
 						const LV2_Atom *atom = &ev->body;
 
+						if(atom->type != handle->midi_MidiEvent)
+							continue; // ignore non-MIDI events
+
 						jack_midi_event_write(out_buf, ev->time.frames,
 							LV2_ATOM_BODY_CONST(atom), atom->size);
 					}
