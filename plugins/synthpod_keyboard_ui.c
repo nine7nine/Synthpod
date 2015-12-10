@@ -75,8 +75,10 @@ _note_on(plughandle_t *handle)
 		evas_object_color_set(handle->obj, 0x80, 0x80, 0x80, 0xff);
 
 	const midi_atom_t midi_atom = {
-		.atom.size = 3,
-		.atom.type = handle->uri.midi_event,
+		.atom = {
+			.size = 3,
+			.type = handle->uri.midi_event
+		},
 		.midi[0] = 0x90,
 		.midi[1] = *handle->key,
 		.midi[2] = 0x7f
@@ -100,8 +102,10 @@ _note_off(plughandle_t *handle)
 		evas_object_color_set(handle->obj, 0x00, 0x00, 0x00, 0xff);
 
 	const midi_atom_t midi_atom = {
-		.atom.size = 3,
-		.atom.type = handle->uri.midi_event,
+		.atom = {
+			.size = 3,
+			.type = handle->uri.midi_event
+		},
 		.midi[0] = 0x80,
 		.midi[1] = *handle->key,
 		.midi[2] = 0x7f
@@ -122,8 +126,10 @@ _note_pressure(plughandle_t *handle, int Y)
 	const uint8_t touch = (Y - y) * 0x7f / h;
 
 	const midi_atom_t midi_atom = {
-		.atom.size = 3,
-		.atom.type = handle->uri.midi_event,
+		.atom = {
+			.size = 3,
+			.type = handle->uri.midi_event
+		},
 		.midi[0] = 0xa0,
 		.midi[1] = *handle->key,
 		.midi[2] = touch
