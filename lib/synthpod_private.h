@@ -359,15 +359,15 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.plugin, world, map, LV2_UI__plugin);
 	_register(&regs->ui.protocol, world, map, LV2_UI_PREFIX"protocol");
 
-	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
 #ifndef LV2_PRESETS__bank
 #	define LV2_PRESETS__bank LV2_PRESETS_PREFIX "bank"
-	_register(&regs->pset.preset_bank, world, map, LV2_PRESETS__bank);
 #endif
 #ifndef LV2_PRESETS__Bank
 #	define LV2_PRESETS__Bank LV2_PRESETS_PREFIX "Bank"
-	_register(&regs->pset.bank, world, map, LV2_PRESETS__Bank);
 #endif
+	_register(&regs->pset.preset, world, map, LV2_PRESETS__Preset);
+	_register(&regs->pset.preset_bank, world, map, LV2_PRESETS__bank);
+	_register(&regs->pset.bank, world, map, LV2_PRESETS__Bank);
 	
 	_register(&regs->rdf.value, world, map, LILV_NS_RDF"value");
 
