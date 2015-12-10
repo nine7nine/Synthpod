@@ -50,6 +50,24 @@ if(${CAN_VECTORIZE})
 	#set(CMAKE_C_FLAGS "-Rpass=loop-vectorize ${CMAKE_C_FLAGS}") # CLANG
 endif()
 
+# atomic operations
+include(CheckCSourceCompiles)
+CHECK_C_SOURCE_COMPILES("
+	#include <stdlib.h>
+	#include <stdatomic.h>
+	int main(int argc, char **argv)
+	{
+		_Atomic size_t head;
+		atomic_init(&head, 0);
+		size_t chead = atomic_load_explicit(&head, memory_order_acquire);
+		chead += 1;
+		atomic_store_explicit(&head, chead, memory_order_release);
+		return 0;
+	}" HAS_ATOMIC)
+if(NOT ${HAS_ATOMIC})
+	message(FATAL_ERROR "compiler has no support for C11 atomic operations")
+endif()
+
 # eina
 pkg_search_module(EINA REQUIRED eina>=1.8)
 include_directories(${EINA_INCLUDE_DIRS})
