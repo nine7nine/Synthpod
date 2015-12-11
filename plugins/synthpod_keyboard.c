@@ -153,6 +153,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_set_buffer(forge, (uint8_t *)handle->event_out, capacity);
 	lv2_atom_forge_sequence_head(forge, &frame, 0);
 
+	int64_t last = 0;
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
 		const LV2_Atom *atom = &ev->body;
@@ -164,7 +165,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 			const uint8_t cmnd = midi[0] & 0xf0;
 			const uint8_t sys = cmnd | channel;
 
-			lv2_atom_forge_frame_time(forge, ev->time.frames);
+			last = ev->time.frames;
+			lv2_atom_forge_frame_time(forge, last);
 			lv2_atom_forge_atom(forge, atom->size, handle->uri.midi_event);
 			if( (cmnd == 0x90) || (cmnd == 0x80) )
 			{
@@ -204,7 +206,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			[2] = controller_val
 		};
 
-		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_frame_time(forge, last);
 		lv2_atom_forge_atom(forge, 3, handle->uri.midi_event);
 		lv2_atom_forge_raw(forge, offset_midi, 3);
 		lv2_atom_forge_pad(forge, 3);
@@ -219,7 +221,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			[1] = program_change
 		};
 
-		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_frame_time(forge, last);
 		lv2_atom_forge_atom(forge, 2, handle->uri.midi_event);
 		lv2_atom_forge_raw(forge, offset_midi, 2);
 		lv2_atom_forge_pad(forge, 2);
@@ -234,7 +236,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			[1] = channel_pressure
 		};
 
-		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_frame_time(forge, last);
 		lv2_atom_forge_atom(forge, 2, handle->uri.midi_event);
 		lv2_atom_forge_raw(forge, offset_midi, 2);
 		lv2_atom_forge_pad(forge, 2);
@@ -250,7 +252,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			[2] = bender >> 7
 		};
 
-		lv2_atom_forge_frame_time(forge, nsamples);
+		lv2_atom_forge_frame_time(forge, last);
 		lv2_atom_forge_atom(forge, 3, handle->uri.midi_event);
 		lv2_atom_forge_raw(forge, offset_midi, 3);
 		lv2_atom_forge_pad(forge, 3);
