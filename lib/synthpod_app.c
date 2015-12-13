@@ -209,6 +209,7 @@ struct _port_t {
 
 	int num_sources;
 	int num_feedbacks;
+	bool is_ramping;
 	source_t sources [MAX_SOURCES];
 
 	size_t size;
@@ -292,10 +293,14 @@ static const port_driver_t cv_port_driver;
 static const port_driver_t atom_port_driver;
 static const port_driver_t seq_port_driver;
 
+#define SINK_IS_NILPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) == 0) && !(PORT)->is_ramping)
+#define SINK_IS_SIMPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) == 1) && !(PORT)->is_ramping)
+#define SINK_IS_MULTIPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) > 1) || (PORT)->is_ramping)
+
 static inline void *
 _port_sink_get(port_t *port)
 {
-	return (port->num_sources + port->num_feedbacks) == 1
+	return SINK_IS_SIMPLEX(port)
 		? port->sources[0].port->buf
 		: port->buf;
 }
@@ -1087,8 +1092,9 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	conn->port = src_port;;
 	snk_port->num_sources += 1;
 	snk_port->num_feedbacks += src_port->mod == snk_port->mod ? 1 : 0;
+	snk_port->is_ramping = src_port->type == PORT_TYPE_AUDIO;
 
-	if( (snk_port->num_sources + snk_port->num_feedbacks) == 1)
+	if(SINK_IS_SIMPLEX(snk_port))
 	{
 		// directly wire source port output buffer to sink input buffer
 		lilv_instance_connect_port(
@@ -1096,7 +1102,7 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->index,
 			snk_port->sources[0].port->buf);
 	}
-	else
+	else // multiplex || nilplex
 	{
 		// multiplex multiple source port output buffers to sink input buffer
 		lilv_instance_connect_port(
@@ -1105,9 +1111,8 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->buf);
 	}
 
-	// only audio output ports need to be ramped to be clickless
-	if(  (src_port->type == PORT_TYPE_AUDIO)
-		&& (src_port->direction == PORT_DIRECTION_OUTPUT) )
+	// only audio port connections need to be ramped to be clickless
+	if(snk_port->is_ramping)
 	{
 		conn->ramp.samples = app->ramp_samples;
 		conn->ramp.state = RAMP_STATE_UP;
@@ -1138,8 +1143,9 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 
 	snk_port->num_sources -= 1;
 	snk_port->num_feedbacks -= src_port->mod == snk_port->mod ? 1 : 0;
+	snk_port->is_ramping = false;
 
-	if( (snk_port->num_sources + snk_port->num_feedbacks) == 1)
+	if(SINK_IS_SIMPLEX(snk_port))
 	{
 		// directly wire source port output buffer to sink input buffer
 		lilv_instance_connect_port(
@@ -1147,7 +1153,7 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->index,
 			snk_port->sources[0].port->buf);
 	}
-	else
+	else // multiplex || nilplex
 	{
 		// multiplex multiple source port output buffers to sink input buffer
 		lilv_instance_connect_port(
@@ -1156,7 +1162,55 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->buf);
 
 		// clear audio/cv port buffers without connections
-		if( (snk_port->num_sources + snk_port->num_feedbacks) == 0)
+		if(SINK_IS_NILPLEX(snk_port))
+		{
+			if(  (snk_port->type == PORT_TYPE_AUDIO)
+				|| (snk_port->type == PORT_TYPE_CV) )
+			{
+				memset(PORT_BUF_ALIGNED(snk_port), 0x0, snk_port->size);
+			}
+		}
+	}
+}
+
+static inline void
+_sp_app_port_reconnect(sp_app_t *app, port_t *src_port, port_t *snk_port, bool is_ramping)
+{
+	//printf("_sp_app_port_reconnect\n");	
+
+	bool connected = false;
+	for(int i=0, j=0; i<snk_port->num_sources; i++)
+	{
+		if(snk_port->sources[i].port == src_port)
+		{
+			connected = true;
+			break;
+		}
+	}
+
+	if(!connected)
+		return;
+
+	snk_port->is_ramping = is_ramping;
+
+	if(SINK_IS_SIMPLEX(snk_port))
+	{
+		// directly wire source port output buffer to sink input buffer
+		lilv_instance_connect_port(
+			snk_port->mod->inst,
+			snk_port->index,
+			snk_port->sources[0].port->buf);
+	}
+	else // multiplex || nilplex
+	{
+		// multiplex multiple source port output buffers to sink input buffer
+		lilv_instance_connect_port(
+			snk_port->mod->inst,
+			snk_port->index,
+			snk_port->buf);
+
+		// clear audio/cv port buffers without connections
+		if(SINK_IS_NILPLEX(snk_port))
 		{
 			if(  (snk_port->type == PORT_TYPE_AUDIO)
 				|| (snk_port->type == PORT_TYPE_CV) )
@@ -1190,6 +1244,8 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 		{
 			if(src_port->type == PORT_TYPE_AUDIO)
 			{
+				_sp_app_port_reconnect(app, src_port, snk_port, true); // handles port_connect
+
 				// only audio output ports need to be ramped to be clickless
 				conn->ramp.samples = app->ramp_samples;
 				conn->ramp.state = ramp_state;
@@ -2642,12 +2698,19 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 	if(source->ramp.samples <= 0)
 	{
 		if(source->ramp.state == RAMP_STATE_DOWN)
+		{
 			_sp_app_port_disconnect(app, source->port, port);
+		}
 		else if(source->ramp.state == RAMP_STATE_DOWN_DEL)
 		{
 			_sp_app_port_disconnect(app, source->port, port);
 			source->port->mod->delete_request = true; // mark module for removal
 		}
+		else if(source->ramp.state == RAMP_STATE_UP)
+		{
+			_sp_app_port_reconnect(app, source->port, port, false); // handles port_connect
+		}
+
 		source->ramp.state = RAMP_STATE_NONE; // ramp is complete
 	}
 	else
@@ -2655,6 +2718,7 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 		source->ramp.value = (float)source->ramp.samples / (float)app->ramp_samples;
 		if(source->ramp.state == RAMP_STATE_UP)
 			source->ramp.value = 1.f - source->ramp.value;
+		//printf("ramp: %u.%u %f\n", source->port->mod->uid, source->port->index, source->ramp.value);
 	}
 }
 
@@ -2706,7 +2770,7 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	source_t *source = &port->sources[0];
+	source_t *source = ASSUME_ALIGNED(&port->sources[0]);
 
 	if(source->ramp.state != RAMP_STATE_NONE)
 	{
@@ -3021,12 +3085,12 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			if(port->direction == PORT_DIRECTION_OUTPUT)
 				continue; // not a sink
 
-			if( (port->num_sources + port->num_feedbacks) > 1) // needs multiplexing
+			if(SINK_IS_MULTIPLEX(port))
 			{
 				if(port->driver->multiplex)
 					port->driver->multiplex(app, port, nsamples);
 			}
-			else if( (port->num_sources + port->num_feedbacks) == 1)
+			else if(SINK_IS_SIMPLEX(port))
 			{
 				if(port->driver->simplex)
 					port->driver->simplex(app, port, nsamples);
@@ -3188,7 +3252,7 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 
 	if(  (tar->direction == PORT_DIRECTION_INPUT)
 		&& (tar->type == PORT_TYPE_CONTROL)
-		&& (tar->num_sources == 0) )
+		&& (tar->num_sources == 0) ) //FIXME do the multiplexing
 	{
 		const float *val = PORT_BUF_ALIGNED(tar);
 
