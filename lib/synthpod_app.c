@@ -50,6 +50,11 @@ typedef struct _work_t work_t;
 typedef struct _job_t job_t;
 typedef struct _source_t source_t;
 typedef struct _pool_t pool_t;
+typedef struct _port_driver_t port_driver_t;
+
+typedef void (*port_simplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
+typedef void (*port_multiplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
+typedef void (*port_transfer_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 
 enum _blocking_state_t {
 	BLOCKING_STATE_RUN = 0,
@@ -175,6 +180,13 @@ struct _mod_t {
 	pool_t pools [PORT_TYPE_NUM];
 };
 
+struct _port_driver_t {
+	port_simplex_cb_t simplex;
+	port_multiplex_cb_t multiplex;
+	port_transfer_cb_t transfer;
+	bool sparse_update;
+};
+
 struct _source_t {
 	port_t *port;
 
@@ -212,6 +224,7 @@ struct _port_t {
 
 	LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
 	int subscriptions; // subsriptions reference counter
+	const port_driver_t *driver;
 
 	float last;
 
@@ -272,6 +285,12 @@ struct _sp_app_t {
 
 	int ramp_samples;
 };
+
+static const port_driver_t control_port_driver;
+static const port_driver_t audio_port_driver;
+static const port_driver_t cv_port_driver;
+static const port_driver_t atom_port_driver;
+static const port_driver_t seq_port_driver;
 
 static inline void *
 _port_sink_get(port_t *port)
@@ -881,6 +900,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 			tar->type =  PORT_TYPE_AUDIO;
 			tar->selected = 1;
 			tar->monitored = 1;
+			tar->protocol = app->regs.port.peak_protocol.urid;
+			tar->driver = &audio_port_driver;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.cv.node))
 		{
@@ -888,6 +909,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 			tar->type = PORT_TYPE_CV;
 			tar->selected = 1;
 			tar->monitored = 1;
+			tar->protocol = app->regs.port.peak_protocol.urid;
+			tar->driver = &cv_port_driver;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.control.node))
 		{
@@ -895,6 +918,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 			tar->type = PORT_TYPE_CONTROL;
 			tar->selected = 0;
 			tar->monitored = 1;
+			tar->protocol = app->regs.port.float_protocol.urid;
+			tar->driver = &control_port_driver;
 		
 			LilvNode *dflt_node;
 			LilvNode *min_node;
@@ -913,15 +938,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 			tar->type = PORT_TYPE_ATOM;
 			tar->selected = 0;
 			tar->monitored = 0;
-			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
-			//tar->buffer_type = lilv_port_is_a(plug, port, app->regs.port.sequence.node)
-			//	? PORT_BUFFER_TYPE_SEQUENCE
-			//	: PORT_BUFFER_TYPE_NONE; //TODO discriminate properly
-				
+			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE; //FIXME properly discover this
+			tar->protocol = app->regs.port.event_transfer.urid; //FIXME handle atom_transfer
+			tar->driver = &seq_port_driver; // FIXME handle atom_port_driver 
+
 			// does this port support patch:Message?
 			tar->patchable = lilv_port_supports_event(plug, port, app->regs.patch.message.node);
-			if(tar->patchable)
-				tar->protocol = app->regs.port.event_transfer.urid;
 
 			// check whether this is a control port
 			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
@@ -933,7 +955,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 			tar->selected = control_port == port; // only select control ports by default
 		}
 		else
-			fprintf(stderr, "unknown port type\n");
+			fprintf(stderr, "unknown port type\n"); //FIXME plugin should fail to initialize here
 		
 		// get minimum port size if specified
 		LilvNode *minsize = lilv_port_get(plug, port, app->regs.port.minimum_size.node);
@@ -2687,8 +2709,9 @@ _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	if(source->ramp.state != RAMP_STATE_NONE)
 	{
 		float *src = PORT_BUF_ALIGNED(source->port);
+		const float ramp_value = source->ramp.value;
 		for(uint32_t j=0; j<nsamples; j++)
-			src[j] *= source->ramp.value;
+			src[j] *= ramp_value;
 
 		_update_ramp(app, source, port, nsamples);
 	}
@@ -2930,17 +2953,53 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
+static const port_driver_t control_port_driver = {
+	.simplex = NULL,
+	.multiplex = _port_control_multiplex,
+	.transfer = _port_float_protocol_update,
+	.sparse_update = true
+};
+
+static const port_driver_t audio_port_driver = {
+	.simplex = _port_audio_simplex,
+	.multiplex = _port_audio_multiplex,
+	.transfer = _port_peak_protocol_update,
+	.sparse_update = true
+};
+
+static const port_driver_t cv_port_driver = {
+	.simplex = NULL,
+	.multiplex = _port_cv_multiplex,
+	.transfer = _port_peak_protocol_update,
+	.sparse_update = true
+};
+
+//FIXME actually use this
+static const port_driver_t atom_port_driver = {
+	.simplex = NULL,
+	.multiplex = NULL, // unsupported
+	.transfer = _port_atom_transfer_update,
+	.sparse_update = false
+};
+
+static const port_driver_t seq_port_driver = {
+	.simplex = _port_seq_simplex,
+	.multiplex = _port_seq_multiplex,
+	.transfer = _port_event_transfer_update,
+	.sparse_update = false
+};
+
 // rt
 void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 {
-	int sparse_update_timeout = 0;
+	bool sparse_update_timeout = false;
 
 	app->fps.counter += nsamples; // increase sample counter
 	app->fps.period_cnt += 1; // increase period counter
 	if(app->fps.counter >= app->fps.bound) // check whether we reached boundary
 	{
-		sparse_update_timeout = 1;
+		sparse_update_timeout = true;
 		app->fps.counter -= app->fps.bound; // reset sample counter
 	}
 
@@ -2962,35 +3021,13 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 			if( (port->num_sources + port->num_feedbacks) > 1) // needs multiplexing
 			{
-				if(port->type == PORT_TYPE_CONTROL)
-				{
-					_port_control_multiplex(app, port, nsamples);
-				}
-				else if(port->type == PORT_TYPE_AUDIO)
-				{
-					_port_audio_multiplex(app, port, nsamples);
-				}
-				else if(port->type == PORT_TYPE_CV)
-				{
-					_port_cv_multiplex(app, port, nsamples);
-				}
-				else if( (port->type == PORT_TYPE_ATOM)
-							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
-				{
-					_port_seq_multiplex(app, port, nsamples);
-				}
+				if(port->driver->multiplex)
+					port->driver->multiplex(app, port, nsamples);
 			}
 			else if( (port->num_sources + port->num_feedbacks) == 1)
 			{
-				if(  (port->type == PORT_TYPE_ATOM)
-					&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
-				{
-					_port_seq_simplex(app, port, nsamples);
-				}
-				else if(port->type == PORT_TYPE_AUDIO)
-				{
-					_port_audio_simplex(app, port, nsamples);
-				}
+				if(port->driver->simplex)
+					port->driver->simplex(app, port, nsamples);
 			}
 		}
 
@@ -3029,24 +3066,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				printf("patchable %i %i %i\n", mod->uid, i, subscribed);
 			*/
 
-			if(port->protocol == app->regs.port.float_protocol.urid)
-			{
-				if(sparse_update_timeout)
-					_port_float_protocol_update(app, port, nsamples);
-			}
-			else if(port->protocol == app->regs.port.peak_protocol.urid)
-			{
-				if(sparse_update_timeout)
-					_port_peak_protocol_update(app, port, nsamples);
-			}
-			else if(port->protocol == app->regs.port.atom_transfer.urid)
-			{
-				_port_atom_transfer_update(app, port, nsamples);
-			}
-			else if(port->protocol == app->regs.port.event_transfer.urid)
-			{
-				_port_event_transfer_update(app, port, nsamples);
-			}
+			if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
+				port->driver->transfer(app, port, nsamples);
 		}
 	}
 		
