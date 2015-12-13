@@ -1121,12 +1121,12 @@ static inline void
 _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 {
 	// update sources list 
-	int connected = 0;
+	bool connected = false;
 	for(int i=0, j=0; i<snk_port->num_sources; i++)
 	{
 		if(snk_port->sources[i].port == src_port)
 		{
-			connected = 1;
+			connected = true;
 			continue;
 		}
 
@@ -1154,6 +1154,16 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 			snk_port->mod->inst,
 			snk_port->index,
 			snk_port->buf);
+
+		// clear audio/cv port buffers without connections
+		if( (snk_port->num_sources + snk_port->num_feedbacks) == 0)
+		{
+			if(  (snk_port->type == PORT_TYPE_AUDIO)
+				|| (snk_port->type == PORT_TYPE_CV) )
+			{
+				memset(PORT_BUF_ALIGNED(snk_port), 0x0, snk_port->size);
+			}
+		}
 	}
 }
 
@@ -2589,7 +2599,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 	{
 		mod_t *mod = app->mods[m];
 
-		if(mod->delete_request)
+		if(mod->delete_request && !del_me) // only delete 1 module at once
 		{
 			del_me = mod;
 			mod->delete_request = 0;
@@ -2606,23 +2616,15 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		{
 			port_t *port = &mod->ports[p];
 
-			if(port->direction == PORT_DIRECTION_INPUT) // ignore output ports
+			if(port->direction == PORT_DIRECTION_OUTPUT)
+				continue; // ignore output ports
+
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
-				if(  (port->type == PORT_TYPE_ATOM)
-					&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
-				{
-					LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
-					seq->atom.type = app->regs.port.sequence.urid;
-					seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
-				}
-				else if( (port->num_sources + port->num_feedbacks) == 0) // clear audio/cv ports without connections
-				{
-					if(  (port->type == PORT_TYPE_AUDIO)
-						|| (port->type == PORT_TYPE_CV) )
-					{
-						memset(PORT_BUF_ALIGNED(port), 0x0, port->size);
-					}
-				}
+				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+				seq->atom.type = app->regs.port.sequence.urid;
+				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 			}
 		}
 	}
