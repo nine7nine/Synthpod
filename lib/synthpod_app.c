@@ -2635,16 +2635,312 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 }
 
 // rt
+static inline void
+_port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	float *val = PORT_BUF_ALIGNED(port);
+	*val = 0; // init
+
+	for(int s=0; s<port->num_sources; s++)
+	{
+		const float *src = PORT_BUF_ALIGNED(port->sources[s].port);
+		*val += *src;
+	}
+}
+
+// rt
+static inline void
+_port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	float *val = PORT_BUF_ALIGNED(port);
+	memset(val, 0, nsamples * sizeof(float)); // init
+
+	for(int s=0; s<port->num_sources; s++)
+	{
+		source_t *source = &port->sources[s];
+
+		// ramp audio output ports
+		if(source->ramp.state != RAMP_STATE_NONE)
+		{
+			const float *src = PORT_BUF_ALIGNED(source->port);
+			const float ramp_value = source->ramp.value;
+			for(uint32_t j=0; j<nsamples; j++)
+				val[j] += src[j] * ramp_value;
+
+			_update_ramp(app, source, port, nsamples);
+		}
+		else // RAMP_STATE_NONE
+		{
+			const float *src = PORT_BUF_ALIGNED(source->port);
+			for(uint32_t j=0; j<nsamples; j++)
+				val[j] += src[j];
+		}
+	}
+}
+
+// rt
+static inline void
+_port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	source_t *source = &port->sources[0];
+
+	if(source->ramp.state != RAMP_STATE_NONE)
+	{
+		float *src = PORT_BUF_ALIGNED(source->port);
+		for(uint32_t j=0; j<nsamples; j++)
+			src[j] *= source->ramp.value;
+
+		_update_ramp(app, source, port, nsamples);
+	}
+}
+
+// rt
+static inline void
+_port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	float *val = PORT_BUF_ALIGNED(port);
+	memset(val, 0, nsamples * sizeof(float)); // init
+
+	for(int s=0; s<port->num_sources; s++)
+	{
+		source_t *source = &port->sources[s];
+
+		const float *src = PORT_BUF_ALIGNED(source->port);
+		for(uint32_t j=0; j<nsamples; j++)
+			val[j] += src[j];
+	}
+}
+
+// rt
+static inline void
+_port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	// create forge to append to sequence (may contain events from UI)
+	LV2_Atom_Forge *forge = &app->forge;
+	LV2_Atom_Forge_Frame frame;
+	LV2_Atom_Forge_Ref ref;
+	ref = _lv2_atom_forge_sequence_append(forge, &frame, port->buf, port->size);
+
+	const LV2_Atom_Sequence *seq [32]; //TODO how big?
+	const LV2_Atom_Event *itr [32]; //TODO how big?
+	for(int s=0; s<port->num_sources; s++)
+	{
+		seq[s] = PORT_BUF_ALIGNED(port->sources[s].port);
+		itr[s] = lv2_atom_sequence_begin(&seq[s]->body);
+	}
+
+	while(1)
+	{
+		int nxt = -1;
+		int64_t frames = nsamples;
+
+		// search for next event in timeline accross source ports
+		for(int s=0; s<port->num_sources; s++)
+		{
+			if(lv2_atom_sequence_is_end(&seq[s]->body, seq[s]->atom.size, itr[s]))
+				continue; // reached sequence end
+			
+			if(itr[s]->time.frames < frames)
+			{
+				frames = itr[s]->time.frames;
+				nxt = s;
+			}
+		}
+
+		if(nxt >= 0) // next event found
+		{
+			// add event to forge
+			size_t len = sizeof(LV2_Atom) + itr[nxt]->body.size;
+			if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
+				+ lv2_atom_pad_size(len) < forge->size) )
+			{
+				ref = lv2_atom_forge_frame_time(forge, frames);
+				ref = lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
+				lv2_atom_forge_pad(forge, len);
+			}
+
+			// advance iterator
+			itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
+		}
+		else
+			break; // no more events to process
+	};
+
+	if(ref)
+		lv2_atom_forge_pop(forge, &frame);
+}
+
+// rt
+static inline void
+_port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+	// move messages from UI on default buffer
+
+	if(seq->atom.size > sizeof(LV2_Atom_Sequence_Body)) // has messages from UI
+	{
+		//printf("adding UI event\n");
+
+		// create forge to append to sequence (may contain events from UI)
+		LV2_Atom_Forge *forge = &app->forge;
+		LV2_Atom_Forge_Frame frame;
+		LV2_Atom_Forge_Ref ref;
+		ref = _lv2_atom_forge_sequence_append(forge, &frame, port->sources[0].port->buf,
+			port->sources[0].port->size);
+
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+		{
+			const LV2_Atom *atom = &ev->body;
+
+			if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
+				+ sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size) < forge->size) )
+			{
+				ref = lv2_atom_forge_frame_time(forge, nsamples-1);
+				ref = lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
+				lv2_atom_forge_pad(forge, atom->size);
+			}
+		}
+
+		if(ref)
+			lv2_atom_forge_pop(forge, &frame);
+	}
+}
+
+// rt
+static inline void
+_port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	const float *val = PORT_SINK_ALIGNED(port);
+
+	if(*val != port->last)
+	{
+		// update last value
+		port->last = *val;
+
+		size_t size = sizeof(transfer_float_t);
+		transfer_float_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
+		{
+			_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, val);
+			_sp_app_to_ui_advance(app, size);
+		}
+	}
+}
+
+// rt
+static inline void
+_port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	const float *vec = PORT_SINK_ALIGNED(port);
+
+	// find peak value in current period
+	float peak = 0.f;
+	for(uint32_t j=0; j<nsamples; j++)
+	{
+		float val = fabs(vec[j]);
+		if(val > peak)
+			peak = val;
+	}
+
+	if(fabs(peak - port->last) >= 1e-3) //TODO make this configurable
+	{
+		// update last value
+		port->last = peak;
+
+		LV2UI_Peak_Data data = {
+			.period_start = app->fps.period_cnt,
+			.period_size = nsamples,
+			.peak = peak
+		};
+
+		size_t size = sizeof(transfer_peak_t);
+		transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
+		{
+			_sp_transfer_peak_fill(&app->regs, &app->forge, trans,
+				port->mod->uid, port->index, &data);
+			_sp_app_to_ui_advance(app, size);
+		}
+	}
+}
+
+// rt
+static inline void
+_port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	const LV2_Atom *atom = PORT_SINK_ALIGNED(port);
+
+	if(atom->size == 0) // empty atom
+		return;
+	else if( (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+			&& (atom->size == sizeof(LV2_Atom_Sequence_Body)) ) // empty atom sequence
+		return;
+
+	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
+	size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
+	transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
+	if(trans)
+	{
+		_sp_transfer_atom_fill(&app->regs, &app->forge, trans,
+			port->mod->uid, port->index, atom_size, atom);
+		_sp_app_to_ui_advance(app, size);
+	}
+}
+
+// rt
+static inline void
+_port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	const LV2_Atom_Sequence *seq = PORT_SINK_ALIGNED(port);
+
+	if(seq->atom.size == sizeof(LV2_Atom_Sequence_Body)) // empty seq
+		return;
+	
+	const int subscribed = port->subscriptions != 0;
+
+	// transfer each atom of sequence separately
+	LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+	{
+		const LV2_Atom *atom = &ev->body;
+
+		if(!subscribed) // patched
+		{
+			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+
+			if(  (obj->atom.type != app->forge.Object)
+				|| ( (obj->body.otype != app->regs.patch.set.urid)
+					&& (obj->body.otype != app->regs.patch.put.urid)
+					&& (obj->body.otype != app->regs.patch.patch.urid) ) ) //FIXME handle more
+			{
+				continue; // skip this event
+			}
+
+			//printf("routing response\n");
+		}
+
+		const uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
+		const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
+		transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
+		{
+			_sp_transfer_event_fill(&app->regs, &app->forge, trans,
+				port->mod->uid, port->index, atom_size, atom);
+			_sp_app_to_ui_advance(app, size);
+		}
+	}
+}
+
+// rt
 void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 {
-	int send_port_updates = 0;
+	int sparse_update_timeout = 0;
 
 	app->fps.counter += nsamples; // increase sample counter
 	app->fps.period_cnt += 1; // increase period counter
 	if(app->fps.counter >= app->fps.bound) // check whether we reached boundary
 	{
-		send_port_updates = 1;
+		sparse_update_timeout = 1;
 		app->fps.counter -= app->fps.bound; // reset sample counter
 	}
 
@@ -2668,144 +2964,32 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			{
 				if(port->type == PORT_TYPE_CONTROL)
 				{
-					float *val = PORT_BUF_ALIGNED(port);
-					*val = 0; // init
-					for(int s=0; s<port->num_sources; s++)
-					{
-						float *src = PORT_BUF_ALIGNED(port->sources[s].port);
-						*val += *src;
-					}
+					_port_control_multiplex(app, port, nsamples);
 				}
-				else if( (port->type == PORT_TYPE_AUDIO)
-							|| (port->type == PORT_TYPE_CV) )
+				else if(port->type == PORT_TYPE_AUDIO)
 				{
-					float *val = PORT_BUF_ALIGNED(port);
-					memset(val, 0, nsamples * sizeof(float)); // init
-					for(int s=0; s<port->num_sources; s++)
-					{
-						source_t *source = &port->sources[s];
-
-						// ramp audio output ports
-						if(source->ramp.state != RAMP_STATE_NONE)
-						{
-							float *src = PORT_BUF_ALIGNED(source->port);
-							for(uint32_t j=0; j<nsamples; j++)
-								val[j] += src[j] * source->ramp.value;
-
-							_update_ramp(app, source, port, nsamples);
-						}
-						else // RAMP_STATE_NONE
-						{
-							float *src = PORT_BUF_ALIGNED(source->port);
-							for(uint32_t j=0; j<nsamples; j++)
-								val[j] += src[j];
-						}
-					}
+					_port_audio_multiplex(app, port, nsamples);
+				}
+				else if(port->type == PORT_TYPE_CV)
+				{
+					_port_cv_multiplex(app, port, nsamples);
 				}
 				else if( (port->type == PORT_TYPE_ATOM)
 							&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
-					// create forge to append to sequence (may contain events from UI)
-					LV2_Atom_Forge *forge = &app->forge;
-					LV2_Atom_Forge_Frame frame;
-					LV2_Atom_Forge_Ref ref;
-					ref = _lv2_atom_forge_sequence_append(forge, &frame, port->buf, port->size);
-
-					LV2_Atom_Sequence *seq [32]; //TODO how big?
-					LV2_Atom_Event *itr [32]; //TODO how big?
-					for(int s=0; s<port->num_sources; s++)
-					{
-						seq[s] = PORT_BUF_ALIGNED(port->sources[s].port);
-						itr[s] = lv2_atom_sequence_begin(&seq[s]->body);
-					}
-
-					while(1)
-					{
-						int nxt = -1;
-						int64_t frames = nsamples;
-
-						// search for next event in timeline accross source ports
-						for(int s=0; s<port->num_sources; s++)
-						{
-							if(lv2_atom_sequence_is_end(&seq[s]->body, seq[s]->atom.size, itr[s]))
-								continue; // reached sequence end
-							
-							if(itr[s]->time.frames < frames)
-							{
-								frames = itr[s]->time.frames;
-								nxt = s;
-							}
-						}
-
-						if(nxt >= 0) // next event found
-						{
-							// add event to forge
-							size_t len = sizeof(LV2_Atom) + itr[nxt]->body.size;
-							if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
-								+ lv2_atom_pad_size(len) < forge->size) )
-							{
-								lv2_atom_forge_frame_time(forge, frames);
-								lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
-								lv2_atom_forge_pad(forge, len);
-							}
-
-							// advance iterator
-							itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
-						}
-						else
-							break; // no more events to process
-					};
-
-					if(ref)
-						lv2_atom_forge_pop(forge, &frame);
+					_port_seq_multiplex(app, port, nsamples);
 				}
 			}
-			else if( (port->num_sources + port->num_feedbacks) == 1) // move messages from UI on default buffer
+			else if( (port->num_sources + port->num_feedbacks) == 1)
 			{
 				if(  (port->type == PORT_TYPE_ATOM)
 					&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 				{
-					const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
-					if(seq->atom.size <= sizeof(LV2_Atom_Sequence_Body)) // no messages from UI
-						continue; // skip
-
-					//printf("adding UI event\n");
-
-					// create forge to append to sequence (may contain events from UI)
-					LV2_Atom_Forge *forge = &app->forge;
-					LV2_Atom_Forge_Frame frame;
-					LV2_Atom_Forge_Ref ref;
-					ref = _lv2_atom_forge_sequence_append(forge, &frame, port->sources[0].port->buf,
-						port->sources[0].port->size);
-
-					LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-					{
-						const LV2_Atom *atom = &ev->body;
-
-						if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
-							+ sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size) < forge->size) )
-						{
-							lv2_atom_forge_frame_time(forge, nsamples-1);
-							lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
-							lv2_atom_forge_pad(forge, atom->size);
-						}
-					}
-
-					if(ref)
-						lv2_atom_forge_pop(forge, &frame);
+					_port_seq_simplex(app, port, nsamples);
 				}
 				else if(port->type == PORT_TYPE_AUDIO)
 				{
-					source_t *source = &port->sources[0];
-
-					if(source->ramp.state != RAMP_STATE_NONE)
-					{
-						float *src = PORT_BUF_ALIGNED(source->port);
-						for(uint32_t j=0; j<nsamples; j++)
-							src[j] *= source->ramp.value;
-
-						_update_ramp(app, source, port, nsamples);
-					}
+					_port_audio_simplex(app, port, nsamples);
 				}
 			}
 		}
@@ -2835,13 +3019,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			port_t *port = &mod->ports[i];
 
 			// no notification/subscription and no support for patch:Message
-			int subscribed = port->subscriptions != 0;
-			int patchable = port->patchable && (port->direction == PORT_DIRECTION_OUTPUT);
+			const int subscribed = port->subscriptions != 0;
+			const int patchable = port->patchable && (port->direction == PORT_DIRECTION_OUTPUT);
 			if(!(subscribed || patchable))
 				continue; // skip this port
-
-			const void *buf = PORT_SINK_ALIGNED(port);
-			assert(buf != NULL);
 
 			/*
 			if(patchable)
@@ -2850,116 +3031,21 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 			if(port->protocol == app->regs.port.float_protocol.urid)
 			{
-				if(send_port_updates)
-				{
-					const float val = *(const float *)buf;
-
-					if(val != port->last)
-					{
-						// update last value
-						port->last = val;
-
-						size_t size = sizeof(transfer_float_t);
-						transfer_float_t *trans = _sp_app_to_ui_request(app, size);
-						if(trans)
-						{
-							_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, &val);
-							_sp_app_to_ui_advance(app, size);
-						}
-					}
-				}
+				if(sparse_update_timeout)
+					_port_float_protocol_update(app, port, nsamples);
 			}
 			else if(port->protocol == app->regs.port.peak_protocol.urid)
 			{
-				if(send_port_updates)
-				{
-					const float *vec = (const float *)buf;
-
-					// find peak value in current period
-					float peak = 0.f;
-					for(uint32_t j=0; j<nsamples; j++)
-					{
-						float val = fabs(vec[j]);
-						if(val > peak)
-							peak = val;
-					}
-
-					if(fabs(peak - port->last) >= 1e-3) //TODO make this configurable
-					{
-						// update last value
-						port->last = peak;
-
-						LV2UI_Peak_Data data = {
-							.period_start = app->fps.period_cnt,
-							.period_size = nsamples,
-							.peak = peak
-						};
-
-						size_t size = sizeof(transfer_peak_t);
-						transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
-						if(trans)
-						{
-							_sp_transfer_peak_fill(&app->regs, &app->forge, trans,
-								port->mod->uid, port->index, &data);
-							_sp_app_to_ui_advance(app, size);
-						}
-					}
-				}
+				if(sparse_update_timeout)
+					_port_peak_protocol_update(app, port, nsamples);
 			}
 			else if(port->protocol == app->regs.port.atom_transfer.urid)
 			{
-				const LV2_Atom *atom = buf;
-				if(atom->size == 0) // empty atom
-					continue;
-				else if( (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) && (atom->size == sizeof(LV2_Atom_Sequence_Body)) ) // empty atom sequence
-					continue;
-
-				uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-				size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
-				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-				if(trans)
-				{
-					_sp_transfer_atom_fill(&app->regs, &app->forge, trans,
-						port->mod->uid, port->index, atom_size, atom);
-					_sp_app_to_ui_advance(app, size);
-				}
+				_port_atom_transfer_update(app, port, nsamples);
 			}
 			else if(port->protocol == app->regs.port.event_transfer.urid)
 			{
-				const LV2_Atom_Sequence *seq = buf;
-				if(seq->atom.size == sizeof(LV2_Atom_Sequence_Body)) // empty seq
-					continue;
-
-				// transfer each atom of sequence separately
-				LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-				{
-					const LV2_Atom *atom = &ev->body;
-
-					if(!subscribed) // patched
-					{
-						const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
-
-						if(  (obj->atom.type != app->forge.Object)
-							|| ( (obj->body.otype != app->regs.patch.set.urid)
-								&& (obj->body.otype != app->regs.patch.put.urid)
-								&& (obj->body.otype != app->regs.patch.patch.urid) ) ) //FIXME handle more
-						{
-							continue; // skip this event
-						}
-
-						//printf("routing response\n");
-					}
-
-					uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-					size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
-					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-					if(trans)
-					{
-						_sp_transfer_event_fill(&app->regs, &app->forge, trans,
-							port->mod->uid, port->index, atom_size, atom);
-						_sp_app_to_ui_advance(app, size);
-					}
-				}
+				_port_event_transfer_update(app, port, nsamples);
 			}
 		}
 	}
