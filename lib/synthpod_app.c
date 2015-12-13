@@ -132,7 +132,7 @@ struct _mod_t {
 	u_id_t uid;
 	int selected;
 
-	int delete_request;
+	bool delete_request;
 	bool bypassed;
 
 	// worker
@@ -2602,7 +2602,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		if(mod->delete_request && !del_me) // only delete 1 module at once
 		{
 			del_me = mod;
-			mod->delete_request = 0;
+			mod->delete_request = false;
 		}
 
 		// handle end of work
@@ -2646,7 +2646,7 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 		else if(source->ramp.state == RAMP_STATE_DOWN_DEL)
 		{
 			_sp_app_port_disconnect(app, source->port, port);
-			source->port->mod->delete_request = 1; // mark module for removal
+			source->port->mod->delete_request = true; // mark module for removal
 		}
 		source->ramp.state = RAMP_STATE_NONE; // ramp is complete
 	}
