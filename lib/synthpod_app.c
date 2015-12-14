@@ -52,6 +52,9 @@ typedef struct _source_t source_t;
 typedef struct _pool_t pool_t;
 typedef struct _port_driver_t port_driver_t;
 
+typedef struct _from_ui_t from_ui_t;
+typedef bool (*from_ui_cb_t)(sp_app_t *app, const LV2_Atom *atom);
+
 typedef void (*port_simplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 typedef void (*port_multiplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 typedef void (*port_transfer_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
@@ -288,6 +291,14 @@ struct _sp_app_t {
 	int ramp_samples;
 };
 
+struct _from_ui_t {
+	LV2_URID protocol;
+	from_ui_cb_t cb;	
+};
+
+#define FROM_UI_NUM 17
+static from_ui_t from_uis [FROM_UI_NUM];
+
 static const port_driver_t control_port_driver;
 static const port_driver_t audio_port_driver;
 static const port_driver_t cv_port_driver;
@@ -301,6 +312,26 @@ static const port_driver_t seq_port_driver;
 #define PORT_BASE_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->base)
 #define PORT_BUF_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->buf)
 #define PORT_SIZE(PORT) ((PORT)->size)
+
+static inline int
+_signum(LV2_URID urid1, LV2_URID urid2)
+{
+	if(urid1 < urid2)
+		return -1;
+	else if(urid1 > urid2)
+		return 1;
+	
+	return 0;
+}
+
+static int
+_from_ui_cmp(const void *itm1, const void *itm2)
+{
+	const from_ui_t *from_ui1 = itm1;
+	const from_ui_t *from_ui2 = itm2;
+
+	return _signum(from_ui1->protocol, from_ui2->protocol);
+}
 
 static void
 _state_set_value(const char *symbol, void *data,
@@ -1227,91 +1258,6 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 	return 0; // not connected
 }
 
-// non-rt
-sp_app_t *
-sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
-{
-	efreet_init();
-	ecore_file_init();
-
-	if(!driver || !data)
-		return NULL;
-
-	sp_app_t *app = calloc(1, sizeof(sp_app_t));
-	if(!app)
-		return NULL;
-
-	atomic_init(&app->dirty, false);
-
-#if !defined(_WIN32)
-	app->dir.home = getenv("HOME");
-#else
-	app->dir.home = evil_homedir_get();
-#endif
-	app->dir.config = efreet_config_home_get();
-	app->dir.data = efreet_data_home_get();
-
-	//printf("%s %s %s\n", app->dir.home, app->dir.config, app->dir.data);
-
-	app->driver = driver;
-	app->data = data;
-
-	if(world)
-	{
-		app->world = (LilvWorld *)world;
-		app->embedded = 1;
-	}
-	else
-	{
-		app->world = lilv_world_new();
-		lilv_world_load_all(app->world);
-		LilvNode *synthpod_bundle = lilv_new_uri(app->world, "file://"SYNTHPOD_BUNDLE_DIR"/");
-		if(synthpod_bundle)
-		{
-			lilv_world_load_bundle(app->world, synthpod_bundle);
-			lilv_node_free(synthpod_bundle);
-		}
-	}
-	app->plugs = lilv_world_get_all_plugins(app->world);
-
-	lv2_atom_forge_init(&app->forge, app->driver->map);
-	sp_regs_init(&app->regs, app->world, app->driver->map);
-
-	const char *uri_str;
-	mod_t *mod;
-
-	app->uid = 1;
-
-	// inject source mod
-	uri_str = SYNTHPOD_PREFIX"source";
-	mod = _sp_app_mod_add(app, uri_str, 0);
-	if(mod)
-	{
-		app->mods[app->num_mods] = mod;
-		app->num_mods += 1;
-	}
-	else
-		fprintf(stderr, "failed to create system source\n");
-
-	// inject sink mod
-	uri_str = SYNTHPOD_PREFIX"sink";
-	mod = _sp_app_mod_add(app, uri_str, 0);
-	if(mod)
-	{
-		app->mods[app->num_mods] = mod;
-		app->num_mods += 1;
-	}
-	else
-		fprintf(stderr, "failed to create system sink\n");
-
-	app->fps.bound = driver->sample_rate / 24; //TODO make this configurable
-	app->fps.counter = 0;
-
-	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s
-	
-	return app;
-}
-
 // rt
 static void
 _eject_module(sp_app_t *app, mod_t *mod)
@@ -1363,157 +1309,177 @@ _eject_module(sp_app_t *app, mod_t *mod)
 	}
 }
 
-// rt
-bool
-sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
+static bool
+_sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 {
-	if(!advance_ui[app->block_state])
-		return false; // we are draining or waiting
-
 	atom = ASSUME_ALIGNED(atom);
-	const transmit_t *transmit = (const transmit_t *)atom;
+	const transfer_float_t *trans = (const transfer_float_t *)atom;
 
-	// check for correct atom object type
-	if(transmit->obj.atom.type != app->forge.Object)
+	port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
+	if(!port) // port not found
 		return advance_ui[app->block_state];
 
-	LV2_URID protocol = transmit->obj.body.otype;
+	// set port value
+	void *buf = PORT_BASE_ALIGNED(port);
+	*(float *)buf = trans->value.body;
+	port->last = trans->value.body;
 
-	if(protocol == app->regs.port.float_protocol.urid)
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_atom_transfer(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+	const transfer_atom_t *trans = (const transfer_atom_t *)atom;
+
+	port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
+	if(!port) // port not found
+		return advance_ui[app->block_state];
+
+	// set port value
+	void *buf = PORT_BASE_ALIGNED(port);
+	memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transfer_atom_t *trans = (const transfer_atom_t *)atom;
+
+	port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
+	if(!port) // port not found
+		return advance_ui[app->block_state];
+
+	// messages from UI are ALWAYS appended to default port buffer, no matter
+	// how many sources the port may have
+	void *buf = PORT_BUF_ALIGNED(port);
+
+	// find last event in sequence
+	LV2_Atom_Sequence *seq = buf;
+	LV2_Atom_Event *last = NULL;
+	LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+		last = ev;
+
+	// create forge to append to sequence
+	LV2_Atom_Forge *forge = &app->forge;
+	LV2_Atom_Forge_Frame frame;
+	LV2_Atom_Forge_Ref ref;
+	ref = _lv2_atom_forge_sequence_append(forge, &frame, buf, port->size);
+
+	//inject atom at end of (existing) sequence
+	if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
+		+ sizeof(LV2_Atom) + lv2_atom_pad_size(trans->atom->size) < forge->size) )
 	{
-		const transfer_float_t *trans = (const transfer_float_t *)atom;
-
-		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
-		if(!port) // port not found
-			return advance_ui[app->block_state];
-
-		// set port value
-		void *buf = PORT_BASE_ALIGNED(port);
-		*(float *)buf = trans->value.body;
-		port->last = trans->value.body;
+		lv2_atom_forge_frame_time(forge, last ? last->time.frames : 0);
+		lv2_atom_forge_raw(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+		lv2_atom_forge_pad(forge, trans->atom->size);
+		lv2_atom_forge_pop(forge, &frame);
 	}
-	else if(protocol == app->regs.port.atom_transfer.urid)
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	// iterate over existing modules and send module_add_t
+	for(unsigned m=0; m<app->num_mods; m++)
 	{
-		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
+		mod_t *mod = app->mods[m];
 
-		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
-		if(!port) // port not found
-			return advance_ui[app->block_state];
-
-		// set port value
-		void *buf = PORT_BASE_ALIGNED(port);
-		memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
-	}
-	else if(protocol == app->regs.port.event_transfer.urid)
-	{
-		const transfer_atom_t *trans = (const transfer_atom_t *)atom;
-
-		port_t *port = _sp_app_port_get(app, trans->transfer.uid.body, trans->transfer.port.body);
-		if(!port) // port not found
-			return advance_ui[app->block_state];
-
-		// messages from UI are ALWAYS appended to default port buffer, no matter
-		// how many sources the port may have
-		void *buf = PORT_BUF_ALIGNED(port);
-
-		// find last event in sequence
-		LV2_Atom_Sequence *seq = buf;
-		LV2_Atom_Event *last = NULL;
-		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-			last = ev;
-
-		// create forge to append to sequence
-		LV2_Atom_Forge *forge = &app->forge;
-		LV2_Atom_Forge_Frame frame;
-		LV2_Atom_Forge_Ref ref;
-		ref = _lv2_atom_forge_sequence_append(forge, &frame, buf, port->size);
-
-		//inject atom at end of (existing) sequence
-		if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
-			+ sizeof(LV2_Atom) + lv2_atom_pad_size(trans->atom->size) < forge->size) )
+		//signal to UI
+		size_t size = sizeof(transmit_module_add_t)
+			+ lv2_atom_pad_size(strlen(mod->uri_str) + 1);
+		transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
 		{
-			lv2_atom_forge_frame_time(forge, last ? last->time.frames : 0);
-			lv2_atom_forge_raw(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
-			lv2_atom_forge_pad(forge, trans->atom->size);
-			lv2_atom_forge_pop(forge, &frame);
+			const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
+			const data_access_t data_access = descriptor
+				? descriptor->extension_data
+				: NULL;
+			_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
+				mod->uid, mod->uri_str, mod->handle, data_access);
+			_sp_app_to_ui_advance(app, size);
 		}
 	}
-	else if(protocol == app->regs.synthpod.module_list.urid)
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_module_add(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_add_t *module_add = (const transmit_module_add_t *)atom;
+
+	// send request to worker thread
+	size_t size = sizeof(work_t) + sizeof(job_t) + module_add->uri.atom.size;
+	work_t *work = _sp_app_to_worker_request(app, size);
+	if(work)
 	{
-		// iterate over existing modules and send module_add_t
+		work->target = app;
+		work->size = size - sizeof(work_t);
+		job_t *job = (job_t *)work->payload;
+		job->request = JOB_TYPE_REQUEST_MODULE_ADD;
+		memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
+		_sp_app_to_worker_advance(app, size);
+	}
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_module_del(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_del_t *module_del = (const transmit_module_del_t *)atom;
+
+	// search mod according to its UUID
+	mod_t *mod = _sp_app_mod_get(app, module_del->uid.body);
+	if(!mod) // mod not found
+		return advance_ui[app->block_state];
+
+	int needs_ramping = 0;
+
+	for(unsigned p1=0; p1<mod->num_ports; p1++)
+	{
+		port_t *port = &mod->ports[p1];
+
+		// disconnect sources
+		for(int s=0; s<port->num_sources; s++)
+		{
+			_sp_app_port_disconnect_request(app,
+				port->sources[s].port, port, RAMP_STATE_DOWN);
+		}
+
+		// disconnect sinks
 		for(unsigned m=0; m<app->num_mods; m++)
-		{
-			mod_t *mod = app->mods[m];
-
-			//signal to UI
-			size_t size = sizeof(transmit_module_add_t)
-				+ lv2_atom_pad_size(strlen(mod->uri_str) + 1);
-			transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
-			if(trans)
+			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
 			{
-				const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
-				const data_access_t data_access = descriptor
-					? descriptor->extension_data
-					: NULL;
-				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-					mod->uid, mod->uri_str, mod->handle, data_access);
-				_sp_app_to_ui_advance(app, size);
+				 needs_ramping = needs_ramping || _sp_app_port_disconnect_request(app,
+					port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DEL);
 			}
-		}
 	}
-	else if(protocol == app->regs.synthpod.module_add.urid)
-	{
-		const transmit_module_add_t *module_add = (const transmit_module_add_t *)atom;
 
-		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + module_add->uri.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
-		{
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
-			job->request = JOB_TYPE_REQUEST_MODULE_ADD;
-			memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
-			_sp_app_to_worker_advance(app, size);
-		}
-	}
-	else if(protocol == app->regs.synthpod.module_del.urid)
-	{
-		const transmit_module_del_t *module_del = (const transmit_module_del_t *)atom;
+	if(!needs_ramping)
+		_eject_module(app, mod);
 
-		// search mod according to its UUID
-		mod_t *mod = _sp_app_mod_get(app, module_del->uid.body);
-		if(!mod) // mod not found
-			return advance_ui[app->block_state];
+	return advance_ui[app->block_state];
+}
 
-		int needs_ramping = 0;
-
-		for(unsigned p1=0; p1<mod->num_ports; p1++)
-		{
-			port_t *port = &mod->ports[p1];
-
-			// disconnect sources
-			for(int s=0; s<port->num_sources; s++)
-			{
-				_sp_app_port_disconnect_request(app,
-					port->sources[s].port, port, RAMP_STATE_DOWN);
-			}
-
-			// disconnect sinks
-			for(unsigned m=0; m<app->num_mods; m++)
-				for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
-				{
-					 needs_ramping = needs_ramping || _sp_app_port_disconnect_request(app,
-						port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DEL);
-				}
-		}
-
-		if(!needs_ramping)
-			_eject_module(app, mod);
-	}
-	else if(protocol == app->regs.synthpod.module_move.urid)
-	{
+static bool
+_sp_app_from_ui_module_move(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
 		const transmit_module_move_t *move = (const transmit_module_move_t *)atom;
 
 		mod_t *mod = _sp_app_mod_get(app, move->uid.body);
@@ -1560,384 +1526,474 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		}
 
 		//TODO signal to ui
-	}
-	else if(protocol == app->regs.synthpod.module_preset_load.urid)
+
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_preset_load_t *pset = (const transmit_module_preset_load_t *)atom;
+
+	mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
+	if(!mod)
+		return advance_ui[app->block_state];
+
+	assert( (app->block_state == BLOCKING_STATE_RUN)
+		|| (app->block_state == BLOCKING_STATE_BLOCK) );
+	if(app->block_state == BLOCKING_STATE_RUN)
 	{
-		const transmit_module_preset_load_t *pset = (const transmit_module_preset_load_t *)atom;
-
-		mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
-		if(!mod)
-			return advance_ui[app->block_state];
-
-		assert( (app->block_state == BLOCKING_STATE_RUN)
-			|| (app->block_state == BLOCKING_STATE_BLOCK) );
-		if(app->block_state == BLOCKING_STATE_RUN)
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t);
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
 		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t);
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
-			{
-				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
 
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_DRAIN;
-				job->status = 0;
-				_sp_app_to_worker_advance(app, size);
-			}
-		}
-		else if(app->block_state == BLOCKING_STATE_BLOCK)
-		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t) + pset->uri.atom.size;
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
-			{
-				app->block_state = BLOCKING_STATE_WAIT; // wait for job
-				mod->bypassed = true;
-
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
-				job->mod = mod;
-				memcpy(job->uri, pset->uri_str, pset->uri.atom.size);
-				_sp_app_to_worker_advance(app, size);
-
-				return true; // advance
-			}
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_DRAIN;
+			job->status = 0;
+			_sp_app_to_worker_advance(app, size);
 		}
 	}
-	else if(protocol == app->regs.synthpod.module_preset_save.urid)
+	else if(app->block_state == BLOCKING_STATE_BLOCK)
 	{
-		const transmit_module_preset_save_t *pset = (const transmit_module_preset_save_t *)atom;
-
-		mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
-		if(!mod)
-			return advance_ui[app->block_state];
-
-		assert( (app->block_state == BLOCKING_STATE_RUN)
-			|| (app->block_state == BLOCKING_STATE_BLOCK) );
-		if(app->block_state == BLOCKING_STATE_RUN)
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + pset->uri.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
 		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t);
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
-			{
-				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+			app->block_state = BLOCKING_STATE_WAIT; // wait for job
+			mod->bypassed = true;
 
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_DRAIN;
-				job->status = 0;
-				_sp_app_to_worker_advance(app, size);
-			}
-		}
-		else if(app->block_state == BLOCKING_STATE_BLOCK)
-		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
-			{
-				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
+			job->mod = mod;
+			memcpy(job->uri, pset->uri_str, pset->uri.atom.size);
+			_sp_app_to_worker_advance(app, size);
 
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_PRESET_SAVE;
-				job->mod = mod;
-				memcpy(job->uri, pset->label_str, pset->label.atom.size);
-				_sp_app_to_worker_advance(app, size);
-
-				return true; // advance
-			}
+			return true; // advance
 		}
 	}
-	else if(protocol == app->regs.synthpod.module_selected.urid)
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_module_preset_save(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_preset_save_t *pset = (const transmit_module_preset_save_t *)atom;
+
+	mod_t *mod = _sp_app_mod_get(app, pset->uid.body);
+	if(!mod)
+		return advance_ui[app->block_state];
+
+	assert( (app->block_state == BLOCKING_STATE_RUN)
+		|| (app->block_state == BLOCKING_STATE_BLOCK) );
+	if(app->block_state == BLOCKING_STATE_RUN)
 	{
-		const transmit_module_selected_t *select = (const transmit_module_selected_t *)atom;
-
-		mod_t *mod = _sp_app_mod_get(app, select->uid.body);
-		if(!mod)
-			return advance_ui[app->block_state];
-
-		switch(select->state.body)
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t);
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
 		{
-			case -1: // query
-			{
-				// signal ui
-				size_t size = sizeof(transmit_module_selected_t);
-				transmit_module_selected_t *trans = _sp_app_to_ui_request(app, size);
-				if(trans)
-				{
-					_sp_transmit_module_selected_fill(&app->regs, &app->forge, trans, size,
-						mod->uid, mod->selected);
-					_sp_app_to_ui_advance(app, size);
-				}
-				break;
-			}
-			case 0: // deselect
-				mod->selected = 0;
-				break;
-			case 1: // select
-				mod->selected = 1;
-				break;
+			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_DRAIN;
+			job->status = 0;
+			_sp_app_to_worker_advance(app, size);
 		}
 	}
-	else if(protocol == app->regs.synthpod.port_connected.urid)
+	else if(app->block_state == BLOCKING_STATE_BLOCK)
 	{
-		const transmit_port_connected_t *conn = (const transmit_port_connected_t *)atom;
-
-		port_t *src_port = _sp_app_port_get(app, conn->src_uid.body, conn->src_port.body);
-		port_t *snk_port = _sp_app_port_get(app, conn->snk_uid.body, conn->snk_port.body);
-		if(!src_port || !snk_port)
-			return advance_ui[app->block_state];
-
-		int32_t state = 0;
-		switch(conn->state.body)
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
 		{
-			case -1: // query
-			{
-				if(_sp_app_port_connected(src_port, snk_port))
-					state = 1;
-				break;
-			}
-			case 0: // disconnect
-			{
-				_sp_app_port_disconnect_request(app, src_port, snk_port, RAMP_STATE_DOWN);
-				state = 0;
-				break;
-			}
-			case 1: // connect
-			{
-				state = _sp_app_port_connect(app, src_port, snk_port);
-				break;
-			}
-		}
+			app->block_state = BLOCKING_STATE_WAIT; // wait for job
 
-		int32_t indirect = 0; // aka direct
-		if(src_port->mod == snk_port->mod)
-		{
-			indirect = -1; // feedback
-		}
-		else
-		{
-			for(unsigned m=0; m<app->num_mods; m++)
-			{
-				if(app->mods[m] == src_port->mod)
-				{
-					indirect = 0;
-					break;
-				}
-				else if(app->mods[m] == snk_port->mod)
-				{
-					indirect = 1;
-					break;
-				}
-			}
-		}
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_PRESET_SAVE;
+			job->mod = mod;
+			memcpy(job->uri, pset->label_str, pset->label.atom.size);
+			_sp_app_to_worker_advance(app, size);
 
-		// signal to ui
-		size_t size = sizeof(transmit_port_connected_t);
-		transmit_port_connected_t *trans = _sp_app_to_ui_request(app, size);
-		if(trans)
-		{
-			_sp_transmit_port_connected_fill(&app->regs, &app->forge, trans, size,
-				src_port->mod->uid, src_port->index,
-				snk_port->mod->uid, snk_port->index, state, indirect);
-			_sp_app_to_ui_advance(app, size);
+			return true; // advance
 		}
 	}
-	else if(protocol == app->regs.synthpod.port_subscribed.urid)
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_module_selected(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_selected_t *select = (const transmit_module_selected_t *)atom;
+
+	mod_t *mod = _sp_app_mod_get(app, select->uid.body);
+	if(!mod)
+		return advance_ui[app->block_state];
+
+	switch(select->state.body)
 	{
-		const transmit_port_subscribed_t *subscribe = (const transmit_port_subscribed_t *)atom;
-
-		port_t *port = _sp_app_port_get(app, subscribe->uid.body, subscribe->port.body);
-		if(!port)
-			return advance_ui[app->block_state];
-
-		if(subscribe->state.body) // subscribe
+		case -1: // query
 		{
-			port->protocol = subscribe->prot.body;
-			port->subscriptions += 1;
+			// signal ui
+			size_t size = sizeof(transmit_module_selected_t);
+			transmit_module_selected_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_selected_fill(&app->regs, &app->forge, trans, size,
+					mod->uid, mod->selected);
+				_sp_app_to_ui_advance(app, size);
+			}
+			break;
 		}
-		else // unsubscribe
-		{
-			if(port->subscriptions > 0)
-				port->subscriptions -= 1;
-		}
+		case 0: // deselect
+			mod->selected = 0;
+			break;
+		case 1: // select
+			mod->selected = 1;
+			break;
 	}
-	else if(protocol == app->regs.synthpod.port_refresh.urid)
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_port_connected(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_port_connected_t *conn = (const transmit_port_connected_t *)atom;
+
+	port_t *src_port = _sp_app_port_get(app, conn->src_uid.body, conn->src_port.body);
+	port_t *snk_port = _sp_app_port_get(app, conn->snk_uid.body, conn->snk_port.body);
+	if(!src_port || !snk_port)
+		return advance_ui[app->block_state];
+
+	int32_t state = 0;
+	switch(conn->state.body)
 	{
-		const transmit_port_refresh_t *refresh = (const transmit_port_refresh_t *)atom;
-
-		port_t *port = _sp_app_port_get(app, refresh->uid.body, refresh->port.body);
-		if(!port)
-			return advance_ui[app->block_state];
-		
-		float *buf_ptr = PORT_BASE_ALIGNED(port);
-		port->last = *buf_ptr - 0.1; // will force notification
+		case -1: // query
+		{
+			if(_sp_app_port_connected(src_port, snk_port))
+				state = 1;
+			break;
+		}
+		case 0: // disconnect
+		{
+			_sp_app_port_disconnect_request(app, src_port, snk_port, RAMP_STATE_DOWN);
+			state = 0;
+			break;
+		}
+		case 1: // connect
+		{
+			state = _sp_app_port_connect(app, src_port, snk_port);
+			break;
+		}
 	}
-	else if(protocol == app->regs.synthpod.port_selected.urid)
+
+	int32_t indirect = 0; // aka direct
+	if(src_port->mod == snk_port->mod)
 	{
-		const transmit_port_selected_t *select = (const transmit_port_selected_t *)atom;
-
-		port_t *port = _sp_app_port_get(app, select->uid.body, select->port.body);
-		if(!port)
-			return advance_ui[app->block_state];
-
-		switch(select->state.body)
-		{
-			case -1: // query
-			{
-				// signal ui
-				size_t size = sizeof(transmit_port_selected_t);
-				transmit_port_selected_t *trans = _sp_app_to_ui_request(app, size);
-				if(trans)
-				{
-					_sp_transmit_port_selected_fill(&app->regs, &app->forge, trans, size,
-						port->mod->uid, port->index, port->selected);
-					_sp_app_to_ui_advance(app, size);
-				}
-				break;
-			}
-			case 0: // deselect
-				port->selected = 0;
-				break;
-			case 1: // select
-				port->selected = 1;
-				break;
-		}
+		indirect = -1; // feedback
 	}
-	else if(protocol == app->regs.synthpod.port_monitored.urid)
+	else
 	{
-		const transmit_port_monitored_t *monitor = (const transmit_port_monitored_t *)atom;
-
-		port_t *port = _sp_app_port_get(app, monitor->uid.body, monitor->port.body);
-		if(!port)
-			return advance_ui[app->block_state];
-
-		switch(monitor->state.body)
+		for(unsigned m=0; m<app->num_mods; m++)
 		{
-			case -1: // query
+			if(app->mods[m] == src_port->mod)
 			{
-				// signal ui
-				size_t size = sizeof(transmit_port_monitored_t);
-				transmit_port_monitored_t *trans = _sp_app_to_ui_request(app, size);
-				if(trans)
-				{
-					_sp_transmit_port_monitored_fill(&app->regs, &app->forge, trans, size,
-						port->mod->uid, port->index, port->monitored);
-					_sp_app_to_ui_advance(app, size);
-				}
+				indirect = 0;
 				break;
 			}
-			case 0: // unmonitor
-				port->monitored = 0;
+			else if(app->mods[m] == snk_port->mod)
+			{
+				indirect = 1;
 				break;
-			case 1: // monitor
-				port->monitored = 1;
-				break;
+			}
 		}
 	}
-	else if(protocol == app->regs.synthpod.bundle_load.urid)
+
+	// signal to ui
+	size_t size = sizeof(transmit_port_connected_t);
+	transmit_port_connected_t *trans = _sp_app_to_ui_request(app, size);
+	if(trans)
 	{
-		const transmit_bundle_load_t *load = (const transmit_bundle_load_t *)atom;
-		if(!load->path.atom.size)
-			return advance_ui[app->block_state];
-
-		assert( (app->block_state == BLOCKING_STATE_RUN)
-			|| (app->block_state == BLOCKING_STATE_BLOCK) );
-		if(app->block_state == BLOCKING_STATE_RUN)
-		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t);
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
-			{
-				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
-
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_DRAIN;
-				job->status = 0;
-				_sp_app_to_worker_advance(app, size);
-			}
-		}
-		else if(app->block_state == BLOCKING_STATE_BLOCK)
-		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t) + load->path.atom.size;
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
-			{
-				app->block_state = BLOCKING_STATE_WAIT; // wait for job
-				app->load_bundle = true; // for sp_app_bypassed
-
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
-				job->status = load->status.body;
-				memcpy(job->uri, load->path_str, load->path.atom.size);
-				_sp_app_to_worker_advance(app, size);
-
-				return true; // advance
-			}
-		}
+		_sp_transmit_port_connected_fill(&app->regs, &app->forge, trans, size,
+			src_port->mod->uid, src_port->index,
+			snk_port->mod->uid, snk_port->index, state, indirect);
+		_sp_app_to_ui_advance(app, size);
 	}
-	else if(protocol == app->regs.synthpod.bundle_save.urid)
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_port_subscribed(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_port_subscribed_t *subscribe = (const transmit_port_subscribed_t *)atom;
+
+	port_t *port = _sp_app_port_get(app, subscribe->uid.body, subscribe->port.body);
+	if(!port)
+		return advance_ui[app->block_state];
+
+	if(subscribe->state.body) // subscribe
 	{
-		const transmit_bundle_save_t *save = (const transmit_bundle_save_t *)atom;
-		if(!save->path.atom.size)
-			return advance_ui[app->block_state];
+		port->protocol = subscribe->prot.body;
+		port->subscriptions += 1;
+	}
+	else // unsubscribe
+	{
+		if(port->subscriptions > 0)
+			port->subscriptions -= 1;
+	}
 
-		assert( (app->block_state == BLOCKING_STATE_RUN)
-			|| (app->block_state == BLOCKING_STATE_BLOCK) );
-		if(app->block_state == BLOCKING_STATE_RUN)
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_port_refresh(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_port_refresh_t *refresh = (const transmit_port_refresh_t *)atom;
+
+	port_t *port = _sp_app_port_get(app, refresh->uid.body, refresh->port.body);
+	if(!port)
+		return advance_ui[app->block_state];
+	
+	float *buf_ptr = PORT_BASE_ALIGNED(port);
+	port->last = *buf_ptr - 0.1; // will force notification
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_port_selected(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_port_selected_t *select = (const transmit_port_selected_t *)atom;
+
+	port_t *port = _sp_app_port_get(app, select->uid.body, select->port.body);
+	if(!port)
+		return advance_ui[app->block_state];
+
+	switch(select->state.body)
+	{
+		case -1: // query
 		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t);
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
+			// signal ui
+			size_t size = sizeof(transmit_port_selected_t);
+			transmit_port_selected_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
 			{
-				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
-
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_DRAIN;
-				job->status = 0;
-				_sp_app_to_worker_advance(app, size);
+				_sp_transmit_port_selected_fill(&app->regs, &app->forge, trans, size,
+					port->mod->uid, port->index, port->selected);
+				_sp_app_to_ui_advance(app, size);
 			}
+			break;
 		}
-		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		case 0: // deselect
+			port->selected = 0;
+			break;
+		case 1: // select
+			port->selected = 1;
+			break;
+	}
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_port_monitored(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_port_monitored_t *monitor = (const transmit_port_monitored_t *)atom;
+
+	port_t *port = _sp_app_port_get(app, monitor->uid.body, monitor->port.body);
+	if(!port)
+		return advance_ui[app->block_state];
+
+	switch(monitor->state.body)
+	{
+		case -1: // query
 		{
-			// send request to worker thread
-			size_t size = sizeof(work_t) + sizeof(job_t) + save->path.atom.size;
-			work_t *work = _sp_app_to_worker_request(app, size);
-			if(work)
+			// signal ui
+			size_t size = sizeof(transmit_port_monitored_t);
+			transmit_port_monitored_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
 			{
-				app->block_state = BLOCKING_STATE_WAIT; // wait for job
-
-				work->target = app;
-				work->size = size - sizeof(work_t);
-				job_t *job = (job_t *)work->payload;
-				job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
-				job->status = save->status.body;
-				memcpy(job->uri, save->path_str, save->path.atom.size);
-				_sp_app_to_worker_advance(app, size);
-
-				return true; // advance
+				_sp_transmit_port_monitored_fill(&app->regs, &app->forge, trans, size,
+					port->mod->uid, port->index, port->monitored);
+				_sp_app_to_ui_advance(app, size);
 			}
+			break;
+		}
+		case 0: // unmonitor
+			port->monitored = 0;
+			break;
+		case 1: // monitor
+			port->monitored = 1;
+			break;
+	}
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_bundle_load(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_bundle_load_t *load = (const transmit_bundle_load_t *)atom;
+	if(!load->path.atom.size)
+		return advance_ui[app->block_state];
+
+	assert( (app->block_state == BLOCKING_STATE_RUN)
+		|| (app->block_state == BLOCKING_STATE_BLOCK) );
+	if(app->block_state == BLOCKING_STATE_RUN)
+	{
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t);
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_DRAIN;
+			job->status = 0;
+			_sp_app_to_worker_advance(app, size);
 		}
 	}
+	else if(app->block_state == BLOCKING_STATE_BLOCK)
+	{
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + load->path.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+			app->block_state = BLOCKING_STATE_WAIT; // wait for job
+			app->load_bundle = true; // for sp_app_bypassed
+
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
+			job->status = load->status.body;
+			memcpy(job->uri, load->path_str, load->path.atom.size);
+			_sp_app_to_worker_advance(app, size);
+
+			return true; // advance
+		}
+	}
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_bundle_save(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_bundle_save_t *save = (const transmit_bundle_save_t *)atom;
+	if(!save->path.atom.size)
+		return advance_ui[app->block_state];
+
+	assert( (app->block_state == BLOCKING_STATE_RUN)
+		|| (app->block_state == BLOCKING_STATE_BLOCK) );
+	if(app->block_state == BLOCKING_STATE_RUN)
+	{
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t);
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_DRAIN;
+			job->status = 0;
+			_sp_app_to_worker_advance(app, size);
+		}
+	}
+	else if(app->block_state == BLOCKING_STATE_BLOCK)
+	{
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + save->path.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+			app->block_state = BLOCKING_STATE_WAIT; // wait for job
+
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
+			job->status = save->status.body;
+			memcpy(job->uri, save->path_str, save->path.atom.size);
+			_sp_app_to_worker_advance(app, size);
+
+			return true; // advance
+		}
+	}
+
+	return advance_ui[app->block_state];
+}
+
+// rt
+bool
+sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
+{
+	if(!advance_ui[app->block_state])
+		return false; // we are draining or waiting
+
+	atom = ASSUME_ALIGNED(atom);
+	const transmit_t *transmit = (const transmit_t *)atom;
+
+	// check for atom object type
+	if(transmit->obj.atom.type != app->forge.Object)
+		return advance_ui[app->block_state];
+
+	// what we want to search for
+	const from_ui_t cmp = {
+		.protocol = transmit->obj.body.otype,
+		.cb = NULL
+	};
+
+	// search for corresponding callback
+	const from_ui_t *from_ui = bsearch(&cmp, from_uis, FROM_UI_NUM, sizeof(from_ui_t), _from_ui_cmp);
+
+	// run callback if found
+	if(from_ui)
+		return from_ui->cb(app, atom);
 
 	return advance_ui[app->block_state];
 }
@@ -2086,6 +2142,151 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 	}
 
 	return advance_work[app->block_state];
+}
+
+// non-rt
+sp_app_t *
+sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
+{
+	efreet_init();
+	ecore_file_init();
+
+	if(!driver || !data)
+		return NULL;
+
+	sp_app_t *app = calloc(1, sizeof(sp_app_t));
+	if(!app)
+		return NULL;
+
+	atomic_init(&app->dirty, false);
+
+#if !defined(_WIN32)
+	app->dir.home = getenv("HOME");
+#else
+	app->dir.home = evil_homedir_get();
+#endif
+	app->dir.config = efreet_config_home_get();
+	app->dir.data = efreet_data_home_get();
+
+	//printf("%s %s %s\n", app->dir.home, app->dir.config, app->dir.data);
+
+	app->driver = driver;
+	app->data = data;
+
+	if(world)
+	{
+		app->world = (LilvWorld *)world;
+		app->embedded = 1;
+	}
+	else
+	{
+		app->world = lilv_world_new();
+		lilv_world_load_all(app->world);
+		LilvNode *synthpod_bundle = lilv_new_uri(app->world, "file://"SYNTHPOD_BUNDLE_DIR"/");
+		if(synthpod_bundle)
+		{
+			lilv_world_load_bundle(app->world, synthpod_bundle);
+			lilv_node_free(synthpod_bundle);
+		}
+	}
+	app->plugs = lilv_world_get_all_plugins(app->world);
+
+	lv2_atom_forge_init(&app->forge, app->driver->map);
+	sp_regs_init(&app->regs, app->world, app->driver->map);
+
+	// fill from_ui binary callback tree
+	{
+		unsigned ptr = 0;
+
+		from_uis[ptr].protocol = app->regs.port.float_protocol.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_float_protocol;
+
+		from_uis[ptr].protocol = app->regs.port.atom_transfer.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_atom_transfer;
+
+		from_uis[ptr].protocol = app->regs.port.event_transfer.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_event_transfer;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_list.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_list;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_add.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_add;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_del.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_del;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_move.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_move;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_preset_load.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_preset_load;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_preset_save.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_preset_save;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_selected.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_selected;
+
+		from_uis[ptr].protocol = app->regs.synthpod.port_connected.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_port_connected;
+
+		from_uis[ptr].protocol = app->regs.synthpod.port_subscribed.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_port_subscribed;
+
+		from_uis[ptr].protocol = app->regs.synthpod.port_refresh.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_port_refresh;
+
+		from_uis[ptr].protocol = app->regs.synthpod.port_selected.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_port_selected;
+
+		from_uis[ptr].protocol = app->regs.synthpod.port_monitored.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_port_monitored;
+
+		from_uis[ptr].protocol = app->regs.synthpod.bundle_load.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_bundle_load;
+
+		from_uis[ptr].protocol = app->regs.synthpod.bundle_save.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_bundle_save;
+
+		assert(ptr == FROM_UI_NUM);
+		// sort according to URID
+		qsort(from_uis, FROM_UI_NUM, sizeof(from_ui_t), _from_ui_cmp);
+	}
+
+	const char *uri_str;
+	mod_t *mod;
+
+	app->uid = 1;
+
+	// inject source mod
+	uri_str = SYNTHPOD_PREFIX"source";
+	mod = _sp_app_mod_add(app, uri_str, 0);
+	if(mod)
+	{
+		app->mods[app->num_mods] = mod;
+		app->num_mods += 1;
+	}
+	else
+		fprintf(stderr, "failed to create system source\n");
+
+	// inject sink mod
+	uri_str = SYNTHPOD_PREFIX"sink";
+	mod = _sp_app_mod_add(app, uri_str, 0);
+	if(mod)
+	{
+		app->mods[app->num_mods] = mod;
+		app->num_mods += 1;
+	}
+	else
+		fprintf(stderr, "failed to create system sink\n");
+
+	app->fps.bound = driver->sample_rate / 24; //TODO make this configurable
+	app->fps.counter = 0;
+
+	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s
+	
+	return app;
 }
 
 // non-rt worker-thread
