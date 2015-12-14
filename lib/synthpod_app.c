@@ -268,9 +268,10 @@ struct _sp_app_t {
 
 	unsigned num_mods;
 	mod_t *mods [MAX_MODS];
+	mod_t *ords [MAX_MODS];
 
-	sp_app_system_source_t system_sources [128]; //FIXME, how many?
-	sp_app_system_sink_t system_sinks [128]; //FIXME, how many?
+	sp_app_system_source_t system_sources [64]; //FIXME, how many?
+	sp_app_system_sink_t system_sinks [64]; //FIXME, how many?
 
 	u_id_t uid;
 	
@@ -320,6 +321,24 @@ _from_ui_cmp(const void *itm1, const void *itm2)
 	const from_ui_t *from_ui2 = itm2;
 
 	return _signum(from_ui1->protocol, from_ui2->protocol);
+}
+
+static int
+_mod_cmp(const void *itm1, const void *itm2)
+{
+	const u_id_t *uid = itm1;
+	const mod_t *const *mod = itm2;
+
+	return _signum(*uid, (*mod)->uid);
+}
+
+static int
+_mod_sort(const void *itm1, const void *itm2)
+{
+	const mod_t *const *mod1 = itm1;
+	const mod_t *const *mod2 = itm2;
+
+	return _signum((*mod1)->uid, (*mod2)->uid);
 }
 
 static void
@@ -1078,14 +1097,8 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 static inline mod_t *
 _sp_app_mod_get(sp_app_t *app, u_id_t uid)
 {
-	for(unsigned i=0; i<app->num_mods; i++)
-	{
-		mod_t *mod = app->mods[i];
-		if(mod->uid == uid)
-			return mod;
-	}
-
-	return NULL;
+	mod_t *const *mod = bsearch(&uid, app->ords, app->num_mods, sizeof(mod_t *), _mod_cmp);
+	return *mod;
 }
 
 static inline port_t *
@@ -1253,11 +1266,19 @@ _eject_module(sp_app_t *app, mod_t *mod)
 {
 	// eject module from graph
 	app->num_mods -= 1;
+	// remove mod from ->mods
 	for(unsigned m=0, offset=0; m<app->num_mods; m++)
 	{
 		if(app->mods[m] == mod)
 			offset += 1;
 		app->mods[m] = app->mods[m+offset];
+	}
+	// remove mod from ->ords
+	for(unsigned m=0, offset=0; m<app->num_mods; m++)
+	{
+		if(app->ords[m] == mod)
+			offset += 1;
+		app->ords[m] = app->ords[m+offset];
 	}
 
 	// disconnect all ports
@@ -1454,7 +1475,7 @@ _sp_app_from_ui_module_del(sp_app_t *app, const LV2_Atom *atom)
 		for(unsigned m=0; m<app->num_mods; m++)
 			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
 			{
-				 needs_ramping = needs_ramping || _sp_app_port_disconnect_request(app,
+				needs_ramping = needs_ramping || _sp_app_port_disconnect_request(app,
 					port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DEL);
 			}
 	}
@@ -1469,53 +1490,53 @@ static bool
 _sp_app_from_ui_module_move(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
-		const transmit_module_move_t *move = (const transmit_module_move_t *)atom;
 
-		mod_t *mod = _sp_app_mod_get(app, move->uid.body);
-		mod_t *prev = _sp_app_mod_get(app, move->prev.body);
-		if(!mod || !prev)
-			return advance_ui[app->block_state];
+	const transmit_module_move_t *move = (const transmit_module_move_t *)atom;
 
-		uint32_t mod_idx;
-		for(mod_idx=0; mod_idx<app->num_mods; mod_idx++)
-			if(app->mods[mod_idx] == mod)
-				break;
+	mod_t *mod = _sp_app_mod_get(app, move->uid.body);
+	mod_t *prev = _sp_app_mod_get(app, move->prev.body);
+	if(!mod || !prev)
+		return advance_ui[app->block_state];
 
-		uint32_t prev_idx;
-		for(prev_idx=0; prev_idx<app->num_mods; prev_idx++)
-			if(app->mods[prev_idx] == prev)
-				break;
+	uint32_t mod_idx;
+	for(mod_idx=0; mod_idx<app->num_mods; mod_idx++)
+		if(app->mods[mod_idx] == mod)
+			break;
 
-		if(mod_idx < prev_idx)
+	uint32_t prev_idx;
+	for(prev_idx=0; prev_idx<app->num_mods; prev_idx++)
+		if(app->mods[prev_idx] == prev)
+			break;
+
+	if(mod_idx < prev_idx)
+	{
+		// forward loop
+		for(unsigned i=mod_idx, j=i; i<app->num_mods; i++)
 		{
-			// forward loop
-			for(unsigned i=mod_idx, j=i; i<app->num_mods; i++)
-			{
-				if(app->mods[i] == mod)
-					continue;
+			if(app->mods[i] == mod)
+				continue;
 
-				app->mods[j++] = app->mods[i];
+			app->mods[j++] = app->mods[i];
 
-				if(app->mods[i] == prev)
-					app->mods[j++] = mod;
-			}
+			if(app->mods[i] == prev)
+				app->mods[j++] = mod;
 		}
-		else // mod_idx > prev_idx
+	}
+	else // mod_idx > prev_idx
+	{
+		// reverse loop
+		for(int i=app->num_mods-1, j=i; i>=0; i--)
 		{
-			// reverse loop
-			for(int i=app->num_mods-1, j=i; i>=0; i--)
-			{
-				if(app->mods[i] == mod)
-					continue;
-				else if(app->mods[i] == prev)
-					app->mods[j--] = mod;
+			if(app->mods[i] == mod)
+				continue;
+			else if(app->mods[i] == prev)
+				app->mods[j--] = mod;
 
-				app->mods[j--] = app->mods[i];
-			}
+			app->mods[j--] = app->mods[i];
 		}
+	}
 
-		//TODO signal to ui
-
+	//TODO signal to ui
 
 	return advance_ui[app->block_state];
 }
@@ -2009,10 +2030,16 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				if(app->num_mods >= MAX_MODS)
 					break; //TODO delete mod
 
+				// inject module into ordered list
+				app->ords[app->num_mods] = mod;
+
 				// inject module into module graph
 				app->mods[app->num_mods] = app->mods[app->num_mods-1]; // system sink
 				app->mods[app->num_mods-1] = mod;
 				app->num_mods += 1;
+
+				// sort ordered list
+				qsort(app->ords, app->num_mods, sizeof(mod_t *), _mod_sort);
 
 				//signal to UI
 				size_t size = sizeof(transmit_module_add_t)
@@ -2253,6 +2280,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	mod = _sp_app_mod_add(app, uri_str, 0);
 	if(mod)
 	{
+		app->ords[app->num_mods] = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 	}
@@ -2264,6 +2292,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	mod = _sp_app_mod_add(app, uri_str, 0);
 	if(mod)
 	{
+		app->ords[app->num_mods] = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 	}
@@ -3713,6 +3742,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			continue;
 
 		// inject module into module graph
+		app->ords[app->num_mods] = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 
@@ -3749,6 +3779,9 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		lilv_state_free(state);
 		free(path);
 	}
+
+	// sort ordered list
+	qsort(app->ords, app->num_mods, sizeof(mod_t *), _mod_sort);
 
 	// iterate over mods and their ports
 	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;
