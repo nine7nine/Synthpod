@@ -293,7 +293,7 @@ struct _sp_app_t {
 
 struct _from_ui_t {
 	LV2_URID protocol;
-	from_ui_cb_t cb;	
+	from_ui_cb_t cb;
 };
 
 #define FROM_UI_NUM 17
@@ -312,17 +312,6 @@ static const port_driver_t seq_port_driver;
 #define PORT_BASE_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->base)
 #define PORT_BUF_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->buf)
 #define PORT_SIZE(PORT) ((PORT)->size)
-
-static inline int
-_signum(LV2_URID urid1, LV2_URID urid2)
-{
-	if(urid1 < urid2)
-		return -1;
-	else if(urid1 > urid2)
-		return 1;
-	
-	return 0;
-}
 
 static int
 _from_ui_cmp(const void *itm1, const void *itm2)

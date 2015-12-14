@@ -1336,4 +1336,15 @@ _lv2_atom_forge_sequence_append(LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *fra
 	return ref;
 }
 
+static inline int
+_signum(LV2_URID urid1, LV2_URID urid2)
+{
+	if(urid1 < urid2)
+		return -1;
+	else if(urid1 > urid2)
+		return 1;
+
+	return 0;
+}
+
 #endif // _SYNTHPOD_PRIVATE_H
