@@ -2854,7 +2854,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
-				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
+				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 			}
