@@ -452,7 +452,7 @@ _process(jack_nframes_t nsamples, void *data)
 			}
 		}
 
-		bin_process_pre(bin, nsamples);
+		bin_process_pre(bin, nsamples, true);
 		bin_process_post(bin);
 
 		return 0;
@@ -577,7 +577,7 @@ _process(jack_nframes_t nsamples, void *data)
 	handle->trans.ticks_per_beat = pos.ticks_per_beat;
 	handle->trans.beats_per_minute = pos.beats_per_minute;
 
-	bin_process_pre(bin, nsamples);
+	bin_process_pre(bin, nsamples, false);
 
 	// fill output buffers
 	for(const sp_app_system_sink_t *sink=sinks;

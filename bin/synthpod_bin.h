@@ -486,7 +486,7 @@ bin_deinit(bin_t *bin)
 }
 
 static inline void
-bin_process_pre(bin_t *bin, uint32_t nsamples)
+bin_process_pre(bin_t *bin, uint32_t nsamples, bool bypassed)
 {
 	// read events from worker
 	{
@@ -507,7 +507,8 @@ bin_process_pre(bin_t *bin, uint32_t nsamples)
 	}
 
 	// run synthpod app pre
-	sp_app_run_pre(bin->app, nsamples);
+	if(!bypassed)
+		sp_app_run_pre(bin->app, nsamples);
 
 	// read events from UI ringbuffer
 	{
@@ -546,7 +547,8 @@ bin_process_pre(bin_t *bin, uint32_t nsamples)
 	}
 	
 	// run synthpod app post
-	sp_app_run_post(bin->app, nsamples);
+	if(!bypassed)
+		sp_app_run_post(bin->app, nsamples);
 }
 
 static inline void

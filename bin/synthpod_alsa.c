@@ -198,7 +198,7 @@ _rt_thread(void *data, Eina_Thread thread)
 
 				pcmi_pcm_idle(pcmi, nsamples);
 
-				bin_process_pre(bin, nsamples);
+				bin_process_pre(bin, nsamples, true);
 				bin_process_post(bin);
 
 				continue;
@@ -347,7 +347,7 @@ _rt_thread(void *data, Eina_Thread thread)
 			if(ncapt)
 				pcmi_capt_done(pcmi, nsamples);
 	
-			bin_process_pre(bin, nsamples);
+			bin_process_pre(bin, nsamples, false);
 
 			// fill output buffers
 			if(nplay)

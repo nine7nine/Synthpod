@@ -565,7 +565,7 @@ activate(LV2_Handle instance)
 }
 
 static inline void
-_process_pre(plughandle_t *handle, uint32_t nsamples)
+_process_pre(plughandle_t *handle, uint32_t nsamples, bool bypassed)
 {
 	sp_app_t *app = handle->app;
 
@@ -588,7 +588,8 @@ _process_pre(plughandle_t *handle, uint32_t nsamples)
 	}
 
 	// run app pre
-	sp_app_run_pre(app, nsamples);
+	if(!bypassed)
+		sp_app_run_pre(app, nsamples);
 
 	// drain events from UI ringbuffer
 	{
@@ -668,7 +669,8 @@ _process_pre(plughandle_t *handle, uint32_t nsamples)
 	}
 
 	// run app post
-	sp_app_run_post(app, nsamples);
+	if(!bypassed)
+		sp_app_run_post(app, nsamples);
 
 	// write com events to feedback buffer
 	if(handle->sink.com_out)
@@ -864,7 +866,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		*handle->port.output[2] = 0.f;
 		*handle->port.output[3] = 0.f;
 
-		_process_pre(handle, nsamples);
+		_process_pre(handle, nsamples, true);
 		_process_post(handle);
 
 		// end sequence(s)
@@ -875,7 +877,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		return;
 	}
 
-	_process_pre(handle, nsamples);
+	_process_pre(handle, nsamples, false);
 	_process_post(handle);
 
 	// end sequence(s)
