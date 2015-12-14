@@ -214,6 +214,7 @@ struct _port_t {
 
 	size_t size;
 	void *buf;
+	void *base;
 	int32_t i32;
 
 	int integer;
@@ -297,15 +298,9 @@ static const port_driver_t seq_port_driver;
 #define SINK_IS_SIMPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) == 1) && !(PORT)->is_ramping)
 #define SINK_IS_MULTIPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) > 1) || (PORT)->is_ramping)
 
-static inline void *
-_port_sink_get(port_t *port)
-{
-	return SINK_IS_SIMPLEX(port)
-		? port->sources[0].port->buf
-		: port->buf;
-}
-#define PORT_SINK_ALIGNED(PORT) ASSUME_ALIGNED(_port_sink_get((PORT)))
+#define PORT_BASE_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->base)
 #define PORT_BUF_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->buf)
+#define PORT_SIZE(PORT) ((PORT)->size)
 
 static void
 _state_set_value(const char *symbol, void *data,
@@ -428,7 +423,7 @@ _sp_app_update_system_sources(sp_app_t *app)
 			if(port->direction == PORT_DIRECTION_OUTPUT)
 			{
 				app->system_sources[num_system_sources].type = port->sys.type;
-				app->system_sources[num_system_sources].buf = port->buf;
+				app->system_sources[num_system_sources].buf = PORT_BASE_ALIGNED(port);
 				app->system_sources[num_system_sources].sys_port = port->sys.data;
 				num_system_sources += 1;
 			}
@@ -464,7 +459,7 @@ _sp_app_update_system_sinks(sp_app_t *app)
 			if(port->direction == PORT_DIRECTION_INPUT)
 			{
 				app->system_sinks[num_system_sinks].type = port->sys.type;
-				app->system_sinks[num_system_sinks].buf = PORT_SINK_ALIGNED(port);
+				app->system_sinks[num_system_sinks].buf = PORT_BASE_ALIGNED(port);
 				app->system_sinks[num_system_sinks].sys_port = port->sys.data;
 				num_system_sinks += 1;
 			}
@@ -629,11 +624,12 @@ _mod_slice_pool(mod_t *mod, port_type_t type)
 
 			// define buffer slice
 			tar->buf = ptr;
+			tar->base = tar->buf;
 
 			// initialize control buffers to default value
 			if(tar->type == PORT_TYPE_CONTROL)
 			{
-				float *buf_ptr = PORT_BUF_ALIGNED(tar);
+				float *buf_ptr = PORT_BASE_ALIGNED(tar);
 				*buf_ptr = tar->dflt;
 			}
 
@@ -1007,7 +1003,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		port_t *tar = &mod->ports[i];
 
 		// set port buffer
-		lilv_instance_connect_port(mod->inst, i, tar->buf);
+		lilv_instance_connect_port(mod->inst, i, tar->base);
 	}
 
 	// load presets
@@ -1082,9 +1078,52 @@ _sp_app_port_get(sp_app_t *app, u_id_t uid, uint32_t index)
 	return NULL;
 }
 
+static inline bool
+_sp_app_port_connected(port_t *src_port, port_t *snk_port)
+{
+	for(int s = 0; s < snk_port->num_sources; s++)
+		if(snk_port->sources[s].port == src_port)
+			return true;
+
+	return false;
+}
+
+static inline void
+_sp_app_port_rewire(port_t *snk_port)
+{
+	if(SINK_IS_SIMPLEX(snk_port))
+	{
+		// directly wire source port output buffer to sink input buffer
+		snk_port->base = PORT_BUF_ALIGNED(snk_port->sources[0].port);
+	}
+	else
+	{
+		// multiplex multiple source port output buffers to sink input buffer
+		snk_port->base = PORT_BUF_ALIGNED(snk_port);
+
+		// clear audio/cv port buffers without connections
+		if(SINK_IS_NILPLEX(snk_port))
+		{
+			if(  (snk_port->type == PORT_TYPE_AUDIO)
+				|| (snk_port->type == PORT_TYPE_CV) )
+			{
+				memset(PORT_BASE_ALIGNED(snk_port), 0x0, snk_port->size);
+			}
+		}
+	}
+
+	lilv_instance_connect_port(
+		snk_port->mod->inst,
+		snk_port->index,
+		snk_port->base);
+}
+
 static inline int
 _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 {
+	if(_sp_app_port_connected(src_port, snk_port))
+		return 0;
+
 	if(snk_port->num_sources >= MAX_SOURCES)
 		return 0;
 
@@ -1094,23 +1133,6 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	snk_port->num_feedbacks += src_port->mod == snk_port->mod ? 1 : 0;
 	snk_port->is_ramping = src_port->type == PORT_TYPE_AUDIO;
 
-	if(SINK_IS_SIMPLEX(snk_port))
-	{
-		// directly wire source port output buffer to sink input buffer
-		lilv_instance_connect_port(
-			snk_port->mod->inst,
-			snk_port->index,
-			snk_port->sources[0].port->buf);
-	}
-	else // multiplex || nilplex
-	{
-		// multiplex multiple source port output buffers to sink input buffer
-		lilv_instance_connect_port(
-			snk_port->mod->inst,
-			snk_port->index,
-			snk_port->buf);
-	}
-
 	// only audio port connections need to be ramped to be clickless
 	if(snk_port->is_ramping)
 	{
@@ -1119,6 +1141,7 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		conn->ramp.value = 0.f;
 	}
 
+	_sp_app_port_rewire(snk_port);
 	return 1;
 }
 
@@ -1145,32 +1168,7 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	snk_port->num_feedbacks -= src_port->mod == snk_port->mod ? 1 : 0;
 	snk_port->is_ramping = false;
 
-	if(SINK_IS_SIMPLEX(snk_port))
-	{
-		// directly wire source port output buffer to sink input buffer
-		lilv_instance_connect_port(
-			snk_port->mod->inst,
-			snk_port->index,
-			snk_port->sources[0].port->buf);
-	}
-	else // multiplex || nilplex
-	{
-		// multiplex multiple source port output buffers to sink input buffer
-		lilv_instance_connect_port(
-			snk_port->mod->inst,
-			snk_port->index,
-			snk_port->buf);
-
-		// clear audio/cv port buffers without connections
-		if(SINK_IS_NILPLEX(snk_port))
-		{
-			if(  (snk_port->type == PORT_TYPE_AUDIO)
-				|| (snk_port->type == PORT_TYPE_CV) )
-			{
-				memset(PORT_BUF_ALIGNED(snk_port), 0x0, snk_port->size);
-			}
-		}
-	}
+	_sp_app_port_rewire(snk_port);
 }
 
 static inline void
@@ -1178,47 +1176,12 @@ _sp_app_port_reconnect(sp_app_t *app, port_t *src_port, port_t *snk_port, bool i
 {
 	//printf("_sp_app_port_reconnect\n");	
 
-	bool connected = false;
-	for(int i=0, j=0; i<snk_port->num_sources; i++)
-	{
-		if(snk_port->sources[i].port == src_port)
-		{
-			connected = true;
-			break;
-		}
-	}
-
-	if(!connected)
+	if(!_sp_app_port_connected(src_port, snk_port))
 		return;
 
 	snk_port->is_ramping = is_ramping;
 
-	if(SINK_IS_SIMPLEX(snk_port))
-	{
-		// directly wire source port output buffer to sink input buffer
-		lilv_instance_connect_port(
-			snk_port->mod->inst,
-			snk_port->index,
-			snk_port->sources[0].port->buf);
-	}
-	else // multiplex || nilplex
-	{
-		// multiplex multiple source port output buffers to sink input buffer
-		lilv_instance_connect_port(
-			snk_port->mod->inst,
-			snk_port->index,
-			snk_port->buf);
-
-		// clear audio/cv port buffers without connections
-		if(SINK_IS_NILPLEX(snk_port))
-		{
-			if(  (snk_port->type == PORT_TYPE_AUDIO)
-				|| (snk_port->type == PORT_TYPE_CV) )
-			{
-				memset(PORT_BUF_ALIGNED(snk_port), 0x0, snk_port->size);
-			}
-		}
-	}
+	_sp_app_port_rewire(snk_port);
 }
 
 static inline int
@@ -1425,7 +1388,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return advance_ui[app->block_state];
 
 		// set port value
-		void *buf = PORT_SINK_ALIGNED(port);
+		void *buf = PORT_BASE_ALIGNED(port);
 		*(float *)buf = trans->value.body;
 		port->last = trans->value.body;
 	}
@@ -1438,7 +1401,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 			return advance_ui[app->block_state];
 
 		// set port value
-		void *buf = PORT_SINK_ALIGNED(port);
+		void *buf = PORT_BASE_ALIGNED(port);
 		memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
 	}
 	else if(protocol == app->regs.port.event_transfer.urid)
@@ -1449,7 +1412,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(!port) // port not found
 			return advance_ui[app->block_state];
 
-		// messages from UI are always appended to default port buffer, no matter
+		// messages from UI are ALWAYS appended to default port buffer, no matter
 		// how many sources the port may have
 		void *buf = PORT_BUF_ALIGNED(port);
 
@@ -1740,14 +1703,8 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		{
 			case -1: // query
 			{
-				for(int s=0; s<snk_port->num_sources; s++)
-				{
-					if(snk_port->sources[s].port == src_port)
-					{
-						state = 1;
-						break;
-					}
-				}
+				if(_sp_app_port_connected(src_port, snk_port))
+					state = 1;
 				break;
 			}
 			case 0: // disconnect
@@ -1823,7 +1780,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		if(!port)
 			return advance_ui[app->block_state];
 		
-		float *buf_ptr = PORT_BUF_ALIGNED(port);
+		float *buf_ptr = PORT_BASE_ALIGNED(port);
 		port->last = *buf_ptr - 0.1; // will force notification
 	}
 	else if(protocol == app->regs.synthpod.port_selected.urid)
@@ -2678,7 +2635,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
-				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 			}
@@ -2726,12 +2683,12 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 static inline void
 _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	float *val = PORT_BUF_ALIGNED(port);
+	float *val = PORT_BASE_ALIGNED(port);
 	*val = 0; // init
 
 	for(int s=0; s<port->num_sources; s++)
 	{
-		const float *src = PORT_BUF_ALIGNED(port->sources[s].port);
+		const float *src = PORT_BASE_ALIGNED(port->sources[s].port);
 		*val += *src;
 	}
 }
@@ -2740,7 +2697,7 @@ _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	float *val = PORT_BUF_ALIGNED(port);
+	float *val = PORT_BASE_ALIGNED(port);
 	memset(val, 0, nsamples * sizeof(float)); // init
 
 	for(int s=0; s<port->num_sources; s++)
@@ -2750,7 +2707,7 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		// ramp audio output ports
 		if(source->ramp.state != RAMP_STATE_NONE)
 		{
-			const float *src = PORT_BUF_ALIGNED(source->port);
+			const float *src = PORT_BASE_ALIGNED(source->port);
 			const float ramp_value = source->ramp.value;
 			for(uint32_t j=0; j<nsamples; j++)
 				val[j] += src[j] * ramp_value;
@@ -2759,7 +2716,7 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		}
 		else // RAMP_STATE_NONE
 		{
-			const float *src = PORT_BUF_ALIGNED(source->port);
+			const float *src = PORT_BASE_ALIGNED(source->port);
 			for(uint32_t j=0; j<nsamples; j++)
 				val[j] += src[j];
 		}
@@ -2770,11 +2727,11 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	source_t *source = ASSUME_ALIGNED(&port->sources[0]);
+	source_t *source = &port->sources[0];
 
 	if(source->ramp.state != RAMP_STATE_NONE)
 	{
-		float *src = PORT_BUF_ALIGNED(source->port);
+		float *src = PORT_BASE_ALIGNED(source->port);
 		const float ramp_value = source->ramp.value;
 		for(uint32_t j=0; j<nsamples; j++)
 			src[j] *= ramp_value;
@@ -2787,14 +2744,14 @@ _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	float *val = PORT_BUF_ALIGNED(port);
+	float *val = PORT_BASE_ALIGNED(port);
 	memset(val, 0, nsamples * sizeof(float)); // init
 
 	for(int s=0; s<port->num_sources; s++)
 	{
 		source_t *source = &port->sources[s];
 
-		const float *src = PORT_BUF_ALIGNED(source->port);
+		const float *src = PORT_BASE_ALIGNED(source->port);
 		for(uint32_t j=0; j<nsamples; j++)
 			val[j] += src[j];
 	}
@@ -2808,13 +2765,13 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	LV2_Atom_Forge *forge = &app->forge;
 	LV2_Atom_Forge_Frame frame;
 	LV2_Atom_Forge_Ref ref;
-	ref = _lv2_atom_forge_sequence_append(forge, &frame, port->buf, port->size);
+	ref = _lv2_atom_forge_sequence_append(forge, &frame, PORT_BASE_ALIGNED(port), port->size);
 
 	const LV2_Atom_Sequence *seq [32]; //TODO how big?
 	const LV2_Atom_Event *itr [32]; //TODO how big?
 	for(int s=0; s<port->num_sources; s++)
 	{
-		seq[s] = PORT_BUF_ALIGNED(port->sources[s].port);
+		seq[s] = PORT_BASE_ALIGNED(port->sources[s].port);
 		itr[s] = lv2_atom_sequence_begin(&seq[s]->body);
 	}
 
@@ -2874,8 +2831,9 @@ _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		LV2_Atom_Forge *forge = &app->forge;
 		LV2_Atom_Forge_Frame frame;
 		LV2_Atom_Forge_Ref ref;
-		ref = _lv2_atom_forge_sequence_append(forge, &frame, port->sources[0].port->buf,
-			port->sources[0].port->size);
+		ref = _lv2_atom_forge_sequence_append(forge, &frame,
+			PORT_BUF_ALIGNED(port->sources[0].port),
+			PORT_SIZE(port->sources[0].port));
 
 		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		{
@@ -2899,7 +2857,7 @@ _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	const float *val = PORT_SINK_ALIGNED(port);
+	const float *val = PORT_BASE_ALIGNED(port);
 
 	if(*val != port->last)
 	{
@@ -2920,7 +2878,7 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	const float *vec = PORT_SINK_ALIGNED(port);
+	const float *vec = PORT_BASE_ALIGNED(port);
 
 	// find peak value in current period
 	float peak = 0.f;
@@ -2957,7 +2915,7 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	const LV2_Atom *atom = PORT_SINK_ALIGNED(port);
+	const LV2_Atom *atom = PORT_BASE_ALIGNED(port);
 
 	if(atom->size == 0) // empty atom
 		return;
@@ -2980,7 +2938,7 @@ _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	const LV2_Atom_Sequence *seq = PORT_SINK_ALIGNED(port);
+	const LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 
 	if(seq->atom.size == sizeof(LV2_Atom_Sequence_Body)) // empty seq
 		return;
@@ -3107,7 +3065,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				&& (port->direction == PORT_DIRECTION_OUTPUT)
 				&& (!mod->system_ports) ) // don't overwrite source buffer events
 			{
-				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = port->size;
 			}
@@ -3225,7 +3183,7 @@ _state_set_value(const char *symbol, void *data,
 			return; //TODO warning
 
 		//printf("%u %f\n", index, val);
-		float *buf_ptr = PORT_BUF_ALIGNED(tar);
+		float *buf_ptr = PORT_BASE_ALIGNED(tar);
 		*buf_ptr = val;
 		tar->last = val - 0.1; // triggers notification
 	}
@@ -3254,7 +3212,7 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 		&& (tar->type == PORT_TYPE_CONTROL)
 		&& (tar->num_sources == 0) ) //FIXME do the multiplexing
 	{
-		const float *val = PORT_BUF_ALIGNED(tar);
+		const float *val = PORT_BASE_ALIGNED(tar);
 
 		if(tar->toggled)
 		{
@@ -3769,10 +3727,7 @@ _sp_app_reinitialize(sp_app_t *app)
 			port_t *tar = &mod->ports[i];
 
 			// set port buffer
-			lilv_instance_connect_port(mod->inst, i,
-				tar->direction == PORT_DIRECTION_INPUT
-					? PORT_SINK_ALIGNED(tar)
-					: PORT_BUF_ALIGNED(tar));
+			lilv_instance_connect_port(mod->inst, i, tar->base);
 		}
 	
 		lilv_instance_activate(mod->inst);
