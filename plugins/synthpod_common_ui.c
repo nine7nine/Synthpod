@@ -122,8 +122,11 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	LV2UI_Controller controller, LV2UI_Widget *widget,
 	const LV2_Feature *const *features)
 {
-	if(strcmp(plugin_uri, SYNTHPOD_STEREO_URI))
+	if(  strcmp(plugin_uri, SYNTHPOD_STEREO_URI)
+		&& strcmp(plugin_uri, SYNTHPOD_MONOATOM_URI) )
+	{
 		return NULL;
+	}
 
 	eo_ui_driver_t driver;
 	if(descriptor == &synthpod_common_eo)

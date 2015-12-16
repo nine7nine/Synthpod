@@ -43,6 +43,18 @@ synthpod:stereo
 	@X11_UI_WRAP@ui:ui synthpod:common_x11 ;
 	rdfs:seeAlso <synthpod.ttl> .
 
+# Synthpod Monoatom
+synthpod:monoatom
+	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
+	lv2:binary <synthpod@LIB_EXT@> ;
+	@EO_UI_WRAP@ui:ui synthpod:common_eo ;
+	@UI_UI_WRAP@ui:ui synthpod:common_ui ;
+	@KX_UI_WRAP@ui:ui synthpod:common_kx ;
+	@X11_UI_WRAP@ui:ui synthpod:common_x11 ;
+	rdfs:seeAlso <synthpod.ttl> .
+
 synthpod:common_eo
 	a ui:EoUI ;
 	ui:binary <synthpod_ui@LIB_EXT@> ;

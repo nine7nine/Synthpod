@@ -90,6 +90,7 @@ synthpod:common_eo
 	a ui:EoUI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
@@ -99,6 +100,7 @@ synthpod:common_ui
 	a ui:UI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
@@ -109,6 +111,7 @@ synthpod:common_x11
 	a ui:X11UI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
@@ -119,6 +122,7 @@ synthpod:common_kx
 	a kx:Widget ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
@@ -279,6 +283,71 @@ synthpod:stereo
 		atom:supports atom:Object ;
 		atom:supports patch:Message ;
 		lv2:index 15 ;
+		lv2:symbol "notify" ;
+		lv2:name "Notify" ;
+		rsz:minimumSize 65536;
+	] .
+
+# Monoatom Plugin
+synthpod:monoatom
+	a lv2:Plugin ,
+		lv2:InstrumentPlugin ;
+	doap:name "Synthpod Monoatom" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:extensionData work:interface , state:interface, zwork:interface, opts:interface ;
+	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
+
+	lv2:port [
+		# event in
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports osc:Event ;
+		atom:supports atom:Object ;
+		atom:supports time:Position ;
+		atom:supports patch:Message ;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
+		lv2:designation lv2:control ;
+		pg:group synthpod:group_in ;
+	] , [
+		# event out
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports osc:Event ;
+		atom:supports atom:Object ;
+		atom:supports time:Position ;
+		atom:supports patch:Message ;
+		lv2:index 1 ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Out" ;
+		lv2:designation lv2:control ;
+		pg:group synthpod:group_out ;
+	] , [
+		# control event port
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports atom:Object ;
+		atom:supports patch:Message ;
+		lv2:index 2 ;
+		lv2:symbol "control" ;
+		lv2:name "Control" ;
+		rsz:minimumSize 65536;
+	] , [
+		# notify event port
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports atom:Object ;
+		atom:supports patch:Message ;
+		lv2:index 3 ;
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		rsz:minimumSize 65536;
