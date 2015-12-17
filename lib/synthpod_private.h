@@ -1323,7 +1323,9 @@ static inline LV2_Atom_Forge_Ref
 _lv2_atom_forge_sequence_append(LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
 	uint8_t *buf, uint32_t size)
 {
+	assert(buf);
 	buf = ASSUME_ALIGNED(buf);
+	assert(buf);
 	LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)buf;
 
 	lv2_atom_forge_set_buffer(forge, buf, size);

@@ -47,8 +47,11 @@ struct _chan_t {
 		struct {
 			int port;
 			snd_midi_event_t *trans;
+
 			LV2_Atom_Forge forge;
 			LV2_Atom_Forge_Frame frame;
+			LV2_Atom_Forge_Ref ref;
+			LV2_Atom_Sequence *seq_in;
 		} midi;
 	};
 };
@@ -159,6 +162,11 @@ _rt_thread(void *data, Eina_Thread thread)
 	handle->cycle.cur_frames = 0; // initialize frame counter
 	_ntp_now(&handle->nxt_ntp);
 
+	snd_seq_queue_status_t *stat = NULL;
+	const snd_seq_real_time_t *real_time = NULL;
+	snd_seq_real_time_t ref_time;
+	snd_seq_queue_status_malloc(&stat);
+
 	pcmi_pcm_start(handle->pcmi);
 	while(!atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
@@ -184,9 +192,17 @@ _rt_thread(void *data, Eina_Thread thread)
 		handle->cycle.dT = nsamples / diff;
 		handle->cycle.dTm1 = 1.0 / handle->cycle.dT;
 
+		// get ALSA sequencer reference timestamp
+		snd_seq_get_queue_status(handle->seq, handle->queue, stat);
+		real_time = snd_seq_queue_status_get_real_time(stat);
+		ref_time.tv_sec = real_time->tv_sec;
+		ref_time.tv_nsec = real_time->tv_nsec;
+
+		uint32_t pos = 0;
 		for( ; na >= nsamples;
 				na -= nsamples,
 				handle->cycle.ref_frames += nsamples,
+				pos += nsamples,
 				_ntp_add_nanos(&handle->nxt_ntp, nanos_per_period) )
 		{
 			const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
@@ -237,8 +253,9 @@ _rt_thread(void *data, Eina_Thread thread)
 
 						// initialize LV2 event port
 						LV2_Atom_Forge *forge = &chan->midi.forge;
+						chan->midi.seq_in = seq_in; // needed for lv2_atom_sequence_clear
 						lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
-						lv2_atom_forge_sequence_head(forge, &chan->midi.frame, 0);
+						chan->midi.ref = lv2_atom_forge_sequence_head(forge, &chan->midi.frame, 0);
 
 						break;
 					}
@@ -250,20 +267,25 @@ _rt_thread(void *data, Eina_Thread thread)
 						LV2_Atom_Forge *forge = &handle->forge;
 						LV2_Atom_Forge_Frame frame;
 						lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
-						lv2_atom_forge_sequence_head(forge, &frame, 0);
+						LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(forge, &frame, 0);
 
 						const LV2_Atom_Object *obj;
 						size_t size;
 						while((obj = varchunk_read_request(bin->app_from_com, &size)))
 						{
-							lv2_atom_forge_frame_time(forge, 0);
-							lv2_atom_forge_raw(forge, obj, size);
-							lv2_atom_forge_pad(forge, size);
+							if(ref)
+								ref = lv2_atom_forge_frame_time(forge, 0);
+							if(ref)
+								ref = lv2_atom_forge_raw(forge, obj, size);
+							if(ref)
+								lv2_atom_forge_pad(forge, size);
 
 							varchunk_read_advance(bin->app_from_com);
 						}
-
-						lv2_atom_forge_pop(forge, &frame);
+						if(ref)
+							lv2_atom_forge_pop(forge, &frame);
+						else
+							lv2_atom_sequence_clear(seq_in);
 
 						break;
 					}
@@ -305,19 +327,39 @@ _rt_thread(void *data, Eina_Thread thread)
 						{
 							LV2_Atom_Forge *forge = &chan->midi.forge;
 
-							int64_t frames = 0;
-							/* FIXME
-							if( (sev->flags & (SND_SEQ_TIME_STAMP_MASK | SND_SEQ_TIME_MODE_MASK))
-								== (SND_SEQ_TIME_STAMP_REAL | SND_SEQ_TIME_MODE_REL) )
-							{
-								frames = sev->time.time.tv_nsec * 1e-9 * handle->srate;
-							}
-							*/
+							bool is_real = snd_seq_ev_is_real(sev);
+							bool is_abs = snd_seq_ev_is_abstime(sev);
+							assert(is_real);
 
-							lv2_atom_forge_frame_time(forge, frames);
-							lv2_atom_forge_atom(forge, len, handle->midi_MidiEvent);
-							lv2_atom_forge_raw(forge, handle->m, len);
-							lv2_atom_forge_pad(forge, len);
+							volatile double dd = sev->time.time.tv_sec;
+							if(is_abs) // calculate relative time difference
+								dd -= ref_time.tv_sec;
+							dd += sev->time.time.tv_nsec * 1e-9;
+							if(is_abs) // calculate relative time difference
+								dd -= ref_time.tv_nsec * 1e-9;
+
+							int64_t frames = dd * handle->srate - pos;
+							if(frames < 0)
+								frames = 0;
+							else if(frames >= nsamples)
+								frames = nsamples - 1; //TODO report this
+
+							// fix up noteOn(vel=0) -> noteOff(vel=64)
+							if(  ( (handle->m[0] & 0xf0) == 0x90)
+								&& (handle->m[2] == 0x00) )
+							{
+								handle->m[0] = 0x80 | (handle->m[0] & 0x0f);
+								handle->m[2] = 0x40;
+							}
+
+							if(chan->midi.ref)
+								chan->midi.ref = lv2_atom_forge_frame_time(forge, frames);
+							if(chan->midi.ref)
+								chan->midi.ref = lv2_atom_forge_atom(forge, len, handle->midi_MidiEvent);
+							if(chan->midi.ref)
+								chan->midi.ref = lv2_atom_forge_raw(forge, handle->m, len);
+							if(chan->midi.ref)
+								lv2_atom_forge_pad(forge, len);
 						}
 						else
 							fprintf(stderr, "event decode failed\n");
@@ -341,7 +383,10 @@ _rt_thread(void *data, Eina_Thread thread)
 					LV2_Atom_Forge *forge = &chan->midi.forge;
 
 					// finalize LV2 event port
-					lv2_atom_forge_pop(forge, &chan->midi.frame);
+					if(chan->midi.ref)
+						lv2_atom_forge_pop(forge, &chan->midi.frame);
+					else
+						lv2_atom_sequence_clear(chan->midi.seq_in);
 				}
 			}
 			if(ncapt)
@@ -389,13 +434,21 @@ _rt_thread(void *data, Eina_Thread thread)
 
 							snd_seq_event_t sev;
 							snd_seq_ev_clear(&sev);
-							if(snd_midi_event_encode(chan->midi.trans, LV2_ATOM_BODY_CONST(atom), atom->size, &sev) != atom->size)
-								fprintf(stderr, "encode event failed\n");
-						
-							// relative timestamp
+							long consumed;
+							const uint8_t *buf = LV2_ATOM_BODY_CONST(atom);
+							if( (consumed = snd_midi_event_encode(chan->midi.trans, buf, atom->size, &sev)) != atom->size)
+							{
+								fprintf(stderr, "encode event failed: %li\n", consumed);
+								continue;
+							}
+
+							// absolute timestamp
+							volatile double dd = (double)(ev->time.frames + pos) / handle->srate;
+							double sec;
+							double nsec = modf(dd, &sec);
 							struct snd_seq_real_time rtime = {
-								.tv_sec = 0,
-								.tv_nsec = ev->time.frames * nanos_per_period
+								.tv_sec = ref_time.tv_sec + sec,
+								.tv_nsec = ref_time.tv_nsec + nsec
 							};
 							while(rtime.tv_nsec >= NANO_SECONDS) // handle overflow
 							{
@@ -406,8 +459,9 @@ _rt_thread(void *data, Eina_Thread thread)
 							// schedule midi
 							snd_seq_ev_set_source(&sev, chan->midi.port);
 							snd_seq_ev_set_subs(&sev); // set broadcasting to subscribers
-							snd_seq_ev_schedule_real(&sev, handle->queue, 1, &rtime); // relative scheduling
+							snd_seq_ev_schedule_real(&sev, handle->queue, 0, &rtime); // absolute scheduling
 							snd_seq_event_output(handle->seq, &sev);
+							//snd_seq_drain_output(handle->seq);
 						}
 
 						break;
@@ -460,6 +514,8 @@ _rt_thread(void *data, Eina_Thread thread)
 		}
 	}
 	pcmi_pcm_stop(handle->pcmi);
+	
+	snd_seq_queue_status_free(stat);
 
 	return NULL;
 }
@@ -511,17 +567,30 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			{
 				chan->type = CHAN_TYPE_MIDI;
 
-				unsigned int caps = input
-					? SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE
-					: SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ;
+				snd_seq_port_info_t *pinfo;
+				snd_seq_port_info_malloc(&pinfo);
 
-				chan->midi.port = snd_seq_create_simple_port(handle->seq, short_name,
-					caps, SND_SEQ_PORT_TYPE_APPLICATION);
+				snd_seq_port_info_set_name(pinfo, short_name);
+				snd_seq_port_info_set_capability(pinfo, input
+					? SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE
+					: SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ);
+				snd_seq_port_info_set_type(pinfo, SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+				snd_seq_port_info_set_midi_channels(pinfo, 16);
+				snd_seq_port_info_set_midi_voices(pinfo, 64);
+				snd_seq_port_info_set_synth_voices(pinfo, 0);
+				snd_seq_port_info_set_timestamping(pinfo, 1);
+				snd_seq_port_info_set_timestamp_real(pinfo, 1);
+				snd_seq_port_info_set_timestamp_queue(pinfo, handle->queue);
+
+				snd_seq_create_port(handle->seq, pinfo);
+				chan->midi.port = snd_seq_port_info_get_port(pinfo);
 				if(chan->midi.port < 0)
 					fprintf(stderr, "could not create port\n");
 
+				snd_seq_port_info_free(pinfo);
+
 				if(snd_midi_event_new(MIDI_SEQ_SIZE, &chan->midi.trans))
-					fprintf(stderr, "could not create event\n");
+					fprintf(stderr, "could not create event translator\n");
 				snd_midi_event_init(chan->midi.trans);
 				if(input)
 					snd_midi_event_reset_encode(chan->midi.trans);

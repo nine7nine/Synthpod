@@ -3447,7 +3447,6 @@ static void
 _mod_close_click(void *data, Evas_Object *lay, const char *emission, const char *source)
 {
 	mod_t *mod = data;
-	sp_ui_t *ui = mod->ui;
 
 	_mod_del_widgets(mod);
 	_mod_del_propagate(mod);
@@ -5504,8 +5503,6 @@ _sp_ui_from_app_port_monitored(sp_ui_t *ui, const LV2_Atom *atom)
 static void
 _sp_ui_from_app_module_list(sp_ui_t *ui, const LV2_Atom *atom)
 {
-	atom = ASSUME_ALIGNED(atom);
-
 	if(ui->modlist)
 	{
 		ui->dirty = 1; // disable ui -> app communication

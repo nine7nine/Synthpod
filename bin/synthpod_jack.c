@@ -53,6 +53,7 @@ struct _prog_t {
 	osc_forge_t oforge;
 	int frame_cnt;
 	LV2_Atom_Forge_Frame frame [32][2]; // 32 nested bundles should be enough
+	LV2_Atom_Forge_Ref ref;
 
 	LV2_URID midi_MidiEvent;
 
@@ -98,42 +99,60 @@ struct _prog_t {
 #endif
 };
 
-static void
+static LV2_Atom_Forge_Ref
 _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t *pos)
 {
 	LV2_Atom_Forge_Frame frame;
 
-	lv2_atom_forge_frame_time(forge, 0);
-	lv2_atom_forge_object(forge, &frame, 0, prog->time_position);
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_frame_time(forge, 0);
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &frame, 0, prog->time_position);
 	{
-		lv2_atom_forge_key(forge, prog->time_frame);
-		lv2_atom_forge_long(forge, pos->frame);
+		if(ref)
+			ref = lv2_atom_forge_key(forge, prog->time_frame);
+		if(ref)
+			ref = lv2_atom_forge_long(forge, pos->frame);
 
-		lv2_atom_forge_key(forge, prog->time_speed);
-		lv2_atom_forge_float(forge, rolling ? 1.0 : 0.0);
+		if(ref)
+			ref = lv2_atom_forge_key(forge, prog->time_speed);
+		if(ref)
+			ref = lv2_atom_forge_float(forge, rolling ? 1.0 : 0.0);
 
 		if(pos->valid & JackPositionBBT)
 		{
 			float bar_beat = pos->beat - 1 + (pos->tick / pos->ticks_per_beat);
 			float bar = pos->bar - 1;
 
-			lv2_atom_forge_key(forge, prog->time_barBeat);
-			lv2_atom_forge_float(forge, bar_beat);
+			if(ref)
+				ref = lv2_atom_forge_key(forge, prog->time_barBeat);
+			if(ref)
+				ref = lv2_atom_forge_float(forge, bar_beat);
 
-			lv2_atom_forge_key(forge, prog->time_bar);
-			lv2_atom_forge_long(forge, bar);
+			if(ref)
+				ref = lv2_atom_forge_key(forge, prog->time_bar);
+			if(ref)
+				ref = lv2_atom_forge_long(forge, bar);
 
-			lv2_atom_forge_key(forge, prog->time_beatUnit);
-			lv2_atom_forge_int(forge, pos->beat_type);
+			if(ref)
+				ref = lv2_atom_forge_key(forge, prog->time_beatUnit);
+			if(ref)
+				ref = lv2_atom_forge_int(forge, pos->beat_type);
 
-			lv2_atom_forge_key(forge, prog->time_beatsPerBar);
-			lv2_atom_forge_float(forge, pos->beats_per_bar);
+			if(ref)
+				ref = lv2_atom_forge_key(forge, prog->time_beatsPerBar);
+			if(ref)
+				ref = lv2_atom_forge_float(forge, pos->beats_per_bar);
 
-			lv2_atom_forge_key(forge, prog->time_beatsPerMinute);
-			lv2_atom_forge_float(forge, pos->beats_per_minute);
+			if(ref)
+				ref = lv2_atom_forge_key(forge, prog->time_beatsPerMinute);
+			if(ref)
+				ref = lv2_atom_forge_float(forge, pos->beats_per_minute);
 		}
 	}
-	lv2_atom_forge_pop(forge, &frame);
+	if(ref)
+		lv2_atom_forge_pop(forge, &frame);
+
+	return ref;
 }
 
 // rt
@@ -143,9 +162,9 @@ _bundle_in(osc_time_t timestamp, void *data)
 	prog_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge;
 
-	//TODO check return
-	osc_forge_bundle_push(&handle->oforge, forge,
-		handle->frame[handle->frame_cnt++], timestamp);
+	if(handle->ref)
+		handle->ref = osc_forge_bundle_push(&handle->oforge, forge,
+			handle->frame[handle->frame_cnt++], timestamp);
 }
 
 // rt
@@ -155,8 +174,9 @@ _bundle_out(osc_time_t timestamp, void *data)
 	prog_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge;
 
-	osc_forge_bundle_pop(&handle->oforge, forge,
-		handle->frame[--handle->frame_cnt]);
+	if(handle->ref)
+		osc_forge_bundle_pop(&handle->oforge, forge,
+			handle->frame[--handle->frame_cnt]);
 }
 
 // rt
@@ -169,7 +189,10 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 	LV2_Atom_Forge_Frame frame [2];
 
 	const osc_data_t *ptr = buf;
-	osc_forge_message_push(&handle->oforge, forge, frame, path, fmt);
+
+	LV2_Atom_Forge_Ref ref = handle->ref;
+	if(ref)
+		ref = osc_forge_message_push(&handle->oforge, forge, frame, path, fmt);
 
 	for(const char *type = fmt; *type; type++)
 		switch(*type)
@@ -178,14 +201,16 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 			{
 				int32_t i = 0;
 				ptr = osc_get_int32(ptr, &i);
-				osc_forge_int32(&handle->oforge, forge, i);
+				if(ref)
+					ref = osc_forge_int32(&handle->oforge, forge, i);
 				break;
 			}
 			case 'f':
 			{
 				float f = 0.f;
 				ptr = osc_get_float(ptr, &f);
-				osc_forge_float(&handle->oforge, forge, f);
+				if(ref)
+					ref = osc_forge_float(&handle->oforge, forge, f);
 				break;
 			}
 			case 's':
@@ -193,14 +218,16 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 			{
 				const char *s = "";
 				ptr = osc_get_string(ptr, &s);
-				osc_forge_string(&handle->oforge, forge, s);
+				if(ref)
+					ref = osc_forge_string(&handle->oforge, forge, s);
 				break;
 			}
 			case 'b':
 			{
 				osc_blob_t b = {.size = 0, .payload=NULL};
 				ptr = osc_get_blob(ptr, &b);
-				osc_forge_blob(&handle->oforge, forge, b.size, b.payload);
+				if(ref)
+					ref = osc_forge_blob(&handle->oforge, forge, b.size, b.payload);
 				break;
 			}
 
@@ -208,21 +235,24 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 			{
 				int64_t h = 0;
 				ptr = osc_get_int64(ptr, &h);
-				osc_forge_int64(&handle->oforge, forge, h);
+				if(ref)
+					ref = osc_forge_int64(&handle->oforge, forge, h);
 				break;
 			}
 			case 'd':
 			{
 				double d = 0.f;
 				ptr = osc_get_double(ptr, &d);
-				osc_forge_double(&handle->oforge, forge, d);
+				if(ref)
+					ref = osc_forge_double(&handle->oforge, forge, d);
 				break;
 			}
 			case 't':
 			{
 				uint64_t t = 0;
 				ptr = osc_get_timetag(ptr, &t);
-				osc_forge_timestamp(&handle->oforge, forge, t);
+				if(ref)
+					ref = osc_forge_timestamp(&handle->oforge, forge, t);
 				break;
 			}
 
@@ -238,19 +268,24 @@ _message(osc_time_t timestamp, const char *path, const char *fmt,
 			{
 				char c = '\0';
 				ptr = osc_get_char(ptr, &c);
-				osc_forge_char(&handle->oforge, forge, c);
+				if(ref)
+					ref = osc_forge_char(&handle->oforge, forge, c);
 				break;
 			}
 			case 'm':
 			{
 				const uint8_t *m = NULL;
 				ptr = osc_get_midi(ptr, &m);
-				osc_forge_midi(&handle->oforge, forge, 3, m + 1); // skip port byte
+				if(ref)
+					ref = osc_forge_midi(&handle->oforge, forge, 3, m + 1); // skip port byte
 				break;
 			}
 		}
 
-	osc_forge_message_pop(&handle->oforge, forge, frame);
+	if(ref)
+		osc_forge_message_pop(&handle->oforge, forge, frame);
+
+	handle->ref = ref;
 
 	return 1;
 }
@@ -486,10 +521,10 @@ _process(jack_nframes_t nsamples, void *data)
 				LV2_Atom_Forge *forge = &handle->forge;
 				LV2_Atom_Forge_Frame frame;
 				lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
-				lv2_atom_forge_sequence_head(forge, &frame, 0);
+				LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(forge, &frame, 0);
 
-				if(trans_changed)
-					_trans_event(handle, forge, rolling, &pos);
+				if(ref && trans_changed)
+					ref = _trans_event(handle, forge, rolling, &pos);
 
 				int n = jack_midi_get_event_count(in_buf);
 				for(int i=0; i<n; i++)
@@ -498,12 +533,19 @@ _process(jack_nframes_t nsamples, void *data)
 					jack_midi_event_get(&mev, in_buf, i);
 
 					//add jack midi event to in_buf
-					lv2_atom_forge_frame_time(forge, mev.time);
-					lv2_atom_forge_atom(forge, mev.size, handle->midi_MidiEvent);
-					lv2_atom_forge_raw(forge, mev.buffer, mev.size);
-					lv2_atom_forge_pad(forge, mev.size);
+					if(ref)
+						ref = lv2_atom_forge_frame_time(forge, mev.time);
+					if(ref)
+						ref = lv2_atom_forge_atom(forge, mev.size, handle->midi_MidiEvent);
+					if(ref)
+						ref = lv2_atom_forge_raw(forge, mev.buffer, mev.size);
+					if(ref)
+						lv2_atom_forge_pad(forge, mev.size);
 				}
-				lv2_atom_forge_pop(forge, &frame);
+				if(ref)
+					lv2_atom_forge_pop(forge, &frame);
+				else
+					lv2_atom_sequence_clear(seq_in);
 
 				break;
 			}
@@ -516,10 +558,10 @@ _process(jack_nframes_t nsamples, void *data)
 				LV2_Atom_Forge *forge = &handle->forge;
 				LV2_Atom_Forge_Frame frame;
 				lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
-				lv2_atom_forge_sequence_head(forge, &frame, 0);
+				LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(forge, &frame, 0);
 
-				if(trans_changed)
-					_trans_event(handle, forge, rolling, &pos);
+				if(ref && trans_changed)
+					ref = _trans_event(handle, forge, rolling, &pos);
 
 				int n = jack_midi_get_event_count(in_buf);	
 				for(int i=0; i<n; i++)
@@ -530,12 +572,18 @@ _process(jack_nframes_t nsamples, void *data)
 					//add jack osc event to in_buf
 					if(osc_check_packet(mev.buffer, mev.size))
 					{
-						lv2_atom_forge_frame_time(forge, mev.time);
+						if(ref)
+							ref = lv2_atom_forge_frame_time(forge, mev.time);
+						handle->ref = ref;
 						osc_dispatch_method(mev.buffer, mev.size, methods,
 							_bundle_in, _bundle_out, handle);
+						ref = handle->ref;
 					}
 				}
-				lv2_atom_forge_pop(forge, &frame);
+				if(ref)
+					lv2_atom_forge_pop(forge, &frame);
+				else
+					lv2_atom_sequence_clear(seq_in);
 
 				break;
 			}
@@ -547,20 +595,25 @@ _process(jack_nframes_t nsamples, void *data)
 				LV2_Atom_Forge *forge = &handle->forge;
 				LV2_Atom_Forge_Frame frame;
 				lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
-				lv2_atom_forge_sequence_head(forge, &frame, 0);
+				LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(forge, &frame, 0);
 
 				const LV2_Atom_Object *obj;
 				size_t size;
 				while((obj = varchunk_read_request(bin->app_from_com, &size)))
 				{
-					lv2_atom_forge_frame_time(forge, 0);
-					lv2_atom_forge_raw(forge, obj, size);
-					lv2_atom_forge_pad(forge, size);
+					if(ref)
+						ref = lv2_atom_forge_frame_time(forge, 0);
+					if(ref)
+						ref = lv2_atom_forge_raw(forge, obj, size);
+					if(ref)
+						lv2_atom_forge_pad(forge, size);
 
 					varchunk_read_advance(bin->app_from_com);
 				}
-
-				lv2_atom_forge_pop(forge, &frame);
+				if(ref)
+					lv2_atom_forge_pop(forge, &frame);
+				else
+					lv2_atom_sequence_clear(seq_in);
 
 				break;
 			}

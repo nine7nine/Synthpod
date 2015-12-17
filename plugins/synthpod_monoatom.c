@@ -79,6 +79,12 @@ struct _plughandle_t {
 	} forge;
 
 	struct {
+		LV2_Atom_Forge_Ref event_out;
+		LV2_Atom_Forge_Ref com_in;
+		LV2_Atom_Forge_Ref notify;
+	} ref;
+
+	struct {
 		const LV2_Atom_Sequence *event_in;
 		LV2_Atom_Sequence *event_out;
 
@@ -291,15 +297,19 @@ _to_ui_advance(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge.notify;
+	LV2_Atom_Forge_Ref *ref = &handle->ref.notify;
 
 	//printf("_to_ui_advance: %zu\n", size);
 
 	if(forge->offset + size > forge->size)
 		return; // buffer overflow
 
-	lv2_atom_forge_frame_time(forge, 0);
-	lv2_atom_forge_raw(forge, handle->buf, size);
-	lv2_atom_forge_pad(forge, size);
+	if(*ref)
+		*ref = lv2_atom_forge_frame_time(forge, 0);
+	if(*ref)
+		*ref = lv2_atom_forge_raw(forge, handle->buf, size);
+	if(*ref)
+		lv2_atom_forge_pad(forge, size);
 }
 
 // rt
@@ -593,9 +603,12 @@ _process_pre(plughandle_t *handle, uint32_t nsamples, bool bypassed)
 			if(sp_app_com_event(handle->app, obj->body.id))
 			{
 				uint32_t size = obj->atom.size + sizeof(LV2_Atom);
-				lv2_atom_forge_frame_time(&handle->forge.com_in, ev->time.frames);
-				lv2_atom_forge_raw(&handle->forge.com_in, obj, size);
-				lv2_atom_forge_pad(&handle->forge.com_in, size);
+				if(handle->ref.com_in)
+					handle->ref.com_in = lv2_atom_forge_frame_time(&handle->forge.com_in, ev->time.frames);
+				if(handle->ref.com_in)
+					handle->ref.com_in = lv2_atom_forge_raw(&handle->forge.com_in, obj, size);
+				if(handle->ref.com_in)
+					lv2_atom_forge_pad(&handle->forge.com_in, size);
 			}
 
 			// try do process events directly
@@ -682,8 +695,6 @@ run(LV2_Handle instance, uint32_t nsamples)
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
 
-	const size_t sample_buf_size = sizeof(float) * nsamples;
-
 	// get input buffers
 	handle->source.event_in = NULL;
 	
@@ -724,8 +735,6 @@ run(LV2_Handle instance, uint32_t nsamples)
 	// fill output buffers
 	handle->sink.event_out = NULL;
 	
-	audio_ptr = 0;
-	control_ptr = 0;
 	for(const sp_app_system_sink_t *sink=sinks;
 		sink->type != SYSTEM_PORT_NONE;
 		sink++)
@@ -764,15 +773,15 @@ run(LV2_Handle instance, uint32_t nsamples)
 	// prepare forge(s) & sequence(s)
 	lv2_atom_forge_set_buffer(&handle->forge.event_out,
 		(uint8_t *)handle->port.event_out, handle->port.event_out->atom.size);
-	lv2_atom_forge_sequence_head(&handle->forge.event_out, &frame.event_out, 0);
+	handle->ref.event_out = lv2_atom_forge_sequence_head(&handle->forge.event_out, &frame.event_out, 0);
 	
 	lv2_atom_forge_set_buffer(&handle->forge.com_in,
 		(uint8_t *)handle->source.com_in, SEQ_SIZE);
-	lv2_atom_forge_sequence_head(&handle->forge.com_in, &frame.com_in, 0);
+	handle->ref.com_in = lv2_atom_forge_sequence_head(&handle->forge.com_in, &frame.com_in, 0);
 	
 	lv2_atom_forge_set_buffer(&handle->forge.notify,
 		(uint8_t *)handle->port.notify, handle->port.notify->atom.size);
-	lv2_atom_forge_sequence_head(&handle->forge.notify, &frame.notify, 0);
+	handle->ref.notify = lv2_atom_forge_sequence_head(&handle->forge.notify, &frame.notify, 0);
 
 	if(sp_app_bypassed(app))
 	{
@@ -782,9 +791,20 @@ run(LV2_Handle instance, uint32_t nsamples)
 		_process_post(handle);
 
 		// end sequence(s)
-		lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
-		lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
-		lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
+		if(handle->ref.event_out)
+			lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
+		else
+			lv2_atom_sequence_clear(handle->port.event_out);
+
+		if(handle->ref.com_in)
+			lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
+		else
+			lv2_atom_sequence_clear(handle->source.com_in);
+
+		if(handle->ref.notify)
+			lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
+		else
+			lv2_atom_sequence_clear(handle->port.notify);
 
 		return;
 	}
@@ -793,9 +813,20 @@ run(LV2_Handle instance, uint32_t nsamples)
 	_process_post(handle);
 
 	// end sequence(s)
-	lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
-	lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
-	lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
+	if(handle->ref.event_out)
+		lv2_atom_forge_pop(&handle->forge.event_out, &frame.event_out);
+	else
+		lv2_atom_sequence_clear(handle->port.event_out);
+
+	if(handle->ref.com_in)
+		lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
+	else
+		lv2_atom_sequence_clear(handle->source.com_in);
+
+	if(handle->ref.notify)
+		lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
+	else
+		lv2_atom_sequence_clear(handle->port.notify);
 
 	if(handle->sink.event_out)
 		memcpy(handle->port.event_out, handle->sink.event_out, SEQ_SIZE);
@@ -817,12 +848,13 @@ cleanup(LV2_Handle instance)
 	plughandle_t *handle = instance;
 
 	sp_app_free(handle->app);
-	free(handle);
 
 	varchunk_free(handle->app_to_worker);
 	varchunk_free(handle->app_from_worker);
 	varchunk_free(handle->app_from_ui);
 	varchunk_free(handle->app_from_app);
+
+	free(handle);
 
 	eina_shutdown();
 }

@@ -1400,8 +1400,6 @@ _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 static bool
 _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 {
-	atom = ASSUME_ALIGNED(atom);
-
 	// iterate over existing modules and send module_add_t
 	for(unsigned m=0; m<app->num_mods; m++)
 	{
@@ -2709,6 +2707,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			case JOB_TYPE_REQUEST_PRESET_LOAD:
 			{
 				int status = _preset_load(app, job->mod, job->uri);
+				(void)status; //FIXME check this
 
 				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
@@ -2728,6 +2727,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			case JOB_TYPE_REQUEST_PRESET_SAVE:
 			{
 				int status = _preset_save(app, job->mod, job->uri);
+				(void)status; //FIXME check this
 
 				// signal to app
 				size_t work_size = sizeof(work_t) + sizeof(job_t);
@@ -3023,8 +3023,10 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 				+ lv2_atom_pad_size(len) < forge->size) )
 			{
 				ref = lv2_atom_forge_frame_time(forge, frames);
-				ref = lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
-				lv2_atom_forge_pad(forge, len);
+				if(ref)
+					ref = lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
+				if(ref)
+					lv2_atom_forge_pad(forge, len);
 			}
 
 			// advance iterator
@@ -3065,8 +3067,10 @@ _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 				+ sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size) < forge->size) )
 			{
 				ref = lv2_atom_forge_frame_time(forge, nsamples-1);
-				ref = lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
-				lv2_atom_forge_pad(forge, atom->size);
+				if(ref)
+					ref = lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
+				if(ref)
+					lv2_atom_forge_pad(forge, atom->size);
 			}
 		}
 
