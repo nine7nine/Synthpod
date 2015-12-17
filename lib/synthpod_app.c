@@ -1098,7 +1098,10 @@ static inline mod_t *
 _sp_app_mod_get(sp_app_t *app, u_id_t uid)
 {
 	mod_t *const *mod = bsearch(&uid, app->ords, app->num_mods, sizeof(mod_t *), _mod_cmp);
-	return *mod;
+	if(mod)
+		return *mod;
+
+	return NULL;
 }
 
 static inline port_t *

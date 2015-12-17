@@ -1736,7 +1736,7 @@ _x11_ui_client_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	int w, h;
 	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
 
-	printf("_x11_ui_client_resize: %i %i\n", w, h);
+	//printf("_x11_ui_client_resize: %i %i\n", w, h);
 	mod->x11.client_resize_iface->ui_resize(mod->x11.handle, w, h);
 }
 
