@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Synthpod (Dummy)
+Comment=Lightweight, nonlinear LV2 plugin host
+Exec=@CMAKE_INSTALL_PREFIX@/@SYNTHPOD_BIN_DIR@/synthpod_dummy
+Terminal=false
+Icon=@CMAKE_INSTALL_PREFIX@/@SYNTHPOD_ICON_DIR@/synthpod.png
+Type=Application
+Categories=AudioVideo;Audio;

@@ -39,7 +39,8 @@ set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-z,relro ${CMAKE_SHARED_LINKER_FLAGS}")
 
 # options
 option(BUILD_JACK "Build JACK standalone host" ON)
-option(BUILD_ALSA "Build ALSA standalone host (experimental)" OFF)
+option(BUILD_ALSA "Build ALSA standalone host" OFF)
+option(BUILD_DUMMY "Build DUMMY standalone host (experimental)" OFF)
 
 # vectorization
 include(CheckCCompilerFlag)

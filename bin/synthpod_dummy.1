@@ -4,13 +4,13 @@
 synthpod \- a lightweight nonlinear LV2 plugin container
 
 .SH SYNOPSIS
-.B synthpod_jack
+.B synthpod_dummy
 [\fIoptions\fR] [\fIbundle-path\fR]
 
 .SH DESCRIPTION
 \fBsynthpod\fP is a lightweight nonlinear LV2 plugin container, aka host.
 .PP
-It is a pure stand-alone JACK client with JACK/NSM session support and JACK AUDIO/MIDI.
+It is a pure stand-alone Dummy client with NSM session support.
 .PP
 It is also a first-class LV2 plugin (http://open-music-kontrollers.ch/lv2/synthpod#stereo).
 
@@ -36,14 +36,14 @@ Enable GUI (default)
 Disable GUI
 
 .HP
-\fB\-n\fR server-name
+\fB\-r\fR sample-rate
 .IP
-Connect to named JACK daemon
+Sample Rate (48000)
 
 .HP
-\fB\-u\fR client-uuid
+\fB\-p\fR sample-period
 .IP
-Client UUID for JACK session management
+Frames per period (1024)
 
 .HP
 \fB\-s\fR sequence-size
@@ -65,4 +65,4 @@ Artistic License 2.0.
 Hanspeter Portner (dev@open-music-kontrollers.ch).
 
 .SH SEE ALSO
-synthpod_alsa(1), jackd(1)
+synthpod_alsa(1), synthpod_jack(1)

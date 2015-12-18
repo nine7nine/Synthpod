@@ -10,7 +10,7 @@ set(SYNTHPOD_BIN_DIR "bin")
 set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
 set(SYNTHPOD_DESKTOP_DIR "share/applications")
 
-if(BUILD_JACK OR BUILD_ALSA)
+if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 # icon
 	install(FILES ${PROJECT_SOURCE_DIR}/data/pix/synthpod.png DESTINATION
 		${SYNTHPOD_ICON_DIR})
@@ -118,4 +118,36 @@ if(BUILD_ALSA)
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod_alsa.1)
 	add_custom_target(SYNTHPOD_ALSA_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_alsa.1.gz)
 	install(FILES "${PROJECT_BINARY_DIR}/synthpod_alsa.1.gz" DESTINATION share/man/man1)
+endif()
+
+if(BUILD_DUMMY)
+# synthpod
+	add_executable(synthpod.dummy
+		synthpod_dummy.c
+		synthpod_nsm.c
+		ext_urid.c)
+	target_link_libraries(synthpod.dummy
+		${ECORE_CON_LDFLAGS}
+		"-lm"
+		synthpod.lib
+		synthpod_ui.lib)
+	set_target_properties(synthpod.dummy PROPERTIES OUTPUT_NAME "synthpod_dummy")
+	install(TARGETS synthpod.dummy DESTINATION bin)
+
+# desktop  file
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_dummy.desktop.in
+		${PROJECT_BINARY_DIR}/bin/synthpod_dummy.desktop @ONLY)
+	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_dummy.desktop DESTINATION
+		${SYNTHPOD_DESKTOP_DIR})
+
+# man page 
+	add_custom_command(
+		OUTPUT ${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz
+		COMMAND ${GZIP} ARGS
+		"-c9" ${CMAKE_CURRENT_SOURCE_DIR}/synthpod_dummy.1
+			">" ${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz
+		DEPENDS
+			${CMAKE_CURRENT_SOURCE_DIR}/synthpod_dummy.1)
+	add_custom_target(SYNTHPOD_DUMMY_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz)
+	install(FILES "${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz" DESTINATION share/man/man1)
 endif()
