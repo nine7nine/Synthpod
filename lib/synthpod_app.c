@@ -225,7 +225,7 @@ struct _port_t {
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
 	port_buffer_type_t buffer_type; // none, sequence
-	int patchable; // support patch:Message
+	bool patchable; // support patch:Message
 
 	LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
 	int subscriptions; // subsriptions reference counter
@@ -3169,36 +3169,47 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 	if(seq->atom.size == sizeof(LV2_Atom_Sequence_Body)) // empty seq
 		return;
 	
-	const int subscribed = port->subscriptions != 0;
+	const bool subscribed = port->subscriptions != 0;
 
-	// transfer each atom of sequence separately
-	LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+	if(subscribed)
 	{
-		const LV2_Atom *atom = &ev->body;
-
-		if(!subscribed) // patched
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		{
-			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+			const LV2_Atom *atom = &ev->body;
 
-			if(  (obj->atom.type != app->forge.Object)
-				|| ( (obj->body.otype != app->regs.patch.set.urid)
-					&& (obj->body.otype != app->regs.patch.put.urid)
-					&& (obj->body.otype != app->regs.patch.patch.urid) ) ) //FIXME handle more
+			const uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
+			const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
+			transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
 			{
-				continue; // skip this event
+				_sp_transfer_event_fill(&app->regs, &app->forge, trans,
+					port->mod->uid, port->index, atom_size, atom);
+				_sp_app_to_ui_advance(app, size);
 			}
-
-			//printf("routing response\n");
 		}
-
-		const uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-		const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
-		transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-		if(trans)
+	}
+	else // patched
+	{
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		{
-			_sp_transfer_event_fill(&app->regs, &app->forge, trans,
-				port->mod->uid, port->index, atom_size, atom);
-			_sp_app_to_ui_advance(app, size);
+			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
+
+			if(  (obj->atom.type == app->forge.Object)
+				&& (obj->body.id != app->regs.synthpod.feedback_block.urid) // don't feedback patch messages from UI itself!
+				&& ( (obj->body.otype == app->regs.patch.set.urid)
+					|| (obj->body.otype == app->regs.patch.put.urid)
+					|| (obj->body.otype == app->regs.patch.patch.urid) ) ) //TODO support more patch messages
+			{
+				const uint32_t atom_size = sizeof(LV2_Atom) + obj->atom.size;
+				const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
+				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transfer_event_fill(&app->regs, &app->forge, trans,
+						port->mod->uid, port->index, atom_size, &obj->atom);
+					_sp_app_to_ui_advance(app, size);
+				}
+			}
 		}
 	}
 }
@@ -3306,13 +3317,12 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			port_t *port = &mod->ports[i];
 
 			// no notification/subscription and no support for patch:Message
-			const int subscribed = port->subscriptions != 0;
-			const int patchable = port->patchable && (port->direction == PORT_DIRECTION_OUTPUT);
-			if(!(subscribed || patchable))
+			const bool subscribed = port->subscriptions != 0;
+			if(!(subscribed || port->patchable))
 				continue; // skip this port
 
 			/*
-			if(patchable)
+			if(port->patchable)
 				printf("patchable %i %i %i\n", mod->uid, i, subscribed);
 			*/
 

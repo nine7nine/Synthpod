@@ -489,8 +489,8 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 {
 	sp_ui_t *ui = mod->ui;
 
-	//printf("ui got patch:Set: %u %u %s\n",
-	//	subject_val, request_val, body_val);
+	//printf("ui got patch:Set: %u %u\n",
+	//	mod->uid, property_val);
 
 	property_t *prop;
 	if(  (prop = eina_list_search_sorted(mod->static_properties, _urid_find, &property_val))
@@ -632,429 +632,430 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	{
 		const LV2_Atom_Object *obj = buf;
 
-		// check for patch:Set
 		if(  (obj->atom.type == ui->forge.Object)
-			&& (obj->body.otype == ui->regs.patch.set.urid) )
+			&& (obj->body.id != ui->regs.synthpod.feedback_block.urid) ) // dont' feedback patch messages from UI itself!
 		{
-			const LV2_Atom_URID *subject = NULL;
-			const LV2_Atom_URID *property = NULL;
-			const LV2_Atom *value = NULL;
-
-			LV2_Atom_Object_Query q[] = {
-				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
-				{ ui->regs.patch.property.urid, (const LV2_Atom **)&property },
-				{ ui->regs.patch.value.urid, &value },
-				LV2_ATOM_OBJECT_QUERY_END
-			};
-			lv2_atom_object_query(obj, q);
-
-			bool subject_match = subject
-				? subject->body == mod->subject
-				: true;
-
-			if(subject_match && property && value)
-				_mod_set_property(mod, property->body, value);
-		}
-		// check for patch:Put
-		else if(  (obj->atom.type == ui->forge.Object)
-			&& (obj->body.otype == ui->regs.patch.put.urid) )
-		{
-			const LV2_Atom_URID *subject = NULL;
-
-			LV2_Atom_Object_Query q[] = {
-				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
-				LV2_ATOM_OBJECT_QUERY_END
-			};
-			lv2_atom_object_query(obj, q);
-
-			bool subject_match = subject
-				? subject->body == mod->subject
-				: true;
-
-			if(subject_match)
+			// check for patch:Set
+			if(obj->body.otype == ui->regs.patch.set.urid)
 			{
-				LV2_ATOM_OBJECT_FOREACH(obj, prop)
+				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_URID *property = NULL;
+				const LV2_Atom *value = NULL;
+
+				LV2_Atom_Object_Query q[] = {
+					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+					{ ui->regs.patch.property.urid, (const LV2_Atom **)&property },
+					{ ui->regs.patch.value.urid, &value },
+					LV2_ATOM_OBJECT_QUERY_END
+				};
+				lv2_atom_object_query(obj, q);
+
+				bool subject_match = subject
+					? subject->body == mod->subject
+					: true;
+
+				if(subject_match && property && value)
+					_mod_set_property(mod, property->body, value);
+			}
+			// check for patch:Put
+			else if(obj->body.otype == ui->regs.patch.put.urid)
+			{
+				const LV2_Atom_URID *subject = NULL;
+
+				LV2_Atom_Object_Query q[] = {
+					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+					LV2_ATOM_OBJECT_QUERY_END
+				};
+				lv2_atom_object_query(obj, q);
+
+				bool subject_match = subject
+					? subject->body == mod->subject
+					: true;
+
+				if(subject_match)
 				{
-					_mod_set_property(mod, prop->key, &prop->value);
+					LV2_ATOM_OBJECT_FOREACH(obj, prop)
+					{
+						_mod_set_property(mod, prop->key, &prop->value);
+					}
 				}
 			}
-		}
-		// check for patch:Patch
-		else if(  (obj->atom.type == ui->forge.Object)
-			&& (obj->body.otype == ui->regs.patch.patch.urid) )
-		{
-			const LV2_Atom_URID *subject = NULL;
-			const LV2_Atom_Object *add = NULL;
-			const LV2_Atom_Object *remove = NULL;
-
-			LV2_Atom_Object_Query q[] = {
-				{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
-				{ ui->regs.patch.add.urid, (const LV2_Atom **)&add },
-				{ ui->regs.patch.remove.urid, (const LV2_Atom **)&remove },
-				LV2_ATOM_OBJECT_QUERY_END
-			};
-			lv2_atom_object_query(obj, q);
-
-			if(subject && add && remove)
+			// check for patch:Patch
+			else if(obj->body.otype == ui->regs.patch.patch.urid)
 			{
-				const char *group_lbl = "*Properties*";
-				Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
-				if(!parent)
+				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_Object *add = NULL;
+				const LV2_Atom_Object *remove = NULL;
+
+				LV2_Atom_Object_Query q[] = {
+					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+					{ ui->regs.patch.add.urid, (const LV2_Atom **)&add },
+					{ ui->regs.patch.remove.urid, (const LV2_Atom **)&remove },
+					LV2_ATOM_OBJECT_QUERY_END
+				};
+				lv2_atom_object_query(obj, q);
+
+				if(subject && add && remove)
 				{
-					group_t *group = calloc(1, sizeof(group_t));
-					if(group)
+					const char *group_lbl = "*Properties*";
+					Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
+					if(!parent)
 					{
-						group->type = GROUP_TYPE_PROPERTY;
-						group->mod = mod;
-
-						parent = elm_genlist_item_sorted_insert(ui->modlist,
-							ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);	
-						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
-						if(parent)
-							eina_hash_add(mod->groups, group_lbl, parent);
-					}
-				}
-				
-				group_t *group = elm_object_item_data_get(parent);
-
-				LV2_ATOM_OBJECT_FOREACH(remove, atom_prop)
-				{
-					if(atom_prop->key == ui->regs.patch.readable.urid)
-					{
-						if(subject->body != mod->subject)
-							continue; // ignore alien patch events
-
-						const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
+						group_t *group = calloc(1, sizeof(group_t));
+						if(group)
 						{
-							if(group)
-								group->children = eina_list_remove(group->children, prop);
+							group->type = GROUP_TYPE_PROPERTY;
+							group->mod = mod;
 
-							mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
-							free(prop);
+							parent = elm_genlist_item_sorted_insert(ui->modlist,
+								ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);	
+							elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
+							if(parent)
+								eina_hash_add(mod->groups, group_lbl, parent);
 						}
 					}
-					else if(atom_prop->key == ui->regs.patch.writable.urid)
+					
+					group_t *group = elm_object_item_data_get(parent);
+
+					LV2_ATOM_OBJECT_FOREACH(remove, atom_prop)
 					{
-						if(subject->body != mod->subject)
-							continue; // ignore alien patch events
-
-						const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
+						if(atom_prop->key == ui->regs.patch.readable.urid)
 						{
-							if(group)
-								group->children = eina_list_remove(group->children, prop);
+							if(subject->body != mod->subject)
+								continue; // ignore alien patch events
 
-							mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
-							free(prop);
-						}
-					}
-					else if(atom_prop->key == ui->regs.rdfs.label.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+							const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
-						if(prop && prop->label)
-						{
-							free(prop->label);
-							prop->label = NULL;
-						}
-					}
-					else if(atom_prop->key == ui->regs.rdfs.range.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
-							prop->type_urid = 0;
-					}
-					else if(atom_prop->key == ui->regs.core.minimum.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
-							prop->minimum = 0.f;
-					}
-					else if(atom_prop->key == ui->regs.core.maximum.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
-							prop->maximum = 1.f;
-					}
-					else if(atom_prop->key == ui->regs.units.unit.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop && prop->unit)
-						{
-							free(prop->unit);
-							prop->unit = NULL;
-						}
-					}
-					else if(atom_prop->key == ui->regs.core.scale_point.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
-						{
-							point_t *p;
-							EINA_LIST_FREE(prop->scale_points, p)
+							if(prop)
 							{
-								free(p->label);
-								free(p->s);
-								free(p);
+								if(group)
+									group->children = eina_list_remove(group->children, prop);
+
+								mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
+								free(prop);
+							}
+						}
+						else if(atom_prop->key == ui->regs.patch.writable.urid)
+						{
+							if(subject->body != mod->subject)
+								continue; // ignore alien patch events
+
+							const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+							{
+								if(group)
+									group->children = eina_list_remove(group->children, prop);
+
+								mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
+								free(prop);
+							}
+						}
+						else if(atom_prop->key == ui->regs.rdfs.label.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop && prop->label)
+							{
+								free(prop->label);
+								prop->label = NULL;
+							}
+						}
+						else if(atom_prop->key == ui->regs.rdfs.range.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+								prop->type_urid = 0;
+						}
+						else if(atom_prop->key == ui->regs.core.minimum.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+								prop->minimum = 0.f;
+						}
+						else if(atom_prop->key == ui->regs.core.maximum.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+								prop->maximum = 1.f;
+						}
+						else if(atom_prop->key == ui->regs.units.unit.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop && prop->unit)
+							{
+								free(prop->unit);
+								prop->unit = NULL;
+							}
+						}
+						else if(atom_prop->key == ui->regs.core.scale_point.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+							{
+								point_t *p;
+								EINA_LIST_FREE(prop->scale_points, p)
+								{
+									free(p->label);
+									free(p->s);
+									free(p);
+								}
 							}
 						}
 					}
-				}
 
-				LV2_ATOM_OBJECT_FOREACH(add, atom_prop)
-				{
-					if(atom_prop->key == ui->regs.patch.readable.urid)
+					LV2_ATOM_OBJECT_FOREACH(add, atom_prop)
 					{
-						if(subject->body != mod->subject)
-							continue; // ignore alien patch events
-
-						property_t *prop = calloc(1, sizeof(property_t));
-						if(prop)
+						if(atom_prop->key == ui->regs.patch.readable.urid)
 						{
-							prop->mod = mod;
-							prop->editable = 0;
-							prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
-							prop->label = NULL; // not yet known
-							prop->type_urid = 0; // not yet known
-							prop->minimum = 0.f; // not yet known
-							prop->maximum = 1.f; // not yet known
-							prop->unit = NULL; // not yet known
+							if(subject->body != mod->subject)
+								continue; // ignore alien patch events
 
-							mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
-
-							// append property to corresponding group
-							if(group)
-								group->children = eina_list_append(group->children, prop);
-
-							// append property to UI
-							if(parent) //TODO remove duplicate code
+							property_t *prop = calloc(1, sizeof(property_t));
+							if(prop)
 							{
-								Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
-									ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
-									NULL, NULL);
-								int select_mode = ELM_OBJECT_SELECT_MODE_NONE;
-								elm_genlist_item_select_mode_set(elmnt, select_mode);
-								prop->std.elmnt = elmnt;
+								prop->mod = mod;
+								prop->editable = 0;
+								prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+								prop->label = NULL; // not yet known
+								prop->type_urid = 0; // not yet known
+								prop->minimum = 0.f; // not yet known
+								prop->maximum = 1.f; // not yet known
+								prop->unit = NULL; // not yet known
+
+								mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
+
+								// append property to corresponding group
+								if(group)
+									group->children = eina_list_append(group->children, prop);
+
+								// append property to UI
+								if(parent) //TODO remove duplicate code
+								{
+									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
+										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
+										NULL, NULL);
+									int select_mode = ELM_OBJECT_SELECT_MODE_NONE;
+									elm_genlist_item_select_mode_set(elmnt, select_mode);
+									prop->std.elmnt = elmnt;
+								}
 							}
 						}
-					}
-					else if(atom_prop->key == ui->regs.patch.writable.urid)
-					{
-						if(subject->body != mod->subject)
-							continue; // ignore alien patch events
-
-						property_t *prop = calloc(1, sizeof(property_t));
-						if(prop)
+						else if(atom_prop->key == ui->regs.patch.writable.urid)
 						{
-							prop->mod = mod;
-							prop->editable = 1;
-							prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
-							prop->label = NULL; // not yet known
-							prop->type_urid = 0; // not yet known
-							prop->minimum = 0.f; // not yet known
-							prop->maximum = 1.f; // not yet known
-							prop->unit = NULL; // not yet known
+							if(subject->body != mod->subject)
+								continue; // ignore alien patch events
 
-							mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
-
-							// append property to corresponding group
-							if(group)
-								group->children = eina_list_append(group->children, prop);
-
-							// append property to UI
-							if(parent) //TODO remove duplicate code
+							property_t *prop = calloc(1, sizeof(property_t));
+							if(prop)
 							{
-								Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
-									ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
-									NULL, NULL);
-								int select_mode = (prop->type_urid == ui->forge.String)
-									|| (prop->type_urid == ui->forge.URI)
-										? ELM_OBJECT_SELECT_MODE_DEFAULT
-										: ELM_OBJECT_SELECT_MODE_NONE;
-								elm_genlist_item_select_mode_set(elmnt, select_mode);
-								prop->std.elmnt = elmnt;
+								prop->mod = mod;
+								prop->editable = 1;
+								prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+								prop->label = NULL; // not yet known
+								prop->type_urid = 0; // not yet known
+								prop->minimum = 0.f; // not yet known
+								prop->maximum = 1.f; // not yet known
+								prop->unit = NULL; // not yet known
+
+								mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
+
+								// append property to corresponding group
+								if(group)
+									group->children = eina_list_append(group->children, prop);
+
+								// append property to UI
+								if(parent) //TODO remove duplicate code
+								{
+									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
+										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
+										NULL, NULL);
+									int select_mode = (prop->type_urid == ui->forge.String)
+										|| (prop->type_urid == ui->forge.URI)
+											? ELM_OBJECT_SELECT_MODE_DEFAULT
+											: ELM_OBJECT_SELECT_MODE_NONE;
+									elm_genlist_item_select_mode_set(elmnt, select_mode);
+									prop->std.elmnt = elmnt;
+								}
 							}
 						}
-					}
-					else if(atom_prop->key == ui->regs.rdfs.label.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
+						else if(atom_prop->key == ui->regs.rdfs.label.urid)
 						{
-							prop->label = strndup(LV2_ATOM_BODY_CONST(&atom_prop->value), atom_prop->value.size);
-							if(prop->std.elmnt)
-								elm_genlist_item_update(prop->std.elmnt);
-						}
-					}
-					else if(atom_prop->key == ui->regs.rdfs.range.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject->body;
 
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
-						if(prop)
-						{
-							prop->type_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
-							if(prop->std.elmnt)
-								elm_genlist_item_update(prop->std.elmnt);
-						}
-					}
-					else if(atom_prop->key == ui->regs.core.minimum.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
-						{
-							if(atom_prop->value.type == ui->forge.Int)
-								prop->minimum = ((const LV2_Atom_Int *)&atom_prop->value)->body;
-							else if(atom_prop->value.type == ui->forge.Long)
-								prop->minimum = ((const LV2_Atom_Long *)&atom_prop->value)->body;
-							else if(atom_prop->value.type == ui->forge.Float)
-								prop->minimum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
-							else if(atom_prop->value.type == ui->forge.Double)
-								prop->minimum = ((const LV2_Atom_Double *)&atom_prop->value)->body;
-
-							if(prop->std.elmnt)
-								elm_genlist_item_update(prop->std.elmnt);
-						}
-					}
-					else if(atom_prop->key == ui->regs.core.maximum.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
-						{
-							if(atom_prop->value.type == ui->forge.Int)
-								prop->maximum = ((const LV2_Atom_Int *)&atom_prop->value)->body;
-							else if(atom_prop->value.type == ui->forge.Long)
-								prop->maximum = ((const LV2_Atom_Long *)&atom_prop->value)->body;
-							else if(atom_prop->value.type == ui->forge.Float)
-								prop->maximum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
-							else if(atom_prop->value.type == ui->forge.Double)
-								prop->maximum = ((const LV2_Atom_Double *)&atom_prop->value)->body;
-
-							if(prop->std.elmnt)
-								elm_genlist_item_update(prop->std.elmnt);
-						}
-					}
-					else if(atom_prop->key == ui->regs.units.unit.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
-						{
-							if(atom_prop->value.type == ui->forge.URID)
+							if(prop)
 							{
-								const char *uri = ui->driver->unmap->unmap(ui->driver->unmap->handle,
-									((const LV2_Atom_URID *)&atom_prop->value)->body);
-
-								if(uri)
-								{
-									LilvNode *unit = lilv_new_uri(ui->world, uri);
-									if(unit)
-									{
-										LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
-										if(symbol)
-										{
-											prop->unit = strdup(lilv_node_as_string(symbol));
-											lilv_node_free(symbol);
-										}
-
-										lilv_node_free(unit);
-									}
-								}
+								prop->label = strndup(LV2_ATOM_BODY_CONST(&atom_prop->value), atom_prop->value.size);
+								if(prop->std.elmnt)
+									elm_genlist_item_update(prop->std.elmnt);
 							}
-
-							if(prop->std.elmnt)
-								elm_genlist_item_update(prop->std.elmnt);
 						}
-					}
-					else if(atom_prop->key == ui->regs.core.scale_point.urid)
-					{
-						const LV2_URID tar_urid = subject->body;
-
-						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-						if(prop)
+						else if(atom_prop->key == ui->regs.rdfs.range.urid)
 						{
-							const LV2_Atom_Object *point_obj = (const LV2_Atom_Object *)&atom_prop->value;
+							const LV2_URID tar_urid = subject->body;
 
-							const LV2_Atom_String *point_label = NULL;
-							const LV2_Atom *point_value = NULL;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
-							LV2_Atom_Object_Query point_q[] = {
-								{ ui->regs.rdfs.label.urid, (const LV2_Atom **)&point_label },
-								{ ui->regs.rdf.value.urid, (const LV2_Atom **)&point_value },
-								LV2_ATOM_OBJECT_QUERY_END
-							};
-							lv2_atom_object_query(point_obj, point_q);
-
-							if(point_label && point_value)
+							if(prop)
 							{
-								point_t *p = calloc(1, sizeof(point_t));
-								p->label = strndup(LV2_ATOM_BODY_CONST(point_label), point_label->atom.size);
-								if(point_value->type == ui->forge.Int)
-								{
-									p->d = calloc(1, sizeof(double));
-									*p->d = ((const LV2_Atom_Int *)point_value)->body;
-								}
-								else if(point_value->type == ui->forge.Float)
-								{
-									p->d = calloc(1, sizeof(double));
-									*p->d = ((const LV2_Atom_Float *)point_value)->body;
-								}
-								else if(point_value->type == ui->forge.Long)
-								{
-									p->d = calloc(1, sizeof(double));
-									*p->d = ((const LV2_Atom_Long *)point_value)->body;
-								}
-								else if(point_value->type == ui->forge.Double)
-								{
-									p->d = calloc(1, sizeof(double));
-									*p->d = ((const LV2_Atom_Double *)point_value)->body;
-								}
-								//FIXME do other types
-								else if(point_value->type == ui->forge.String)
-								{
-									p->s = strndup(LV2_ATOM_BODY_CONST(point_value), point_value->size);
-								}
+								prop->type_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
+								if(prop->std.elmnt)
+									elm_genlist_item_update(prop->std.elmnt);
+							}
+						}
+						else if(atom_prop->key == ui->regs.core.minimum.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
 
-								prop->scale_points = eina_list_append(prop->scale_points, p);
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+							{
+								if(atom_prop->value.type == ui->forge.Int)
+									prop->minimum = ((const LV2_Atom_Int *)&atom_prop->value)->body;
+								else if(atom_prop->value.type == ui->forge.Long)
+									prop->minimum = ((const LV2_Atom_Long *)&atom_prop->value)->body;
+								else if(atom_prop->value.type == ui->forge.Float)
+									prop->minimum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+								else if(atom_prop->value.type == ui->forge.Double)
+									prop->minimum = ((const LV2_Atom_Double *)&atom_prop->value)->body;
 
 								if(prop->std.elmnt)
 									elm_genlist_item_update(prop->std.elmnt);
 							}
 						}
+						else if(atom_prop->key == ui->regs.core.maximum.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+							{
+								if(atom_prop->value.type == ui->forge.Int)
+									prop->maximum = ((const LV2_Atom_Int *)&atom_prop->value)->body;
+								else if(atom_prop->value.type == ui->forge.Long)
+									prop->maximum = ((const LV2_Atom_Long *)&atom_prop->value)->body;
+								else if(atom_prop->value.type == ui->forge.Float)
+									prop->maximum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
+								else if(atom_prop->value.type == ui->forge.Double)
+									prop->maximum = ((const LV2_Atom_Double *)&atom_prop->value)->body;
+
+								if(prop->std.elmnt)
+									elm_genlist_item_update(prop->std.elmnt);
+							}
+						}
+						else if(atom_prop->key == ui->regs.units.unit.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+							{
+								if(atom_prop->value.type == ui->forge.URID)
+								{
+									const char *uri = ui->driver->unmap->unmap(ui->driver->unmap->handle,
+										((const LV2_Atom_URID *)&atom_prop->value)->body);
+
+									if(uri)
+									{
+										LilvNode *unit = lilv_new_uri(ui->world, uri);
+										if(unit)
+										{
+											LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+											if(symbol)
+											{
+												prop->unit = strdup(lilv_node_as_string(symbol));
+												lilv_node_free(symbol);
+											}
+
+											lilv_node_free(unit);
+										}
+									}
+								}
+
+								if(prop->std.elmnt)
+									elm_genlist_item_update(prop->std.elmnt);
+							}
+						}
+						else if(atom_prop->key == ui->regs.core.scale_point.urid)
+						{
+							const LV2_URID tar_urid = subject->body;
+
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+							{
+								const LV2_Atom_Object *point_obj = (const LV2_Atom_Object *)&atom_prop->value;
+
+								const LV2_Atom_String *point_label = NULL;
+								const LV2_Atom *point_value = NULL;
+
+								LV2_Atom_Object_Query point_q[] = {
+									{ ui->regs.rdfs.label.urid, (const LV2_Atom **)&point_label },
+									{ ui->regs.rdf.value.urid, (const LV2_Atom **)&point_value },
+									LV2_ATOM_OBJECT_QUERY_END
+								};
+								lv2_atom_object_query(point_obj, point_q);
+
+								if(point_label && point_value)
+								{
+									point_t *p = calloc(1, sizeof(point_t));
+									p->label = strndup(LV2_ATOM_BODY_CONST(point_label), point_label->atom.size);
+									if(point_value->type == ui->forge.Int)
+									{
+										p->d = calloc(1, sizeof(double));
+										*p->d = ((const LV2_Atom_Int *)point_value)->body;
+									}
+									else if(point_value->type == ui->forge.Float)
+									{
+										p->d = calloc(1, sizeof(double));
+										*p->d = ((const LV2_Atom_Float *)point_value)->body;
+									}
+									else if(point_value->type == ui->forge.Long)
+									{
+										p->d = calloc(1, sizeof(double));
+										*p->d = ((const LV2_Atom_Long *)point_value)->body;
+									}
+									else if(point_value->type == ui->forge.Double)
+									{
+										p->d = calloc(1, sizeof(double));
+										*p->d = ((const LV2_Atom_Double *)point_value)->body;
+									}
+									//FIXME do other types
+									else if(point_value->type == ui->forge.String)
+									{
+										p->s = strndup(LV2_ATOM_BODY_CONST(point_value), point_value->size);
+									}
+
+									prop->scale_points = eina_list_append(prop->scale_points, p);
+
+									if(prop->std.elmnt)
+										elm_genlist_item_update(prop->std.elmnt);
+								}
+							}
+						}
 					}
 				}
+				else
+					fprintf(stderr, "patch:Patch one of patch:subject, patch:add, patch:add missing\n");
 			}
-			else
-				fprintf(stderr, "patch:Patch one of patch:subject, patch:add, patch:add missing\n");
 		}
 	}
 	else
