@@ -272,6 +272,7 @@ struct _property_t {
 	float maximum;
 
 	Eina_List *scale_points;
+	char *unit;
 };
 
 struct _sp_ui_t {
@@ -787,6 +788,17 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						if(prop)
 							prop->maximum = 1.f;
 					}
+					else if(atom_prop->key == ui->regs.units.unit.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop && prop->unit)
+						{
+							free(prop->unit);
+							prop->unit = NULL;
+						}
+					}
 					else if(atom_prop->key == ui->regs.core.scale_point.urid)
 					{
 						const LV2_URID tar_urid = subject->body;
@@ -822,6 +834,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							prop->type_urid = 0; // not yet known
 							prop->minimum = 0.f; // not yet known
 							prop->maximum = 1.f; // not yet known
+							prop->unit = NULL; // not yet known
 
 							mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
 
@@ -856,6 +869,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							prop->type_urid = 0; // not yet known
 							prop->minimum = 0.f; // not yet known
 							prop->maximum = 1.f; // not yet known
+							prop->unit = NULL; // not yet known
 
 							mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
 
@@ -941,6 +955,40 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->maximum = ((const LV2_Atom_Float *)&atom_prop->value)->body;
 							else if(atom_prop->value.type == ui->forge.Double)
 								prop->maximum = ((const LV2_Atom_Double *)&atom_prop->value)->body;
+
+							if(prop->std.elmnt)
+								elm_genlist_item_update(prop->std.elmnt);
+						}
+					}
+					else if(atom_prop->key == ui->regs.units.unit.urid)
+					{
+						const LV2_URID tar_urid = subject->body;
+
+						property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+						if(prop)
+						{
+							if(atom_prop->value.type == ui->forge.URID)
+							{
+								const char *uri = ui->driver->unmap->unmap(ui->driver->unmap->handle,
+									((const LV2_Atom_URID *)&atom_prop->value)->body);
+
+								if(uri)
+								{
+									LilvNode *unit = lilv_new_uri(ui->world, uri);
+									if(unit)
+									{
+										LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+										if(symbol)
+										{
+											prop->unit = strdup(lilv_node_as_string(symbol));
+											lilv_node_free(symbol);
+										}
+
+										lilv_node_free(unit);
+									}
+								}
+							}
 
 							if(prop->std.elmnt)
 								elm_genlist_item_update(prop->std.elmnt);
@@ -2260,6 +2308,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			prop->type_urid = 0; // invalid type
 			prop->minimum = 0.f; // not yet known
 			prop->maximum = 1.f; // not yet known
+			prop->unit = NULL; // not yet known
 
 			// get type of patch:writable
 			LilvNode *type = lilv_world_get(ui->world, writable,
@@ -2292,6 +2341,21 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				prop->maximum = lilv_node_as_float(maximum);
 
 				lilv_node_free(maximum);
+			}
+
+			// get units:unit
+			LilvNode *unit = lilv_world_get(ui->world, writable,
+				ui->regs.units.unit.node, NULL);
+			if(unit)
+			{
+				LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+				if(symbol)
+				{
+					prop->unit = strdup(lilv_node_as_string(symbol));
+					lilv_node_free(symbol);
+				}
+
+				lilv_node_free(unit);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -2330,6 +2394,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			prop->type_urid = 0; // invalid type
 			prop->minimum = 0.f; // not yet known
 			prop->maximum = 1.f; // not yet known
+			prop->unit = NULL; // not yet known
 
 			// get type of patch:readable
 			LilvNode *type = lilv_world_get(ui->world, readable,
@@ -2362,6 +2427,21 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				prop->maximum = lilv_node_as_float(maximum);
 
 				lilv_node_free(maximum);
+			}
+
+			// get units:unit
+			LilvNode *unit = lilv_world_get(ui->world, readable,
+				ui->regs.units.unit.node, NULL);
+			if(unit)
+			{
+				LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+				if(symbol)
+				{
+					prop->unit = strdup(lilv_node_as_string(symbol));
+					lilv_node_free(symbol);
+				}
+
+				lilv_node_free(unit);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
@@ -2561,7 +2641,9 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 		EINA_LIST_FREE(mod->dynamic_properties, prop)
 		{
 			if(prop->label)
-				free(prop->label); // strndup
+				free(prop->label); // strdup
+			if(prop->unit)
+				free(prop->unit); // strdup
 			point_t *p;
 			EINA_LIST_FREE(prop->scale_points, p)
 			{
@@ -4091,8 +4173,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_integer_set(child, integer);
 					smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s");
 					smart_slider_disabled_set(child, !prop->editable);
-					//if(prop->unit) //FIXME
-					//	smart_slider_unit_set(child, port->unit);
+					if(prop->unit)
+						smart_slider_unit_set(child, prop->unit);
 					if(prop->editable)
 						evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
 					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
