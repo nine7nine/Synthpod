@@ -2358,6 +2358,63 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 				lilv_node_free(unit);
 			}
+			
+			LilvNodes *spoints = lilv_world_find_nodes(ui->world, writable,
+				ui->regs.core.scale_point.node, NULL);
+			if(spoints)
+			{
+				LILV_FOREACH(nodes, n, spoints)
+				{
+					const LilvNode *point = lilv_nodes_get(spoints, n);
+					LilvNode *point_label = lilv_world_get(ui->world, point,
+						ui->regs.rdfs.label.node, NULL);
+					LilvNode *point_value = lilv_world_get(ui->world, point,
+						ui->regs.rdf.value.node, NULL);
+
+					if(point_label && point_value)
+					{
+						point_t *p = calloc(1, sizeof(point_t));
+						p->label = strdup(lilv_node_as_string(point_label));
+						if(prop->type_urid == ui->forge.Int)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						else if(prop->type_urid == ui->forge.Float)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						else if(prop->type_urid == ui->forge.Long)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						else if(prop->type_urid == ui->forge.Double)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						//FIXME do other types
+						else if(prop->type_urid == ui->forge.String)
+						{
+							p->s = strdup(lilv_node_as_string(point_value));
+						}
+
+						prop->scale_points = eina_list_append(prop->scale_points, p);
+
+						if(prop->std.elmnt)
+							elm_genlist_item_update(prop->std.elmnt);
+					}
+
+					if(point_label)
+						lilv_node_free(point_label);
+					if(point_value)
+						lilv_node_free(point_value);
+				}
+					
+				lilv_nodes_free(spoints);
+			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
 		}
@@ -2443,6 +2500,64 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				}
 
 				lilv_node_free(unit);
+			}
+			
+			LilvNodes *spoints = lilv_world_find_nodes(ui->world, readable,
+				ui->regs.core.scale_point.node, NULL);
+			if(spoints)
+			{
+				LILV_FOREACH(nodes, n, spoints)
+				{
+					const LilvNode *point = lilv_nodes_get(spoints, n);
+					LilvNode *point_label = lilv_world_get(ui->world, point,
+						ui->regs.rdfs.label.node, NULL);
+					LilvNode *point_value = lilv_world_get(ui->world, point,
+						ui->regs.rdf.value.node, NULL);
+
+					if(point_label && point_value)
+					{
+						point_t *p = calloc(1, sizeof(point_t));
+						p->label = strdup(lilv_node_as_string(point_label));
+
+						if(prop->type_urid == ui->forge.Int)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						else if(prop->type_urid == ui->forge.Float)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						else if(prop->type_urid == ui->forge.Long)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						else if(prop->type_urid == ui->forge.Double)
+						{
+							p->d = calloc(1, sizeof(double));
+							*p->d = lilv_node_as_float(point_value);
+						}
+						//FIXME do other types
+						else if(prop->type_urid == ui->forge.String)
+						{
+							p->s = strdup(lilv_node_as_string(point_value));
+						}
+
+						prop->scale_points = eina_list_append(prop->scale_points, p);
+
+						if(prop->std.elmnt)
+							elm_genlist_item_update(prop->std.elmnt);
+					}
+
+					if(point_label)
+						lilv_node_free(point_label);
+					if(point_value)
+						lilv_node_free(point_value);
+				}
+					
+				lilv_nodes_free(spoints);
 			}
 
 			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
