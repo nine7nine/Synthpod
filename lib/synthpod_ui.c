@@ -3932,7 +3932,7 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 
 	//printf("_property_path_chosen: %s\n", path);
 
-	size_t strsize = strlen(path) + 1 + 7; // strlen("file://") == 7
+	size_t strsize = strlen(path) + 1;
 	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
 
 	for(unsigned index=0; index<mod->num_ports; index++)
@@ -3954,7 +3954,7 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 				&ui->forge, trans, mod->uid, index, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
-				sprintf(LV2_ATOM_BODY(atom), "file://%s", path);
+				strcpy(LV2_ATOM_BODY(atom), path);
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
@@ -4254,7 +4254,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					{
 						elm_fileselector_button_inwin_mode_set(child, EINA_FALSE);
 						elm_fileselector_button_window_title_set(child, "Select file");
-						elm_fileselector_is_save_set(child, EINA_FALSE);
+						elm_fileselector_is_save_set(child, EINA_TRUE);
 						elm_object_text_set(child, "Select file");
 						evas_object_smart_callback_add(child, "file,chosen",
 							_property_path_chosen, prop);
