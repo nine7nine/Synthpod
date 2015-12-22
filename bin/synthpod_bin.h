@@ -55,7 +55,14 @@ enum _save_state_t {
 	SAVE_STATE_JACK
 };
 
+typedef struct _light_sem_t light_sem_t;
 typedef struct _bin_t bin_t;
+
+struct _light_sem_t {
+	Eina_Semaphore sem;
+	_Atomic int count;
+	int spin;
+};
 
 struct _bin_t {
 	ext_urid_t *ext_urid;
@@ -87,8 +94,7 @@ struct _bin_t {
 	
 	_Atomic int worker_dead;
 	Eina_Thread worker_thread;
-	Eina_Semaphore worker_sem;
-	bool worker_sem_needs_release;
+	light_sem_t worker_sem;
 
 	LV2_URID log_entry;
 	LV2_URID log_error;
@@ -96,6 +102,71 @@ struct _bin_t {
 	LV2_URID log_trace;
 	LV2_URID log_warning;
 };
+
+static inline void
+_light_sem_init(light_sem_t *lsem, int count)
+{
+	assert(count >= 0);
+	eina_semaphore_new(&lsem->sem, count);
+	lsem->spin = 10000; //TODO make this configurable or self-adapting
+}
+
+static inline void
+_light_sem_deinit(light_sem_t *lsem)
+{
+	eina_semaphore_free(&lsem->sem);
+}
+
+static inline void
+_light_sem_wait_partial_spinning(light_sem_t *lsem)
+{
+	int old_count;
+	int spin = lsem->spin;
+
+	while(spin--)
+	{
+		old_count = atomic_load_explicit(&lsem->count, memory_order_relaxed);
+
+		if(  (old_count > 0) && atomic_compare_exchange_strong_explicit(
+			&lsem->count, &old_count, old_count - 1, memory_order_acquire, memory_order_acquire) )
+		{
+			return; // immediately return from wait as there was a new signal while spinning
+		}
+
+		atomic_signal_fence(memory_order_acquire); // prevent compiler from collapsing the loop
+	}
+
+	old_count = atomic_fetch_sub_explicit(&lsem->count, 1, memory_order_acquire);
+
+	if(old_count <= 0)
+		eina_semaphore_lock(&lsem->sem);
+}
+
+static inline bool
+_light_sem_trywait(light_sem_t *lsem)
+{
+	int old_count = atomic_load_explicit(&lsem->count, memory_order_relaxed);
+
+	return (old_count > 0) && atomic_compare_exchange_strong_explicit(
+		&lsem->count, &old_count, old_count - 1, memory_order_acquire, memory_order_acquire);
+}
+
+static inline void
+_light_sem_wait(light_sem_t *lsem)
+{
+	if(!_light_sem_trywait(lsem))
+		_light_sem_wait_partial_spinning(lsem);
+}
+
+static inline void
+_light_sem_signal(light_sem_t *lsem, int count)
+{
+	int old_count = atomic_fetch_add_explicit(&lsem->count, count, memory_order_release);
+	int to_release = -old_count < count ? -old_count : count;
+
+	if(to_release > 0) // old_count changed from (-1) to (0)
+		eina_semaphore_release(&lsem->sem, to_release);
+}
 
 // non-rt ui-thread
 static void
@@ -163,7 +234,7 @@ _worker_thread(void *data, Eina_Thread thread)
 
 	while(!atomic_load_explicit(&bin->worker_dead, memory_order_relaxed))
 	{
-		eina_semaphore_lock(&bin->worker_sem);
+		_light_sem_wait(&bin->worker_sem);
 
 		size_t size;
 		const void *body;
@@ -251,7 +322,7 @@ _app_to_worker_advance(size_t size, void *data)
 	bin_t *bin = data;
 
 	varchunk_write_advance(bin->app_to_worker, size);
-	bin->worker_sem_needs_release = true;
+	_light_sem_signal(&bin->worker_sem, 1);
 }
 
 // non-rt worker-thread
@@ -292,7 +363,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 
 			size_t written = strlen(trace) + 1;
 			varchunk_write_advance(bin->app_to_log, written);
-			bin->worker_sem_needs_release = true;
+			_light_sem_signal(&bin->worker_sem, 1);
 		}
 	}
 	else // !log_trace
@@ -426,7 +497,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 
 	// init semaphores
 	atomic_init(&bin->worker_dead, 0);
-	eina_semaphore_new(&bin->worker_sem, 0);
+	_light_sem_init(&bin->worker_sem, 0);
 
 	// threads init
 	Eina_Bool status = eina_thread_create(&bin->worker_thread,
@@ -453,14 +524,14 @@ bin_stop(bin_t *bin)
 {
 	// threads deinit
 	atomic_store_explicit(&bin->worker_dead, 1, memory_order_relaxed);
-	eina_semaphore_release(&bin->worker_sem, 1);
+	_light_sem_signal(&bin->worker_sem, 1);
 	eina_thread_join(bin->worker_thread);
 
 	// NSM deinit
 	synthpod_nsm_free(bin->nsm);
 
 	// deinit semaphores
-	eina_semaphore_free(&bin->worker_sem);
+	_light_sem_deinit(&bin->worker_sem);
 
 	if(bin->path)
 		free(bin->path);
@@ -554,11 +625,6 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, bool bypassed)
 static inline void
 bin_process_post(bin_t *bin)
 {
-	if(bin->worker_sem_needs_release)
-	{
-		eina_semaphore_release(&bin->worker_sem, 1);
-		bin->worker_sem_needs_release = false;
-	}
 }
 
 #endif
