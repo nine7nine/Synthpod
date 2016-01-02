@@ -347,6 +347,24 @@ struct _from_app_t {
 	from_app_cb_t cb;
 };
 
+static const char *keys [12] = {
+	"C", "#C",
+	"D", "#D",
+	"E",
+	"F", "#F",
+	"G", "#G",
+	"A", "#A",
+	"H"
+};
+
+static inline const char *
+_note(uint8_t val, uint8_t *octave)
+{
+	*octave = val / 12;
+
+	return keys[val % 12];
+}
+
 #define FROM_APP_NUM 14
 static from_app_t from_apps [FROM_APP_NUM];
 
@@ -4287,7 +4305,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_range_set(child, min, max, dflt);
 					smart_slider_color_set(child, mod->col);
 					smart_slider_integer_set(child, integer);
-					smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s");
+					smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
 					smart_slider_disabled_set(child, !prop->editable);
 					if(prop->unit)
 						smart_slider_unit_set(child, prop->unit);
@@ -4666,7 +4684,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_range_set(sldr, port->min, port->max, port->dflt);
 					smart_slider_color_set(sldr, mod->col);
 					smart_slider_integer_set(sldr, port->integer);
-					smart_slider_format_set(sldr, port->integer ? "%.0f %s" : "%.4f %s");
+					smart_slider_format_set(sldr, port->integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
 					if(port->unit)
 						smart_slider_unit_set(sldr, port->unit);
 					smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
