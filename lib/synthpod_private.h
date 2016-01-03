@@ -135,6 +135,9 @@ struct _reg_t {
 
 		reg_item_t notification;
 		reg_item_t minimum_size;
+
+		// properties
+		reg_item_t logarithmic;
 	} port;
 
 	struct {
@@ -342,6 +345,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->port.minimum_size, world, map, LV2_RESIZE_PORT__minimumSize);
 
+	_register(&regs->port.logarithmic, world, map, LV2_PORT_PROPS__logarithmic);
+
 	_register(&regs->work.schedule, world, map, LV2_WORKER__schedule);
 	_register(&regs->zero.schedule, world, map, ZERO_WORKER__schedule);
 
@@ -503,6 +508,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->port.notification);
 
 	_unregister(&regs->port.minimum_size);
+
+	_unregister(&regs->port.logarithmic);
 
 	_unregister(&regs->work.schedule);
 	_unregister(&regs->zero.schedule);

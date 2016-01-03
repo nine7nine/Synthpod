@@ -48,6 +48,9 @@ void
 smart_slider_integer_set(Evas_Object *o, int integer);
 
 void
+smart_slider_logarithmic_set(Evas_Object *o, int logarithmic);
+
+void
 smart_slider_disabled_set(Evas_Object *o, int disabled);
 
 #endif // _SYNTHPOD_SMART_SLIDER_H

@@ -230,6 +230,7 @@ struct _port_t {
 
 	bool integer;
 	bool toggled;
+	bool logarithmic;
 	LilvScalePoints *points;
 	char *unit;
 
@@ -2254,10 +2255,20 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 				tar->integer = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.integer.node);
 				tar->toggled = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.toggled.node);
+				tar->logarithmic = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.logarithmic.node);
 				int enumeration = lilv_port_has_property(plug, port, ui->regs.port.enumeration.node);
 				tar->points = enumeration
 					? lilv_port_get_scale_points(plug, port)
 					: NULL;
+
+				// force positive logarithmic range
+				if(tar->logarithmic)
+				{
+					if(tar->min <= 0.f)
+						tar->min = FLT_MIN; // smallest positive normalized float
+					if(tar->max <= 0.f)
+						tar->max = 1.f;
+				}
 			}
 			else if(lilv_port_is_a(plug, port, ui->regs.port.atom.node)) 
 			{
@@ -4305,6 +4316,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_range_set(child, min, max, dflt);
 					smart_slider_color_set(child, mod->col);
 					smart_slider_integer_set(child, integer);
+					//smart_slider_logarithmic_set(child, logarithmic); //TODO
 					smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
 					smart_slider_disabled_set(child, !prop->editable);
 					if(prop->unit)
@@ -4684,6 +4696,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_range_set(sldr, port->min, port->max, port->dflt);
 					smart_slider_color_set(sldr, mod->col);
 					smart_slider_integer_set(sldr, port->integer);
+					smart_slider_logarithmic_set(sldr, port->logarithmic);
 					smart_slider_format_set(sldr, port->integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
 					if(port->unit)
 						smart_slider_unit_set(sldr, port->unit);
