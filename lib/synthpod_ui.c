@@ -1870,7 +1870,7 @@ _x11_ui_show(mod_t *mod)
 	{
 		elm_win_title_set(mod->x11.win, mod->name);
 		evas_object_smart_callback_add(mod->x11.win, "delete,request", _x11_delete_request, mod);
-		evas_object_resize(mod->x11.win, 400, 400);
+		evas_object_resize(mod->x11.win, 800, 450);
 		evas_object_show(mod->x11.win);
 		mod->x11.xwin = elm_win_xwindow_get(mod->x11.win);
 	}
@@ -3796,8 +3796,7 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 			{
 				elm_win_title_set(win, mod->name);
 				evas_object_smart_callback_add(win, "delete,request", _full_delete_request, mod);
-				evas_object_resize(win, 640, 480);
-				evas_object_show(win);
+				evas_object_resize(win, 800, 450);
 
 				mod->eo.full.win = win;
 
@@ -3833,6 +3832,8 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 						elm_layout_content_set(container, "elm.swallow.content", widget);
 					} // widget
 				} // container
+
+				evas_object_show(win);
 			} // win
 		}
 	}
