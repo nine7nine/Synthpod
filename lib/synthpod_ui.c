@@ -139,6 +139,8 @@ struct _mod_t {
 		struct {
 			Evas_Object *win;
 		} full;
+
+		bool do_not_embed;
 	} eo;
 
 	// custom UIs via the LV2UI_{Show,Idle}_Interface extensions
@@ -1732,12 +1734,14 @@ _kx_ui_closed(LV2UI_Controller controller)
 }
 
 static int
-_x11_ui_host_resize(LV2UI_Feature_Handle handle, int w, int h)
+_ui_host_resize(LV2UI_Feature_Handle handle, int w, int h)
 {
 	mod_t *mod = handle;
 
 	if(mod->x11.ui && mod->x11.win)
 		evas_object_resize(mod->x11.win, w, h);
+	else if(mod->eo.ui && mod->eo.full.win)
+		evas_object_resize(mod->eo.full.win, w, h);
 
 	return 0;
 }
@@ -2119,7 +2123,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->std.descriptor.port_event = _std_port_event;
 
 	// populate x11 resize
-	mod->x11.host_resize_iface.ui_resize = _x11_ui_host_resize;
+	mod->x11.host_resize_iface.ui_resize = _ui_host_resize;
 	mod->x11.host_resize_iface.handle = mod;
 
 	// populate options
@@ -2645,6 +2649,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				{
 					//printf("has EoUI\n");
 					mod->eo.ui = lui;
+					mod->eo.do_not_embed =
+						!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#stereo")
+						|| !strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#monoatom"); //TODO handle more
 				}
 			}
 
@@ -3752,8 +3759,9 @@ _full_delete_request(void *data, Evas_Object *obj, void *event_info)
 	mod->eo.full.win = NULL;
 
 	// add EoUI to modgrid
-	mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-		NULL, NULL);
+	if(!mod->eo.do_not_embed)
+		mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+			NULL, NULL);
 }
 
 static void
@@ -3772,11 +3780,12 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 			mod->eo.widget = NULL;
 			mod->eo.full.win = NULL;
 
-			// add EoUI to midgrid
-			mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-				NULL, NULL);
+			// add EoUI to modgrid
+			if(!mod->eo.do_not_embed)
+				mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+					NULL, NULL);
 		}
-		else if(mod->eo.embedded.itm)
+		else if(mod->eo.embedded.itm || mod->eo.do_not_embed)
 		{
 			// remove EoUI from modgrid
 			elm_object_item_del(mod->eo.embedded.itm);
@@ -3787,7 +3796,7 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 			{
 				elm_win_title_set(win, mod->name);
 				evas_object_smart_callback_add(win, "delete,request", _full_delete_request, mod);
-				evas_object_resize(win, 800, 450);
+				evas_object_resize(win, 640, 480);
 				evas_object_show(win);
 
 				mod->eo.full.win = win;
@@ -5521,8 +5530,9 @@ _sp_ui_from_app_module_add(sp_ui_t *ui, const LV2_Atom *atom)
 
 	if(mod->eo.ui && ui->modgrid) // has EoUI
 	{
-		mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-			NULL, NULL);
+		if(!mod->eo.do_not_embed)
+			mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+				NULL, NULL);
 	}
 }
 
