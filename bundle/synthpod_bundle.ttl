@@ -74,26 +74,31 @@ omk:me
 proj:synthpod
 	a doap:Project ;
 	doap:maintainer omk:me ;
-	doap:name "Synthpod Bundle" .
+	doap:name "Synthpod Bundle"@en ,
+		"Synthpod Bündel"@de .
 
 # Audio groups
 synthpod:group_sink
 	a pg:InputGroup ,
 		pg:StereoGroup ;
-	lv2:name "Sink" ;
+	lv2:name "Sink"@en ,
+		"Ziel"@de ;
 	lv2:symbol "sink" .
 
 synthpod:group_source
 	a pg:OutputGroup ,
 		pg:StereoGroup ;
-	lv2:name "Source" ;
+	lv2:name "Source"@en ,
+		"Quelle"@de ;
 	lv2:symbol "source" .
 
 # Sink Plugin
 synthpod:sink
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod System Sink" ;
+	doap:name "Synthpod System Sink" ,
+		"Synthpod System Sink"@en ,
+		"Synthpod System Ziel"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength ;
@@ -185,7 +190,9 @@ synthpod:sink
 synthpod:source
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod System Source" ;
+	doap:name "Synthpod System Source" ,
+		"Synthpod System Source"@en ,
+		"Synthpod System Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength ;
@@ -277,7 +284,9 @@ synthpod:source
 synthpod:midi_sink
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod MIDI Sink" ;
+	doap:name "Synthpod MIDI Sink" ,
+		"Synthpod MIDI Sink"@en ,
+		"Synthpod MIDI Ziel"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
@@ -300,7 +309,9 @@ synthpod:midi_sink
 synthpod:midi_source
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod MIDI Source" ;
+	doap:name "Synthpod MIDI Source" ,
+		"Synthpod MIDI Source"@en ,
+		"Synthpod MIDI Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
@@ -323,7 +334,9 @@ synthpod:midi_source
 synthpod:osc_sink
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod OSC Sink" ;
+	doap:name "Synthpod OSC Sink" ,
+		"Synthpod OSC Sink"@en ,
+		"Synthpod OSC Ziel"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
@@ -347,7 +360,9 @@ synthpod:osc_sink
 synthpod:osc_source
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod OSC Source" ;
+	doap:name "Synthpod OSC Source" ,
+		"Syntphod OSC Source"@en ,
+		"Synthpod OSC Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
@@ -371,7 +386,9 @@ synthpod:osc_source
 synthpod:cv_sink
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod CV Sink" ;
+	doap:name "Synthpod CV Sink" ,
+		"Synthpod CV Sink"@en ,
+		"Synthpod CV Ziel"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
@@ -415,7 +432,9 @@ synthpod:cv_sink
 synthpod:cv_source
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod CV Source" ;
+	doap:name "Synthpod CV Source" ,
+		"Synthpod CV Source"@en ,
+		"Synthpod CV Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
@@ -459,7 +478,9 @@ synthpod:cv_source
 synthpod:audio_sink
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod Audio Sink" ;
+	doap:name "Synthpod Audio Sink" ,
+		"Synthpod Audio Sink"@en ,
+		"Synthpod Audio Ziel"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
@@ -503,7 +524,9 @@ synthpod:audio_sink
 synthpod:audio_source
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
-	doap:name "Synthpod Audio Source" ;
+	doap:name "Synthpod Audio Source" ,
+		"Synthpod Audio Source"@en ,
+		"Synthpod Audio Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
