@@ -3406,12 +3406,12 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 				continue; // skip
 			}
 
-			transfer_patch_get_t *trans = _sp_ui_to_app_request(ui, len);
+			transfer_patch_get_all_t *trans = _sp_ui_to_app_request(ui, len);
 			if(trans)
 			{
-				_sp_transfer_patch_get_fill(&ui->regs,
+				_sp_transfer_patch_get_all_fill(&ui->regs,
 					&ui->forge, trans, mod->uid, index,
-					mod->subject, ui->regs.patch.wildcard.urid);
+					mod->subject);
 				_sp_ui_to_app_advance(ui, len);
 			}
 		}

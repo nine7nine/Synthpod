@@ -766,6 +766,7 @@ typedef struct _transfer_peak_t transfer_peak_t;
 typedef struct _transfer_atom_t transfer_atom_t;
 typedef struct _transfer_patch_set_t transfer_patch_set_t;
 typedef struct _transfer_patch_get_t transfer_patch_get_t;
+typedef struct _transfer_patch_get_all_t transfer_patch_get_all_t;
 
 struct _transfer_t {
 	transmit_t transmit _ATOM_ALIGNED;
@@ -807,6 +808,13 @@ struct _transfer_patch_get_t {
 	LV2_URID subj_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
 	LV2_URID prop_val _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transfer_patch_get_all_t {
+	transfer_t transfer _ATOM_ALIGNED;
+	LV2_Atom_Object obj _ATOM_ALIGNED;
+	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
+	LV2_URID subj_val _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 static inline void
@@ -1301,6 +1309,33 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->prop.value.type = forge->URID;
 
 	trans->prop_val = property;
+}
+
+static inline void
+_sp_transfer_patch_get_all_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transfer_patch_get_all_t *trans, u_id_t module_uid, uint32_t port_index,
+	LV2_URID subject)
+{
+	trans = ASSUME_ALIGNED(trans);
+
+	uint32_t trans_size = sizeof(transfer_patch_get_all_t);
+	uint32_t obj_size = trans_size
+		- offsetof(transfer_patch_get_all_t, obj.body);
+
+	_sp_transfer_fill(regs, forge, &trans->transfer, trans_size,
+		regs->port.event_transfer.urid, module_uid, port_index);
+
+	trans->obj.atom.size = obj_size;
+	trans->obj.atom.type = forge->Object;
+	trans->obj.body.id = regs->synthpod.feedback_block.urid; // prevent feedback from app
+	trans->obj.body.otype = regs->patch.get.urid;
+
+	trans->subj.key = regs->patch.subject.urid;
+	trans->subj.context = 0;
+	trans->subj.value.size = sizeof(LV2_URID);
+	trans->subj.value.type = forge->URID;
+
+	trans->subj_val = subject;
 }
 
 // non-rt
