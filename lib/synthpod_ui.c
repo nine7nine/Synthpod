@@ -682,9 +682,11 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 			else if(obj->body.otype == ui->regs.patch.put.urid)
 			{
 				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_Object *body = NULL;
 
 				LV2_Atom_Object_Query q[] = {
 					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+					{ ui->regs.patch.body.urid, (const LV2_Atom **)&body },
 					LV2_ATOM_OBJECT_QUERY_END
 				};
 				lv2_atom_object_query(obj, q);
@@ -693,9 +695,9 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					? subject->body == mod->subject
 					: true;
 
-				if(subject_match)
+				if(subject_match && body)
 				{
-					LV2_ATOM_OBJECT_FOREACH(obj, prop)
+					LV2_ATOM_OBJECT_FOREACH(body, prop)
 					{
 						_mod_set_property(mod, prop->key, &prop->value);
 					}
