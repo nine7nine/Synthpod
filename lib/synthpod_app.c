@@ -1990,7 +1990,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	const transmit_t *transmit = (const transmit_t *)atom;
 
 	// check for atom object type
-	if(transmit->obj.atom.type != app->forge.Object)
+	if(!lv2_atom_forge_is_object_type(&app->forge, transmit->obj.atom.type))
 		return advance_ui[app->block_state];
 
 	// what we want to search for
@@ -3194,7 +3194,7 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 		{
 			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 
-			if(  (obj->atom.type == app->forge.Object)
+			if(  lv2_atom_forge_is_object_type(&app->forge, obj->atom.type)
 				&& (obj->body.id != app->regs.synthpod.feedback_block.urid) // don't feedback patch messages from UI itself!
 				&& ( (obj->body.otype == app->regs.patch.set.urid)
 					|| (obj->body.otype == app->regs.patch.put.urid)

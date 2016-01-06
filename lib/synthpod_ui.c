@@ -653,7 +653,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	{
 		const LV2_Atom_Object *obj = buf;
 
-		if(  (obj->atom.type == ui->forge.Object)
+		if(  lv2_atom_forge_is_object_type(&ui->forge, obj->atom.type)
 			&& (obj->body.id != ui->regs.synthpod.feedback_block.urid) ) // dont' feedback patch messages from UI itself!
 		{
 			// check for patch:Set
@@ -671,11 +671,11 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				};
 				lv2_atom_object_query(obj, q);
 
-				bool subject_match = subject
+				bool subject_match = subject && (subject->atom.type == ui->forge.URID)
 					? subject->body == mod->subject
 					: true;
 
-				if(subject_match && property && value)
+				if(subject_match && property && (property->atom.type == ui->forge.URID) && value)
 					_mod_set_property(mod, property->body, value);
 			}
 			// check for patch:Put
@@ -691,11 +691,11 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				};
 				lv2_atom_object_query(obj, q);
 
-				bool subject_match = subject
+				bool subject_match = subject && (subject->atom.type == ui->forge.URID)
 					? subject->body == mod->subject
 					: true;
 
-				if(subject_match && body)
+				if(subject_match && body && lv2_atom_forge_is_object_type(&ui->forge, body->atom.type))
 				{
 					LV2_ATOM_OBJECT_FOREACH(body, prop)
 					{
@@ -718,7 +718,9 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				};
 				lv2_atom_object_query(obj, q);
 
-				if(subject && add && remove)
+				if(  subject && (subject->atom.type == ui->forge.URID)
+					&& add && lv2_atom_forge_is_object_type(&ui->forge, add->atom.type)
+					&& remove && lv2_atom_forge_is_object_type(&ui->forge, remove->atom.type))
 				{
 					const char *group_lbl = "*Properties*";
 					Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
@@ -5793,7 +5795,7 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 	const transmit_t *transmit = (const transmit_t *)atom;
 
 	// check for atom object type
-	if(transmit->obj.atom.type != ui->forge.Object)
+	if(!lv2_atom_forge_is_object_type(&ui->forge, transmit->obj.atom.type))
 		return;
 
 	// what we want to search for
