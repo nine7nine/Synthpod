@@ -3163,10 +3163,7 @@ _patches_update(sp_ui_t *ui)
 			LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);
 			const char *name_str = NULL;
 			if(name_node)
-			{
 				name_str = lilv_node_as_string(name_node);
-				lilv_node_free(name_node);
-			}
 
 			if(port->direction == PORT_DIRECTION_OUTPUT) // source
 			{
@@ -3192,6 +3189,9 @@ _patches_update(sp_ui_t *ui)
 						count[port->direction][port->type], name_str);
 				}
 			}
+
+			if(name_node)
+				lilv_node_free(name_node);
 
 			count[port->direction][port->type] += 1;
 		}
