@@ -219,6 +219,7 @@ struct _port_t {
 	void *buf;
 	void *base;
 	int32_t i32;
+	float f32;
 
 	int integer;
 	int toggled;
@@ -242,6 +243,8 @@ struct _port_t {
 		system_port_t type;
 		void *data;
 	} sys;
+
+	atomic_flag lock;
 };
 
 struct _sp_app_t {
@@ -889,6 +892,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
 			? PORT_DIRECTION_INPUT
 			: PORT_DIRECTION_OUTPUT;
+		atomic_flag_clear_explicit(&tar->lock, memory_order_relaxed);
 
 		// register system ports
 		if(mod->system_ports)
@@ -1058,6 +1062,21 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	lilv_instance_activate(mod->inst);
 
 	return mod;
+}
+
+static inline void
+_sp_app_port_spin_lock(port_t *port)
+{
+	while(atomic_flag_test_and_set_explicit(&port->lock, memory_order_acquire))
+	{
+		// spin
+	}
+}
+
+static inline void
+_sp_app_port_spin_unlock(port_t *port)
+{
+	atomic_flag_clear_explicit(&port->lock, memory_order_release);
 }
 
 // non-rt worker-thread
@@ -1332,10 +1351,14 @@ _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 	if(!port) // port not found
 		return advance_ui[app->block_state];
 
+	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
+
 	// set port value
 	void *buf = PORT_BASE_ALIGNED(port);
 	*(float *)buf = trans->value.body;
 	port->last = trans->value.body;
+
+	_sp_app_port_spin_unlock(port);
 
 	return advance_ui[app->block_state];
 }
@@ -1350,9 +1373,13 @@ _sp_app_from_ui_atom_transfer(sp_app_t *app, const LV2_Atom *atom)
 	if(!port) // port not found
 		return advance_ui[app->block_state];
 
+	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
+
 	// set port value
 	void *buf = PORT_BASE_ALIGNED(port);
 	memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+
+	_sp_app_port_spin_unlock(port);
 
 	return advance_ui[app->block_state];
 }
@@ -1793,9 +1820,13 @@ _sp_app_from_ui_port_refresh(sp_app_t *app, const LV2_Atom *atom)
 	port_t *port = _sp_app_port_get(app, refresh->uid.body, refresh->port.body);
 	if(!port)
 		return advance_ui[app->block_state];
+
+	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
 	
 	float *buf_ptr = PORT_BASE_ALIGNED(port);
 	port->last = *buf_ptr - 0.1; // will force notification
+
+	_sp_app_port_spin_unlock(port);
 
 	return advance_ui[app->block_state];
 }
@@ -2905,14 +2936,25 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 static inline void
 _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
+	//FIXME simplex needs spin_lock, too
+	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
+
 	float *val = PORT_BASE_ALIGNED(port);
 	*val = 0; // init
 
 	for(int s=0; s<port->num_sources; s++)
 	{
-		const float *src = PORT_BASE_ALIGNED(port->sources[s].port);
+		port_t *src_port = port->sources[s].port;
+
+		_sp_app_port_spin_lock(src_port); // concurrent acess from worker and rt threads
+
+		const float *src = PORT_BASE_ALIGNED(src_port);
 		*val += *src;
+
+		_sp_app_port_spin_unlock(src_port);
 	}
+
+	_sp_app_port_spin_unlock(port);
 }
 
 // rt
@@ -3083,13 +3125,18 @@ _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	const float *val = PORT_BASE_ALIGNED(port);
+	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
 
-	if(*val != port->last)
-	{
-		// update last value
+	const float *val = PORT_BASE_ALIGNED(port);
+	const bool needs_update = *val != port->last;
+
+	if(needs_update) // update last value
 		port->last = *val;
 
+	_sp_app_port_spin_unlock(port);
+
+	if(needs_update)
+	{
 		size_t size = sizeof(transfer_float_t);
 		transfer_float_t *trans = _sp_app_to_ui_request(app, size);
 		if(trans)
@@ -3418,10 +3465,14 @@ _state_set_value(const char *symbol, void *data,
 		else
 			return; //TODO warning
 
+		_sp_app_port_spin_lock(tar); // concurrent acess from worker and rt threads
+
 		//printf("%u %f\n", index, val);
 		float *buf_ptr = PORT_BASE_ALIGNED(tar);
 		*buf_ptr = val;
 		tar->last = val - 0.1; // triggers notification
+
+		_sp_app_port_spin_unlock(tar);
 	}
 }
 
@@ -3449,27 +3500,35 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 		&& (tar->num_sources == 0) ) //FIXME do the multiplexing
 	{
 		const float *val = PORT_BASE_ALIGNED(tar);
+		const void *ptr = NULL;
+
+		_sp_app_port_spin_lock(tar); // concurrent acess from worker and rt threads
 
 		if(tar->toggled)
 		{
 			*size = sizeof(int32_t);
 			*type = app->forge.Bool;
 			tar->i32 = floor(*val);
-			return &tar->i32;
+			ptr = &tar->i32;
 		}
 		else if(tar->integer)
 		{
 			*size = sizeof(int32_t);
 			*type = app->forge.Int;
 			tar->i32 = floor(*val);
-			return &tar->i32;
+			ptr = &tar->i32;
 		}
 		else // float
 		{
 			*size = sizeof(float);
 			*type = app->forge.Float;
-			return val;
+			tar->f32 = *val;
+			ptr = &tar->f32;
 		}
+
+		_sp_app_port_spin_unlock(tar);
+
+		return ptr;
 	}
 
 fail:
