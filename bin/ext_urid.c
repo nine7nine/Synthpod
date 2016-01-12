@@ -17,14 +17,13 @@
 
 #include <ext_urid.h>
 
+#include <stdatomic.h>
 #include <Eina.h>
-
-//TODO eina_lock_release may fail
 
 struct _ext_urid_t {
 	LV2_URID cnt;
 
-	Eina_Lock mutex;
+	atomic_flag lock;
 
 	Eina_Hash *uris;
 	Eina_Hash *urids;
@@ -32,6 +31,22 @@ struct _ext_urid_t {
 	LV2_URID_Map map;
 	LV2_URID_Unmap unmap;
 };
+
+static inline void
+_spin_lock(ext_urid_t *ext_urid)
+{
+	while(atomic_flag_test_and_set_explicit(&ext_urid->lock, memory_order_acquire))
+	{
+		// spin
+	}
+	
+}
+
+static inline void
+_spin_unlock(ext_urid_t *ext_urid)
+{
+	atomic_flag_clear_explicit(&ext_urid->lock, memory_order_release);
+}
 
 static void
 _uri_hash_uri_del(void *data)
@@ -52,22 +67,18 @@ _urid_map(LV2_URID_Map_Handle handle, const char *uri)
 {
 	ext_urid_t *uri_hash = handle;
 	LV2_URID *urid = NULL;
-	
-	Eina_Lock_Result res = eina_lock_take(&uri_hash->mutex);
-	if(res == EINA_LOCK_SUCCEED)
-	{
-		// uri already registered?
-		urid = eina_hash_find(uri_hash->uris, uri);
-		eina_lock_release(&uri_hash->mutex);
 
-		if(urid)
-			return *urid;
-	}
-	else
-	{
-		fprintf(stderr, "_urid_map: lock failed\n");
-		return 0;
-	}
+	_spin_lock(uri_hash);
+
+	// uri already registered?
+	urid = eina_hash_find(uri_hash->uris, uri);
+
+	_spin_unlock(uri_hash);
+
+	if(urid)
+		return *urid;
+
+	// uri not yet registered
 
 	// duplicate uri
 	char *uri_dup = strdup(uri);
@@ -85,28 +96,27 @@ _urid_map(LV2_URID_Map_Handle handle, const char *uri)
 		fprintf(stderr, "_urid_map: out-of-memory\n");
 		return 0;
 	}
-	
-	res = eina_lock_take(&uri_hash->mutex);
-	if(res == EINA_LOCK_SUCCEED)
+
+	_spin_lock(uri_hash);
+
+	if(eina_hash_add(uri_hash->uris, uri_dup, urid))
 	{
-		if(eina_hash_add(uri_hash->uris, uri_dup, urid))
+		*urid = uri_hash->cnt++;
+
+		if(eina_hash_add(uri_hash->urids, urid, uri_dup))
 		{
-			*urid = uri_hash->cnt++;
-
-			if(eina_hash_add(uri_hash->urids, urid, uri_dup))
-			{
-				eina_lock_release(&uri_hash->mutex);
-				return *urid;
-			}
-			else
-			{
-				eina_hash_del(uri_hash->uris, uri_dup, urid);
-			}
+			_spin_unlock(uri_hash);
+			return *urid;
 		}
-
-		eina_lock_release(&uri_hash->mutex);
+		else
+		{
+			eina_hash_del(uri_hash->uris, uri_dup, urid);
+		}
 	}
-	fprintf(stderr, "_urid_map: lock failed\n");
+
+	_spin_unlock(uri_hash);
+
+	fprintf(stderr, "_urid_map: map failed\n");
 
 	free(urid);
 	free(uri_dup);
@@ -119,16 +129,11 @@ _urid_unmap(LV2_URID_Map_Handle handle, LV2_URID urid)
 {
 	ext_urid_t *uri_hash = handle;
 
-	Eina_Lock_Result res = eina_lock_take(&uri_hash->mutex);
-
-	if(res != EINA_LOCK_SUCCEED)
-	{
-		fprintf(stderr, "_urid_map: lock failed\n");
-		return NULL;
-	}
+	_spin_lock(uri_hash);
 
 	const char *uri = eina_hash_find(uri_hash->urids, &urid);
-	eina_lock_release(&uri_hash->mutex);
+
+	_spin_unlock(uri_hash);
 
 	return uri;
 }
@@ -140,30 +145,26 @@ ext_urid_new()
 	if(!ext_urid)
 		return NULL;
 
+	atomic_flag_clear_explicit(&ext_urid->lock, memory_order_relaxed);
 	ext_urid->cnt = 1;
 
-	if(eina_lock_new(&ext_urid->mutex) == EINA_TRUE)
+	ext_urid->uris = eina_hash_string_superfast_new(_uri_hash_uri_del);
+	if(ext_urid->uris)
 	{
-		ext_urid->uris = eina_hash_string_superfast_new(_uri_hash_uri_del);
-		if(ext_urid->uris)
+		ext_urid->urids = eina_hash_int32_new(_uri_hash_urid_del);
+		if(ext_urid->urids)
 		{
-			ext_urid->urids = eina_hash_int32_new(_uri_hash_urid_del);
-			if(ext_urid->urids)
-			{
-				ext_urid->map.handle = ext_urid;
-				ext_urid->map.map = _urid_map;
+			ext_urid->map.handle = ext_urid;
+			ext_urid->map.map = _urid_map;
 
-				ext_urid->unmap.handle = ext_urid;
-				ext_urid->unmap.unmap = _urid_unmap;
+			ext_urid->unmap.handle = ext_urid;
+			ext_urid->unmap.unmap = _urid_unmap;
 
-				return ext_urid;
-			} // urids
+			return ext_urid;
+		} // urids
 
-			eina_hash_free(ext_urid->uris);
-		} // uris
-
-		eina_lock_free(&ext_urid->mutex);
-	} // mutex
+		eina_hash_free(ext_urid->uris);
+	} // uris
 
 	free(ext_urid);
 	return NULL;
@@ -179,7 +180,6 @@ ext_urid_free(ext_urid_t *ext_urid)
 		eina_hash_free(ext_urid->uris);
 	if(ext_urid->urids)
 		eina_hash_free(ext_urid->urids);
-	eina_lock_free(&ext_urid->mutex);
 
 	free(ext_urid);
 }
