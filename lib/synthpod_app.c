@@ -3380,9 +3380,9 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		
 	// handle app ui post
 	bool expected = true;
-	bool desired = false;
+	const bool desired = false;
 	if(atomic_compare_exchange_weak_explicit(&app->dirty, &expected, desired,
-		memory_order_relaxed, memory_order_relaxed))
+		memory_order_acquire, memory_order_acquire))
 	{
 		size_t size = sizeof(transmit_module_list_t);
 		transmit_module_list_t *trans = _sp_app_to_ui_request(app, size);
@@ -3753,7 +3753,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 	if(!ecore_file_exists(absolute)) // new project?
 	{
-		atomic_store_explicit(&app->dirty, true, memory_order_relaxed);
+		atomic_store_explicit(&app->dirty, true, memory_order_release);
 
 		return LV2_STATE_SUCCESS;
 	}
@@ -3941,8 +3941,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	}
 	cJSON_Delete(root_json);
 
-	// XXX is safe to call, as sp_app_restore is not called during sp_app_run_post
-	atomic_store_explicit(&app->dirty, 1, memory_order_relaxed);
+	atomic_store_explicit(&app->dirty, true, memory_order_release);
 
 	return LV2_STATE_SUCCESS;
 }
