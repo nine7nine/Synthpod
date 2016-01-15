@@ -32,11 +32,6 @@ typedef struct _plughandle_t plughandle_t;
 
 struct _target_t {
 	LV2_URID subject;
-
-	int32_t zone;
-	float pitch;
-	float pressure;
-	float timbre;
 };
 
 struct _plughandle_t {
@@ -46,22 +41,11 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
 
-	XPRESS_T(xpress_in, MAX_NVOICES);
-	XPRESS_T(xpress_out, MAX_NVOICES);
-	target_t target_in [MAX_NVOICES];
-	target_t target_out [MAX_NVOICES];
+	XPRESS_T(xpress, MAX_NVOICES);
+	target_t target [MAX_NVOICES];
 
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
-};
-
-static const xpress_offset_t offset = {
-	.size = sizeof(target_t),
-
-	.zone = offsetof(target_t, zone),
-	.pitch = offsetof(target_t, pitch),
-	.pressure = offsetof(target_t, pressure),
-	.timbre = offsetof(target_t, timbre)
 };
 
 static _Atomic uint32_t voice_id = ATOMIC_VAR_INIT(UINT32_MAX);
@@ -79,79 +63,85 @@ static xpress_map_t voice_map_fallback = {
 };
 
 static void
-_intercept(void *data, int64_t frames, xpress_event_t event, LV2_URID subject, void *target)
+_dump(plughandle_t *handle)
 {
-	plughandle_t *handle = data;
-	LV2_Atom_Forge *forge = &handle->forge;
-
-	switch(event)
+	XPRESS_VOICE_FOREACH(&handle->xpress, voice)
 	{
-		case XPRESS_EVENT_ADD:
-		{
-			lv2_log_trace(&handle->logger, "ADD: %u", subject);
-
-			target_t *src = target;
-			src->subject = xpress_create(&handle->xpress_out);
-			if(src->subject)
-			{
-				target_t *dst = xpress_get(&handle->xpress_out, src->subject);
-				if(dst)
-				{
-					dst->zone = src->zone;
-					dst->pitch = src->pitch * 2;
-					dst->pressure = src->pressure;
-					dst->timbre = src->timbre;
-				}
-				
-				if(handle->ref)
-					handle->ref = xpress_put(&handle->xpress_out, forge, frames, src->subject);
-			}
-
-			break;
-		}
-		case XPRESS_EVENT_DEL:
-		{
-			lv2_log_trace(&handle->logger, "DEL: %u", subject);
-
-			target_t *src = target;
-
-			if(handle->ref)
-				handle->ref = xpress_del(&handle->xpress_out, forge, frames, src->subject);
-
-			xpress_free(&handle->xpress_out, src->subject);
-
-			break;
-		}
-		case XPRESS_EVENT_PUT:
-		{
-			lv2_log_trace(&handle->logger, "PUT: %u", subject);
-
-			target_t *src = target;
-			target_t *dst = xpress_get(&handle->xpress_out, src->subject);
-
-			if(dst)
-			{
-				dst->zone = src->zone;
-				dst->pitch = src->pitch * 2;
-				dst->pressure = src->pressure;
-				dst->timbre = src->timbre;
-			}
-
-			if(handle->ref)
-				handle->ref = xpress_put(&handle->xpress_out, forge, frames, src->subject);
-
-			break;
-		}
-	}
-
-	XPRESS_VOICE_FOREACH(&handle->xpress_in, voice)
-	{
-		target_t *src = voice->target;
-		lv2_log_trace(&handle->logger, "%u: %i %f %f %f", voice->subject,
-			src->zone, src->pitch, src->pressure, src->timbre);
+		lv2_log_trace(&handle->logger, "%u", voice->subject);
 	}
 	lv2_log_trace(&handle->logger, "");
 }
+
+static void
+_add(void *data, int64_t frames, const xpress_state_t *state,
+	LV2_URID subject, void *target)
+{
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+	target_t *src = target;
+
+	lv2_log_trace(&handle->logger, "ADD: %u", subject);
+
+	src->subject = xpress_map(&handle->xpress);
+
+	const xpress_state_t new_state = {
+		.zone = state->zone,
+		.pitch = state->pitch * 2,
+		.pressure = state->pressure,
+		.timbre = state->timbre
+	};
+
+	if(handle->ref)
+		handle->ref = xpress_put(&handle->xpress, forge, frames, src->subject, &new_state);
+
+	_dump(handle);
+}
+
+static void
+_put(void *data, int64_t frames, const xpress_state_t *state,
+	LV2_URID subject, void *target)
+{
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+	target_t *src = target;
+
+	lv2_log_trace(&handle->logger, "PUT: %u", subject);
+
+	const xpress_state_t new_state = {
+		.zone = state->zone,
+		.pitch = state->pitch * 2,
+		.pressure = state->pressure,
+		.timbre = state->timbre
+	};
+
+	if(handle->ref)
+		handle->ref = xpress_put(&handle->xpress, forge, frames, src->subject, &new_state);
+
+	_dump(handle);
+}
+
+static void
+_del(void *data, int64_t frames, const xpress_state_t *state,
+	LV2_URID subject, void *target)
+{
+	plughandle_t *handle = data;
+	LV2_Atom_Forge *forge = &handle->forge;
+	target_t *src = target;
+
+	lv2_log_trace(&handle->logger, "DEL: %u", subject);
+
+	if(handle->ref)
+		handle->ref = xpress_del(&handle->xpress, forge, frames, src->subject);
+
+	_dump(handle);
+}
+
+static const xpress_iface_t iface = {
+	.size = sizeof(target_t),
+	.add = _add,
+	.put = _put,
+	.del = _del
+};
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
@@ -193,10 +183,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	lv2_log_logger_init(&handle->logger, handle->map, handle->log);
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
-	if(  !xpress_init(&handle->xpress_in, MAX_NVOICES, handle->map, voice_map,
-			XPRESS_EVENT_ALL, _intercept, handle, handle->target_in, &offset)
-		|| !xpress_init(&handle->xpress_out, MAX_NVOICES, handle->map, voice_map,
-			XPRESS_EVENT_NONE, NULL, NULL, handle->target_out, &offset))
+	if(!xpress_init(&handle->xpress, MAX_NVOICES, handle->map, voice_map,
+			XPRESS_EVENT_ALL, &iface, handle->target, handle) )
 	{
 		fprintf(stderr, "failed to initialize xpress structure\n");
 		free(handle);
@@ -239,7 +227,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 
 		if(handle->ref)
-			xpress_advance(&handle->xpress_in, &handle->forge, ev->time.frames, obj, &handle->ref); //TODO handle return
+			xpress_advance(&handle->xpress, &handle->forge, ev->time.frames, obj, &handle->ref); //TODO handle return
 	}
 	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);

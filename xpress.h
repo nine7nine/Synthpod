@@ -51,18 +51,17 @@ typedef enum _xpress_event_t xpress_event_t;
 
 // structures
 typedef struct _xpress_map_t xpress_map_t;
-typedef struct _xpress_offset_t xpress_offset_t;
+typedef struct _xpress_state_t xpress_state_t;
 typedef struct _xpress_voice_t xpress_voice_t;
+typedef struct _xpress_iface_t xpress_iface_t;
 typedef struct _xpress_t xpress_t;
 
 // function callbacks
-typedef void (*xpress_event_cb_t)(
-	void *data,
-	int64_t frames,
-	xpress_event_t event,
-	LV2_URID subject,
-	void *target);
 typedef uint32_t (*xpress_map_new_id_t)(void *handle);
+
+typedef void (*xpress_state_cb_t)(void *data,
+	int64_t frames, const xpress_state_t *state,
+	LV2_URID subject, void *target);
 
 enum _xpress_event_t {
 	XPRESS_EVENT_ADD					= (1 << 0),
@@ -73,13 +72,19 @@ enum _xpress_event_t {
 #define XPRESS_EVENT_NONE		(0)
 #define XPRESS_EVENT_ALL		(XPRESS_EVENT_ADD | XPRESS_EVENT_DEL | XPRESS_EVENT_PUT)
 
-struct _xpress_offset_t {
+struct _xpress_state_t {
+	int32_t zone;
+	float pitch;
+	float pressure;
+	float timbre;
+};
+
+struct _xpress_iface_t {
 	size_t size;
 
-	ssize_t zone;
-	ssize_t pitch;
-	ssize_t pressure;
-	ssize_t timbre;
+	xpress_state_cb_t add;
+	xpress_state_cb_t put;
+	xpress_state_cb_t del;
 };
 
 #define XPRESS_UNUSED				(-1)
@@ -118,9 +123,8 @@ struct _xpress_t {
 	xpress_map_t *voice_map;
 
 	xpress_event_t event_mask;
-	xpress_event_cb_t event_cb;
+	const xpress_iface_t *iface;
 	void *data;
-	const xpress_offset_t *offset;
 
 	unsigned max_nvoices;
 	unsigned nvoices;
@@ -135,13 +139,20 @@ struct _xpress_t {
 	xpress_voice_t XPRESS_CONCAT(_voices, __COUNTER__) [(MAX_NVOICES)];
 
 #define XPRESS_VOICE_FOREACH(XPRESS, VOICE) \
-	for(xpress_voice_t *VOICE = (XPRESS)->voices; VOICE - (XPRESS)->voices < (XPRESS)->nvoices; VOICE++)
+	for(xpress_voice_t *VOICE = &(XPRESS)->voices[(int)(XPRESS)->nvoices - 1]; \
+		VOICE >= (XPRESS)->voices; \
+		VOICE--)
+
+#define XPRESS_VOICE_FREE(XPRESS, VOICE) \
+	for(xpress_voice_t *VOICE = &(XPRESS)->voices[(int)(XPRESS)->nvoices - 1]; \
+		VOICE >= (XPRESS)->voices; \
+		VOICE->subject = 0, VOICE--, (XPRESS)->nvoices--)
 
 // non rt-safe
 static inline int
-xpress_init(xpress_t *xpress, const size_t max_nvoices, LV2_URID_Map *map, xpress_map_t *voice_map,
-	xpress_event_t event_mask, xpress_event_cb_t event_cb, void *data,
-	void *target, const xpress_offset_t *offset);
+xpress_init(xpress_t *xpress, const size_t max_nvoices, LV2_URID_Map *map,
+	xpress_map_t *voice_map, xpress_event_t event_mask, const xpress_iface_t *iface,
+	void *target, void *data);
 
 // rt-safe
 static inline void *
@@ -153,12 +164,12 @@ xpress_advance(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
 	const LV2_Atom_Object *obj, LV2_Atom_Forge_Ref *ref);
 
 // rt-safe
-static inline LV2_URID
-xpress_create(xpress_t *xpress);
+static inline void * 
+xpress_add(xpress_t *xpress, LV2_URID subject);
 
 // rt-safe
-static inline int 
-xpress_add(xpress_t *xpress, LV2_URID subject);
+static inline void *
+xpress_create(xpress_t *xpress, LV2_URID *subject);
 
 // rt-safe
 static inline int
@@ -166,54 +177,58 @@ xpress_free(xpress_t *xpress, LV2_URID subject);
 
 // rt-safe
 static inline LV2_Atom_Forge_Ref
-xpress_del(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID subject);
+xpress_del(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
+	LV2_URID subject);
 
 // rt-safe
 static inline LV2_Atom_Forge_Ref
-xpress_put(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID subject);
+xpress_put(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
+	LV2_URID subject, const xpress_state_t *state);
+
+// rt-safe
+static inline int32_t
+xpress_map(xpress_t *xpress);
 
 /*****************************************************************************
  * API END
  *****************************************************************************/
 
-static void
-_xpress_int_set_cb(xpress_t *xpress, void *value, LV2_URID new_type, const void *new_value)
+static inline int32_t
+_xpress_int_get(xpress_t *xpress, const LV2_Atom *atom)
 {
-	int32_t *ref = value;
+	if(atom->type == xpress->urid.atom_int)
+		return ((const LV2_Atom_Int *)atom)->body;
+	else if(atom->type == xpress->urid.atom_long)
+		return ((const LV2_Atom_Long *)atom)->body;
 
-	if(new_type == xpress->urid.atom_int)
-		*ref = *(const int32_t *)new_value;
-	else if(new_type == xpress->urid.atom_bool)
-		*ref = *(const int32_t *)new_value;
-	else if(new_type == xpress->urid.atom_urid)
-		*ref = *(const uint32_t *)new_value;
-	else if(new_type == xpress->urid.atom_long)
-		*ref = *(const int64_t *)new_value;
+	else if(atom->type == xpress->urid.atom_float)
+		return ((const LV2_Atom_Float *)atom)->body;
+	else if(atom->type == xpress->urid.atom_double)
+		return ((const LV2_Atom_Double *)atom)->body;
 
-	else if(new_type == xpress->urid.atom_float)
-		*ref = *(const float *)new_value;
-	else if(new_type == xpress->urid.atom_double)
-		*ref = *(const double *)new_value;
+	else if(atom->type == xpress->urid.atom_bool)
+		return ((const LV2_Atom_Bool *)atom)->body;
+
+	return 0;
 }
 
-static void
-_xpress_float_set_cb(xpress_t *xpress, void *value, LV2_URID new_type, const void *new_value)
+static inline float
+_xpress_float_get(xpress_t *xpress, const LV2_Atom *atom)
 {
-	float *ref = value;
+	if(atom->type == xpress->urid.atom_float)
+		return ((const LV2_Atom_Float *)atom)->body;
+	else if(atom->type == xpress->urid.atom_double)
+		return ((const LV2_Atom_Double *)atom)->body;
 
-	if(new_type == xpress->urid.atom_float)
-		*ref = *(const float *)new_value;
-	else if(new_type == xpress->urid.atom_double)
-		*ref = *(const double *)new_value;
+	else if(atom->type == xpress->urid.atom_int)
+		return ((const LV2_Atom_Int *)atom)->body;
+	else if(atom->type == xpress->urid.atom_long)
+		return ((const LV2_Atom_Long *)atom)->body;
 
-	else if(new_type == xpress->urid.atom_int)
-		*ref = *(const int32_t *)new_value;
-	else if(new_type == xpress->urid.atom_bool)
-		*ref = *(const int32_t *)new_value;
-	else if(new_type == xpress->urid.atom_urid)
-		*ref = *(const uint32_t *)new_value;
-	else if(new_type == xpress->urid.atom_long)
-		*ref = *(const int64_t *)new_value;
+	else if(atom->type == xpress->urid.atom_bool)
+		return ((const LV2_Atom_Bool *)atom)->body;
+
+	return 0.f;
 }
 
 static inline int
@@ -251,126 +266,14 @@ _xpress_sort(xpress_t *xpress)
 	qsort(xpress->voices, xpress->nvoices, sizeof(xpress_voice_t), _xpress_voice_sort);
 }
 
-static inline LV2_Atom_Forge_Ref
-_xpress_voice_put(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames, xpress_voice_t *voice)
-{
-	const xpress_offset_t *offset = xpress->offset;
-	LV2_Atom_Forge_Frame obj_frame;
-	LV2_Atom_Forge_Frame body_frame;
-
-	LV2_Atom_Forge_Ref ref = lv2_atom_forge_frame_time(forge, frames);
-
-	if(ref)
-		ref = lv2_atom_forge_object(forge, &obj_frame, 0, xpress->urid.patch_put);
-	{
-		if(ref)
-			ref = lv2_atom_forge_key(forge, xpress->urid.patch_subject);
-		if(ref)
-			ref = lv2_atom_forge_urid(forge, voice->subject);
-
-		if(ref)
-			ref = lv2_atom_forge_key(forge, xpress->urid.patch_body);
-		if(ref)
-			ref = lv2_atom_forge_object(forge, &body_frame, 0, 0);
-		{
-			if(offset)
-			{
-				if(offset->zone != XPRESS_UNUSED)
-				{
-					if(ref)
-						ref = lv2_atom_forge_key(forge, xpress->urid.xpress_zone);
-					if(ref)
-						ref = lv2_atom_forge_int(forge, *(int32_t *)(voice->target + offset->zone));
-				}
-
-				if(offset->pitch != XPRESS_UNUSED)
-				{
-					if(ref)
-						ref = lv2_atom_forge_key(forge, xpress->urid.xpress_pitch);
-					if(ref)
-						ref = lv2_atom_forge_float(forge, *(float *)(voice->target + offset->pitch));
-				}
-
-				if(offset->pitch != XPRESS_UNUSED)
-				{
-					if(ref)
-						ref = lv2_atom_forge_key(forge, xpress->urid.xpress_pressure);
-					if(ref)
-						ref = lv2_atom_forge_float(forge, *(float *)(voice->target + offset->pressure));
-				}
-
-				if(offset->timbre != XPRESS_UNUSED)
-				{
-					if(ref)
-						ref = lv2_atom_forge_key(forge, xpress->urid.xpress_timbre);
-					if(ref)
-							ref = lv2_atom_forge_float(forge, *(float *)(voice->target + offset->timbre));
-				}
-			}
-		}
-		if(ref)
-			lv2_atom_forge_pop(forge, &body_frame);
-	}
-	if(ref)
-		lv2_atom_forge_pop(forge, &obj_frame);
-
-	return ref;
-}
-
-static inline LV2_Atom_Forge_Ref
-_xpress_voice_del(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames, xpress_voice_t *voice)
-{
-	LV2_Atom_Forge_Frame obj_frame;
-
-	LV2_Atom_Forge_Ref ref = lv2_atom_forge_frame_time(forge, frames);
-
-	if(ref)
-		ref = lv2_atom_forge_object(forge, &obj_frame, 0, xpress->urid.patch_delete);
-	{
-		if(ref)
-			ref = lv2_atom_forge_key(forge, xpress->urid.patch_subject);
-		if(ref)
-			ref = lv2_atom_forge_urid(forge, voice->subject);
-	}
-	if(ref)
-		lv2_atom_forge_pop(forge, &obj_frame);
-
-	return ref;
-}
-
-static inline void
-_xpress_voice_prop_set(xpress_t *xpress, xpress_voice_t *voice,
-	LV2_URID property, LV2_URID type, const void *value)
-{
-	const xpress_offset_t *offset = xpress->offset;
-	if(!offset)
-		return;
-
-	if( (property == xpress->urid.xpress_zone) && (offset->zone != XPRESS_UNUSED) )
-	{
-		_xpress_int_set_cb(xpress, voice->target + offset->zone, type, value);
-	}
-	else if( (property == xpress->urid.xpress_pitch) && (offset->pitch != XPRESS_UNUSED) )
-	{
-		_xpress_float_set_cb(xpress, voice->target + offset->pitch, type, value);
-	}
-	else if( (property == xpress->urid.xpress_pressure) && (offset->pressure != XPRESS_UNUSED) )
-	{
-		_xpress_float_set_cb(xpress, voice->target + offset->pressure, type, value);
-	}
-	else if( (property == xpress->urid.xpress_timbre) && (offset->timbre != XPRESS_UNUSED) )
-	{
-		_xpress_float_set_cb(xpress, voice->target + offset->timbre, type, value);
-	}
-}
-
 static inline xpress_voice_t *
 _xpress_voice_get(xpress_t *xpress, LV2_URID subject)
 {
-	return bsearch(&subject, xpress->voices, xpress->nvoices, sizeof(xpress_voice_t), _xpress_voice_search);
+	return bsearch(&subject, xpress->voices, xpress->nvoices, sizeof(xpress_voice_t),
+		_xpress_voice_search);
 }
 
-static inline xpress_voice_t *
+static inline void *
 _xpress_voice_add(xpress_t *xpress, LV2_URID subject)
 {
 	if(xpress->nvoices >= xpress->max_nvoices)
@@ -378,10 +281,11 @@ _xpress_voice_add(xpress_t *xpress, LV2_URID subject)
 
 	xpress_voice_t *voice = &xpress->voices[xpress->nvoices++];
 	voice->subject = subject;
+	void *target = voice->target;
 
 	_xpress_sort(xpress);
 
-	return _xpress_voice_get(xpress, subject);
+	return target;
 }
 
 static inline void
@@ -395,11 +299,11 @@ _xpress_voice_free(xpress_t *xpress, xpress_voice_t *voice)
 }
 
 static inline int
-xpress_init(xpress_t *xpress, const size_t max_nvoices, LV2_URID_Map *map, xpress_map_t *voice_map,
-	xpress_event_t event_mask, xpress_event_cb_t event_cb, void *data,
-	void *target, const xpress_offset_t *offset)
+xpress_init(xpress_t *xpress, const size_t max_nvoices, LV2_URID_Map *map,
+	xpress_map_t *voice_map, xpress_event_t event_mask, const xpress_iface_t *iface,
+	void *target, void *data)
 {
-	if(!map)
+	if(!map || ( (event_mask != XPRESS_EVENT_NONE) && !iface))
 		return 0;
 
 	xpress->nvoices = 0;
@@ -407,9 +311,8 @@ xpress_init(xpress_t *xpress, const size_t max_nvoices, LV2_URID_Map *map, xpres
 	xpress->map = map;
 	xpress->voice_map = voice_map;
 	xpress->event_mask = event_mask;
-	xpress->event_cb = event_cb;
+	xpress->iface = iface;
 	xpress->data = data;
-	xpress->offset = offset;
 	
 	xpress->urid.patch_delete = map->map(map->handle, LV2_PATCH__Delete);
 	xpress->urid.patch_put = map->map(map->handle, LV2_PATCH__Put);
@@ -433,8 +336,8 @@ xpress_init(xpress_t *xpress, const size_t max_nvoices, LV2_URID_Map *map, xpres
 		xpress_voice_t *voice = &xpress->voices[i];
 
 		voice->subject = 0;
-		voice->target = target && offset
-			? target + i*offset->size
+		voice->target = target && iface
+			? target + i*iface->size
 			: NULL;
 	}
 
@@ -466,7 +369,7 @@ xpress_advance(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
 		LV2_Atom_Object_Query q [] = {
 			{ xpress->urid.patch_subject, (const LV2_Atom **)&subject },
 			{ xpress->urid.patch_body, (const LV2_Atom **)&body },
-			LV2_ATOM_OBJECT_QUERY_END
+			{ 0, NULL}
 		};
 		lv2_atom_object_query(obj, q);
 
@@ -476,39 +379,49 @@ xpress_advance(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
 			return 0;
 		}
 
-		bool added = false;
+		bool added;
 		xpress_voice_t *voice = _xpress_voice_get(xpress, subject->body);
-		if(!voice)
+		void *target;
+		if(voice)
 		{
-			voice = _xpress_voice_add(xpress, subject->body);
-			if(!voice)
-			{
+			target = voice->target;
+
+			added = false;
+		}
+		else
+		{
+			if(!(target = _xpress_voice_add(xpress, subject->body)))
 				return 0;
-			}
 
 			added = true;
 		}
+
+		xpress_state_t state;
 
 		LV2_ATOM_OBJECT_FOREACH(body, prop)
 		{
 			const LV2_URID property = prop->key;
 			const LV2_Atom *value = &prop->value;
 
-			_xpress_voice_prop_set(xpress, voice, property,
-				value->type, LV2_ATOM_BODY_CONST(value));
+			if(property == xpress->urid.xpress_zone)
+				state.zone = _xpress_int_get(xpress, value);
+			else if(property == xpress->urid.xpress_pitch)
+				state.pitch = _xpress_float_get(xpress, value);
+			else if(property == xpress->urid.xpress_pressure)
+				state.pressure = _xpress_float_get(xpress, value);
+			else if(property == xpress->urid.xpress_timbre)
+				state.timbre = _xpress_float_get(xpress, value);
 		}
 
 		if(added)
 		{
-			if(xpress->event_cb && (xpress->event_mask & XPRESS_EVENT_ADD) )
-				xpress->event_cb(xpress->data, frames, XPRESS_EVENT_ADD,
-					voice->subject, voice->target);
+			if( (xpress->event_mask & XPRESS_EVENT_ADD) && xpress->iface->add)
+				xpress->iface->add(xpress->data, frames, &state, subject->body, target);
 		}
 		else
 		{
-			if(xpress->event_cb && (xpress->event_mask & XPRESS_EVENT_PUT) )
-				xpress->event_cb(xpress->data, frames, XPRESS_EVENT_PUT,
-					voice->subject, voice->target);
+			if( (xpress->event_mask & XPRESS_EVENT_PUT) && xpress->iface->put)
+				xpress->iface->put(xpress->data, frames, &state, subject->body, target);
 		}
 
 		return 1;
@@ -519,29 +432,24 @@ xpress_advance(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
 
 		LV2_Atom_Object_Query q [] = {
 			{ xpress->urid.patch_subject, (const LV2_Atom **)&subject },
-			LV2_ATOM_OBJECT_QUERY_END
+			{ 0, NULL}
 		};
 		lv2_atom_object_query(obj, q);
 
 		if(!subject || (subject->atom.type != xpress->urid.atom_urid))
-		{
 			return 0;
-		}
 
 		xpress_voice_t *voice = _xpress_voice_get(xpress, subject->body);
 		if(!voice)
-		{
 			return 0;
-		}
 
 		const LV2_URID voice_subject = voice->subject;
 		void *voice_target = voice->target;
 	
 		_xpress_voice_free(xpress, voice);
 
-		if(xpress->event_cb && (xpress->event_mask & XPRESS_EVENT_DEL) )
-			xpress->event_cb(xpress->data, frames, XPRESS_EVENT_DEL,
-				voice_subject, voice_target);
+		if( (xpress->event_mask & XPRESS_EVENT_DEL) && xpress->iface->del)
+			xpress->iface->del(xpress->data, frames, NULL, voice_subject, voice_target);
 
 		return 1;
 	}
@@ -549,27 +457,18 @@ xpress_advance(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
 	return 0; // did not handle a patch event
 }
 
-static inline LV2_URID
-xpress_create(xpress_t *xpress)
-{
-	if(xpress->nvoices >= xpress->max_nvoices)
-		return 0; // failed
-
-	const LV2_URID subject = xpress->voice_map->new_id(xpress->voice_map->handle);
-	xpress_voice_t *voice = &xpress->voices[xpress->nvoices++];
-	voice->subject = subject;
-	_xpress_sort(xpress);
-
-	return subject;
-}
-
-static inline int
+static inline void *
 xpress_add(xpress_t *xpress, LV2_URID subject)
 {
-	if(!_xpress_voice_add(xpress, subject))
-		return 0; // failed
+	return _xpress_voice_add(xpress, subject);
+}
 
-	return 1;
+static inline void *
+xpress_create(xpress_t *xpress, LV2_URID *subject)
+{
+	*subject = xpress->voice_map->new_id(xpress->voice_map->handle);
+
+	return xpress_add(xpress, *subject);
 }
 
 static inline int
@@ -585,23 +484,82 @@ xpress_free(xpress_t *xpress, LV2_URID subject)
 }
 
 static inline LV2_Atom_Forge_Ref
-xpress_del(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID subject)
+xpress_del(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
+	LV2_URID subject)
 {
-	xpress_voice_t *voice = _xpress_voice_get(xpress, subject);
-	if(voice)
-		return _xpress_voice_del(xpress, forge, frames, voice);
+	LV2_Atom_Forge_Frame obj_frame;
 
-	return 1; // we have not written anything, ref thus is set to 'good'
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_frame_time(forge, frames);
+
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &obj_frame, 0, xpress->urid.patch_delete);
+	{
+		if(ref)
+			ref = lv2_atom_forge_key(forge, xpress->urid.patch_subject);
+		if(ref)
+			ref = lv2_atom_forge_urid(forge, subject);
+	}
+	if(ref)
+		lv2_atom_forge_pop(forge, &obj_frame);
+
+	return ref;
 }
 
 static inline LV2_Atom_Forge_Ref
-xpress_put(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID subject)
+xpress_put(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
+	LV2_URID subject, const xpress_state_t *state)
 {
-	xpress_voice_t *voice = _xpress_voice_get(xpress, subject);
-	if(voice)
-		return _xpress_voice_put(xpress, forge, frames, voice);
+	LV2_Atom_Forge_Frame obj_frame;
+	LV2_Atom_Forge_Frame body_frame;
 
-	return 1; // we have not written anything, ref thus is set to 'good'
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_frame_time(forge, frames);
+
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &obj_frame, 0, xpress->urid.patch_put);
+	{
+		if(ref)
+			ref = lv2_atom_forge_key(forge, xpress->urid.patch_subject);
+		if(ref)
+			ref = lv2_atom_forge_urid(forge, subject);
+
+		if(ref)
+			ref = lv2_atom_forge_key(forge, xpress->urid.patch_body);
+		if(ref)
+			ref = lv2_atom_forge_object(forge, &body_frame, 0, 0);
+		{
+			if(ref)
+				ref = lv2_atom_forge_key(forge, xpress->urid.xpress_zone);
+			if(ref)
+				ref = lv2_atom_forge_int(forge, state->zone);
+
+			if(ref)
+				ref = lv2_atom_forge_key(forge, xpress->urid.xpress_pitch);
+			if(ref)
+				ref = lv2_atom_forge_float(forge, state->pitch);
+
+			if(ref)
+				ref = lv2_atom_forge_key(forge, xpress->urid.xpress_pressure);
+			if(ref)
+				ref = lv2_atom_forge_float(forge, state->pressure);
+
+			if(ref)
+				ref = lv2_atom_forge_key(forge, xpress->urid.xpress_timbre);
+			if(ref)
+					ref = lv2_atom_forge_float(forge, state->timbre);
+		}
+		if(ref)
+			lv2_atom_forge_pop(forge, &body_frame);
+	}
+	if(ref)
+		lv2_atom_forge_pop(forge, &obj_frame);
+
+	return ref;
+}
+
+static inline int32_t
+xpress_map(xpress_t *xpress)
+{
+	return xpress->voice_map->new_id(xpress->voice_map->handle);
 }
 
 #ifdef __cplusplus
