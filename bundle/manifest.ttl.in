@@ -23,14 +23,14 @@ synthpod:source
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 # Synthpod System Sink
 synthpod:sink
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 
 # Synthpod OSC Source
@@ -38,14 +38,14 @@ synthpod:osc_source
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 # Synthpod OSC Sink
 synthpod:osc_sink
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 
 # Synthpod MIDI Source
@@ -53,14 +53,14 @@ synthpod:midi_source
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 # Synthpod MIDI Sink
 synthpod:midi_sink
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 
 # Synthpod Audio Source
@@ -68,14 +68,14 @@ synthpod:audio_source
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 # Synthpod Audio Sink
 synthpod:audio_sink
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 
 # Synthpod CV Source
@@ -83,12 +83,12 @@ synthpod:cv_source
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .
 # Synthpod CV Sink
 synthpod:cv_sink
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod_bundle@LIB_EXT@> ;
+	lv2:binary <synthpod_bundle@CMAKE_SHARED_LIBRARY_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_bundle.ttl> .

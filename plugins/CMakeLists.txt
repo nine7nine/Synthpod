@@ -7,14 +7,6 @@ include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
-if(WIN32)
-	set(LIB_EXT ".dll")
-elseif(APPLE)
-	set(LIB_EXT ".so")
-else()
-	set(LIB_EXT ".so")
-endif()
-
 # synthpod
 add_library(synthpod.lv2 MODULE
 	synthpod_lv2.c
