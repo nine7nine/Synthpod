@@ -273,6 +273,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 {
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+	(void)handle;
 
 	switch(type)
 	{
@@ -295,6 +296,7 @@ _system_port_del(void *data, void *sys_port)
 {
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+	(void)handle;
 
 	// unsupported, skip
 }

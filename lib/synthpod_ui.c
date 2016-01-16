@@ -667,7 +667,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
 					{ ui->regs.patch.property.urid, (const LV2_Atom **)&property },
 					{ ui->regs.patch.value.urid, &value },
-					LV2_ATOM_OBJECT_QUERY_END
+					{ 0, NULL }
 				};
 				lv2_atom_object_query(obj, q);
 
@@ -687,7 +687,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				LV2_Atom_Object_Query q[] = {
 					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
 					{ ui->regs.patch.body.urid, (const LV2_Atom **)&body },
-					LV2_ATOM_OBJECT_QUERY_END
+					{ 0, NULL }
 				};
 				lv2_atom_object_query(obj, q);
 
@@ -714,7 +714,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
 					{ ui->regs.patch.add.urid, (const LV2_Atom **)&add },
 					{ ui->regs.patch.remove.urid, (const LV2_Atom **)&remove },
-					LV2_ATOM_OBJECT_QUERY_END
+					{ 0, NULL }
 				};
 				lv2_atom_object_query(obj, q);
 
@@ -1035,7 +1035,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								LV2_Atom_Object_Query point_q[] = {
 									{ ui->regs.rdfs.label.urid, (const LV2_Atom **)&point_label },
 									{ ui->regs.rdf.value.urid, (const LV2_Atom **)&point_value },
-									LV2_ATOM_OBJECT_QUERY_END
+									{ 0, NULL }
 								};
 								lv2_atom_object_query(point_obj, point_q);
 
