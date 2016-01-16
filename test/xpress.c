@@ -84,12 +84,9 @@ _add(void *data, int64_t frames, const xpress_state_t *state,
 
 	src->subject = xpress_map(&handle->xpress);
 
-	const xpress_state_t new_state = {
-		.zone = state->zone,
-		.pitch = state->pitch * 2,
-		.pressure = state->pressure,
-		.timbre = state->timbre
-	};
+	xpress_state_t new_state;
+	memcpy(&new_state, state, sizeof(xpress_state_t));
+	new_state.position[0] *= 2;
 
 	if(handle->ref)
 		handle->ref = xpress_put(&handle->xpress, forge, frames, src->subject, &new_state);
@@ -107,12 +104,9 @@ _put(void *data, int64_t frames, const xpress_state_t *state,
 
 	lv2_log_trace(&handle->logger, "PUT: %u", subject);
 
-	const xpress_state_t new_state = {
-		.zone = state->zone,
-		.pitch = state->pitch * 2,
-		.pressure = state->pressure,
-		.timbre = state->timbre
-	};
+	xpress_state_t new_state;
+	memcpy(&new_state, state, sizeof(xpress_state_t));
+	new_state.position[0] *= 2;
 
 	if(handle->ref)
 		handle->ref = xpress_put(&handle->xpress, forge, frames, src->subject, &new_state);
@@ -183,6 +177,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	lv2_log_logger_init(&handle->logger, handle->map, handle->log);
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
+
 	if(!xpress_init(&handle->xpress, MAX_NVOICES, handle->map, voice_map,
 			XPRESS_EVENT_ALL, &iface, handle->target, handle) )
 	{
