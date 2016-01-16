@@ -251,15 +251,6 @@ _xpress_voice_sort(const void *itm1, const void *itm2)
 	return _xpress_signum(voice1->subject, voice2->subject);
 }
 
-static int
-_xpress_voice_search(const void *itm1, const void *itm2)
-{
-	const LV2_URID *subject = itm1;
-	const xpress_voice_t *voice = itm2;
-
-	return _xpress_signum(*subject, voice->subject);
-}
-
 static inline void
 _xpress_sort(xpress_t *xpress)
 {
@@ -269,8 +260,13 @@ _xpress_sort(xpress_t *xpress)
 static inline xpress_voice_t *
 _xpress_voice_get(xpress_t *xpress, LV2_URID subject)
 {
-	return bsearch(&subject, xpress->voices, xpress->nvoices, sizeof(xpress_voice_t),
-		_xpress_voice_search);
+	const xpress_voice_t voice = {
+		.subject = subject,
+		.target = NULL
+	};
+
+	return bsearch(&voice, xpress->voices, xpress->nvoices, sizeof(xpress_voice_t),
+		_xpress_voice_sort);
 }
 
 static inline void *
