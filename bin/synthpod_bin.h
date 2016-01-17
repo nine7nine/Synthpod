@@ -107,6 +107,7 @@ static inline void
 _light_sem_init(light_sem_t *lsem, int count)
 {
 	assert(count >= 0);
+	atomic_init(&lsem->count, 0);
 	eina_semaphore_new(&lsem->sem, count);
 	lsem->spin = 10000; //TODO make this configurable or self-adapting
 }
