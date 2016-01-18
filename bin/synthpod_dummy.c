@@ -101,7 +101,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	
 	if(schedp.sched_priority)
 	{
-		if(pthread_setschedparam(self, SCHED_RR, &schedp))
+		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
 			fprintf(stderr, "pthread_setschedparam error\n");
 	}
 		
@@ -121,8 +121,8 @@ _rt_thread(void *data, Eina_Thread thread)
 	while(!atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
 		struct timespec sleep_rem;
-		if(nanosleep(&sleep_todo, &sleep_rem)) // has been interrupted?
-			nanosleep(&sleep_rem, NULL); // sleep for remaining time
+		if(clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_todo, &sleep_rem)) // has been interrupted?
+			clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_rem, NULL); // sleep for remaining time
 
 		uint32_t na = nsamples * n_period;
 

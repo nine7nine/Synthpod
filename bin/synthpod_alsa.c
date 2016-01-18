@@ -148,7 +148,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	
 	if(schedp.sched_priority)
 	{
-		if(pthread_setschedparam(self, SCHED_RR, &schedp))
+		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
 			fprintf(stderr, "pthread_setschedparam error\n");
 	}
 		
