@@ -37,7 +37,6 @@ struct _smart_slider_t {
 	float diff;
 	float dflt;
 	float value;
-	float frac;
 
 	float drag;
 
@@ -72,8 +71,6 @@ _smart_slider_smart_init(Evas_Object *o)
 	priv->scale = 1.f / priv->diff;
 	priv->dflt = 0.f;
 	priv->value = priv->dflt;
-	if(priv->min != 0.f)
-		priv->frac = priv->max / priv->min;
 
 	priv->drag = 0.f;
 
@@ -100,7 +97,8 @@ _smart_slider_value_flush(Evas_Object *o)
 	// calculate exact value
 	float new_value;
 	if(priv->logarithmic)
-		new_value = priv->min * pow(priv->frac, priv->drag);
+		//new_value = priv->min * pow(priv->max / priv->min, priv->drag);
+		new_value = pow(priv->min, 1.f - priv->drag) * pow(priv->max, priv->drag);
 	else
 		new_value =  priv->min + priv->drag * priv->diff;
 
@@ -110,7 +108,8 @@ _smart_slider_value_flush(Evas_Object *o)
 		new_value = round(new_value);
 		
 		if(priv->logarithmic)
-			drag_x = log(new_value / priv->min) / log(priv->frac);
+			//drag_x = log(new_value / priv->min) / log(priv->max / priv->min);
+			drag_x = (log(new_value) - log(priv->min)) / (log(priv->max) - log(priv->min));
 		else
 			drag_x = (new_value - priv->min) * priv->scale;
 	}
@@ -317,8 +316,6 @@ smart_slider_range_set(Evas_Object *o, float min, float max, float dflt)
 	priv->dflt = dflt;
 	priv->diff = priv->max - priv->min;
 	priv->scale = 1.f / priv->diff;
-	if(priv->min != 0.f)
-		priv->frac = priv->max / priv->min;
 	
 	_smart_slider_value_flush(o);
 }

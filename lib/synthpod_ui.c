@@ -2274,9 +2274,17 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				{
 					if(tar->min <= 0.f)
 						tar->min = FLT_MIN; // smallest positive normalized float
-					if(tar->max <= 0.f)
-						tar->max = 1.f;
 				}
+
+				// force max > min
+				if(tar->max <= tar->min)
+					tar->max = tar->min + FLT_MIN;
+
+				// force min <= dflt <= max
+				if(tar->dflt < tar->min)
+					tar->dflt = tar->min;
+				if(tar->dflt > tar->max)
+					tar->dflt = tar->max;
 			}
 			else if(lilv_port_is_a(plug, port, ui->regs.port.atom.node)) 
 			{
