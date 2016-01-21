@@ -74,22 +74,29 @@ omk:me
 proj:synthpod
 	a doap:Project ;
 	doap:maintainer omk:me ;
-	doap:name "Synthpod Bundle" ,
-		"Synthpod Bündel"@de .
+	doap:name "Synthpod bundle" ,
+		"Synthpod Bündel"@de ,
+		"Synthpod fasko"@eo , # esperanto
+		"Synthpod Böndu"@gsw , # allemannic
+		"  "@tlh . # klingon
 
 # Audio groups
 synthpod:group_sink
 	a pg:InputGroup ,
 		pg:StereoGroup ;
 	lv2:name "Sink" ,
-		"Ziel"@de ;
+		"Ziel"@de ,
+		"Sinki"@eo ,
+	 	"Ziiu"@gsw ;
 	lv2:symbol "sink" .
 
 synthpod:group_source
 	a pg:OutputGroup ,
 		pg:StereoGroup ;
 	lv2:name "Source" ,
-		"Quelle"@de ;
+		"Quelle"@de ,
+		"Fonto"@eo ,
+	 	"Quöue"@gsw ;
 	lv2:symbol "source" .
 
 # Sink Plugin
@@ -97,7 +104,8 @@ synthpod:sink
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod System Sink" ,
-		"Synthpod System Ziel"@de ;
+		"Synthpod System Ziel"@de ,
+		"Synthpod Syschtem Ziiu"@gsw ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength ;
