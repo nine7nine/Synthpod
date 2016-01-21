@@ -1412,17 +1412,21 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 	LILV_FOREACH(nodes, n, notifs)
 	{
 		const LilvNode *notif = lilv_nodes_get(notifs, n);
-		const LilvNode *sym = lilv_world_get(ui->world, notif,
-			ui->regs.core.symbol.node, NULL);
-		const LilvNode *ind = lilv_world_get(ui->world, notif,
-			ui->regs.core.index.node, NULL);
-		const LilvNode *plug = lilv_world_get(ui->world, notif,
+		LilvNode *plug = lilv_world_get(ui->world, notif,
 			ui->regs.ui.plugin.node, NULL);
-		const LilvNode *prot = lilv_world_get(ui->world, notif,
-			ui->regs.ui.protocol.node, NULL);
 
 		if(plug && !lilv_node_equals(plug, plug_uri_node))
+		{
+			lilv_node_free(plug);
 			continue; // notification not for this plugin 
+		}
+
+		LilvNode *ind = lilv_world_get(ui->world, notif,
+			ui->regs.core.index.node, NULL);
+		LilvNode *sym = lilv_world_get(ui->world, notif,
+			ui->regs.core.symbol.node, NULL);
+		LilvNode *prot = lilv_world_get(ui->world, notif,
+			ui->regs.ui.protocol.node, NULL);
 
 		uint32_t index = LV2UI_INVALID_PORT_INDEX;
 		if(ind)
@@ -1439,29 +1443,32 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 		{
 			port_t *port = &mod->ports[index];
 
-			// protocol specified
-			if(lilv_node_equals(prot, ui->regs.port.float_protocol.node))
-				_port_subscription_set(mod, index, ui->regs.port.float_protocol.urid, state);
-			else if(lilv_node_equals(prot, ui->regs.port.peak_protocol.node))
-				_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
-			else if(lilv_node_equals(prot, ui->regs.port.atom_transfer.node))
-				_port_subscription_set(mod, index, ui->regs.port.atom_transfer.urid, state);
-			else if(lilv_node_equals(prot, ui->regs.port.event_transfer.node))
-				_port_subscription_set(mod, index, ui->regs.port.event_transfer.urid, state);
-
-			// no protocol specified, we have to guess according to port type
-			else if(port->type == PORT_TYPE_CONTROL)
-				_port_subscription_set(mod, index, ui->regs.port.float_protocol.urid, state);
-			else if(port->type == PORT_TYPE_AUDIO)
-				_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
-			else if(port->type == PORT_TYPE_CV)
-				_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
-			else if(port->type == PORT_TYPE_ATOM)
+			if(prot) // protocol specified
 			{
-				if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-					_port_subscription_set(mod, index, ui->regs.port.event_transfer.urid, state);
-				else
+				if(lilv_node_equals(prot, ui->regs.port.float_protocol.node))
+					_port_subscription_set(mod, index, ui->regs.port.float_protocol.urid, state);
+				else if(lilv_node_equals(prot, ui->regs.port.peak_protocol.node))
+					_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
+				else if(lilv_node_equals(prot, ui->regs.port.atom_transfer.node))
 					_port_subscription_set(mod, index, ui->regs.port.atom_transfer.urid, state);
+				else if(lilv_node_equals(prot, ui->regs.port.event_transfer.node))
+					_port_subscription_set(mod, index, ui->regs.port.event_transfer.urid, state);
+			}
+			else // no protocol specified, we have to guess according to port type
+			{
+				if(port->type == PORT_TYPE_CONTROL)
+					_port_subscription_set(mod, index, ui->regs.port.float_protocol.urid, state);
+				else if(port->type == PORT_TYPE_AUDIO)
+					_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
+				else if(port->type == PORT_TYPE_CV)
+					_port_subscription_set(mod, index, ui->regs.port.peak_protocol.urid, state);
+				else if(port->type == PORT_TYPE_ATOM)
+				{
+					if(port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+						_port_subscription_set(mod, index, ui->regs.port.event_transfer.urid, state);
+					else
+						_port_subscription_set(mod, index, ui->regs.port.atom_transfer.urid, state);
+				}
 			}
 
 			//TODO handle ui:notifyType
@@ -1475,6 +1482,15 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 				ui->regs.port.event_transfer.urid);
 			*/
 		}
+
+		if(plug)
+			lilv_node_free(plug);
+		if(ind)
+			lilv_node_free(ind);
+		if(sym)
+			lilv_node_free(sym);
+		if(prot)
+			lilv_node_free(prot);
 	}
 	lilv_nodes_free(notifs);
 }
