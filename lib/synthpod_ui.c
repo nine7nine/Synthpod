@@ -263,6 +263,7 @@ struct _property_t {
 	int editable;
 
 	char *label;
+	char *comment;
 	LV2_URID tar_urid;
 	LV2_URID type_urid;
 
@@ -605,6 +606,31 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 }
 
 static inline void
+_ui_port_tooltip_add(sp_ui_t *ui, Elm_Object_Item *elmnt, port_t *port)
+{
+	mod_t *mod = port->mod;
+
+	LilvNodes *nodes = lilv_port_get_value(mod->plug, port->tar,
+		ui->regs.rdfs.comment.node);
+	LilvNode *node = nodes
+		? lilv_nodes_get_first(nodes) //FIXME delete?
+		: NULL;
+
+	if(node)
+		elm_object_item_tooltip_text_set(elmnt, lilv_node_as_string(node));
+
+	if(nodes)
+		lilv_nodes_free(nodes);
+}
+
+static inline void
+_ui_property_tooltip_add(sp_ui_t *ui, Elm_Object_Item *elmnt, property_t *prop)
+{
+	if(prop->comment)
+		elm_object_item_tooltip_text_set(elmnt, prop->comment);
+}
+
+static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
@@ -790,6 +816,17 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->label = NULL;
 							}
 						}
+						else if(atom_prop->key == ui->regs.rdfs.comment.urid)
+						{
+							const LV2_URID tar_urid = subject ? subject->body : 0;
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop && prop->comment)
+							{
+								free(prop->comment);
+								prop->comment = NULL;
+							}
+						}
 						else if(atom_prop->key == ui->regs.rdfs.range.urid)
 						{
 							const LV2_URID tar_urid = subject ? subject->body : 0;
@@ -857,6 +894,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->editable = 0;
 								prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
 								prop->label = NULL; // not yet known
+								prop->comment = NULL; // not yet known
 								prop->type_urid = 0; // not yet known
 								prop->minimum = 0.f; // not yet known
 								prop->maximum = 1.f; // not yet known
@@ -874,9 +912,13 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
 										NULL, NULL);
-									int select_mode = ELM_OBJECT_SELECT_MODE_NONE;
-									elm_genlist_item_select_mode_set(elmnt, select_mode);
-									prop->std.elmnt = elmnt;
+									if(elmnt)
+									{
+										int select_mode = ELM_OBJECT_SELECT_MODE_NONE;
+										elm_genlist_item_select_mode_set(elmnt, select_mode);
+										_ui_property_tooltip_add(ui, elmnt, prop);
+										prop->std.elmnt = elmnt;
+									}
 								}
 							}
 						}
@@ -892,6 +934,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->editable = 1;
 								prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
 								prop->label = NULL; // not yet known
+								prop->comment = NULL; // not yet known
 								prop->type_urid = 0; // not yet known
 								prop->minimum = 0.f; // not yet known
 								prop->maximum = 1.f; // not yet known
@@ -909,12 +952,16 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
 										NULL, NULL);
-									int select_mode = (prop->type_urid == ui->forge.String)
-										|| (prop->type_urid == ui->forge.URI)
-											? ELM_OBJECT_SELECT_MODE_DEFAULT
-											: ELM_OBJECT_SELECT_MODE_NONE;
-									elm_genlist_item_select_mode_set(elmnt, select_mode);
-									prop->std.elmnt = elmnt;
+									if(elmnt)
+									{
+										int select_mode = (prop->type_urid == ui->forge.String)
+											|| (prop->type_urid == ui->forge.URI)
+												? ELM_OBJECT_SELECT_MODE_DEFAULT
+												: ELM_OBJECT_SELECT_MODE_NONE;
+										elm_genlist_item_select_mode_set(elmnt, select_mode);
+										_ui_property_tooltip_add(ui, elmnt, prop);
+										prop->std.elmnt = elmnt;
+									}
 								}
 							}
 						}
@@ -929,6 +976,22 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->label = strndup(LV2_ATOM_BODY_CONST(&atom_prop->value), atom_prop->value.size);
 								if(prop->std.elmnt)
 									elm_genlist_item_update(prop->std.elmnt);
+							}
+						}
+						else if(atom_prop->key == ui->regs.rdfs.comment.urid)
+						{
+							const LV2_URID tar_urid = subject ? subject->body : 0;
+
+							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+							if(prop)
+							{
+								prop->comment = strndup(LV2_ATOM_BODY_CONST(&atom_prop->value), atom_prop->value.size);
+								if(prop->std.elmnt)
+								{
+									_ui_property_tooltip_add(ui, prop->std.elmnt, prop);
+									elm_genlist_item_update(prop->std.elmnt);
+								}
 							}
 						}
 						else if(atom_prop->key == ui->regs.rdfs.range.urid)
@@ -2084,6 +2147,257 @@ _bank_cmp(const void *data1, const void *data2)
 		: -1;
 }
 
+static inline void
+_sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const LilvPort *port)
+{
+	// discover port groups
+	tar->group = lilv_port_get(mod->plug, port, ui->regs.group.group.node);
+
+	tar->mod = mod;
+	tar->tar = port;
+	tar->index = i;
+	tar->direction = lilv_port_is_a(mod->plug, port, ui->regs.port.input.node)
+		? PORT_DIRECTION_INPUT
+		: PORT_DIRECTION_OUTPUT;
+
+	if(lilv_port_is_a(mod->plug, port, ui->regs.port.audio.node))
+	{
+		tar->type =  PORT_TYPE_AUDIO;
+	}
+	else if(lilv_port_is_a(mod->plug, port, ui->regs.port.cv.node))
+	{
+		tar->type = PORT_TYPE_CV;
+	}
+	else if(lilv_port_is_a(mod->plug, port, ui->regs.port.control.node))
+	{
+		tar->type = PORT_TYPE_CONTROL;
+
+		LilvNode *dflt_node;
+		LilvNode *min_node;
+		LilvNode *max_node;
+		lilv_port_get_range(mod->plug, tar->tar, &dflt_node, &min_node, &max_node);
+		tar->dflt = dflt_node ? lilv_node_as_float(dflt_node) : 0.f;
+		tar->min = min_node ? lilv_node_as_float(min_node) : 0.f;
+		tar->max = max_node ? lilv_node_as_float(max_node) : 1.f;
+		lilv_node_free(dflt_node);
+		lilv_node_free(min_node);
+		lilv_node_free(max_node);
+
+		tar->integer = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.integer.node);
+		tar->toggled = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.toggled.node);
+		tar->logarithmic = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.logarithmic.node);
+		int enumeration = lilv_port_has_property(mod->plug, port, ui->regs.port.enumeration.node);
+		tar->points = enumeration
+			? lilv_port_get_scale_points(mod->plug, port)
+			: NULL;
+
+		// force positive logarithmic range
+		if(tar->logarithmic)
+		{
+			if(tar->min <= 0.f)
+				tar->min = FLT_MIN; // smallest positive normalized float
+		}
+
+		// force max > min
+		if(tar->max <= tar->min)
+			tar->max = tar->min + FLT_MIN;
+
+		// force min <= dflt <= max
+		if(tar->dflt < tar->min)
+			tar->dflt = tar->min;
+		if(tar->dflt > tar->max)
+			tar->dflt = tar->max;
+	}
+	else if(lilv_port_is_a(mod->plug, port, ui->regs.port.atom.node)) 
+	{
+		tar->type = PORT_TYPE_ATOM;
+		tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
+		//tar->buffer_type = lilv_port_is_a(mod->plug, port, ui->regs.port.sequence.node)
+		//	? PORT_BUFFER_TYPE_SEQUENCE
+		//	: PORT_BUFFER_TYPE_NONE; //TODO
+
+		// does this port support patch:Message?
+		tar->patchable = lilv_port_supports_event(mod->plug, port, ui->regs.patch.message.node);
+
+		tar->atom_type = 0;
+		if(lilv_port_supports_event(mod->plug, port, ui->regs.port.midi.node))
+			tar->atom_type |= PORT_ATOM_TYPE_MIDI;
+		if(lilv_port_supports_event(mod->plug, port, ui->regs.port.osc_event.node))
+			tar->atom_type |= PORT_ATOM_TYPE_OSC;
+		if(lilv_port_supports_event(mod->plug, port, ui->regs.port.time_position.node))
+			tar->atom_type |= PORT_ATOM_TYPE_TIME;
+		if(lilv_port_supports_event(mod->plug, port, ui->regs.patch.message.node))
+			tar->atom_type |= PORT_ATOM_TYPE_PATCH;
+	}
+
+	// get port unit
+	LilvNode *unit = lilv_port_get(mod->plug, tar->tar, ui->regs.units.unit.node);
+	if(unit)
+	{
+		LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+		if(symbol)
+		{
+			tar->unit = strdup(lilv_node_as_string(symbol));
+			lilv_node_free(symbol);
+		}
+
+		lilv_node_free(unit);
+	}
+}
+
+static inline property_t *
+_sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, int editable)
+{
+	property_t *prop = calloc(1, sizeof(property_t));
+	if(!prop)
+		return NULL;
+
+	const char *writable_str = lilv_node_as_uri(writable);
+
+	prop->mod = mod;
+	prop->editable = editable;
+	prop->label = NULL;
+	prop->comment = NULL;
+	prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, writable_str);
+	prop->type_urid = 0; // invalid type
+	prop->minimum = 0.f; // not yet known
+	prop->maximum = 1.f; // not yet known
+	prop->unit = NULL; // not yet known
+
+	// get rdfs:label
+	LilvNode *label = lilv_world_get(ui->world, writable,
+		ui->regs.rdfs.label.node, NULL);
+	if(label)
+	{
+		const char *label_str = lilv_node_as_string(label);
+
+		if(label_str)
+			prop->label = strdup(label_str);
+
+		lilv_node_free(label);
+	}
+
+	// get rdfs:comment
+	LilvNode *comment = lilv_world_get(ui->world, writable,
+		ui->regs.rdfs.comment.node, NULL);
+	if(comment)
+	{
+		const char *comment_str = lilv_node_as_string(comment);
+
+		if(comment_str)
+			prop->comment = strdup(comment_str);
+
+		lilv_node_free(comment);
+	}
+
+	// get type of patch:writable
+	LilvNode *type = lilv_world_get(ui->world, writable,
+		ui->regs.rdfs.range.node, NULL);
+	if(type)
+	{
+		const char *type_str = lilv_node_as_string(type);
+
+		//printf("with type: %s\n", type_str);
+		prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
+
+		lilv_node_free(type);
+	}
+
+	// get lv2:minimum
+	LilvNode *minimum = lilv_world_get(ui->world, writable,
+		ui->regs.core.minimum.node, NULL);
+	if(minimum)
+	{
+		prop->minimum = lilv_node_as_float(minimum);
+
+		lilv_node_free(minimum);
+	}
+
+	// get lv2:maximum
+	LilvNode *maximum = lilv_world_get(ui->world, writable,
+		ui->regs.core.maximum.node, NULL);
+	if(maximum)
+	{
+		prop->maximum = lilv_node_as_float(maximum);
+
+		lilv_node_free(maximum);
+	}
+
+	// get units:unit
+	LilvNode *unit = lilv_world_get(ui->world, writable,
+		ui->regs.units.unit.node, NULL);
+	if(unit)
+	{
+		LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+		if(symbol)
+		{
+			prop->unit = strdup(lilv_node_as_string(symbol));
+			lilv_node_free(symbol);
+		}
+
+		lilv_node_free(unit);
+	}
+	
+	LilvNodes *spoints = lilv_world_find_nodes(ui->world, writable,
+		ui->regs.core.scale_point.node, NULL);
+	if(spoints)
+	{
+		LILV_FOREACH(nodes, n, spoints)
+		{
+			const LilvNode *point = lilv_nodes_get(spoints, n);
+			LilvNode *point_label = lilv_world_get(ui->world, point,
+				ui->regs.rdfs.label.node, NULL);
+			LilvNode *point_value = lilv_world_get(ui->world, point,
+				ui->regs.rdf.value.node, NULL);
+
+			if(point_label && point_value)
+			{
+				point_t *p = calloc(1, sizeof(point_t));
+				p->label = strdup(lilv_node_as_string(point_label));
+				if(prop->type_urid == ui->forge.Int)
+				{
+					p->d = calloc(1, sizeof(double));
+					*p->d = lilv_node_as_float(point_value);
+				}
+				else if(prop->type_urid == ui->forge.Float)
+				{
+					p->d = calloc(1, sizeof(double));
+					*p->d = lilv_node_as_float(point_value);
+				}
+				else if(prop->type_urid == ui->forge.Long)
+				{
+					p->d = calloc(1, sizeof(double));
+					*p->d = lilv_node_as_float(point_value);
+				}
+				else if(prop->type_urid == ui->forge.Double)
+				{
+					p->d = calloc(1, sizeof(double));
+					*p->d = lilv_node_as_float(point_value);
+				}
+				//FIXME do other types
+				else if(prop->type_urid == ui->forge.String)
+				{
+					p->s = strdup(lilv_node_as_string(point_value));
+				}
+
+				prop->scale_points = eina_list_append(prop->scale_points, p);
+
+				if(prop->std.elmnt)
+					elm_genlist_item_update(prop->std.elmnt);
+			}
+
+			if(point_label)
+				lilv_node_free(point_label);
+			if(point_value)
+				lilv_node_free(point_value);
+		}
+			
+		lilv_nodes_free(spoints);
+	}
+
+	return prop;
+}
+
 static mod_t *
 _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	data_access_t data_access)
@@ -2242,102 +2556,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		{
 			port_t *tar = &mod->ports[i];
 			const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
-			if(!port)
-				continue;
 
-			// discover port groups
-			tar->group = lilv_port_get(plug, port, ui->regs.group.group.node);
-
-			tar->mod = mod;
-			tar->tar = port;
-			tar->index = i;
-			tar->direction = lilv_port_is_a(plug, port, ui->regs.port.input.node)
-				? PORT_DIRECTION_INPUT
-				: PORT_DIRECTION_OUTPUT;
-
-			if(lilv_port_is_a(plug, port, ui->regs.port.audio.node))
-			{
-				tar->type =  PORT_TYPE_AUDIO;
-			}
-			else if(lilv_port_is_a(plug, port, ui->regs.port.cv.node))
-			{
-				tar->type = PORT_TYPE_CV;
-			}
-			else if(lilv_port_is_a(plug, port, ui->regs.port.control.node))
-			{
-				tar->type = PORT_TYPE_CONTROL;
-
-				LilvNode *dflt_node;
-				LilvNode *min_node;
-				LilvNode *max_node;
-				lilv_port_get_range(mod->plug, tar->tar, &dflt_node, &min_node, &max_node);
-				tar->dflt = dflt_node ? lilv_node_as_float(dflt_node) : 0.f;
-				tar->min = min_node ? lilv_node_as_float(min_node) : 0.f;
-				tar->max = max_node ? lilv_node_as_float(max_node) : 1.f;
-				lilv_node_free(dflt_node);
-				lilv_node_free(min_node);
-				lilv_node_free(max_node);
-
-				tar->integer = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.integer.node);
-				tar->toggled = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.toggled.node);
-				tar->logarithmic = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.logarithmic.node);
-				int enumeration = lilv_port_has_property(plug, port, ui->regs.port.enumeration.node);
-				tar->points = enumeration
-					? lilv_port_get_scale_points(plug, port)
-					: NULL;
-
-				// force positive logarithmic range
-				if(tar->logarithmic)
-				{
-					if(tar->min <= 0.f)
-						tar->min = FLT_MIN; // smallest positive normalized float
-				}
-
-				// force max > min
-				if(tar->max <= tar->min)
-					tar->max = tar->min + FLT_MIN;
-
-				// force min <= dflt <= max
-				if(tar->dflt < tar->min)
-					tar->dflt = tar->min;
-				if(tar->dflt > tar->max)
-					tar->dflt = tar->max;
-			}
-			else if(lilv_port_is_a(plug, port, ui->regs.port.atom.node)) 
-			{
-				tar->type = PORT_TYPE_ATOM;
-				tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
-				//tar->buffer_type = lilv_port_is_a(plug, port, ui->regs.port.sequence.node)
-				//	? PORT_BUFFER_TYPE_SEQUENCE
-				//	: PORT_BUFFER_TYPE_NONE; //TODO
-
-				// does this port support patch:Message?
-				tar->patchable = lilv_port_supports_event(plug, port, ui->regs.patch.message.node);
-
-				tar->atom_type = 0;
-				if(lilv_port_supports_event(plug, port, ui->regs.port.midi.node))
-					tar->atom_type |= PORT_ATOM_TYPE_MIDI;
-				if(lilv_port_supports_event(plug, port, ui->regs.port.osc_event.node))
-					tar->atom_type |= PORT_ATOM_TYPE_OSC;
-				if(lilv_port_supports_event(plug, port, ui->regs.port.time_position.node))
-					tar->atom_type |= PORT_ATOM_TYPE_TIME;
-				if(lilv_port_supports_event(plug, port, ui->regs.patch.message.node))
-					tar->atom_type |= PORT_ATOM_TYPE_PATCH;
-			}
-
-			// get port unit
-			LilvNode *unit = lilv_port_get(mod->plug, tar->tar, ui->regs.units.unit.node);
-			if(unit)
-			{
-				LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
-				if(symbol)
-				{
-					tar->unit = strdup(lilv_node_as_string(symbol));
-					lilv_node_free(symbol);
-				}
-
-				lilv_node_free(unit);
-			}
+			if(port)
+				_sp_ui_mod_port_add(ui, mod, i, tar, port);
 		}
 	}
 
@@ -2349,136 +2570,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		LILV_FOREACH(nodes, i, mod->writs)
 		{
 			const LilvNode *writable = lilv_nodes_get(mod->writs, i);
-			const char *writable_str = lilv_node_as_uri(writable);
+			property_t *prop = _sp_ui_mod_static_prop_add(ui, mod, writable, 1);
 
-			const char *label_str = NULL;
-			LilvNode *label = lilv_world_get(ui->world, writable,
-				ui->regs.rdfs.label.node, NULL);
-			if(label)
-			{
-				label_str = lilv_node_as_string(label);
-				lilv_node_free(label);
-			}
-			//printf("plugin '%s' has writable: %s\n", plugin_string, writable_str);
-
-			property_t *prop = calloc(1, sizeof(property_t));
-			if(!prop)
-				continue;
-			prop->mod = mod;
-			prop->editable = 1;
-			prop->label = (char *)label_str; //TODO is a bit dangerous
-			prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, writable_str);
-			prop->type_urid = 0; // invalid type
-			prop->minimum = 0.f; // not yet known
-			prop->maximum = 1.f; // not yet known
-			prop->unit = NULL; // not yet known
-
-			// get type of patch:writable
-			LilvNode *type = lilv_world_get(ui->world, writable,
-				ui->regs.rdfs.range.node, NULL);
-			if(type)
-			{
-				const char *type_str = lilv_node_as_string(type);
-
-				//printf("with type: %s\n", type_str);
-				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
-
-				lilv_node_free(type);
-			}
-
-			// get lv2:minimum
-			LilvNode *minimum = lilv_world_get(ui->world, writable,
-				ui->regs.core.minimum.node, NULL);
-			if(minimum)
-			{
-				prop->minimum = lilv_node_as_float(minimum);
-
-				lilv_node_free(minimum);
-			}
-
-			// get lv2:maximum
-			LilvNode *maximum = lilv_world_get(ui->world, writable,
-				ui->regs.core.maximum.node, NULL);
-			if(maximum)
-			{
-				prop->maximum = lilv_node_as_float(maximum);
-
-				lilv_node_free(maximum);
-			}
-
-			// get units:unit
-			LilvNode *unit = lilv_world_get(ui->world, writable,
-				ui->regs.units.unit.node, NULL);
-			if(unit)
-			{
-				LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
-				if(symbol)
-				{
-					prop->unit = strdup(lilv_node_as_string(symbol));
-					lilv_node_free(symbol);
-				}
-
-				lilv_node_free(unit);
-			}
-			
-			LilvNodes *spoints = lilv_world_find_nodes(ui->world, writable,
-				ui->regs.core.scale_point.node, NULL);
-			if(spoints)
-			{
-				LILV_FOREACH(nodes, n, spoints)
-				{
-					const LilvNode *point = lilv_nodes_get(spoints, n);
-					LilvNode *point_label = lilv_world_get(ui->world, point,
-						ui->regs.rdfs.label.node, NULL);
-					LilvNode *point_value = lilv_world_get(ui->world, point,
-						ui->regs.rdf.value.node, NULL);
-
-					if(point_label && point_value)
-					{
-						point_t *p = calloc(1, sizeof(point_t));
-						p->label = strdup(lilv_node_as_string(point_label));
-						if(prop->type_urid == ui->forge.Int)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						else if(prop->type_urid == ui->forge.Float)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						else if(prop->type_urid == ui->forge.Long)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						else if(prop->type_urid == ui->forge.Double)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						//FIXME do other types
-						else if(prop->type_urid == ui->forge.String)
-						{
-							p->s = strdup(lilv_node_as_string(point_value));
-						}
-
-						prop->scale_points = eina_list_append(prop->scale_points, p);
-
-						if(prop->std.elmnt)
-							elm_genlist_item_update(prop->std.elmnt);
-					}
-
-					if(point_label)
-						lilv_node_free(point_label);
-					if(point_value)
-						lilv_node_free(point_value);
-				}
-					
-				lilv_nodes_free(spoints);
-			}
-
-			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
+			if(prop)
+				mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
 		}
 	}
 
@@ -2490,139 +2585,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 		LILV_FOREACH(nodes, i, mod->reads)
 		{
 			const LilvNode *readable = lilv_nodes_get(mod->reads, i);
-			const char *readable_str = lilv_node_as_uri(readable);
+			property_t *prop = _sp_ui_mod_static_prop_add(ui, mod, readable, 0);
 
-			const char *label_str = NULL;
-			LilvNode *label = lilv_world_get(ui->world, readable,
-				ui->regs.rdfs.label.node, NULL);
-			if(label)
-			{
-				label_str = lilv_node_as_string(label);
-
-				lilv_node_free(label);
-			}
-
-			//printf("plugin '%s' has readable: %s\n", plugin_string, readable_str);
-
-			property_t *prop = calloc(1, sizeof(property_t));
-			if(!prop)
-				continue;
-			prop->mod = mod;
-			prop->editable = 0;
-			prop->label = (char *)label_str; // is a bit dangerous
-			prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, readable_str);
-			prop->type_urid = 0; // invalid type
-			prop->minimum = 0.f; // not yet known
-			prop->maximum = 1.f; // not yet known
-			prop->unit = NULL; // not yet known
-
-			// get type of patch:readable
-			LilvNode *type = lilv_world_get(ui->world, readable,
-				ui->regs.rdfs.range.node, NULL);
-			if(type)
-			{
-				const char *type_str = lilv_node_as_string(type);
-
-				//printf("with type: %s\n", type_str);
-				prop->type_urid = ui->driver->map->map(ui->driver->map->handle, type_str);
-
-				lilv_node_free(type);
-			}
-
-			// get lv2:minimum
-			LilvNode *minimum = lilv_world_get(ui->world, readable,
-				ui->regs.core.minimum.node, NULL);
-			if(minimum)
-			{
-				prop->minimum = lilv_node_as_float(minimum);
-
-				lilv_node_free(minimum);
-			}
-
-			// get lv2:maximum
-			LilvNode *maximum = lilv_world_get(ui->world, readable,
-				ui->regs.core.maximum.node, NULL);
-			if(maximum)
-			{
-				prop->maximum = lilv_node_as_float(maximum);
-
-				lilv_node_free(maximum);
-			}
-
-			// get units:unit
-			LilvNode *unit = lilv_world_get(ui->world, readable,
-				ui->regs.units.unit.node, NULL);
-			if(unit)
-			{
-				LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
-				if(symbol)
-				{
-					prop->unit = strdup(lilv_node_as_string(symbol));
-					lilv_node_free(symbol);
-				}
-
-				lilv_node_free(unit);
-			}
-			
-			LilvNodes *spoints = lilv_world_find_nodes(ui->world, readable,
-				ui->regs.core.scale_point.node, NULL);
-			if(spoints)
-			{
-				LILV_FOREACH(nodes, n, spoints)
-				{
-					const LilvNode *point = lilv_nodes_get(spoints, n);
-					LilvNode *point_label = lilv_world_get(ui->world, point,
-						ui->regs.rdfs.label.node, NULL);
-					LilvNode *point_value = lilv_world_get(ui->world, point,
-						ui->regs.rdf.value.node, NULL);
-
-					if(point_label && point_value)
-					{
-						point_t *p = calloc(1, sizeof(point_t));
-						p->label = strdup(lilv_node_as_string(point_label));
-
-						if(prop->type_urid == ui->forge.Int)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						else if(prop->type_urid == ui->forge.Float)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						else if(prop->type_urid == ui->forge.Long)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						else if(prop->type_urid == ui->forge.Double)
-						{
-							p->d = calloc(1, sizeof(double));
-							*p->d = lilv_node_as_float(point_value);
-						}
-						//FIXME do other types
-						else if(prop->type_urid == ui->forge.String)
-						{
-							p->s = strdup(lilv_node_as_string(point_value));
-						}
-
-						prop->scale_points = eina_list_append(prop->scale_points, p);
-
-						if(prop->std.elmnt)
-							elm_genlist_item_update(prop->std.elmnt);
-					}
-
-					if(point_label)
-						lilv_node_free(point_label);
-					if(point_value)
-						lilv_node_free(point_value);
-				}
-					
-				lilv_nodes_free(spoints);
-			}
-
-			mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
+			if(prop)
+				mod->static_properties = eina_list_sorted_insert(mod->static_properties, _urid_cmp, prop);
 		}
 	}
 
@@ -2777,6 +2743,33 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	return mod;
 }
 
+static inline void
+_property_free(property_t *prop)
+{
+	if(prop->label)
+		free(prop->label); // strdup
+
+	if(prop->comment)
+		free(prop->comment); // strdup
+
+	if(prop->unit)
+		free(prop->unit); // strdup
+
+	point_t *p;
+	EINA_LIST_FREE(prop->scale_points, p)
+	{
+		if(p->label)
+			free(p->label);
+
+		if(p->s)
+			free(p->s);
+
+		free(p);
+	}
+
+	free(prop);
+}
+
 static void
 _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 {
@@ -2812,28 +2805,13 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	{
 		property_t *prop;
 		EINA_LIST_FREE(mod->static_properties, prop)
-		{
-			free(prop);
-		}
+			_property_free(prop);
 	}
 	if(mod->dynamic_properties)
 	{
 		property_t *prop;
 		EINA_LIST_FREE(mod->dynamic_properties, prop)
-		{
-			if(prop->label)
-				free(prop->label); // strdup
-			if(prop->unit)
-				free(prop->unit); // strdup
-			point_t *p;
-			EINA_LIST_FREE(prop->scale_points, p)
-			{
-				free(p->label);
-				free(p->s);
-				free(p);
-			}
-			free(prop);
-		}
+			_property_free(prop);
 	}
 	if(mod->writs)
 		lilv_nodes_free(mod->writs);
@@ -3476,7 +3454,11 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			{
 				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->stditc, port, itm,
 					ELM_GENLIST_ITEM_NONE, _stditc_cmp, NULL, NULL);
-				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+				if(elmnt)
+				{
+					_ui_port_tooltip_add(ui, elmnt, port);
+					elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+				}
 			}
 		}
 		else if(group->type == GROUP_TYPE_PROPERTY)
@@ -3487,13 +3469,17 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			{
 				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->propitc, prop, itm,
 					ELM_GENLIST_ITEM_NONE, _propitc_cmp, NULL, NULL);
-				int select_mode = prop->editable
-					? ( (prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
-						? ELM_OBJECT_SELECT_MODE_DEFAULT
-						: ELM_OBJECT_SELECT_MODE_NONE)
-					: ELM_OBJECT_SELECT_MODE_NONE;
-				elm_genlist_item_select_mode_set(elmnt, select_mode);
-				prop->std.elmnt = elmnt;
+				if(elmnt)
+				{
+					int select_mode = prop->editable
+						? ( (prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
+							? ELM_OBJECT_SELECT_MODE_DEFAULT
+							: ELM_OBJECT_SELECT_MODE_NONE)
+						: ELM_OBJECT_SELECT_MODE_NONE;
+					elm_genlist_item_select_mode_set(elmnt, select_mode);
+					_ui_property_tooltip_add(ui, elmnt, prop);
+					prop->std.elmnt = elmnt;
+				}
 			}
 		}
 	}
