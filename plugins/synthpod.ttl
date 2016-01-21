@@ -90,6 +90,10 @@ synthpod:common_eo
 	a ui:EoUI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	ui:portNotification [
 		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
@@ -101,6 +105,10 @@ synthpod:common_ui
 	a ui:UI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	ui:portNotification [
 		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
@@ -112,6 +120,10 @@ synthpod:common_x11
 	a ui:X11UI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	ui:portNotification [
 		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
@@ -123,6 +135,10 @@ synthpod:common_kx
 	a kx:Widget ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	ui:portNotification [
 		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
