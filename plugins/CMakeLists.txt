@@ -21,6 +21,7 @@ add_library(synthpod.lv2 MODULE
 	synthpod_atom2control.c
 	synthpod_control2atom.c
 	synthpod_mixer.c
+	synthpod_anonymizer.c
 	synthpod_monoatom.c)
 target_link_libraries(synthpod.lv2 synthpod.lib)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")

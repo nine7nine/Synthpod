@@ -42,6 +42,7 @@
 #define SYNTHPOD_CONTROL2ATOM_URI			SYNTHPOD_URI"#control2atom"
 #define SYNTHPOD_MIXER_URI						SYNTHPOD_URI"#mixer"
 #define SYNTHPOD_MONOATOM_URI					SYNTHPOD_URI"#monoatom"
+#define SYNTHPOD_ANONYMIZER_URI				SYNTHPOD_URI"#anonymizer"
 
 extern const LV2_Descriptor synthpod_stereo;
 extern const LV2_Descriptor synthpod_keyboard;
@@ -55,6 +56,7 @@ extern const LV2_Descriptor synthpod_atom2control;
 extern const LV2_Descriptor synthpod_control2atom;
 extern const LV2_Descriptor synthpod_mixer;
 extern const LV2_Descriptor synthpod_monoatom;
+extern const LV2_Descriptor synthpod_anonymizer;
 
 // common UI uris
 #define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_eo"

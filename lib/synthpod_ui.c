@@ -718,7 +718,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				};
 				lv2_atom_object_query(obj, q);
 
-				if(  subject && (subject->atom.type == ui->forge.URID)
+				if(  (!subject || (subject->atom.type == ui->forge.URID))
 					&& add && lv2_atom_forge_is_object_type(&ui->forge, add->atom.type)
 					&& remove && lv2_atom_forge_is_object_type(&ui->forge, remove->atom.type))
 				{
@@ -746,7 +746,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					{
 						if(atom_prop->key == ui->regs.patch.readable.urid)
 						{
-							if(subject->body != mod->subject)
+							if(subject && (subject->body != mod->subject))
 								continue; // ignore alien patch events
 
 							const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
@@ -763,7 +763,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.patch.writable.urid)
 						{
-							if(subject->body != mod->subject)
+							if(subject && (subject->body != mod->subject))
 								continue; // ignore alien patch events
 
 							const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
@@ -780,7 +780,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.rdfs.label.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 							if(prop && prop->label)
@@ -791,7 +791,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.rdfs.range.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 							if(prop)
@@ -799,7 +799,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.core.minimum.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 							if(prop)
@@ -807,7 +807,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.core.maximum.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 							if(prop)
@@ -815,7 +815,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.units.unit.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 							if(prop && prop->unit)
@@ -826,7 +826,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.core.scale_point.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 							if(prop)
@@ -846,7 +846,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					{
 						if(atom_prop->key == ui->regs.patch.readable.urid)
 						{
-							if(subject->body != mod->subject)
+							if(subject && (subject->body != mod->subject))
 								continue; // ignore alien patch events
 
 							property_t *prop = calloc(1, sizeof(property_t));
@@ -881,7 +881,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.patch.writable.urid)
 						{
-							if(subject->body != mod->subject)
+							if(subject && (subject->body != mod->subject))
 								continue; // ignore alien patch events
 
 							property_t *prop = calloc(1, sizeof(property_t));
@@ -919,7 +919,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.rdfs.label.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
@@ -932,7 +932,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.rdfs.range.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
@@ -945,7 +945,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.core.minimum.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
@@ -966,7 +966,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.core.maximum.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
@@ -987,7 +987,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.units.unit.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
@@ -1021,7 +1021,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 						}
 						else if(atom_prop->key == ui->regs.core.scale_point.urid)
 						{
-							const LV2_URID tar_urid = subject->body;
+							const LV2_URID tar_urid = subject ? subject->body : 0;
 
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 

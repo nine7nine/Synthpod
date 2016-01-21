@@ -53,6 +53,8 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_mixer;
 		case 11:
 			return &synthpod_monoatom;
+		case 12:
+			return &synthpod_anonymizer;
 		default:
 			return NULL;
 	}
