@@ -181,6 +181,7 @@ struct _reg_t {
 	struct {
 		reg_item_t label;
 		reg_item_t range;
+		reg_item_t comment;
 	} rdfs;
 
 	struct {
@@ -381,6 +382,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->rdfs.label, world, map, LILV_NS_RDFS"label");
 	_register(&regs->rdfs.range, world, map, LILV_NS_RDFS"range");
+	_register(&regs->rdfs.comment, world, map, LILV_NS_RDFS"comment");
 
 	_register(&regs->doap.license, world, map, LILV_NS_DOAP"license");
 
@@ -540,6 +542,7 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->rdfs.label);
 	_unregister(&regs->rdfs.range);
+	_unregister(&regs->rdfs.comment);
 
 	_unregister(&regs->doap.license);
 

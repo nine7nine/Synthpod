@@ -55,6 +55,7 @@ enum _plug_info_type_t {
 	PLUG_INFO_TYPE_AUTHOR_NAME,
 	PLUG_INFO_TYPE_AUTHOR_EMAIL,
 	PLUG_INFO_TYPE_AUTHOR_HOMEPAGE,
+	PLUG_INFO_TYPE_COMMENT,
 
 	PLUG_INFO_TYPE_MAX
 };
@@ -3018,6 +3019,23 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 
 			return str;
 		}
+		case PLUG_INFO_TYPE_COMMENT:
+		{
+			LilvNodes *nodes = lilv_plugin_get_value(info->plug,
+				ui->regs.rdfs.comment.node);
+			LilvNode *node = nodes
+				? lilv_nodes_get_first(nodes) //FIXME delete?
+				: NULL;
+
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"Comment "INFO_POST" %s", node
+				? lilv_node_as_string(node)
+				: "-");
+			if(nodes)
+				lilv_nodes_free(nodes);
+
+			return str;
+		}
 		default:
 			return NULL;
 	}
@@ -3077,9 +3095,11 @@ _pluglist_expanded(void *data, Evas_Object *obj, void *event_info)
 			//TODO check whether entry exists before adding
 			child->type = t;
 			child->plug = info->plug;
-			elmnt = elm_genlist_item_append(ui->pluglist, ui->plugitc,
+			Elm_Genlist_Item_Class *class = ui->plugitc; //FIXME
+			elmnt = elm_genlist_item_append(ui->pluglist, class,
 				child, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
-			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			if(elmnt)
+				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 		}
 	}
 }
@@ -5237,7 +5257,7 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 				{
 					info->type = PLUG_INFO_TYPE_NAME;
 					info->plug = plug;
-					elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
+					Elm_Object_Item *elmnt = elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
 						ELM_GENLIST_ITEM_TREE, NULL, NULL);
 				}
 			}
@@ -6351,7 +6371,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 							ui->pluglist = elm_genlist_add(ui->plugbox);
 							if(ui->pluglist)
 							{
-								//elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
+								elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
+								elm_genlist_mode_set(ui->pluglist, ELM_LIST_SCROLL);
+								elm_genlist_block_count_set(ui->pluglist, 64); // needef for lazy-loading
 								evas_object_smart_callback_add(ui->pluglist, "activated",
 									_pluglist_activated, ui);
 								evas_object_smart_callback_add(ui->pluglist, "expand,request",
@@ -6442,6 +6464,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					if(ui->modlist)
 					{
 						elm_genlist_homogeneous_set(ui->modlist, EINA_TRUE); // needef for lazy-loading
+						elm_genlist_mode_set(ui->modlist, ELM_LIST_LIMIT);
 						elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
 						//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
 						elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
