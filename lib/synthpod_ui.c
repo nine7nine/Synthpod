@@ -631,6 +631,33 @@ _ui_property_tooltip_add(sp_ui_t *ui, Elm_Object_Item *elmnt, property_t *prop)
 }
 
 static inline void
+_property_free(property_t *prop)
+{
+	if(prop->label)
+		free(prop->label); // strdup
+
+	if(prop->comment)
+		free(prop->comment); // strdup
+
+	if(prop->unit)
+		free(prop->unit); // strdup
+
+	point_t *p;
+	EINA_LIST_FREE(prop->scale_points, p)
+	{
+		if(p->label)
+			free(p->label);
+
+		if(p->s)
+			free(p->s);
+
+		free(p);
+	}
+
+	free(prop);
+}
+
+static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
@@ -785,7 +812,9 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									group->children = eina_list_remove(group->children, prop);
 
 								mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
-								free(prop);
+								if(prop->std.elmnt)
+									elm_object_item_del(prop->std.elmnt);
+								_property_free(prop);
 							}
 						}
 						else if(atom_prop->key == ui->regs.patch.writable.urid)
@@ -802,7 +831,9 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									group->children = eina_list_remove(group->children, prop);
 
 								mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
-								free(prop);
+								if(prop->std.elmnt)
+									elm_object_item_del(prop->std.elmnt);
+								_property_free(prop);
 							}
 						}
 						else if(atom_prop->key == ui->regs.rdfs.label.urid)
@@ -2741,33 +2772,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	//	_kx_ui_show(mod);
 
 	return mod;
-}
-
-static inline void
-_property_free(property_t *prop)
-{
-	if(prop->label)
-		free(prop->label); // strdup
-
-	if(prop->comment)
-		free(prop->comment); // strdup
-
-	if(prop->unit)
-		free(prop->unit); // strdup
-
-	point_t *p;
-	EINA_LIST_FREE(prop->scale_points, p)
-	{
-		if(p->label)
-			free(p->label);
-
-		if(p->s)
-			free(p->s);
-
-		free(p);
-	}
-
-	free(prop);
 }
 
 static void
