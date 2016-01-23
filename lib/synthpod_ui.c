@@ -669,6 +669,48 @@ _property_remove(mod_t *mod, group_t *group, property_t *prop)
 		elm_object_item_del(prop->std.elmnt);
 }
 
+static inline group_t *
+_mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
+	LilvNode *node, Elm_Object_Item **parent)
+{
+	sp_ui_t *ui = mod->ui;
+
+	*parent = eina_hash_find(mod->groups, group_lbl);
+
+	if(*parent)
+	{
+		return elm_object_item_data_get(*parent);
+	}
+	else
+	{
+		group_t *group = calloc(1, sizeof(group_t));
+
+		if(group)
+		{
+			group->type = group_type;
+			group->mod = mod;
+			group->node = node;
+
+			*parent = elm_genlist_item_sorted_insert(ui->modlist,
+				ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
+
+			if(*parent)
+			{
+				elm_genlist_item_select_mode_set(*parent, ELM_OBJECT_SELECT_MODE_NONE);
+				eina_hash_add(mod->groups, group_lbl, *parent);
+
+				return group;
+			}
+
+			free(group);
+		}
+
+		*parent = NULL;
+	}
+
+	return NULL;
+}
+
 static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -788,25 +830,9 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					&& add && lv2_atom_forge_is_object_type(&ui->forge, add->atom.type)
 					&& remove && lv2_atom_forge_is_object_type(&ui->forge, remove->atom.type))
 				{
+					Elm_Object_Item *parent;
 					const char *group_lbl = "*Properties*";
-					Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
-					if(!parent)
-					{
-						group_t *group = calloc(1, sizeof(group_t));
-						if(group)
-						{
-							group->type = GROUP_TYPE_PROPERTY;
-							group->mod = mod;
-
-							parent = elm_genlist_item_sorted_insert(ui->modlist,
-								ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);	
-							elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
-							if(parent)
-								eina_hash_add(mod->groups, group_lbl, parent);
-						}
-					}
-					
-					group_t *group = elm_object_item_data_get(parent);
+					group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent);
 
 					LV2_ATOM_OBJECT_FOREACH(remove, atom_prop)
 					{
@@ -3367,54 +3393,22 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			port_t *port = &mod->ports[i];
 
 			Elm_Object_Item *parent;
+			group_t *group;
+
 			if(port->group)
 			{
 				const char *group_lbl = lilv_node_as_string(port->group);
-				parent = eina_hash_find(mod->groups, group_lbl);
-
-				if(!parent)
-				{
-					group_t *group = calloc(1, sizeof(group_t));
-					if(group)
-					{
-						group->type = GROUP_TYPE_PORT;
-						group->mod = mod;
-						group->node = port->group;
-
-						parent = elm_genlist_item_sorted_insert(ui->modlist,
-							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
-						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
-						if(parent)
-							eina_hash_add(mod->groups, group_lbl, parent);
-					}
-				}
+				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, port->group, &parent);
 			}
 			else
 			{
 				const char *group_lbl = "*Ungrouped*";
-				parent = eina_hash_find(mod->groups, group_lbl);
-
-				if(!parent)
-				{
-					group_t *group = calloc(1, sizeof(group_t));
-					if(group)
-					{
-						group->type = GROUP_TYPE_PORT;
-						group->mod = mod;
-						group->node = NULL;
-
-						parent = elm_genlist_item_sorted_insert(ui->modlist,
-							ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
-						elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
-						if(parent)
-							eina_hash_add(mod->groups, group_lbl, parent);
-					}
-				}
+				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, NULL, &parent);
 			}
 
 			// append port to corresponding group
-			group_t *group = elm_object_item_data_get(parent);
-			group->children = eina_list_append(group->children, port);
+			if(group)
+				group->children = eina_list_append(group->children, port);
 		}
 
 		Eina_List *l;
@@ -3422,27 +3416,12 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		EINA_LIST_FOREACH(mod->static_properties, l, prop)
 		{
 			const char *group_lbl = "*Properties*";
-			Elm_Object_Item *parent = eina_hash_find(mod->groups, group_lbl);
-
-			if(!parent)
-			{
-				group_t *group = calloc(1, sizeof(group_t));
-				if(group)
-				{
-					group->type = GROUP_TYPE_PROPERTY;
-					group->mod = mod;
-
-					parent = elm_genlist_item_sorted_insert(ui->modlist,
-						ui->grpitc, group, itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
-					elm_genlist_item_select_mode_set(parent, ELM_OBJECT_SELECT_MODE_NONE);
-					if(parent)
-						eina_hash_add(mod->groups, group_lbl, parent);
-				}
-			}
+			Elm_Object_Item *parent;
+			group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent);
 
 			// append property to corresponding group
-			group_t *group = elm_object_item_data_get(parent);
-			group->children = eina_list_append(group->children, prop);
+			if(group)
+				group->children = eina_list_append(group->children, prop);
 		}
 
 		// presets
@@ -3503,6 +3482,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		}
 		else if(group->type == GROUP_TYPE_PROPERTY)
 		{
+			//FIXME check whether expanded?
 			Eina_List *l;
 			property_t *prop;
 			EINA_LIST_FOREACH(group->children, l, prop)
@@ -4482,6 +4462,17 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 	} // lay
 
 	return lay;
+}
+
+static void
+_property_del(void *data, Evas_Object *obj)
+{
+	property_t *prop = data;
+
+	if(prop)
+		prop->std.elmnt = NULL;
+
+	// we don't free it here, as this is only a reference from group->children
 }
 
 static Evas_Object *
@@ -5950,7 +5941,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->propitc->func.text_get = NULL;
 			ui->propitc->func.content_get = _property_content_get;
 			ui->propitc->func.state_get = NULL;
-			ui->propitc->func.del = NULL;
+			ui->propitc->func.del = _property_del;
 		}
 
 		ui->grpitc = elm_gengrid_item_class_new();
