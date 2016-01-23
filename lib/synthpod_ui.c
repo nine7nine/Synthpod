@@ -658,6 +658,18 @@ _property_free(property_t *prop)
 }
 
 static inline void
+_property_remove(mod_t *mod, group_t *group, property_t *prop)
+{
+	if(group)
+		group->children = eina_list_remove(group->children, prop);
+
+	mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
+
+	if(prop->std.elmnt)
+		elm_object_item_del(prop->std.elmnt);
+}
+
+static inline void
 _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
@@ -804,17 +816,29 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								continue; // ignore alien patch events
 
 							const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
-							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-							if(prop)
+							if(tar_urid == ui->regs.patch.wildcard.urid)
 							{
-								if(group)
-									group->children = eina_list_remove(group->children, prop);
+								// delete all readable dynamic properties of this module
+								Eina_List *l1, *l2;
+								property_t *prop;
+								EINA_LIST_FOREACH_SAFE(mod->dynamic_properties, l1, l2, prop)
+								{
+									if(prop->editable)
+										continue; // skip writable
 
-								mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
-								if(prop->std.elmnt)
-									elm_object_item_del(prop->std.elmnt);
-								_property_free(prop);
+									_property_remove(mod, group, prop);
+									_property_free(prop);
+								}
+							}
+							else // !wildcard
+							{
+								property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+								if(prop)
+								{
+									_property_remove(mod, group, prop);
+									_property_free(prop);
+								}
 							}
 						}
 						else if(atom_prop->key == ui->regs.patch.writable.urid)
@@ -823,17 +847,29 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								continue; // ignore alien patch events
 
 							const LV2_URID tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
-							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
-
-							if(prop)
+							if(tar_urid == ui->regs.patch.wildcard.urid)
 							{
-								if(group)
-									group->children = eina_list_remove(group->children, prop);
+								// delete all readable dynamic properties of this module
+								Eina_List *l1, *l2;
+								property_t *prop;
+								EINA_LIST_FOREACH_SAFE(mod->dynamic_properties, l1, l2, prop)
+								{
+									if(!prop->editable)
+										continue; // skip readable
 
-								mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
-								if(prop->std.elmnt)
-									elm_object_item_del(prop->std.elmnt);
-								_property_free(prop);
+									_property_remove(mod, group, prop);
+									_property_free(prop);
+								}
+							}
+							else // !wildcard
+							{
+								property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
+
+								if(prop)
+								{
+									_property_remove(mod, group, prop);
+									_property_free(prop);
+								}
 							}
 						}
 						else if(atom_prop->key == ui->regs.rdfs.label.urid)
