@@ -671,7 +671,7 @@ _property_remove(mod_t *mod, group_t *group, property_t *prop)
 
 static inline group_t *
 _mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
-	LilvNode *node, Elm_Object_Item **parent)
+	LilvNode *node, Elm_Object_Item **parent, bool expand)
 {
 	sp_ui_t *ui = mod->ui;
 
@@ -696,6 +696,8 @@ _mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
 
 			if(*parent)
 			{
+				if(expand)
+					elm_genlist_item_expanded_set(*parent, EINA_TRUE);
 				elm_genlist_item_select_mode_set(*parent, ELM_OBJECT_SELECT_MODE_NONE);
 				eina_hash_add(mod->groups, group_lbl, *parent);
 
@@ -832,7 +834,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 				{
 					Elm_Object_Item *parent;
 					const char *group_lbl = "*Properties*";
-					group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent);
+					group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent, true);
 
 					LV2_ATOM_OBJECT_FOREACH(remove, atom_prop)
 					{
@@ -1000,7 +1002,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									group->children = eina_list_append(group->children, prop);
 
 								// append property to UI
-								if(parent) //TODO remove duplicate code
+								if(parent && elm_genlist_item_expanded_get(parent)) //TODO remove duplicate code
 								{
 									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
@@ -1040,7 +1042,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									group->children = eina_list_append(group->children, prop);
 
 								// append property to UI
-								if(parent) //TODO remove duplicate code
+								if(parent && elm_genlist_item_expanded_get(parent)) //TODO remove duplicate code
 								{
 									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
@@ -3398,12 +3400,12 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			if(port->group)
 			{
 				const char *group_lbl = lilv_node_as_string(port->group);
-				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, port->group, &parent);
+				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, port->group, &parent, false);
 			}
 			else
 			{
 				const char *group_lbl = "*Ungrouped*";
-				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, NULL, &parent);
+				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, NULL, &parent, false);
 			}
 
 			// append port to corresponding group
@@ -3417,7 +3419,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		{
 			const char *group_lbl = "*Properties*";
 			Elm_Object_Item *parent;
-			group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent);
+			group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent, false);
 
 			// append property to corresponding group
 			if(group)
@@ -3434,7 +3436,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			ELM_GENLIST_ITEM_NONE, _grpitc_cmp, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 
-		// extract all groups by default
+		// expand all groups by default
 		eina_hash_foreach(mod->groups, _groups_foreach, NULL);
 
 		// request all properties
@@ -3482,7 +3484,6 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 		}
 		else if(group->type == GROUP_TYPE_PROPERTY)
 		{
-			//FIXME check whether expanded?
 			Eina_List *l;
 			property_t *prop;
 			EINA_LIST_FOREACH(group->children, l, prop)
@@ -4515,7 +4516,7 @@ _group_content_get(void *data, Evas_Object *obj, const char *part)
 		else
 		{
 			if(group->type == GROUP_TYPE_PORT)
-				elm_object_part_text_set(lay, "elm.text", "UNgroup");
+				elm_object_part_text_set(lay, "elm.text", "Ports");
 			else if(group->type == GROUP_TYPE_PROPERTY)
 				elm_object_part_text_set(lay, "elm.text", "Properties");
 		}
