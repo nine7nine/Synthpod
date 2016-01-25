@@ -99,7 +99,7 @@ synthpod:common_eo
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:extensionData ui:resize ;
-	lv2:optionalFeature inst:, zwrite:schedule, ui:resize ;
+	lv2:optionalFeature inst:, zwrite:schedule, ui:resize, log:log ;
 	lv2:requiredFeature ui:portMap, urid:map .
 synthpod:common_ui
 	a ui:UI ;
@@ -113,7 +113,7 @@ synthpod:common_ui
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst:, zwrite:schedule ;
+	lv2:optionalFeature inst:, zwrite:schedule, log:log ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
 synthpod:common_x11
@@ -128,7 +128,7 @@ synthpod:common_x11
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature ui:resize, inst:, zwrite:schedule ;
+	lv2:optionalFeature ui:resize, inst:, zwrite:schedule, log:log ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface, ui:resize .
 synthpod:common_kx
@@ -143,7 +143,7 @@ synthpod:common_kx
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst:, zwrite:schedule ;
+	lv2:optionalFeature inst:, zwrite:schedule, log:log ;
 	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
 
 # Stereo Plugin

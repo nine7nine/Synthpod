@@ -169,6 +169,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->port_map = (LV2UI_Port_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, ZERO_WRITER__schedule))
 			handle->zero_writer = (Zero_Writer_Schedule *)features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_LOG__log))
+			handle->driver.log = (LV2_Log_Log *)features[i]->data;
   }
 
 	if(!handle->driver.map)

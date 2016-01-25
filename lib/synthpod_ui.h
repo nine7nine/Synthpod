@@ -23,6 +23,7 @@
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
+#include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/data-access/data-access.h>
 #include <lv2/lv2plug.in/ns/ext/instance-access/instance-access.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
@@ -74,6 +75,9 @@ struct _sp_ui_driver_t {
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 	int instance_access;
+
+	// logging
+	LV2_Log_Log *log;
 
 	// from ui
 	sp_to_request_t to_app_request;

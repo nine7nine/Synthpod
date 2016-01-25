@@ -49,19 +49,11 @@ struct _plughandle_t {
 
 	LV2_Worker_Schedule *schedule;
 	Zero_Worker_Schedule *zero_sched;
-	LV2_Log_Log *log;
 	LV2_Options_Option *opts;
 
 	bool dirty_in;
 
 	struct {
-		struct {
-			LV2_URID entry;
-			LV2_URID error;
-			LV2_URID note;
-			LV2_URID trace;
-			LV2_URID warning;
-		} log;
 		struct {
 			LV2_URID max_block_length;
 			LV2_URID min_block_length;
@@ -122,53 +114,6 @@ struct _plughandle_t {
 	varchunk_t *app_from_ui;
 	varchunk_t *app_from_app;
 };
-
-static int
-_log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
-{
-	plughandle_t *handle = data;
-
-	if(handle->log)
-	{
-		return handle->log->vprintf(handle->log->handle, type, fmt, args);
-	}
-	else if(type != handle->uri.log.trace)
-	{
-		const char *type_str = NULL;
-		if(type == handle->uri.log.entry)
-			type_str = "Entry";
-		else if(type == handle->uri.log.error)
-			type_str = "Error";
-		else if(type == handle->uri.log.note)
-			type_str = "Note";
-		else if(type == handle->uri.log.trace)
-			type_str = "Trace";
-		else if(type == handle->uri.log.warning)
-			type_str = "Warning";
-
-		fprintf(stderr, "[%s]", type_str);
-		vfprintf(stderr, fmt, args);
-		fputc('\n', stderr);
-
-		return 0;
-	}
-	
-	return -1;
-}
-
-// non-rt || rt with LV2_LOG__Trace
-static int
-_log_printf(void *data, LV2_URID type, const char *fmt, ...)
-{
-  va_list args;
-	int ret;
-
-  va_start (args, fmt);
-	ret = _log_vprintf(data, type, fmt, args);
-  va_end(args);
-
-	return ret;
-}
 
 static LV2_State_Status
 _state_save(LV2_Handle instance, LV2_State_Store_Function store,
@@ -372,8 +317,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	handle->driver.sample_rate = rate;
 	handle->driver.seq_size = SEQ_SIZE;
-	handle->driver.log_printf = _log_printf;
-	handle->driver.log_vprintf = _log_vprintf;
 	handle->driver.system_port_add = NULL;
 	handle->driver.system_port_del = NULL;
 	handle->driver.osc_sched = NULL;
@@ -387,7 +330,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
-			handle->log = (LV2_Log_Log *)features[i]->data;
+			handle->driver.log = (LV2_Log_Log *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
 			handle->schedule = (LV2_Worker_Schedule *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
@@ -405,7 +348,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	if(!handle->driver.map)
 	{
-		_log_printf(handle, handle->uri.log.error,
+		fprintf(stderr,
 			"%s: Host does not support urid:map\n", descriptor->URI);
 		free(handle);
 		return NULL;
@@ -413,7 +356,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	
 	if(!handle->schedule && !handle->zero_sched)
 	{
-		_log_printf(handle, handle->uri.log.error,
+		fprintf(stderr,
 			"%s: Host does not support worker:schedule\n",
 			descriptor->URI);
 		free(handle);
@@ -422,14 +365,14 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	if(handle->zero_sched)
 	{
-		_log_printf(handle, handle->uri.log.note,
+		fprintf(stderr,
 			"%s: Host supports zero-worker:schedule\n",
 			descriptor->URI);
 	}
 	
 	if(!handle->opts)
 	{
-		_log_printf(handle, handle->uri.log.error,
+		fprintf(stderr,
 			"%s: Host does not support options:option\n",
 			descriptor->URI);
 		free(handle);
@@ -437,17 +380,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	}
 
 	// map URIs
-	handle->uri.log.entry = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Entry);
-	handle->uri.log.error = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Error);
-	handle->uri.log.note = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Note);
-	handle->uri.log.trace = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Trace);
-	handle->uri.log.warning = handle->driver.map->map(handle->driver.map->handle,
-		LV2_LOG__Warning);
-			
 	handle->uri.bufsz.max_block_length = handle->driver.map->map(handle->driver.map->handle,
 		LV2_BUF_SIZE__maxBlockLength);
 	handle->uri.bufsz.min_block_length = handle->driver.map->map(handle->driver.map->handle,
@@ -486,7 +418,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->app = sp_app_new(world, &handle->driver, handle);
 	if(!handle->app)
 	{
-		_log_printf(handle, handle->uri.log.error,
+		fprintf(stderr,
 			"%s: creation of app failed\n",
 			descriptor->URI);
 		free(handle);

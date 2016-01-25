@@ -44,9 +44,6 @@ typedef struct _sp_app_driver_t sp_app_driver_t;
 typedef void *(*sp_to_request_t)(size_t size, void *data);
 typedef void (*sp_to_advance_t)(size_t size, void *data);
 
-typedef int (*sp_printf)(void *data, LV2_URID type, const char *fmt, ...);
-typedef int (*sp_vprintf)(void *data, LV2_URID type, const char *fmt, va_list args);
-
 typedef void *(*sp_system_port_add)(void *data, system_port_t type,
 	const char *short_name, const char *pretty_name, int input);
 typedef void (*sp_system_port_del)(void *data, void *sys_port);
@@ -99,8 +96,7 @@ struct _sp_app_driver_t {
 	sp_to_advance_t to_app_advance;
 
 	// logging
-	sp_printf log_printf;
-	sp_vprintf log_vprintf;
+	LV2_Log_Log *log;
 
 	// system_port
 	sp_system_port_add system_port_add;

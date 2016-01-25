@@ -28,7 +28,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 17
+#define NUM_UI_FEATURES 18
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -109,6 +109,9 @@ struct _mod_t {
 
 	// LV2UI_Port_Map extention
 	LV2UI_Port_Map port_map;
+
+	// log
+	LV2_Log_Log log;
 
 	// LV2UI_Port_Subscribe extension
 	LV2UI_Port_Subscribe port_subscribe;
@@ -438,6 +441,37 @@ _urid_find(const void *data1, const void *data2)
 		: (prop1->tar_urid > *tar_urid
 			? 1
 			: 0);
+}
+
+// non-rt || rt with LV2_LOG__Trace
+static int
+_log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
+{
+	mod_t *mod = handle;
+	sp_ui_t *ui = mod->ui;
+
+	char buf [1024]; //TODO how big?
+	sprintf(buf, "(UI)  {%i} ", mod->uid);
+	vsprintf(buf + strlen(buf), fmt, args);
+
+	if(ui->driver->log)
+		ui->driver->log->printf(ui->driver->log->handle, type, "%s", buf);
+
+	return 0;
+}
+
+// non-rt || rt with LV2_LOG__Trace
+static int
+_log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(handle, type, fmt, args);
+  va_end(args);
+
+	return ret;
 }
 
 static int
@@ -2532,6 +2566,11 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->port_map.handle = mod;
 	mod->port_map.port_index = _port_index;
 
+	// populate log
+	mod->log.handle = mod;
+	mod->log.printf = _log_printf;
+	mod->log.vprintf = _log_vprintf;
+
 	// populate port_subscribe
 	mod->port_subscribe.handle = mod;
 	mod->port_subscribe.subscribe = _port_subscribe;
@@ -2579,6 +2618,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = LV2_UI__parent;
 	mod->feature_list[nfeatures++].data = NULL; // will be filled in before instantiation
+
+	mod->feature_list[nfeatures].URI = LV2_LOG__log;
+	mod->feature_list[nfeatures++].data = &mod->log;
 
 	mod->feature_list[nfeatures].URI = LV2_UI__portMap;
 	mod->feature_list[nfeatures++].data = &mod->port_map;

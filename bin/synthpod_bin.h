@@ -101,6 +101,8 @@ struct _bin_t {
 	LV2_URID log_note;
 	LV2_URID log_trace;
 	LV2_URID log_warning;
+
+	LV2_Log_Log log;
 };
 
 static inline void
@@ -369,19 +371,17 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	}
 	else // !log_trace
 	{
-		const char *type_str = NULL;
 		if(type == bin->log_entry)
-			type_str = "Entry";
+			fprintf(stderr, "[Entry] ");
 		else if(type == bin->log_error)
-			type_str = "Error";
+			fprintf(stderr, "[Error] ");
 		else if(type == bin->log_note)
-			type_str = "Note";
+			fprintf(stderr, "[Note] ");
 		else if(type == bin->log_warning)
-			type_str = "Warning";
+			fprintf(stderr, "[Warning] ");
 
 		//TODO send to UI?
 
-		fprintf(stderr, "[%s] ", type_str);
 		vfprintf(stderr, fmt, args);
 		fputc('\n', stderr);
 
@@ -448,11 +448,14 @@ bin_init(bin_t *bin)
 	bin->log_note = map->map(map->handle, LV2_LOG__Note);
 	bin->log_trace = map->map(map->handle, LV2_LOG__Trace);
 	bin->log_warning = map->map(map->handle, LV2_LOG__Warning);
+
+	bin->log.handle = bin;
+	bin->log.printf = _log_printf;
+	bin->log.vprintf = _log_vprintf;
 	
 	bin->app_driver.map = map;
 	bin->app_driver.unmap = unmap;
-	bin->app_driver.log_printf = _log_printf;
-	bin->app_driver.log_vprintf = _log_vprintf;
+	bin->app_driver.log = &bin->log;
 	bin->app_driver.to_ui_request = _app_to_ui_request;
 	bin->app_driver.to_ui_advance = _app_to_ui_advance;
 	bin->app_driver.to_worker_request = _app_to_worker_request;
@@ -462,6 +465,7 @@ bin_init(bin_t *bin)
 
 	bin->ui_driver.map = map;
 	bin->ui_driver.unmap = unmap;
+	bin->ui_driver.log = &bin->log;
 	bin->ui_driver.to_app_request = _ui_to_app_request;
 	bin->ui_driver.to_app_advance = _ui_to_app_advance;
 	bin->ui_driver.instance_access = 1; // enabled
