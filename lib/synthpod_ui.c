@@ -3385,6 +3385,11 @@ _itmitc_cmp(const void *data1, const void *data2)
 	if(!par2)
 		return 1;
 
+	const Elm_Genlist_Item_Class *class1 = elm_genlist_item_item_class_get(itm1);
+	const Elm_Genlist_Item_Class *class2 = elm_genlist_item_item_class_get(itm2);
+	if(class1 != class2)
+		return -1; // banks before presets
+
 	const LilvNode *pset1 = elm_object_item_data_get(itm1);
 	const LilvNode *pset2 = elm_object_item_data_get(itm2);
 	mod_t *mod = elm_object_item_data_get(par2);
@@ -3557,7 +3562,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			EINA_LIST_FOREACH(mod->banks, l, bank)
 			{
 				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetbnkitc, bank, itm,
-				ELM_GENLIST_ITEM_TREE, _itmitc_cmp, NULL, NULL);
+					ELM_GENLIST_ITEM_TREE, _itmitc_cmp, NULL, NULL);
 				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 			}
 		}
