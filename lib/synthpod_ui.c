@@ -450,12 +450,19 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	mod_t *mod = handle;
 	sp_ui_t *ui = mod->ui;
 
+	char prefix [32]; //TODO how big?
 	char buf [1024]; //TODO how big?
-	sprintf(buf, "(UI)  {%i} ", mod->uid);
-	vsprintf(buf + strlen(buf), fmt, args);
 
-	if(ui->driver->log)
-		ui->driver->log->printf(ui->driver->log->handle, type, "%s", buf);
+	snprintf(prefix, 32, "(DSP) {%i} ", mod->uid);
+	vsnprintf(buf, 1024, fmt, args);
+
+	char *pch = strtok(buf, "\n");
+	while(pch)
+	{
+		if(ui->driver->log)
+			ui->driver->log->printf(ui->driver->log->handle, type, "%s%s\n", prefix, pch);
+		pch = strtok(NULL, "\n");
+	}
 
 	return 0;
 }

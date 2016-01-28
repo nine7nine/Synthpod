@@ -103,6 +103,8 @@ struct _bin_t {
 	LV2_URID log_warning;
 
 	LV2_Log_Log log;
+
+	Eina_Thread self;
 };
 
 static inline void
@@ -250,7 +252,7 @@ _worker_thread(void *data, Eina_Thread thread)
 		const char *trace;
 		while((trace = varchunk_read_request(bin->app_to_log, &size)))
 		{
-			fprintf(stderr, "[Trace] %s\n", trace);
+			fprintf(stderr, "[Trace] %s", trace);
 
 			varchunk_read_advance(bin->app_to_log);
 		}
@@ -357,33 +359,41 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
 	bin_t *bin = data;
 
-	if(type == bin->log_trace)
+	Eina_Thread this = eina_thread_self();
+
+	// check for trace mode AND DSP thread ID
+	if( (type == bin->log_trace)
+		&& !eina_thread_equal(this, bin->self) // not UI thread ID
+		&& !eina_thread_equal(this, bin->worker_thread) ) // not worker thread ID
 	{
 		char *trace;
 		if((trace = varchunk_write_request(bin->app_to_log, 1024)))
 		{
-			vsprintf(trace, fmt, args);
+			vsnprintf(trace, 1024, fmt, args);
 
 			size_t written = strlen(trace) + 1;
 			varchunk_write_advance(bin->app_to_log, written);
 			_light_sem_signal(&bin->worker_sem, 1);
 		}
 	}
-	else // !log_trace
+	else // !log_trace OR not DSP thread ID
 	{
-		if(type == bin->log_entry)
-			fprintf(stderr, "[Entry] ");
+		const char *prefix = "[Log]   ";
+		if(type == bin->log_trace)
+			prefix = "[Trace] ";
+		else if(type == bin->log_entry)
+			prefix = "[Entry] ";
 		else if(type == bin->log_error)
-			fprintf(stderr, "[Error] ");
+			prefix = "[Error] ";
 		else if(type == bin->log_note)
-			fprintf(stderr, "[Note] ");
+			prefix = "[Note]  ";
 		else if(type == bin->log_warning)
-			fprintf(stderr, "[Warning] ");
+			prefix = "[Warn]  ";
 
 		//TODO send to UI?
 
+		fprintf(stderr, "%s", prefix);
 		vfprintf(stderr, fmt, args);
-		fputc('\n', stderr);
 
 		return 0;
 	}
@@ -472,6 +482,8 @@ bin_init(bin_t *bin)
 
 	bin->ui_driver.opened = _ui_opened;
 	bin->ui_driver.close = _ui_close;
+
+	bin->self = eina_thread_self(); // thread ID of UI thread
 }
 
 static void
