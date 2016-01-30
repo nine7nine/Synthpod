@@ -453,7 +453,7 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	char prefix [32]; //TODO how big?
 	char buf [1024]; //TODO how big?
 
-	snprintf(prefix, 32, "(DSP) {%i} ", mod->uid);
+	snprintf(prefix, 32, "(UI)  {%i} ", mod->uid);
 	vsnprintf(buf, 1024, fmt, args);
 
 	char *pch = strtok(buf, "\n");
