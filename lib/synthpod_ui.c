@@ -197,7 +197,9 @@ struct _mod_t {
 	// standard "automatic" UI
 	struct {
 		LV2UI_Descriptor descriptor;
-		Elm_Object_Item *itm;
+		Elm_Object_Item *elmnt;
+		Elm_Object_Item *grid;
+		Evas_Object *list;
 	} std;
 
 	struct {
@@ -331,6 +333,7 @@ struct _sp_ui_t {
 	Evas_Object *modgrid;
 
 	Elm_Genlist_Item_Class *plugitc;
+	Elm_Genlist_Item_Class *listitc;
 	Elm_Genlist_Item_Class *moditc;
 	Elm_Genlist_Item_Class *stditc;
 	Elm_Genlist_Item_Class *psetitc;
@@ -728,8 +731,8 @@ _mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
 			group->mod = mod;
 			group->node = node;
 
-			*parent = elm_genlist_item_sorted_insert(ui->modlist,
-				ui->grpitc, group, mod->std.itm, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
+			*parent = elm_genlist_item_sorted_insert(mod->std.list,
+				ui->grpitc, group, NULL, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
 
 			if(*parent)
 			{
@@ -762,10 +765,6 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	if(protocol == 0)
 		protocol = ui->regs.port.float_protocol.urid;
-
-	// check for expanded list
-	if(!mod->std.itm || !elm_genlist_item_expanded_get(mod->std.itm))
-		return;
 
 	if(protocol == ui->regs.port.float_protocol.urid)
 	{
@@ -1041,7 +1040,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								// append property to UI
 								if(parent && elm_genlist_item_expanded_get(parent)) //TODO remove duplicate code
 								{
-									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
+									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(mod->std.list,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
 										NULL, NULL);
 									if(elmnt)
@@ -1081,7 +1080,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								// append property to UI
 								if(parent && elm_genlist_item_expanded_get(parent)) //TODO remove duplicate code
 								{
-									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->modlist,
+									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(mod->std.list,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
 										NULL, NULL);
 									if(elmnt)
@@ -1596,14 +1595,17 @@ _std_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	// to rt-thread
 	_ui_write_function(controller, port, size, protocol, buffer);
 
-	if(mod_ui->type == MOD_UI_TYPE_EO)
-		_eo_port_event(controller, port, size, protocol, buffer);
-	if(mod_ui->type == MOD_UI_TYPE_SHOW)
-		_show_port_event(controller, port, size, protocol, buffer);
-	if(mod_ui->type == MOD_UI_TYPE_KX)
-		_kx_port_event(controller, port, size, protocol, buffer);
-	if(mod_ui->type == MOD_UI_TYPE_X11)
-		_x11_port_event(controller, port, size, protocol, buffer);
+	if(mod_ui)
+	{
+		if(mod_ui->type == MOD_UI_TYPE_EO)
+			_eo_port_event(controller, port, size, protocol, buffer);
+		if(mod_ui->type == MOD_UI_TYPE_SHOW)
+			_show_port_event(controller, port, size, protocol, buffer);
+		if(mod_ui->type == MOD_UI_TYPE_KX)
+			_kx_port_event(controller, port, size, protocol, buffer);
+		if(mod_ui->type == MOD_UI_TYPE_X11)
+			_x11_port_event(controller, port, size, protocol, buffer);
+	}
 }
 
 static void
@@ -3099,7 +3101,7 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 		free(mod_ui);
 	}
 
-	if(mod->std.itm == ui->sink_itm)
+	if(mod->std.elmnt == ui->sink_itm)
 		ui->sink_itm = 0;
 
 	if(mod->static_properties)
@@ -3403,7 +3405,7 @@ _patches_update(sp_ui_t *ui)
 		itm = elm_genlist_item_next_get(itm))
 	{
 		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
-		if(itc != ui->moditc)
+		if(itc != ui->listitc)
 			continue; // ignore port items
 
 		mod_t *mod = elm_object_item_data_get(itm);
@@ -3442,7 +3444,7 @@ _patches_update(sp_ui_t *ui)
 		itm = elm_genlist_item_next_get(itm))
 	{
 		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
-		if(itc != ui->moditc)
+		if(itc != ui->listitc)
 			continue; // ignore port items
 
 		mod_t *mod = elm_object_item_data_get(itm);
@@ -3591,7 +3593,7 @@ _bnkitc_cmp(const void *data1, const void *data2)
 }
 
 static void
-_modlist_expanded(void *data, Evas_Object *obj, void *event_info)
+_modgrid_expanded(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
@@ -3599,90 +3601,10 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
 
-	if(class == ui->moditc) // is parent module item
-	{
-		mod_t *mod = elm_object_item_data_get(itm);
-
-		// port groups
-		mod->groups = eina_hash_string_superfast_new(NULL); //TODO check
-
-		// port entries
-		for(unsigned i=0; i<mod->num_ports; i++)
-		{
-			port_t *port = &mod->ports[i];
-
-			Elm_Object_Item *parent;
-			group_t *group;
-
-			if(port->group)
-			{
-				const char *group_lbl = lilv_node_as_string(port->group);
-				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, port->group, &parent, false);
-			}
-			else
-			{
-				const char *group_lbl = "*Ungrouped*";
-				group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, NULL, &parent, false);
-			}
-
-			// append port to corresponding group
-			if(group)
-				group->children = eina_list_append(group->children, port);
-		}
-
-		Eina_List *l;
-		property_t *prop;
-		EINA_LIST_FOREACH(mod->static_properties, l, prop)
-		{
-			const char *group_lbl = "*Properties*";
-			Elm_Object_Item *parent;
-			group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent, false);
-
-			// append property to corresponding group
-			if(group)
-				group->children = eina_list_append(group->children, prop);
-		}
-
-		// presets
-		elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetitc, mod, itm,
-			ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
-		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
-
-		// separator
-		elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->stditc, NULL, itm,
-			ELM_GENLIST_ITEM_NONE, _grpitc_cmp, NULL, NULL);
-		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
-
-		// expand all groups by default
-		eina_hash_foreach(mod->groups, _groups_foreach, NULL);
-
-		// request all properties
-		size_t len = sizeof(transfer_patch_get_t);
-		for(unsigned index=0; index<mod->num_ports; index++)
-		{
-			port_t *port = &mod->ports[index];
-
-			// only consider event ports which support patch:Message
-			if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
-				|| (port->direction != PORT_DIRECTION_INPUT)
-				|| !port->patchable)
-			{
-				continue; // skip
-			}
-
-			transfer_patch_get_all_t *trans = _sp_ui_to_app_request(ui, len);
-			if(trans)
-			{
-				_sp_transfer_patch_get_all_fill(&ui->regs,
-					&ui->forge, trans, mod->uid, index,
-					mod->subject);
-				_sp_ui_to_app_advance(ui, len);
-			}
-		}
-	}
-	else if(class == ui->grpitc) // is group
+	if(class == ui->grpitc) // is group
 	{
 		group_t *group = elm_object_item_data_get(itm);
+		mod_t *mod = group->mod;
 		
 		if(group->type == GROUP_TYPE_PORT)
 		{
@@ -3690,7 +3612,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			port_t *port;
 			EINA_LIST_FOREACH(group->children, l, port)
 			{
-				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->stditc, port, itm,
+				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->stditc, port, itm,
 					ELM_GENLIST_ITEM_NONE, _stditc_cmp, NULL, NULL);
 				if(elmnt)
 				{
@@ -3705,7 +3627,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			property_t *prop;
 			EINA_LIST_FOREACH(group->children, l, prop)
 			{
-				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->propitc, prop, itm,
+				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->propitc, prop, itm,
 					ELM_GENLIST_ITEM_NONE, _propitc_cmp, NULL, NULL);
 				if(elmnt)
 				{
@@ -3731,7 +3653,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 			LilvNode *bank;
 			EINA_LIST_FOREACH(mod->banks, l, bank)
 			{
-				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetbnkitc, bank, itm,
+				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->psetbnkitc, bank, itm,
 					ELM_GENLIST_ITEM_TREE, _itmitc_cmp, NULL, NULL);
 				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 			}
@@ -3751,12 +3673,12 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 				continue; // ignore presets which are part of a bank
 			}
 
-			elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetitmitc, preset, itm,
+			elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->psetitmitc, preset, itm,
 				ELM_GENLIST_ITEM_NONE, _itmitc_cmp, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 		}
 
-		elmnt = elm_genlist_item_append(ui->modlist, ui->psetsaveitc, mod, itm,
+		elmnt = elm_genlist_item_append(mod->std.list, ui->psetsaveitc, mod, itm,
 			ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 	}
@@ -3786,7 +3708,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 
 			if(ref)
 			{
-				elmnt = elm_genlist_item_sorted_insert(ui->modlist, ui->psetitmitc, ref, itm,
+				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->psetitmitc, ref, itm,
 					ELM_GENLIST_ITEM_NONE, _bnkitc_cmp, NULL, NULL);
 				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 			}
@@ -3796,7 +3718,7 @@ _modlist_expanded(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_modlist_contracted(void *data, Evas_Object *obj, void *event_info)
+_modgrid_contracted(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
@@ -3815,6 +3737,27 @@ _modlist_contracted(void *data, Evas_Object *obj, void *event_info)
 
 static void
 _modlist_activated(void *data, Evas_Object *obj, void *event_info)
+{
+	Elm_Object_Item *itm = event_info;
+	sp_ui_t *ui = data;
+
+	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
+
+	if(class == ui->listitc)
+	{
+		mod_t *mod = elm_object_item_data_get(itm);
+		printf("_modlist_activated: %p %p %u\n", ui, mod, mod->uid);
+
+		if(mod->std.grid)
+			elm_object_item_del(mod->std.grid);
+		else
+			mod->std.grid = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+				NULL, NULL);
+	}
+}
+
+static void
+_modgrid_activated(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
@@ -3917,6 +3860,19 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 	}
 
 	_patches_update(ui);
+}
+
+static void
+_modgrid_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	int w, h;
+	evas_object_geometry_get(ui->modgrid, NULL, NULL, &w, &h);
+
+	const int iw = w / 3; //FIXME make this configurable
+	const int ih = (h - 20) / 1; //FIXME make this configurable
+	elm_gengrid_item_size_set(ui->modgrid, iw, ih);
 }
 
 static inline void
@@ -4137,24 +4093,24 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 static void
 _smart_mouse_in(void *data, Evas_Object *obj, void *event_info)
 {
-	sp_ui_t *ui = data;
+	mod_t *mod = data;
 
-	if(!ui->modlist)
+	if(!mod->std.list)
 		return;
 
-	elm_scroller_movement_block_set(ui->modlist,
+	elm_scroller_movement_block_set(mod->std.list,
 		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
 }
 
 static void
 _smart_mouse_out(void *data, Evas_Object *obj, void *event_info)
 {
-	sp_ui_t *ui = data;
+	mod_t *mod = data;
 
-	if(!ui->modlist)
+	if(!mod->std.list)
 		return;
 
-	elm_scroller_movement_block_set(ui->modlist, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
+	elm_scroller_movement_block_set(mod->std.list, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
 }
 
 static void
@@ -4532,8 +4488,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 						smart_slider_unit_set(child, prop->unit);
 					if(prop->editable)
 						evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
-					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, mod);
+					evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, mod);
 				}
 			}
 			else if(prop->type_urid == ui->forge.Bool)
@@ -4545,8 +4501,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_toggle_disabled_set(child, !prop->editable);
 					if(prop->editable)
 						evas_object_smart_callback_add(child, "changed", _property_check_changed, prop);
-					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, mod);
+					evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, mod);
 				}
 			}
 		}
@@ -4568,8 +4524,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 				}
 				if(prop->editable)
 					evas_object_smart_callback_add(child, "changed", _property_spinner_changed, prop);
-				evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, ui);
-				evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, ui);
+				evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, mod);
+				evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, mod);
 			}
 		}
 
@@ -4878,8 +4834,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_toggle_disabled_set(check, port->direction == PORT_DIRECTION_OUTPUT);
 					if(port->direction == PORT_DIRECTION_INPUT)
 						evas_object_smart_callback_add(check, "changed", _check_changed, port);
-					evas_object_smart_callback_add(check, "cat,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(check, "cat,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(check, "cat,in", _smart_mouse_in, mod);
+					evas_object_smart_callback_add(check, "cat,out", _smart_mouse_out, mod);
 				}
 
 				child = check;
@@ -4902,8 +4858,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					}
 					if(port->direction == PORT_DIRECTION_INPUT)
 						evas_object_smart_callback_add(spin, "changed", _spinner_changed, port);
-					evas_object_smart_callback_add(spin, "cat,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(spin, "cat,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(spin, "cat,in", _smart_mouse_in, mod);
+					evas_object_smart_callback_add(spin, "cat,out", _smart_mouse_out, mod);
 				}
 
 				child = spin;
@@ -4923,8 +4879,8 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
 					if(port->direction == PORT_DIRECTION_INPUT)
 						evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);
-					evas_object_smart_callback_add(sldr, "cat,in", _smart_mouse_in, ui);
-					evas_object_smart_callback_add(sldr, "cat,out", _smart_mouse_out, ui);
+					evas_object_smart_callback_add(sldr, "cat,in", _smart_mouse_in, mod);
+					evas_object_smart_callback_add(sldr, "cat,out", _smart_mouse_out, mod);
 				}
 
 				child = sldr;
@@ -5110,7 +5066,7 @@ _pset_clicked(void *data, Evas_Object *obj, void *event_info)
 	mod->pset_label = strdup("unknown"); //TODO check
 
 	// contract parent list item
-	for(Elm_Object_Item *itm = elm_genlist_first_item_get(ui->modlist);
+	for(Elm_Object_Item *itm = elm_genlist_first_item_get(mod->std.list);
 		itm != NULL;
 		itm = elm_genlist_item_next_get(itm))
 	{
@@ -5121,7 +5077,7 @@ _pset_clicked(void *data, Evas_Object *obj, void *event_info)
 		if(elm_object_item_data_get(itm) != mod) // does not belong to this module
 			continue; // skip
 
-		evas_object_smart_callback_call(ui->modlist, "contract,request", itm);
+		evas_object_smart_callback_call(mod->std.list, "contract,request", itm);
 		break;
 	}
 }
@@ -5241,37 +5197,107 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	if(!ui->modgrid)
-		return NULL;
-
 	if(!strcmp(part, "elm.swallow.icon"))
 	{
-		Evas_Object *container = elm_layout_add(ui->modgrid);
-		if(container)
+		Evas_Object *modlist = elm_genlist_add(obj);
+		if(modlist)
 		{
-			elm_layout_file_set(container, SYNTHPOD_DATA_DIR"/synthpod.edj",
-				"/synthpod/modgrid/container");
-			char col [7];
-			sprintf(col, "col,%02i", mod->col);
-			elm_layout_signal_emit(container, col, MODGRID_UI);
-			evas_object_event_callback_add(container, EVAS_CALLBACK_MOUSE_IN, _modgrid_mouse_in, ui);
-			evas_object_event_callback_add(container, EVAS_CALLBACK_MOUSE_OUT, _modgrid_mouse_out, ui);
-			evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(container);
+			elm_genlist_homogeneous_set(modlist, EINA_TRUE); // needef for lazy-loading
+			elm_genlist_mode_set(modlist, ELM_LIST_LIMIT);
+			elm_genlist_block_count_set(modlist, 64); // needef for lazy-loading
+			//elm_genlist_select_mode_set(modlist, ELM_OBJECT_SELECT_MODE_NONE);
+			elm_genlist_reorder_mode_set(modlist, EINA_TRUE);
+			evas_object_smart_callback_add(modlist, "expand,request",
+				_list_expand_request, ui);
+			evas_object_smart_callback_add(modlist, "contract,request",
+				_list_contract_request, ui);
+			evas_object_smart_callback_add(modlist, "expanded",
+				_modgrid_expanded, ui);
+			evas_object_smart_callback_add(modlist, "contracted",
+				_modgrid_contracted, ui);
+			evas_object_smart_callback_add(modlist, "activated",
+				_modgrid_activated, ui);
+			evas_object_data_set(modlist, "ui", ui);
+			evas_object_size_hint_weight_set(modlist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(modlist, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(modlist);
+			mod->std.list = modlist;
 
-			//TODO add EVAS DEL callback
-			Evas_Object *widget = _eo_widget_create(container, mod);
-			if(widget)
+			// port groups
+			mod->groups = eina_hash_string_superfast_new(NULL); //TODO check
+
+			// port entries
+			for(unsigned i=0; i<mod->num_ports; i++)
 			{
-				evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-				evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
-				evas_object_show(widget);
-				elm_layout_content_set(container, "elm.swallow.content", widget);
-			}
-		}
+				port_t *port = &mod->ports[i];
 
-		return container;
+				Elm_Object_Item *parent;
+				group_t *group;
+
+				if(port->group)
+				{
+					const char *group_lbl = lilv_node_as_string(port->group);
+					group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, port->group, &parent, false);
+				}
+				else
+				{
+					const char *group_lbl = "*Ungrouped*";
+					group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PORT, NULL, &parent, false);
+				}
+
+				// append port to corresponding group
+				if(group)
+					group->children = eina_list_append(group->children, port);
+			}
+
+			Eina_List *l;
+			property_t *prop;
+			EINA_LIST_FOREACH(mod->static_properties, l, prop)
+			{
+				const char *group_lbl = "*Properties*";
+				Elm_Object_Item *parent;
+				group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent, false);
+
+				// append property to corresponding group
+				if(group)
+					group->children = eina_list_append(group->children, prop);
+			}
+
+			// presets
+			Elm_Object_Item *elmnt;
+			elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->psetitc, mod, NULL,
+				ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
+			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
+
+			// expand all groups by default
+			eina_hash_foreach(mod->groups, _groups_foreach, NULL);
+
+			// request all properties
+			size_t len = sizeof(transfer_patch_get_t);
+			for(unsigned index=0; index<mod->num_ports; index++)
+			{
+				port_t *port = &mod->ports[index];
+
+				// only consider event ports which support patch:Message
+				if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+					|| (port->direction != PORT_DIRECTION_INPUT)
+					|| !port->patchable)
+				{
+					continue; // skip
+				}
+
+				transfer_patch_get_all_t *trans = _sp_ui_to_app_request(ui, len);
+				if(trans)
+				{
+					_sp_transfer_patch_get_all_fill(&ui->regs,
+						&ui->forge, trans, mod->uid, index,
+						mod->subject);
+					_sp_ui_to_app_advance(ui, len);
+				}
+			}
+
+			return modlist;
+		} // modlist
 	}
 
 	return NULL;
@@ -5281,36 +5307,12 @@ static void
 _modgrid_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
-	mod_ui_t *mod_ui = mod->mod_ui;
-	sp_ui_t *ui = mod->ui;
 
-	if(!mod_ui->ui)
-		return;
-
-	// unsubscribe from all ports
-	for(unsigned i=0; i<mod->num_ports; i++)
+	if(mod)
 	{
-		port_t *port = &mod->ports[i];
-
-		if(port->type == PORT_TYPE_CONTROL)
-			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 0);
+		mod->std.grid = NULL;
+		mod->std.list = NULL;
 	}
-
-	// unsubscribe from all notifications
-	_mod_subscription_set(mod, mod_ui->ui, 0);
-
-	// cleanup EoUI
-	if(  mod_ui
-		&& mod_ui->descriptor
-		&& mod_ui->descriptor->cleanup
-		&& mod_ui->handle)
-	{
-		mod_ui->descriptor->cleanup(mod_ui->handle);
-	}
-
-	// clear parameters
-	mod_ui->handle = NULL;
-	mod_ui->eo.widget = NULL;
 }
 
 static void
@@ -5473,7 +5475,7 @@ _modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate)
 		itm = elm_genlist_item_next_get(itm))
 	{
 		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
-		if(itc != ui->moditc) // is not a parent mod item 
+		if(itc != ui->listitc) // is not a parent mod item 
 			continue; // skip 
 
 		mod_t *mod = elm_object_item_data_get(itm);
@@ -5728,19 +5730,19 @@ _sp_ui_from_app_module_add(sp_ui_t *ui, const LV2_Atom *atom)
 	{
 		if(ui->modlist)
 		{
-			mod->std.itm = elm_genlist_item_append(ui->modlist, ui->moditc, mod,
-				NULL, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+			mod->std.elmnt = elm_genlist_item_append(ui->modlist, ui->listitc, mod,
+				NULL, ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		}
 
 		if(mod->system.sink)
-			ui->sink_itm = mod->std.itm;
+			ui->sink_itm = mod->std.elmnt;
 	}
 	else // no sink and no source
 	{
 		if(ui->modlist)
 		{
-			mod->std.itm = elm_genlist_item_insert_before(ui->modlist, ui->moditc, mod,
-				NULL, ui->sink_itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
+			mod->std.elmnt = elm_genlist_item_insert_before(ui->modlist, ui->listitc, mod,
+				NULL, ui->sink_itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
 		}
 	}
 }
@@ -5761,11 +5763,20 @@ _sp_ui_from_app_module_del(sp_ui_t *ui, const LV2_Atom *atom)
 		_mod_del_widgets(mod);
 
 	// remove StdUI list item
-	if(mod->std.itm)
+	if(mod->std.list)
 	{
-		elm_genlist_item_expanded_set(mod->std.itm, EINA_FALSE);
-		elm_object_item_del(mod->std.itm);
-		mod->std.itm = NULL;
+		elm_genlist_clear(mod->std.list);
+		elm_object_item_del(mod->std.list);
+		mod->std.list = NULL;
+	}
+	if(mod->std.elmnt)
+	{
+		elm_object_item_del(mod->std.elmnt);
+		mod->std.elmnt = NULL;
+	}
+	if(mod->std.grid)
+	{
+		elm_object_item_del(mod->std.grid);
 	}
 
 	_patches_update(ui);
@@ -5799,8 +5810,8 @@ _sp_ui_from_app_module_selected(sp_ui_t *ui, const LV2_Atom *atom)
 	if(mod->selected != trans->state.body)
 	{
 		mod->selected = trans->state.body;
-		if(mod->std.itm)
-			elm_genlist_item_update(mod->std.itm);
+		if(mod->std.elmnt)
+			elm_genlist_item_update(mod->std.elmnt);
 
 		_patches_update(ui);
 	}
@@ -5911,8 +5922,10 @@ _sp_ui_from_app_port_selected(sp_ui_t *ui, const LV2_Atom *atom)
 
 		// FIXME update port itm
 		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
-		if(mod && mod->std.itm)
-			elm_genlist_item_update(mod->std.itm);
+		/* FIXME
+		if(mod && mod->std.elmnt)
+			elm_genlist_item_update(mod->std.elmnt);
+		*/
 
 		_patches_update(ui);
 	}
@@ -5934,8 +5947,10 @@ _sp_ui_from_app_port_monitored(sp_ui_t *ui, const LV2_Atom *atom)
 
 		// FIXME update port itm
 		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
-		if(mod && mod->std.itm)
-			elm_genlist_item_update(mod->std.itm);
+		/* FIXME
+		if(mod && mod->std.elmnt)
+			elm_genlist_item_update(mod->std.elmnt);
+		*/
 	}
 }
 
@@ -6088,6 +6103,16 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->grpitc->func.del = _group_del;
 		}
 
+		ui->listitc = elm_genlist_item_class_new();
+		if(ui->listitc)
+		{
+			ui->listitc->item_style = "full";
+			ui->listitc->func.text_get = NULL;
+			ui->listitc->func.content_get = _modlist_content_get;
+			ui->listitc->func.state_get = NULL;
+			ui->listitc->func.del = _modlist_del;
+		}
+
 		ui->moditc = elm_genlist_item_class_new();
 		if(ui->moditc)
 		{
@@ -6095,7 +6120,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->moditc->func.text_get = NULL;
 			ui->moditc->func.content_get = _modlist_content_get;
 			ui->moditc->func.state_get = NULL;
-			ui->moditc->func.del = _modlist_del;
+			ui->moditc->func.del = NULL;
 		}
 
 		ui->stditc = elm_genlist_item_class_new();
@@ -6625,14 +6650,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 						elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
 						//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
 						elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
-						evas_object_smart_callback_add(ui->modlist, "expand,request",
-							_list_expand_request, ui);
-						evas_object_smart_callback_add(ui->modlist, "contract,request",
-							_list_contract_request, ui);
-						evas_object_smart_callback_add(ui->modlist, "expanded",
-							_modlist_expanded, ui);
-						evas_object_smart_callback_add(ui->modlist, "contracted",
-							_modlist_contracted, ui);
 						evas_object_smart_callback_add(ui->modlist, "activated",
 							_modlist_activated, ui);
 						evas_object_smart_callback_add(ui->modlist, "moved",
@@ -6650,7 +6667,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				{
 					elm_gengrid_select_mode_set(ui->modgrid, ELM_OBJECT_SELECT_MODE_NONE);
 					elm_gengrid_reorder_mode_set(ui->modgrid, EINA_TRUE);
-					elm_gengrid_item_size_set(ui->modgrid, 600, 400);
+					elm_gengrid_horizontal_set(ui->modgrid, EINA_TRUE);
+					elm_scroller_policy_set(ui->modgrid, ELM_SCROLLER_POLICY_AUTO, ELM_SCROLLER_POLICY_OFF);
+					elm_scroller_single_direction_set(ui->modgrid, ELM_SCROLLER_SINGLE_DIRECTION_HARD);
+					elm_gengrid_item_size_set(ui->modgrid, 200, 200);
+					evas_object_smart_callback_add(ui->modgrid, "changed",
+						_modgrid_changed, ui);
 					evas_object_data_set(ui->modgrid, "ui", ui);
 					evas_object_size_hint_weight_set(ui->modgrid, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 					evas_object_size_hint_align_set(ui->modgrid, EVAS_HINT_FILL, EVAS_HINT_FILL);
@@ -6794,6 +6816,8 @@ sp_ui_free(sp_ui_t *ui)
 		elm_genlist_item_class_free(ui->plugitc);
 	if(ui->griditc)
 		elm_gengrid_item_class_free(ui->griditc);
+	if(ui->listitc)
+		elm_genlist_item_class_free(ui->listitc);
 	if(ui->moditc)
 		elm_genlist_item_class_free(ui->moditc);
 	if(ui->stditc)
