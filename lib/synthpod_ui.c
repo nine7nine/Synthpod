@@ -33,6 +33,7 @@
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
 typedef struct _mod_t mod_t;
+typedef struct _mod_ui_t mod_ui_t;
 typedef struct _port_t port_t;
 typedef struct _group_t group_t;
 typedef struct _property_t property_t;
@@ -65,9 +66,66 @@ enum _group_type_t {
 	GROUP_TYPE_PROPERTY	= -1
 };
 
+enum _mod_ui_type_t {
+	MOD_UI_TYPE_UNSUPPORTED = 0,
+
+	MOD_UI_TYPE_EO,
+	MOD_UI_TYPE_X11,
+	MOD_UI_TYPE_SHOW,
+	MOD_UI_TYPE_KX,
+
+	MOD_UI_TYPE_MAX
+};
+
 struct _plug_info_t {
 	plug_info_type_t type;
 	const LilvPlugin *plug;
+};
+
+struct _mod_ui_t {
+	const LilvUI *ui;
+	Eina_Module *lib;
+	const LV2UI_Descriptor *descriptor;
+	LV2UI_Handle handle;
+	int type;
+
+	union {
+		// Eo UI
+		struct {
+			Evas_Object *widget;
+			Evas_Object *win;
+		} eo;
+
+		// custom UIs via the LV2UI_{Show,Idle}_Interface extensions
+		struct {
+			const LV2UI_Idle_Interface *idle_iface;
+			const LV2UI_Show_Interface *show_iface;
+			int dead;
+			int visible;
+			Ecore_Animator *anim;
+		} show;
+
+		// kx external-ui
+		struct {
+			LV2_External_UI_Widget *widget;
+			int dead;
+			Ecore_Animator *anim;
+		} kx;
+
+		// X11 UI
+		struct {
+			const LV2UI_Idle_Interface *idle_iface;
+			const LV2UI_Resize *client_resize_iface;
+			Evas_Object *win;
+			Ecore_X_Window xwin;
+			Ecore_Animator *anim;
+		} x11;
+
+		// TODO MOD UI
+		// TODO GtkUI
+		// TODO Qt4UI
+		// TODO Qt5UI
+	};
 };
 
 struct _mod_t {
@@ -127,77 +185,14 @@ struct _mod_t {
 	// port-groups
 	Eina_Hash *groups;
 
-	// Eo UI
 	struct {
-		const LilvUI *ui;
-		Eina_Module *lib;
-		const LV2UI_Descriptor *descriptor;
-
-		LV2UI_Handle handle;
-		Evas_Object *widget;
-
-		struct {
-			Elm_Object_Item *itm;
-		} embedded;
-
-		struct {
-			Evas_Object *win;
-		} full;
-
-		bool do_not_embed;
-	} eo;
-
-	// custom UIs via the LV2UI_{Show,Idle}_Interface extensions
-	struct {
-		const LilvUI *ui;
-		Eina_Module *lib;
-
-		const LV2UI_Descriptor *descriptor;
-		LV2UI_Handle handle;
-
-		int dead;
-		int visible;
-		const LV2UI_Idle_Interface *idle_iface;
-		const LV2UI_Show_Interface *show_iface;
-
-		Ecore_Animator *anim;
-	} show;
-
-	// kx external-ui
-	struct {
-		const LilvUI *ui;
-		Eina_Module *lib;
-
-		int dead;
-		const LV2UI_Descriptor *descriptor;
-		LV2UI_Handle handle;
-
 		LV2_External_UI_Host host;
-		LV2_External_UI_Widget *widget;
-
-		Ecore_Animator *anim;
 	} kx;
-
-	// X11 UI
 	struct {
-		const LilvUI *ui;
-		Eina_Module *lib;
-
-		const LV2UI_Descriptor *descriptor;
-		LV2UI_Handle handle;
-		const LV2UI_Idle_Interface *idle_iface;
-
 		LV2UI_Resize host_resize_iface;
-		const LV2UI_Resize *client_resize_iface;
-		Evas_Object *win;
-		Ecore_X_Window xwin;
-		Ecore_Animator *anim;
 	} x11;
-
-	// TODO MOD UI
-	// TODO GtkUI
-	// TODO Qt4UI
-	// TODO Qt5UI
+	Eina_List *mod_uis;
+	mod_ui_t *mod_ui;
 
 	// standard "automatic" UI
 	struct {
@@ -299,6 +294,7 @@ struct _sp_ui_t {
 	Evas_Object *win;
 	Evas_Object *vbox;
 	Evas_Object *popup;
+	Evas_Object *selector;
 	Evas_Object *mainmenu;
 	Evas_Object *statusline;
 
@@ -1292,18 +1288,18 @@ _eo_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_t *mod = handle;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	//printf("_eo_port_event: %u %u %u\n", index, size, protocol);
 
-	if(  mod->eo.ui
-		&& mod->eo.descriptor
-		&& mod->eo.descriptor->port_event
-		&& mod->eo.handle)
+	if(  mod_ui
+		&& mod_ui->ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->port_event
+		&& mod_ui->handle)
 	{
-		if(mod->eo.full.win)
-			mod->eo.descriptor->port_event(mod->eo.handle, index, size, protocol, buf);
-		else if(mod->eo.embedded.itm)
-			mod->eo.descriptor->port_event(mod->eo.handle, index, size, protocol, buf);
+		if(mod_ui->eo.win)
+			mod_ui->descriptor->port_event(mod_ui->handle, index, size, protocol, buf);
 	}
 }
 
@@ -1479,21 +1475,23 @@ _show_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_t *mod = handle;
+	mod_ui_t *mod_ui = mod->mod_ui;
 	sp_ui_t *ui = mod->ui;
 
 	//printf("_show_port_event: %u %u %u\n", index, size, protocol);
 
-	if(  mod->show.ui
-		&& mod->show.descriptor
-		&& mod->show.descriptor->port_event
-		&& mod->show.handle)
+	if(  mod_ui
+		&& mod_ui->ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->port_event
+		&& mod_ui->handle)
 	{
-		mod->show.descriptor->port_event(mod->show.handle,
+		mod_ui->descriptor->port_event(mod_ui->handle,
 			index, size, protocol, buf);
 		if(protocol == ui->regs.port.float_protocol.urid)
 		{
 			// send it twice for plugins that expect "0" instead of float_protocol URID
-			mod->show.descriptor->port_event(mod->show.handle,
+			mod_ui->descriptor->port_event(mod_ui->handle,
 				index, size, 0, buf);
 		}
 	}
@@ -1504,21 +1502,23 @@ _kx_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_t *mod = handle;
+	mod_ui_t *mod_ui = mod->mod_ui;
 	sp_ui_t *ui = mod->ui;
 
 	//printf("_kx_port_event: %u %u %u\n", index, size, protocol);
 
-	if(  mod->kx.ui
-		&& mod->kx.descriptor
-		&& mod->kx.descriptor->port_event
-		&& mod->kx.handle)
+	if(  mod_ui
+		&& mod_ui->ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->port_event
+		&& mod_ui->handle)
 	{
-		mod->kx.descriptor->port_event(mod->kx.handle,
+		mod_ui->descriptor->port_event(mod_ui->handle,
 			index, size, protocol, buf);
 		if(protocol == ui->regs.port.float_protocol.urid)
 		{
 			// send it twice for plugins that expect "0" instead of float_protocol URID
-			mod->kx.descriptor->port_event(mod->kx.handle,
+			mod_ui->descriptor->port_event(mod_ui->handle,
 				index, size, 0, buf);
 		}
 	}
@@ -1529,21 +1529,23 @@ _x11_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_t *mod = handle;
+	mod_ui_t *mod_ui = mod->mod_ui;
 	sp_ui_t *ui = mod->ui;
 
 	//printf("_x11_port_event: %u %u %u\n", index, size, protocol);
 
-	if(  mod->x11.ui
-		&& mod->x11.descriptor
-		&& mod->x11.descriptor->port_event
-		&& mod->x11.handle)
+	if(  mod_ui
+		&& mod_ui->ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->port_event
+		&& mod_ui->handle)
 	{
-		mod->x11.descriptor->port_event(mod->x11.handle,
+		mod_ui->descriptor->port_event(mod_ui->handle,
 			index, size, protocol, buf);
 		if(protocol == ui->regs.port.float_protocol.urid)
 		{
 			// send it twice for plugins that expect "0" instead of float_protocol URID
-			mod->x11.descriptor->port_event(mod->x11.handle,
+			mod_ui->descriptor->port_event(mod_ui->handle,
 				index, size, 0, buf);
 		}
 	}
@@ -1554,19 +1556,23 @@ _ui_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_t *mod = handle;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	//printf("_ui_port_event: %u %u %u %u\n", mod->uid, index, size, protocol);
 
 	_std_port_event(mod, index, size, protocol, buf);
 
-	if(mod->eo.ui && mod->eo.descriptor)
-		_eo_port_event(mod, index, size, protocol, buf);
-	else if(mod->show.ui && mod->show.descriptor)
-		_show_port_event(mod, index, size, protocol, buf);
-	else if(mod->kx.ui && mod->kx.descriptor)
-		_kx_port_event(mod, index, size, protocol, buf);
-	else if(mod->x11.ui && mod->x11.descriptor)
-		_x11_port_event(mod, index, size, protocol, buf);
+	if(mod_ui)
+	{
+		if(mod_ui->type == MOD_UI_TYPE_EO)
+			_eo_port_event(mod, index, size, protocol, buf);
+		else if(mod_ui->type == MOD_UI_TYPE_SHOW)
+			_show_port_event(mod, index, size, protocol, buf);
+		else if(mod_ui->type == MOD_UI_TYPE_KX)
+			_kx_port_event(mod, index, size, protocol, buf);
+		else if(mod_ui->type == MOD_UI_TYPE_X11)
+			_x11_port_event(mod, index, size, protocol, buf);
+	}
 }
 
 static void
@@ -1585,17 +1591,18 @@ _std_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
 {
 	mod_t *mod = controller;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	// to rt-thread
 	_ui_write_function(controller, port, size, protocol, buffer);
 
-	if(mod->eo.ui && mod->eo.descriptor)
+	if(mod_ui->type == MOD_UI_TYPE_EO)
 		_eo_port_event(controller, port, size, protocol, buffer);
-	else if(mod->show.ui && mod->show.descriptor)
+	if(mod_ui->type == MOD_UI_TYPE_SHOW)
 		_show_port_event(controller, port, size, protocol, buffer);
-	else if(mod->kx.ui && mod->kx.descriptor)
+	if(mod_ui->type == MOD_UI_TYPE_KX)
 		_kx_port_event(controller, port, size, protocol, buffer);
-	else if(mod->x11.ui && mod->x11.descriptor)
+	if(mod_ui->type == MOD_UI_TYPE_X11)
 		_x11_port_event(controller, port, size, protocol, buffer);
 }
 
@@ -1699,21 +1706,22 @@ static void
 _show_ui_hide(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	// stop animator
-	if(mod->show.anim)
+	if(mod_ui->show.anim)
 	{
-		ecore_animator_del(mod->show.anim);
-		mod->show.anim = NULL;
+		ecore_animator_del(mod_ui->show.anim);
+		mod_ui->show.anim = NULL;
 	}
 
 	// hide UI
-	if(mod->show.show_iface && mod->show.show_iface->hide && mod->show.handle)
+	if(mod_ui->show.show_iface && mod_ui->show.show_iface->hide && mod_ui->handle)
 	{
-		if(mod->show.show_iface->hide(mod->show.handle))
+		if(mod_ui->show.show_iface->hide(mod_ui->handle))
 			fprintf(stderr, "show_iface->hide failed\n");
 		else
-			mod->show.visible = 0; // toggle visibility flag
+			mod_ui->show.visible = 0; // toggle visibility flag
 	}
 
 	// unsubscribe all ports
@@ -1726,24 +1734,27 @@ _show_ui_hide(mod_t *mod)
 	}
 
 	// unsubscribe from notifications
-	_mod_subscription_set(mod, mod->show.ui, 0);
+	_mod_subscription_set(mod, mod_ui->ui, 0);
 
 	// call cleanup 
-	if(mod->show.descriptor && mod->show.descriptor->cleanup && mod->show.handle)
-		mod->show.descriptor->cleanup(mod->show.handle);
-	mod->show.handle = NULL;
-	mod->show.idle_iface = NULL;
-	mod->show.show_iface = NULL;
+	if(mod_ui->descriptor && mod_ui->descriptor->cleanup && mod_ui->handle)
+		mod_ui->descriptor->cleanup(mod_ui->handle);
+	mod_ui->handle = NULL;
+	mod_ui->show.idle_iface = NULL;
+	mod_ui->show.show_iface = NULL;
+
+	mod->mod_ui = NULL;
 }
 
 static Eina_Bool
 _show_ui_animator(void *data)
 {
 	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	int res = 0;
-	if(mod->show.idle_iface && mod->show.idle_iface->idle && mod->show.handle)
-		res = mod->show.idle_iface->idle(mod->show.handle);
+	if(mod_ui->show.idle_iface && mod_ui->show.idle_iface->idle && mod_ui->handle)
+		res = mod_ui->show.idle_iface->idle(mod_ui->handle);
 
 	if(res) // UI requests to be hidden
 	{
@@ -1759,14 +1770,15 @@ static void
 _show_ui_show(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
-	if(!mod->show.descriptor)
+	if(!mod_ui->descriptor)
 		return;
 
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 
-	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->show.ui);
+	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod_ui->ui);
 #if defined(LILV_0_22)
 	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
 #else
@@ -1782,12 +1794,12 @@ _show_ui_show(mod_t *mod)
 	}
 
 	// subscribe to notifications
-	_mod_subscription_set(mod, mod->show.ui, 1);
+	_mod_subscription_set(mod, mod_ui->ui, 1);
 
 	// instantiate UI
 	void *dummy;
-	mod->show.handle = mod->show.descriptor->instantiate(
-		mod->show.descriptor,
+	mod_ui->handle = mod_ui->descriptor->instantiate(
+		mod_ui->descriptor,
 		plugin_string,
 		bundle_path,
 		_ext_ui_write_function,
@@ -1799,44 +1811,45 @@ _show_ui_show(mod_t *mod)
 	lilv_free(bundle_path);
 #endif
 
-	if(!mod->show.handle)
+	if(!mod_ui->handle)
 		return;
 
 	// get show iface if any
-	if(mod->show.descriptor->extension_data)
-		mod->show.show_iface = mod->show.descriptor->extension_data(LV2_UI__showInterface);
+	if(mod_ui->descriptor->extension_data)
+		mod_ui->show.show_iface = mod_ui->descriptor->extension_data(LV2_UI__showInterface);
 
-	if(!mod->show.show_iface)
+	if(!mod_ui->show.show_iface)
 		return;
 
 	// show UI
-	if(mod->show.show_iface && mod->show.show_iface->show && mod->show.handle)
+	if(mod_ui->show.show_iface && mod_ui->show.show_iface->show && mod_ui->handle)
 	{
-		if(mod->show.show_iface->show(mod->show.handle))
+		if(mod_ui->show.show_iface->show(mod_ui->handle))
 			fprintf(stderr, "show_iface->show failed\n");
 		else
-			mod->show.visible = 1; // toggle visibility flag
+			mod_ui->show.visible = 1; // toggle visibility flag
 	}
 
 	// get idle iface if any
-	if(mod->show.descriptor->extension_data)
-		mod->show.idle_iface = mod->show.descriptor->extension_data(LV2_UI__idleInterface);
+	if(mod_ui->descriptor->extension_data)
+		mod_ui->show.idle_iface = mod_ui->descriptor->extension_data(LV2_UI__idleInterface);
 
 	// start animator
-	if(mod->show.idle_iface)
-		mod->show.anim = ecore_animator_add(_show_ui_animator, mod);
+	if(mod_ui->show.idle_iface)
+		mod_ui->show.anim = ecore_animator_add(_show_ui_animator, mod);
 }
 
 static void
 _kx_ui_cleanup(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	// stop animator
-	if(mod->kx.anim)
+	if(mod_ui->kx.anim)
 	{
-		ecore_animator_del(mod->kx.anim);
-		mod->kx.anim = NULL;
+		ecore_animator_del(mod_ui->kx.anim);
+		mod_ui->kx.anim = NULL;
 	}
 
 	// unsubscribe all ports
@@ -1849,24 +1862,27 @@ _kx_ui_cleanup(mod_t *mod)
 	}
 
 	// unsubscribe from notifications
-	_mod_subscription_set(mod, mod->kx.ui, 0);
+	_mod_subscription_set(mod, mod_ui->ui, 0);
 
 	// call cleanup 
-	if(mod->kx.descriptor && mod->kx.descriptor->cleanup && mod->kx.handle)
-		mod->kx.descriptor->cleanup(mod->kx.handle);
-	mod->kx.handle = NULL;
-	mod->kx.widget = NULL;
-	mod->kx.dead = 0;
+	if(mod_ui->descriptor && mod_ui->descriptor->cleanup && mod_ui->handle)
+		mod_ui->descriptor->cleanup(mod_ui->handle);
+	mod_ui->handle = NULL;
+	mod_ui->kx.widget = NULL;
+	mod_ui->kx.dead = 0;
+
+	mod->mod_ui = NULL;
 }
 
 static Eina_Bool
 _kx_ui_animator(void *data)
 {
 	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
-	LV2_EXTERNAL_UI_RUN(mod->kx.widget);
+	LV2_EXTERNAL_UI_RUN(mod_ui->kx.widget);
 
-	if(mod->kx.dead)
+	if(mod_ui->kx.dead)
 	{
 		_kx_ui_cleanup(mod);
 
@@ -1880,14 +1896,15 @@ static void
 _kx_ui_show(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
-	if(!mod->kx.descriptor)
+	if(!mod_ui->descriptor)
 		return;
 
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 
-	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->kx.ui);
+	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod_ui->ui);
 #if defined(LILV_0_22)
 	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
 #else
@@ -1903,38 +1920,40 @@ _kx_ui_show(mod_t *mod)
 	}
 
 	// subscribe to notifications
-	_mod_subscription_set(mod, mod->kx.ui, 1);
+	_mod_subscription_set(mod, mod_ui->ui, 1);
 
 	// instantiate UI
-	mod->kx.handle = mod->kx.descriptor->instantiate(
-		mod->kx.descriptor,
+	mod_ui->handle = mod_ui->descriptor->instantiate(
+		mod_ui->descriptor,
 		plugin_string,
 		bundle_path,
 		_ext_ui_write_function,
 		mod,
-		(void **)&mod->kx.widget,
+		(void **)&mod_ui->kx.widget,
 		mod->features);
 
 #if defined(LILV_0_22)
 	lilv_free(bundle_path);
 #endif
 
-	if(!mod->kx.handle)
+	if(!mod_ui->handle)
 		return;
 
 	// show UI
-	LV2_EXTERNAL_UI_SHOW(mod->kx.widget);
+	LV2_EXTERNAL_UI_SHOW(mod_ui->kx.widget);
 
 	// start animator
-	mod->kx.anim = ecore_animator_add(_kx_ui_animator, mod);
+	mod_ui->kx.anim = ecore_animator_add(_kx_ui_animator, mod);
 }
 
 static void
 _kx_ui_hide(mod_t *mod)
 {
+	mod_ui_t *mod_ui = mod->mod_ui;
+
 	// hide UI
-	if(mod->kx.anim) // UI is running
-		LV2_EXTERNAL_UI_HIDE(mod->kx.widget);
+	if(mod_ui->kx.anim) // UI is running
+		LV2_EXTERNAL_UI_HIDE(mod_ui->kx.widget);
 
 	// cleanup
 	_kx_ui_cleanup(mod);
@@ -1945,23 +1964,26 @@ static void
 _kx_ui_closed(LV2UI_Controller controller)
 {
 	mod_t *mod = controller;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
-	if(!mod || !mod->kx.ui)
+	if(!mod_ui || !mod_ui->ui)
 		return;
 
 	// mark for cleanup
-	mod->kx.dead = 1;
+	mod_ui->kx.dead = 1;
 }
 
 static int
 _ui_host_resize(LV2UI_Feature_Handle handle, int w, int h)
 {
 	mod_t *mod = handle;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
-	if(mod->x11.ui && mod->x11.win)
-		evas_object_resize(mod->x11.win, w, h);
-	else if(mod->eo.ui && mod->eo.full.win)
-		evas_object_resize(mod->eo.full.win, w, h);
+	//printf("_ui_host_resize: %i %i\n", w, h);
+	if( (mod_ui->type == MOD_UI_TYPE_X11) && mod_ui->x11.win)
+		evas_object_resize(mod_ui->x11.win, w, h);
+	else if( (mod_ui->type == MOD_UI_TYPE_EO) && mod_ui->eo.win)
+		evas_object_resize(mod_ui->eo.win, w, h);
 
 	return 0;
 }
@@ -1970,9 +1992,10 @@ static Eina_Bool
 _x11_ui_animator(void *data)
 {
 	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
-	if(mod->x11.idle_iface && mod->x11.idle_iface->idle && mod->x11.handle)
-		mod->x11.idle_iface->idle(mod->x11.handle);
+	if(mod_ui->x11.idle_iface && mod_ui->x11.idle_iface->idle && mod_ui->handle)
+		mod_ui->x11.idle_iface->idle(mod_ui->handle);
 
 	return EINA_TRUE; // retrigger animator
 }
@@ -1981,12 +2004,13 @@ static void
 _x11_ui_hide(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	// stop animator
-	if(mod->x11.anim)
+	if(mod_ui->x11.anim)
 	{
-		ecore_animator_del(mod->x11.anim);
-		mod->x11.anim = NULL;
+		ecore_animator_del(mod_ui->x11.anim);
+		mod_ui->x11.anim = NULL;
 	}
 
 	// unsubscribe all ports
@@ -1999,17 +2023,19 @@ _x11_ui_hide(mod_t *mod)
 	}
 
 	// unsubscribe from notifications
-	_mod_subscription_set(mod, mod->x11.ui, 0);
+	_mod_subscription_set(mod, mod_ui->ui, 0);
 
 	// call cleanup 
-	if(mod->x11.descriptor && mod->x11.descriptor->cleanup && mod->x11.handle)
-		mod->x11.descriptor->cleanup(mod->x11.handle);
-	mod->x11.handle = NULL;
+	if(mod_ui->descriptor && mod_ui->descriptor->cleanup && mod_ui->handle)
+		mod_ui->descriptor->cleanup(mod_ui->handle);
+	mod_ui->handle = NULL;
 
-	evas_object_del(mod->x11.win);
-	mod->x11.win = NULL;
-	mod->x11.xwin = 0;
-	mod->x11.idle_iface = NULL;
+	evas_object_del(mod_ui->x11.win);
+	mod_ui->x11.win = NULL;
+	mod_ui->x11.xwin = 0;
+	mod_ui->x11.idle_iface = NULL;
+
+	mod->mod_ui = NULL;
 }
 
 static void
@@ -2024,12 +2050,150 @@ static void
 _x11_ui_client_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
 	int w, h;
 	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
 
 	//printf("_x11_ui_client_resize: %i %i\n", w, h);
-	mod->x11.client_resize_iface->ui_resize(mod->x11.handle, w, h);
+	mod_ui->x11.client_resize_iface->ui_resize(mod_ui->handle, w, h);
+}
+
+static inline void
+_eo_ui_hide(mod_t *mod)
+{
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(mod_ui->eo.win)
+		evas_object_del(mod_ui->eo.win);
+	mod_ui->handle = NULL;
+	mod_ui->eo.widget = NULL;
+	mod_ui->eo.win = NULL;
+
+	mod->mod_ui = NULL;
+}
+
+static void
+_full_delete_request(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+
+	_eo_ui_hide(mod);
+}
+
+static inline Evas_Object *
+_eo_widget_create(Evas_Object *parent, mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(!mod_ui->ui || !mod_ui->descriptor)
+		return NULL;
+
+	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
+	const char *plugin_string = NULL;
+	if(plugin_uri)
+		plugin_string = lilv_node_as_string(plugin_uri);
+
+	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod_ui->ui);
+#if defined(LILV_0_22)
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
+#else
+	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
+#endif
+
+	// subscribe automatically to all non-atom ports by default
+	for(unsigned i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		if(port->type == PORT_TYPE_CONTROL)
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
+	}
+
+	// set subscriptions for notifications
+	_mod_subscription_set(mod, mod_ui->ui, 1);
+
+	// instantiate UI
+	mod_ui->eo.widget = NULL;
+
+	if(mod_ui->descriptor->instantiate)
+	{
+		mod->feature_list[2].data = parent;
+
+		mod_ui->handle = mod_ui->descriptor->instantiate(
+			mod_ui->descriptor,
+			plugin_string,
+			bundle_path,
+			_ext_ui_write_function,
+			mod,
+			(void **)&(mod_ui->eo.widget),
+			mod->features);
+
+		mod->feature_list[2].data = NULL;
+	}
+
+#if defined(LILV_0_22)
+	lilv_free(bundle_path);
+#endif
+
+	if(!mod_ui->handle || !mod_ui->eo.widget)
+		return NULL;
+
+	return mod_ui->eo.widget;
+}
+
+static inline void
+_eo_ui_show(mod_t *mod)
+{
+	mod_ui_t *mod_ui = mod->mod_ui;
+	sp_ui_t *ui = mod->ui;
+
+	// add fullscreen EoUI
+	Evas_Object *win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
+	if(win)
+	{
+		elm_win_title_set(win, mod->name);
+		evas_object_smart_callback_add(win, "delete,request", _full_delete_request, mod);
+		evas_object_resize(win, 800, 450);
+
+		mod_ui->eo.win = win;
+
+		Evas_Object *bg = elm_bg_add(win);
+		if(bg)
+		{
+			elm_bg_color_set(bg, 64, 64, 64);
+			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(bg);
+			elm_win_resize_object_add(win, bg);
+		} // bg
+
+		Evas_Object *container = elm_layout_add(win);
+		if(container)
+		{
+			elm_layout_file_set(container, SYNTHPOD_DATA_DIR"/synthpod.edj",
+				"/synthpod/modgrid/container");
+			char col [7];
+			sprintf(col, "col,%02i", mod->col);
+			elm_layout_signal_emit(container, col, MODGRID_UI);
+			evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(container);
+			elm_win_resize_object_add(win, container);
+
+			Evas_Object *widget = _eo_widget_create(container, mod);
+			if(widget)
+			{
+				evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(widget);
+				elm_layout_content_set(container, "elm.swallow.content", widget);
+			} // widget
+		} // container
+
+		evas_object_show(win);
+	} // win
 }
 
 static inline char *
@@ -2060,14 +2224,15 @@ static void
 _x11_ui_show(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
 
-	if(!mod->x11.descriptor)
+	if(!mod_ui->descriptor)
 		return;
 
 	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_string = lilv_node_as_string(plugin_uri);
 
-	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->x11.ui);
+	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod_ui->ui);
 #if defined(LILV_0_22)
 	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
 #else
@@ -2083,24 +2248,24 @@ _x11_ui_show(mod_t *mod)
 	}
 
 	// subscribe to notifications
-	_mod_subscription_set(mod, mod->x11.ui, 1);
+	_mod_subscription_set(mod, mod_ui->ui, 1);
 
-	mod->x11.win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
-	if(mod->x11.win)
+	mod_ui->x11.win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
+	if(mod_ui->x11.win)
 	{
-		elm_win_title_set(mod->x11.win, mod->name);
-		evas_object_smart_callback_add(mod->x11.win, "delete,request", _x11_delete_request, mod);
-		evas_object_resize(mod->x11.win, 800, 450);
-		evas_object_show(mod->x11.win);
-		mod->x11.xwin = elm_win_xwindow_get(mod->x11.win);
+		elm_win_title_set(mod_ui->x11.win, mod->name);
+		evas_object_smart_callback_add(mod_ui->x11.win, "delete,request", _x11_delete_request, mod);
+		evas_object_resize(mod_ui->x11.win, 800, 450);
+		evas_object_show(mod_ui->x11.win);
+		mod_ui->x11.xwin = elm_win_xwindow_get(mod_ui->x11.win);
 	}
 
 	void *dummy;
-	mod->feature_list[2].data = (void *)((uintptr_t)mod->x11.xwin);
+	mod->feature_list[2].data = (void *)((uintptr_t)mod_ui->x11.xwin);
 
 	// instantiate UI
-	mod->x11.handle = mod->x11.descriptor->instantiate(
-		mod->x11.descriptor,
+	mod_ui->handle = mod_ui->descriptor->instantiate(
+		mod_ui->descriptor,
 		plugin_string,
 		bundle_path,
 		_ext_ui_write_function,
@@ -2114,24 +2279,24 @@ _x11_ui_show(mod_t *mod)
 
 	mod->feature_list[2].data = NULL;
 
-	if(!mod->x11.handle)
+	if(!mod_ui->handle)
 		return;
 
 	// get interfaces
-	if(mod->x11.descriptor->extension_data)
+	if(mod_ui->descriptor->extension_data)
 	{
 		// get idle iface
-		mod->x11.idle_iface = mod->x11.descriptor->extension_data(LV2_UI__idleInterface);
+		mod_ui->x11.idle_iface = mod_ui->descriptor->extension_data(LV2_UI__idleInterface);
 
 		// get resize iface
-		mod->x11.client_resize_iface = mod->x11.descriptor->extension_data(LV2_UI__resize);
-		if(mod->x11.client_resize_iface)
-			evas_object_event_callback_add(mod->x11.win, EVAS_CALLBACK_RESIZE, _x11_ui_client_resize, mod);
+		mod_ui->x11.client_resize_iface = mod_ui->descriptor->extension_data(LV2_UI__resize);
+		if(mod_ui->x11.client_resize_iface)
+			evas_object_event_callback_add(mod_ui->x11.win, EVAS_CALLBACK_RESIZE, _x11_ui_client_resize, mod);
 	}
 
 	// start animator
-	if(mod->x11.idle_iface)
-		mod->x11.anim = ecore_animator_add(_x11_ui_animator, mod);
+	if(mod_ui->x11.idle_iface)
+		mod_ui->x11.anim = ecore_animator_add(_x11_ui_animator, mod);
 }
 
 //XXX do code cleanup from here upwards
@@ -2782,19 +2947,26 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			if(missing_required_feature)
 				continue; // plugin requires a feature we do not support
 
+			mod_ui_t *mod_ui = calloc(1, sizeof(mod_ui_t));
+			if(!mod_ui)
+				continue;
+
+			mod->mod_uis = eina_list_append(mod->mod_uis, mod_ui);
+			mod_ui->ui = lui;
+			mod_ui->type = MOD_UI_TYPE_UNSUPPORTED;
+
 			// test for EoUI
+			if(!mod_ui->type)
 			{
 				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
 				{
 					//printf("has EoUI\n");
-					mod->eo.ui = lui;
-					mod->eo.do_not_embed =
-						!strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#stereo")
-						|| !strcmp(uri, "http://open-music-kontrollers.ch/lv2/synthpod#monoatom"); //TODO handle more
+					mod_ui->type = MOD_UI_TYPE_EO;
 				}
 			}
 
 			// test for show UI
+			if(!mod_ui->type)
 			{ //TODO add to reg_t
 				bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
 					ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
@@ -2803,40 +2975,41 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 				if(has_show_iface)
 				{
-					mod->show.ui = lui;
+					mod_ui->type = MOD_UI_TYPE_SHOW;
 					//printf("has show UI\n");
 				}
 			}
 
 			// test for kxstudio kx_ui
+			if(!mod_ui->type)
 			{
 				if(  lilv_ui_is_a(lui, ui->regs.ui.kx_widget.node)
 					|| lilv_ui_is_a(lui, ui->regs.ui.external.node) )
 				{
 					//printf("has kx-ui\n");
-					mod->kx.ui = lui;
+					mod_ui->type = MOD_UI_TYPE_KX;
 				}
 			}
 
 			// test for X11UI
+			if(!mod_ui->type)
 			{
 				if(lilv_ui_is_a(lui, ui->regs.ui.x11.node))
 				{
 					//printf("has x11-ui\n");
-					mod->x11.ui = lui;
+					mod_ui->type = MOD_UI_TYPE_X11;
 				}
 			}
 		}
 	}
 
-	if(mod->eo.ui)
-		mod->eo.descriptor = _ui_dlopen(mod->eo.ui, &mod->eo.lib);
-	else if(mod->show.ui)
-		mod->show.descriptor = _ui_dlopen(mod->show.ui, &mod->show.lib);
-	else if(mod->kx.ui)
-		mod->kx.descriptor = _ui_dlopen(mod->kx.ui, &mod->kx.lib);
-	else if(mod->x11.ui)
-		mod->x11.descriptor = _ui_dlopen(mod->x11.ui, &mod->x11.lib);
+	Eina_List *l;
+	mod_ui_t *mod_ui;
+	EINA_LIST_FOREACH(mod->mod_uis, l, mod_ui)
+	{
+		if(mod_ui->ui && mod_ui->type)
+			mod_ui->descriptor = _ui_dlopen(mod_ui->ui, &mod_ui->lib);
+	}
 
 	if(mod->system.source || mod->system.sink)
 		mod->col = 0; // reserved color for system ports
@@ -2915,6 +3088,17 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	if(mod->presets)
 		lilv_nodes_free(mod->presets);
 
+	mod_ui_t *mod_ui;
+	EINA_LIST_FREE(mod->mod_uis, mod_ui)
+	{
+		if(mod_ui->ui)
+		{
+			eina_module_unload(mod_ui->lib);
+			eina_module_free(mod_ui->lib);
+		}
+		free(mod_ui);
+	}
+
 	if(mod->std.itm == ui->sink_itm)
 		ui->sink_itm = 0;
 
@@ -2937,27 +3121,6 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 
 	if(mod->all_uis)
 		lilv_uis_free(mod->all_uis);
-
-	if(mod->eo.ui && mod->eo.descriptor)
-	{
-		eina_module_unload(mod->eo.lib);
-		eina_module_free(mod->eo.lib);
-	}
-	else if(mod->show.ui && mod->show.descriptor)
-	{
-		eina_module_unload(mod->show.lib);
-		eina_module_free(mod->show.lib);
-	}
-	else if(mod->kx.ui && mod->kx.descriptor)
-	{
-		eina_module_unload(mod->kx.lib);
-		eina_module_free(mod->kx.lib);
-	}
-	else if(mod->x11.ui && mod->x11.descriptor)
-	{
-		eina_module_unload(mod->x11.lib);
-		eina_module_free(mod->x11.lib);
-	}
 
 	if(mod->name)
 		free(mod->name);
@@ -3759,17 +3922,22 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 static inline void
 _mod_del_widgets(mod_t *mod)
 {
-	// close show ui
-	if(mod->show.ui && mod->show.descriptor)
-		_show_ui_hide(mod);
-	// close kx ui
-	else if(mod->kx.ui && mod->kx.descriptor)
-		_kx_ui_hide(mod);
-	// close x11 ui
-	else if(mod->x11.ui && mod->x11.descriptor)
-		_x11_ui_hide(mod);
-	else if(mod->eo.embedded.itm)
-		elm_object_item_del(mod->eo.embedded.itm);
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(mod_ui)
+	{
+		// close show ui
+		if(mod_ui->type == MOD_UI_TYPE_SHOW)
+			_show_ui_hide(mod);
+		// close kx ui
+		else if(mod_ui->type == MOD_UI_TYPE_KX)
+			_kx_ui_hide(mod);
+		// close x11 ui
+		else if(mod_ui->type == MOD_UI_TYPE_X11)
+			_x11_ui_hide(mod);
+		else if(mod_ui->type == MOD_UI_TYPE_EO)
+			_eo_ui_hide(mod);
+	}
 }
 
 static inline void
@@ -3795,82 +3963,35 @@ _mod_close_click(void *data, Evas_Object *lay, const char *emission, const char 
 	_mod_del_propagate(mod);
 }
 
-static inline Evas_Object *
-_eo_widget_create(Evas_Object *parent, mod_t *mod)
-{
-	sp_ui_t *ui = mod->ui;
-
-	if(!mod->eo.ui || !mod->eo.descriptor)
-		return NULL;
-
-	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
-	const char *plugin_string = NULL;
-	if(plugin_uri)
-		plugin_string = lilv_node_as_string(plugin_uri);
-
-	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod->eo.ui);
-#if defined(LILV_0_22)
-	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
-#else
-	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
-#endif
-
-	// subscribe automatically to all non-atom ports by default
-	for(unsigned i=0; i<mod->num_ports; i++)
-	{
-		port_t *port = &mod->ports[i];
-
-		if(port->type == PORT_TYPE_CONTROL)
-			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
-	}
-
-	// set subscriptions for notifications
-	_mod_subscription_set(mod, mod->eo.ui, 1);
-
-	// instantiate UI
-	mod->eo.widget = NULL;
-
-	if(mod->eo.descriptor->instantiate)
-	{
-		mod->feature_list[2].data = parent;
-
-		mod->eo.handle = mod->eo.descriptor->instantiate(
-			mod->eo.descriptor,
-			plugin_string,
-			bundle_path,
-			_ext_ui_write_function,
-			mod,
-			(void **)&(mod->eo.widget),
-			mod->features);
-
-		mod->feature_list[2].data = NULL;
-	}
-
-#if defined(LILV_0_22)
-	lilv_free(bundle_path);
-#endif
-
-	if(!mod->eo.handle || !mod->eo.widget)
-		return NULL;
-
-	return mod->eo.widget;
-}
-
 static void
-_full_delete_request(void *data, Evas_Object *obj, void *event_info)
+_mod_ui_toggle_chosen(void *data, Evas_Object *obj, void *event_info)
 {
-	mod_t *mod = data;
+	mod_ui_t *mod_ui = data;
+	mod_t *mod = evas_object_data_get(obj, "module");
 	sp_ui_t *ui = mod->ui;
 
-	evas_object_del(mod->eo.full.win);
-	mod->eo.handle = NULL;
-	mod->eo.widget = NULL;
-	mod->eo.full.win = NULL;
+	evas_object_hide(ui->selector);
 
-	// add EoUI to modgrid
-	if(!mod->eo.do_not_embed)
-		mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-			NULL, NULL);
+	mod->mod_ui = mod_ui;
+
+	switch(mod_ui->type)
+	{
+		case MOD_UI_TYPE_EO:
+			_eo_ui_show(mod);
+			break;
+		case MOD_UI_TYPE_SHOW:
+			if(!mod_ui->show.visible)
+				_show_ui_show(mod);
+			break;
+		case MOD_UI_TYPE_KX:
+			if(!mod_ui->kx.widget)
+				_kx_ui_show(mod);
+			break;
+		case MOD_UI_TYPE_X11:
+			if(!mod_ui->x11.win)
+				_x11_ui_show(mod);
+			break;
+	}
 }
 
 static void
@@ -3879,93 +4000,61 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	if(mod->eo.ui)
+	// clear
+	elm_object_content_set(ui->selector, NULL);
+	evas_object_data_set(ui->selector, "module", mod);
+
+	if(!mod->mod_ui) // show it!
 	{
-		if(mod->eo.full.win)
+		Eina_List *l;
+		mod_ui_t *mod_ui;
+		if(eina_list_count(mod->mod_uis) == 1) // single UI
 		{
-			// remove fullscreen EoUI
-			evas_object_del(mod->eo.full.win);
-			mod->eo.handle = NULL;
-			mod->eo.widget = NULL;
-			mod->eo.full.win = NULL;
-
-			// add EoUI to modgrid
-			if(!mod->eo.do_not_embed)
-				mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-					NULL, NULL);
+			mod_ui = eina_list_data_get(mod->mod_uis);
+			_mod_ui_toggle_chosen(mod_ui, ui->selector, NULL);
 		}
-		else if(mod->eo.embedded.itm || mod->eo.do_not_embed)
+		else if(eina_list_count(mod->mod_uis) > 1) // multiple UIs
 		{
-			// remove EoUI from modgrid
-			elm_object_item_del(mod->eo.embedded.itm);
-
-			// add fullscreen EoUI
-			Evas_Object *win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
-			if(win)
+			EINA_LIST_FOREACH(mod->mod_uis, l, mod_ui)
 			{
-				elm_win_title_set(win, mod->name);
-				evas_object_smart_callback_add(win, "delete,request", _full_delete_request, mod);
-				evas_object_resize(win, 800, 450);
+				const LilvNode *ui_uri = lilv_ui_get_uri(mod_ui->ui);
+				const char *ui_uri_str = lilv_node_as_string(ui_uri);
 
-				mod->eo.full.win = win;
-
-				Evas_Object *bg = elm_bg_add(win);
-				if(bg)
+				switch(mod_ui->type)
 				{
-					elm_bg_color_set(bg, 64, 64, 64);
-					evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-					evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
-					evas_object_show(bg);
-					elm_win_resize_object_add(win, bg);
-				} // bg
-
-				Evas_Object *container = elm_layout_add(win);
-				if(container)
-				{
-					elm_layout_file_set(container, SYNTHPOD_DATA_DIR"/synthpod.edj",
-						"/synthpod/modgrid/container");
-					char col [7];
-					sprintf(col, "col,%02i", mod->col);
-					elm_layout_signal_emit(container, col, MODGRID_UI);
-					evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-					evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
-					evas_object_show(container);
-					elm_win_resize_object_add(win, container);
-
-					Evas_Object *widget = _eo_widget_create(container, mod);
-					if(widget)
-					{
-						evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-						evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						evas_object_show(widget);
-						elm_layout_content_set(container, "elm.swallow.content", widget);
-					} // widget
-				} // container
-
-				evas_object_show(win);
-			} // win
+					case MOD_UI_TYPE_EO:
+					case MOD_UI_TYPE_SHOW:
+					case MOD_UI_TYPE_KX:
+					case MOD_UI_TYPE_X11:
+						elm_popup_item_append(ui->selector, ui_uri_str, NULL, _mod_ui_toggle_chosen, mod_ui);
+						break;
+				}
+			}
+			evas_object_show(ui->selector);
 		}
 	}
-	else if(mod->show.ui && mod->show.descriptor)
+	else // hide it!
 	{
-		if(mod->show.visible)
-			_show_ui_hide(mod);
-		else
-			_show_ui_show(mod);
-	}
-	else if(mod->kx.ui && mod->kx.descriptor)
-	{
-		if(mod->kx.widget)
-			_kx_ui_hide(mod);
-		else
-			_kx_ui_show(mod);
-	}
-	else if(mod->x11.ui && mod->x11.descriptor)
-	{
-		if(mod->x11.win)
-			_x11_ui_hide(mod);
-		else
-			_x11_ui_show(mod);
+		mod_ui_t *mod_ui = mod->mod_ui;
+
+		switch(mod_ui->type)
+		{
+			case MOD_UI_TYPE_EO:
+				_eo_ui_hide(mod);
+				break;
+			case MOD_UI_TYPE_SHOW:
+				if(mod_ui->show.visible)
+					_show_ui_hide(mod);
+				break;
+			case MOD_UI_TYPE_KX:
+				if(mod_ui->kx.widget)
+					_kx_ui_hide(mod);
+				break;
+			case MOD_UI_TYPE_X11:
+				if(mod_ui->x11.win)
+					_x11_ui_hide(mod);
+				break;
+		}
 	}
 }
 
@@ -4030,7 +4119,8 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		}
 
 		// window
-		if(mod->show.ui || mod->kx.ui || mod->eo.ui || mod->x11.ui) //TODO also check for descriptor
+		//if(mod->show.ui || mod->kx.ui || mod->eo.ui || mod->x11.ui) //TODO also check for descriptor
+		if(eina_list_count(mod->mod_uis) > 0)
 		{
 			elm_layout_signal_callback_add(lay, "ui,toggle", "", _mod_ui_toggle, mod);
 			elm_layout_signal_emit(lay, "ui,show", "");
@@ -5089,19 +5179,23 @@ static void
 _modlist_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
 	sp_ui_t *ui = mod->ui;
 
-	// close show ui
-	if(mod->show.ui && mod->show.descriptor)
-		_show_ui_hide(mod);
-	// close kx ui
-	else if(mod->kx.ui && mod->kx.descriptor)
-		_kx_ui_hide(mod);
-	// close x11 ui
-	else if(mod->x11.ui && mod->x11.descriptor)
-		_x11_ui_hide(mod);
-	else if(mod->eo.ui && mod->eo.full.win && mod->eo.descriptor)
-		evas_object_del(mod->eo.full.win);
+	if(mod_ui)
+	{
+		// close show ui
+		if( (mod_ui->type == MOD_UI_TYPE_SHOW) && mod_ui->descriptor)
+			_show_ui_hide(mod);
+		// close kx ui
+		else if( (mod_ui->type == MOD_UI_TYPE_KX) && mod_ui->descriptor)
+			_kx_ui_hide(mod);
+		// close x11 ui
+		else if( (mod_ui->type == MOD_UI_TYPE_X11) && mod_ui->descriptor)
+			_x11_ui_hide(mod);
+		else if( (mod_ui->type == MOD_UI_TYPE_EO) && mod_ui->eo.win && mod_ui->descriptor)
+			evas_object_del(mod_ui->eo.win);
+	}
 
 	_sp_ui_mod_del(ui, mod);
 }
@@ -5187,9 +5281,10 @@ static void
 _modgrid_del(void *data, Evas_Object *obj)
 {
 	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
 	sp_ui_t *ui = mod->ui;
 
-	if(!mod->eo.ui)
+	if(!mod_ui->ui)
 		return;
 
 	// unsubscribe from all ports
@@ -5202,20 +5297,20 @@ _modgrid_del(void *data, Evas_Object *obj)
 	}
 
 	// unsubscribe from all notifications
-	_mod_subscription_set(mod, mod->eo.ui, 0);
+	_mod_subscription_set(mod, mod_ui->ui, 0);
 
 	// cleanup EoUI
-	if(  mod->eo.descriptor
-		&& mod->eo.descriptor->cleanup
-		&& mod->eo.handle)
+	if(  mod_ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->cleanup
+		&& mod_ui->handle)
 	{
-		mod->eo.descriptor->cleanup(mod->eo.handle);
+		mod_ui->descriptor->cleanup(mod_ui->handle);
 	}
 
 	// clear parameters
-	mod->eo.handle = NULL;
-	mod->eo.widget = NULL;
-	mod->eo.embedded.itm = NULL;
+	mod_ui->handle = NULL;
+	mod_ui->eo.widget = NULL;
 }
 
 static void
@@ -5648,13 +5743,6 @@ _sp_ui_from_app_module_add(sp_ui_t *ui, const LV2_Atom *atom)
 				NULL, ui->sink_itm, ELM_GENLIST_ITEM_TREE, NULL, NULL);
 		}
 	}
-
-	if(mod->eo.ui && ui->modgrid) // has EoUI
-	{
-		if(!mod->eo.do_not_embed)
-			mod->eo.embedded.itm = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-				NULL, NULL);
-	}
 }
 
 static void
@@ -5667,19 +5755,10 @@ _sp_ui_from_app_module_del(sp_ui_t *ui, const LV2_Atom *atom)
 	if(!mod)
 		return;
 
-	if(mod->eo.full.win)
-	{
-		// remove full EoI if present
-		evas_object_del(mod->eo.full.win);
-		mod->eo.handle = NULL;
-		mod->eo.widget = NULL;
-		mod->eo.full.win = NULL;
-	}
-	else if(mod->eo.embedded.itm)
-	{
-		// remove EoUI grid item, if present
-		elm_object_item_del(mod->eo.embedded.itm);
-	}
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(mod_ui)
+		_mod_del_widgets(mod);
 
 	// remove StdUI list item
 	if(mod->std.itm)
@@ -6394,6 +6473,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					}
 				}
 
+				ui->selector = elm_popup_add(ui->vbox);
+				if(ui->selector)
+				{
+					elm_popup_allow_events_set(ui->selector, EINA_FALSE);
+				}
+
 				ui->leftpane = elm_panes_add(ui->mainpane);
 				if(ui->leftpane)
 				{
@@ -6772,6 +6857,8 @@ sp_ui_del(sp_ui_t *ui, bool delete_self)
 		evas_object_del(ui->mainpane);
 	if(ui->popup)
 		evas_object_del(ui->popup);
+	if(ui->selector)
+		evas_object_del(ui->selector);
 	if(ui->vbox)
 	{
 		elm_box_clear(ui->vbox);
