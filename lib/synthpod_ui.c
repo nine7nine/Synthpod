@@ -62,8 +62,8 @@ enum _plug_info_type_t {
 };
 
 enum _group_type_t {
-	GROUP_TYPE_PORT			= -2,
-	GROUP_TYPE_PROPERTY	= -1
+	GROUP_TYPE_PORT			= 0,
+	GROUP_TYPE_PROPERTY	= 1
 };
 
 enum _mod_ui_type_t {
@@ -486,16 +486,16 @@ _grpitc_cmp(const void *data1, const void *data2)
 	const Elm_Object_Item *itm1 = data1;
 	const Elm_Object_Item *itm2 = data2;
 
+	const Elm_Genlist_Item_Class *class1 = elm_genlist_item_item_class_get(itm1);
+	const Elm_Genlist_Item_Class *class2 = elm_genlist_item_item_class_get(itm2);
+
+	if(class1->refcount < class2->refcount)
+		return -1;
+	else if(class1->refcount > class2->refcount)
+		return 1;
+
 	group_t *grp1 = elm_object_item_data_get(itm1);
 	group_t *grp2 = elm_object_item_data_get(itm2);
-
-	// handle comparison with separators 
-	if(grp1 && !grp2)
-		return -1;
-	else if(!grp1 && grp2)
-		return 1;
-	else if(!grp1 && !grp2)
-		return 0;
 
 	// compare group type or property module uid
 	return grp1->type < grp2->type
@@ -2171,28 +2171,14 @@ _eo_ui_show(mod_t *mod)
 			elm_win_resize_object_add(win, bg);
 		} // bg
 
-		Evas_Object *container = elm_layout_add(win);
-		if(container)
+		Evas_Object *widget = _eo_widget_create(win, mod);
+		if(widget)
 		{
-			elm_layout_file_set(container, SYNTHPOD_DATA_DIR"/synthpod.edj",
-				"/synthpod/modgrid/container");
-			char col [7];
-			sprintf(col, "col,%02i", mod->col);
-			elm_layout_signal_emit(container, col, MODGRID_UI);
-			evas_object_size_hint_weight_set(container, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(container, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(container);
-			elm_win_resize_object_add(win, container);
-
-			Evas_Object *widget = _eo_widget_create(container, mod);
-			if(widget)
-			{
-				evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-				evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
-				evas_object_show(widget);
-				elm_layout_content_set(container, "elm.swallow.content", widget);
-			} // widget
-		} // container
+			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(widget);
+			elm_win_resize_object_add(win, widget);
+		} // widget
 
 		evas_object_show(win);
 	} // win
@@ -4094,23 +4080,32 @@ static void
 _smart_mouse_in(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
 
-	if(!mod->std.list)
-		return;
+	if(mod->std.list)
+	{
+		elm_scroller_movement_block_set(mod->std.list,
+			ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
+	}
 
-	elm_scroller_movement_block_set(mod->std.list,
-		ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
+	if(ui->modgrid)
+	{
+		elm_scroller_movement_block_set(ui->modgrid,
+			ELM_SCROLLER_MOVEMENT_BLOCK_HORIZONTAL | ELM_SCROLLER_MOVEMENT_BLOCK_VERTICAL);
+	}
 }
 
 static void
 _smart_mouse_out(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
 
-	if(!mod->std.list)
-		return;
+	if(mod->std.list)
+		elm_scroller_movement_block_set(mod->std.list, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
 
-	elm_scroller_movement_block_set(mod->std.list, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
+	if(ui->modgrid)
+		elm_scroller_movement_block_set(ui->modgrid, ELM_SCROLLER_MOVEMENT_NO_BLOCK);
 }
 
 static void
@@ -5197,7 +5192,13 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	if(!strcmp(part, "elm.swallow.icon"))
+	printf("_modgrid_content_get: %s\n", part);
+
+	char col [7];
+	sprintf(col, "col,%02i", mod->col);
+	elm_layout_signal_emit(obj, col, MODGRID_UI);
+
+	if(!strcmp(part, "elm.swallow.content"))
 	{
 		Evas_Object *modlist = elm_genlist_add(obj);
 		if(modlist)
@@ -5265,6 +5266,11 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 
 			// presets
 			Elm_Object_Item *elmnt;
+			elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->moditc, mod, NULL,
+				ELM_GENLIST_ITEM_NONE, _grpitc_cmp, NULL, NULL);
+			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+
+			// presets
 			elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->psetitc, mod, NULL,
 				ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
@@ -6039,6 +6045,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	elm_config_first_item_focus_on_first_focusin_set(EINA_TRUE);
 #endif
 
+	Elm_Theme *default_theme = elm_theme_default_get();
+	elm_theme_extension_add(default_theme, SYNTHPOD_DATA_DIR"/synthpod.edj");
+
 	sp_ui_t *ui = calloc(1, sizeof(sp_ui_t));
 	if(!ui)
 		return NULL;
@@ -6083,7 +6092,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->plugitc->func.del = _pluglist_del;
 		}
 
-		ui->propitc = elm_gengrid_item_class_new();
+		ui->propitc = elm_genlist_item_class_new();
 		if(ui->propitc)
 		{
 			ui->propitc->item_style = "full";
@@ -6091,26 +6100,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->propitc->func.content_get = _property_content_get;
 			ui->propitc->func.state_get = NULL;
 			ui->propitc->func.del = _property_del;
-		}
-
-		ui->grpitc = elm_gengrid_item_class_new();
-		if(ui->grpitc)
-		{
-			ui->grpitc->item_style = "full";
-			ui->grpitc->func.text_get = NULL;
-			ui->grpitc->func.content_get = _group_content_get;
-			ui->grpitc->func.state_get = NULL;
-			ui->grpitc->func.del = _group_del;
-		}
-
-		ui->listitc = elm_genlist_item_class_new();
-		if(ui->listitc)
-		{
-			ui->listitc->item_style = "full";
-			ui->listitc->func.text_get = NULL;
-			ui->listitc->func.content_get = _modlist_content_get;
-			ui->listitc->func.state_get = NULL;
-			ui->listitc->func.del = _modlist_del;
 		}
 
 		ui->moditc = elm_genlist_item_class_new();
@@ -6123,16 +6112,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->moditc->func.del = NULL;
 		}
 
-		ui->stditc = elm_genlist_item_class_new();
-		if(ui->stditc)
-		{
-			ui->stditc->item_style = "full";
-			ui->stditc->func.text_get = NULL;
-			ui->stditc->func.content_get = _modlist_std_content_get;
-			ui->stditc->func.state_get = NULL;
-			ui->stditc->func.del = NULL;
-		}
-
 		ui->psetitc = elm_genlist_item_class_new();
 		if(ui->psetitc)
 		{
@@ -6141,6 +6120,41 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			ui->psetitc->func.content_get = _modlist_psets_content_get;
 			ui->psetitc->func.state_get = NULL;
 			ui->psetitc->func.del = NULL;
+
+			elm_genlist_item_class_ref(ui->psetitc);
+		}
+
+		ui->grpitc = elm_genlist_item_class_new();
+		if(ui->grpitc)
+		{
+			ui->grpitc->item_style = "full";
+			ui->grpitc->func.text_get = NULL;
+			ui->grpitc->func.content_get = _group_content_get;
+			ui->grpitc->func.state_get = NULL;
+			ui->grpitc->func.del = _group_del;
+
+			elm_genlist_item_class_ref(ui->grpitc); // used for genlist ordering
+			elm_genlist_item_class_ref(ui->grpitc); // used for genlist ordering
+		}
+
+		ui->listitc = elm_genlist_item_class_new();
+		if(ui->listitc)
+		{
+			ui->listitc->item_style = "full";
+			ui->listitc->func.text_get = NULL;
+			ui->listitc->func.content_get = _modlist_content_get;
+			ui->listitc->func.state_get = NULL;
+			ui->listitc->func.del = _modlist_del;
+		}
+
+		ui->stditc = elm_genlist_item_class_new();
+		if(ui->stditc)
+		{
+			ui->stditc->item_style = "full";
+			ui->stditc->func.text_get = NULL;
+			ui->stditc->func.content_get = _modlist_std_content_get;
+			ui->stditc->func.state_get = NULL;
+			ui->stditc->func.del = NULL;
 		}
 
 		ui->psetbnkitc = elm_genlist_item_class_new();
@@ -6176,8 +6190,8 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		ui->griditc = elm_gengrid_item_class_new();
 		if(ui->griditc)
 		{
-			ui->griditc->item_style = "default";
-			ui->griditc->func.text_get = _modgrid_label_get;
+			ui->griditc->item_style = "synthpod";
+			ui->griditc->func.text_get = NULL;
 			ui->griditc->func.content_get = _modgrid_content_get;
 			ui->griditc->func.state_get = NULL;
 			ui->griditc->func.del = _modgrid_del;
@@ -6820,10 +6834,19 @@ sp_ui_free(sp_ui_t *ui)
 		elm_genlist_item_class_free(ui->listitc);
 	if(ui->moditc)
 		elm_genlist_item_class_free(ui->moditc);
+	if(ui->grpitc)
+	{
+		elm_genlist_item_class_unref(ui->grpitc);
+		elm_genlist_item_class_unref(ui->grpitc);
+		elm_genlist_item_class_free(ui->grpitc);
+	}
+	if(ui->psetitc)
+	{
+		elm_genlist_item_class_unref(ui->psetitc);
+		elm_genlist_item_class_free(ui->psetitc);
+	}
 	if(ui->stditc)
 		elm_genlist_item_class_free(ui->stditc);
-	if(ui->psetitc)
-		elm_genlist_item_class_free(ui->psetitc);
 	if(ui->psetbnkitc)
 		elm_genlist_item_class_free(ui->psetbnkitc);
 	if(ui->psetitmitc)
@@ -6831,9 +6854,7 @@ sp_ui_free(sp_ui_t *ui)
 	if(ui->psetsaveitc)
 		elm_genlist_item_class_free(ui->psetsaveitc);
 	if(ui->propitc)
-		elm_gengrid_item_class_free(ui->propitc);
-	if(ui->grpitc)
-		elm_gengrid_item_class_free(ui->grpitc);
+		elm_genlist_item_class_free(ui->propitc);
 
 	sp_regs_deinit(&ui->regs);
 
