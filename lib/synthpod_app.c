@@ -35,7 +35,7 @@
 #include <synthpod_app.h>
 #include <synthpod_private.h>
 
-#define NUM_FEATURES 15
+#define NUM_FEATURES 16
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 
@@ -290,6 +290,7 @@ struct _sp_app_t {
 	LV2_State_Map_Path map_path;
 	LV2_Feature state_feature_list [2];
 	LV2_Feature *state_features [3];
+	LV2_URI_Map_Feature uri_to_id;
 
 	char *bundle_path;
 	char *bundle_filename;
@@ -845,6 +846,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		mod->feature_list[nfeatures].URI = LV2_BUF_SIZE__powerOf2BlockLength;
 		mod->feature_list[nfeatures++].data = NULL;
 	}
+
+	mod->feature_list[nfeatures].URI = LV2_URI_MAP_URI;
+	mod->feature_list[nfeatures++].data = &app->uri_to_id;
 
 	assert(nfeatures <= NUM_FEATURES);
 
@@ -2222,6 +2226,16 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 	return advance_work[app->block_state];
 }
 
+static uint32_t
+_uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
+{
+	sp_app_t *app = handle;
+
+	LV2_URID_Map *map = app->driver->map;
+
+	return map->map(map->handle, uri);
+}
+
 // non-rt
 sp_app_t *
 sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
@@ -2370,6 +2384,10 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	atomic_init(&app->voice_id, UINT32_MAX);
 	app->voice_map.handle = app;
 	app->voice_map.new_id = _voice_map_new_id;
+
+	// populate uri_to_id
+	app->uri_to_id.callback_data = app;
+	app->uri_to_id.uri_to_id = _uri_to_id;
 	
 	return app;
 }

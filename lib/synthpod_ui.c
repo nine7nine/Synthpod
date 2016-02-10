@@ -28,7 +28,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 18
+#define NUM_UI_FEATURES 19
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -347,6 +347,8 @@ struct _sp_ui_t {
 	Elm_Object_Item *sink_itm;
 
 	int dirty;
+
+	LV2_URI_Map_Feature uri_to_id;
 };
 
 struct _from_app_t {
@@ -2833,6 +2835,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = ZERO_WRITER__schedule;
 	mod->feature_list[nfeatures++].data = &mod->zero_writer;
+
+	mod->feature_list[nfeatures].URI = LV2_URI_MAP_URI;
+	mod->feature_list[nfeatures++].data = &ui->uri_to_id;
 
 	assert(nfeatures <= NUM_UI_FEATURES);
 
@@ -6028,6 +6033,16 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		from_app->cb(ui, atom);
 }
 
+static uint32_t
+_uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
+{
+	sp_ui_t *ui = handle;
+
+	LV2_URID_Map *map = ui->driver->map;
+
+	return map->map(map->handle, uri);
+}
+
 sp_ui_t *
 sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	void *data, int show_splash)
@@ -6770,6 +6785,10 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 	// fill pluglist
 	_pluglist_populate(ui, ""); // populate with everything
+
+	// populate uri_to_id
+	ui->uri_to_id.callback_data = ui;
+	ui->uri_to_id.uri_to_id = _uri_to_id;
 
 	return ui;
 }
