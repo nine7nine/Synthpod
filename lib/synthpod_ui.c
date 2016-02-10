@@ -2944,7 +2944,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			mod_ui->type = MOD_UI_TYPE_UNSUPPORTED;
 
 			// test for EoUI
-			if(!mod_ui->type)
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
 			{
 				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
 				{
@@ -2953,8 +2953,18 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				}
 			}
 
+			// test for X11UI
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.x11.node))
+				{
+					//printf("has x11-ui\n");
+					mod_ui->type = MOD_UI_TYPE_X11;
+				}
+			}
+
 			// test for show UI
-			if(!mod_ui->type)
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
 			{ //TODO add to reg_t
 				bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
 					ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
@@ -2963,29 +2973,19 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 				if(has_show_iface)
 				{
-					mod_ui->type = MOD_UI_TYPE_SHOW;
 					//printf("has show UI\n");
+					mod_ui->type = MOD_UI_TYPE_SHOW;
 				}
 			}
 
 			// test for kxstudio kx_ui
-			if(!mod_ui->type)
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
 			{
 				if(  lilv_ui_is_a(lui, ui->regs.ui.kx_widget.node)
 					|| lilv_ui_is_a(lui, ui->regs.ui.external.node) )
 				{
 					//printf("has kx-ui\n");
 					mod_ui->type = MOD_UI_TYPE_KX;
-				}
-			}
-
-			// test for X11UI
-			if(!mod_ui->type)
-			{
-				if(lilv_ui_is_a(lui, ui->regs.ui.x11.node))
-				{
-					//printf("has x11-ui\n");
-					mod_ui->type = MOD_UI_TYPE_X11;
 				}
 			}
 		}
