@@ -16,6 +16,8 @@ add_library(synthpod.lv2 MODULE
 	synthpod_control2cv.c
 	synthpod_cv2atom.c
 	synthpod_atom2cv.c
+	synthpod_atom2event.c
+	synthpod_event2atom.c
 	synthpod_audioxfademono.c
 	synthpod_audioxfadestereo.c
 	synthpod_atom2control.c

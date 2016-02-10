@@ -320,6 +320,7 @@ struct _sp_ui_t {
 	port_type_t matrix_type;
 	Elm_Object_Item *matrix_audio;
 	Elm_Object_Item *matrix_atom;
+	Elm_Object_Item *matrix_event;
 	Elm_Object_Item *matrix_control;
 	Elm_Object_Item *matrix_cv;
 	port_atom_type_t matrix_atom_type;
@@ -2519,6 +2520,12 @@ _sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const Lilv
 			tar->atom_type |= PORT_ATOM_TYPE_TIME;
 		if(lilv_port_supports_event(mod->plug, port, ui->regs.patch.message.node))
 			tar->atom_type |= PORT_ATOM_TYPE_PATCH;
+	}
+	else if(lilv_port_is_a(mod->plug, port, ui->regs.port.event.node)) 
+	{
+		tar->type = PORT_TYPE_EVENT;
+
+		tar->atom_type = 0;
 	}
 
 	// get port unit
@@ -4788,7 +4795,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		elm_layout_signal_emit(lay, port->selected ? "link,on" : "link,off", "");
 
 		// monitor
-		if(port->type != PORT_TYPE_ATOM)
+		if( (port->type != PORT_TYPE_ATOM) && (port->type != PORT_TYPE_EVENT) )
 		{
 			elm_layout_signal_callback_add(lay, "monitor,toggle", "", _port_monitor_toggle, port);
 			elm_layout_signal_emit(lay, port->std.monitored ? "monitor,on" : "monitor,off", "");
@@ -4900,6 +4907,14 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			Evas_Object *lbl = elm_label_add(lay);
 			if(lbl)
 				elm_object_text_set(lbl, "Atom Port");
+
+			child = lbl;
+		}
+		else if(port->type == PORT_TYPE_EVENT)
+		{
+			Evas_Object *lbl = elm_label_add(lay);
+			if(lbl)
+				elm_object_text_set(lbl, "Event Port");
 
 			child = lbl;
 		}
@@ -5655,6 +5670,10 @@ _patchbar_selected(void *data, Evas_Object *obj, void *event_info)
 	else if(itm == ui->matrix_cv)
 	{
 		ui->matrix_type = PORT_TYPE_CV;
+	}
+	else if(itm == ui->matrix_event)
+	{
+		ui->matrix_type = PORT_TYPE_EVENT;
 	}
 	else if(itm == ui->matrix_atom)
 	{
@@ -6635,6 +6654,8 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 									SYNTHPOD_DATA_DIR"/control.png", "Control", NULL, NULL);
 								ui->matrix_cv = elm_toolbar_item_append(ui->patchbar,
 									SYNTHPOD_DATA_DIR"/cv.png", "CV", NULL, NULL);
+								ui->matrix_event = elm_toolbar_item_append(ui->patchbar,
+									SYNTHPOD_DATA_DIR"/atom.png", "Event", NULL, NULL); //FIXME event.png
 								ui->matrix_atom = elm_toolbar_item_append(ui->patchbar,
 									SYNTHPOD_DATA_DIR"/atom.png", "Atom", NULL, NULL);
 

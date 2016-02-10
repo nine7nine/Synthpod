@@ -55,6 +55,10 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_monoatom;
 		case 12:
 			return &synthpod_anonymizer;
+		case 13:
+			return &synthpod_atom2event;
+		case 14:
+			return &synthpod_event2atom;
 		default:
 			return NULL;
 	}

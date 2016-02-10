@@ -320,6 +320,7 @@ static const port_driver_t audio_port_driver;
 static const port_driver_t cv_port_driver;
 static const port_driver_t atom_port_driver;
 static const port_driver_t seq_port_driver;
+static const port_driver_t ev_port_driver;
 
 #define SINK_IS_NILPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) == 0) && !(PORT)->is_ramping)
 #define SINK_IS_SIMPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) == 1) && !(PORT)->is_ramping)
@@ -1022,6 +1023,24 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 			// does this port support patch:Message?
 			tar->patchable = lilv_port_supports_event(plug, port, app->regs.patch.message.node);
+
+			// check whether this is a control port
+			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
+				tar->direction == PORT_DIRECTION_INPUT
+					? app->regs.port.input.node
+					: app->regs.port.output.node
+					, app->regs.core.control.node);
+
+			tar->selected = control_port == port; // only select control ports by default
+		}
+		else if(lilv_port_is_a(plug, port, app->regs.port.event.node)) 
+		{
+			tar->size = app->driver->seq_size;
+			tar->type = PORT_TYPE_EVENT;
+			tar->selected = 0;
+			tar->monitored = 0;
+			tar->protocol = app->regs.port.event_transfer.urid; //FIXME handle atom_transfer
+			tar->driver = &ev_port_driver;
 
 			// check whether this is a control port
 			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
@@ -2945,6 +2964,13 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 			}
+			else if(port->type == PORT_TYPE_EVENT)
+			{
+				LV2_Event_Buffer *evbuf = PORT_BUF_ALIGNED(port);
+				size_t offset = lv2_atom_pad_size(sizeof(LV2_Event_Buffer));
+				lv2_event_buffer_reset(evbuf, 0, (uint8_t*)evbuf + offset);
+				evbuf->capacity = port->size - offset;
+			}
 		}
 	}
 
@@ -3133,6 +3159,15 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 	if(ref)
 		lv2_atom_forge_pop(forge, &frame);
+}
+
+// rt
+static inline void
+_port_ev_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+
+	//FIXME FIXME FIXME actually implement me FIXME FIXME FIXME
 }
 
 // rt
@@ -3350,6 +3385,13 @@ static const port_driver_t seq_port_driver = {
 	.sparse_update = false
 };
 
+static const port_driver_t ev_port_driver = {
+	.simplex = NULL,
+	.multiplex = _port_ev_multiplex,
+	.transfer = NULL,
+	.sparse_update = false
+};
+
 // rt
 void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples)
@@ -3405,6 +3447,14 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = port->size;
+			}
+			else if((port->type == PORT_TYPE_EVENT)
+				&& (port->direction == PORT_DIRECTION_OUTPUT) )
+			{
+				LV2_Event_Buffer *evbuf = PORT_BUF_ALIGNED(port);
+				size_t offset = lv2_atom_pad_size(sizeof(LV2_Event_Buffer));
+				lv2_event_buffer_reset(evbuf, 0, (uint8_t*)evbuf + offset);
+				evbuf->capacity = port->size - offset;
 			}
 		}
 

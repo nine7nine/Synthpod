@@ -133,6 +133,22 @@ synthpod:atom2cv
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
+# Atom2Event
+synthpod:atom2event
+	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
+	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod.ttl> .
+
+# Event2Atom
+synthpod:event2atom
+	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
+	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod.ttl> .
+
 # AudioXFadeMono
 synthpod:audioxfademono
 	a lv2:Plugin ;
