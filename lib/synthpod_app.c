@@ -4208,7 +4208,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			LV2_Atom_Object_Query port_q[] = {
 				{ app->regs.core.symbol.urid, (const LV2_Atom **)&port_symbol },
 				{ app->regs.synthpod.port_selected.urid, (const LV2_Atom **)&port_selected },
-				{ app->regs.synthpod.port_selected.urid, (const LV2_Atom **)&port_monitored },
+				{ app->regs.synthpod.port_monitored.urid, (const LV2_Atom **)&port_monitored },
 				{ 0, NULL }
 			};
 			lv2_atom_object_query(port_obj, port_q);
