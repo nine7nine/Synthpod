@@ -114,7 +114,6 @@ add_subdirectory(lib)
 add_subdirectory(bin)
 add_subdirectory(plugins)
 add_subdirectory(data)
-add_subdirectory(state)
 add_subdirectory(bundle)
 
 # CPack
