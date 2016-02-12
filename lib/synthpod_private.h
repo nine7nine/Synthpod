@@ -181,12 +181,14 @@ struct _reg_t {
 
 	struct {
 		reg_item_t value;
+		reg_item_t type;
 	} rdf;
 
 	struct {
 		reg_item_t label;
 		reg_item_t range;
 		reg_item_t comment;
+		reg_item_t see_also;
 	} rdfs;
 
 	struct {
@@ -206,6 +208,10 @@ struct _reg_t {
 		reg_item_t minimum;
 		reg_item_t maximum;
 		reg_item_t scale_point;
+		reg_item_t port;
+		reg_item_t Port;
+		reg_item_t plugin;
+		reg_item_t applies_to;
 	} core;
 
 	struct {
@@ -281,7 +287,10 @@ struct _reg_t {
 		reg_item_t transfer_event;
 		reg_item_t payload;
 		reg_item_t state;
-		reg_item_t json;
+		reg_item_t graph;
+		reg_item_t null;
+		reg_item_t stereo;
+		reg_item_t monoatom;
 
 		reg_item_t module_list;
 		reg_item_t module_add;
@@ -314,6 +323,13 @@ static inline void
 _register(reg_item_t *itm, LilvWorld *world, LV2_URID_Map *map, const char *uri)
 {
 	itm->node = lilv_new_uri(world, uri);
+	itm->urid = map->map(map->handle, uri);
+}
+
+static inline void
+_register_string(reg_item_t *itm, LilvWorld *world, LV2_URID_Map *map, const char *uri)
+{
+	itm->node = lilv_new_string(world, uri);
 	itm->urid = map->map(map->handle, uri);
 }
 
@@ -385,10 +401,12 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->pset.bank, world, map, LV2_PRESETS__Bank);
 	
 	_register(&regs->rdf.value, world, map, LILV_NS_RDF"value");
+	_register(&regs->rdf.type, world, map, LILV_NS_RDF"type");
 
 	_register(&regs->rdfs.label, world, map, LILV_NS_RDFS"label");
 	_register(&regs->rdfs.range, world, map, LILV_NS_RDFS"range");
 	_register(&regs->rdfs.comment, world, map, LILV_NS_RDFS"comment");
+	_register(&regs->rdfs.see_also, world, map, LILV_NS_RDFS"seeAlso");
 
 	_register(&regs->doap.license, world, map, LILV_NS_DOAP"license");
 
@@ -404,6 +422,10 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.minimum, world, map, LV2_CORE__minimum);
 	_register(&regs->core.maximum, world, map, LV2_CORE__maximum);
 	_register(&regs->core.scale_point, world, map, LV2_CORE__scalePoint);
+	_register(&regs->core.port, world, map, LV2_CORE__port);
+	_register(&regs->core.Port, world, map, LV2_CORE__Port);
+	_register(&regs->core.plugin, world, map, LV2_CORE__Plugin);
+	_register(&regs->core.applies_to, world, map, LV2_CORE__appliesTo);
 
 	_register(&regs->bufsz.nominal_block_length, world, map, LV2_BUF_SIZE_PREFIX "nominalBlockLength");
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
@@ -463,8 +485,11 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.com_event, world, map, SYNTHPOD_PREFIX"comEvent");
 	_register(&regs->synthpod.transfer_event, world, map, SYNTHPOD_PREFIX"transferEvent");
 	_register(&regs->synthpod.payload, world, map, SYNTHPOD_PREFIX"payload");
-	_register(&regs->synthpod.state, world, map, SYNTHPOD_PREFIX"state");
-	_register(&regs->synthpod.json, world, map, SYNTHPOD_PREFIX"json");
+	_register_string(&regs->synthpod.state, world, map, "state.ttl");
+	_register(&regs->synthpod.graph, world, map, SYNTHPOD_PREFIX"graph");
+	_register_string(&regs->synthpod.null, world, map, "");
+	_register(&regs->synthpod.stereo, world, map, SYNTHPOD_PREFIX"stereo");
+	_register(&regs->synthpod.monoatom, world, map, SYNTHPOD_PREFIX"monoatom");
 	_register(&regs->synthpod.module_list, world, map, SYNTHPOD_PREFIX"moduleList");
 	_register(&regs->synthpod.module_add, world, map, SYNTHPOD_PREFIX"moduleAdd");
 	_register(&regs->synthpod.module_del, world, map, SYNTHPOD_PREFIX"moduleDel");
@@ -546,10 +571,12 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->pset.bank);
 	
 	_unregister(&regs->rdf.value);
+	_unregister(&regs->rdf.type);
 
 	_unregister(&regs->rdfs.label);
 	_unregister(&regs->rdfs.range);
 	_unregister(&regs->rdfs.comment);
+	_unregister(&regs->rdfs.see_also);
 
 	_unregister(&regs->doap.license);
 
@@ -565,6 +592,10 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.minimum);
 	_unregister(&regs->core.maximum);
 	_unregister(&regs->core.scale_point);
+	_unregister(&regs->core.port);
+	_unregister(&regs->core.Port);
+	_unregister(&regs->core.plugin);
+	_unregister(&regs->core.applies_to);
 
 	_unregister(&regs->bufsz.nominal_block_length);
 	_unregister(&regs->bufsz.max_block_length);
@@ -625,7 +656,10 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.transfer_event);
 	_unregister(&regs->synthpod.payload);
 	_unregister(&regs->synthpod.state);
-	_unregister(&regs->synthpod.json);
+	_unregister(&regs->synthpod.graph);
+	_unregister(&regs->synthpod.null);
+	_unregister(&regs->synthpod.stereo);
+	_unregister(&regs->synthpod.monoatom);
 	_unregister(&regs->synthpod.module_list);
 	_unregister(&regs->synthpod.module_add);
 	_unregister(&regs->synthpod.module_del);

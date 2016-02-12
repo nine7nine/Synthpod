@@ -3,7 +3,6 @@ include_directories(${PROJECT_SOURCE_DIR}/eo_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cjson)
 		
 add_definitions("-D_GNU_SOURCE=1") # asprintf
 
@@ -21,8 +20,7 @@ endif()
 
 # synthpod
 add_library(synthpod.lib SHARED
-	synthpod_app.c
-	cjson/cJSON.c)
+	synthpod_app.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
 	${ECORE_LDFLAGS}

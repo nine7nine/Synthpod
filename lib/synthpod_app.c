@@ -27,13 +27,14 @@
 #	include <Evil.h>
 #endif
 
-#include <cJSON.h>
 #include <Eina.h>
 #include <Efreet.h>
 #include <Ecore_File.h>
 
 #include <synthpod_app.h>
 #include <synthpod_private.h>
+
+#include <sratom/sratom.h>
 
 #define NUM_FEATURES 16
 #define MAX_SOURCES 32 // TODO how many?
@@ -305,6 +306,8 @@ struct _sp_app_t {
 
 	_Atomic uint32_t voice_id;
 	xpress_map_t voice_map;
+
+	Sratom *sratom;
 };
 
 struct _from_ui_t {
@@ -2408,6 +2411,10 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	app->uri_to_id.callback_data = app;
 	app->uri_to_id.uri_to_id = _uri_to_id;
 	
+	app->sratom = sratom_new(app->driver->map);
+	if(app->sratom)
+		sratom_set_pretty_numbers(app->sratom, false);
+	
 	return app;
 }
 
@@ -2647,70 +2654,162 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	return 0; // success
 }
 
+//FIXME move up
+#define XSD_PREFIX "http://www.w3.org/2001/XMLSchema#"
+#define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+#define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
+#define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
+
+static char *
+synthpod_to_turtle(Sratom* sratom, LV2_URID_Unmap* unmap,
+	uint32_t type, uint32_t size, const void *body)
+{
+	const char* base_uri = "file:///tmp/base/";
+	SerdURI buri = SERD_URI_NULL;
+	SerdNode base = serd_node_new_uri_from_string((const uint8_t *)base_uri, NULL, &buri);
+	SerdEnv *env = serd_env_new(&base);
+	if(env)
+	{
+		SerdChunk str = { .buf = NULL, .len = 0 };
+
+#define CUINT8(str) ((const uint8_t *)(str))
+		serd_env_set_prefix_from_strings(env, CUINT8("midi"), CUINT8(LV2_MIDI_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("atom"), CUINT8(LV2_ATOM_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("rdf"), CUINT8(RDF_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("xsd"), CUINT8(XSD_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("rdfs"), CUINT8(RDFS_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("lv2"), CUINT8(LV2_CORE_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("pset"), CUINT8(LV2_PRESETS_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("state"), CUINT8(LV2_STATE_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("spod"), CUINT8(SPOD_PREFIX));
+#undef CUINT8
+
+		SerdWriter *writer = serd_writer_new(SERD_TURTLE,
+			SERD_STYLE_ABBREVIATED | SERD_STYLE_RESOLVED | SERD_STYLE_CURIED,
+			env, &buri, serd_chunk_sink, &str);
+
+		if(writer)
+		{
+			// Write @prefix directives
+			serd_env_foreach(env, (SerdPrefixSink)serd_writer_set_prefix, writer);
+
+			sratom_set_sink(sratom, NULL,
+				(SerdStatementSink)serd_writer_write_statement,
+				(SerdEndSink)serd_writer_end_anon,
+				writer);
+			sratom_write(sratom, unmap, SERD_EMPTY_S, NULL, NULL, type, size, body);
+			serd_writer_finish(writer);
+
+			serd_writer_free(writer);
+			serd_env_free(env);
+			serd_node_free(&base);
+
+			return (char *)serd_chunk_sink_finish(&str);
+		}
+		serd_env_free(env);
+	}
+	serd_node_free(&base);
+
+	return NULL;
+}
+
+static inline void
+_serialize_to_turtle(Sratom *sratom, LV2_URID_Unmap *unmap, const LV2_Atom *atom, const char *path)
+{
+	FILE *f = fopen(path, "wb");
+	if(f)
+	{
+		char *ttl = synthpod_to_turtle(sratom, unmap,
+			atom->type, atom->size, LV2_ATOM_BODY_CONST(atom));
+
+		if(ttl)
+		{
+			fprintf(f, "%s", ttl);
+			free(ttl);
+		}
+
+		fclose(f);
+	}
+}
+
+static inline LV2_Atom_Object *
+_deserialize_from_turtle(Sratom *sratom, LV2_URID_Unmap *unmap, const char *path)
+{
+	LV2_Atom_Object *obj = NULL;
+
+	FILE *f = fopen(path, "rb");
+	if(f)
+	{
+		fseek(f, 0, SEEK_END);
+		long fsize = ftell(f);
+		fseek(f, 0, SEEK_SET);
+
+		char *ttl = malloc(fsize + 1);
+		if(ttl)
+		{
+			if(fread(ttl, fsize, 1, f) == 1)
+			{
+				ttl[fsize] = 0;
+
+				const char* base_uri = "file:///tmp/base/";
+
+				SerdNode s = serd_node_from_string(SERD_URI, (const uint8_t *)"");
+				SerdNode p = serd_node_from_string(SERD_URI, (const uint8_t *)LV2_STATE__state);
+				obj = (LV2_Atom_Object *)sratom_from_turtle(sratom, base_uri, &s, &p, ttl);
+			}
+
+			free(ttl);
+		}
+	}
+
+	return obj;
+}
+
 // non-rt / rt
 static LV2_State_Status
 _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	size_t size, uint32_t type, uint32_t flags)
 {
-	sp_app_t *app = state;
-	
-	if(key != app->regs.synthpod.json.urid)
-		return LV2_STATE_ERR_NO_PROPERTY;
+	LV2_Atom_Forge *forge = state;
 
-	if(type != app->forge.Path)
-		return LV2_STATE_ERR_BAD_TYPE;
-	
 	if(!(flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
 		return LV2_STATE_ERR_BAD_FLAGS;
-	
-	if(strcmp(value, "state.json"))
-		return LV2_STATE_ERR_UNKNOWN;
 
-	char *manifest_dst = _make_path(app->bundle_path, "manifest.ttl");
-	char *state_dst = _make_path(app->bundle_path, "state.ttl");
-
-	if(manifest_dst && state_dst)
+	if(  lv2_atom_forge_key(forge, key)
+		&& lv2_atom_forge_atom(forge, size, type)
+		&& lv2_atom_forge_raw(forge, value, size) )
 	{
-		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/manifest.ttl", manifest_dst) == EINA_FALSE)
-			fprintf(stderr, "_state_store: could not save manifest.ttl\n");
-		if(ecore_file_cp(SYNTHPOD_DATA_DIR"/state.ttl", state_dst) == EINA_FALSE)
-			fprintf(stderr, "_state_store: could not save state.ttl\n");
-
-		free(manifest_dst);
-		free(state_dst);
-
+		lv2_atom_forge_pad(forge, size);
 		return LV2_STATE_SUCCESS;
 	}
-	
-	if(manifest_dst)
-		free(manifest_dst);
-	if(state_dst)
-		free(state_dst);
-		
+
 	return LV2_STATE_ERR_UNKNOWN;
 }
 
-static const void*
+static const void *
 _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	uint32_t *type, uint32_t *flags)
 {
-	sp_app_t *app = state;
+	const LV2_Atom_Object *obj = state;
 
-	if(key == app->regs.synthpod.json.urid)
+	const LV2_Atom *atom = NULL;
+	LV2_Atom_Object_Query obj_q[] = {
+		{ key, &atom },
+		{ 0, NULL }
+	};
+	lv2_atom_object_query(obj, obj_q);
+
+	if(atom)
 	{
-		*type = app->forge.Path;
+		*size = atom->size;
+		*type = atom->type;
 		*flags = LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE;
-
-		if(app->bundle_filename)
-			free(app->bundle_filename);
-
-		app->bundle_filename = _make_path(app->bundle_path, "state.json");
-
-		*size = strlen(app->bundle_filename) + 1;
-		return app->bundle_filename;
+		return LV2_ATOM_BODY_CONST(atom);
 	}
 
 	*size = 0;
+	*type = 0;
+	*flags = 0;
 	return NULL;
 }
 
@@ -2720,6 +2819,9 @@ _bundle_load(sp_app_t *app, const char *bundle_path)
 {
 	//printf("_bundle_load: %s\n", bundle_path);
 
+	if(!app->sratom)
+		return -1;
+
 	if(app->bundle_path)
 		free(app->bundle_path);
 
@@ -2727,12 +2829,73 @@ _bundle_load(sp_app_t *app, const char *bundle_path)
 	if(!app->bundle_path)
 		return -1;
 
-	// restore state
-	sp_app_restore(app, _state_retrieve, app,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
-		_state_features(app, app->bundle_path));
+	char *state_dst = _make_path(app->bundle_path, "state.ttl");
+	if(!state_dst)
+		return -1;
+
+	LV2_Atom_Object *obj = _deserialize_from_turtle(app->sratom, app->driver->unmap, state_dst);
+	if(obj)
+	{
+		// restore state
+		sp_app_restore(app, _state_retrieve, obj,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
+			_state_features(app, app->bundle_path));
+
+		free(obj); // allocated by _deserialize_from_turtle
+	}
+	else if(!ecore_file_exists(state_dst)) // new project?
+	{
+		atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed);
+
+		return LV2_STATE_SUCCESS;
+	}
+
+	free(state_dst);
 
 	return 0; // success
+}
+
+typedef struct _atom_ser_t atom_ser_t;
+
+struct _atom_ser_t {
+	uint32_t size;
+	uint8_t *buf;
+	uint32_t offset;
+};
+
+static inline LV2_Atom_Forge_Ref
+_sink(LV2_Atom_Forge_Sink_Handle handle, const void *buf, uint32_t size)
+{
+	atom_ser_t *ser = handle;
+
+	const LV2_Atom_Forge_Ref ref = ser->offset + 1;
+
+	if(ser->offset + size > ser->size)
+	{
+		uint32_t new_size = ser->size;
+		do new_size <<= 1;
+		while(new_size < ser->offset + size);
+
+		if(!(ser->buf = realloc(ser->buf, new_size)))
+			return 0; // realloc failed
+
+		ser->size = new_size;
+	}
+
+	memcpy(ser->buf + ser->offset, buf, size);
+	ser->offset += size;
+
+	return ref;
+}
+
+static inline LV2_Atom *
+_deref(LV2_Atom_Forge_Sink_Handle handle, LV2_Atom_Forge_Ref ref)
+{
+	atom_ser_t *ser = handle;
+
+	const uint32_t offset = ref - 1;
+
+	return (LV2_Atom *)(ser->buf + offset);
 }
 
 static inline int
@@ -2747,12 +2910,82 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 	if(!app->bundle_path)
 		return -1;
 
-	// store state
-	sp_app_save(app, _state_store, app,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
-		_state_features(app, app->bundle_path));
+	char *manifest_dst = _make_path(app->bundle_path, "manifest.ttl");
+	char *state_dst = _make_path(app->bundle_path, "state.ttl");
+	if(manifest_dst && state_dst)
+	{
+		LV2_Atom_Forge _forge;
+		LV2_Atom_Forge *forge = &_forge;
+		memcpy(forge, &app->forge, sizeof(LV2_Atom_Forge));
+		LV2_Atom_Forge_Frame pset_frame;
+		LV2_Atom_Forge_Frame state_frame;
 
-	return 0; // success
+		if(app->sratom)
+		{
+			atom_ser_t ser = { .size = 1024, .offset = 0 };
+			ser.buf = malloc(ser.size);
+			lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
+
+			if(  ser.buf
+				&& lv2_atom_forge_object(forge, &pset_frame, app->regs.synthpod.state.urid, app->regs.pset.preset.urid)
+				&& lv2_atom_forge_key(forge, app->regs.core.applies_to.urid)
+				&& lv2_atom_forge_urid(forge, app->regs.synthpod.stereo.urid)
+				&& lv2_atom_forge_key(forge, app->regs.core.applies_to.urid)
+				&& lv2_atom_forge_urid(forge, app->regs.synthpod.monoatom.urid)
+				&& lv2_atom_forge_key(forge, app->regs.rdfs.see_also.urid)
+				&& lv2_atom_forge_urid(forge, app->regs.synthpod.state.urid) )
+			{
+				lv2_atom_forge_pop(forge, &pset_frame);
+
+				const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
+				_serialize_to_turtle(app->sratom, app->driver->unmap, atom, manifest_dst);
+				free(ser.buf);
+			}
+
+			ser.size = 4096;
+			ser.offset = 0;
+			ser.buf = malloc(ser.size);
+			lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
+
+			if(  ser.buf
+				&& lv2_atom_forge_object(forge, &pset_frame, app->regs.synthpod.null.urid, app->regs.pset.preset.urid)
+				&& lv2_atom_forge_key(forge, app->regs.core.applies_to.urid)
+				&& lv2_atom_forge_urid(forge, app->regs.synthpod.stereo.urid)
+				&& lv2_atom_forge_key(forge, app->regs.core.applies_to.urid)
+				&& lv2_atom_forge_urid(forge, app->regs.synthpod.monoatom.urid)
+
+				&& lv2_atom_forge_key(forge, app->regs.rdfs.label.urid)
+				&& lv2_atom_forge_string(forge, app->bundle_path, strlen(app->bundle_path))
+
+				&& lv2_atom_forge_key(forge, app->regs.state.state.urid)
+				&& lv2_atom_forge_object(forge, &state_frame, 0, 0) )
+			{
+				// store state
+				sp_app_save(app, _state_store, forge,
+					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
+					_state_features(app, app->bundle_path));
+
+				lv2_atom_forge_pop(forge, &state_frame);
+				lv2_atom_forge_pop(forge, &pset_frame);
+
+				const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
+				_serialize_to_turtle(app->sratom, app->driver->unmap, atom, state_dst);
+				free(ser.buf);
+			}
+		}
+
+		free(manifest_dst);
+		free(state_dst);
+
+		return LV2_STATE_SUCCESS;
+	}
+	
+	if(manifest_dst)
+		free(manifest_dst);
+	if(state_dst)
+		free(state_dst);
+
+	return LV2_STATE_ERR_UNKNOWN;
 }
 
 // non-rt
@@ -3524,6 +3757,9 @@ sp_app_free(sp_app_t *app)
 	if(app->bundle_filename)
 		free(app->bundle_filename);
 
+	if(app->sratom)
+		sratom_free(app->sratom);
+
 	free(app);
 
 	ecore_file_shutdown();
@@ -3706,114 +3942,124 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		}
 	}
 
-	// create json object
-	cJSON *root_json = cJSON_CreateObject();
-	cJSON *arr_json = cJSON_CreateArray();
-	cJSON_AddItemToObject(root_json, "items", arr_json);
-	
-	for(unsigned m=0; m<app->num_mods; m++)
+	LV2_Atom_Forge *forge = &app->forge;
+
+	atom_ser_t ser = { .size = 4096, .offset = 0 };
+	ser.buf = malloc(ser.size);
+	lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
+
+	if(ser.buf)
 	{
-		mod_t *mod = app->mods[m];
-
-		char uid [64];
-		sprintf(uid, "%u/", mod->uid);
-		char *path = make_path->path(make_path->handle, uid);
-		if(!path)
-			continue;
-
-		LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-			app->driver->map, NULL, NULL, NULL, path,
-			_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
-
-		lilv_state_set_label(state, "state"); //TODO use path prefix?
-		lilv_state_save(app->world, app->driver->map, app->driver->unmap,
-			state, NULL, path, "state.ttl");
-
-		free(path);
-		
-		// fill mod json object
-		cJSON *mod_json = cJSON_CreateObject();
-		cJSON *mod_uid_json = cJSON_CreateNumber(mod->uid);
-		cJSON *mod_uri_json = cJSON_CreateString(mod->uri_str);
-		cJSON *mod_selected_json = cJSON_CreateBool(mod->selected);
-		cJSON *mod_ports_json = cJSON_CreateArray();
-
-		for(unsigned i=0; i<mod->num_ports; i++)
+		LV2_Atom_Forge_Ref ref;
+		LV2_Atom_Forge_Frame graph_frame;
+		if( (ref = lv2_atom_forge_tuple(forge, &graph_frame)) )
 		{
-			port_t *port = &mod->ports[i];
+			for(unsigned m=0; m<app->num_mods; m++)
+			{
+				mod_t *mod = app->mods[m];
 
-			cJSON *port_json = cJSON_CreateObject();
-			cJSON *port_symbol_json = cJSON_CreateString(
-				lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar)));
-			cJSON *port_selected_json = cJSON_CreateBool(port->selected);
-			cJSON *port_monitored_json = cJSON_CreateBool(port->monitored);
-			cJSON *port_sources_json = cJSON_CreateArray();
-				for(int j=0; j<port->num_sources; j++)
+				char uid [64];
+				sprintf(uid, "%u/", mod->uid);
+				char *path = make_path->path(make_path->handle, uid);
+				if(!path)
+					continue;
+
+				LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+					app->driver->map, NULL, NULL, NULL, path,
+					_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
+
+				lilv_state_set_label(state, "state"); //TODO use path prefix?
+				lilv_state_save(app->world, app->driver->map, app->driver->unmap,
+					state, NULL, path, "state.ttl");
+
+				free(path);
+
+				const LV2_URID uri_urid = app->driver->map->map(app->driver->map->handle, mod->uri_str);
+
+				LV2_Atom_Forge_Frame mod_frame;
+				if(  ref
+					&& lv2_atom_forge_object(forge, &mod_frame, 0, uri_urid))
 				{
-					port_t *source = port->sources[j].port;
+					ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
+						&& lv2_atom_forge_int(forge, mod->uid);
 
-					cJSON *conn_json = cJSON_CreateObject();
+					if(ref && mod->selected)
+					{
+						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_selected.urid)
+							&& lv2_atom_forge_bool(forge, mod->selected);
+					}
 
-					cJSON *source_uid_json = cJSON_CreateNumber(source->mod->uid);
-					cJSON *source_symbol_json = cJSON_CreateString(
-						lilv_node_as_string(lilv_port_get_symbol(source->mod->plug, source->tar)));
-					cJSON_AddItemToObject(conn_json, "uid", source_uid_json);
-					cJSON_AddItemToObject(conn_json, "symbol", source_symbol_json);
+					for(unsigned i=0; i<mod->num_ports; i++)
+					{
+						port_t *port = &mod->ports[i];
 
-					cJSON_AddItemToArray(port_sources_json, conn_json);
+						LV2_Atom_Forge_Frame port_frame;
+						if(  ref
+							&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
+							&& lv2_atom_forge_object(forge, &port_frame, 0, app->regs.core.Port.urid) )
+						{
+							const char *symbol = lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar));
+
+							ref = lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
+								&& lv2_atom_forge_string(forge, symbol, strlen(symbol));
+
+							if(ref && port->selected)
+							{
+								ref = lv2_atom_forge_key(forge, app->regs.synthpod.port_selected.urid)
+									&& lv2_atom_forge_bool(forge, port->selected);
+							}
+
+							if(ref && port->monitored)
+							{
+								ref = lv2_atom_forge_key(forge, app->regs.synthpod.port_monitored.urid)
+									&& lv2_atom_forge_bool(forge, port->monitored);
+							}
+
+							for(int j=0; j<port->num_sources; j++)
+							{
+								port_t *source = port->sources[j].port;
+
+								LV2_Atom_Forge_Frame source_frame;
+								if(  ref
+									&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
+									&& lv2_atom_forge_object(forge, &source_frame, 0, app->regs.core.Port.urid) )
+								{
+									const char *symbol2 = lilv_node_as_string(lilv_port_get_symbol(mod->plug, source->tar));
+
+									if(  lv2_atom_forge_key(forge, app->regs.core.index.urid)
+										&& lv2_atom_forge_int(forge, source->mod->uid)
+
+										&& lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
+										&& (ref = lv2_atom_forge_string(forge, symbol2, strlen(symbol2))) )
+										lv2_atom_forge_pop(forge, &source_frame);
+								}
+							}
+
+							if(ref)
+								lv2_atom_forge_pop(forge, &port_frame);
+						}
+					}
+
+					if(ref)
+						lv2_atom_forge_pop(forge, &mod_frame);
 				}
-			cJSON_AddItemToObject(port_json, "symbol", port_symbol_json);
-			cJSON_AddItemToObject(port_json, "selected", port_selected_json);
-			cJSON_AddItemToObject(port_json, "monitored", port_monitored_json);
-			cJSON_AddItemToObject(port_json, "sources", port_sources_json);
-			cJSON_AddItemToArray(mod_ports_json, port_json);
+
+				lilv_state_free(state);
+			}
+
+			if(ref)
+				lv2_atom_forge_pop(forge, &graph_frame);
 		}
-		cJSON_AddItemToObject(mod_json, "uid", mod_uid_json);
-		cJSON_AddItemToObject(mod_json, "uri", mod_uri_json);
-		cJSON_AddItemToObject(mod_json, "selected", mod_selected_json);
-		cJSON_AddItemToObject(mod_json, "ports", mod_ports_json);
-		cJSON_AddItemToArray(arr_json, mod_json);
 
-		lilv_state_free(state);
+		const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
+		if(ref && atom)
+		{
+			store(hndl, app->regs.synthpod.graph.urid,
+				LV2_ATOM_BODY_CONST(atom), atom->size, atom->type,
+				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+		}
+		free(ser.buf);
 	}
-
-	// serialize json object
-	char *root_str = cJSON_Print(root_json);	
-	cJSON_Delete(root_json);
-	
-	if(!root_str)
-		return LV2_STATE_ERR_UNKNOWN;
-
-	char *absolute = make_path->path(make_path->handle, "state.json");
-	if(!absolute)
-		return LV2_STATE_ERR_UNKNOWN;
-
-	char *abstract = map_path->abstract_path(map_path->handle, absolute);
-	if(!abstract)
-		return LV2_STATE_ERR_UNKNOWN;
-
-	FILE *f = fopen(absolute, "wb");
-	if(f)
-	{
-		size_t written = fwrite(root_str, strlen(root_str), 1, f);
-		fflush(f);
-		fclose(f);
-
-		if(written != 1)
-			fprintf(stderr, "error writing to JSON file\n");
-	}
-	else
-		fprintf(stderr, "error opening JSON file\n");
-
-	free(root_str);
-
-	//printf("abstract: %s (%zu)\n", abstract, strlen(abstract));
-	store(hndl, app->regs.synthpod.json.urid,
-		abstract, strlen(abstract) + 1, app->forge.Path,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
-
-	free(abstract);
-	free(absolute);
 
 	return LV2_STATE_SUCCESS;
 }
@@ -3838,61 +4084,18 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	size_t size;
 	uint32_t _flags;
 	uint32_t type;
-	
-	const char *absolute = retrieve(hndl, app->regs.synthpod.json.urid,
-		&size, &type, &_flags);
 
-	if(!absolute)
+	const LV2_Atom_Tuple *graph_body = retrieve(hndl, app->regs.synthpod.graph.urid,
+		&size, &type, &_flags);
+	
+	if(!graph_body)
 		return LV2_STATE_ERR_UNKNOWN;
 
-	if(type != app->forge.Path)
+	if(type != app->forge.Tuple)
 		return LV2_STATE_ERR_BAD_TYPE;
 
 	if(!(_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
 		return LV2_STATE_ERR_BAD_FLAGS;
-
-	//printf("absolute: %s\n", absolute);
-
-	if(!ecore_file_exists(absolute)) // new project?
-	{
-		atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed);
-
-		return LV2_STATE_SUCCESS;
-	}
-
-	char *root_str = NULL;
-	FILE *f = fopen(absolute, "rb");
-	if(f)
-	{
-		fseek(f, 0, SEEK_END);
-		const size_t fsize = ftell(f);
-		fseek(f, 0, SEEK_SET);
-				
-		root_str = malloc(fsize + 1);
-		if(root_str)
-		{
-			if(fread(root_str, fsize, 1, f) == 1)
-			{
-				root_str[fsize] = '\0';
-				size = fsize + 1;
-			}
-			else // read failed
-			{
-				free(root_str);
-				root_str = NULL;
-			}
-		}
-		fclose(f);
-	}
-
-	if(!root_str)
-		return LV2_STATE_ERR_UNKNOWN;
-
-	cJSON *root_json = cJSON_Parse(root_str);
-	free(root_str);
-
-	if(!root_json)
-		return LV2_STATE_ERR_UNKNOWN;
 
 	// remove existing modules
 	int num_mods = app->num_mods;
@@ -3902,19 +4105,28 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	for(int m=0; m<num_mods; m++)
 		_sp_app_mod_del(app, app->mods[m]);
 
-	// iterate over mods, create and apply states
-	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;
-		mod_json;
-		mod_json = mod_json->next)
+	LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, iter)
 	{
-		const cJSON *mod_uri_json = cJSON_GetObjectItem(mod_json, "uri");
-		const cJSON *mod_uid_json = cJSON_GetObjectItem(mod_json, "uid");
-		if(!mod_uri_json || !mod_uid_json)
+		const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)iter;
+
+		if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
+			|| !mod_obj->body.otype)
 			continue;
 
-		const char *mod_uri_str = mod_uri_json->valuestring;
-		u_id_t mod_uid = mod_uid_json->valueint;
+		const LV2_Atom_Int *mod_index = NULL;
+		const LV2_Atom_Bool *mod_selected = NULL;
+		LV2_Atom_Object_Query mod_q[] = {
+			{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
+			{ app->regs.synthpod.module_selected.urid, (const LV2_Atom **)&mod_selected },
+			{ 0, NULL }
+		};
+		lv2_atom_object_query(mod_obj, mod_q);
+	
+		if(!mod_index || (mod_index->atom.type != app->forge.Int) )
+			continue;
 
+		const char *mod_uri_str = app->driver->unmap->unmap(app->driver->unmap->handle, mod_obj->body.otype);
+		const u_id_t mod_uid = mod_index->body;
 		mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_uid);
 		if(!mod)
 			continue;
@@ -3924,10 +4136,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 
-		const cJSON *mod_selected_json = cJSON_GetObjectItem(mod_json, "selected");
-		mod->selected = mod_selected_json
-			? mod_selected_json->type == cJSON_True
-			: 0;
+		mod->selected = mod_selected && (mod_selected->atom.type == app->forge.Bool) ? mod_selected->body : 0;
 
 		if(mod->uid > app->uid - 1)
 			app->uid = mod->uid + 1;
@@ -3961,31 +4170,53 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	// sort ordered list
 	qsort(app->ords, app->num_mods, sizeof(mod_t *), _mod_sort);
 
-	// iterate over mods and their ports
-	for(cJSON *mod_json = cJSON_GetObjectItem(root_json, "items")->child;
-		mod_json;
-		mod_json = mod_json->next)
+	LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, iter)
 	{
-		const cJSON *mod_uid_json = cJSON_GetObjectItem(mod_json, "uid");
-		if(!mod_uid_json)
+		const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)iter;
+
+		if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
+			|| !mod_obj->body.otype)
 			continue;
 
-		u_id_t mod_uid = mod_uid_json->valueint;
+		const LV2_Atom_Int *mod_index = NULL;
+		LV2_Atom_Object_Query mod_q[] = {
+			{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
+			{ 0, NULL }
+		};
+		lv2_atom_object_query(mod_obj, mod_q);
+	
+		if(!mod_index || (mod_index->atom.type != app->forge.Int) )
+			continue;
 
+		const u_id_t mod_uid = mod_index->body;
 		mod_t *mod = _sp_app_mod_get(app, mod_uid);
 		if(!mod)
 			continue;
 
-		// iterate over ports
-		for(cJSON *port_json = cJSON_GetObjectItem(mod_json, "ports")->child;
-			port_json;
-			port_json = port_json->next)
+		LV2_ATOM_OBJECT_FOREACH(mod_obj, item)
 		{
-			const cJSON *port_symbol_json = cJSON_GetObjectItem(port_json, "symbol");
-			if(!port_symbol_json)
+			const LV2_Atom_Object *port_obj = (const LV2_Atom_Object *)&item->value;
+
+			if(  (item->key != app->regs.core.port.urid)
+				|| !lv2_atom_forge_is_object_type(&app->forge, port_obj->atom.type)
+				|| (port_obj->body.otype != app->regs.core.Port.urid) )
 				continue;
 
-			const char *port_symbol_str = port_symbol_json->valuestring;
+			const LV2_Atom_String *port_symbol = NULL;
+			const LV2_Atom_Bool *port_selected = NULL;
+			const LV2_Atom_Bool *port_monitored = NULL;
+			LV2_Atom_Object_Query port_q[] = {
+				{ app->regs.core.symbol.urid, (const LV2_Atom **)&port_symbol },
+				{ app->regs.synthpod.port_selected.urid, (const LV2_Atom **)&port_selected },
+				{ app->regs.synthpod.port_selected.urid, (const LV2_Atom **)&port_monitored },
+				{ 0, NULL }
+			};
+			lv2_atom_object_query(port_obj, port_q);
+
+			if(!port_symbol || (port_symbol->atom.type != app->forge.String) )
+				continue;
+
+			const char *port_symbol_str = LV2_ATOM_BODY_CONST(port_symbol);
 
 			for(unsigned i=0; i<mod->num_ports; i++)
 			{
@@ -3998,26 +4229,33 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 				if(strcmp(port_symbol_str, lilv_node_as_string(port_symbol_node)))
 					continue;
 
-				const cJSON *port_selected_json = cJSON_GetObjectItem(port_json, "selected");
-				port->selected = port_selected_json
-					? port_selected_json->type == cJSON_True
-					: 0;
-				const cJSON *port_monitored_json = cJSON_GetObjectItem(port_json, "monitored");
-				port->monitored = port_monitored_json
-					? port_monitored_json->type == cJSON_True
-					: 1;
+				port->selected = port_selected && (port_selected->atom.type == app->forge.Bool) ? port_selected->body : 0;
+				port->monitored = port_monitored && (port_monitored->atom.type == app->forge.Bool) ? port_monitored->body : 0;
 
-				for(cJSON *source_json = cJSON_GetObjectItem(port_json, "sources")->child;
-					source_json;
-					source_json = source_json->next)
+				LV2_ATOM_OBJECT_FOREACH(port_obj, sub)
 				{
-					const cJSON *source_uid_json = cJSON_GetObjectItem(source_json, "uid");
-					const cJSON *source_symbol_json = cJSON_GetObjectItem(source_json, "symbol");
-					if(!source_uid_json || !source_symbol_json)
+					const LV2_Atom_Object *source_obj = (const LV2_Atom_Object *)&sub->value;
+
+					if(  (sub->key != app->regs.core.port.urid)
+						|| !lv2_atom_forge_is_object_type(&app->forge, source_obj->atom.type)
+						|| (source_obj->body.otype != app->regs.core.Port.urid) )
 						continue;
 
-					uint32_t source_uid = source_uid_json->valueint;
-					const char *source_symbol_str = source_symbol_json->valuestring;
+					const LV2_Atom_String *source_symbol = NULL;
+					const LV2_Atom_Int *source_index = NULL;
+					LV2_Atom_Object_Query source_q[] = {
+						{ app->regs.core.symbol.urid, (const LV2_Atom **)&source_symbol },
+						{ app->regs.core.index.urid, (const LV2_Atom **)&source_index },
+						{ 0, NULL }
+					};
+					lv2_atom_object_query(source_obj, source_q);
+
+					if(  !source_symbol || (source_symbol->atom.type != app->forge.String)
+						|| !source_index || (source_index->atom.type != app->forge.Int) )
+						continue;
+
+					const uint32_t source_uid = source_index->body;
+					const char *source_symbol_str = LV2_ATOM_BODY_CONST(source_symbol);
 
 					mod_t *source = _sp_app_mod_get(app, source_uid);
 					if(!source)
@@ -4041,7 +4279,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			}
 		}
 	}
-	cJSON_Delete(root_json);
 
 	atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed);
 
