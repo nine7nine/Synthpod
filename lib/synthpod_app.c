@@ -2295,6 +2295,17 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	else
 	{
 		app->world = lilv_world_new();
+		if(!app->world)
+		{
+			free(app);
+			return NULL;
+		}
+		LilvNode *node_false = lilv_new_bool(app->world, false);
+		if(node_false)
+		{
+			lilv_world_set_option(app->world, LILV_OPTION_DYN_MANIFEST, node_false);
+			lilv_node_free(node_false);
+		}
 		lilv_world_load_all(app->world);
 		LilvNode *synthpod_bundle = lilv_new_uri(app->world, "file://"SYNTHPOD_BUNDLE_DIR"/");
 		if(synthpod_bundle)

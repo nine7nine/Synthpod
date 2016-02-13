@@ -6105,6 +6105,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			free(ui);
 			return NULL;
 		}
+		LilvNode *node_false = lilv_new_bool(ui->world, false);
+		if(node_false)
+		{
+			lilv_world_set_option(ui->world, LILV_OPTION_DYN_MANIFEST, node_false);
+			lilv_node_free(node_false);
+		}
 		lilv_world_load_all(ui->world);
 		LilvNode *synthpod_bundle = lilv_new_uri(ui->world, "file://"SYNTHPOD_BUNDLE_DIR"/");
 		if(synthpod_bundle)
