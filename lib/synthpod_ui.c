@@ -3956,7 +3956,7 @@ _modgrid_changed(void *data, Evas_Object *obj, void *event_info)
 	evas_object_geometry_get(ui->modgrid, NULL, NULL, &w, &h);
 
 	const int iw = w / 3; //FIXME make this configurable
-	const int ih = (h - 20) / 1; //FIXME make this configurable
+	const int ih = (h - 20) / 2; //FIXME make this configurable
 	elm_gengrid_item_size_set(ui->modgrid, iw, ih);
 }
 
