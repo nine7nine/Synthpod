@@ -143,6 +143,8 @@ struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
 	int selected;
+	int visible;
+	int embedded;
 
 	bool delete_request;
 	bool bypassed;
@@ -315,7 +317,7 @@ struct _from_ui_t {
 	from_ui_cb_t cb;
 };
 
-#define FROM_UI_NUM 17
+#define FROM_UI_NUM 19
 static from_ui_t from_uis [FROM_UI_NUM];
 
 static const port_driver_t control_port_driver;
@@ -1772,6 +1774,80 @@ _sp_app_from_ui_module_selected(sp_app_t *app, const LV2_Atom *atom)
 }
 
 static bool
+_sp_app_from_ui_module_visible(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_visible_t *visible = (const transmit_module_visible_t *)atom;
+
+	mod_t *mod = _sp_app_mod_get(app, visible->uid.body);
+	if(!mod)
+		return advance_ui[app->block_state];
+
+	switch(visible->state.body)
+	{
+		case -1: // query
+		{
+			// signal ui
+			size_t size = sizeof(transmit_module_visible_t);
+			transmit_module_visible_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_visible_fill(&app->regs, &app->forge, trans, size,
+					mod->uid, mod->visible ? 1 : 0, mod->visible);
+				_sp_app_to_ui_advance(app, size);
+			}
+			break;
+		}
+		case 0: // deselect
+			mod->visible = 0;
+			break;
+		case 1: // select
+			mod->visible = visible->urid.body;
+			break;
+	}
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_module_embedded(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_embedded_t *embedded = (const transmit_module_embedded_t *)atom;
+
+	mod_t *mod = _sp_app_mod_get(app, embedded->uid.body);
+	if(!mod)
+		return advance_ui[app->block_state];
+
+	switch(embedded->state.body)
+	{
+		case -1: // query
+		{
+			// signal ui
+			size_t size = sizeof(transmit_module_embedded_t);
+			transmit_module_embedded_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_embedded_fill(&app->regs, &app->forge, trans, size,
+					mod->uid, mod->embedded);
+				_sp_app_to_ui_advance(app, size);
+			}
+			break;
+		}
+		case 0: // deselect
+			mod->embedded = 0;
+			break;
+		case 1: // select
+			mod->embedded = 1;
+			break;
+	}
+
+	return advance_ui[app->block_state];
+}
+
+static bool
 _sp_app_from_ui_port_connected(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2352,6 +2428,12 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 		from_uis[ptr].protocol = app->regs.synthpod.module_selected.urid;
 		from_uis[ptr++].cb = _sp_app_from_ui_module_selected;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_visible.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_visible;
+
+		from_uis[ptr].protocol = app->regs.synthpod.module_embedded.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_module_embedded;
 
 		from_uis[ptr].protocol = app->regs.synthpod.port_connected.urid;
 		from_uis[ptr++].cb = _sp_app_from_ui_port_connected;
@@ -4000,6 +4082,18 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 							&& lv2_atom_forge_bool(forge, mod->selected);
 					}
 
+					if(ref && mod->visible)
+					{
+						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_visible.urid)
+							&& lv2_atom_forge_urid(forge, mod->visible);
+					}
+
+					if(ref && mod->embedded)
+					{
+						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_embedded.urid)
+							&& lv2_atom_forge_bool(forge, mod->embedded);
+					}
+
 					for(unsigned i=0; i<mod->num_ports; i++)
 					{
 						port_t *port = &mod->ports[i];
@@ -4126,9 +4220,13 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 		const LV2_Atom_Int *mod_index = NULL;
 		const LV2_Atom_Bool *mod_selected = NULL;
+		const LV2_Atom_Bool *mod_visible = NULL;
+		const LV2_Atom_Bool *mod_embedded = NULL;
 		LV2_Atom_Object_Query mod_q[] = {
 			{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
 			{ app->regs.synthpod.module_selected.urid, (const LV2_Atom **)&mod_selected },
+			{ app->regs.synthpod.module_visible.urid, (const LV2_Atom **)&mod_visible },
+			{ app->regs.synthpod.module_embedded.urid, (const LV2_Atom **)&mod_embedded },
 			{ 0, NULL }
 		};
 		lv2_atom_object_query(mod_obj, mod_q);
@@ -4147,7 +4245,12 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 
-		mod->selected = mod_selected && (mod_selected->atom.type == app->forge.Bool) ? mod_selected->body : 0;
+		mod->selected = mod_selected && (mod_selected->atom.type == app->forge.Bool)
+			? mod_selected->body : 0;
+		mod->visible = mod_visible && (mod_visible->atom.type == app->forge.URID)
+			? mod_visible->body : 0;
+		mod->embedded = mod_embedded && (mod_embedded->atom.type == app->forge.Bool)
+			? mod_embedded->body : 0;
 
 		if(mod->uid > app->uid - 1)
 			app->uid = mod->uid + 1;

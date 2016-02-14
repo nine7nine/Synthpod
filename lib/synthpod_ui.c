@@ -84,6 +84,7 @@ struct _plug_info_t {
 
 struct _mod_ui_t {
 	const LilvUI *ui;
+	LV2_URID urid;
 	Eina_Module *lib;
 	const LV2UI_Descriptor *descriptor;
 	LV2UI_Handle handle;
@@ -375,7 +376,7 @@ _note(uint8_t val, uint8_t *octave)
 	return keys[val % 12];
 }
 
-#define FROM_APP_NUM 14
+#define FROM_APP_NUM 16
 static from_app_t from_apps [FROM_APP_NUM];
 
 static int
@@ -1417,6 +1418,36 @@ _ui_mod_selected_request(mod_t *mod)
 	}
 }
 
+static inline void
+_ui_mod_visible_request(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+
+	// request module visible state
+	size_t size = sizeof(transmit_module_visible_t);
+	transmit_module_visible_t *trans0 = _sp_ui_to_app_request(ui, size);
+	if(trans0)
+	{
+		_sp_transmit_module_visible_fill(&ui->regs, &ui->forge, trans0, size, mod->uid, -1, 0);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static inline void
+_ui_mod_embedded_request(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+
+	// request module embedded state
+	size_t size = sizeof(transmit_module_embedded_t);
+	transmit_module_embedded_t *trans0 = _sp_ui_to_app_request(ui, size);
+	if(trans0)
+	{
+		_sp_transmit_module_embedded_fill(&ui->regs, &ui->forge, trans0, size, mod->uid, -1);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
 static void //XXX check with _zero_writer_request/advance
 _ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
@@ -1707,6 +1738,36 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 	lilv_nodes_free(notifs);
 }
 
+static inline void
+_mod_visible_set(mod_t *mod, int state, LV2_URID urid)
+{
+	sp_ui_t *ui = mod->ui;
+
+	// set module visible state
+	const size_t size = sizeof(transmit_module_visible_t);
+	transmit_module_visible_t *trans1 = _sp_ui_to_app_request(ui, size);
+	if(trans1)
+	{
+		_sp_transmit_module_visible_fill(&ui->regs, &ui->forge, trans1, size, mod->uid, state, urid);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static inline void
+_mod_embedded_set(mod_t *mod, int state)
+{
+	sp_ui_t *ui = mod->ui;
+
+	// set module embedded state
+	const size_t size = sizeof(transmit_module_embedded_t);
+	transmit_module_embedded_t *trans1 = _sp_ui_to_app_request(ui, size);
+	if(trans1)
+	{
+		_sp_transmit_module_embedded_fill(&ui->regs, &ui->forge, trans1, size, mod->uid, state);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
 static void
 _show_ui_hide(mod_t *mod)
 {
@@ -1749,6 +1810,8 @@ _show_ui_hide(mod_t *mod)
 	mod_ui->show.show_iface = NULL;
 
 	mod->mod_ui = NULL;
+
+	_mod_visible_set(mod, 0, 0);
 }
 
 static Eina_Bool
@@ -1842,6 +1905,8 @@ _show_ui_show(mod_t *mod)
 	// start animator
 	if(mod_ui->show.idle_iface)
 		mod_ui->show.anim = ecore_animator_add(_show_ui_animator, mod);
+
+	_mod_visible_set(mod, 1, mod_ui->urid);
 }
 
 static void
@@ -1949,6 +2014,8 @@ _kx_ui_show(mod_t *mod)
 
 	// start animator
 	mod_ui->kx.anim = ecore_animator_add(_kx_ui_animator, mod);
+
+	_mod_visible_set(mod, 1, mod_ui->urid);
 }
 
 static void
@@ -1962,6 +2029,8 @@ _kx_ui_hide(mod_t *mod)
 
 	// cleanup
 	_kx_ui_cleanup(mod);
+
+	_mod_visible_set(mod, 0, 0);
 }
  
 // plugin ui has been closed manually
@@ -2041,6 +2110,8 @@ _x11_ui_hide(mod_t *mod)
 	mod_ui->x11.idle_iface = NULL;
 
 	mod->mod_ui = NULL;
+
+	_mod_visible_set(mod, 0, 0);
 }
 
 static void
@@ -2076,6 +2147,8 @@ _eo_ui_hide(mod_t *mod)
 	mod_ui->eo.win = NULL;
 
 	mod->mod_ui = NULL;
+
+	_mod_visible_set(mod, 0, 0);
 }
 
 static void
@@ -2184,6 +2257,8 @@ _eo_ui_show(mod_t *mod)
 		} // widget
 
 		evas_object_show(win);
+
+		_mod_visible_set(mod, 1, mod_ui->urid);
 	} // win
 }
 
@@ -2288,6 +2363,8 @@ _x11_ui_show(mod_t *mod)
 	// start animator
 	if(mod_ui->x11.idle_iface)
 		mod_ui->x11.anim = ecore_animator_add(_x11_ui_animator, mod);
+	
+	_mod_visible_set(mod, 1, mod_ui->urid);
 }
 
 //XXX do code cleanup from here upwards
@@ -2953,6 +3030,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 			mod->mod_uis = eina_list_append(mod->mod_uis, mod_ui);
 			mod_ui->ui = lui;
+			mod_ui->urid = ui->driver->map->map(ui->driver->map->handle,
+				lilv_node_as_string(lilv_ui_get_uri(lui)));
 			mod_ui->type = MOD_UI_TYPE_UNSUPPORTED;
 
 			// test for EoUI
@@ -3052,6 +3131,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	// request selected state
 	_ui_mod_selected_request(mod);
+	_ui_mod_visible_request(mod);
+	_ui_mod_embedded_request(mod);
 
 	//TODO save visibility in synthpod state?
 	//if(!mod->eo.ui && mod->kx.ui)
@@ -3747,10 +3828,16 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 		printf("_modlist_activated: %p %p %u\n", ui, mod, mod->uid);
 
 		if(mod->std.grid)
+		{
 			elm_object_item_del(mod->std.grid);
+			_mod_embedded_set(mod, 0);
+		}
 		else
+		{
 			mod->std.grid = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
 				NULL, NULL);
+			_mod_embedded_set(mod, 1);
+		}
 	}
 }
 
@@ -3918,14 +4005,8 @@ _mod_close_click(void *data, Evas_Object *lay, const char *emission, const char 
 }
 
 static void
-_mod_ui_toggle_chosen(void *data, Evas_Object *obj, void *event_info)
+_mod_ui_toggle_raw(mod_t *mod, mod_ui_t *mod_ui)
 {
-	mod_ui_t *mod_ui = data;
-	mod_t *mod = evas_object_data_get(obj, "module");
-	sp_ui_t *ui = mod->ui;
-
-	evas_object_hide(ui->selector);
-
 	mod->mod_ui = mod_ui;
 
 	switch(mod_ui->type)
@@ -3946,6 +4027,18 @@ _mod_ui_toggle_chosen(void *data, Evas_Object *obj, void *event_info)
 				_x11_ui_show(mod);
 			break;
 	}
+}
+
+static void
+_mod_ui_toggle_chosen(void *data, Evas_Object *obj, void *event_info)
+{
+	mod_ui_t *mod_ui = data;
+	mod_t *mod = evas_object_data_get(obj, "module");
+	sp_ui_t *ui = mod->ui;
+
+	evas_object_hide(ui->selector);
+
+	_mod_ui_toggle_raw(mod, mod_ui);
 }
 
 static void
@@ -5848,6 +5941,48 @@ _sp_ui_from_app_module_selected(sp_ui_t *ui, const LV2_Atom *atom)
 }
 
 static void
+_sp_ui_from_app_module_visible(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_visible_t *trans = (const transmit_module_visible_t *)atom;
+	mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+	if(!mod)
+		return;
+
+	if(trans->state.body == 1)
+	{
+		Eina_List *l;
+		mod_ui_t *mod_ui;
+		EINA_LIST_FOREACH(mod->mod_uis, l, mod_ui)
+		{
+			if(mod_ui->urid == trans->urid.body)
+			{
+				_mod_ui_toggle_raw(mod, mod_ui);
+				break;
+			}
+		}
+	}
+}
+
+static void
+_sp_ui_from_app_module_embedded(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_embedded_t *trans = (const transmit_module_embedded_t *)atom;
+	mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+	if(!mod)
+		return;
+
+	if(mod->std.grid && !trans->state.body)
+		elm_object_item_del(mod->std.grid);
+	else if(!mod->std.grid && trans->state.body)
+		mod->std.grid = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+			NULL, NULL);
+}
+
+static void
 _sp_ui_from_app_port_connected(sp_ui_t *ui, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -6771,6 +6906,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 		from_apps[ptr].protocol = ui->regs.synthpod.module_selected.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_module_selected;
+
+		from_apps[ptr].protocol = ui->regs.synthpod.module_visible.urid;
+		from_apps[ptr++].cb = _sp_ui_from_app_module_visible;
+
+		from_apps[ptr].protocol = ui->regs.synthpod.module_embedded.urid;
+		from_apps[ptr++].cb = _sp_ui_from_app_module_embedded;
 
 		from_apps[ptr].protocol = ui->regs.synthpod.port_connected.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_port_connected;
