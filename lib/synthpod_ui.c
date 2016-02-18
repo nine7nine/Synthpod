@@ -4248,7 +4248,12 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 				&ui->forge, trans, mod->uid, index, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
+			{
 				strcpy(LV2_ATOM_BODY(atom), path);
+
+				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
+					ui->regs.port.event_transfer.urid, &trans->obj);
+			}
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
@@ -4288,8 +4293,12 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
 				&ui->forge, trans, mod->uid, index, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
-			if(atom)
+			if(atom) {
 				strcpy(LV2_ATOM_BODY(atom), entered);
+
+				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
+					ui->regs.port.event_transfer.urid, &trans->obj);
+			}
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
@@ -4349,6 +4358,9 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 					((LV2_Atom_Double *)atom)->body = value;
 				else if(prop->type_urid == ui->forge.URID)
 					((LV2_Atom_URID *)atom)->body = value;
+
+				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
+					ui->regs.port.event_transfer.urid, &trans->obj);
 			}
 			_sp_ui_to_app_advance(ui, len);
 		}
@@ -4386,7 +4398,12 @@ _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 				&ui->forge, trans, mod->uid, index, body_size,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
+			{
 				((LV2_Atom_Bool *)atom)->body = value;
+
+				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
+					ui->regs.port.event_transfer.urid, &trans->obj);
+			}
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}
@@ -4452,6 +4469,9 @@ _property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
 				else if(prop->type_urid == ui->forge.Double)
 					((LV2_Atom_Double *)atom)->body = value;
 				//TODO do other types
+
+				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
+					ui->regs.port.event_transfer.urid, &trans->obj);
 			}
 			_sp_ui_to_app_advance(ui, len);
 		}
