@@ -4227,7 +4227,7 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 	//printf("_property_path_chosen: %s\n", path);
 
 	size_t strsize = strlen(path) + 1;
-	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(strsize);
 
 	for(unsigned index=0; index<mod->num_ports; index++)
 	{
@@ -4241,11 +4241,11 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 			continue; // skip
 		}
 
-		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		transfer_patch_set_obj_t *trans = malloc(len);
 		if(trans)
 		{
-			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
-				&ui->forge, trans, mod->uid, index, strsize,
+			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
+				&ui->forge, trans, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
 			{
@@ -4254,7 +4254,7 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
 			}
-			_sp_ui_to_app_advance(ui, len);
+			free(trans);
 		}
 	}
 }
@@ -4273,7 +4273,7 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 	//printf("_property_string_activated: %s\n", entered);
 
 	size_t strsize = strlen(entered) + 1;
-	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(strsize);
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(strsize);
 
 	for(unsigned index=0; index<mod->num_ports; index++)
 	{
@@ -4287,11 +4287,11 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 			continue; // skip
 		}
 
-		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		transfer_patch_set_obj_t *trans = malloc(len);
 		if(trans)
 		{
-			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
-				&ui->forge, trans, mod->uid, index, strsize,
+			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
+				&ui->forge, trans, strsize,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom) {
 				strcpy(LV2_ATOM_BODY(atom), entered);
@@ -4299,7 +4299,7 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
 			}
-			_sp_ui_to_app_advance(ui, len);
+			free(trans);
 		}
 	}
 }
@@ -4326,7 +4326,7 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 		body_size = sizeof(int64_t);
 	}
 
-	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(body_size);
 
 	for(unsigned index=0; index<mod->num_ports; index++)
 	{
@@ -4340,11 +4340,11 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 			continue; // skip
 		}
 
-		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		transfer_patch_set_obj_t *trans = malloc(len);
 		if(trans)
 		{
-			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
-				&ui->forge, trans, mod->uid, index, body_size,
+			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
+				&ui->forge, trans, body_size,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
 			{
@@ -4362,7 +4362,7 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
 			}
-			_sp_ui_to_app_advance(ui, len);
+			free(trans);
 		}
 	}
 }
@@ -4377,7 +4377,7 @@ _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 	int value = smart_toggle_value_get(obj);
 
 	size_t body_size = sizeof(int32_t);
-	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(body_size);
 
 	for(unsigned index=0; index<mod->num_ports; index++)
 	{
@@ -4391,11 +4391,11 @@ _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 			continue; // skip
 		}
 
-		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		transfer_patch_set_obj_t *trans = malloc(len);
 		if(trans)
 		{
-			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
-				&ui->forge, trans, mod->uid, index, body_size,
+			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
+				&ui->forge, trans, body_size,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
 			{
@@ -4404,7 +4404,7 @@ _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
 			}
-			_sp_ui_to_app_advance(ui, len);
+			free(trans);
 		}
 	}
 }
@@ -4436,7 +4436,7 @@ _property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
 	else if(prop->type_urid == ui->forge.Double)
 		body_size = sizeof(double);
 	//TODO do other types
-	size_t len = sizeof(transfer_patch_set_t) + lv2_atom_pad_size(body_size);
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(body_size);
 
 	for(unsigned index=0; index<mod->num_ports; index++)
 	{
@@ -4450,11 +4450,11 @@ _property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
 			continue; // skip
 		}
 
-		transfer_patch_set_t *trans = _sp_ui_to_app_request(ui, len);
+		transfer_patch_set_obj_t *trans = malloc(len);
 		if(trans)
 		{
-			LV2_Atom *atom = _sp_transfer_patch_set_fill(&ui->regs,
-				&ui->forge, trans, mod->uid, index, body_size,
+			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
+				&ui->forge, trans, body_size,
 				mod->subject, prop->tar_urid, prop->type_urid);
 			if(atom)
 			{
@@ -4473,7 +4473,7 @@ _property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
 			}
-			_sp_ui_to_app_advance(ui, len);
+			free(trans);
 		}
 	}
 }

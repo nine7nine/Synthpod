@@ -832,7 +832,7 @@ typedef struct _transfer_t transfer_t;
 typedef struct _transfer_float_t transfer_float_t;
 typedef struct _transfer_peak_t transfer_peak_t;
 typedef struct _transfer_atom_t transfer_atom_t;
-typedef struct _transfer_patch_set_t transfer_patch_set_t;
+typedef struct _transfer_patch_set_obj_t transfer_patch_set_obj_t;
 typedef struct _transfer_patch_get_t transfer_patch_get_t;
 typedef struct _transfer_patch_get_all_t transfer_patch_get_all_t;
 
@@ -859,8 +859,7 @@ struct _transfer_atom_t {
 	LV2_Atom atom [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
-struct _transfer_patch_set_t {
-	transfer_t transfer _ATOM_ALIGNED;
+struct _transfer_patch_set_obj_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
 	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
 	LV2_URID subj_val _ATOM_ALIGNED;
@@ -1344,19 +1343,13 @@ _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *tra
 }
 
 static inline LV2_Atom *
-_sp_transfer_patch_set_fill(reg_t *regs, LV2_Atom_Forge *forge,
-	transfer_patch_set_t *trans, u_id_t module_uid, uint32_t port_index,
+_sp_transfer_patch_set_obj_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transfer_patch_set_obj_t *trans,
 	uint32_t body_size, LV2_URID subject, LV2_URID property, LV2_URID type)
 {
 	trans = ASSUME_ALIGNED(trans);
 
-	uint32_t trans_size = sizeof(transfer_patch_set_t)
-		+ lv2_atom_pad_size(body_size);
-	uint32_t obj_size = trans_size
-		- offsetof(transfer_patch_set_t, obj.body);
-
-	_sp_transfer_fill(regs, forge, &trans->transfer, trans_size,
-		regs->port.event_transfer.urid, module_uid, port_index);
+	uint32_t obj_size = sizeof(transfer_patch_set_obj_t) + body_size - sizeof(LV2_Atom);
 
 	trans->obj.atom.size = obj_size;
 	trans->obj.atom.type = forge->Object;
