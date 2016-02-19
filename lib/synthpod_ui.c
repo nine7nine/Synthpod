@@ -1612,11 +1612,32 @@ static void
 _ext_ui_write_function(LV2UI_Controller controller, uint32_t port,
 	uint32_t size, uint32_t protocol, const void *buffer)
 {
-	// to rt-thread
-	_ui_write_function(controller, port, size, protocol, buffer);
+	mod_t *mod = controller;
+	sp_ui_t *ui = mod->ui;
 
-	// to StdUI FIXME is this necessary?
+	// to StdUI
 	_std_port_event(controller, port, size, protocol, buffer);
+
+	// to rt-thread
+	const LV2_Atom_Object *obj = buffer;
+	if(  lv2_atom_forge_is_object_type(&ui->forge, obj->atom.type)
+		&& ( (obj->body.otype == ui->regs.patch.set.urid)
+			|| (obj->body.otype == ui->regs.patch.put.urid)
+			|| (obj->body.otype == ui->regs.patch.patch.urid) ) ) //TODO support more patch messages
+	{
+		// set feedback block flag on object id
+		// TODO can we do this without a malloc?
+		LV2_Atom_Object *clone = malloc(size);
+		if(clone)
+		{
+			memcpy(clone, obj, size);
+			clone->body.id = ui->regs.synthpod.feedback_block.urid;
+			_ui_write_function(controller, port, size, protocol, clone);
+			free(clone);
+		}
+	}
+	else // no feedback block flag needed
+		_ui_write_function(controller, port, size, protocol, buffer);
 }
 
 static void
