@@ -115,7 +115,7 @@ _rt_thread(void *data, Eina_Thread thread)
 
 	struct timespec sleep_todo = {
 		.tv_sec = 0,
-		.tv_nsec = NANO_SECONDS / handle->srate * n_period
+		.tv_nsec = nanos_per_period * n_period
 	};
 
 	while(!atomic_load_explicit(&handle->kill, memory_order_relaxed))
