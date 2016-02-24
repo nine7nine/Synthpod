@@ -44,7 +44,7 @@ if(BUILD_JACK)
 	add_executable(synthpod.jack
 		synthpod_jack.c
 		synthpod_nsm.c
-		ext_urid.c)
+		symap.c)
 	target_link_libraries(synthpod.jack
 		${ECORE_CON_LDFLAGS}
 		${JACK_LIBS}
@@ -91,7 +91,7 @@ if(BUILD_ALSA)
 		pcmi.cpp
 		synthpod_alsa.c
 		synthpod_nsm.c
-		ext_urid.c)
+		symap.c)
 	target_link_libraries(synthpod.alsa
 		${ECORE_CON_LDFLAGS}
 		"-lasound" #FIXME
@@ -125,7 +125,7 @@ if(BUILD_DUMMY)
 	add_executable(synthpod.dummy
 		synthpod_dummy.c
 		synthpod_nsm.c
-		ext_urid.c)
+		symap.c)
 	target_link_libraries(synthpod.dummy
 		${ECORE_CON_LDFLAGS}
 		"-lm"

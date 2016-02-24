@@ -26,7 +26,7 @@
 
 #include <stdatomic.h>
 
-#include <ext_urid.h>
+#include <symap.h>
 #include <varchunk.h>
 #include <lv2_osc.h>
 #include <osc.h>
@@ -65,7 +65,10 @@ struct _light_sem_t {
 };
 
 struct _bin_t {
-	ext_urid_t *ext_urid;
+	Symap *symap;
+	LV2_URID_Map map;
+	LV2_URID_Unmap unmap;
+	atomic_flag map_lock;
 	
 	sp_app_t *app;
 	sp_app_driver_t app_driver;
@@ -437,6 +440,45 @@ _hide(void *data)
 	return 0;
 }
 
+static inline void
+_map_lock(bin_t *bin)
+{
+	while(atomic_flag_test_and_set_explicit(&bin->map_lock, memory_order_acquire))
+	{
+		// spin
+	}
+}
+
+static inline void
+_map_unlock(bin_t *bin)
+{
+	atomic_flag_clear_explicit(&bin->map_lock, memory_order_release);
+}
+
+static uint32_t
+_map(void *data, const char *uri)
+{
+	bin_t *bin = data;
+
+	_map_lock(bin);
+	const uint32_t urid = symap_map(bin->symap, uri);
+	_map_unlock(bin);
+	
+	return urid;
+}
+
+static const char *
+_unmap(void *data, uint32_t urid)
+{
+	bin_t *bin = data;
+
+	_map_lock(bin);
+	const char *uri = symap_unmap(bin->symap, urid);
+	_map_unlock(bin);
+	
+	return uri;
+}
+
 static void
 bin_init(bin_t *bin)
 {
@@ -449,9 +491,15 @@ bin_init(bin_t *bin)
 	bin->app_from_com = varchunk_new(CHUNK_SIZE);
 	bin->app_from_app = varchunk_new(CHUNK_SIZE);
 
-	bin->ext_urid = ext_urid_new();
-	LV2_URID_Map *map = ext_urid_map_get(bin->ext_urid);
-	LV2_URID_Unmap *unmap = ext_urid_unmap_get(bin->ext_urid);
+	bin->symap = symap_new();
+	atomic_flag_clear_explicit(&bin->map_lock, memory_order_relaxed);
+
+	bin->map.map = _map;
+	bin->map.handle = bin;
+	LV2_URID_Map *map = &bin->map;
+
+	bin->unmap.unmap = _unmap;
+	bin->unmap.handle = bin;
 
 	bin->log_entry = map->map(map->handle, LV2_LOG__Entry);
 	bin->log_error = map->map(map->handle, LV2_LOG__Error);
@@ -463,8 +511,8 @@ bin_init(bin_t *bin)
 	bin->log.printf = _log_printf;
 	bin->log.vprintf = _log_vprintf;
 	
-	bin->app_driver.map = map;
-	bin->app_driver.unmap = unmap;
+	bin->app_driver.map = &bin->map;
+	bin->app_driver.unmap = &bin->unmap;
 	bin->app_driver.log = &bin->log;
 	bin->app_driver.to_ui_request = _app_to_ui_request;
 	bin->app_driver.to_ui_advance = _app_to_ui_advance;
@@ -473,8 +521,8 @@ bin_init(bin_t *bin)
 	bin->app_driver.to_app_request = _worker_to_app_request;
 	bin->app_driver.to_app_advance = _worker_to_app_advance;
 
-	bin->ui_driver.map = map;
-	bin->ui_driver.unmap = unmap;
+	bin->ui_driver.map = &bin->map;
+	bin->ui_driver.unmap = &bin->unmap;
 	bin->ui_driver.log = &bin->log;
 	bin->ui_driver.to_app_request = _ui_to_app_request;
 	bin->ui_driver.to_app_advance = _ui_to_app_advance;
@@ -560,8 +608,8 @@ bin_deinit(bin_t *bin)
 	// synthpod deinit
 	sp_app_free(bin->app);
 
-	// ext_urid deinit
-	ext_urid_free(bin->ext_urid);
+	// symap deinit
+	symap_free(bin->symap);
 
 	// varchunk deinit
 	varchunk_free(bin->app_to_ui);
