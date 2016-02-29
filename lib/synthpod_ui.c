@@ -736,7 +736,7 @@ _mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
 			group->node = node;
 
 			*parent = elm_genlist_item_sorted_insert(mod->std.list,
-				ui->grpitc, group, NULL, ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
+				ui->grpitc, group, NULL, ELM_GENLIST_ITEM_GROUP, _grpitc_cmp, NULL, NULL);
 
 			if(*parent)
 			{
@@ -3608,8 +3608,55 @@ _patches_update(sp_ui_t *ui)
 static Eina_Bool
 _groups_foreach(const Eina_Hash *hash, const void *key, void *data, void *fdata)
 {
-	Elm_Object_Item *parent = data;
-	elm_genlist_item_expanded_set(parent, EINA_TRUE);
+	Elm_Object_Item *itm = data;
+	sp_ui_t *ui = fdata;
+	Elm_Object_Item *elmnt;
+	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
+
+	if(class == ui->grpitc) // is group
+	{
+		group_t *group = elm_object_item_data_get(itm);
+		mod_t *mod = group->mod;
+		
+		if(group->type == GROUP_TYPE_PORT)
+		{
+			Eina_List *l;
+			port_t *port;
+			EINA_LIST_FOREACH(group->children, l, port)
+			{
+				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->stditc, port, itm,
+					ELM_GENLIST_ITEM_NONE, _stditc_cmp, NULL, NULL);
+				if(elmnt)
+				{
+					_ui_port_tooltip_add(ui, elmnt, port);
+					elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+				}
+			}
+		}
+		else if(group->type == GROUP_TYPE_PROPERTY)
+		{
+			Eina_List *l;
+			property_t *prop;
+			EINA_LIST_FOREACH(group->children, l, prop)
+			{
+				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->propitc, prop, itm,
+					ELM_GENLIST_ITEM_NONE, _propitc_cmp, NULL, NULL);
+				if(elmnt)
+				{
+					int select_mode = prop->editable
+						? ( (prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
+							? ELM_OBJECT_SELECT_MODE_DEFAULT
+							: ELM_OBJECT_SELECT_MODE_NONE)
+						: ELM_OBJECT_SELECT_MODE_NONE;
+					elm_genlist_item_select_mode_set(elmnt, select_mode);
+					_ui_property_tooltip_add(ui, elmnt, prop);
+					prop->std.elmnt = elmnt;
+				}
+			}
+		}
+	}
+	else
+		elm_genlist_item_expanded_set(itm, EINA_TRUE);
 
 	return EINA_TRUE;
 }
@@ -3701,49 +3748,7 @@ _modgrid_expanded(void *data, Evas_Object *obj, void *event_info)
 
 	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
 
-	if(class == ui->grpitc) // is group
-	{
-		group_t *group = elm_object_item_data_get(itm);
-		mod_t *mod = group->mod;
-		
-		if(group->type == GROUP_TYPE_PORT)
-		{
-			Eina_List *l;
-			port_t *port;
-			EINA_LIST_FOREACH(group->children, l, port)
-			{
-				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->stditc, port, itm,
-					ELM_GENLIST_ITEM_NONE, _stditc_cmp, NULL, NULL);
-				if(elmnt)
-				{
-					_ui_port_tooltip_add(ui, elmnt, port);
-					elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
-				}
-			}
-		}
-		else if(group->type == GROUP_TYPE_PROPERTY)
-		{
-			Eina_List *l;
-			property_t *prop;
-			EINA_LIST_FOREACH(group->children, l, prop)
-			{
-				elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->propitc, prop, itm,
-					ELM_GENLIST_ITEM_NONE, _propitc_cmp, NULL, NULL);
-				if(elmnt)
-				{
-					int select_mode = prop->editable
-						? ( (prop->type_urid == ui->forge.String) || (prop->type_urid == ui->forge.URI)
-							? ELM_OBJECT_SELECT_MODE_DEFAULT
-							: ELM_OBJECT_SELECT_MODE_NONE)
-						: ELM_OBJECT_SELECT_MODE_NONE;
-					elm_genlist_item_select_mode_set(elmnt, select_mode);
-					_ui_property_tooltip_add(ui, elmnt, prop);
-					prop->std.elmnt = elmnt;
-				}
-			}
-		}
-	}
-	else if(class == ui->psetitc) // is presets item
+	if(class == ui->psetitc) // is presets item
 	{
 		mod_t *mod = elm_object_item_data_get(itm);
 
@@ -5430,7 +5435,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
 
 			// expand all groups by default
-			eina_hash_foreach(mod->groups, _groups_foreach, NULL);
+			eina_hash_foreach(mod->groups, _groups_foreach, ui);
 
 			// request all properties
 			size_t len = sizeof(transfer_patch_get_t);
