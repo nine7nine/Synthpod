@@ -306,13 +306,13 @@ struct _sp_ui_t {
 	int *colors_vec;
 
 	Evas_Object *mainpane;
-	Evas_Object *leftpane;
-	Evas_Object *plugpane;
 
+	Evas_Object *plugwin;
 	Evas_Object *plugbox;
 	Evas_Object *plugentry;
 	Evas_Object *pluglist;
 
+	Evas_Object *patchwin;
 	Evas_Object *patchbox;
 	Evas_Object *patchbar;
 	Evas_Object *matrix;
@@ -5644,8 +5644,8 @@ _menu_fileselector_del(void *data, Evas_Object *obj, void *event_info)
 	ui->fileselector = NULL;
 }
 
-static inline void
-_menu_fileselector(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_Smart_Cb cb)
+static inline Evas_Object *
+_menu_fileselector_new(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_Smart_Cb cb)
 {
 	Evas_Object *win = elm_win_add(ui->win, title, ELM_WIN_BASIC);
 	if(win)
@@ -5682,9 +5682,11 @@ _menu_fileselector(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_Smart
 			evas_object_show(fileselector);
 			elm_win_resize_object_add(win, fileselector);
 		} // widget
+
+		return win;
 	}
 
-	ui->fileselector = win;
+	return NULL;
 }
 
 static void
@@ -5723,7 +5725,7 @@ _menu_open_fileselector(void *data, Evas_Object *obj, void *event_info)
 	sp_ui_t *ui = data;
 
 	if(!ui->fileselector)
-		_menu_fileselector(ui, "Open / Import", EINA_FALSE, _menu_open);
+		ui->fileselector = _menu_fileselector_new(ui, "Open / Import", EINA_FALSE, _menu_open);
 }
 
 static void
@@ -5751,7 +5753,7 @@ _menu_save_as_fileselector(void *data, Evas_Object *obj, void *event_info)
 	sp_ui_t *ui = data;
 
 	if(!ui->fileselector)
-		_menu_fileselector(ui, "Save as / Export", EINA_TRUE, _menu_save_as);
+		ui->fileselector = _menu_fileselector_new(ui, "Save as / Export", EINA_TRUE, _menu_save_as);
 }
 
 static void
@@ -5785,62 +5787,6 @@ _menu_about(void *data, Evas_Object *obj, void *event_info)
 		evas_object_hide(ui->popup);
 	else
 		evas_object_show(ui->popup);
-}
-
-static void
-_theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	sp_ui_t *ui = data;
-	const Evas_Event_Key_Down *ev = event_info;
-
-	const Eina_Bool cntrl = evas_key_modifier_is_set(ev->modifiers, "Control");
-	const Eina_Bool shift = evas_key_modifier_is_set(ev->modifiers, "Shift");
-	(void)shift;
-	
-	//printf("_theme_key_down: %s %i %i\n", ev->key, cntrl, shift);
-
-	if(cntrl)
-	{
-		if(!strcmp(ev->key, "n")
-			&& (ui->driver->features & SP_UI_FEATURE_NEW) )
-		{
-			_menu_new(ui, NULL, NULL);
-		}
-		else if(!strcmp(ev->key, "o")
-			&& (ui->driver->features & SP_UI_FEATURE_OPEN) )
-		{
-			_menu_open_fileselector(ui, NULL, NULL);
-		}
-		else if(!strcmp(ev->key, "i")
-			&& (ui->driver->features & SP_UI_FEATURE_IMPORT_FROM) )
-		{
-			_menu_open_fileselector(ui, NULL, NULL);
-		}
-		else if(!strcmp(ev->key, "s")
-			&& (ui->driver->features & SP_UI_FEATURE_SAVE) )
-		{
-			_menu_save(ui, NULL, NULL);
-		}
-		else if(!strcmp(ev->key, "S")
-			&& (ui->driver->features & SP_UI_FEATURE_SAVE_AS) )
-		{
-			_menu_save_as_fileselector(ui, NULL, NULL);
-		}
-		else if(!strcmp(ev->key, "e")
-			&& (ui->driver->features & SP_UI_FEATURE_EXPORT_TO) )
-		{
-			_menu_save_as_fileselector(ui, NULL, NULL);
-		}
-		else if(!strcmp(ev->key, "q")
-			&& (ui->driver->features & SP_UI_FEATURE_CLOSE) )
-		{
-			_menu_close(ui, NULL, NULL);
-		}
-		else if(!strcmp(ev->key, "h"))
-		{
-			_menu_about(ui, NULL, NULL);
-		}
-	}
 }
 
 static void
@@ -5898,6 +5844,298 @@ _patchbar_selected(void *data, Evas_Object *obj, void *event_info)
 	}
 	
 	_patches_update(ui);
+}
+
+static void
+_menu_matrix_del(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	ui->patchwin = NULL;
+	ui->patchbox = NULL;
+	ui->patchbar = NULL;
+	ui->matrix_audio = NULL;
+	ui->matrix_control = NULL;
+	ui->matrix_cv = NULL;
+	ui->matrix_event = NULL;
+	ui->matrix_atom = NULL;
+	ui->matrix_atom_midi = NULL;
+	ui->matrix_atom_osc = NULL;
+	ui->matrix_atom_time = NULL;
+	ui->matrix_atom_patch = NULL;
+	ui->matrix = NULL;
+}
+
+static inline Evas_Object *
+_menu_matrix_new(sp_ui_t *ui)
+{
+	const char *title = "Matrix";
+	Evas_Object *win = elm_win_add(ui->win, title, ELM_WIN_BASIC);
+	if(win)
+	{
+		elm_win_title_set(win, title);
+		elm_win_autodel_set(win, EINA_TRUE);
+		evas_object_smart_callback_add(win, "delete,request", _menu_matrix_del, ui);
+		evas_object_resize(win, 640, 480);
+		evas_object_show(win);
+
+		Evas_Object *bg = elm_bg_add(win);
+		if(bg)
+		{
+			elm_bg_color_set(bg, 64, 64, 64);
+			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(bg);
+			elm_win_resize_object_add(win, bg);
+		} // bg
+
+		ui->patchbox = elm_box_add(win);
+		if(ui->patchbox)
+		{
+			elm_box_horizontal_set(ui->patchbox, EINA_FALSE);
+			elm_box_homogeneous_set(ui->patchbox, EINA_FALSE);
+			evas_object_data_set(ui->patchbox, "ui", ui);
+			evas_object_size_hint_weight_set(ui->patchbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(ui->patchbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(ui->patchbox);
+			elm_win_resize_object_add(win, ui->patchbox);
+
+			ui->patchbar = elm_toolbar_add(ui->patchbox);
+			if(ui->patchbar)
+			{
+				elm_toolbar_horizontal_set(ui->patchbar, EINA_TRUE);
+				elm_toolbar_homogeneous_set(ui->patchbar, EINA_TRUE);
+				elm_toolbar_align_set(ui->patchbar, 0.f);
+				elm_toolbar_select_mode_set(ui->patchbar, ELM_OBJECT_SELECT_MODE_ALWAYS);
+				elm_toolbar_shrink_mode_set(ui->patchbar, ELM_TOOLBAR_SHRINK_SCROLL);
+				evas_object_smart_callback_add(ui->patchbar, "selected", _patchbar_selected, ui);
+				evas_object_size_hint_weight_set(ui->patchbar, EVAS_HINT_EXPAND, 0.f);
+				evas_object_size_hint_align_set(ui->patchbar, EVAS_HINT_FILL, 0.f);
+				evas_object_show(ui->patchbar);
+				elm_box_pack_end(ui->patchbox, ui->patchbar);
+
+				ui->matrix_audio = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/audio.png", "Audio", NULL, NULL);
+				elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
+				ui->matrix_control = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/control.png", "Control", NULL, NULL);
+				ui->matrix_cv = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/cv.png", "CV", NULL, NULL);
+				ui->matrix_event = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/atom.png", "Event", NULL, NULL); //FIXME event.png
+				ui->matrix_atom = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/atom.png", "Atom", NULL, NULL);
+
+				Elm_Object_Item *sep = elm_toolbar_item_append(ui->patchbar,
+					NULL, NULL, NULL, NULL);
+				elm_toolbar_item_separator_set(sep, EINA_TRUE);
+
+				ui->matrix_atom_midi = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/midi.png", "MIDI", NULL, NULL);
+				ui->matrix_atom_osc = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/osc.png", "OSC", NULL, NULL);
+				ui->matrix_atom_time = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/time.png", "Time", NULL, NULL);
+				ui->matrix_atom_patch = elm_toolbar_item_append(ui->patchbar,
+					SYNTHPOD_DATA_DIR"/patch.png", "Patch", NULL, NULL);
+			} // patchbar
+
+			ui->matrix = patcher_object_add(ui->patchbox);
+			if(ui->matrix)
+			{
+				evas_object_smart_callback_add(ui->matrix, "connect,request",
+					_matrix_connect_request, ui);
+				evas_object_smart_callback_add(ui->matrix, "disconnect,request",
+					_matrix_disconnect_request, ui);
+				evas_object_smart_callback_add(ui->matrix, "realize,request",
+					_matrix_realize_request, ui);
+				evas_object_size_hint_weight_set(ui->matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(ui->matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(ui->matrix);
+				elm_box_pack_end(ui->patchbox, ui->matrix);
+
+				_patches_update(ui);
+			} // matrix
+		} // patchbox
+
+		return win;
+	}
+
+	return NULL;
+}
+
+static void
+_menu_matrix(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	if(!ui->patchwin)
+		ui->patchwin = _menu_matrix_new(ui);
+}
+
+static void
+_menu_plugin_del(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	ui->plugwin = NULL;
+	ui->pluglist = NULL;
+	ui->plugentry = NULL;
+	ui->plugbox = NULL;
+}
+
+static inline Evas_Object *
+_menu_plugin_new(sp_ui_t *ui)
+{
+	const char *title = "Plugin";
+	Evas_Object *win = elm_win_add(ui->win, title, ELM_WIN_BASIC);
+	if(win)
+	{
+		elm_win_title_set(win, title);
+		elm_win_autodel_set(win, EINA_TRUE);
+		evas_object_smart_callback_add(win, "delete,request", _menu_plugin_del, ui);
+		evas_object_resize(win, 640, 480);
+		evas_object_show(win);
+
+		Evas_Object *bg = elm_bg_add(win);
+		if(bg)
+		{
+			elm_bg_color_set(bg, 64, 64, 64);
+			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(bg);
+			elm_win_resize_object_add(win, bg);
+		} // bg
+
+		ui->plugbox = elm_box_add(win);
+		if(ui->plugbox)
+		{
+			elm_box_horizontal_set(ui->plugbox, EINA_FALSE);
+			elm_box_homogeneous_set(ui->plugbox, EINA_FALSE);
+			evas_object_data_set(ui->plugbox, "ui", ui);
+			evas_object_size_hint_weight_set(ui->plugbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(ui->plugbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(ui->plugbox);
+			elm_win_resize_object_add(win, ui->plugbox);
+
+			ui->plugentry = elm_entry_add(ui->plugbox);
+			if(ui->plugentry)
+			{
+				elm_entry_entry_set(ui->plugentry, "");
+				elm_entry_editable_set(ui->plugentry, EINA_TRUE);
+				elm_entry_single_line_set(ui->plugentry, EINA_TRUE);
+				elm_entry_scrollable_set(ui->plugentry, EINA_TRUE);
+				evas_object_smart_callback_add(ui->plugentry, "changed,user", _plugentry_changed, ui);
+				evas_object_data_set(ui->plugentry, "ui", ui);
+				//evas_object_size_hint_weight_set(ui->plugentry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(ui->plugentry, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(ui->plugentry);
+				elm_box_pack_end(ui->plugbox, ui->plugentry);
+			} // plugentry
+
+			ui->pluglist = elm_genlist_add(ui->plugbox);
+			if(ui->pluglist)
+			{
+				elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
+				elm_genlist_mode_set(ui->pluglist, ELM_LIST_SCROLL);
+				elm_genlist_block_count_set(ui->pluglist, 64); // needef for lazy-loading
+				evas_object_smart_callback_add(ui->pluglist, "activated",
+					_pluglist_activated, ui);
+				evas_object_smart_callback_add(ui->pluglist, "expand,request",
+					_list_expand_request, ui);
+				evas_object_smart_callback_add(ui->pluglist, "contract,request",
+					_list_contract_request, ui);
+				evas_object_smart_callback_add(ui->pluglist, "expanded",
+					_pluglist_expanded, ui);
+				evas_object_smart_callback_add(ui->pluglist, "contracted",
+					_pluglist_contracted, ui);
+				evas_object_data_set(ui->pluglist, "ui", ui);
+				evas_object_size_hint_weight_set(ui->pluglist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(ui->pluglist, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(ui->pluglist);
+				elm_box_pack_end(ui->plugbox, ui->pluglist);
+			} // pluglist
+
+			_pluglist_populate(ui, ""); // populate with everything
+		} // plugbox
+
+		return win;
+	}
+
+	return NULL;
+}
+
+static void
+_menu_plugin(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	if(!ui->plugwin)
+		ui->plugwin = _menu_plugin_new(ui);
+}
+
+static void
+_theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+	const Evas_Event_Key_Down *ev = event_info;
+
+	const Eina_Bool cntrl = evas_key_modifier_is_set(ev->modifiers, "Control");
+	const Eina_Bool shift = evas_key_modifier_is_set(ev->modifiers, "Shift");
+	(void)shift;
+	
+	//printf("_theme_key_down: %s %i %i\n", ev->key, cntrl, shift);
+
+	if(cntrl)
+	{
+		if(!strcmp(ev->key, "n")
+			&& (ui->driver->features & SP_UI_FEATURE_NEW) )
+		{
+			_menu_new(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "o")
+			&& (ui->driver->features & SP_UI_FEATURE_OPEN) )
+		{
+			_menu_open_fileselector(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "i")
+			&& (ui->driver->features & SP_UI_FEATURE_IMPORT_FROM) )
+		{
+			_menu_open_fileselector(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "s")
+			&& (ui->driver->features & SP_UI_FEATURE_SAVE) )
+		{
+			_menu_save(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "S")
+			&& (ui->driver->features & SP_UI_FEATURE_SAVE_AS) )
+		{
+			_menu_save_as_fileselector(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "e")
+			&& (ui->driver->features & SP_UI_FEATURE_EXPORT_TO) )
+		{
+			_menu_save_as_fileselector(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "q")
+			&& (ui->driver->features & SP_UI_FEATURE_CLOSE) )
+		{
+			_menu_close(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "h"))
+		{
+			_menu_about(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "m"))
+		{
+			_menu_matrix(ui, NULL, NULL);
+		}
+		else if(!strcmp(ev->key, "p"))
+		{
+			_menu_plugin(ui, NULL, NULL);
+		}
+	}
 }
 
 Evas_Object *
@@ -6525,6 +6763,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			// about
 			if(!evas_object_key_grab(ui->win, "h", ctrl_mask, 0, exclusive))
 				fprintf(stderr, "could not grab 'h' key\n");
+			// matrix
+			if(!evas_object_key_grab(ui->win, "m", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'm' key\n");
+			// plugin
+			if(!evas_object_key_grab(ui->win, "p", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'p' key\n");
 
 			ui->mainmenu = elm_win_main_menu_get(ui->win);
 			if(ui->mainmenu)
@@ -6573,244 +6817,107 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					}
 				}
 
+				elmnt = elm_menu_item_add(ui->mainmenu, NULL, "list-add", "Plugin", _menu_plugin, ui);
+				elm_object_item_tooltip_text_set(elmnt, "Ctrl+P");
+
+				elmnt = elm_menu_item_add(ui->mainmenu, NULL, "applications-system", "Matrix", _menu_matrix, ui);
+				elm_object_item_tooltip_text_set(elmnt, "Ctrl+M");
+
 				if(ui->driver->features & SP_UI_FEATURE_CLOSE)
 				{
 					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "application-exit", "Quit", _menu_close, ui);
 					elm_object_item_tooltip_text_set(elmnt, "Ctrl+Q");
 				}
 
+				elmnt = elm_menu_item_add(ui->mainmenu, NULL, "help-about", "About", _menu_about, ui);
+				elm_object_item_tooltip_text_set(elmnt, "Ctrl+H");
+			}
+
+			ui->popup = elm_popup_add(ui->vbox);
+			if(ui->popup)
+			{
+				elm_popup_allow_events_set(ui->popup, EINA_TRUE);
+				if(show_splash)
+					evas_object_show(ui->popup);
+
+				Evas_Object *hbox = elm_box_add(ui->popup);
+				if(hbox)
 				{
-					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "help-about", "About", _menu_about, ui);
-					elm_object_item_tooltip_text_set(elmnt, "Ctrl+H");
+					elm_box_horizontal_set(hbox, EINA_TRUE);
+					elm_box_homogeneous_set(hbox, EINA_FALSE);
+					elm_box_padding_set(hbox, 10, 0);
+					evas_object_show(hbox);
+					elm_object_content_set(ui->popup, hbox);
+
+					Evas_Object *icon = elm_icon_add(hbox);
+					if(icon)
+					{
+						elm_image_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
+							"/omk/logo");
+						evas_object_size_hint_min_set(icon, 128, 128);
+						evas_object_size_hint_max_set(icon, 256, 256);
+						evas_object_size_hint_aspect_set(icon, EVAS_ASPECT_CONTROL_BOTH, 1, 1);
+						evas_object_show(icon);
+						elm_box_pack_end(hbox, icon);
+					}
+
+					Evas_Object *label = elm_label_add(hbox);
+					if(label)
+					{
+						elm_object_text_set(label,
+							"<color=#b00 shadow_color=#fff font_size=20>"
+							"Synthpod - Plugin Container"
+							"</color></br><align=left>"
+							"Version "SYNTHPOD_VERSION"</br></br>"
+							"Copyright (c) 2015 Hanspeter Portner</br></br>"
+							"This is free and libre software</br>"
+							"Released under Artistic License 2.0</br>"
+							"By Open Music Kontrollers</br></br>"
+							"<color=#bbb>"
+							"http://open-music-kontrollers.ch/lv2/synthpod</br>"
+							"dev@open-music-kontrollers.ch"
+							"</color></align>");
+
+						evas_object_show(label);
+						elm_box_pack_end(hbox, label);
+					}
 				}
+			}
+
+			ui->selector = elm_popup_add(ui->vbox);
+			if(ui->selector)
+			{
+				elm_popup_allow_events_set(ui->selector, EINA_FALSE);
 			}
 
 			ui->mainpane = elm_panes_add(ui->vbox);
 			if(ui->mainpane)
 			{
 				elm_panes_horizontal_set(ui->mainpane, EINA_FALSE);
-				elm_panes_content_left_size_set(ui->mainpane, 0.5);
+				elm_panes_content_left_size_set(ui->mainpane, 0.2);
 				evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 				evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 				evas_object_show(ui->mainpane);
 				elm_box_pack_end(ui->vbox, ui->mainpane);
 
-				ui->popup = elm_popup_add(ui->vbox);
-				if(ui->popup)
+				ui->modlist = elm_genlist_add(ui->mainpane);
+				if(ui->modlist)
 				{
-					elm_popup_allow_events_set(ui->popup, EINA_TRUE);
-					if(show_splash)
-						evas_object_show(ui->popup);
-
-					Evas_Object *hbox = elm_box_add(ui->popup);
-					if(hbox)
-					{
-						elm_box_horizontal_set(hbox, EINA_TRUE);
-						elm_box_homogeneous_set(hbox, EINA_FALSE);
-						elm_box_padding_set(hbox, 10, 0);
-						evas_object_show(hbox);
-						elm_object_content_set(ui->popup, hbox);
-
-						Evas_Object *icon = elm_icon_add(hbox);
-						if(icon)
-						{
-							elm_image_file_set(icon, SYNTHPOD_DATA_DIR"/synthpod.edj",
-								"/omk/logo");
-							evas_object_size_hint_min_set(icon, 128, 128);
-							evas_object_size_hint_max_set(icon, 256, 256);
-							evas_object_size_hint_aspect_set(icon, EVAS_ASPECT_CONTROL_BOTH, 1, 1);
-							evas_object_show(icon);
-							elm_box_pack_end(hbox, icon);
-						}
-
-						Evas_Object *label = elm_label_add(hbox);
-						if(label)
-						{
-							elm_object_text_set(label,
-								"<color=#b00 shadow_color=#fff font_size=20>"
-								"Synthpod - Plugin Container"
-								"</color></br><align=left>"
-								"Version "SYNTHPOD_VERSION"</br></br>"
-								"Copyright (c) 2015 Hanspeter Portner</br></br>"
-								"This is free and libre software</br>"
-								"Released under Artistic License 2.0</br>"
-								"By Open Music Kontrollers</br></br>"
-								"<color=#bbb>"
-								"http://open-music-kontrollers.ch/lv2/synthpod</br>"
-								"dev@open-music-kontrollers.ch"
-								"</color></align>");
-
-							evas_object_show(label);
-							elm_box_pack_end(hbox, label);
-						}
-					}
-				}
-
-				ui->selector = elm_popup_add(ui->vbox);
-				if(ui->selector)
-				{
-					elm_popup_allow_events_set(ui->selector, EINA_FALSE);
-				}
-
-				ui->leftpane = elm_panes_add(ui->mainpane);
-				if(ui->leftpane)
-				{
-					elm_panes_horizontal_set(ui->leftpane, EINA_FALSE);
-					elm_panes_content_left_size_set(ui->leftpane, 0.5);
-					evas_object_size_hint_weight_set(ui->leftpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-					evas_object_size_hint_align_set(ui->leftpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
-					evas_object_show(ui->leftpane);
-					elm_object_part_content_set(ui->mainpane, "left", ui->leftpane);
-
-					ui->plugpane = elm_panes_add(ui->mainpane);
-					if(ui->plugpane)
-					{
-						elm_panes_horizontal_set(ui->plugpane, EINA_TRUE);
-						elm_panes_content_left_size_set(ui->plugpane, 0.4);
-						evas_object_size_hint_weight_set(ui->plugpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-						evas_object_size_hint_align_set(ui->plugpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						evas_object_show(ui->plugpane);
-						elm_object_part_content_set(ui->leftpane, "left", ui->plugpane);
-
-						ui->plugbox = elm_box_add(ui->plugpane);
-						if(ui->plugbox)
-						{
-							elm_box_horizontal_set(ui->plugbox, EINA_FALSE);
-							elm_box_homogeneous_set(ui->plugbox, EINA_FALSE);
-							evas_object_data_set(ui->plugbox, "ui", ui);
-							evas_object_size_hint_weight_set(ui->plugbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-							evas_object_size_hint_align_set(ui->plugbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
-							evas_object_show(ui->plugbox);
-							elm_object_part_content_set(ui->plugpane, "left", ui->plugbox);
-
-							ui->plugentry = elm_entry_add(ui->plugbox);
-							if(ui->plugentry)
-							{
-								elm_entry_entry_set(ui->plugentry, "");
-								elm_entry_editable_set(ui->plugentry, EINA_TRUE);
-								elm_entry_single_line_set(ui->plugentry, EINA_TRUE);
-								elm_entry_scrollable_set(ui->plugentry, EINA_TRUE);
-								evas_object_smart_callback_add(ui->plugentry, "changed,user", _plugentry_changed, ui);
-								evas_object_data_set(ui->plugentry, "ui", ui);
-								//evas_object_size_hint_weight_set(ui->plugentry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-								evas_object_size_hint_align_set(ui->plugentry, EVAS_HINT_FILL, EVAS_HINT_FILL);
-								evas_object_show(ui->plugentry);
-								elm_box_pack_end(ui->plugbox, ui->plugentry);
-							} // plugentry
-
-							ui->pluglist = elm_genlist_add(ui->plugbox);
-							if(ui->pluglist)
-							{
-								elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
-								elm_genlist_mode_set(ui->pluglist, ELM_LIST_SCROLL);
-								elm_genlist_block_count_set(ui->pluglist, 64); // needef for lazy-loading
-								evas_object_smart_callback_add(ui->pluglist, "activated",
-									_pluglist_activated, ui);
-								evas_object_smart_callback_add(ui->pluglist, "expand,request",
-									_list_expand_request, ui);
-								evas_object_smart_callback_add(ui->pluglist, "contract,request",
-									_list_contract_request, ui);
-								evas_object_smart_callback_add(ui->pluglist, "expanded",
-									_pluglist_expanded, ui);
-								evas_object_smart_callback_add(ui->pluglist, "contracted",
-									_pluglist_contracted, ui);
-								evas_object_data_set(ui->pluglist, "ui", ui);
-								evas_object_size_hint_weight_set(ui->pluglist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-								evas_object_size_hint_align_set(ui->pluglist, EVAS_HINT_FILL, EVAS_HINT_FILL);
-								evas_object_show(ui->pluglist);
-								elm_box_pack_end(ui->plugbox, ui->pluglist);
-							} // pluglist
-						} // plugbox
-						
-						ui->patchbox = elm_box_add(ui->plugpane);
-						if(ui->patchbox)
-						{
-							elm_box_horizontal_set(ui->patchbox, EINA_FALSE);
-							elm_box_homogeneous_set(ui->patchbox, EINA_FALSE);
-							evas_object_data_set(ui->patchbox, "ui", ui);
-							evas_object_size_hint_weight_set(ui->patchbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-							evas_object_size_hint_align_set(ui->patchbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
-							evas_object_show(ui->patchbox);
-							elm_object_part_content_set(ui->plugpane, "right", ui->patchbox);
-
-							ui->patchbar = elm_toolbar_add(ui->patchbox);
-							if(ui->patchbar)
-							{
-								elm_toolbar_horizontal_set(ui->patchbar, EINA_TRUE);
-								elm_toolbar_homogeneous_set(ui->patchbar, EINA_TRUE);
-								elm_toolbar_align_set(ui->patchbar, 0.f);
-								elm_toolbar_select_mode_set(ui->patchbar, ELM_OBJECT_SELECT_MODE_ALWAYS);
-								elm_toolbar_shrink_mode_set(ui->patchbar, ELM_TOOLBAR_SHRINK_SCROLL);
-								evas_object_smart_callback_add(ui->patchbar, "selected", _patchbar_selected, ui);
-								evas_object_size_hint_weight_set(ui->patchbar, EVAS_HINT_EXPAND, 0.f);
-								evas_object_size_hint_align_set(ui->patchbar, EVAS_HINT_FILL, 0.f);
-								evas_object_show(ui->patchbar);
-								elm_box_pack_end(ui->patchbox, ui->patchbar);
-
-								ui->matrix_audio = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/audio.png", "Audio", NULL, NULL);
-								elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
-								ui->matrix_control = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/control.png", "Control", NULL, NULL);
-								ui->matrix_cv = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/cv.png", "CV", NULL, NULL);
-								ui->matrix_event = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/atom.png", "Event", NULL, NULL); //FIXME event.png
-								ui->matrix_atom = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/atom.png", "Atom", NULL, NULL);
-
-								Elm_Object_Item *sep = elm_toolbar_item_append(ui->patchbar,
-									NULL, NULL, NULL, NULL);
-								elm_toolbar_item_separator_set(sep, EINA_TRUE);
-
-								ui->matrix_atom_midi = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/midi.png", "MIDI", NULL, NULL);
-								ui->matrix_atom_osc = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/osc.png", "OSC", NULL, NULL);
-								ui->matrix_atom_time = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/time.png", "Time", NULL, NULL);
-								ui->matrix_atom_patch = elm_toolbar_item_append(ui->patchbar,
-									SYNTHPOD_DATA_DIR"/patch.png", "Patch", NULL, NULL);
-							} // patchbar
-
-							ui->matrix = patcher_object_add(ui->patchbox);
-							if(ui->matrix)
-							{
-								evas_object_smart_callback_add(ui->matrix, "connect,request",
-									_matrix_connect_request, ui);
-								evas_object_smart_callback_add(ui->matrix, "disconnect,request",
-									_matrix_disconnect_request, ui);
-								evas_object_smart_callback_add(ui->matrix, "realize,request",
-									_matrix_realize_request, ui);
-								evas_object_size_hint_weight_set(ui->matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-								evas_object_size_hint_align_set(ui->matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
-								evas_object_show(ui->matrix);
-								elm_box_pack_end(ui->patchbox, ui->matrix);
-
-								_patches_update(ui);
-							} // matrix
-						} // patchbox
-					} // plugpane
-
-					ui->modlist = elm_genlist_add(ui->leftpane);
-					if(ui->modlist)
-					{
-						elm_genlist_homogeneous_set(ui->modlist, EINA_TRUE); // needef for lazy-loading
-						elm_genlist_mode_set(ui->modlist, ELM_LIST_LIMIT);
-						elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
-						//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
-						elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
-						evas_object_smart_callback_add(ui->modlist, "activated",
-							_modlist_activated, ui);
-						evas_object_smart_callback_add(ui->modlist, "moved",
-							_modlist_moved, ui);
-						evas_object_data_set(ui->modlist, "ui", ui);
-						evas_object_size_hint_weight_set(ui->modlist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-						evas_object_size_hint_align_set(ui->modlist, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						evas_object_show(ui->modlist);
-						elm_object_part_content_set(ui->leftpane, "right", ui->modlist);
-					} // modlist
-				} // leftpane
+					elm_genlist_homogeneous_set(ui->modlist, EINA_TRUE); // needef for lazy-loading
+					elm_genlist_mode_set(ui->modlist, ELM_LIST_LIMIT);
+					elm_genlist_block_count_set(ui->modlist, 64); // needef for lazy-loading
+					//elm_genlist_select_mode_set(ui->modlist, ELM_OBJECT_SELECT_MODE_NONE);
+					elm_genlist_reorder_mode_set(ui->modlist, EINA_TRUE);
+					evas_object_smart_callback_add(ui->modlist, "activated",
+						_modlist_activated, ui);
+					evas_object_smart_callback_add(ui->modlist, "moved",
+						_modlist_moved, ui);
+					evas_object_data_set(ui->modlist, "ui", ui);
+					evas_object_size_hint_weight_set(ui->modlist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(ui->modlist, EVAS_HINT_FILL, EVAS_HINT_FILL);
+					evas_object_show(ui->modlist);
+					elm_object_part_content_set(ui->mainpane, "left", ui->modlist);
+				} // modlist
 
 				ui->modgrid = elm_gengrid_add(ui->mainpane);
 				if(ui->modgrid)
@@ -6909,9 +7016,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 	// walk plugin directories
 	ui->plugs = lilv_world_get_all_plugins(ui->world);
-
-	// fill pluglist
-	_pluglist_populate(ui, ""); // populate with everything
 
 	// populate uri_to_id
 	ui->uri_to_id.callback_data = ui;
@@ -7029,20 +7133,20 @@ sp_ui_del(sp_ui_t *ui, bool delete_self)
 		elm_genlist_clear(ui->pluglist);
 		evas_object_del(ui->pluglist);
 	}
-
 	if(ui->plugentry)
 		evas_object_del(ui->plugentry);
-
 	if(ui->plugbox)
 		evas_object_del(ui->plugbox);
+	if(ui->plugwin)
+		evas_object_del(ui->plugwin);
 
+	if(ui->patchbar)
+		evas_object_del(ui->patchbar);
 	if(ui->patchbox)
 		evas_object_del(ui->patchbox);
+	if(ui->patchwin)
+		evas_object_del(ui->patchwin);
 
-	if(ui->plugpane)
-		evas_object_del(ui->plugpane);
-	if(ui->leftpane)
-		evas_object_del(ui->leftpane);
 	if(ui->mainpane)
 		evas_object_del(ui->mainpane);
 	if(ui->popup)
