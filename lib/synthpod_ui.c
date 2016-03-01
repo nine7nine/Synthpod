@@ -737,12 +737,15 @@ _mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
 
 			*parent = elm_genlist_item_sorted_insert(mod->std.list,
 				ui->grpitc, group, NULL, ELM_GENLIST_ITEM_GROUP, _grpitc_cmp, NULL, NULL);
+			elm_genlist_item_select_mode_set(*parent, ELM_OBJECT_SELECT_MODE_NONE);
 
 			if(*parent)
 			{
+				/*FIXME remove
 				if(expand)
 					elm_genlist_item_expanded_set(*parent, EINA_TRUE);
 				elm_genlist_item_select_mode_set(*parent, ELM_OBJECT_SELECT_MODE_NONE);
+				*/
 				eina_hash_add(mod->groups, group_lbl, *parent);
 
 				return group;
@@ -3656,7 +3659,10 @@ _groups_foreach(const Eina_Hash *hash, const void *key, void *data, void *fdata)
 		}
 	}
 	else
+	{
+		printf("is not a group, expanding\n"); //FIXME not needed
 		elm_genlist_item_expanded_set(itm, EINA_TRUE);
+	}
 
 	return EINA_TRUE;
 }
@@ -5410,26 +5416,34 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 					group->children = eina_list_append(group->children, port);
 			}
 
-			Eina_List *l;
-			property_t *prop;
-			EINA_LIST_FOREACH(mod->static_properties, l, prop)
 			{
 				const char *group_lbl = "*Properties*";
 				Elm_Object_Item *parent;
 				group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent, false);
 
-				// append property to corresponding group
-				if(group)
-					group->children = eina_list_append(group->children, prop);
+				Eina_List *l;
+				property_t *prop;
+				EINA_LIST_FOREACH(mod->static_properties, l, prop)
+				{
+					/* FIXME remove
+					const char *group_lbl = "*Properties*";
+					Elm_Object_Item *parent;
+					group_t *group = _mod_group_get(mod, group_lbl, GROUP_TYPE_PROPERTY, NULL, &parent, false);
+					*/
+
+					// append property to corresponding group
+					if(group)
+						group->children = eina_list_append(group->children, prop);
+				}
 			}
 
-			// presets
+			// mod header //FIXME put in vbox
 			Elm_Object_Item *elmnt;
 			elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->moditc, mod, NULL,
 				ELM_GENLIST_ITEM_NONE, _grpitc_cmp, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 
-			// presets
+			// presets //FIXME put in vbox 
 			elmnt = elm_genlist_item_sorted_insert(mod->std.list, ui->psetitc, mod, NULL,
 				ELM_GENLIST_ITEM_TREE, _grpitc_cmp, NULL, NULL);
 			elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_DEFAULT);
