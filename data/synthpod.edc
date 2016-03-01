@@ -17,8 +17,7 @@
 
 #if 1
 #define COLORS_MAX "20"
-//#define COL00    0    0    0  255 // Black
-#define COL00   64   64   64  255 // Black
+#define COL00    0    0    0  255 // Black
 #define COL01  255  179    0  255 // Vivid Yellow
 #define COL02  128   62  117  255 // Strong Purple
 #define COL03  255  104    0  255 // Vivid Orange
