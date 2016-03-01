@@ -300,9 +300,7 @@ struct _sp_ui_t {
 	Evas_Object *selector;
 	Evas_Object *mainmenu;
 	Evas_Object *statusline;
-
-	Evas_Object *save_as_but;
-	Evas_Object *load_but;
+	Evas_Object *fileselector;
 
 	int colors_max;
 	int *colors_vec;
@@ -741,11 +739,6 @@ _mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
 
 			if(*parent)
 			{
-				/*FIXME remove
-				if(expand)
-					elm_genlist_item_expanded_set(*parent, EINA_TRUE);
-				elm_genlist_item_select_mode_set(*parent, ELM_OBJECT_SELECT_MODE_NONE);
-				*/
 				eina_hash_add(mod->groups, group_lbl, *parent);
 
 				return group;
@@ -5643,6 +5636,48 @@ _modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate)
 	}
 }
 
+static inline void
+_menu_fileselector(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_Smart_Cb cb)
+{
+	Evas_Object *win = elm_win_add(ui->win, title, ELM_WIN_BASIC);
+	if(win)
+	{
+		elm_win_title_set(win, title);
+		elm_win_autodel_set(win, EINA_TRUE);
+		evas_object_resize(win, 640, 480);
+		evas_object_show(win);
+
+		Evas_Object *bg = elm_bg_add(win);
+		if(bg)
+		{
+			elm_bg_color_set(bg, 64, 64, 64);
+			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(bg);
+			elm_win_resize_object_add(win, bg);
+		} // bg
+
+		Evas_Object *fileselector = elm_fileselector_add(win);
+		if(fileselector)
+		{
+			elm_fileselector_path_set(fileselector, ui->bundle_path);
+			elm_fileselector_is_save_set(fileselector, is_save);
+			elm_fileselector_folder_only_set(fileselector, EINA_TRUE);
+			elm_fileselector_expandable_set(fileselector, EINA_TRUE);
+			elm_fileselector_multi_select_set(fileselector, EINA_FALSE);
+			elm_fileselector_hidden_visible_set(fileselector, EINA_TRUE);
+			evas_object_size_hint_weight_set(fileselector, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(fileselector, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_smart_callback_add(fileselector, "done", cb, ui);
+			evas_object_smart_callback_add(fileselector, "activated", cb, ui);
+			evas_object_show(fileselector);
+			elm_win_resize_object_add(win, fileselector);
+		} // widget
+	}
+
+	ui->fileselector = win;
+}
+
 static void
 _menu_new(void *data, Evas_Object *obj, void *event_info)
 {
@@ -5659,12 +5694,23 @@ _menu_open(void *data, Evas_Object *obj, void *event_info)
 	sp_ui_t *ui = data;
 
 	const char *bundle_path = event_info;
-	if(ui && bundle_path)
+	if(bundle_path)
 	{
 		int update_path = ui->driver->features & SP_UI_FEATURE_OPEN ? 1 : 0;
 		_modlist_clear(ui, true, false); // clear system ports
 		sp_ui_bundle_load(ui, bundle_path, update_path);
 	}
+
+	if(ui->fileselector)
+		evas_object_del(ui->fileselector);
+}
+
+static inline void
+_menu_open_fileselector(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	_menu_fileselector(ui, "Open / Import", EINA_FALSE, _menu_open);
 }
 
 static void
@@ -5673,11 +5719,22 @@ _menu_save_as(void *data, Evas_Object *obj, void *event_info)
 	sp_ui_t *ui = data;
 
 	const char *bundle_path = event_info;
-	if(ui && bundle_path)
+	if(bundle_path)
 	{
 		int update_path = ui->driver->features & SP_UI_FEATURE_SAVE_AS ? 1 : 0;
 		sp_ui_bundle_save(ui, bundle_path, update_path);
 	}
+
+	if(ui->fileselector)
+		evas_object_del(ui->fileselector);
+}
+
+static inline void
+_menu_save_as_fileselector(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	_menu_fileselector(ui, "Save as / Export", EINA_TRUE, _menu_save_as);
 }
 
 static void
@@ -5714,18 +5771,6 @@ _menu_about(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	sp_ui_t *ui = data;
-
-	Evas_Coord w, h;
-	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
-
-	if(ui->vbox)
-		evas_object_resize(ui->vbox, w, h);
-}
-
-static void
 _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
@@ -5747,12 +5792,12 @@ _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 		else if(!strcmp(ev->key, "o")
 			&& (ui->driver->features & SP_UI_FEATURE_OPEN) )
 		{
-			evas_object_smart_callback_call(ui->load_but, "clicked", NULL);
+			_menu_open_fileselector(ui, NULL, NULL);
 		}
 		else if(!strcmp(ev->key, "i")
 			&& (ui->driver->features & SP_UI_FEATURE_IMPORT_FROM) )
 		{
-			evas_object_smart_callback_call(ui->load_but, "clicked", NULL);
+			_menu_open_fileselector(ui, NULL, NULL);
 		}
 		else if(!strcmp(ev->key, "s")
 			&& (ui->driver->features & SP_UI_FEATURE_SAVE) )
@@ -5762,12 +5807,12 @@ _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 		else if(!strcmp(ev->key, "S")
 			&& (ui->driver->features & SP_UI_FEATURE_SAVE_AS) )
 		{
-			evas_object_smart_callback_call(ui->save_as_but, "clicked", NULL);
+			_menu_save_as_fileselector(ui, NULL, NULL);
 		}
 		else if(!strcmp(ev->key, "e")
 			&& (ui->driver->features & SP_UI_FEATURE_EXPORT_TO) )
 		{
-			evas_object_smart_callback_call(ui->save_as_but, "clicked", NULL);
+			_menu_save_as_fileselector(ui, NULL, NULL);
 		}
 		else if(!strcmp(ev->key, "q")
 			&& (ui->driver->features & SP_UI_FEATURE_CLOSE) )
@@ -6434,8 +6479,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				ui->colors_max = 20;
 			}
 
-			_theme_resize(ui, NULL, ui->win, NULL);
-			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
+			elm_win_resize_object_add(ui->win, ui->vbox);
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down, ui);
 
 			const Eina_Bool exclusive = EINA_FALSE;
@@ -6465,201 +6509,64 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			if(!evas_object_key_grab(ui->win, "h", ctrl_mask, 0, exclusive))
 				fprintf(stderr, "could not grab 'h' key\n");
 
-			ui->mainmenu = elm_box_add(ui->vbox);
+			ui->mainmenu = elm_win_main_menu_get(ui->win);
 			if(ui->mainmenu)
 			{
-				Evas_Object *but;
-
-				elm_box_horizontal_set(ui->mainmenu, EINA_TRUE);
-				elm_box_homogeneous_set(ui->mainmenu, EINA_TRUE);
-				evas_object_size_hint_weight_set(ui->mainmenu, EVAS_HINT_EXPAND, 0.f);
-				evas_object_size_hint_align_set(ui->mainmenu, 0.f, 0.f);
 				evas_object_show(ui->mainmenu);
-				elm_box_pack_end(ui->vbox, ui->mainmenu);
-			
+
+				Elm_Object_Item *elmnt;
+
 				if(ui->driver->features & SP_UI_FEATURE_NEW)
 				{
-					but = elm_button_add(ui->mainmenu);
-					if(but)
-					{
-						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						elm_object_tooltip_text_set(but, "Ctrl+N");
-#if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
-						elm_object_text_set(but, "New");
-						evas_object_smart_callback_add(but, "clicked", _menu_new, ui);
-						evas_object_show(but);
-						elm_box_pack_end(ui->mainmenu, but);
-
-						Evas_Object *icon;
-						icon = elm_icon_add(but);
-						if(icon)
-						{
-							elm_icon_standard_set(icon, "document-new");
-							evas_object_show(icon);
-							elm_object_content_set(but, icon);
-						}
-					}
+					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-new", "New", _menu_new, ui);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl+N");
 				}
 
 				if(ui->driver->features & (SP_UI_FEATURE_OPEN | SP_UI_FEATURE_IMPORT_FROM) )
 				{
-					but = elm_fileselector_button_add(ui->mainmenu);
-					if(but)
+					if(ui->driver->features & SP_UI_FEATURE_OPEN)
 					{
-						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						elm_fileselector_is_save_set(but, EINA_FALSE);
-						elm_fileselector_folder_only_set(but, EINA_TRUE);
-						if(ui->driver->features & SP_UI_FEATURE_OPEN)
-						{
-							elm_object_text_set(but, "Open");
-							elm_object_tooltip_text_set(but, "Ctrl+O");
-						}
-						else if(ui->driver->features & SP_UI_FEATURE_IMPORT_FROM)
-						{
-							elm_object_text_set(but, "Import");
-							elm_object_tooltip_text_set(but, "Ctrl+I");
-						}
-#if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
-						evas_object_smart_callback_add(but, "file,chosen", _menu_open, ui);
-						evas_object_show(but);
-						elm_box_pack_end(ui->mainmenu, but);
-
-						Evas_Object *icon;
-						icon = elm_icon_add(but);
-						if(icon)
-						{
-							if(ui->driver->features & SP_UI_FEATURE_OPEN)
-								elm_icon_standard_set(icon, "document-open");
-							else if(ui->driver->features & SP_UI_FEATURE_IMPORT_FROM)
-								elm_icon_standard_set(icon, "document-import");
-							evas_object_show(icon);
-							elm_object_content_set(but, icon);
-						}
-
-						ui->load_but = but;
+						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-new", "Open", _menu_open_fileselector, ui);
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl+O");
+					}
+					else if(ui->driver->features & SP_UI_FEATURE_IMPORT_FROM)
+					{
+						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-import", "Import", _menu_open_fileselector, ui);
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl+I");
 					}
 				}
 
 				if(ui->driver->features & SP_UI_FEATURE_SAVE)
 				{
-					but = elm_button_add(ui->mainmenu);
-					if(but)
-					{
-						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						elm_object_tooltip_text_set(but, "Ctrl+S");
-#if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
-						elm_object_text_set(but, "Save");
-						evas_object_smart_callback_add(but, "clicked", _menu_save, ui);
-						evas_object_show(but);
-						elm_box_pack_end(ui->mainmenu, but);
-
-						Evas_Object *icon;
-						icon = elm_icon_add(but);
-						if(icon)
-						{
-							elm_icon_standard_set(icon, "document-save");
-							evas_object_show(icon);
-							elm_object_content_set(but, icon);
-						}
-					}
+					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-save", "Save", _menu_save, ui);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl+S");
 				}
 
-				if(ui->driver->features & (SP_UI_FEATURE_SAVE_AS | SP_UI_FEATURE_EXPORT_TO))
+				if(ui->driver->features & (SP_UI_FEATURE_SAVE_AS | SP_UI_FEATURE_EXPORT_TO) )
 				{
-					but = elm_fileselector_button_add(ui->mainmenu);
-					if(but)
+					if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
 					{
-						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						elm_fileselector_is_save_set(but, EINA_TRUE);
-						elm_fileselector_folder_only_set(but, EINA_TRUE);
-						if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
-						{
-							elm_object_text_set(but, "Save as");
-							elm_object_tooltip_text_set(but, "Ctrl+Shift+S");
-						}
-						else if(ui->driver->features & SP_UI_FEATURE_EXPORT_TO)
-						{
-							elm_object_text_set(but, "Export");
-							elm_object_tooltip_text_set(but, "Ctrl+E");
-						}
-#if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
-						evas_object_smart_callback_add(but, "file,chosen", _menu_save_as, ui);
-						evas_object_show(but);
-						elm_box_pack_end(ui->mainmenu, but);
-
-						Evas_Object *icon;
-						icon = elm_icon_add(but);
-						if(icon)
-						{
-							if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
-								elm_icon_standard_set(icon, "document-save-as");
-							else if(ui->driver->features & SP_UI_FEATURE_EXPORT_TO)
-								elm_icon_standard_set(icon, "document-export");
-							evas_object_show(icon);
-							elm_object_content_set(but, icon);
-						}
-
-						ui->save_as_but = but;
+						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-save-as", "Save as", _menu_save_as_fileselector, ui);
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl+Shift+S");
+					}
+					else if(ui->driver->features & SP_UI_FEATURE_EXPORT_TO)
+					{
+						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-export", "Export", _menu_save_as_fileselector, ui);
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl+E");
 					}
 				}
 
 				if(ui->driver->features & SP_UI_FEATURE_CLOSE)
 				{
-					but = elm_button_add(ui->mainmenu);
-					if(but)
-					{
-						evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
-						elm_object_tooltip_text_set(but, "Ctrl+Q");
-#if defined(ELM_1_10)
-						elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
-						elm_object_text_set(but, "Close");
-						evas_object_smart_callback_add(but, "clicked", _menu_close, ui);
-						evas_object_show(but);
-						elm_box_pack_end(ui->mainmenu, but);
-
-						Evas_Object *icon;
-						icon = elm_icon_add(but);
-						if(icon)
-						{
-							elm_icon_standard_set(icon, "application-exit");
-							evas_object_show(icon);
-							elm_object_content_set(but, icon);
-						}
-					}
+					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "application-exit", "Quit", _menu_close, ui);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl+Q");
 				}
 
-				but = elm_button_add(ui->mainmenu);
-				if(but)
 				{
-					evas_object_size_hint_align_set(but, EVAS_HINT_FILL, EVAS_HINT_FILL);
-					elm_object_tooltip_text_set(but, "Ctrl+H");
-#if defined(ELM_1_10)
-					elm_object_tooltip_orient_set(but, ELM_TOOLTIP_ORIENT_BOTTOM);
-#endif
-					elm_object_text_set(but, "About");
-					evas_object_smart_callback_add(but, "clicked", _menu_about, ui);
-					evas_object_show(but);
-					elm_box_pack_end(ui->mainmenu, but);
-
-					Evas_Object *icon;
-					icon = elm_icon_add(but);
-					if(icon)
-					{
-						elm_icon_standard_set(icon, "help-about");
-						evas_object_show(icon);
-						elm_object_content_set(but, icon);
-					}
+					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "help-about", "About", _menu_about, ui);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl+H");
 				}
-			} // mainmenu
+			}
 
 			ui->mainpane = elm_panes_add(ui->vbox);
 			if(ui->mainpane)
@@ -7045,7 +6952,6 @@ sp_ui_free(sp_ui_t *ui)
 	if(ui->bundle_path)
 		free(ui->bundle_path);
 
-	evas_object_event_callback_del(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize);
 	evas_object_event_callback_del(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down);
 
 	if(ui->plugitc)
@@ -7147,11 +7053,6 @@ sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path)
 			free(ui->bundle_path);
 		ui->bundle_path = strdup(bundle_path);
 	}
-	
-	if(ui->load_but)
-		elm_fileselector_path_set(ui->load_but, bundle_path);
-	if(ui->save_as_but)
-		elm_fileselector_path_set(ui->save_as_but, bundle_path);
 
 	// signal to app
 	size_t size = sizeof(transmit_bundle_load_t)
@@ -7187,11 +7088,6 @@ sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path, int update_path)
 			free(ui->bundle_path);
 		ui->bundle_path = strdup(bundle_path);
 	}
-	
-	if(ui->load_but)
-		elm_fileselector_path_set(ui->load_but, bundle_path);
-	if(ui->save_as_but)
-		elm_fileselector_path_set(ui->save_as_but, bundle_path);
 
 	// signal to app
 	size_t size = sizeof(transmit_bundle_save_t)
