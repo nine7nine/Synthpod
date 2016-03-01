@@ -1111,6 +1111,173 @@ synthpod:atom2cv
 		pg:group synthpod:group_out ;
 	] .
 
+# MidiSpliter Plugin
+synthpod:midisplitter
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Synthpod MIDI Splitter" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 0 ;
+		lv2:symbol "midi_in" ;
+		lv2:name "MIDI In" ;
+		lv2:designation lv2:control ;
+		pg:group synthpod:group_in ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 1 ;
+		lv2:symbol "midi_out_1" ;
+		lv2:name "MIDI Out 1" ;
+		lv2:designation lv2:control ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 2 ;
+		lv2:symbol "midi_out_2" ;
+		lv2:name "MIDI Out 2" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 3 ;
+		lv2:symbol "midi_out_3" ;
+		lv2:name "MIDI Out 3" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 4 ;
+		lv2:symbol "midi_out_4" ;
+		lv2:name "MIDI Out 4" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 5 ;
+		lv2:symbol "midi_out_5" ;
+		lv2:name "MIDI Out 5" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 6 ;
+		lv2:symbol "midi_out_6" ;
+		lv2:name "MIDI Out 6" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 7 ;
+		lv2:symbol "midi_out_7" ;
+		lv2:name "MIDI Out 7" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 8 ;
+		lv2:symbol "midi_out_8" ;
+		lv2:name "MIDI Out 8" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 9 ;
+		lv2:symbol "midi_out_9" ;
+		lv2:name "MIDI Out 9" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 10 ;
+		lv2:symbol "midi_out_10" ;
+		lv2:name "MIDI Out 10" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 11 ;
+		lv2:symbol "midi_out_11" ;
+		lv2:name "MIDI Out 11" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 12 ;
+		lv2:symbol "midi_out_12" ;
+		lv2:name "MIDI Out 12" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 13 ;
+		lv2:symbol "midi_out_13" ;
+		lv2:name "MIDI Out 13" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 14 ;
+		lv2:symbol "midi_out_14" ;
+		lv2:name "MIDI Out 14" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 15 ;
+		lv2:symbol "midi_out_15" ;
+		lv2:name "MIDI Out 15" ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		lv2:index 16 ;
+		lv2:symbol "midi_out_16" ;
+		lv2:name "MIDI Out 16" ;
+		pg:group synthpod:group_out ;
+	] .
+
 # Atom2Event Plugin
 synthpod:atom2event
 	a lv2:Plugin ,

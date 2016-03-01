@@ -36,6 +36,7 @@
 #define SYNTHPOD_CONTROL2CV_URI				SYNTHPOD_URI"#control2cv"
 #define SYNTHPOD_CV2ATOM_URI					SYNTHPOD_URI"#cv2atom"
 #define SYNTHPOD_ATOM2CV_URI					SYNTHPOD_URI"#atom2cv"
+#define SYNTHPOD_MIDISPLITTER_URI			SYNTHPOD_URI"#midisplitter"
 #define SYNTHPOD_ATOM2EVENT_URI				SYNTHPOD_URI"#atom2event"
 #define SYNTHPOD_EVENT2ATOM_URI				SYNTHPOD_URI"#event2atom"
 #define SYNTHPOD_AUDIOXFADEMONO_URI		SYNTHPOD_URI"#audioxfademono"
@@ -52,6 +53,7 @@ extern const LV2_Descriptor synthpod_cv2control;
 extern const LV2_Descriptor synthpod_control2cv;
 extern const LV2_Descriptor synthpod_cv2atom;
 extern const LV2_Descriptor synthpod_atom2cv;
+extern const LV2_Descriptor synthpod_midisplitter;
 extern const LV2_Descriptor synthpod_atom2event;
 extern const LV2_Descriptor synthpod_event2atom;
 extern const LV2_Descriptor synthpod_audioxfademono;
