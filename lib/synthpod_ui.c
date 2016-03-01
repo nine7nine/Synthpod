@@ -5636,6 +5636,14 @@ _modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate)
 	}
 }
 
+static void
+_menu_fileselector_del(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	ui->fileselector = NULL;
+}
+
 static inline void
 _menu_fileselector(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_Smart_Cb cb)
 {
@@ -5644,6 +5652,7 @@ _menu_fileselector(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_Smart
 	{
 		elm_win_title_set(win, title);
 		elm_win_autodel_set(win, EINA_TRUE);
+		evas_object_smart_callback_add(win, "delete,request", _menu_fileselector_del, ui);
 		evas_object_resize(win, 640, 480);
 		evas_object_show(win);
 
@@ -5702,7 +5711,10 @@ _menu_open(void *data, Evas_Object *obj, void *event_info)
 	}
 
 	if(ui->fileselector)
+	{
 		evas_object_del(ui->fileselector);
+		ui->fileselector = NULL;
+	}
 }
 
 static inline void
@@ -5710,7 +5722,8 @@ _menu_open_fileselector(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
 
-	_menu_fileselector(ui, "Open / Import", EINA_FALSE, _menu_open);
+	if(!ui->fileselector)
+		_menu_fileselector(ui, "Open / Import", EINA_FALSE, _menu_open);
 }
 
 static void
@@ -5726,7 +5739,10 @@ _menu_save_as(void *data, Evas_Object *obj, void *event_info)
 	}
 
 	if(ui->fileselector)
+	{
 		evas_object_del(ui->fileselector);
+		ui->fileselector = NULL;
+	}
 }
 
 static inline void
@@ -5734,7 +5750,8 @@ _menu_save_as_fileselector(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
 
-	_menu_fileselector(ui, "Save as / Export", EINA_TRUE, _menu_save_as);
+	if(!ui->fileselector)
+		_menu_fileselector(ui, "Save as / Export", EINA_TRUE, _menu_save_as);
 }
 
 static void
