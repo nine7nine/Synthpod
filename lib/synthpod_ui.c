@@ -1034,7 +1034,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									group->children = eina_list_append(group->children, prop);
 
 								// append property to UI
-								if(parent && elm_genlist_item_expanded_get(parent)) //TODO remove duplicate code
+								if(parent && mod->std.list) //TODO remove duplicate code
 								{
 									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(mod->std.list,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
@@ -1074,7 +1074,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									group->children = eina_list_append(group->children, prop);
 
 								// append property to UI
-								if(parent && elm_genlist_item_expanded_get(parent)) //TODO remove duplicate code
+								if(parent && mod->std.list) //TODO remove duplicate code
 								{
 									Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(mod->std.list,
 										ui->propitc, prop, parent, ELM_GENLIST_ITEM_NONE, _propitc_cmp,
