@@ -6151,6 +6151,18 @@ _menu_plugin(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
+_theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+	int w, h, H;
+
+	evas_object_geometry_get(ui->mainmenu, NULL, NULL, NULL, &H);
+	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
+	evas_object_move(ui->vbox, 0, H);
+	evas_object_resize(ui->vbox, w, h-H);
+}
+
+static void
 _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
@@ -6810,7 +6822,11 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				ui->colors_max = 20;
 			}
 
-			elm_win_resize_object_add(ui->win, ui->vbox);
+			if(elm_win_type_get(ui->win) == ELM_WIN_FAKE)
+				evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
+			else
+				elm_win_resize_object_add(ui->win, ui->vbox);
+
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down, ui);
 
 			const Eina_Bool exclusive = EINA_FALSE;
