@@ -3186,10 +3186,11 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	mod_ui_t *mod_ui;
 	EINA_LIST_FREE(mod->mod_uis, mod_ui)
 	{
-		if(mod_ui->ui)
+		if(mod_ui->lib)
 		{
 			eina_module_unload(mod_ui->lib);
 			eina_module_free(mod_ui->lib);
+			mod_ui->lib = NULL;
 		}
 		free(mod_ui);
 	}
