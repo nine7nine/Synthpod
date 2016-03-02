@@ -297,6 +297,7 @@ struct _sp_ui_t {
 	Evas_Object *win;
 	Evas_Object *vbox;
 	Evas_Object *popup;
+	Evas_Object *message;
 	Evas_Object *feedback;
 	Evas_Object *selector;
 	Evas_Object *mainmenu;
@@ -5684,7 +5685,9 @@ _menu_fileselector_new(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_S
 static inline void
 _feedback(sp_ui_t *ui, const char *message)
 {
-	elm_object_text_set(ui->feedback, message);
+	elm_object_text_set(ui->message, message);
+	if(evas_object_visible_get(ui->feedback))
+		evas_object_hide(ui->feedback);
 	evas_object_show(ui->feedback);
 }
 
@@ -6953,12 +6956,22 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				}
 			}
 
-			ui->feedback = elm_popup_add(ui->vbox);
+			ui->message = elm_label_add(ui->vbox);
+			if(ui->message)
+			{
+				elm_object_text_set(ui->message, "Idle");
+				evas_object_show(ui->message);
+			}
+
+			ui->feedback = elm_notify_add(ui->vbox);
 			if(ui->feedback)
 			{
-				elm_popup_timeout_set(ui->feedback, 1.f);
-				elm_popup_allow_events_set(ui->feedback, EINA_TRUE);
-				elm_popup_orient_set(ui->feedback, ELM_POPUP_ORIENT_BOTTOM);
+				elm_notify_timeout_set(ui->feedback, 1.f);
+				elm_notify_allow_events_set(ui->feedback, EINA_TRUE);
+				elm_notify_align_set(ui->feedback, 0.0, 1.f);
+				evas_object_size_hint_weight_set(ui->feedback, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				if(ui->message)
+					elm_object_content_set(ui->feedback, ui->message);
 			}
 
 			ui->selector = elm_popup_add(ui->vbox);
@@ -7217,6 +7230,8 @@ sp_ui_del(sp_ui_t *ui, bool delete_self)
 		evas_object_del(ui->popup);
 	if(ui->feedback)
 		evas_object_del(ui->feedback);
+	if(ui->message)
+		evas_object_del(ui->message);
 	if(ui->selector)
 		evas_object_del(ui->selector);
 	if(ui->vbox)
