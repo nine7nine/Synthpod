@@ -297,6 +297,7 @@ struct _sp_ui_t {
 	Evas_Object *win;
 	Evas_Object *vbox;
 	Evas_Object *popup;
+	Evas_Object *feedback;
 	Evas_Object *selector;
 	Evas_Object *mainmenu;
 	Evas_Object *statusline;
@@ -5680,6 +5681,13 @@ _menu_fileselector_new(sp_ui_t *ui, const char *title, Eina_Bool is_save, Evas_S
 	return NULL;
 }
 
+static inline void
+_feedback(sp_ui_t *ui, const char *message)
+{
+	elm_object_text_set(ui->feedback, message);
+	evas_object_show(ui->feedback);
+}
+
 static void
 _menu_new(void *data, Evas_Object *obj, void *event_info)
 {
@@ -5688,6 +5696,8 @@ _menu_new(void *data, Evas_Object *obj, void *event_info)
 		return;
 
 	sp_ui_bundle_new(ui);
+
+	_feedback(ui, "New project");
 }
 
 static void
@@ -5701,6 +5711,8 @@ _menu_open(void *data, Evas_Object *obj, void *event_info)
 		int update_path = ui->driver->features & SP_UI_FEATURE_OPEN ? 1 : 0;
 		_modlist_clear(ui, true, false); // clear system ports
 		sp_ui_bundle_load(ui, bundle_path, update_path);
+
+		_feedback(ui, "Open project");
 	}
 
 	if(ui->fileselector)
@@ -5729,6 +5741,8 @@ _menu_save_as(void *data, Evas_Object *obj, void *event_info)
 	{
 		int update_path = ui->driver->features & SP_UI_FEATURE_SAVE_AS ? 1 : 0;
 		sp_ui_bundle_save(ui, bundle_path, update_path);
+
+		_feedback(ui, "Save project");
 	}
 
 	if(ui->fileselector)
@@ -5753,7 +5767,11 @@ _menu_save(void *data, Evas_Object *obj, void *event_info)
 	sp_ui_t *ui = data;
 
 	if(ui && ui->bundle_path)
+	{
 		sp_ui_bundle_save(ui, ui->bundle_path, 0);
+
+		_feedback(ui, "Save project");
+	}
 }
 
 static void
@@ -5762,7 +5780,9 @@ _menu_close(void *data, Evas_Object *obj, void *event_info)
 	sp_ui_t *ui = data;
 
 	if(ui && ui->driver->close)
+	{
 		ui->driver->close(ui->data);
+	}
 }
 
 static void
@@ -6933,6 +6953,14 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				}
 			}
 
+			ui->feedback = elm_popup_add(ui->vbox);
+			if(ui->feedback)
+			{
+				elm_popup_timeout_set(ui->feedback, 1.f);
+				elm_popup_allow_events_set(ui->feedback, EINA_TRUE);
+				elm_popup_orient_set(ui->feedback, ELM_POPUP_ORIENT_BOTTOM);
+			}
+
 			ui->selector = elm_popup_add(ui->vbox);
 			if(ui->selector)
 			{
@@ -7187,6 +7215,8 @@ sp_ui_del(sp_ui_t *ui, bool delete_self)
 		evas_object_del(ui->mainpane);
 	if(ui->popup)
 		evas_object_del(ui->popup);
+	if(ui->feedback)
+		evas_object_del(ui->feedback);
 	if(ui->selector)
 		evas_object_del(ui->selector);
 	if(ui->vbox)
