@@ -309,6 +309,7 @@ struct _sp_ui_t {
 
 	Evas_Object *plugwin;
 	Evas_Object *pluglist;
+	Evas_Object *pluginfo;
 
 	Evas_Object *patchwin;
 	Evas_Object *matrix;
@@ -3428,7 +3429,7 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_pluglist_expanded(void *data, Evas_Object *obj, void *event_info)
+_pluglist_selected(void *data, Evas_Object *obj, void *event_info)
 {
 	Elm_Object_Item *itm = event_info;
 	sp_ui_t *ui = data;
@@ -3436,33 +3437,27 @@ _pluglist_expanded(void *data, Evas_Object *obj, void *event_info)
 	if(!info)
 		return;
 
-	plug_info_t *child;
-	Elm_Object_Item *elmnt;
-
-	for(int t=1; t<PLUG_INFO_TYPE_MAX; t++)
+	if(ui->pluginfo)
 	{
-		child = calloc(1, sizeof(plug_info_t));
-		if(child)
+		elm_genlist_clear(ui->pluginfo);
+
+		plug_info_t *child;
+		Elm_Object_Item *elmnt;
+
+		for(int t=1; t<PLUG_INFO_TYPE_MAX; t++)
 		{
-			//TODO check whether entry exists before adding
-			child->type = t;
-			child->plug = info->plug;
-			Elm_Genlist_Item_Class *class = ui->plugitc; //FIXME
-			elmnt = elm_genlist_item_append(ui->pluglist, class,
-				child, itm, ELM_GENLIST_ITEM_NONE, NULL, NULL);
-			if(elmnt)
-				elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			child = calloc(1, sizeof(plug_info_t));
+			if(child)
+			{
+				child->type = t;
+				child->plug = info->plug;
+				elmnt = elm_genlist_item_append(ui->pluginfo, ui->plugitc,
+					child, NULL, ELM_GENLIST_ITEM_NONE, NULL, NULL);
+				if(elmnt)
+					elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
+			}
 		}
 	}
-}
-
-static void
-_pluglist_contracted(void *data, Evas_Object *obj, void *event_info)
-{
-	Elm_Object_Item *itm = event_info;
-
-	// clear items
-	elm_genlist_item_subitems_clear(itm);
 }
 
 static void
@@ -5570,7 +5565,7 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 					info->type = PLUG_INFO_TYPE_NAME;
 					info->plug = plug;
 					Elm_Object_Item *elmnt = elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
-						ELM_GENLIST_ITEM_TREE, NULL, NULL);
+						ELM_GENLIST_ITEM_NONE, NULL, NULL);
 				}
 			}
 
@@ -6017,6 +6012,7 @@ _menu_plugin_del(void *data, Evas_Object *obj, void *event_info)
 
 	ui->plugwin = NULL;
 	ui->pluglist = NULL;
+	ui->pluginfo = NULL;
 }
 
 static inline Evas_Object *
@@ -6029,7 +6025,7 @@ _menu_plugin_new(sp_ui_t *ui)
 		elm_win_title_set(win, title);
 		elm_win_autodel_set(win, EINA_TRUE);
 		evas_object_smart_callback_add(win, "delete,request", _menu_plugin_del, ui);
-		evas_object_resize(win, 640, 480);
+		evas_object_resize(win, 960, 480);
 		evas_object_show(win);
 
 		Evas_Object *bg = elm_bg_add(win);
@@ -6042,57 +6038,75 @@ _menu_plugin_new(sp_ui_t *ui)
 			elm_win_resize_object_add(win, bg);
 		} // bg
 
-		Evas_Object *plugbox = elm_box_add(win);
-		if(plugbox)
+		Evas_Object *plugpane = elm_panes_add(win);
+		if(plugpane)
 		{
-			elm_box_horizontal_set(plugbox, EINA_FALSE);
-			elm_box_homogeneous_set(plugbox, EINA_FALSE);
-			evas_object_data_set(plugbox, "ui", ui);
-			evas_object_size_hint_weight_set(plugbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(plugbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(plugbox);
-			elm_win_resize_object_add(win, plugbox);
+			elm_panes_horizontal_set(plugpane, EINA_FALSE);
+			elm_panes_content_left_size_set(plugpane, 0.4);
+			evas_object_size_hint_weight_set(plugpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(plugpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(plugpane);
+			elm_win_resize_object_add(win, plugpane);
 
-			Evas_Object *plugentry = elm_entry_add(plugbox);
-			if(plugentry)
+			Evas_Object *plugbox = elm_box_add(win);
+			if(plugbox)
 			{
-				elm_entry_entry_set(plugentry, "");
-				elm_entry_editable_set(plugentry, EINA_TRUE);
-				elm_entry_single_line_set(plugentry, EINA_TRUE);
-				elm_entry_scrollable_set(plugentry, EINA_TRUE);
-				evas_object_smart_callback_add(plugentry, "changed,user", _plugentry_changed, ui);
-				evas_object_data_set(plugentry, "ui", ui);
-				//evas_object_size_hint_weight_set(plugentry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-				evas_object_size_hint_align_set(plugentry, EVAS_HINT_FILL, EVAS_HINT_FILL);
-				evas_object_show(plugentry);
-				elm_box_pack_end(plugbox, plugentry);
-			} // plugentry
+				elm_box_horizontal_set(plugbox, EINA_FALSE);
+				elm_box_homogeneous_set(plugbox, EINA_FALSE);
+				evas_object_data_set(plugbox, "ui", ui);
+				evas_object_size_hint_weight_set(plugbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(plugbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(plugbox);
+				elm_object_part_content_set(plugpane, "left", plugbox);
 
-			ui->pluglist = elm_genlist_add(plugbox);
-			if(ui->pluglist)
+				Evas_Object *plugentry = elm_entry_add(plugbox);
+				if(plugentry)
+				{
+					elm_entry_entry_set(plugentry, "");
+					elm_entry_editable_set(plugentry, EINA_TRUE);
+					elm_entry_single_line_set(plugentry, EINA_TRUE);
+					elm_entry_scrollable_set(plugentry, EINA_TRUE);
+					evas_object_smart_callback_add(plugentry, "changed,user", _plugentry_changed, ui);
+					evas_object_data_set(plugentry, "ui", ui);
+					//evas_object_size_hint_weight_set(plugentry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(plugentry, EVAS_HINT_FILL, EVAS_HINT_FILL);
+					evas_object_show(plugentry);
+					elm_box_pack_end(plugbox, plugentry);
+				} // plugentry
+
+				ui->pluglist = elm_genlist_add(plugbox);
+				if(ui->pluglist)
+				{
+					elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
+					elm_genlist_mode_set(ui->pluglist, ELM_LIST_LIMIT);
+					elm_genlist_block_count_set(ui->pluglist, 64); // needef for lazy-loading
+					evas_object_smart_callback_add(ui->pluglist, "activated",
+						_pluglist_activated, ui);
+					evas_object_smart_callback_add(ui->pluglist, "selected",
+						_pluglist_selected, ui);
+					evas_object_data_set(ui->pluglist, "ui", ui);
+					evas_object_size_hint_weight_set(ui->pluglist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(ui->pluglist, EVAS_HINT_FILL, EVAS_HINT_FILL);
+					evas_object_show(ui->pluglist);
+					elm_box_pack_end(plugbox, ui->pluglist);
+				} // pluglist
+
+				_pluglist_populate(ui, ""); // populate with everything
+			} // plugbox
+
+			ui->pluginfo = elm_genlist_add(plugpane);
+			if(ui->pluginfo)
 			{
-				elm_genlist_homogeneous_set(ui->pluglist, EINA_TRUE); // needef for lazy-loading
-				elm_genlist_mode_set(ui->pluglist, ELM_LIST_SCROLL);
-				elm_genlist_block_count_set(ui->pluglist, 64); // needef for lazy-loading
-				evas_object_smart_callback_add(ui->pluglist, "activated",
-					_pluglist_activated, ui);
-				evas_object_smart_callback_add(ui->pluglist, "expand,request",
-					_list_expand_request, ui);
-				evas_object_smart_callback_add(ui->pluglist, "contract,request",
-					_list_contract_request, ui);
-				evas_object_smart_callback_add(ui->pluglist, "expanded",
-					_pluglist_expanded, ui);
-				evas_object_smart_callback_add(ui->pluglist, "contracted",
-					_pluglist_contracted, ui);
-				evas_object_data_set(ui->pluglist, "ui", ui);
-				evas_object_size_hint_weight_set(ui->pluglist, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-				evas_object_size_hint_align_set(ui->pluglist, EVAS_HINT_FILL, EVAS_HINT_FILL);
-				evas_object_show(ui->pluglist);
-				elm_box_pack_end(plugbox, ui->pluglist);
-			} // pluglist
-
-			_pluglist_populate(ui, ""); // populate with everything
-		} // plugbox
+				elm_genlist_homogeneous_set(ui->pluginfo, EINA_TRUE); // needef for lazy-loading
+				elm_genlist_mode_set(ui->pluginfo, ELM_LIST_COMPRESS);
+				elm_genlist_block_count_set(ui->pluginfo, 64); // needef for lazy-loading
+				evas_object_data_set(ui->pluginfo, "ui", ui);
+				evas_object_size_hint_weight_set(ui->pluginfo, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(ui->pluginfo, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(ui->pluginfo);
+				elm_object_part_content_set(plugpane, "right", ui->pluginfo);
+			} // pluginfo
+		} // plugpane
 
 		return win;
 	}
