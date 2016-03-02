@@ -83,6 +83,7 @@ struct _plug_info_t {
 };
 
 struct _mod_ui_t {
+	mod_t *mod;
 	const LilvUI *ui;
 	LV2_URID urid;
 	Eina_Module *lib;
@@ -299,8 +300,8 @@ struct _sp_ui_t {
 	Evas_Object *popup;
 	Evas_Object *message;
 	Evas_Object *feedback;
-	Evas_Object *selector;
 	Evas_Object *mainmenu;
+	Evas_Object *uimenu;
 	Evas_Object *statusline;
 	Evas_Object *fileselector;
 
@@ -3045,6 +3046,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				continue;
 
 			mod->mod_uis = eina_list_append(mod->mod_uis, mod_ui);
+			mod_ui->mod = mod;
 			mod_ui->ui = lui;
 			mod_ui->urid = ui->driver->map->map(ui->driver->map->handle,
 				lilv_node_as_string(lilv_ui_get_uri(lui)));
@@ -4051,10 +4053,8 @@ static void
 _mod_ui_toggle_chosen(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_ui_t *mod_ui = data;
-	mod_t *mod = evas_object_data_get(obj, "module");
+	mod_t *mod = mod_ui->mod;
 	sp_ui_t *ui = mod->ui;
-
-	evas_object_hide(ui->selector);
 
 	_mod_ui_toggle_raw(mod, mod_ui);
 }
@@ -4064,10 +4064,13 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
+	int x, y, w, h;
 
-	// clear
-	elm_object_content_set(ui->selector, NULL);
-	evas_object_data_set(ui->selector, "module", mod);
+	evas_object_geometry_get(lay, &x, &y, &w, &h);
+
+	Elm_Object_Item *itm;
+	while((itm = elm_menu_first_item_get(ui->uimenu)))
+		elm_object_item_del(itm);
 
 	if(!mod->mod_ui) // show it!
 	{
@@ -4076,7 +4079,7 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 		if(eina_list_count(mod->mod_uis) == 1) // single UI
 		{
 			mod_ui = eina_list_data_get(mod->mod_uis);
-			_mod_ui_toggle_chosen(mod_ui, ui->selector, NULL);
+			_mod_ui_toggle_chosen(mod_ui, ui->uimenu, NULL);
 		}
 		else if(eina_list_count(mod->mod_uis) > 1) // multiple UIs
 		{
@@ -4091,11 +4094,12 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 					case MOD_UI_TYPE_SHOW:
 					case MOD_UI_TYPE_KX:
 					case MOD_UI_TYPE_X11:
-						elm_popup_item_append(ui->selector, ui_uri_str, NULL, _mod_ui_toggle_chosen, mod_ui);
+						elm_menu_item_add(ui->uimenu, NULL, NULL, ui_uri_str, _mod_ui_toggle_chosen, mod_ui);
 						break;
 				}
 			}
-			evas_object_show(ui->selector);
+			elm_menu_move(ui->uimenu, x+w, y+h);
+			evas_object_show(ui->uimenu);
 		}
 	}
 	else // hide it!
@@ -6842,6 +6846,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			if(!evas_object_key_grab(ui->win, "p", ctrl_mask, 0, exclusive))
 				fprintf(stderr, "could not grab 'p' key\n");
 
+			ui->uimenu = elm_menu_add(ui->win);
+			if(ui->uimenu)
+			{
+				elm_menu_parent_set(ui->uimenu, ui->win);
+			}
+
 			ui->mainmenu = elm_win_main_menu_get(ui->win);
 			if(ui->mainmenu)
 			{
@@ -6972,12 +6982,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				evas_object_size_hint_weight_set(ui->feedback, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 				if(ui->message)
 					elm_object_content_set(ui->feedback, ui->message);
-			}
-
-			ui->selector = elm_popup_add(ui->vbox);
-			if(ui->selector)
-			{
-				elm_popup_allow_events_set(ui->selector, EINA_FALSE);
 			}
 
 			ui->mainpane = elm_panes_add(ui->vbox);
@@ -7232,8 +7236,6 @@ sp_ui_del(sp_ui_t *ui, bool delete_self)
 		evas_object_del(ui->feedback);
 	if(ui->message)
 		evas_object_del(ui->message);
-	if(ui->selector)
-		evas_object_del(ui->selector);
 	if(ui->vbox)
 	{
 		elm_box_clear(ui->vbox);
