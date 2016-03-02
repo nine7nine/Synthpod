@@ -3841,7 +3841,6 @@ _modlist_activated(void *data, Evas_Object *obj, void *event_info)
 	if(class == ui->listitc)
 	{
 		mod_t *mod = elm_object_item_data_get(itm);
-		printf("_modlist_activated: %p %p %u\n", ui, mod, mod->uid);
 
 		if(mod->std.grid)
 		{

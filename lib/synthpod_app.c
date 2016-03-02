@@ -1111,7 +1111,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->presets = lilv_plugin_get_related(mod->plug, app->regs.pset.preset.node);
 	
 	// selection
-	mod->selected = 0;
+	mod->selected = 1;
+	mod->embedded = 1;
 
 	// load default state
 	if(load_default_state && _preset_load(app, mod, uri))
