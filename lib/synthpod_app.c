@@ -36,6 +36,11 @@
 
 #include <sratom/sratom.h>
 
+#define XSD_PREFIX "http://www.w3.org/2001/XMLSchema#"
+#define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+#define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
+#define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
+
 #define NUM_FEATURES 16
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
@@ -2748,11 +2753,7 @@ _preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	return 0; // success
 }
 
-//FIXME move up
-#define XSD_PREFIX "http://www.w3.org/2001/XMLSchema#"
-#define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-#define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
-#define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
+#define CUINT8(str) ((const uint8_t *)(str))
 
 static char *
 synthpod_to_turtle(Sratom* sratom, LV2_URID_Unmap* unmap,
@@ -2760,13 +2761,12 @@ synthpod_to_turtle(Sratom* sratom, LV2_URID_Unmap* unmap,
 {
 	const char* base_uri = "file:///tmp/base/";
 	SerdURI buri = SERD_URI_NULL;
-	SerdNode base = serd_node_new_uri_from_string((const uint8_t *)base_uri, NULL, &buri);
+	SerdNode base = serd_node_new_uri_from_string(CUINT8(base_uri), NULL, &buri);
 	SerdEnv *env = serd_env_new(&base);
 	if(env)
 	{
 		SerdChunk str = { .buf = NULL, .len = 0 };
 
-#define CUINT8(str) ((const uint8_t *)(str))
 		serd_env_set_prefix_from_strings(env, CUINT8("midi"), CUINT8(LV2_MIDI_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("atom"), CUINT8(LV2_ATOM_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("rdf"), CUINT8(RDF_PREFIX));
@@ -2776,7 +2776,6 @@ synthpod_to_turtle(Sratom* sratom, LV2_URID_Unmap* unmap,
 		serd_env_set_prefix_from_strings(env, CUINT8("pset"), CUINT8(LV2_PRESETS_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("state"), CUINT8(LV2_STATE_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("spod"), CUINT8(SPOD_PREFIX));
-#undef CUINT8
 
 		SerdWriter *writer = serd_writer_new(SERD_TURTLE,
 			SERD_STYLE_ABBREVIATED | SERD_STYLE_RESOLVED | SERD_STYLE_CURIED,
@@ -2847,8 +2846,8 @@ _deserialize_from_turtle(Sratom *sratom, LV2_URID_Unmap *unmap, const char *path
 
 				const char* base_uri = "file:///tmp/base/";
 
-				SerdNode s = serd_node_from_string(SERD_URI, (const uint8_t *)"");
-				SerdNode p = serd_node_from_string(SERD_URI, (const uint8_t *)LV2_STATE__state);
+				SerdNode s = serd_node_from_string(SERD_URI, CUINT8(""));
+				SerdNode p = serd_node_from_string(SERD_URI, CUINT8(LV2_STATE__state));
 				obj = (LV2_Atom_Object *)sratom_from_turtle(sratom, base_uri, &s, &p, ttl);
 			}
 
@@ -2858,6 +2857,8 @@ _deserialize_from_turtle(Sratom *sratom, LV2_URID_Unmap *unmap, const char *path
 
 	return obj;
 }
+
+#undef CUINT8
 
 // non-rt / rt
 static LV2_State_Status
@@ -2940,8 +2941,6 @@ _bundle_load(sp_app_t *app, const char *bundle_path)
 	else if(!ecore_file_exists(state_dst)) // new project?
 	{
 		atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed);
-
-		return LV2_STATE_SUCCESS;
 	}
 
 	free(state_dst);
@@ -3009,9 +3008,11 @@ _bundle_save(sp_app_t *app, const char *bundle_path)
 	char *state_dst = _make_path(app->bundle_path, "state.ttl");
 	if(manifest_dst && state_dst)
 	{
+		// create temporary forge
 		LV2_Atom_Forge _forge;
 		LV2_Atom_Forge *forge = &_forge;
 		memcpy(forge, &app->forge, sizeof(LV2_Atom_Forge));
+
 		LV2_Atom_Forge_Frame pset_frame;
 		LV2_Atom_Forge_Frame state_frame;
 
@@ -4037,7 +4038,10 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		}
 	}
 
-	LV2_Atom_Forge *forge = &app->forge;
+	// create temporary forge
+	LV2_Atom_Forge _forge;
+	LV2_Atom_Forge *forge = &_forge;
+	memcpy(forge, &app->forge, sizeof(LV2_Atom_Forge));
 
 	atom_ser_t ser = { .size = 4096, .offset = 0 };
 	ser.buf = malloc(ser.size);
@@ -4056,18 +4060,26 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				char uid [64];
 				sprintf(uid, "%u/", mod->uid);
 				char *path = make_path->path(make_path->handle, uid);
-				if(!path)
-					continue;
+				if(path)
+				{
+					LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+						app->driver->map, NULL, NULL, NULL, path,
+						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
 
-				LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-					app->driver->map, NULL, NULL, NULL, path,
-					_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
+					if(state)
+					{
+						lilv_state_set_label(state, "state"); //TODO use path prefix?
+						lilv_state_save(app->world, app->driver->map, app->driver->unmap,
+							state, NULL, path, "state.ttl");
+						lilv_state_free(state);
+					}
+					else
+						fprintf(stderr, "sp_app_save: invalid state\n");
 
-				lilv_state_set_label(state, "state"); //TODO use path prefix?
-				lilv_state_save(app->world, app->driver->map, app->driver->unmap,
-					state, NULL, path, "state.ttl");
-
-				free(path);
+					free(path);
+				}
+				else
+					fprintf(stderr, "sp_app_save: invalid path\n");
 
 				const LV2_URID uri_urid = app->driver->map->map(app->driver->map->handle, mod->uri_str);
 
@@ -4133,11 +4145,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 								{
 									const char *symbol2 = lilv_node_as_string(lilv_port_get_symbol(mod->plug, source->tar));
 
-									if(  lv2_atom_forge_key(forge, app->regs.core.index.urid)
+									ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
 										&& lv2_atom_forge_int(forge, source->mod->uid)
-
 										&& lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
-										&& (ref = lv2_atom_forge_string(forge, symbol2, strlen(symbol2))) )
+										&& lv2_atom_forge_string(forge, symbol2, strlen(symbol2));
+
+									if(ref)
 										lv2_atom_forge_pop(forge, &source_frame);
 								}
 							}
@@ -4145,18 +4158,22 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 							if(ref)
 								lv2_atom_forge_pop(forge, &port_frame);
 						}
+						else
+							fprintf(stderr, "sp_app_save: invalid port\n");
 					}
 
 					if(ref)
 						lv2_atom_forge_pop(forge, &mod_frame);
 				}
-
-				lilv_state_free(state);
+				else
+					fprintf(stderr, "sp_app_save: invalid mod\n");
 			}
 
 			if(ref)
 				lv2_atom_forge_pop(forge, &graph_frame);
 		}
+		else
+			fprintf(stderr, "sp_app_save: invalid graph\n");
 
 		const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
 		if(ref && atom)
@@ -4165,10 +4182,15 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				LV2_ATOM_BODY_CONST(atom), atom->size, atom->type,
 				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 		}
+		else
+			fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+
 		free(ser.buf);
+
+		return LV2_STATE_SUCCESS;
 	}
 
-	return LV2_STATE_SUCCESS;
+	return LV2_STATE_ERR_UNKNOWN;
 }
 
 // non-rt
