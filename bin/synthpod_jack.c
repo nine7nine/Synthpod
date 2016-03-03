@@ -452,10 +452,11 @@ _process(jack_nframes_t nsamples, void *data)
 
 	const size_t sample_buf_size = sizeof(float) * nsamples;
 	const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
-	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
 	if(sp_app_bypassed(app)) // aka loading state
 	{
+		const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
+
 		//fprintf(stderr, "app is bypassed\n");
 
 		// clear output buffers
@@ -631,6 +632,8 @@ _process(jack_nframes_t nsamples, void *data)
 	handle->trans.beats_per_minute = pos.beats_per_minute;
 
 	bin_process_pre(bin, nsamples, false);
+
+	const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
 	// fill output buffers
 	for(const sp_app_system_sink_t *sink=sinks;

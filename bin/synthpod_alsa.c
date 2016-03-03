@@ -206,10 +206,11 @@ _rt_thread(void *data, Eina_Thread thread)
 				_ntp_add_nanos(&handle->nxt_ntp, nanos_per_period) )
 		{
 			const sp_app_system_source_t *sources = sp_app_get_system_sources(app);
-			const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 	
 			if(sp_app_bypassed(app))
 			{
+				const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
+
 				//fprintf(stderr, "app is bypassed\n");
 
 				pcmi_pcm_idle(pcmi, nsamples);
@@ -393,6 +394,8 @@ _rt_thread(void *data, Eina_Thread thread)
 				pcmi_capt_done(pcmi, nsamples);
 	
 			bin_process_pre(bin, nsamples, false);
+
+			const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
 			// fill output buffers
 			if(nplay)
