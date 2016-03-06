@@ -67,9 +67,9 @@ _note_on(plughandle_t *handle)
 	int r, g, b, a;
 	evas_object_color_get(handle->obj, &r, &g, &b, &a);
 	if(r == 0xff)
-		evas_object_color_set(handle->obj, 0x7f, 0x7f, 0x7f, 0xff);
-	else
-		evas_object_color_set(handle->obj, 0x80, 0x80, 0x80, 0xff);
+		evas_object_color_set(handle->obj, 0x78, 0x78, 0x78, 0xff);
+	else if(r == 0x0)
+		evas_object_color_set(handle->obj, 0x88, 0x88, 0x88, 0xff);
 
 	const midi_atom_t midi_atom = {
 		.atom = {
@@ -93,9 +93,9 @@ _note_off(plughandle_t *handle)
 
 	int r, g, b, a;
 	evas_object_color_get(handle->obj, &r, &g, &b, &a);
-	if(r == 0x7f)
+	if(r < 0x80)
 		evas_object_color_set(handle->obj, 0xff, 0xff, 0xff, 0xff);
-	else
+	else if(r > 0x80)
 		evas_object_color_set(handle->obj, 0x00, 0x00, 0x00, 0xff);
 
 	const midi_atom_t midi_atom = {
