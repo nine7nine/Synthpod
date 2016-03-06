@@ -427,9 +427,9 @@ synthpod:keyboard
 		lv2:index 2 ;
 		lv2:symbol "octave" ;
 		lv2:name "Octave" ;
-		lv2:default 3 ;
+		lv2:default 1 ;
 		lv2:minimum 0 ;
-		lv2:maximum 6 ;
+		lv2:maximum 3 ;
 		lv2:portProperty lv2:integer ;
 		units:unit units:oct ;
 	] , [

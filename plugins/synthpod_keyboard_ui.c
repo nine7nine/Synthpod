@@ -27,6 +27,8 @@
 
 #include <lv2_eo_ui.h>
 
+#define MAX_NOTES 97
+
 typedef struct _midi_atom_t midi_atom_t;
 typedef struct _plughandle_t plughandle_t;
 
@@ -42,6 +44,7 @@ struct _plughandle_t {
 	LV2UI_Write_Function write_function;
 	LV2UI_Controller controller;
 
+	uint8_t keys [MAX_NOTES];
 	uint8_t *key;
 	Evas_Object *obj;
 };
@@ -53,12 +56,6 @@ struct _midi_atom_t {
 
 static const int octave [12] = {
 	0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0
-};
-
-static const uint8_t keys [25] = {
-	 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11,
-	12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-	24
 };
 
 static void
@@ -216,12 +213,14 @@ _content_get(eo_ui_t *eoui)
 	evas_object_size_hint_aspect_set(widg, EVAS_ASPECT_CONTROL_BOTH,
 		eoui->w, eoui->h);
 
-	for(int i=0, pos=0; i<25; i++)
+	for(int i=0, pos=0; i<MAX_NOTES; i++)
 	{
+		handle->keys[i] = i;
+
 		if(octave[i % 12] == 0)
 		{
 			Evas_Object *key = evas_object_rectangle_add(evas_object_evas_get(widg));
-			evas_object_data_set(key, "key", &keys[i]);
+			evas_object_data_set(key, "key", &handle->keys[i]);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_UP, _mouse_up, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_MOVE, _mouse_move, handle);
@@ -237,7 +236,7 @@ _content_get(eo_ui_t *eoui)
 		}
 	}
 
-	for(int i=0, pos=0; i<25; i++)
+	for(int i=0, pos=0; i<MAX_NOTES; i++)
 	{
 		if(octave[i % 12] == 0)
 		{
@@ -246,7 +245,7 @@ _content_get(eo_ui_t *eoui)
 		else
 		{
 			Evas_Object *key = evas_object_rectangle_add(evas_object_evas_get(widg));
-			evas_object_data_set(key, "key", &keys[i]);
+			evas_object_data_set(key, "key", &handle->keys[i]);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_DOWN, _mouse_down, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_UP, _mouse_up, handle);
 			evas_object_event_callback_add(key, EVAS_CALLBACK_MOUSE_MOVE, _mouse_move, handle);
@@ -291,7 +290,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	eo_ui_t *eoui = &handle->eoui;
 	eoui->driver = driver;
 	eoui->content_get = _content_get;
-	eoui->w = 400,
+	eoui->w = 1280,
 	eoui->h = 100;
 
 	handle->write_function = write_function;
