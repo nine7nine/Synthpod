@@ -969,8 +969,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 					mod->uid, lilv_node_as_string(port_symbol_node));
 				asprintf(&pretty_name, "#%u - %s",
 					mod->uid, lilv_node_as_string(port_name_node));
+				const uint32_t order = (mod->uid << 16) | tar->index;
 				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
-					short_name, pretty_name, tar->direction == PORT_DIRECTION_OUTPUT);
+					short_name, pretty_name, tar->direction == PORT_DIRECTION_OUTPUT, order);
 
 				lilv_node_free(port_name_node);
 				free(short_name);

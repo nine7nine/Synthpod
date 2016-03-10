@@ -272,7 +272,7 @@ _rt_thread(void *data, Eina_Thread thread)
 
 static void *
 _system_port_add(void *data, system_port_t type, const char *short_name,
-	const char *pretty_name, int input)
+	const char *pretty_name, bool input, uint32_t order)
 {
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);

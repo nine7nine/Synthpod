@@ -862,7 +862,7 @@ _ui_saved(void *data, int status)
 
 static void *
 _system_port_add(void *data, system_port_t type, const char *short_name,
-	const char *pretty_name, int input)
+	const char *pretty_name, bool input, uint32_t order)
 {
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
@@ -945,13 +945,21 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 	}
 
 #if defined(JACK_HAS_METADATA_API)
-	if(jack_port && pretty_name)
+	if(jack_port)
 	{
 		jack_uuid_t uuid = jack_port_uuid(jack_port);
 		if(!jack_uuid_empty(uuid))
 		{
+			if(pretty_name)
+			{
+				jack_set_property(handle->client, uuid,
+					JACK_METADATA_PRETTY_NAME, pretty_name, "text/plain");
+			}
+
+			char order_str [32];
+			sprintf(order_str, "%"PRIu32, order);
 			jack_set_property(handle->client, uuid,
-				JACK_METADATA_PRETTY_NAME, pretty_name, "text/plain");
+				"http://jackaudio.org/metadata/order", order_str, "http://www.w3.org/2001/XMLSchema#integer");
 		}
 	}
 #endif
