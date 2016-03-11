@@ -6987,7 +6987,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				if(ui->driver->features & SP_UI_FEATURE_NEW)
 				{
 					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-new", "New", _menu_new, ui);
-					elm_object_item_tooltip_text_set(elmnt, "Ctrl+N");
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'N'");
 				}
 
 				if(ui->driver->features & (SP_UI_FEATURE_OPEN | SP_UI_FEATURE_IMPORT_FROM) )
@@ -6995,19 +6995,19 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					if(ui->driver->features & SP_UI_FEATURE_OPEN)
 					{
 						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-new", "Open", _menu_open_fileselector, ui);
-						elm_object_item_tooltip_text_set(elmnt, "Ctrl+O");
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'O'");
 					}
 					else if(ui->driver->features & SP_UI_FEATURE_IMPORT_FROM)
 					{
 						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-import", "Import", _menu_open_fileselector, ui);
-						elm_object_item_tooltip_text_set(elmnt, "Ctrl+I");
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'I'");
 					}
 				}
 
 				if(ui->driver->features & SP_UI_FEATURE_SAVE)
 				{
 					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-save", "Save", _menu_save, ui);
-					elm_object_item_tooltip_text_set(elmnt, "Ctrl+S");
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'S'");
 				}
 
 				if(ui->driver->features & (SP_UI_FEATURE_SAVE_AS | SP_UI_FEATURE_EXPORT_TO) )
@@ -7015,29 +7015,29 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					if(ui->driver->features & SP_UI_FEATURE_SAVE_AS)
 					{
 						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-save-as", "Save as", _menu_save_as_fileselector, ui);
-						elm_object_item_tooltip_text_set(elmnt, "Ctrl+Shift+S");
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl + Shift + 'S'");
 					}
 					else if(ui->driver->features & SP_UI_FEATURE_EXPORT_TO)
 					{
 						elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-export", "Export", _menu_save_as_fileselector, ui);
-						elm_object_item_tooltip_text_set(elmnt, "Ctrl+E");
+						elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'E'");
 					}
 				}
 
 				elmnt = elm_menu_item_add(ui->mainmenu, NULL, "list-add", "Plugin", _menu_plugin, ui);
-				elm_object_item_tooltip_text_set(elmnt, "Ctrl+P");
+				elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'P'");
 
 				elmnt = elm_menu_item_add(ui->mainmenu, NULL, "applications-system", "Matrix", _menu_matrix, ui);
-				elm_object_item_tooltip_text_set(elmnt, "Ctrl+M");
+				elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'M'");
 
 				if(ui->driver->features & SP_UI_FEATURE_CLOSE)
 				{
 					elmnt = elm_menu_item_add(ui->mainmenu, NULL, "application-exit", "Quit", _menu_close, ui);
-					elm_object_item_tooltip_text_set(elmnt, "Ctrl+Q");
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'Q'");
 				}
 
 				elmnt = elm_menu_item_add(ui->mainmenu, NULL, "help-about", "About", _menu_about, ui);
-				elm_object_item_tooltip_text_set(elmnt, "Ctrl+H");
+				elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'H'");
 			}
 
 			ui->popup = elm_popup_add(ui->vbox);
