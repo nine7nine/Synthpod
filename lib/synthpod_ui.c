@@ -5953,6 +5953,38 @@ _menu_matrix_del(void *data, Evas_Object *obj, void *event_info)
 	ui->matrix = NULL;
 }
 
+static void
+_matrix_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+	const Evas_Event_Key_Down *ev = event_info;
+
+	const Eina_Bool cntrl = evas_key_modifier_is_set(ev->modifiers, "Control");
+	
+	if(cntrl)
+	{
+		if(!strcmp(ev->key, "a"))
+			elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
+		else if(!strcmp(ev->key, "n"))
+			elm_toolbar_item_selected_set(ui->matrix_control, EINA_TRUE);
+		else if(!strcmp(ev->key, "c"))
+			elm_toolbar_item_selected_set(ui->matrix_cv, EINA_TRUE);
+		else if(!strcmp(ev->key, "e"))
+			elm_toolbar_item_selected_set(ui->matrix_event, EINA_TRUE);
+		else if(!strcmp(ev->key, "l"))
+			elm_toolbar_item_selected_set(ui->matrix_atom, EINA_TRUE);
+
+		else if(!strcmp(ev->key, "m"))
+			elm_toolbar_item_selected_set(ui->matrix_atom_midi, EINA_TRUE);
+		else if(!strcmp(ev->key, "o"))
+			elm_toolbar_item_selected_set(ui->matrix_atom_osc, EINA_TRUE);
+		else if(!strcmp(ev->key, "t"))
+			elm_toolbar_item_selected_set(ui->matrix_atom_time, EINA_TRUE);
+		else if(!strcmp(ev->key, "p"))
+			elm_toolbar_item_selected_set(ui->matrix_atom_patch, EINA_TRUE);
+	}
+}
+
 static inline Evas_Object *
 _menu_matrix_new(sp_ui_t *ui)
 {
@@ -5965,6 +5997,31 @@ _menu_matrix_new(sp_ui_t *ui)
 		evas_object_smart_callback_add(win, "delete,request", _menu_matrix_del, ui);
 		evas_object_resize(win, 1280, 640);
 		evas_object_show(win);
+
+		evas_object_event_callback_add(win, EVAS_CALLBACK_KEY_DOWN, _matrix_key_down, ui);
+
+		const Eina_Bool exclusive = EINA_FALSE;
+		const Evas_Modifier_Mask ctrl_mask = evas_key_modifier_mask_get(
+			evas_object_evas_get(win), "Control");
+		if(!evas_object_key_grab(win, "a", ctrl_mask, 0, exclusive)) // AUDIO
+			fprintf(stderr, "could not grab 'a' key\n");
+		if(!evas_object_key_grab(win, "n", ctrl_mask, 0, exclusive)) // CONTROL
+			fprintf(stderr, "could not grab 'n' key\n");
+		if(!evas_object_key_grab(win, "c", ctrl_mask, 0, exclusive)) // CV
+			fprintf(stderr, "could not grab 'c' key\n");
+		if(!evas_object_key_grab(win, "e", ctrl_mask, 0, exclusive)) // EVENT
+			fprintf(stderr, "could not grab 'e' key\n");
+		if(!evas_object_key_grab(win, "l", ctrl_mask, 0, exclusive)) // ATOM
+			fprintf(stderr, "could not grab 'l' key\n");
+
+		if(!evas_object_key_grab(win, "m", ctrl_mask, 0, exclusive)) // MIDI
+			fprintf(stderr, "could not grab 'm' key\n");
+		if(!evas_object_key_grab(win, "o", ctrl_mask, 0, exclusive)) // OSC
+			fprintf(stderr, "could not grab 'o' key\n");
+		if(!evas_object_key_grab(win, "t", ctrl_mask, 0, exclusive)) // TIME
+			fprintf(stderr, "could not grab 't' key\n");
+		if(!evas_object_key_grab(win, "p", ctrl_mask, 0, exclusive)) // PATCH
+			fprintf(stderr, "could not grab 'p' key\n");
 
 		Evas_Object *bg = elm_bg_add(win);
 		if(bg)
@@ -6004,14 +6061,23 @@ _menu_matrix_new(sp_ui_t *ui)
 				ui->matrix_audio = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/audio.png", "Audio", NULL, NULL);
 				elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
+				elm_object_item_tooltip_text_set(ui->matrix_audio, "Ctrl + 'A'");
+
 				ui->matrix_control = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/control.png", "Control", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_control, "Ctrl + 'N'");
+
 				ui->matrix_cv = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/cv.png", "CV", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_cv, "Ctrl + 'C'");
+
 				ui->matrix_event = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/atom.png", "Event", NULL, NULL); //FIXME event.png
+				elm_object_item_tooltip_text_set(ui->matrix_event, "Ctrl + 'E'");
+
 				ui->matrix_atom = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/atom.png", "Atom", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_atom, "Ctrl + 'L'");
 
 				Elm_Object_Item *sep = elm_toolbar_item_append(patchbar,
 					NULL, NULL, NULL, NULL);
@@ -6019,12 +6085,20 @@ _menu_matrix_new(sp_ui_t *ui)
 
 				ui->matrix_atom_midi = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/midi.png", "MIDI", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_atom_midi, "Ctrl + 'M'");
+
 				ui->matrix_atom_osc = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/osc.png", "OSC", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_atom_osc, "Ctrl + 'O'");
+
 				ui->matrix_atom_time = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/time.png", "Time", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_atom_time, "Ctrl + 'T'");
+
 				ui->matrix_atom_patch = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/patch.png", "Patch", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_atom_patch, "Ctrl + 'P'");
+
 			} // patchbar
 
 			ui->matrix = patcher_object_add(patchbox);
