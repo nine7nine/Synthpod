@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+ * Copyright (c) 2016 Hanspeter Portner (dev@open-music-kontrollers.ch)
  *
  * This is free software: you can redistribute it and/or modify
  * it under the terms of the Artistic License 2.0 as published by
@@ -15,517 +15,206 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#define PATCHER_UI "/synthpod/patcher/ui"
-
-images {
-	image: "border.png" COMP;
-	image: "icon_arrow_up.png" COMP;
-	image: "icon_arrow_right.png" COMP;
-}
+#define PATCHER_UI "/patcher/ui"
 
 group {
-	name: "/synthpod/patcher/node";
+	name: "/patcher/port";
 
 	parts {
+		part {
+			name: "clip";
+			type: RECT;
+			mouse_events: 0;
+			description { state: "default" 0.00; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL00; }
+			description { state: "default" 0.01; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL01; }
+			description { state: "default" 0.02; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL02; }
+			description { state: "default" 0.03; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL03; }
+			description { state: "default" 0.04; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL04; }
+			description { state: "default" 0.05; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL05; }
+			description { state: "default" 0.06; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL06; }
+			description { state: "default" 0.07; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL07; }
+			description { state: "default" 0.08; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL08; }
+			description { state: "default" 0.09; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL09; }
+			description { state: "default" 0.10; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL10; }
+			description { state: "default" 0.11; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL11; }
+			description { state: "default" 0.12; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL12; }
+			description { state: "default" 0.13; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL13; }
+			description { state: "default" 0.14; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL14; }
+			description { state: "default" 0.15; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL15; }
+			description { state: "default" 0.16; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL16; }
+			description { state: "default" 0.17; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL17; }
+			description { state: "default" 0.18; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL18; }
+			description { state: "default" 0.19; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL19; }
+			description { state: "default" 0.20; fixed: 1 1; rel1.offset: 0 -1; rel2.offset: 0 1; color: COL20; }
+		}
+
+		part {
+			name: "fg";
+			type: RECT;
+			mouse_events: 0;
+			description {
+				state: "default" 0.0;
+				color: 204 204 204 255;
+			}
+			description {
+				state: "default" 1.0;
+				color: 64 64 64 255;
+			}
+		}
+
 		part {
 			name: "bg";
 			type: RECT;
 			mouse_events: 0;
 			description {
 				state: "default" 0.0;
-				fixed: 1 1;
-				color: 255 255 255 0;
-			}
-			description {
-				state: "default" 0.5;
-				inherit: "default" 0.0;
-				color: 0 0 0 48;
+				rel1.offset: 0 -1;
+				rel2.offset: 0 1;
+				color: 204 204 204 0;
 			}
 			description {
 				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 0 0 0 96;
+				rel1.offset: 0 -1;
+				rel2.offset: 0 1;
+				color: 204 204 204 255;
 			}
 		}
 
 		part {
-			name: "grid.vertical";
+			name: "col";
 			type: RECT;
+			clip_to: "clip";
 			mouse_events: 0;
 			description {
 				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0.5 0;
-				rel1.offset: -0.5 0;
+				rel1.relative: 0 0;
+				rel1.offset: 0 -1;
+				rel2.relative: 0 1;
+				rel2.offset: 24 1;
+			}
+			description {
+				state: "default" 1.0;
+				rel1.relative: 1 0;
+				rel1.offset: -24 -1;
+				rel2.relative: 1 1;
+				rel2.offset: 0 1;
+			}
+		}
+
+		part {
+			name: "text.client";
+			type: TEXT;
+			mouse_events: 0;
+			clip_to: "fg";
+			scale: 1;
+			description {
+				state: "default" 0.0;
+				rel1.relative: 0.0 0;
+				rel1.offset: 29 0;
 				rel2.relative: 0.5 1;
-				rel2.offset: 0.5 0;
-				color: 128 128 128 255;
-			}
-		}
-		part {
-			name: "grid.horizontal";
-			type: RECT;
-			mouse_events: 0;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0 0.5;
-				rel1.offset: 0 -0.5;
-				rel2.relative: 1 0.5;
-				rel2.offset: 0 0.5;
-				color: 128 128 128 255;
-			}
-		}
-		
-		part {
-			name: "rect";
-			type: RECT;
-			mouse_events: 0;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0.25 0.25;
-				rel2.relative: 0.75 0.75;
-				color: 255 255 255 0;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 255 255 255 255;
-			}
-		}
-
-		part {
-			name: "line.vertical";
-			type: RECT;
-			mouse_events: 0;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0.5 0.5;
-				rel2.relative: 0.5 0.5;
-			}
-			description {
-				state: "default" 0.5;
-				inherit: "default" 0.0;
-				rel1.relative: 0.4 0.4;
-				rel2.relative: 0.6 1.0;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				rel1.relative: 0.4 0.0;
-				rel2.relative: 0.6 1.0;
-			}
-		}
-		part {
-			name: "line.horizontal";
-			type: RECT;
-			mouse_events: 0;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.relative: 0.5 0.5;
-				rel2.relative: 0.5 0.5;
-			}
-			description {
-				state: "default" 0.5;
-				inherit: "default" 0.0;
-				rel1.relative: 0.4 0.4;
-				rel2.relative: 1.0 0.6;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				rel1.relative: 0.0 0.4;
-				rel2.relative: 1.0 0.6;
-			}
-		}
-
-		part {
-			name: "ev";
-			type: IMAGE;
-			mouse_events: 1;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				image {
-					normal: "border.png";
-					border: 2 2 2 2;
-					middle: NONE;
-					scale_hint: STATIC;
+				text {
+					font: "default";
+					size: 10;
+					align: 0.0 0.5;
 				}
-				color: 255 255 255 0;
+				color: 255 255 255 255;
+			}
+			description {
+				state: "default" 1.0;
+				rel1.relative: 0.5 0;
+				rel2.relative: 1.0 1;
+				rel2.offset: -29 0;
+				text {
+					font: "default";
+					size: 10;
+					align: 1.0 0.5;
+				}
+				color: 255 255 255 255;
+			}
+		}
+
+		part {
+			name: "text.port";
+			type: TEXT;
+			mouse_events: 0;
+			clip_to: "fg";
+			scale: 1;
+			description {
+				state: "default" 0.0;
+				rel1.relative: 0.5 0;
+				rel2.relative: 1.0 1;
+				rel2.offset: -5 0;
+				text {
+					font: "default";
+					size: 10;
+					align: 1.0 0.5;
+				}
+				color: 255 255 255 255;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				color: 255 255 255 255;
+				rel1.relative: 0.0 0;
+				rel1.offset: 5 0;
+				rel2.relative: 0.5 1;
+				text.align: 0.0 0.5;
 			}
 		}
 	}
 
 	programs {
-		program {
-			signal: "mouse,in";
-			source: "ev";
-			action: STATE_SET "default" 1.0;
-			target: "ev";
-		}
-		program {
-			signal: "mouse,in";
-			source: "ev";
-			action: SIGNAL_EMIT "in" PATCHER_UI;
-		}
-		program {
-			signal: "mouse,out";
-			source: "ev";
-			action: STATE_SET "default" 0.0;
-			target: "ev";
-		}
-		program {
-			signal: "mouse,out";
-			source: "ev";
-			action: SIGNAL_EMIT "out" PATCHER_UI;
-		}
-		program {
-			signal: "mouse,clicked,*";
-			source: "ev";
-			action: SIGNAL_EMIT "toggled" PATCHER_UI;
-		}
+		program { signal: "col,00"; source: PATCHER_UI; action: STATE_SET "default" 0.00; target: "clip"; }
+		program { signal: "col,01"; source: PATCHER_UI; action: STATE_SET "default" 0.01; target: "clip"; }
+		program { signal: "col,02"; source: PATCHER_UI; action: STATE_SET "default" 0.02; target: "clip"; }
+		program { signal: "col,03"; source: PATCHER_UI; action: STATE_SET "default" 0.03; target: "clip"; }
+		program { signal: "col,04"; source: PATCHER_UI; action: STATE_SET "default" 0.04; target: "clip"; }
+		program { signal: "col,05"; source: PATCHER_UI; action: STATE_SET "default" 0.05; target: "clip"; }
+		program { signal: "col,06"; source: PATCHER_UI; action: STATE_SET "default" 0.06; target: "clip"; }
+		program { signal: "col,07"; source: PATCHER_UI; action: STATE_SET "default" 0.07; target: "clip"; }
+		program { signal: "col,08"; source: PATCHER_UI; action: STATE_SET "default" 0.08; target: "clip"; }
+		program { signal: "col,09"; source: PATCHER_UI; action: STATE_SET "default" 0.09; target: "clip"; }
+		program { signal: "col,10"; source: PATCHER_UI; action: STATE_SET "default" 0.10; target: "clip"; }
+		program { signal: "col,11"; source: PATCHER_UI; action: STATE_SET "default" 0.11; target: "clip"; }
+		program { signal: "col,12"; source: PATCHER_UI; action: STATE_SET "default" 0.12; target: "clip"; }
+		program { signal: "col,13"; source: PATCHER_UI; action: STATE_SET "default" 0.13; target: "clip"; }
+		program { signal: "col,14"; source: PATCHER_UI; action: STATE_SET "default" 0.14; target: "clip"; }
+		program { signal: "col,15"; source: PATCHER_UI; action: STATE_SET "default" 0.15; target: "clip"; }
+		program { signal: "col,16"; source: PATCHER_UI; action: STATE_SET "default" 0.16; target: "clip"; }
+		program { signal: "col,17"; source: PATCHER_UI; action: STATE_SET "default" 0.17; target: "clip"; }
+		program { signal: "col,18"; source: PATCHER_UI; action: STATE_SET "default" 0.18; target: "clip"; }
+		program { signal: "col,19"; source: PATCHER_UI; action: STATE_SET "default" 0.19; target: "clip"; }
+		program { signal: "col,20"; source: PATCHER_UI; action: STATE_SET "default" 0.20; target: "clip"; }
 
-		program {
-			signal: "on";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "rect";
-		}
-		program {
-			signal: "off";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "rect";
-		}
-
-		program {
-			signal: "direct";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "bg";
-		}
-		program {
-			signal: "feedback";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.5;
-			target: "bg";
-		}
-		program {
-			signal: "indirect";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "bg";
-		}
-
-		program {
-			signal: "clear";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "line.vertical";
-			target: "line.horizontal";
-		}
-		program {
-			signal: "edge";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.5;
-			target: "line.vertical";
-			target: "line.horizontal";
-		}
-		program {
-			signal: "edge,vertical";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "line.vertical";
-		}
-		program {
-			signal: "edge,vertical";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.5;
-			target: "line.horizontal";
-		}
-		program {
-			signal: "edge,horizontal";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.5;
-			target: "line.vertical";
-		}
-		program {
-			signal: "edge,horizontal";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "line.horizontal";
-		}
-		program {
-			signal: "vertical";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "line.vertical";
-		}
-		program {
-			signal: "vertical";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "line.horizontal";
-		}
-		program {
-			signal: "horizontal";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "line.horizontal";
-		}
-		program {
-			signal: "horizontal";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "line.vertical";
-		}
-	}
-}
-
-group {
-	name: "/synthpod/patcher/port";
-
-	parts {
-		part {
-			name: "icon.clip";
-			type: RECT;
-			mouse_events: 0;
-			description { state: "default" 0.00; fixed: 1 1; color: COL00; }
-			description { state: "default" 0.01; fixed: 1 1; color: COL01; }
-			description { state: "default" 0.02; fixed: 1 1; color: COL02; }
-			description { state: "default" 0.03; fixed: 1 1; color: COL03; }
-			description { state: "default" 0.04; fixed: 1 1; color: COL04; }
-			description { state: "default" 0.05; fixed: 1 1; color: COL05; }
-			description { state: "default" 0.06; fixed: 1 1; color: COL06; }
-			description { state: "default" 0.07; fixed: 1 1; color: COL07; }
-			description { state: "default" 0.08; fixed: 1 1; color: COL08; }
-			description { state: "default" 0.09; fixed: 1 1; color: COL09; }
-			description { state: "default" 0.10; fixed: 1 1; color: COL10; }
-			description { state: "default" 0.11; fixed: 1 1; color: COL11; }
-			description { state: "default" 0.12; fixed: 1 1; color: COL12; }
-			description { state: "default" 0.13; fixed: 1 1; color: COL13; }
-			description { state: "default" 0.14; fixed: 1 1; color: COL14; }
-			description { state: "default" 0.15; fixed: 1 1; color: COL15; }
-			description { state: "default" 0.16; fixed: 1 1; color: COL16; }
-			description { state: "default" 0.17; fixed: 1 1; color: COL17; }
-			description { state: "default" 0.18; fixed: 1 1; color: COL18; }
-			description { state: "default" 0.19; fixed: 1 1; color: COL19; }
-			description { state: "default" 0.20; fixed: 1 1; color: COL20; }
-		}
-		part {
-			name: "icon";
-			type: IMAGE;
-			mouse_events: 0;
-			clip_to: "icon.clip";
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				image.normal: "icon_arrow_up.png";
-				color: 255 255 255 255;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				image.normal: "icon_arrow_right.png";
-				color: 255 255 255 255;
-			}
-		}
-		part {
-			name: "ev";
-			type: IMAGE;
-			mouse_events: 1;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				image {
-					normal: "border.png";
-					border: 2 2 2 2;
-					middle: NONE;
-					scale_hint: STATIC;
-				}
-				color: 255 255 255 0;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 255 255 255 255;
-			}
-		}
-	}
-
-	programs {
 		program {
 			signal: "source";
 			source: PATCHER_UI;
 			action: STATE_SET "default" 0.0;
-			target: "icon";
+			target: "col";
+			target: "text.client";
+			target: "text.port";
 		}
 		program {
 			signal: "sink";
 			source: PATCHER_UI;
 			action: STATE_SET "default" 1.0;
-			target: "icon";
-		}
-
-		program { signal: "col,00"; source: PATCHER_UI; action: STATE_SET "default" 0.00; target: "icon.clip"; }
-		program { signal: "col,01"; source: PATCHER_UI; action: STATE_SET "default" 0.01; target: "icon.clip"; }
-		program { signal: "col,02"; source: PATCHER_UI; action: STATE_SET "default" 0.02; target: "icon.clip"; }
-		program { signal: "col,03"; source: PATCHER_UI; action: STATE_SET "default" 0.03; target: "icon.clip"; }
-		program { signal: "col,04"; source: PATCHER_UI; action: STATE_SET "default" 0.04; target: "icon.clip"; }
-		program { signal: "col,05"; source: PATCHER_UI; action: STATE_SET "default" 0.05; target: "icon.clip"; }
-		program { signal: "col,06"; source: PATCHER_UI; action: STATE_SET "default" 0.06; target: "icon.clip"; }
-		program { signal: "col,07"; source: PATCHER_UI; action: STATE_SET "default" 0.07; target: "icon.clip"; }
-		program { signal: "col,08"; source: PATCHER_UI; action: STATE_SET "default" 0.08; target: "icon.clip"; }
-		program { signal: "col,09"; source: PATCHER_UI; action: STATE_SET "default" 0.09; target: "icon.clip"; }
-		program { signal: "col,10"; source: PATCHER_UI; action: STATE_SET "default" 0.10; target: "icon.clip"; }
-		program { signal: "col,11"; source: PATCHER_UI; action: STATE_SET "default" 0.11; target: "icon.clip"; }
-		program { signal: "col,12"; source: PATCHER_UI; action: STATE_SET "default" 0.12; target: "icon.clip"; }
-		program { signal: "col,13"; source: PATCHER_UI; action: STATE_SET "default" 0.13; target: "icon.clip"; }
-		program { signal: "col,14"; source: PATCHER_UI; action: STATE_SET "default" 0.14; target: "icon.clip"; }
-		program { signal: "col,15"; source: PATCHER_UI; action: STATE_SET "default" 0.15; target: "icon.clip"; }
-		program { signal: "col,16"; source: PATCHER_UI; action: STATE_SET "default" 0.16; target: "icon.clip"; }
-		program { signal: "col,17"; source: PATCHER_UI; action: STATE_SET "default" 0.17; target: "icon.clip"; }
-		program { signal: "col,18"; source: PATCHER_UI; action: STATE_SET "default" 0.18; target: "icon.clip"; }
-		program { signal: "col,19"; source: PATCHER_UI; action: STATE_SET "default" 0.19; target: "icon.clip"; }
-		program { signal: "col,20"; source: PATCHER_UI; action: STATE_SET "default" 0.20; target: "icon.clip"; }
-
-		program {
-			signal: "mouse,in";
-			source: "ev";
-			action: SIGNAL_EMIT "in" PATCHER_UI;
-		}
-		program {
-			signal: "mouse,out";
-			source: "ev";
-			action: SIGNAL_EMIT "out" PATCHER_UI;
-		}
-		program {
-			signal: "mouse,clicked,*";
-			source: "ev";
-			action: SIGNAL_EMIT "toggled" PATCHER_UI;
+			target: "col";
+			target: "text.client";
+			target: "text.port";
 		}
 
 		program {
 			signal: "on";
 			source: PATCHER_UI;
 			action: STATE_SET "default" 1.0;
-			target: "ev";
+			target: "fg";
+			target: "bg";
 		}
 		program {
 			signal: "off";
 			source: PATCHER_UI;
 			action: STATE_SET "default" 0.0;
-			target: "ev";
-		}
-	}
-}
-
-group {
-	name: "/synthpod/patcher/label/horizontal";
-
-	parts {
-		part {
-			name: "default";
-			type: TEXT;
-			mouse_events: 0;
-			scale: 1;
-			description {
-				state: "default" 0.0;
-				text {
-					text: "Sources";
-					size: 10;
-					align: 0.0 0.5;
-				}
-				color: 128 128 128 255;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 255 255 255 255;
-			}
-		}
-	}
-
-	programs {
-		program {
-			signal: "on";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "default";
-		}
-		program {
-			signal: "off";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "default";
-		}
-	}
-}
-
-group {
-	name: "/synthpod/patcher/label/vertical";
-
-	parts {
-		part {
-			name: "center";
-			type: RECT;
-			mouse_events: 0;
-			description {
-				state: "default" 0.0;
-				rel1.relative: 0.5 0.0;
-				rel2.relative: 0.5 0.0;
-			}
-		}
-		part {
-			name: "default";
-			type: TEXT;
-			mouse_events: 0;
-			scale: 1;
-			description {
-				state: "default" 0.0;
-				rel1.relative: 0.5 -0.5;
-				rel2.relative: 12.5 0.5; //FIXME
-				map {
-					on: 1;
-					rotation.center: "center";
-					rotation.z: 90; // 45
-				}
-				text {
-					text: "Sinks";
-					size: 10;
-					align: 0.0 0.5;
-				}
-				color: 128 128 128 255;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 255 255 255 255;
-			}
-		}
-	}
-
-	programs {
-		program {
-			signal: "on";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 1.0;
-			target: "default";
-		}
-		program {
-			signal: "off";
-			source: PATCHER_UI;
-			action: STATE_SET "default" 0.0;
-			target: "default";
+			target: "fg";
+			target: "bg";
 		}
 	}
 }

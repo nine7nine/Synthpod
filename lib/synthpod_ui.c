@@ -316,6 +316,7 @@ struct _sp_ui_t {
 
 	Evas_Object *patchwin;
 	Evas_Object *matrix;
+	float zoom;
 	port_type_t matrix_type;
 	Elm_Object_Item *matrix_audio;
 	Elm_Object_Item *matrix_atom;
@@ -3543,6 +3544,8 @@ _patches_update(sp_ui_t *ui)
 		if(!mod || !mod->selected)
 			continue; // ignore unselected mods
 
+		bool first_source = true;
+		bool first_sink = true;
 		for(unsigned i=0; i<mod->num_ports; i++)
 		{
 			port_t *port = &mod->ports[i];
@@ -3565,24 +3568,36 @@ _patches_update(sp_ui_t *ui)
 			{
 				if(ui->matrix)
 				{
-					patcher_object_source_data_set(ui->matrix,
-						count[port->direction][port->type], port);
+					patcher_object_source_id_set(ui->matrix,
+						count[port->direction][port->type], (intptr_t)port);
 					patcher_object_source_color_set(ui->matrix,
 						count[port->direction][port->type], mod->col);
 					patcher_object_source_label_set(ui->matrix,
 						count[port->direction][port->type], name_str);
+					if(first_source)
+					{
+						patcher_object_source_group_set(ui->matrix,
+							count[port->direction][port->type], mod->name);
+						first_source = false;
+					}
 				}
 			}
 			else // sink
 			{
 				if(ui->matrix)
 				{
-					patcher_object_sink_data_set(ui->matrix,
-						count[port->direction][port->type], port);
+					patcher_object_sink_id_set(ui->matrix,
+						count[port->direction][port->type], (intptr_t)port);
 					patcher_object_sink_color_set(ui->matrix,
 						count[port->direction][port->type], mod->col);
 					patcher_object_sink_label_set(ui->matrix,
 						count[port->direction][port->type], name_str);
+					if(first_sink)
+					{
+						patcher_object_sink_group_set(ui->matrix,
+							count[port->direction][port->type], mod->name);
+						first_sink = false;
+					}
 				}
 			}
 
@@ -5472,8 +5487,8 @@ _matrix_connect_request(void *data, Evas_Object *obj, void *event_info)
 	if(!source || !sink)
 		return;
 
-	port_t *source_port = source->ptr;
-	port_t *sink_port = sink->ptr;
+	port_t *source_port = (port_t *)source->id;
+	port_t *sink_port = (port_t *)sink->id;
 	if(!source_port || !sink_port)
 		return;
 
@@ -5501,8 +5516,8 @@ _matrix_disconnect_request(void *data, Evas_Object *obj, void *event_info)
 	if(!source || !sink)
 		return;
 
-	port_t *source_port = source->ptr;
-	port_t *sink_port = sink->ptr;
+	port_t *source_port = (port_t *)source->id;
+	port_t *sink_port = (port_t *)sink->id;
 	if(!source_port || !sink_port)
 		return;
 
@@ -5530,8 +5545,8 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 	if(!source || !sink)
 		return;
 
-	port_t *source_port = source->ptr;
-	port_t *sink_port = sink->ptr;
+	port_t *source_port = (port_t *)source->id;
+	port_t *sink_port = (port_t *)sink->id;
 	if(!source_port || !sink_port)
 		return;
 
@@ -5544,6 +5559,17 @@ _matrix_realize_request(void *data, Evas_Object *obj, void *event_info)
 			sink_port->mod->uid, sink_port->index, -1, -999);
 		_sp_ui_to_app_advance(ui, size);
 	}
+}
+
+static void
+_matrix_zoom_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+	float *ev = event_info;
+	if(!ui || !ev)
+		return;
+
+	ui->zoom = *ev; //TODO serialize this to state?
 }
 
 static void
@@ -5845,6 +5871,9 @@ _patchbar_restore(sp_ui_t *ui)
 			}
 			break;
 		default:
+			// force first time reload
+			elm_toolbar_item_selected_set(ui->matrix_cv, EINA_TRUE);
+			elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
 			break;
 	}
 }
@@ -5934,7 +5963,7 @@ _menu_matrix_new(sp_ui_t *ui)
 		elm_win_title_set(win, title);
 		elm_win_autodel_set(win, EINA_TRUE);
 		evas_object_smart_callback_add(win, "delete,request", _menu_matrix_del, ui);
-		evas_object_resize(win, 640, 480);
+		evas_object_resize(win, 1280, 640);
 		evas_object_show(win);
 
 		Evas_Object *bg = elm_bg_add(win);
@@ -5950,7 +5979,7 @@ _menu_matrix_new(sp_ui_t *ui)
 		Evas_Object *patchbox = elm_box_add(win);
 		if(patchbox)
 		{
-			elm_box_horizontal_set(patchbox, EINA_FALSE);
+			elm_box_horizontal_set(patchbox, EINA_TRUE);
 			elm_box_homogeneous_set(patchbox, EINA_FALSE);
 			evas_object_data_set(patchbox, "ui", ui);
 			evas_object_size_hint_weight_set(patchbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
@@ -5961,14 +5990,14 @@ _menu_matrix_new(sp_ui_t *ui)
 			Evas_Object *patchbar = elm_toolbar_add(patchbox);
 			if(patchbar)
 			{
-				elm_toolbar_horizontal_set(patchbar, EINA_TRUE);
+				elm_toolbar_horizontal_set(patchbar, EINA_FALSE);
 				elm_toolbar_homogeneous_set(patchbar, EINA_TRUE);
 				elm_toolbar_align_set(patchbar, 0.f);
 				elm_toolbar_select_mode_set(patchbar, ELM_OBJECT_SELECT_MODE_ALWAYS);
 				elm_toolbar_shrink_mode_set(patchbar, ELM_TOOLBAR_SHRINK_SCROLL);
 				evas_object_smart_callback_add(patchbar, "selected", _patchbar_selected, ui);
-				evas_object_size_hint_weight_set(patchbar, EVAS_HINT_EXPAND, 0.f);
-				evas_object_size_hint_align_set(patchbar, EVAS_HINT_FILL, 0.f);
+				evas_object_size_hint_weight_set(patchbar, 0.f, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(patchbar, 0.f, EVAS_HINT_FILL);
 				evas_object_show(patchbar);
 				elm_box_pack_end(patchbox, patchbar);
 
@@ -6001,19 +6030,22 @@ _menu_matrix_new(sp_ui_t *ui)
 			ui->matrix = patcher_object_add(patchbox);
 			if(ui->matrix)
 			{
+				if(ui->zoom > 0.f)
+					patcher_object_zoom_set(ui->matrix, ui->zoom);
 				evas_object_smart_callback_add(ui->matrix, "connect,request",
 					_matrix_connect_request, ui);
 				evas_object_smart_callback_add(ui->matrix, "disconnect,request",
 					_matrix_disconnect_request, ui);
 				evas_object_smart_callback_add(ui->matrix, "realize,request",
 					_matrix_realize_request, ui);
+				evas_object_smart_callback_add(ui->matrix, "zoom,changed",
+					_matrix_zoom_changed, ui);
 				evas_object_size_hint_weight_set(ui->matrix, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 				evas_object_size_hint_align_set(ui->matrix, EVAS_HINT_FILL, EVAS_HINT_FILL);
 				evas_object_show(ui->matrix);
-				elm_box_pack_end(patchbox, ui->matrix);
+				elm_box_pack_start(patchbox, ui->matrix);
 
 				_patchbar_restore(ui);
-				_patches_update(ui);
 			} // matrix
 		} // patchbox
 
@@ -6418,7 +6450,7 @@ _sp_ui_from_app_port_connected(sp_ui_t *ui, const LV2_Atom *atom)
 
 	if(ui->matrix && (src->type == ui->matrix_type))
 	{
-		patcher_object_connected_set(ui->matrix, src, snk,
+		patcher_object_connected_set(ui->matrix, (intptr_t)src, (intptr_t)snk,
 			trans->state.body ? EINA_TRUE : EINA_FALSE,
 			trans->indirect.body);
 	}
@@ -6647,6 +6679,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->win = win;
 	ui->driver = driver;
 	ui->data = data;
+
+	ui->zoom = 0.f;
+	ui->matrix_type = PORT_TYPE_NUM; // force first time reload
 
 	lv2_atom_forge_init(&ui->forge, ui->driver->map);
 

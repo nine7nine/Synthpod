@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+ * Copyright (c) 2016 Hanspeter Portner (dev@open-music-kontrollers.ch)
  *
  * This is free software: you can redistribute it and/or modify
  * it under the terms of the Artistic License 2.0 as published by
@@ -20,30 +20,30 @@
 
 #include <Evas.h>
 
-#define PATCHER_UI "/synthpod/patcher/ui"
+#define PATCHER_UI "/patcher/ui"
 
 typedef struct _patcher_event_t patcher_event_t;
 
 struct _patcher_event_t {
 	int index;
-	void *ptr;
+	intptr_t id;
 };
 
 Evas_Object *
-patcher_object_add(Evas *e);
+patcher_object_add(Evas_Object *parent);
 
 void
 patcher_object_dimension_set(Evas_Object *o, int sources, int sinks);
 
 void
-patcher_object_connected_set(Evas_Object *o, void *source_data, void *sink_data,
+patcher_object_connected_set(Evas_Object *o, intptr_t source_id, intptr_t sink_id,
 	Eina_Bool state, int indirect);
 
 void
-patcher_object_source_data_set(Evas_Object *o, int source, void *data);
+patcher_object_source_id_set(Evas_Object *o, int source, intptr_t id);
 
 void
-patcher_object_sink_data_set(Evas_Object *o, int sink, void *data);
+patcher_object_sink_id_set(Evas_Object *o, int sink, intptr_t id);
 
 void
 patcher_object_source_color_set(Evas_Object *o, int source, int col);
@@ -58,6 +58,21 @@ void
 patcher_object_sink_label_set(Evas_Object *o, int sink, const char *label);
 
 void
+patcher_object_source_group_set(Evas_Object *o, int source, const char *group);
+
+void
+patcher_object_sink_group_set(Evas_Object *o, int sink, const char *group);
+
+void
 patcher_object_realize(Evas_Object *o);
+
+void
+patcher_object_zoom_in(Evas_Object *o);
+
+void
+patcher_object_zoom_out(Evas_Object *o);
+
+void
+patcher_object_zoom_set(Evas_Object *o, float zoom);
 
 #endif // _SYNTHPOD_PATCHER_H
