@@ -5963,7 +5963,12 @@ _matrix_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	
 	if(cntrl)
 	{
-		if(!strcmp(ev->key, "a"))
+		if(!strcmp(ev->key, "KP_Add"))
+			patcher_object_zoom_in(ui->matrix);
+		else if(!strcmp(ev->key, "KP_Subtract"))
+			patcher_object_zoom_out(ui->matrix);
+
+		else if(!strcmp(ev->key, "a"))
 			elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
 		else if(!strcmp(ev->key, "n"))
 			elm_toolbar_item_selected_set(ui->matrix_control, EINA_TRUE);
@@ -6003,6 +6008,10 @@ _menu_matrix_new(sp_ui_t *ui)
 		const Eina_Bool exclusive = EINA_FALSE;
 		const Evas_Modifier_Mask ctrl_mask = evas_key_modifier_mask_get(
 			evas_object_evas_get(win), "Control");
+		if(!evas_object_key_grab(win, "KP_Add", ctrl_mask, 0, exclusive)) // zoom in
+			fprintf(stderr, "could not grab '+' key\n");
+		if(!evas_object_key_grab(win, "KP_Subtract", ctrl_mask, 0, exclusive)) // zoom out
+			fprintf(stderr, "could not grab '-' key\n");
 		if(!evas_object_key_grab(win, "a", ctrl_mask, 0, exclusive)) // AUDIO
 			fprintf(stderr, "could not grab 'a' key\n");
 		if(!evas_object_key_grab(win, "n", ctrl_mask, 0, exclusive)) // CONTROL
