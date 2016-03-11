@@ -48,6 +48,7 @@
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
 typedef enum _blocking_state_t blocking_state_t;
+typedef enum _silencing_state_t silencing_state_t;
 typedef enum _ramp_state_t ramp_state_t;
 
 typedef struct _xpress_map_t xpress_map_t;
@@ -67,6 +68,12 @@ typedef bool (*from_ui_cb_t)(sp_app_t *app, const LV2_Atom *atom);
 typedef void (*port_simplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 typedef void (*port_multiplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 typedef void (*port_transfer_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
+
+enum _silencing_state_t {
+	SILENCING_STATE_RUN = 0,
+	SILENCING_STATE_BLOCK,
+	SILENCING_STATE_WAIT
+};
 
 enum _blocking_state_t {
 	BLOCKING_STATE_RUN = 0,
@@ -93,7 +100,8 @@ enum _ramp_state_t {
 	RAMP_STATE_NONE = 0,
 	RAMP_STATE_UP,
 	RAMP_STATE_DOWN,
-	RAMP_STATE_DOWN_DEL
+	RAMP_STATE_DOWN_DEL,
+	RAMP_STATE_DOWN_DRAIN,
 };
 
 enum _job_type_request_t {
@@ -270,6 +278,7 @@ struct _sp_app_t {
 	atomic_flag dirty;
 
 	blocking_state_t block_state;
+	silencing_state_t silence_state;
 	bool load_bundle;
 
 	struct {
@@ -1347,6 +1356,82 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 	return 0; // not connected
 }
 
+static inline int
+_sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port)
+{
+	if(  (src_port->direction == PORT_DIRECTION_OUTPUT)
+		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
+	{
+		source_t *conn = NULL;
+	
+		// find connection
+		for(int i=0; i<snk_port->num_sources; i++)
+		{
+			if(snk_port->sources[i].port == src_port)
+			{
+				conn = &snk_port->sources[i];
+				break;
+			}
+		}
+
+		if(conn)
+		{
+			if(src_port->type == PORT_TYPE_AUDIO)
+			{
+				//_sp_app_port_reconnect(app, src_port, snk_port, true); // handles port_connect
+				// XXX we are already in multiplex mode
+
+				// only audio output ports need to be ramped to be clickless
+				conn->ramp.samples = app->ramp_samples;
+				conn->ramp.state = RAMP_STATE_UP;
+				conn->ramp.value = 0.f;
+
+				return 1; // needs ramping
+			}
+		}
+	}
+
+	return 0; // not connected
+}
+
+static inline int
+_sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
+	ramp_state_t ramp_state)
+{
+	if(  (src_port->direction == PORT_DIRECTION_OUTPUT)
+		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
+	{
+		source_t *conn = NULL;
+	
+		// find connection
+		for(int i=0; i<snk_port->num_sources; i++)
+		{
+			if(snk_port->sources[i].port == src_port)
+			{
+				conn = &snk_port->sources[i];
+				break;
+			}
+		}
+
+		if(conn)
+		{
+			if(src_port->type == PORT_TYPE_AUDIO)
+			{
+				_sp_app_port_reconnect(app, src_port, snk_port, true); // handles port_connect
+
+				// only audio output ports need to be ramped to be clickless
+				conn->ramp.samples = app->ramp_samples;
+				conn->ramp.state = ramp_state;
+				conn->ramp.value = 1.f;
+
+				return 1; // needs ramping
+			}
+		}
+	}
+
+	return 0; // not connected
+}
+
 // rt
 static void
 _eject_module(sp_app_t *app, mod_t *mod)
@@ -1552,7 +1637,6 @@ _sp_app_from_ui_module_del(sp_app_t *app, const LV2_Atom *atom)
 		return advance_ui[app->block_state];
 
 	int needs_ramping = 0;
-
 	for(unsigned p1=0; p1<mod->num_ports; p1++)
 	{
 		port_t *port = &mod->ports[p1];
@@ -1568,12 +1652,11 @@ _sp_app_from_ui_module_del(sp_app_t *app, const LV2_Atom *atom)
 		for(unsigned m=0; m<app->num_mods; m++)
 			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
 			{
-				needs_ramping = needs_ramping || _sp_app_port_disconnect_request(app,
+				needs_ramping += _sp_app_port_disconnect_request(app,
 					port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DEL);
 			}
 	}
-
-	if(!needs_ramping)
+	if(needs_ramping == 0)
 		_eject_module(app, mod);
 
 	return advance_ui[app->block_state];
@@ -1649,6 +1732,33 @@ _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 		|| (app->block_state == BLOCKING_STATE_BLOCK) );
 	if(app->block_state == BLOCKING_STATE_RUN)
 	{
+		// ramping
+		int needs_ramping = 0;
+		for(unsigned p1=0; p1<mod->num_ports; p1++)
+		{
+			port_t *port = &mod->ports[p1];
+
+			// silence sources
+			/* TODO is this needed?
+			for(int s=0; s<port->num_sources; s++)
+			{
+				_sp_app_port_silence_request(app,
+					port->sources[s].port, port, RAMP_STATE_DOWN_DRAIN);
+			}
+			*/
+
+			// silence sinks
+			for(unsigned m=0; m<app->num_mods; m++)
+				for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
+				{
+					needs_ramping += _sp_app_port_silence_request(app,
+						port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DRAIN);
+				}
+		}
+		app->silence_state = needs_ramping == 0
+			? SILENCING_STATE_RUN
+			: SILENCING_STATE_BLOCK;
+
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t);
 		work_t *work = _sp_app_to_worker_request(app, size);
@@ -1666,6 +1776,9 @@ _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 	}
 	else if(app->block_state == BLOCKING_STATE_BLOCK)
 	{
+		if(app->silence_state == SILENCING_STATE_BLOCK)
+			return false; // not fully silenced yet, wait
+
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t) + pset->uri.atom.size;
 		work_t *work = _sp_app_to_worker_request(app, size);
@@ -2057,6 +2170,8 @@ _sp_app_from_ui_bundle_load(sp_app_t *app, const LV2_Atom *atom)
 		|| (app->block_state == BLOCKING_STATE_BLOCK) );
 	if(app->block_state == BLOCKING_STATE_RUN)
 	{
+		//FIXME ramp down system outputs
+
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t);
 		work_t *work = _sp_app_to_worker_request(app, size);
@@ -2074,6 +2189,8 @@ _sp_app_from_ui_bundle_load(sp_app_t *app, const LV2_Atom *atom)
 	}
 	else if(app->block_state == BLOCKING_STATE_BLOCK)
 	{
+		//FIXME ramp up system outputs
+
 		// send request to worker thread
 		size_t size = sizeof(work_t) + sizeof(job_t) + load->path.atom.size;
 		work_t *work = _sp_app_to_worker_request(app, size);
@@ -2243,6 +2360,24 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				assert(app->block_state == BLOCKING_STATE_WAIT);
 				app->block_state = BLOCKING_STATE_RUN; // release block
 				mod->bypassed = false;
+
+				if(app->silence_state == SILENCING_STATE_WAIT)
+				{
+					app->silence_state = SILENCING_STATE_RUN;
+
+					// ramping
+					for(unsigned p1=0; p1<mod->num_ports; p1++)
+					{
+						port_t *port = &mod->ports[p1];
+
+						// desilence sinks
+						for(unsigned m=0; m<app->num_mods; m++)
+							for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
+							{
+								_sp_app_port_desilence(app, port, &app->mods[m]->ports[p2]);
+							}
+					}
+				}
 
 				//FIXME signal to UI
 
@@ -3324,6 +3459,16 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 		{
 			_sp_app_port_disconnect(app, source->port, port);
 			source->port->mod->delete_request = true; // mark module for removal
+		}
+		else if(source->ramp.state == RAMP_STATE_DOWN_DRAIN)
+		{
+			// fully silenced, continue with preset loading
+			//_sp_app_port_reconnect(app, source->port, port, false); // handles port_connect
+			// XXX stay in multiplex mode
+
+			app->silence_state = SILENCING_STATE_WAIT;
+			source->ramp.value = 0.f;
+			return; // stay in RAMP_STATE_DOWN_DRAIN
 		}
 		else if(source->ramp.state == RAMP_STATE_UP)
 		{
