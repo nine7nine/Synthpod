@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+ * Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)
  *
  * This is free software: you can redistribute it and/or modify
  * it under the terms of the Artistic License 2.0 as published by
@@ -441,7 +441,7 @@ elm_main(int argc, char **argv)
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
-		"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;

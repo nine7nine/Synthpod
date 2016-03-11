@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+ * Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -914,7 +914,7 @@ elm_main(int argc, char **argv)
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
-		"Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
 		"Released under GNU General Public License 3 by Open Music Kontrollers\n");
 
 	// read local configuration if present

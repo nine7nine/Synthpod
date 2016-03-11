@@ -60,7 +60,7 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 ### License (everything but synthpod\_alsa)
 
-Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)
 
 This is free software: you can redistribute it and/or modify
 it under the terms of the Artistic License 2.0 as published by
@@ -77,7 +77,7 @@ along the source as a COPYING file. If not, obtain it from
 
 ### License (synthpod\_alsa only)
 
-Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
