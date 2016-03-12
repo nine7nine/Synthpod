@@ -61,6 +61,8 @@ typedef struct _job_t job_t;
 typedef struct _source_t source_t;
 typedef struct _pool_t pool_t;
 typedef struct _port_driver_t port_driver_t;
+typedef struct _app_prof_t app_prof_t;
+typedef struct _mod_prof_t mod_prof_t;
 
 typedef struct _from_ui_t from_ui_t;
 typedef bool (*from_ui_cb_t)(sp_app_t *app, const LV2_Atom *atom);
@@ -152,6 +154,21 @@ struct _xpress_map_t {
 	xpress_map_new_id_t new_id;
 };
 
+struct _app_prof_t {
+	struct timespec t0;
+	struct timespec t1;
+	unsigned sum;
+	unsigned min;
+	unsigned max;
+	unsigned count;
+};
+
+struct _mod_prof_t {
+	unsigned sum;
+	unsigned min;
+	unsigned max;
+};
+
 struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
@@ -205,6 +222,7 @@ struct _mod_t {
 	port_t *ports;
 
 	pool_t pools [PORT_TYPE_NUM];
+	mod_prof_t prof;
 };
 
 struct _port_driver_t {
@@ -324,6 +342,7 @@ struct _sp_app_t {
 	xpress_map_t voice_map;
 
 	Sratom *sratom;
+	app_prof_t prof;
 };
 
 struct _from_ui_t {
@@ -1134,6 +1153,11 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		fprintf(stderr, "default state loading failed\n");
 
 	lilv_instance_activate(mod->inst);
+
+	// initialize profiling reference time
+	mod->prof.min = UINT_MAX;
+	mod->prof.max = 0;
+	mod->prof.sum = 0;
 
 	return mod;
 }
@@ -2649,6 +2673,13 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	app->sratom = sratom_new(app->driver->map);
 	if(app->sratom)
 		sratom_set_pretty_numbers(app->sratom, false);
+
+	// initialize DSP load profiler
+	clock_gettime(CLOCK_MONOTONIC, &app->prof.t0);
+	app->prof.min = UINT_MAX;
+	app->prof.max = 0;
+	app->prof.sum = 0;
+	app->prof.count = 0;
 	
 	return app;
 }
@@ -3397,6 +3428,8 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 {
 	mod_t *del_me = NULL;
 
+	clock_gettime(CLOCK_MONOTONIC, &app->prof.t1);
+
 	// iterate over all modules
 	for(unsigned m=0; m<app->num_mods; m++)
 	{
@@ -3933,8 +3966,24 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			}
 		}
 
+		struct timespec mod_t1;
+		struct timespec mod_t2;
+		clock_gettime(CLOCK_MONOTONIC, &mod_t1);
+
 		// run plugin
 		lilv_instance_run(mod->inst, nsamples);
+
+		clock_gettime(CLOCK_MONOTONIC, &mod_t2);
+
+		// profiling
+		const unsigned run_time = (mod_t2.tv_sec - mod_t1.tv_sec)*1000000000
+			+ mod_t2.tv_nsec - mod_t1.tv_nsec;
+		mod->prof.sum += run_time;
+
+		if(run_time < mod->prof.min)
+			mod->prof.min = run_time;
+		else if(run_time > mod->prof.max)
+			mod->prof.max = run_time;
 
 		// handle mod ui post
 		for(unsigned i=0; i<mod->num_ports; i++)
@@ -3953,6 +4002,72 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 			if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
 				port->driver->transfer(app, port, nsamples);
+		}
+	}
+
+	// profiling
+	struct timespec app_t2;
+	clock_gettime(CLOCK_MONOTONIC, &app_t2);
+
+	const unsigned run_time = (app_t2.tv_sec - app->prof.t1.tv_sec)*1000000000
+		+ app_t2.tv_nsec - app->prof.t1.tv_nsec;
+	app->prof.sum += run_time;
+	app->prof.count += 1;
+
+	if(run_time < app->prof.min)
+		app->prof.min = run_time;
+	else if(run_time > app->prof.max)
+		app->prof.max = run_time;
+
+	if(app_t2.tv_sec > app->prof.t0.tv_sec) // a second has passed
+	{
+		const unsigned tot_time = (app_t2.tv_sec - app->prof.t0.tv_sec)*1000000000
+			+ app_t2.tv_nsec - app->prof.t0.tv_nsec;
+		const float tot_time_1 = 100.f / tot_time;
+		const float sum_time_1 = 100.f / app->prof.sum;
+
+		for(unsigned m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+
+			const float mod_min = mod->prof.min * app->prof.count * sum_time_1;
+			const float mod_avg = mod->prof.sum * sum_time_1;
+			const float mod_max = mod->prof.max * app->prof.count * sum_time_1;
+
+			const size_t size = sizeof(transmit_module_profiling_t);
+			transmit_module_profiling_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_profiling_fill(&app->regs, &app->forge, trans, size,
+					mod->uid, mod_min, mod_avg, mod_max);
+				_sp_app_to_ui_advance(app, size);
+			}
+
+			mod->prof.min = UINT_MAX;
+			mod->prof.max = 0;
+			mod->prof.sum = 0;
+		}
+
+		{
+			const float app_min = app->prof.min * app->prof.count * tot_time_1;
+			const float app_avg = app->prof.sum * tot_time_1;
+			const float app_max = app->prof.max * app->prof.count * tot_time_1;
+
+			const size_t size = sizeof(transmit_module_profiling_t);
+			transmit_module_profiling_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_profiling_fill(&app->regs, &app->forge, trans, size,
+					0, app_min, app_avg, app_max); //FIXME use separate message for app profiling?
+				_sp_app_to_ui_advance(app, size);
+			}
+
+			app->prof.t0.tv_sec = app_t2.tv_sec;
+			app->prof.t0.tv_nsec = app_t2.tv_nsec;
+			app->prof.min = UINT_MAX;
+			app->prof.max = 0;
+			app->prof.sum = 0;
+			app->prof.count = 0;
 		}
 	}
 		

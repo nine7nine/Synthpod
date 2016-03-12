@@ -375,7 +375,7 @@ _note(uint8_t val, uint8_t *octave)
 	return keys[val % 12];
 }
 
-#define FROM_APP_NUM 16
+#define FROM_APP_NUM 17
 static from_app_t from_apps [FROM_APP_NUM];
 
 static int
@@ -6504,6 +6504,38 @@ _sp_ui_from_app_module_visible(sp_ui_t *ui, const LV2_Atom *atom)
 }
 
 static void
+_sp_ui_from_app_module_profiling(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_profiling_t *trans = (const transmit_module_profiling_t *)atom;
+
+	if(trans->uid.body) // is module profiling
+	{
+		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+		if(!mod)
+			return;
+
+		//printf("%u: %2.1f%% %2.1f%% %2.1f%%\n",
+		//	mod->uid, trans->min.body, trans->avg.body, trans->max.body);
+		//FIXME show on UI
+	}
+	else // is app profiling
+	{
+		//printf("app: %2.1f%% %2.1f%% %2.1f%%\n\n",
+		//	trans->min.body, trans->avg.body, trans->max.body);
+
+		if(ui->statusline)
+		{
+			char dsp [32];
+			sprintf(dsp, "DSP | %2.1f%% | %2.1f%% | %2.1f%% |",
+				trans->min.body, trans->avg.body, trans->max.body);
+			elm_object_text_set(ui->statusline, dsp);
+		}
+	}
+}
+
+static void
 _sp_ui_from_app_module_embedded(sp_ui_t *ui, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -7203,6 +7235,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 		from_apps[ptr].protocol = ui->regs.synthpod.module_visible.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_module_visible;
+
+		from_apps[ptr].protocol = ui->regs.synthpod.module_profiling.urid;
+		from_apps[ptr++].cb = _sp_ui_from_app_module_profiling;
 
 		from_apps[ptr].protocol = ui->regs.synthpod.module_embedded.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_module_embedded;

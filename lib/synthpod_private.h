@@ -301,6 +301,7 @@ struct _reg_t {
 		reg_item_t module_selected;
 		reg_item_t module_embedded;
 		reg_item_t module_visible;
+		reg_item_t module_profiling;
 		reg_item_t port_refresh;
 		reg_item_t port_connected;
 		reg_item_t port_subscribed;
@@ -501,6 +502,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.module_selected, world, map, SYNTHPOD_PREFIX"moduleSelect");
 	_register(&regs->synthpod.module_embedded, world, map, SYNTHPOD_PREFIX"moduleEmbedded");
 	_register(&regs->synthpod.module_visible, world, map, SYNTHPOD_PREFIX"moduleVisible");
+	_register(&regs->synthpod.module_profiling, world, map, SYNTHPOD_PREFIX"moduleProfiling");
 	_register(&regs->synthpod.port_refresh, world, map, SYNTHPOD_PREFIX"portRefresh");
 	_register(&regs->synthpod.port_connected, world, map, SYNTHPOD_PREFIX"portConnect");
 	_register(&regs->synthpod.port_subscribed, world, map, SYNTHPOD_PREFIX"portSubscribe");
@@ -673,6 +675,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.module_selected);
 	_unregister(&regs->synthpod.module_embedded);
 	_unregister(&regs->synthpod.module_visible);
+	_unregister(&regs->synthpod.module_profiling);
 	_unregister(&regs->synthpod.port_refresh);
 	_unregister(&regs->synthpod.port_connected);
 	_unregister(&regs->synthpod.port_subscribed);
@@ -705,6 +708,7 @@ typedef struct _transmit_module_preset_save_t transmit_module_preset_save_t;
 typedef struct _transmit_module_selected_t transmit_module_selected_t;
 typedef struct _transmit_module_embedded_t transmit_module_embedded_t;
 typedef struct _transmit_module_visible_t transmit_module_visible_t;
+typedef struct _transmit_module_profiling_t transmit_module_profiling_t;
 typedef struct _transmit_port_connected_t transmit_port_connected_t;
 typedef struct _transmit_port_subscribed_t transmit_port_subscribed_t;
 typedef struct _transmit_port_monitored_t transmit_port_monitored_t;
@@ -773,6 +777,14 @@ struct _transmit_module_visible_t {
 	LV2_Atom_Int uid _ATOM_ALIGNED;
 	LV2_Atom_Int state _ATOM_ALIGNED;
 	LV2_Atom_URID urid _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_module_profiling_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_Float min _ATOM_ALIGNED;
+	LV2_Atom_Float avg _ATOM_ALIGNED;
+	LV2_Atom_Float max _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_port_connected_t {
@@ -1079,6 +1091,33 @@ _sp_transmit_module_visible_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->urid.atom.size = sizeof(uint32_t);
 	trans->urid.atom.type = forge->URID;
 	trans->urid.body = urid;
+}
+
+static inline void
+_sp_transmit_module_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_profiling_t *trans, uint32_t size, u_id_t module_uid,
+	float min, float avg, float max)
+{
+	trans = ASSUME_ALIGNED(trans);
+
+	_sp_transmit_fill(regs, forge, &trans->transmit, size,
+		regs->synthpod.com_event.urid, regs->synthpod.module_profiling.urid);
+
+	trans->uid.atom.size = sizeof(int32_t);
+	trans->uid.atom.type = forge->Int;
+	trans->uid.body = module_uid;
+
+	trans->min.atom.size = sizeof(float);
+	trans->min.atom.type = forge->Float;
+	trans->min.body = min;
+
+	trans->avg.atom.size = sizeof(float);
+	trans->avg.atom.type = forge->Float;
+	trans->avg.body = avg;
+
+	trans->max.atom.size = sizeof(float);
+	trans->max.atom.type = forge->Float;
+	trans->max.body = max;
 }
 
 static inline void
