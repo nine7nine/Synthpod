@@ -6537,8 +6537,8 @@ _sp_ui_from_app_dsp_profiling(sp_ui_t *ui, const LV2_Atom *atom)
 
 	if(ui->statusline)
 	{
-		char dsp [64];
-		snprintf(dsp, 64, "DSP | min: %4.1f%% | avg: %4.1f%% | max: %4.1f%% | ovh: %4.1f%% |",
+		char dsp [80];
+		snprintf(dsp, 80, "<font=Mono>DSP | min: %4.1f%% | avg: %4.1f%% | max: %4.1f%% | ovh: %4.1f%% |</font>",
 			trans->min.body,
 			trans->avg.body,
 			trans->max.body,
