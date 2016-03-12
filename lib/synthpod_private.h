@@ -309,6 +309,7 @@ struct _reg_t {
 		reg_item_t port_selected;
 		reg_item_t bundle_load;
 		reg_item_t bundle_save;
+		reg_item_t dsp_profiling;
 
 		reg_item_t system_ports;
 		reg_item_t control_port;
@@ -510,6 +511,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.port_selected, world, map, SYNTHPOD_PREFIX"portSelect");
 	_register(&regs->synthpod.bundle_load, world, map, SYNTHPOD_PREFIX"bundleLoad");
 	_register(&regs->synthpod.bundle_save, world, map, SYNTHPOD_PREFIX"bundleSave");
+	_register(&regs->synthpod.dsp_profiling, world, map, SYNTHPOD_PREFIX"DSPProfiling");
 	
 	_register(&regs->synthpod.system_ports, world, map, SYNTHPOD_PREFIX"systemPorts");
 	_register(&regs->synthpod.control_port, world, map, SYNTHPOD_PREFIX"ControlPort");
@@ -683,6 +685,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.port_selected);
 	_unregister(&regs->synthpod.bundle_load);
 	_unregister(&regs->synthpod.bundle_save);
+	_unregister(&regs->synthpod.dsp_profiling);
 	
 	_unregister(&regs->synthpod.system_ports);
 	_unregister(&regs->synthpod.control_port);
@@ -716,6 +719,7 @@ typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
 typedef struct _transmit_port_selected_t transmit_port_selected_t;
 typedef struct _transmit_bundle_load_t transmit_bundle_load_t;
 typedef struct _transmit_bundle_save_t transmit_bundle_save_t;
+typedef struct _transmit_dsp_profiling_t transmit_dsp_profiling_t;
 
 struct _transmit_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
@@ -782,9 +786,7 @@ struct _transmit_module_visible_t {
 struct _transmit_module_profiling_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
-	LV2_Atom_Float min _ATOM_ALIGNED;
 	LV2_Atom_Float avg _ATOM_ALIGNED;
-	LV2_Atom_Float max _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_port_connected_t {
@@ -837,6 +839,14 @@ struct _transmit_bundle_save_t {
 	LV2_Atom_String path _ATOM_ALIGNED;
 	LV2_Atom_Int status _ATOM_ALIGNED;
 		char path_str [0] _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_dsp_profiling_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Float min _ATOM_ALIGNED;
+	LV2_Atom_Float avg _ATOM_ALIGNED;
+	LV2_Atom_Float max _ATOM_ALIGNED;
+	LV2_Atom_Float ovh _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 // app <-> ui communication for port notifications
@@ -1095,8 +1105,7 @@ _sp_transmit_module_visible_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 static inline void
 _sp_transmit_module_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
-	transmit_module_profiling_t *trans, uint32_t size, u_id_t module_uid,
-	float min, float avg, float max)
+	transmit_module_profiling_t *trans, uint32_t size, u_id_t module_uid, float avg)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -1107,17 +1116,9 @@ _sp_transmit_module_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
 
-	trans->min.atom.size = sizeof(float);
-	trans->min.atom.type = forge->Float;
-	trans->min.body = min;
-
 	trans->avg.atom.size = sizeof(float);
 	trans->avg.atom.type = forge->Float;
 	trans->avg.body = avg;
-
-	trans->max.atom.size = sizeof(float);
-	trans->max.atom.type = forge->Float;
-	trans->max.body = max;
 }
 
 static inline void
@@ -1291,6 +1292,33 @@ _sp_transmit_bundle_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	if(bundle_path)
 		strcpy(trans->path_str, bundle_path);
+}
+
+static inline void
+_sp_transmit_dsp_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_dsp_profiling_t *trans, uint32_t size,
+	float min, float avg, float max, float ovh)
+{
+	trans = ASSUME_ALIGNED(trans);
+
+	_sp_transmit_fill(regs, forge, &trans->transmit, size,
+		regs->synthpod.com_event.urid, regs->synthpod.dsp_profiling.urid);
+
+	trans->min.atom.size = sizeof(float);
+	trans->min.atom.type = forge->Float;
+	trans->min.body = min;
+
+	trans->avg.atom.size = sizeof(float);
+	trans->avg.atom.type = forge->Float;
+	trans->avg.body = avg;
+
+	trans->max.atom.size = sizeof(float);
+	trans->max.atom.type = forge->Float;
+	trans->max.body = max;
+
+	trans->ovh.atom.size = sizeof(float);
+	trans->ovh.atom.type = forge->Float;
+	trans->ovh.body = ovh;
 }
 
 static inline void

@@ -201,6 +201,7 @@ struct _mod_t {
 		LV2UI_Descriptor descriptor;
 		Elm_Object_Item *elmnt;
 		Elm_Object_Item *grid;
+		Elm_Object_Item *frame;
 		Evas_Object *list;
 	} std;
 
@@ -375,7 +376,7 @@ _note(uint8_t val, uint8_t *octave)
 	return keys[val % 12];
 }
 
-#define FROM_APP_NUM 17
+#define FROM_APP_NUM 18
 static from_app_t from_apps [FROM_APP_NUM];
 
 static int
@@ -2293,7 +2294,7 @@ _mod_get_name(mod_t *mod)
 
 			char *dup = NULL;
 			if(name_str)
-				asprintf(&dup, "%s (#%u)", name_str, mod->uid);
+				asprintf(&dup, "#%u %s", mod->uid, name_str);
 			
 			lilv_node_free(name_node);
 
@@ -5357,6 +5358,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_align_set(frame, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(frame);
 		evas_object_show(frame);
+		mod->std.frame = frame;
 
 		Evas_Object *modlist = elm_genlist_add(frame);
 		if(modlist)
@@ -5470,6 +5472,7 @@ _modgrid_del(void *data, Evas_Object *obj)
 	if(mod)
 	{
 		mod->std.grid = NULL;
+		mod->std.frame = NULL;
 		mod->std.list = NULL;
 	}
 }
@@ -6510,28 +6513,37 @@ _sp_ui_from_app_module_profiling(sp_ui_t *ui, const LV2_Atom *atom)
 
 	const transmit_module_profiling_t *trans = (const transmit_module_profiling_t *)atom;
 
-	if(trans->uid.body) // is module profiling
-	{
-		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
-		if(!mod)
-			return;
+	mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+	if(!mod)
+		return;
 
-		//printf("%u: %2.1f%% %2.1f%% %2.1f%%\n",
-		//	mod->uid, trans->min.body, trans->avg.body, trans->max.body);
-		//FIXME show on UI
+	//printf("%u: %2.1f%% %2.1f%% %2.1f%%\n",
+	//	mod->uid, trans->min.body, trans->avg.body, trans->max.body);
+
+	if(mod->std.frame)
+	{
+		char dsp [128]; //TODO size?
+		snprintf(dsp, 128, "%s  | %4.1f%% |", mod->name, trans->avg.body);
+		elm_object_text_set(mod->std.frame, dsp);
 	}
-	else // is app profiling
-	{
-		//printf("app: %2.1f%% %2.1f%% %2.1f%%\n\n",
-		//	trans->min.body, trans->avg.body, trans->max.body);
+}
 
-		if(ui->statusline)
-		{
-			char dsp [32];
-			sprintf(dsp, "DSP | %2.1f%% | %2.1f%% | %2.1f%% |",
-				trans->min.body, trans->avg.body, trans->max.body);
-			elm_object_text_set(ui->statusline, dsp);
-		}
+static void
+_sp_ui_from_app_dsp_profiling(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_dsp_profiling_t *trans = (const transmit_dsp_profiling_t *)atom;
+
+	if(ui->statusline)
+	{
+		char dsp [64];
+		snprintf(dsp, 64, "DSP | min: %4.1f%% | avg: %4.1f%% | max: %4.1f%% | ovh: %4.1f%% |",
+			trans->min.body,
+			trans->avg.body,
+			trans->max.body,
+			trans->ovh.body);
+		elm_object_text_set(ui->statusline, dsp);
 	}
 }
 
@@ -7271,6 +7283,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 		from_apps[ptr].protocol = ui->regs.synthpod.bundle_save.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_bundle_save;
+
+		from_apps[ptr].protocol = ui->regs.synthpod.dsp_profiling.urid;
+		from_apps[ptr++].cb = _sp_ui_from_app_dsp_profiling;
 
 		assert(ptr == FROM_APP_NUM);
 		// sort according to URID

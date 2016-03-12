@@ -165,8 +165,6 @@ struct _app_prof_t {
 
 struct _mod_prof_t {
 	unsigned sum;
-	unsigned min;
-	unsigned max;
 };
 
 struct _mod_t {
@@ -1155,8 +1153,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	lilv_instance_activate(mod->inst);
 
 	// initialize profiling reference time
-	mod->prof.min = UINT_MAX;
-	mod->prof.max = 0;
 	mod->prof.sum = 0;
 
 	return mod;
@@ -3980,11 +3976,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			+ mod_t2.tv_nsec - mod_t1.tv_nsec;
 		mod->prof.sum += run_time;
 
-		if(run_time < mod->prof.min)
-			mod->prof.min = run_time;
-		else if(run_time > mod->prof.max)
-			mod->prof.max = run_time;
-
 		// handle mod ui post
 		for(unsigned i=0; i<mod->num_ports; i++)
 		{
@@ -4021,44 +4012,45 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 	if(app_t2.tv_sec > app->prof.t0.tv_sec) // a second has passed
 	{
-		const unsigned tot_time = (app_t2.tv_sec - app->prof.t0.tv_sec)*1000000000
-			+ app_t2.tv_nsec - app->prof.t0.tv_nsec;
-		const float tot_time_1 = 100.f / tot_time;
 		const float sum_time_1 = 100.f / app->prof.sum;
+		unsigned dsp_sum = 0;
 
 		for(unsigned m=0; m<app->num_mods; m++)
 		{
 			mod_t *mod = app->mods[m];
 
-			const float mod_min = mod->prof.min * app->prof.count * sum_time_1;
 			const float mod_avg = mod->prof.sum * sum_time_1;
-			const float mod_max = mod->prof.max * app->prof.count * sum_time_1;
+
+			dsp_sum += mod->prof.sum;
 
 			const size_t size = sizeof(transmit_module_profiling_t);
 			transmit_module_profiling_t *trans = _sp_app_to_ui_request(app, size);
 			if(trans)
 			{
 				_sp_transmit_module_profiling_fill(&app->regs, &app->forge, trans, size,
-					mod->uid, mod_min, mod_avg, mod_max);
+					mod->uid, mod_avg);
 				_sp_app_to_ui_advance(app, size);
 			}
 
-			mod->prof.min = UINT_MAX;
-			mod->prof.max = 0;
 			mod->prof.sum = 0;
 		}
 
 		{
+			const unsigned tot_time = (app_t2.tv_sec - app->prof.t0.tv_sec)*1000000000
+				+ app_t2.tv_nsec - app->prof.t0.tv_nsec;
+			const float tot_time_1 = 100.f / tot_time;
+
 			const float app_min = app->prof.min * app->prof.count * tot_time_1;
 			const float app_avg = app->prof.sum * tot_time_1;
 			const float app_max = app->prof.max * app->prof.count * tot_time_1;
+			const float app_ovh = 100.f - dsp_sum * sum_time_1;
 
-			const size_t size = sizeof(transmit_module_profiling_t);
-			transmit_module_profiling_t *trans = _sp_app_to_ui_request(app, size);
+			const size_t size = sizeof(transmit_dsp_profiling_t);
+			transmit_dsp_profiling_t *trans = _sp_app_to_ui_request(app, size);
 			if(trans)
 			{
-				_sp_transmit_module_profiling_fill(&app->regs, &app->forge, trans, size,
-					0, app_min, app_avg, app_max); //FIXME use separate message for app profiling?
+				_sp_transmit_dsp_profiling_fill(&app->regs, &app->forge, trans, size,
+					app_min, app_avg, app_max, app_ovh);
 				_sp_app_to_ui_advance(app, size);
 			}
 
