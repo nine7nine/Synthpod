@@ -351,6 +351,9 @@ struct _sp_ui_t {
 	int dirty;
 
 	LV2_URI_Map_Feature uri_to_id;
+
+	int ncols;
+	int nrows;
 };
 
 struct _from_app_t {
@@ -3983,17 +3986,23 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 	_patches_update(ui);
 }
 
+static inline void
+_modgrid_item_size_update(sp_ui_t *ui)
+{
+	int w, h;
+	evas_object_geometry_get(ui->modgrid, NULL, NULL, &w, &h);
+
+	const int iw = w / ui->ncols;
+	const int ih = (h - 20) / ui->nrows;
+	elm_gengrid_item_size_set(ui->modgrid, iw, ih);
+}
+
 static void
 _modgrid_changed(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
 
-	int w, h;
-	evas_object_geometry_get(ui->modgrid, NULL, NULL, &w, &h);
-
-	const int iw = w / 3; //FIXME make this configurable
-	const int ih = (h - 20) / 2; //FIXME make this configurable
-	elm_gengrid_item_size_set(ui->modgrid, iw, ih);
+	_modgrid_item_size_update(ui);
 }
 
 static inline void
@@ -6571,7 +6580,7 @@ _sp_ui_from_app_dsp_profiling(sp_ui_t *ui, const LV2_Atom *atom)
 	if(ui->statusline)
 	{
 		char dsp [80];
-		snprintf(dsp, 80, "<font=Mono>DSP | min: %4.1f%% | avg: %4.1f%% | max: %4.1f%% | ovh: %4.1f%% |</font>",
+		snprintf(dsp, 80, "<font=Mono align=left>DSP | min: %4.1f%% | avg: %4.1f%% | max: %4.1f%% | ovh: %4.1f%% |</font>",
 			trans->min.body,
 			trans->avg.body,
 			trans->max.body,
@@ -6812,6 +6821,24 @@ _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 	return map->map(map->handle, uri);
 }
 
+static void
+_columns_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	ui->ncols = elm_spinner_value_get(obj);
+	_modgrid_item_size_update(ui);
+}
+
+static void
+_rows_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	ui->nrows = elm_spinner_value_get(obj);
+	_modgrid_item_size_update(ui);
+}
+
 sp_ui_t *
 sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	void *data, int show_splash)
@@ -6835,6 +6862,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	sp_ui_t *ui = calloc(1, sizeof(sp_ui_t));
 	if(!ui)
 		return NULL;
+
+	ui->ncols = 3; //TODO load from state
+	ui->nrows = 2; //TODO load from state
 
 	ui->win = win;
 	ui->driver = driver;
@@ -7242,17 +7272,57 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					elm_object_part_content_set(ui->mainpane, "right", ui->modgrid);
 				} // modgrid
 			} // mainpane
-			
-			ui->statusline = elm_label_add(ui->vbox);
-			if(ui->statusline)
+		
+			Evas_Object *hbox = elm_box_add(ui->vbox);
+			if(hbox)
 			{
-				//TODO use
-				elm_object_text_set(ui->statusline, "");
-				evas_object_size_hint_weight_set(ui->statusline, EVAS_HINT_EXPAND, 0.f);
-				evas_object_size_hint_align_set(ui->statusline, 0.f, 1.f);
-				evas_object_show(ui->statusline);
-				elm_box_pack_end(ui->vbox, ui->statusline);
-			} // statusline
+				elm_box_horizontal_set(hbox, EINA_TRUE);
+				elm_box_homogeneous_set(hbox, EINA_FALSE);
+				evas_object_size_hint_weight_set(hbox, EVAS_HINT_EXPAND, 0.f);
+				evas_object_size_hint_align_set(hbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(hbox);
+				elm_box_pack_end(ui->vbox, hbox);
+
+				ui->statusline = elm_label_add(hbox);
+				if(ui->statusline)
+				{
+					elm_object_text_set(ui->statusline, "");
+					evas_object_size_hint_weight_set(ui->statusline, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(ui->statusline, EVAS_HINT_FILL, EVAS_HINT_FILL);
+					evas_object_show(ui->statusline);
+					elm_box_pack_end(hbox, ui->statusline);
+				} // statusline
+
+				Evas_Object *spin = elm_spinner_add(hbox);
+				if(spin)
+				{
+					elm_spinner_min_max_set(spin, 1, 8);
+					elm_spinner_value_set(spin, ui->ncols);
+					elm_spinner_step_set(spin, 1);
+					elm_spinner_wrap_set(spin, EINA_FALSE);
+					elm_spinner_label_format_set(spin, "%0.f col");
+					evas_object_size_hint_weight_set(spin, 0.f, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(spin, 0.f, EVAS_HINT_FILL);
+					evas_object_smart_callback_add(spin, "changed", _columns_changed, ui);
+					evas_object_show(spin);
+					elm_box_pack_end(hbox, spin);
+				}
+
+				spin = elm_spinner_add(hbox);
+				if(spin)
+				{
+					elm_spinner_min_max_set(spin, 1, 4);
+					elm_spinner_value_set(spin, ui->nrows);
+					elm_spinner_step_set(spin, 1);
+					elm_spinner_wrap_set(spin, EINA_FALSE);
+					elm_spinner_label_format_set(spin, "%0.f row");
+					evas_object_size_hint_weight_set(spin, 0.f, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(spin, 0.f, EVAS_HINT_FILL);
+					evas_object_smart_callback_add(spin, "changed", _rows_changed, ui);
+					evas_object_show(spin);
+					elm_box_pack_end(hbox, spin);
+				}
+			}
 		} // theme
 
 		// listen for elm config changes
