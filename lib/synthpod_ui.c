@@ -6084,7 +6084,7 @@ _menu_matrix_new(sp_ui_t *ui)
 				elm_object_item_tooltip_text_set(ui->matrix_cv, "Ctrl + 'C'");
 
 				ui->matrix_event = elm_toolbar_item_append(patchbar,
-					SYNTHPOD_DATA_DIR"/atom.png", "Event", NULL, NULL); //FIXME event.png
+					SYNTHPOD_DATA_DIR"/event.png", "Event", NULL, NULL);
 				elm_object_item_tooltip_text_set(ui->matrix_event, "Ctrl + 'E'");
 
 				ui->matrix_atom = elm_toolbar_item_append(patchbar,
