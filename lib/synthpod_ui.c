@@ -4172,6 +4172,41 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
 
+	/* FIXME implement me!
+	Evas_Object *frame = elm_frame_add(obj);
+	if(frame)
+	{
+		elm_object_text_set(frame, mod->name);
+		evas_object_size_hint_weight_set(frame, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(frame, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_size_hint_min_set(frame, ELM_SCALE_SIZE(50), ELM_SCALE_SIZE(50));
+		evas_object_show(frame);
+
+		Evas_Object *hbox = elm_box_add(frame);
+		if(hbox)
+		{
+			elm_box_homogeneous_set(hbox, EINA_TRUE);
+			elm_box_horizontal_set(hbox, EINA_TRUE);
+			evas_object_size_hint_weight_set(hbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(hbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(hbox);
+			elm_object_content_set(frame, hbox);
+
+			Evas_Object *lbl = elm_label_add(hbox);
+			if(lbl)
+			{
+				elm_object_text_set(lbl, "<font=mono align=right>0.1%</font>");
+				evas_object_size_hint_weight_set(lbl, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+				evas_object_size_hint_align_set(lbl, EVAS_HINT_FILL, EVAS_HINT_FILL);
+				evas_object_show(lbl);
+				elm_box_pack_end(hbox, lbl);
+			}
+		}
+	}
+
+	return frame;
+	*/
+
 	Evas_Object *lay = elm_layout_add(obj);
 	if(lay)
 	{
