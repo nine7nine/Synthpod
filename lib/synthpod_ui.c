@@ -5874,9 +5874,6 @@ _patchbar_restore(sp_ui_t *ui)
 			}
 			break;
 		default:
-			// force first time reload
-			elm_toolbar_item_selected_set(ui->matrix_cv, EINA_TRUE);
-			elm_toolbar_item_selected_set(ui->matrix_audio, EINA_TRUE);
 			break;
 	}
 }
@@ -6132,6 +6129,7 @@ _menu_matrix_new(sp_ui_t *ui)
 				elm_box_pack_start(patchbox, ui->matrix);
 
 				_patchbar_restore(ui);
+				_patches_update(ui);
 			} // matrix
 		} // patchbox
 
@@ -6808,7 +6806,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->data = data;
 
 	ui->zoom = 0.f;
-	ui->matrix_type = PORT_TYPE_NUM; // force first time reload
+	ui->matrix_type = PORT_TYPE_AUDIO;
 
 	lv2_atom_forge_init(&ui->forge, ui->driver->map);
 
