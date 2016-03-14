@@ -16,6 +16,7 @@
  */
 
 #include <stdio.h>
+#include <inttypes.h>
 #include <stdatomic.h>
 
 #include <xpress.h>
@@ -31,7 +32,7 @@ typedef struct _target_t target_t;
 typedef struct _plughandle_t plughandle_t;
 
 struct _target_t {
-	LV2_URID subject;
+	xpress_uuid_t uuid;
 };
 
 struct _plughandle_t {
@@ -48,18 +49,18 @@ struct _plughandle_t {
 	LV2_Atom_Sequence *event_out;
 };
 
-static _Atomic uint32_t voice_id = ATOMIC_VAR_INIT(UINT32_MAX);
+static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
 
-static uint32_t
-_voice_map_new_id(void *handle)
+static xpress_uuid_t
+_voice_map_new_uuid(void *handle)
 {
-	(void) handle;
-	return atomic_fetch_sub_explicit(&voice_id, 1, memory_order_relaxed);
+	_Atomic xpress_uuid_t *uuid = handle;
+	return atomic_fetch_add_explicit(uuid, 1, memory_order_relaxed);
 }
 
 static xpress_map_t voice_map_fallback = {
-	.handle = NULL,
-	.new_id = _voice_map_new_id
+	.handle = &voice_uuid,
+	.new_uuid = _voice_map_new_uuid
 };
 
 static void
@@ -67,65 +68,65 @@ _dump(plughandle_t *handle)
 {
 	XPRESS_VOICE_FOREACH(&handle->xpress, voice)
 	{
-		lv2_log_trace(&handle->logger, "%u", voice->subject);
+		lv2_log_trace(&handle->logger, "%"PRIi64, voice->uuid);
 	}
 	lv2_log_trace(&handle->logger, "");
 }
 
 static void
 _add(void *data, int64_t frames, const xpress_state_t *state,
-	LV2_URID subject, void *target)
+	xpress_uuid_t uuid, void *target)
 {
 	plughandle_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge;
 	target_t *src = target;
 
-	lv2_log_trace(&handle->logger, "ADD: %u", subject);
+	lv2_log_trace(&handle->logger, "ADD: %"PRIi64, uuid);
 
-	src->subject = xpress_map(&handle->xpress);
+	src->uuid = xpress_map(&handle->xpress);
 
 	xpress_state_t new_state;
 	memcpy(&new_state, state, sizeof(xpress_state_t));
 	new_state.position[0] *= 2;
 
 	if(handle->ref)
-		handle->ref = xpress_put(&handle->xpress, forge, frames, src->subject, &new_state);
+		handle->ref = xpress_put(&handle->xpress, forge, frames, src->uuid, &new_state);
 
 	_dump(handle);
 }
 
 static void
 _put(void *data, int64_t frames, const xpress_state_t *state,
-	LV2_URID subject, void *target)
+	xpress_uuid_t uuid, void *target)
 {
 	plughandle_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge;
 	target_t *src = target;
 
-	lv2_log_trace(&handle->logger, "PUT: %u", subject);
+	lv2_log_trace(&handle->logger, "PUT: %"PRIi64, uuid);
 
 	xpress_state_t new_state;
 	memcpy(&new_state, state, sizeof(xpress_state_t));
 	new_state.position[0] *= 2;
 
 	if(handle->ref)
-		handle->ref = xpress_put(&handle->xpress, forge, frames, src->subject, &new_state);
+		handle->ref = xpress_put(&handle->xpress, forge, frames, src->uuid, &new_state);
 
 	_dump(handle);
 }
 
 static void
 _del(void *data, int64_t frames, const xpress_state_t *state,
-	LV2_URID subject, void *target)
+	xpress_uuid_t uuid, void *target)
 {
 	plughandle_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge;
 	target_t *src = target;
 
-	lv2_log_trace(&handle->logger, "DEL: %u", subject);
+	lv2_log_trace(&handle->logger, "DEL: %"PRIi64, uuid);
 
 	if(handle->ref)
-		handle->ref = xpress_del(&handle->xpress, forge, frames, src->subject);
+		handle->ref = xpress_del(&handle->xpress, forge, frames, src->uuid);
 
 	_dump(handle);
 }

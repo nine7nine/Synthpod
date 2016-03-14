@@ -16,16 +16,11 @@
 @prefix owl:			<http://www.w3.org/2002/07/owl#> .
 @prefix foaf:			<http://xmlns.com/foaf/0.1/> .
 @prefix doap:			<http://usefulinc.com/ns/doap#> .
-@prefix rdf:			<http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: 		<http://www.w3.org/2000/01/rdf-schema#> .
 @prefix lv2:			<http://lv2plug.in/ns/lv2core#> .
 @prefix atom:			<http://lv2plug.in/ns/ext/atom#> .
 @prefix urid:			<http://lv2plug.in/ns/ext/urid#> .
-@prefix state:		<http://lv2plug.in/ns/ext/state#> .
-@prefix patch:		<http://lv2plug.in/ns/ext/patch#> .
 @prefix log:			<http://lv2plug.in/ns/ext/log#> .
-@prefix units:		<http://lv2plug.in/ns/extensions/units#> .
-@prefix xsd:			<http://www.w3.org/2001/XMLSchema#> .
 
 @prefix lic:			<http://opensource.org/licenses/> .
 @prefix omk:			<http://open-music-kontrollers.ch/ventosus#> .
@@ -35,6 +30,11 @@
 # Features
 xpress:voiceMap
 	a lv2:Feature .
+
+xpress:Message
+	a rdfs:Class ,
+		rdfs:Datatype ;
+	rdfs:subClassOf atom:Atom .
 
 # Maintainer
 omk:me
@@ -64,7 +64,7 @@ xpress:test
 	  a lv2:InputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
-		atom:supports patch:Message ;
+		atom:supports xpress:Message ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
@@ -74,7 +74,7 @@ xpress:test
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
-		atom:supports patch:Message ;
+		atom:supports xpress:Message ;
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Output" ;
