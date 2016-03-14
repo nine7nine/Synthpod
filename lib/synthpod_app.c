@@ -804,7 +804,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->feature_list[nfeatures].URI = LV2_URID__unmap;
 	mod->feature_list[nfeatures++].data = app->driver->unmap;
 
-	mod->feature_list[nfeatures].URI = "http://open-music-kontrollers.ch/lv2/xpress#voiceMap";
+	mod->feature_list[nfeatures].URI = XPRESS_VOICE_MAP;
 	mod->feature_list[nfeatures++].data = app->driver->xmap;
 
 	mod->feature_list[nfeatures].URI = LV2_WORKER__schedule;

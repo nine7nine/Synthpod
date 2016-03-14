@@ -161,6 +161,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
+		else if(!strcmp(features[i]->URI, XPRESS_VOICE_MAP))
+			handle->driver.xmap = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_INSTANCE_ACCESS_URI))
 			handle->driver.instance_access = features[i]->data != NULL;
 		else if(!strcmp(features[i]->URI, SYNTHPOD_PREFIX"world"))
@@ -172,6 +174,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->driver.log = (LV2_Log_Log *)features[i]->data;
   }
+
+	if(!handle->driver.xmap)
+		handle->driver.xmap = &voice_map_fallback;
 
 	if(!handle->driver.map)
 	{

@@ -26,13 +26,6 @@
 #	define SYNTHPOD_SYMBOL_EXTERN __attribute__((visibility("default")))
 #endif
 
-typedef int64_t xpress_uuid_t;
-typedef struct _xpress_map_t xpress_map_t;
-typedef xpress_uuid_t (*xpress_map_new_uuid_t)(void *handle);
-
-struct _xpress_map_t {
-	void *handle;
-	xpress_map_new_uuid_t new_uuid;
-};
+#include <xpress.h>
 
 #endif // _SYNTHPOD_COMMON_H

@@ -28,7 +28,7 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 19
+#define NUM_UI_FEATURES 20
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -2886,6 +2886,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 
 	mod->feature_list[nfeatures].URI = LV2_URID__unmap;
 	mod->feature_list[nfeatures++].data = ui->driver->unmap;
+
+	mod->feature_list[nfeatures].URI = XPRESS_VOICE_MAP;
+	mod->feature_list[nfeatures++].data = ui->driver->xmap;
 
 	mod->feature_list[nfeatures].URI = LV2_UI__parent;
 	mod->feature_list[nfeatures++].data = NULL; // will be filled in before instantiation

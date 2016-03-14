@@ -107,20 +107,6 @@ struct _plughandle_t {
 	varchunk_t *app_from_app;
 };
 
-static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
-
-static xpress_uuid_t
-_voice_map_new_uuid(void *handle)
-{
-	_Atomic xpress_uuid_t *uuid = handle;
-	return atomic_fetch_add_explicit(uuid, 1, memory_order_relaxed);
-}
-
-static xpress_map_t voice_map_fallback = {
-	.handle = &voice_uuid,
-	.new_uuid = _voice_map_new_uuid
-};
-
 static LV2_State_Status
 _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
@@ -335,8 +321,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
-		else if(!strcmp(features[i]->URI, "http://open-music-kontrollers.ch/lv2/xpress#voiceMap"))
-			handle->driver.xmap= features[i]->data;
+		else if(!strcmp(features[i]->URI, XPRESS_VOICE_MAP))
+			handle->driver.xmap = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->driver.log = (LV2_Log_Log *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
