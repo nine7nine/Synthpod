@@ -329,6 +329,7 @@ struct _sp_ui_t {
 	Elm_Object_Item *matrix_atom_osc;
 	Elm_Object_Item *matrix_atom_time;
 	Elm_Object_Item *matrix_atom_patch;
+	Elm_Object_Item *matrix_atom_xpress;
 
 	Evas_Object *modlist;
 
@@ -2619,6 +2620,8 @@ _sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const Lilv
 			tar->atom_type |= PORT_ATOM_TYPE_TIME;
 		if(lilv_port_supports_event(mod->plug, port, ui->regs.patch.message.node))
 			tar->atom_type |= PORT_ATOM_TYPE_PATCH;
+		if(lilv_port_supports_event(mod->plug, port, ui->regs.xpress.message.node))
+			tar->atom_type |= PORT_ATOM_TYPE_XPRESS;
 	}
 	else if(lilv_port_is_a(mod->plug, port, ui->regs.port.event.node)) 
 	{
@@ -5915,6 +5918,9 @@ _patchbar_restore(sp_ui_t *ui)
 				case PORT_ATOM_TYPE_PATCH:
 					elm_toolbar_item_selected_set(ui->matrix_atom_patch, EINA_TRUE);
 					break;
+				case PORT_ATOM_TYPE_XPRESS:
+					elm_toolbar_item_selected_set(ui->matrix_atom_xpress, EINA_TRUE);
+					break;
 			}
 			break;
 		default:
@@ -5970,6 +5976,11 @@ _patchbar_selected(void *data, Evas_Object *obj, void *event_info)
 		ui->matrix_type = PORT_TYPE_ATOM;
 		ui->matrix_atom_type = PORT_ATOM_TYPE_PATCH;
 	}
+	else if(itm == ui->matrix_atom_xpress)
+	{
+		ui->matrix_type = PORT_TYPE_ATOM;
+		ui->matrix_atom_type = PORT_ATOM_TYPE_XPRESS;
+	}
 
 	else
 	{
@@ -5994,6 +6005,7 @@ _menu_matrix_del(void *data, Evas_Object *obj, void *event_info)
 	ui->matrix_atom_osc = NULL;
 	ui->matrix_atom_time = NULL;
 	ui->matrix_atom_patch = NULL;
+	ui->matrix_atom_xpress = NULL;
 	ui->matrix = NULL;
 }
 
@@ -6031,6 +6043,8 @@ _matrix_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 			elm_toolbar_item_selected_set(ui->matrix_atom_time, EINA_TRUE);
 		else if(!strcmp(ev->key, "p"))
 			elm_toolbar_item_selected_set(ui->matrix_atom_patch, EINA_TRUE);
+		else if(!strcmp(ev->key, "x"))
+			elm_toolbar_item_selected_set(ui->matrix_atom_xpress, EINA_TRUE);
 	}
 }
 
@@ -6075,6 +6089,8 @@ _menu_matrix_new(sp_ui_t *ui)
 			fprintf(stderr, "could not grab 't' key\n");
 		if(!evas_object_key_grab(win, "p", ctrl_mask, 0, exclusive)) // PATCH
 			fprintf(stderr, "could not grab 'p' key\n");
+		if(!evas_object_key_grab(win, "x", ctrl_mask, 0, exclusive)) // XPRESS
+			fprintf(stderr, "could not grab 'x' key\n");
 
 		Evas_Object *bg = elm_bg_add(win);
 		if(bg)
@@ -6151,6 +6167,10 @@ _menu_matrix_new(sp_ui_t *ui)
 				ui->matrix_atom_patch = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/patch.png", "Patch", NULL, NULL);
 				elm_object_item_tooltip_text_set(ui->matrix_atom_patch, "Ctrl + 'P'");
+
+				ui->matrix_atom_xpress = elm_toolbar_item_append(patchbar,
+					SYNTHPOD_DATA_DIR"/xpress.png", "XPress", NULL, NULL);
+				elm_object_item_tooltip_text_set(ui->matrix_atom_xpress, "Ctrl + 'X'");
 
 			} // patchbar
 

@@ -73,7 +73,8 @@ enum _port_atom_type_t {
 	PORT_ATOM_TYPE_MIDI		= (1 << 0),
 	PORT_ATOM_TYPE_OSC		= (1 << 1),
 	PORT_ATOM_TYPE_TIME		= (1 << 2),
-	PORT_ATOM_TYPE_PATCH	= (1 << 3)
+	PORT_ATOM_TYPE_PATCH	= (1 << 3),
+	PORT_ATOM_TYPE_XPRESS	= (1 << 4)
 };
 
 enum _port_buffer_type_t {
@@ -237,6 +238,10 @@ struct _reg_t {
 		reg_item_t remove;
 		reg_item_t put;
 	} patch;
+
+	struct {
+		reg_item_t message;
+	} xpress;
 
 	struct {
 		reg_item_t group;
@@ -451,6 +456,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.remove, world, map, LV2_PATCH__remove);
 	_register(&regs->patch.put, world, map, LV2_PATCH__Put);
 
+	_register(&regs->xpress.message, world, map, "http://open-music-kontrollers.ch/lv2/xpress#Message");
+
 	_register(&regs->group.group, world, map, LV2_PORT_GROUPS__group);
 
 	_register(&regs->units.conversion, world, map, LV2_UNITS__conversion);
@@ -624,6 +631,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.add);
 	_unregister(&regs->patch.remove);
 	_unregister(&regs->patch.put);
+
+	_unregister(&regs->xpress.message);
 
 	_unregister(&regs->group.group);
 

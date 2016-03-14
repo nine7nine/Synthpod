@@ -83,6 +83,7 @@ struct _sp_app_driver_t {
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
+	xpress_map_t *xmap;
 
 	// from app
 	sp_to_request_t to_ui_request;

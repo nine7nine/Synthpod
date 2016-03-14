@@ -68,6 +68,7 @@ struct _bin_t {
 	Symap *symap;
 	LV2_URID_Map map;
 	LV2_URID_Unmap unmap;
+	xpress_map_t xmap;
 	atomic_flag map_lock;
 	
 	sp_app_t *app;
@@ -109,6 +110,16 @@ struct _bin_t {
 
 	Eina_Thread self;
 };
+
+static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
+
+static xpress_uuid_t
+_voice_map_new_uuid(void *handle)
+{
+	_Atomic xpress_uuid_t *uuid = handle;
+
+	return atomic_fetch_add_explicit(uuid, 1, memory_order_relaxed);
+}
 
 static inline void
 _light_sem_init(light_sem_t *lsem, int count)
@@ -501,6 +512,9 @@ bin_init(bin_t *bin)
 	bin->unmap.unmap = _unmap;
 	bin->unmap.handle = bin;
 
+	bin->xmap.new_uuid = _voice_map_new_uuid;
+	bin->xmap.handle = &voice_uuid;
+
 	bin->log_entry = map->map(map->handle, LV2_LOG__Entry);
 	bin->log_error = map->map(map->handle, LV2_LOG__Error);
 	bin->log_note = map->map(map->handle, LV2_LOG__Note);
@@ -513,6 +527,7 @@ bin_init(bin_t *bin)
 	
 	bin->app_driver.map = &bin->map;
 	bin->app_driver.unmap = &bin->unmap;
+	bin->app_driver.xmap = &bin->xmap;
 	bin->app_driver.log = &bin->log;
 	bin->app_driver.to_ui_request = _app_to_ui_request;
 	bin->app_driver.to_ui_advance = _app_to_ui_advance;
@@ -523,6 +538,7 @@ bin_init(bin_t *bin)
 
 	bin->ui_driver.map = &bin->map;
 	bin->ui_driver.unmap = &bin->unmap;
+	bin->ui_driver.xmap = &bin->xmap;
 	bin->ui_driver.log = &bin->log;
 	bin->ui_driver.to_app_request = _ui_to_app_request;
 	bin->ui_driver.to_app_advance = _ui_to_app_advance;

@@ -51,9 +51,6 @@ typedef enum _blocking_state_t blocking_state_t;
 typedef enum _silencing_state_t silencing_state_t;
 typedef enum _ramp_state_t ramp_state_t;
 
-typedef struct _xpress_map_t xpress_map_t;
-typedef uint32_t (*xpress_map_new_id_t)(void *handle);
-
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
 typedef struct _work_t work_t;
@@ -147,11 +144,6 @@ struct _work_t {
 struct _pool_t {
 	size_t size;
 	void *buf;
-};
-
-struct _xpress_map_t {
-	void *handle;
-	xpress_map_new_id_t new_id;
 };
 
 struct _app_prof_t {
@@ -335,9 +327,6 @@ struct _sp_app_t {
 	} fps;
 
 	int ramp_samples;
-
-	_Atomic uint32_t voice_id;
-	xpress_map_t voice_map;
 
 	Sratom *sratom;
 	app_prof_t prof;
@@ -737,14 +726,6 @@ _mod_slice_pool(mod_t *mod, port_type_t type)
 	}
 }
 
-static uint32_t
-_voice_map_new_id(void *handle)
-{
-	sp_app_t *app = handle;
-
-	return atomic_fetch_sub_explicit(&app->voice_id, 1, memory_order_relaxed);
-}
-
 static inline int //TODO move
 _preset_load(sp_app_t *app, mod_t *mod, const char *uri);
 
@@ -823,6 +804,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->feature_list[nfeatures].URI = LV2_URID__unmap;
 	mod->feature_list[nfeatures++].data = app->driver->unmap;
 
+	mod->feature_list[nfeatures].URI = "http://open-music-kontrollers.ch/lv2/xpress#voiceMap";
+	mod->feature_list[nfeatures++].data = app->driver->xmap;
+
 	mod->feature_list[nfeatures].URI = LV2_WORKER__schedule;
 	mod->feature_list[nfeatures++].data = &mod->worker.schedule;
 
@@ -856,9 +840,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 	mod->feature_list[nfeatures].URI = ZERO_WORKER__schedule;
 	mod->feature_list[nfeatures++].data = &mod->zero.schedule;
-
-	mod->feature_list[nfeatures].URI = "http://open-music-kontrollers.ch/lv2/xpress#voiceMap";
-	mod->feature_list[nfeatures++].data = &app->voice_map;
 
 	if(app->driver->system_port_add && app->driver->system_port_del)
 	{
@@ -2656,11 +2637,6 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	app->fps.counter = 0;
 
 	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s
-
-	// initialize xpress voice map
-	atomic_init(&app->voice_id, UINT32_MAX);
-	app->voice_map.handle = app;
-	app->voice_map.new_id = _voice_map_new_id;
 
 	// populate uri_to_id
 	app->uri_to_id.callback_data = app;
