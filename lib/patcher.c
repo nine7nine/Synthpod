@@ -107,6 +107,7 @@ struct _patcher_t {
 	GLuint vconns;
 	int nconns;
 
+	int X, Y;
 	int x, y;
 	int w, h;
 	int W, H;
@@ -308,34 +309,51 @@ _patcher_labels_move_resize(patcher_t *priv)
 	if(!priv->active)
 		return;
 
-	int sspan;
 	float fx, fy;
-	int sx, sy;
+	int sx0, sy0, sx1, sy1;
 
 	_precalc(priv);
 
 	// get label height FIXME
 	_rel_to_abs(priv, 0, 1, &fx, &fy);
-	_abs_to_screen(priv, fx, fy, &sx, &sy);
-	sspan = sy;
+	_abs_to_screen(priv, fx, fy, &sx1, &sy1);
 	_rel_to_abs(priv, 0, 0, &fx, &fy);
-	_abs_to_screen(priv, fx, fy, &sx, &sy);
-	sspan -= sy + 1;
+	_abs_to_screen(priv, fx, fy, &sx0, &sy0);
+	const int sspan = sy1 - sy0 - 1;
 
 	for(int i=0; i<priv->ncols; i++)
 	{
 		_rel_to_abs(priv, i, priv->nrows, &fx, &fy);
-		_abs_to_screen(priv, fx, fy, &sx, &sy);
-		evas_object_move(priv->cols[i], priv->x, priv->y + sy);
-		evas_object_resize(priv->cols[i], sx, sspan);
+		_abs_to_screen(priv, fx, fy, &sx1, &sy1);
+		sx1 += priv->X;
+		sy1 += priv->Y;
+		if(sx1 < priv->x) sx1 = priv->x;
+
+		_abs_to_screen(priv, -1.f, fy, &sx0, &sy0);
+		sx0 += priv->X;
+		sy0 += priv->Y;
+		if(sx0 < priv->x) sx0 = priv->x;
+
+		evas_object_move(priv->cols[i], sx0, sy0);
+		evas_object_resize(priv->cols[i], sx1 - sx0, sspan);
 	}
 
 	for(int j=0; j<priv->nrows; j++)
 	{
 		_rel_to_abs(priv, priv->ncols, j, &fx, &fy);
-		_abs_to_screen(priv, fx, fy, &sx, &sy);
-		evas_object_move(priv->rows[j], priv->x + sx, priv->y + sy);
-		evas_object_resize(priv->rows[j], priv->w - sx, sspan);
+		_abs_to_screen(priv, fx, fy, &sx0, &sy0);
+		sx0 += priv->X;
+		sy0 += priv->Y;
+		if(sx0 > priv->x + priv->w) sx0 = priv->x + priv->w;
+
+		_rel_to_abs(priv, priv->ncols, j, &fx, &fy);
+		_abs_to_screen(priv, 1.f, fy, &sx1, &sy1);
+		sx1 += priv->X;
+		sy1 += priv->Y;
+		if(sx1 > priv->x + priv->w) sx1 = priv->x + priv->w;
+
+		evas_object_move(priv->rows[j], sx0, sy0);
+		evas_object_resize(priv->rows[j], sx1 - sx0, sspan);
 	}
 }
 
@@ -529,6 +547,7 @@ _dump(patcher_t *priv)
 {
 	debugf("active: %i\n", priv->active);
 	debugf("x, y: %i %i\n", priv->x, priv->y);
+	debugf("X, Y: %i %i\n", priv->X, priv->Y);
 	debugf("w, h: %i %i\n", priv->w, priv->h);
 	debugf("W, H: %i %i\n", priv->W, priv->H);
 	debugf("scale: %f\n", priv->scale);
@@ -1000,8 +1019,8 @@ _mouse_move_raw(patcher_t *priv, int sx, int sy)
 	float fx, fy;
 	int ax, ay;
 
-	sx -= priv->x;
-	sy -= priv->y;
+	sx -= priv->X;
+	sy -= priv->Y;
 
 	_screen_to_abs(priv, sx, sy, &fx, &fy);
 	_abs_to_rel(priv, fx, fy, &ax, &ay);
@@ -1293,8 +1312,11 @@ _patcher_smart_calculate(Evas_Object *o)
 	priv->W = w > h ? w : h;
 	priv->H = h > w ? h : w;
 
-	priv->x = x - (priv->W - priv->w) / 2;
-	priv->y = y - (priv->H - priv->h) / 2;
+	priv->x = x;
+	priv->y = y;
+
+	priv->X = x - (priv->W - priv->w) / 2;
+	priv->Y = y - (priv->H - priv->h) / 2;
 
 	_patcher_labels_move_resize(priv);
 	evas_object_move(priv->glview, x, y);
