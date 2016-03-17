@@ -201,7 +201,7 @@ struct _mod_t {
 		LV2UI_Descriptor descriptor;
 		Elm_Object_Item *elmnt;
 		Elm_Object_Item *grid;
-		Elm_Object_Item *frame;
+		Evas_Object *frame;
 		Evas_Object *list;
 	} std;
 
@@ -6495,7 +6495,7 @@ _sp_ui_from_app_module_del(sp_ui_t *ui, const LV2_Atom *atom)
 	if(mod->std.list)
 	{
 		elm_genlist_clear(mod->std.list);
-		elm_object_item_del(mod->std.list);
+		evas_object_del(mod->std.list);
 		mod->std.list = NULL;
 	}
 	if(mod->std.elmnt)
