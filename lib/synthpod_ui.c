@@ -2887,11 +2887,13 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->feature_list[nfeatures].URI = LV2_URID__unmap;
 	mod->feature_list[nfeatures++].data = ui->driver->unmap;
 
-	mod->feature_list[nfeatures].URI = XPRESS_VOICE_MAP;
-	mod->feature_list[nfeatures++].data = ui->driver->xmap;
+	//XXX do NOT put ANY feature BEFORE LV2_UI__parent
 
 	mod->feature_list[nfeatures].URI = LV2_UI__parent;
 	mod->feature_list[nfeatures++].data = NULL; // will be filled in before instantiation
+
+	mod->feature_list[nfeatures].URI = XPRESS_VOICE_MAP;
+	mod->feature_list[nfeatures++].data = ui->driver->xmap;
 
 	mod->feature_list[nfeatures].URI = LV2_LOG__log;
 	mod->feature_list[nfeatures++].data = &mod->log;
