@@ -559,7 +559,9 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	bin->win = NULL;
 	if(bin->has_gui)
 	{
+#ifdef ELM_1_10
 		elm_config_accel_preference_set("gl");
+#endif
 		elm_policy_set(ELM_POLICY_QUIT, ELM_POLICY_QUIT_LAST_WINDOW_CLOSED);
 
 		bin->win = elm_win_util_standard_add("synthpod", "Synthpod");
