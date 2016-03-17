@@ -26,6 +26,10 @@
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 
+#ifndef LV2_PATCH__Copy
+#	define LV2_PATCH__Copy LV2_PATCH_PREFIX "Copy"
+#endif
+
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
