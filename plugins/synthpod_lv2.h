@@ -69,25 +69,25 @@ extern const LV2_Descriptor synthpod_monoatom;
 extern const LV2_Descriptor synthpod_anonymizer;
 
 // common UI uris
-#define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_eo"
-#define SYNTHPOD_COMMON_UI_URI	SYNTHPOD_URI"#common_ui"
-#define SYNTHPOD_COMMON_X11_URI	SYNTHPOD_URI"#common_x11"
-#define SYNTHPOD_COMMON_KX_URI	SYNTHPOD_URI"#common_kx"
+#define SYNTHPOD_COMMON_UI_URI	SYNTHPOD_URI"#common_1_ui"
+#define SYNTHPOD_COMMON_KX_URI	SYNTHPOD_URI"#common_2_kx"
+#define SYNTHPOD_COMMON_X11_URI	SYNTHPOD_URI"#common_3_x11"
+#define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_4_eo"
 
-extern const LV2UI_Descriptor synthpod_common_eo;
-extern const LV2UI_Descriptor synthpod_common_ui;
-extern const LV2UI_Descriptor synthpod_common_x11;
-extern const LV2UI_Descriptor synthpod_common_kx;
+extern const LV2UI_Descriptor synthpod_common_1_ui;
+extern const LV2UI_Descriptor synthpod_common_2_kx;
+extern const LV2UI_Descriptor synthpod_common_3_x11;
+extern const LV2UI_Descriptor synthpod_common_4_eo;
 
 // keyboard UI uris
-#define SYNTHPOD_KEYBOARD_EO_URI	SYNTHPOD_URI"#keyboard_eo"
-#define SYNTHPOD_KEYBOARD_UI_URI	SYNTHPOD_URI"#keyboard_ui"
-#define SYNTHPOD_KEYBOARD_X11_URI	SYNTHPOD_URI"#keyboard_x11"
-#define SYNTHPOD_KEYBOARD_KX_URI	SYNTHPOD_URI"#keyboard_kx"
+#define SYNTHPOD_KEYBOARD_UI_URI	SYNTHPOD_URI"#keyboard_1_ui"
+#define SYNTHPOD_KEYBOARD_KX_URI	SYNTHPOD_URI"#keyboard_2_kx"
+#define SYNTHPOD_KEYBOARD_X11_URI	SYNTHPOD_URI"#keyboard_3_x11"
+#define SYNTHPOD_KEYBOARD_EO_URI	SYNTHPOD_URI"#keyboard_4_eo"
 
-extern const LV2UI_Descriptor synthpod_keyboard_eo;
-extern const LV2UI_Descriptor synthpod_keyboard_ui;
-extern const LV2UI_Descriptor synthpod_keyboard_x11;
-extern const LV2UI_Descriptor synthpod_keyboard_kx;
+extern const LV2UI_Descriptor synthpod_keyboard_1_ui;
+extern const LV2UI_Descriptor synthpod_keyboard_2_kx;
+extern const LV2UI_Descriptor synthpod_keyboard_3_x11;
+extern const LV2UI_Descriptor synthpod_keyboard_4_eo;
 
 #endif // _SYNTHPOD_LV2_H

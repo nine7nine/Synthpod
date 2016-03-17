@@ -87,22 +87,7 @@ synthpod:group_out
 	lv2:symbol "out" .
 
 # Common UIs
-synthpod:common_eo
-	a ui:EoUI ;
-	ui:portNotification [
-		ui:plugin synthpod:stereo ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	lv2:extensionData ui:resize ;
-	lv2:optionalFeature inst:, zwrite:schedule, ui:resize, log:log ;
-	lv2:requiredFeature ui:portMap, urid:map .
-synthpod:common_ui
+synthpod:common_1_ui
 	a ui:UI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
@@ -117,7 +102,21 @@ synthpod:common_ui
 	lv2:optionalFeature inst:, zwrite:schedule, log:log ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
-synthpod:common_x11
+synthpod:common_2_kx
+	a kx:Widget ;
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	ui:portNotification [
+		ui:plugin synthpod:monoatom ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:optionalFeature inst:, zwrite:schedule, log:log ;
+	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
+synthpod:common_3_x11
 	a ui:X11UI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
@@ -132,8 +131,8 @@ synthpod:common_x11
 	lv2:optionalFeature ui:resize, inst:, zwrite:schedule, log:log ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface, ui:resize .
-synthpod:common_kx
-	a kx:Widget ;
+synthpod:common_4_eo
+	a ui:EoUI ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
 		lv2:symbol "notify" ;
@@ -144,8 +143,9 @@ synthpod:common_kx
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst:, zwrite:schedule, log:log ;
-	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
+	lv2:extensionData ui:resize ;
+	lv2:optionalFeature inst:, zwrite:schedule, ui:resize, log:log ;
+	lv2:requiredFeature ui:portMap, urid:map .
 
 # Stereo Plugin
 synthpod:stereo
@@ -372,23 +372,23 @@ synthpod:monoatom
 	] .
 
 # Keybaord UIs
-synthpod:keyboard_eo
-	a ui:EoUI ;
-	lv2:extensionData ui:resize ;
-	lv2:optionalFeature ui:resize ;
-	lv2:requiredFeature urid:map .
-synthpod:keyboard_ui
+synthpod:keyboard_1_ui
 	a ui:UI ;
 	lv2:requiredFeature ui:idleInterface, urid:map ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
-synthpod:keyboard_x11
+synthpod:keyboard_2_kx
+	a kx:Widget ;
+	lv2:requiredFeature kx:Host, urid:map .
+synthpod:keyboard_3_x11
 	a ui:X11UI ;
 	lv2:requiredFeature ui:idleInterface, urid:map ;
 	lv2:optionalFeature ui:resize ;
   lv2:extensionData ui:idleInterface, ui:resize .
-synthpod:keyboard_kx
-	a kx:Widget ;
-	lv2:requiredFeature kx:Host, urid:map .
+synthpod:keyboard_4_eo
+	a ui:EoUI ;
+	lv2:extensionData ui:resize ;
+	lv2:optionalFeature ui:resize ;
+	lv2:requiredFeature urid:map .
 
 # Keyboard Plugin
 synthpod:keyboard

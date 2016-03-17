@@ -37,10 +37,10 @@ synthpod:stereo
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	@EO_UI_WRAP@ui:ui synthpod:common_eo ;
-	@UI_UI_WRAP@ui:ui synthpod:common_ui ;
-	@KX_UI_WRAP@ui:ui synthpod:common_kx ;
-	@X11_UI_WRAP@ui:ui synthpod:common_x11 ;
+	@UI_UI_WRAP@ui:ui synthpod:common_1_ui ;
+	@KX_UI_WRAP@ui:ui synthpod:common_2_kx ;
+	@X11_UI_WRAP@ui:ui synthpod:common_3_x11 ;
+	@EO_UI_WRAP@ui:ui synthpod:common_4_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Synthpod Monoatom
@@ -49,26 +49,26 @@ synthpod:monoatom
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	@EO_UI_WRAP@ui:ui synthpod:common_eo ;
-	@UI_UI_WRAP@ui:ui synthpod:common_ui ;
-	@KX_UI_WRAP@ui:ui synthpod:common_kx ;
-	@X11_UI_WRAP@ui:ui synthpod:common_x11 ;
+	@UI_UI_WRAP@ui:ui synthpod:common_1_ui ;
+	@KX_UI_WRAP@ui:ui synthpod:common_2_kx ;
+	@X11_UI_WRAP@ui:ui synthpod:common_3_x11 ;
+	@EO_UI_WRAP@ui:ui synthpod:common_4_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
-synthpod:common_eo
-	a ui:EoUI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-synthpod:common_ui
+synthpod:common_1_ui
 	a ui:UI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
-synthpod:common_kx
+synthpod:common_2_kx
 	a kx:Widget ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
-synthpod:common_x11
+synthpod:common_3_x11
 	a ui:X11UI ;
+	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod.ttl> .
+synthpod:common_4_eo
+	a ui:EoUI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
@@ -78,26 +78,26 @@ synthpod:keyboard
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	@EO_UI_WRAP@ui:ui synthpod:keyboard_eo ;
-	@UI_UI_WRAP@ui:ui synthpod:keyboard_ui ;
-	@KX_UI_WRAP@ui:ui synthpod:keyboard_kx ;
-	@X11_UI_WRAP@ui:ui synthpod:keyboard_x11 ;
+	@UI_UI_WRAP@ui:ui synthpod:keyboard_1_ui ;
+	@KX_UI_WRAP@ui:ui synthpod:keyboard_2_kx ;
+	@X11_UI_WRAP@ui:ui synthpod:keyboard_3_x11 ;
+	@EO_UI_WRAP@ui:ui synthpod:keyboard_4_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
-synthpod:keyboard_eo
-	a ui:EoUI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-synthpod:keyboard_ui
+synthpod:keyboard_1_ui
 	a ui:UI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
-synthpod:keyboard_kx
+synthpod:keyboard_2_kx
 	a kx:Widget ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
-synthpod:keyboard_x11
+synthpod:keyboard_3_x11
 	a ui:X11UI ;
+	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod.ttl> .
+synthpod:keyboard_4_eo
+	a ui:EoUI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
