@@ -108,6 +108,10 @@ if((${ELM_VERSION} VERSION_EQUAL "1.10.0") OR (${ELM_VERSION} VERSION_GREATER "1
 	add_definitions("-DELM_1_10")
 endif()
 
+if((${ELM_VERSION} VERSION_EQUAL "1.13.0") OR (${ELM_VERSION} VERSION_GREATER "1.13.0"))
+	add_definitions("-DELM_1_13")
+endif()
+
 pkg_search_module(ECORE_X OPTIONAL ecore-x)
 
 add_subdirectory(lib)
