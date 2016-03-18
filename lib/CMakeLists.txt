@@ -43,7 +43,8 @@ add_library(synthpod_ui.lib SHARED
 	smart_slider.c
 	smart_meter.c
 	smart_spinner.c
-	smart_toggle.c)
+	smart_toggle.c
+	smart_bitmask.c)
 target_link_libraries(synthpod_ui.lib
 	${ELM_LDFLAGS}
 	${LILV_LDFLAGS}

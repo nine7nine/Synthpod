@@ -132,6 +132,7 @@ struct _reg_t {
 		reg_item_t integer;
 		reg_item_t enumeration;
 		reg_item_t toggled;
+		reg_item_t is_bitmask;
 
 		// port protocols
 		reg_item_t float_protocol;
@@ -145,6 +146,10 @@ struct _reg_t {
 		// properties
 		reg_item_t logarithmic;
 	} port;
+
+	struct {
+		reg_item_t property;
+	} parameter;
 
 	struct {
 		reg_item_t schedule;
@@ -369,6 +374,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->port.integer, world, map, LV2_CORE__integer);
 	_register(&regs->port.enumeration, world, map, LV2_CORE__enumeration);
 	_register(&regs->port.toggled, world, map, LV2_CORE__toggled);
+	_register(&regs->port.is_bitmask, world, map, LV2_CORE_PREFIX"isBitmask");
 
 	_register(&regs->port.float_protocol, world, map, LV2_UI_PREFIX"floatProtocol");
 	_register(&regs->port.peak_protocol, world, map, LV2_UI_PREFIX"peakProtocol");
@@ -379,6 +385,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->port.minimum_size, world, map, LV2_RESIZE_PORT__minimumSize);
 
 	_register(&regs->port.logarithmic, world, map, LV2_PORT_PROPS__logarithmic);
+
+	_register(&regs->parameter.property, world, map, LV2_CORE_PREFIX"parameterProperty");
 
 	_register(&regs->work.schedule, world, map, LV2_WORKER__schedule);
 	_register(&regs->zero.schedule, world, map, ZERO_WORKER__schedule);
@@ -551,6 +559,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->port.integer);
 	_unregister(&regs->port.enumeration);
 	_unregister(&regs->port.toggled);
+	_unregister(&regs->port.is_bitmask);
 
 	_unregister(&regs->port.float_protocol);
 	_unregister(&regs->port.peak_protocol);
@@ -561,6 +570,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->port.minimum_size);
 
 	_unregister(&regs->port.logarithmic);
+
+	_unregister(&regs->parameter.property);
 
 	_unregister(&regs->work.schedule);
 	_unregister(&regs->zero.schedule);

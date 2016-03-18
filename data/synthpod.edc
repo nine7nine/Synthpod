@@ -83,6 +83,7 @@ collections {
 #include <smart_meter.edc>
 #include <smart_spinner.edc>
 #include <smart_toggle.edc>
+#include <smart_bitmask.edc>
 #include <entry.edc>
 #include <group.edc>
 }

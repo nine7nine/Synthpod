@@ -25,6 +25,7 @@
 #include <smart_meter.h>
 #include <smart_spinner.h>
 #include <smart_toggle.h>
+#include <smart_bitmask.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
@@ -236,6 +237,7 @@ struct _port_t {
 
 	bool integer;
 	bool toggled;
+	bool is_bitmask;
 	bool logarithmic;
 	LilvScalePoints *points;
 	char *unit;
@@ -269,6 +271,7 @@ struct _property_t {
 	char *comment;
 	LV2_URID tar_urid;
 	LV2_URID type_urid;
+	bool is_bitmask;
 
 	struct {
 		Elm_Object_Item *elmnt;
@@ -621,7 +624,10 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 				else if(prop->type_urid == ui->forge.Int)
 				{
 					int32_t val = ((const LV2_Atom_Int *)value)->body;
-					smart_slider_value_set(prop->std.widget, val);
+					if(prop->is_bitmask)
+						smart_bitmask_value_set(prop->std.widget, val);
+					else
+						smart_slider_value_set(prop->std.widget, val);
 				}
 				else if(prop->type_urid == ui->forge.URID)
 				{
@@ -631,7 +637,10 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 				else if(prop->type_urid == ui->forge.Long)
 				{
 					int64_t val = ((const LV2_Atom_Long *)value)->body;
-					smart_slider_value_set(prop->std.widget, val);
+					if(prop->is_bitmask)
+						smart_bitmask_value_set(prop->std.widget, val);
+					else
+						smart_slider_value_set(prop->std.widget, val);
 				}
 				else if(prop->type_urid == ui->forge.Float)
 				{
@@ -787,6 +796,8 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		{
 			if(port->toggled)
 				smart_toggle_value_set(port->std.widget, floor(val));
+			else if(port->is_bitmask)
+				smart_bitmask_value_set(port->std.widget, floor(val));
 			else if(port->points)
 				smart_spinner_value_set(port->std.widget, val);
 			else // integer or float
@@ -1029,6 +1040,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							{
 								prop->mod = mod;
 								prop->editable = 0;
+								prop->is_bitmask = false;
 								prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
 								prop->label = NULL; // not yet known
 								prop->comment = NULL; // not yet known
@@ -1069,6 +1081,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							{
 								prop->mod = mod;
 								prop->editable = 1;
+								prop->is_bitmask = false;
 								prop->tar_urid = ((const LV2_Atom_URID *)&atom_prop->value)->body;
 								prop->label = NULL; // not yet known
 								prop->comment = NULL; // not yet known
@@ -2577,6 +2590,7 @@ _sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const Lilv
 
 		tar->integer = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.integer.node);
 		tar->toggled = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.toggled.node);
+		tar->is_bitmask = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.is_bitmask.node);
 		tar->logarithmic = lilv_port_has_property(mod->plug, tar->tar, ui->regs.port.logarithmic.node);
 		int enumeration = lilv_port_has_property(mod->plug, port, ui->regs.port.enumeration.node);
 		tar->points = enumeration
@@ -2656,6 +2670,7 @@ _sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, in
 
 	prop->mod = mod;
 	prop->editable = editable;
+	prop->is_bitmask = false;
 	prop->label = NULL;
 	prop->comment = NULL;
 	prop->tar_urid = ui->driver->map->map(ui->driver->map->handle, writable_str);
@@ -2663,6 +2678,15 @@ _sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, in
 	prop->minimum = 0.f; // not yet known
 	prop->maximum = 1.f; // not yet known
 	prop->unit = NULL; // not yet known
+	
+	// get lv2:parameterProperty
+	LilvNode *paramprop = lilv_world_get(ui->world, writable,
+		ui->regs.rdfs.label.node, NULL);
+	if(paramprop)
+	{
+		prop->is_bitmask = true; //FIXME
+		lilv_node_free(paramprop);
+	}
 
 	// get rdfs:label
 	LilvNode *label = lilv_world_get(ui->world, writable,
@@ -4458,6 +4482,64 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
+_property_bitmask_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+
+	int64_t value = smart_bitmask_value_get(obj);
+
+	size_t body_size = 0;
+	if(prop->type_urid == ui->forge.Int)
+		body_size = sizeof(int32_t);
+	else if(prop->type_urid == ui->forge.Long)
+		body_size = sizeof(int64_t);
+	else
+		return; // unsupported type
+
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(body_size);
+
+	for(unsigned index=0; index<mod->num_ports; index++)
+	{
+		port_t *port = &mod->ports[index];
+
+		// only consider event ports which support patch:Message
+		if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+			|| (port->direction != PORT_DIRECTION_INPUT)
+			|| !port->patchable)
+		{
+			continue; // skip
+		}
+
+		transfer_patch_set_obj_t *trans = malloc(len);
+		if(trans)
+		{
+			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
+				&ui->forge, trans, body_size,
+				mod->subject, prop->tar_urid, prop->type_urid);
+			if(atom)
+			{
+				if(prop->type_urid == ui->forge.Int)
+					((LV2_Atom_Int *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Long)
+					((LV2_Atom_Long *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Float)
+					((LV2_Atom_Float *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.Double)
+					((LV2_Atom_Double *)atom)->body = value;
+				else if(prop->type_urid == ui->forge.URID)
+					((LV2_Atom_URID *)atom)->body = value;
+
+				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
+					ui->regs.port.event_transfer.urid, &trans->obj);
+			}
+			free(trans);
+		}
+	}
+}
+
+static void
 _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 {
 	property_t *prop = data;
@@ -4678,28 +4760,46 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 				|| (prop->type_urid == ui->forge.Float)
 				|| (prop->type_urid == ui->forge.Double) )
 			{
-				child = smart_slider_add(evas_object_evas_get(lay));
-				if(child)
+				if(prop->is_bitmask)
 				{
-					int integer = (prop->type_urid == ui->forge.Int)
-						|| (prop->type_urid == ui->forge.URID)
-						|| (prop->type_urid == ui->forge.Long);
-					double min = prop->minimum;
-					double max = prop->maximum;
-					double dflt = prop->minimum; //FIXME
+					child = smart_bitmask_add(evas_object_evas_get(lay));
+					if(child)
+					{
+						smart_bitmask_color_set(child, mod->col);
+						smart_bitmask_disabled_set(child, !prop->editable);
+						const int nbits = log2(prop->maximum + 1);
+						smart_bitmask_bits_set(child, nbits);
+						if(prop->editable)
+							evas_object_smart_callback_add(child, "changed", _property_bitmask_changed, prop);
+						evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, mod);
+						evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, mod);
+					}
+				}
+				else // !is_bitmask
+				{
+					child = smart_slider_add(evas_object_evas_get(lay));
+					if(child)
+					{
+						int integer = (prop->type_urid == ui->forge.Int)
+							|| (prop->type_urid == ui->forge.URID)
+							|| (prop->type_urid == ui->forge.Long);
+						double min = prop->minimum;
+						double max = prop->maximum;
+						double dflt = prop->minimum; //FIXME
 
-					smart_slider_range_set(child, min, max, dflt);
-					smart_slider_color_set(child, mod->col);
-					smart_slider_integer_set(child, integer);
-					//smart_slider_logarithmic_set(child, logarithmic); //TODO
-					smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
-					smart_slider_disabled_set(child, !prop->editable);
-					if(prop->unit)
-						smart_slider_unit_set(child, prop->unit);
-					if(prop->editable)
-						evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
-					evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, mod);
-					evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, mod);
+						smart_slider_range_set(child, min, max, dflt);
+						smart_slider_color_set(child, mod->col);
+						smart_slider_integer_set(child, integer);
+						//smart_slider_logarithmic_set(child, logarithmic); //TODO
+						smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
+						smart_slider_disabled_set(child, !prop->editable);
+						if(prop->unit)
+							smart_slider_unit_set(child, prop->unit);
+						if(prop->editable)
+							evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
+						evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, mod);
+						evas_object_smart_callback_add(child, "cat,out", _smart_mouse_out, mod);
+					}
 				}
 			}
 			else if(prop->type_urid == ui->forge.Bool)
@@ -4918,6 +5018,19 @@ _check_changed(void *data, Evas_Object *obj, void *event)
 }
 
 static void
+_bitmask_changed(void *data, Evas_Object *obj, void *event)
+{
+	port_t *port = data;
+	mod_t *mod = port->mod;
+	sp_ui_t *ui = mod->ui;
+
+	float val = smart_bitmask_value_get(obj);
+
+	_std_ui_write_function(mod, port->index, sizeof(float),
+		ui->regs.port.float_protocol.urid, &val);
+}
+
+static void
 _spinner_changed(void *data, Evas_Object *obj, void *event)
 {
 	port_t *port = data;
@@ -5049,6 +5162,23 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 				}
 
 				child = check;
+			}
+			if(port->is_bitmask)
+			{
+				Evas_Object *bitmask = smart_bitmask_add(evas_object_evas_get(lay));
+				if(bitmask)
+				{
+					smart_bitmask_color_set(bitmask, mod->col);
+					smart_bitmask_disabled_set(bitmask, port->direction == PORT_DIRECTION_OUTPUT);
+					const int nbits = log2(port->max + 1);
+					smart_bitmask_bits_set(bitmask, nbits);
+					if(port->direction == PORT_DIRECTION_INPUT)
+						evas_object_smart_callback_add(bitmask, "changed", _bitmask_changed, port);
+					evas_object_smart_callback_add(bitmask, "cat,in", _smart_mouse_in, mod);
+					evas_object_smart_callback_add(bitmask, "cat,out", _smart_mouse_out, mod);
+				}
+
+				child = bitmask;
 			}
 			else if(port->points)
 			{

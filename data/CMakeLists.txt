@@ -23,6 +23,7 @@ add_custom_command(
 		${CMAKE_CURRENT_SOURCE_DIR}/smart_meter.edc
 		${CMAKE_CURRENT_SOURCE_DIR}/smart_spinner.edc
 		${CMAKE_CURRENT_SOURCE_DIR}/smart_toggle.edc
+		${CMAKE_CURRENT_SOURCE_DIR}/smart_bitmask.edc
 		${CMAKE_CURRENT_SOURCE_DIR}/synthpod.edc
 		${CMAKE_CURRENT_SOURCE_DIR}/theme.edc
 		${CMAKE_CURRENT_SOURCE_DIR}/omk_logo.edc

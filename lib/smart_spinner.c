@@ -19,7 +19,7 @@
 
 #include <smart_spinner.h>
 
-#define SMART_SPINNER_TYPE "Smart Slider"
+#define SMART_SPINNER_TYPE "Smart Spinner"
 
 #define SMART_SPINNER_CHANGED "changed"
 #define SMART_SPINNER_MOUSE_IN "cat,in"

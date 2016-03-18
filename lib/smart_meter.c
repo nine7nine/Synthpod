@@ -19,7 +19,7 @@
 
 #include <smart_meter.h>
 
-#define SMART_METER_TYPE "Smart Slider"
+#define SMART_METER_TYPE "Smart Meter"
 
 typedef struct _smart_meter_t smart_meter_t;
 

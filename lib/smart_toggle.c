@@ -19,7 +19,7 @@
 
 #include <smart_toggle.h>
 
-#define SMART_TOGGLE_TYPE "Smart Slider"
+#define SMART_TOGGLE_TYPE "Smart Toggle"
 
 #define SMART_TOGGLE_CHANGED "changed"
 #define SMART_TOGGLE_MOUSE_IN "cat,in"
