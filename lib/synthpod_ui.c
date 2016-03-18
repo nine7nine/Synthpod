@@ -2680,12 +2680,19 @@ _sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, in
 	prop->unit = NULL; // not yet known
 	
 	// get lv2:parameterProperty
-	LilvNode *paramprop = lilv_world_get(ui->world, writable,
-		ui->regs.rdfs.label.node, NULL);
-	if(paramprop)
+	LilvNodes *paramprops = lilv_world_find_nodes(ui->world, writable,
+		ui->regs.parameter.property.node, NULL);
+	if(paramprops)
 	{
-		prop->is_bitmask = true; //FIXME
-		lilv_node_free(paramprop);
+		LILV_FOREACH(nodes, itr, paramprops)
+		{
+			const LilvNode *node = lilv_nodes_get(paramprops, itr);
+			if(lilv_node_equals(node, ui->regs.port.is_bitmask.node))
+			{
+				prop->is_bitmask = true;
+				lilv_nodes_free(paramprops);
+			}
+		}
 	}
 
 	// get rdfs:label
