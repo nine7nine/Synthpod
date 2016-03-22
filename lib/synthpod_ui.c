@@ -5090,6 +5090,21 @@ _modlist_std_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	}
 }
 
+static void
+_table_add_icon(Evas_Object *tab, const char *path, int col)
+{
+	Evas_Object *ico = elm_icon_add(tab);
+	if(ico)
+	{
+		elm_layout_file_set(ico, path, NULL);
+		evas_object_size_hint_weight_set(ico, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+		evas_object_size_hint_align_set(ico, EVAS_HINT_FILL, EVAS_HINT_FILL);
+		evas_object_show(ico);
+
+		elm_table_pack(tab, ico, col, 0, 1, 1);
+	}
+}
+
 static Evas_Object * 
 _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -5244,19 +5259,38 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		}
 		else if(port->type == PORT_TYPE_ATOM)
 		{
-			Evas_Object *lbl = elm_label_add(lay);
-			if(lbl)
-				elm_object_text_set(lbl, "Atom Port");
+			Evas_Object *tab = elm_table_add(lay);
+			if(tab)
+			{
+				elm_table_homogeneous_set(tab, EINA_TRUE);
 
-			child = lbl;
+				if(port->atom_type & PORT_ATOM_TYPE_MIDI)
+					_table_add_icon(tab, SYNTHPOD_DATA_DIR"/midi.png", 0);
+				if(port->atom_type & PORT_ATOM_TYPE_OSC)
+					_table_add_icon(tab, SYNTHPOD_DATA_DIR"/osc.png", 1);
+				if(port->atom_type & PORT_ATOM_TYPE_TIME)
+					_table_add_icon(tab, SYNTHPOD_DATA_DIR"/time.png", 2);
+				if(port->atom_type & PORT_ATOM_TYPE_PATCH)
+					_table_add_icon(tab, SYNTHPOD_DATA_DIR"/patch.png", 3);
+				if(port->atom_type & PORT_ATOM_TYPE_XPRESS)
+					_table_add_icon(tab, SYNTHPOD_DATA_DIR"/xpress.png", 4);
+
+				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/atom.png", 6);
+			}
+
+			child = tab;
 		}
 		else if(port->type == PORT_TYPE_EVENT)
 		{
-			Evas_Object *lbl = elm_label_add(lay);
-			if(lbl)
-				elm_object_text_set(lbl, "Event Port");
+			Evas_Object *tab = elm_table_add(lay);
+			if(tab)
+			{
+				elm_table_homogeneous_set(tab, EINA_TRUE);
 
-			child = lbl;
+				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/event.png", 6);
+			}
+
+			child = tab;
 		}
 
 		if(child)
