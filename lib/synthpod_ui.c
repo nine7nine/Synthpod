@@ -5275,7 +5275,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 				if(port->atom_type & PORT_ATOM_TYPE_XPRESS)
 					_table_add_icon(tab, SYNTHPOD_DATA_DIR"/xpress.png", 4);
 
-				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/atom.png", 6);
+				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/atom_inverted.png", 6);
 			}
 
 			child = tab;
@@ -5287,7 +5287,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 			{
 				elm_table_homogeneous_set(tab, EINA_TRUE);
 
-				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/event.png", 6);
+				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/event_inverted.png", 6);
 			}
 
 			child = tab;
