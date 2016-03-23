@@ -111,18 +111,15 @@ _rt_thread(void *data, Eina_Thread thread)
 	handle->cycle.cur_frames = 0; // initialize frame counter
 	_ntp_now(&handle->nxt_ntp);
 
-	const unsigned n_period = 4; // do how many periods per iteration?
+	const unsigned n_period = 3; // TODO make this configurable
 
-	struct timespec sleep_todo = {
-		.tv_sec = 0,
-		.tv_nsec = nanos_per_period * n_period
-	};
+	struct timespec sleep_to;
+	clock_gettime(CLOCK_MONOTONIC, &sleep_to);
 
 	while(!atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
-		struct timespec sleep_rem;
-		if(clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_todo, &sleep_rem)) // has been interrupted?
-			clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_rem, NULL); // sleep for remaining time
+		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &sleep_to, NULL);
+		_ntp_add_nanos(&sleep_to, nanos_per_period * n_period);
 
 		uint32_t na = nsamples * n_period;
 
@@ -134,8 +131,7 @@ _rt_thread(void *data, Eina_Thread thread)
 		_ntp_now(&nxt_ntp);
 		_ntp_clone(&handle->nxt_ntp, &nxt_ntp);
 
-		// increase cur_frames
-		handle->cycle.cur_frames += na;
+		// reset ref_frames
 		handle->cycle.ref_frames = handle->cycle.cur_frames;
 
 		// calculate apparent period
@@ -265,6 +261,9 @@ _rt_thread(void *data, Eina_Thread thread)
 
 			bin_process_post(bin);
 		}
+
+		// increase cur_frames
+		handle->cycle.cur_frames = handle->cycle.ref_frames;
 	}
 
 	return NULL;
@@ -375,7 +374,7 @@ static const synthpod_nsm_driver_t nsm_driver = {
 };
 
 // rt
-static int64_t
+static double
 _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 {
 	prog_t *handle = instance;
@@ -383,30 +382,27 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 	if(timestamp == 1ULL)
 		return 0; // inject at start of period
 
-	uint64_t time_sec = timestamp >> 32;
-	uint64_t time_frac = timestamp & 0xffffffff;
+	const uint64_t time_sec = timestamp >> 32;
+	const uint64_t time_frac = timestamp & 0xffffffff;
 
-	double diff = time_sec;
-	diff -= handle->cur_ntp.tv_sec;
-	diff += time_frac * 0x1p-32;
-	diff -= handle->cur_ntp.tv_nsec * 1e-9;
+	const double diff = (time_sec - handle->cur_ntp.tv_sec)
+		+ time_frac * 0x1p-32
+		- handle->cur_ntp.tv_nsec * 1e-9;
 
-	double frames_d = handle->cycle.ref_frames
-		- handle->cycle.cur_frames
-		+ diff * handle->cycle.dT;
-
-	int64_t frames = ceil(frames_d);
+	const double frames = diff * handle->cycle.dT
+		- handle->cycle.ref_frames
+		+ handle->cycle.cur_frames;
 
 	return frames;
 }
 
 // rt
 static uint64_t
-_osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
+_osc_schedule_frames2osc(osc_schedule_handle_t instance, double frames)
 {
 	prog_t *handle = instance;
 
-	double diff = (double)(frames - handle->cycle.ref_frames + handle->cycle.cur_frames)
+	double diff = (frames - handle->cycle.cur_frames - handle->cycle.ref_frames)
 		* handle->cycle.dTm1;
 	diff += handle->cur_ntp.tv_nsec * 1e-9;
 	diff += handle->cur_ntp.tv_sec;

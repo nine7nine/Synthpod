@@ -87,7 +87,7 @@ struct _prog_t {
 
 #if defined(JACK_HAS_CYCLE_TIMES)
 	osc_schedule_t osc_sched;
-	struct timespec ntp;
+	struct timespec cur_ntp;
 	struct {
 		jack_nframes_t cur_frames;
 		jack_nframes_t ref_frames;
@@ -421,16 +421,16 @@ _process(jack_nframes_t nsamples, void *data)
 	sp_app_t *app = bin->app;
 
 #if defined(JACK_HAS_CYCLE_TIMES)
-	clock_gettime(CLOCK_REALTIME, &handle->ntp);
-	handle->ntp.tv_sec += JAN_1970; // convert NTP to OSC time
-	jack_nframes_t offset = jack_frames_since_cycle_start(handle->client);
+	clock_gettime(CLOCK_REALTIME, &handle->cur_ntp);
+	handle->cur_ntp.tv_sec += JAN_1970; // convert NTP to OSC time
+	//jack_nframes_t offset = jack_frames_since_cycle_start(handle->client);
 
 	float T;
 	jack_get_cycle_times(handle->client, &handle->cycle.cur_frames,
 		&handle->cycle.cur_usecs, &handle->cycle.nxt_usecs, &T);
 	(void)T;
 	
-	handle->cycle.ref_frames = handle->cycle.cur_frames + offset;
+	handle->cycle.ref_frames = handle->cycle.cur_frames;
 
 	// calculate apparent period
 	double diff = 1e-6 * (handle->cycle.nxt_usecs - handle->cycle.cur_usecs);
@@ -1152,7 +1152,7 @@ static const synthpod_nsm_driver_t nsm_driver = {
 
 #if defined(JACK_HAS_CYCLE_TIMES)
 // rt
-static int64_t
+static double
 _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 {
 	prog_t *handle = instance;
@@ -1160,33 +1160,30 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 	if(timestamp == 1ULL)
 		return 0; // inject at start of period
 
-	uint64_t time_sec = timestamp >> 32;
-	uint64_t time_frac = timestamp & 0xffffffff;
+	const uint64_t time_sec = timestamp >> 32;
+	const uint64_t time_frac = timestamp & 0xffffffff;
 
-	double diff = time_sec;
-	diff -= handle->ntp.tv_sec;
-	diff += time_frac * 0x1p-32;
-	diff -= handle->ntp.tv_nsec * 1e-9;
+	const double diff = (time_sec - handle->cur_ntp.tv_sec)
+		+ time_frac * 0x1p-32
+		- handle->cur_ntp.tv_nsec * 1e-9;
 
-	double frames_d = handle->cycle.ref_frames
-		- handle->cycle.cur_frames
-		+ diff * handle->cycle.dT;
-
-	int64_t frames = ceil(frames_d);
+	const double frames = diff * handle->cycle.dT
+		- handle->cycle.ref_frames
+		+ handle->cycle.cur_frames;
 
 	return frames;
 }
 
 // rt
 static uint64_t
-_osc_schedule_frames2osc(osc_schedule_handle_t instance, int64_t frames)
+_osc_schedule_frames2osc(osc_schedule_handle_t instance, double frames)
 {
 	prog_t *handle = instance;
 
-	double diff = (double)(frames - handle->cycle.ref_frames + handle->cycle.cur_frames)
+	double diff = (frames - handle->cycle.cur_frames - handle->cycle.ref_frames)
 		* handle->cycle.dTm1;
-	diff += handle->ntp.tv_nsec * 1e-9;
-	diff += handle->ntp.tv_sec;
+	diff += handle->cur_ntp.tv_nsec * 1e-9;
+	diff += handle->cur_ntp.tv_sec;
 
 	double time_sec_d;
 	double time_frac_d = modf(diff, &time_sec_d);
