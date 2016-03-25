@@ -746,6 +746,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 		return NULL;
+#if !defined(_WIN32)
+	mlock(mod, sizeof(mod_t));
+#endif
 
 	// populate worker schedule
 	mod->worker.schedule.handle = mod;
@@ -930,6 +933,15 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		mod->pools[pool].size = 0;
 
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
+	if(!mod->ports)
+	{
+		free(mod);
+		return NULL; // failed to alloc ports
+	}
+#if !defined(_WIN32)
+	mlock(mod->ports, mod->num_ports * sizeof(port_t));
+#endif
+
 	for(unsigned i=0; i<mod->num_ports; i++)
 	{
 		port_t *tar = &mod->ports[i];
@@ -1178,11 +1190,19 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 
 	// free ports
 	if(mod->ports)
+	{
+#if !defined(_WIN32)
+		munlock(mod->ports, mod->num_ports * sizeof(port_t));
+#endif
 		free(mod->ports);
+	}
 
 	if(mod->uri_str)
 		free(mod->uri_str);
 
+#if !defined(_WIN32)
+	munlock(mod, sizeof(mod_t));
+#endif
 	free(mod);
 
 	return 0; //success
@@ -2490,6 +2510,9 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	sp_app_t *app = calloc(1, sizeof(sp_app_t));
 	if(!app)
 		return NULL;
+#if !defined(_WIN32)
+	mlock(app, sizeof(sp_app_t));
+#endif
 
 	atomic_flag_clear_explicit(&app->dirty, memory_order_relaxed);
 
@@ -4085,6 +4108,9 @@ sp_app_free(sp_app_t *app)
 	if(app->sratom)
 		sratom_free(app->sratom);
 
+#if !defined(_WIN32)
+	munlock(app, sizeof(sp_app_t));
+#endif
 	free(app);
 
 	ecore_file_shutdown();

@@ -427,6 +427,9 @@ EAPI_MAIN int
 elm_main(int argc, char **argv)
 {
 	static prog_t handle;
+#if !defined(_WIN32)
+	mlock(&handle, sizeof(prog_t));
+#endif
 	bin_t *bin = &handle.bin;
 
 	handle.srate = 48000;
@@ -545,6 +548,10 @@ elm_main(int argc, char **argv)
 
 	// deinit
 	bin_deinit(bin);
+
+#if !defined(_WIN32)
+	munlock(&handle, sizeof(prog_t));
+#endif
 
 	return 0;
 }

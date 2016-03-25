@@ -553,6 +553,9 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			chan = calloc(1, sizeof(chan_t));
 			if(chan)
 			{
+#if !defined(_WIN32)
+				mlock(chan, sizeof(chan_t));
+#endif
 				chan->type = CHAN_TYPE_PCMI;
 				//TODO
 			}
@@ -570,6 +573,9 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			chan = calloc(1, sizeof(chan_t));
 			if(chan)
 			{
+#if !defined(_WIN32)
+				mlock(chan, sizeof(chan_t));
+#endif
 				chan->type = CHAN_TYPE_MIDI;
 
 				snd_seq_port_info_t *pinfo;
@@ -650,6 +656,9 @@ _system_port_del(void *data, void *sys_port)
 		}
 	}
 
+#if !defined(_WIN32)
+	munlock(chan, sizeof(chan_t));
+#endif
 	free(chan);
 }
 
@@ -893,6 +902,9 @@ EAPI_MAIN int
 elm_main(int argc, char **argv)
 {
 	static prog_t handle;
+#if !defined(_WIN32)
+	mlock(&handle, sizeof(prog_t));
+#endif
 	bin_t *bin = &handle.bin;
 
 	handle.srate = 48000;
@@ -1073,6 +1085,10 @@ elm_main(int argc, char **argv)
 
 	if(ini)
 		efreet_ini_free(ini);
+
+#if !defined(_WIN32)
+	munlock(&handle, sizeof(prog_t));
+#endif
 
 	return 0;
 }
