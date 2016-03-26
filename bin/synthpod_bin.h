@@ -494,13 +494,13 @@ static void
 bin_init(bin_t *bin)
 {
 	// varchunk init
-	bin->app_to_ui = varchunk_new(CHUNK_SIZE);
-	bin->app_from_ui = varchunk_new(CHUNK_SIZE);
-	bin->app_to_worker = varchunk_new(CHUNK_SIZE);
-	bin->app_from_worker = varchunk_new(CHUNK_SIZE);
-	bin->app_to_log = varchunk_new(CHUNK_SIZE);
-	bin->app_from_com = varchunk_new(CHUNK_SIZE);
-	bin->app_from_app = varchunk_new(CHUNK_SIZE);
+	bin->app_to_ui = varchunk_new(CHUNK_SIZE, true);
+	bin->app_from_ui = varchunk_new(CHUNK_SIZE, true);
+	bin->app_to_worker = varchunk_new(CHUNK_SIZE, true);
+	bin->app_from_worker = varchunk_new(CHUNK_SIZE, true);
+	bin->app_to_log = varchunk_new(CHUNK_SIZE, true);
+	bin->app_from_com = varchunk_new(CHUNK_SIZE, false);
+	bin->app_from_app = varchunk_new(CHUNK_SIZE, false);
 
 	bin->symap = symap_new();
 	atomic_flag_clear_explicit(&bin->map_lock, memory_order_relaxed);

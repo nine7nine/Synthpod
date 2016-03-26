@@ -409,10 +409,10 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	handle->advance_worker = true; //TODO reset in activate ?
 	handle->advance_ui = true; //TODO reset in activate ?
-	handle->app_to_worker = varchunk_new(CHUNK_SIZE);
-	handle->app_from_worker = varchunk_new(CHUNK_SIZE);
-	handle->app_from_ui = varchunk_new(CHUNK_SIZE);
-	handle->app_from_app = varchunk_new(CHUNK_SIZE);
+	handle->app_to_worker = varchunk_new(CHUNK_SIZE, true);
+	handle->app_from_worker = varchunk_new(CHUNK_SIZE, true);
+	handle->app_from_ui = varchunk_new(CHUNK_SIZE, false);
+	handle->app_from_app = varchunk_new(CHUNK_SIZE, false);
 
 	handle->driver.to_ui_request = _to_ui_request;
 	handle->driver.to_ui_advance = _to_ui_advance;
