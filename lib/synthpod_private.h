@@ -218,6 +218,7 @@ struct _reg_t {
 		reg_item_t Port;
 		reg_item_t plugin;
 		reg_item_t applies_to;
+		reg_item_t designation;
 	} core;
 
 	struct {
@@ -443,6 +444,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.Port, world, map, LV2_CORE__Port);
 	_register(&regs->core.plugin, world, map, LV2_CORE__Plugin);
 	_register(&regs->core.applies_to, world, map, LV2_CORE__appliesTo);
+	_register(&regs->core.designation, world, map, LV2_CORE__designation);
 
 	_register(&regs->bufsz.nominal_block_length, world, map, LV2_BUF_SIZE_PREFIX "nominalBlockLength");
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
@@ -622,6 +624,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.Port);
 	_unregister(&regs->core.plugin);
 	_unregister(&regs->core.applies_to);
+	_unregister(&regs->core.designation);
 
 	_unregister(&regs->bufsz.nominal_block_length);
 	_unregister(&regs->bufsz.max_block_length);

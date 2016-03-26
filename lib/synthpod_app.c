@@ -967,17 +967,23 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 				//FIXME check lilv returns
 				char *short_name = NULL;
 				char *pretty_name = NULL;
+				const char *designation = NULL;
 				const LilvNode *port_symbol_node = lilv_port_get_symbol(plug, port);
 				LilvNode *port_name_node = lilv_port_get_name(plug, port);
+				LilvNode *port_designation= lilv_port_get(plug, port, app->regs.core.designation.node);
 
 				asprintf(&short_name, "#%u_%s",
 					mod->uid, lilv_node_as_string(port_symbol_node));
 				asprintf(&pretty_name, "#%u - %s",
 					mod->uid, lilv_node_as_string(port_name_node));
+				designation = port_designation ? lilv_node_as_string(port_designation) : NULL;
 				const uint32_t order = (mod->uid << 16) | tar->index;
-				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
-					short_name, pretty_name, tar->direction == PORT_DIRECTION_OUTPUT, order);
 
+				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
+					short_name, pretty_name, designation,
+					tar->direction == PORT_DIRECTION_OUTPUT, order);
+
+				lilv_node_free(port_designation);
 				lilv_node_free(port_name_node);
 				free(short_name);
 				free(pretty_name);

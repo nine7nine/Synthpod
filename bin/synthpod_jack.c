@@ -863,7 +863,7 @@ _ui_saved(void *data, int status)
 
 static void *
 _system_port_add(void *data, system_port_t type, const char *short_name,
-	const char *pretty_name, bool input, uint32_t order)
+	const char *pretty_name, const char *designation, bool input, uint32_t order)
 {
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
@@ -955,6 +955,12 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			{
 				jack_set_property(handle->client, uuid,
 					JACK_METADATA_PRETTY_NAME, pretty_name, "text/plain");
+			}
+
+			if(designation)
+			{
+				jack_set_property(handle->client, uuid,
+					JACKEY_DESIGNATION, designation, "text/plain");
 			}
 
 			char order_str [32];
