@@ -29,6 +29,7 @@
 #if defined(JACK_HAS_METADATA_API)
 #	include <jack/metadata.h>
 #	include <jack/uuid.h>
+# include <jackey.h>
 #endif
 
 #ifndef MAX
@@ -905,7 +906,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 				if(!jack_uuid_empty(uuid))
 				{
 					jack_set_property(handle->client, uuid,
-						"http://jackaudio.org/metadata/signal-type", "CV", "text/plain");
+						JACKEY_SIGNAL_TYPE, "CV", "text/plain");
 				}
 			}
 #endif
@@ -930,7 +931,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 				if(!jack_uuid_empty(uuid))
 				{
 					jack_set_property(handle->client, uuid,
-						"http://jackaudio.org/metadata/event-types", "OSC", "text/plain");
+						JACKEY_EVENT_TYPES, "OSC", "text/plain");
 				}
 			}
 #endif
@@ -959,7 +960,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			char order_str [32];
 			sprintf(order_str, "%"PRIu32, order);
 			jack_set_property(handle->client, uuid,
-				"http://jackaudio.org/metadata/order", order_str, "http://www.w3.org/2001/XMLSchema#integer");
+				JACKEY_ORDER, order_str, "http://www.w3.org/2001/XMLSchema#integer");
 		}
 	}
 #endif
