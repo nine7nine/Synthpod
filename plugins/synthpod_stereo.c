@@ -314,6 +314,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
+	mlock(handle, sizeof(plughandle_t));
 
 	handle->driver.sample_rate = rate;
 	handle->driver.seq_size = SEQ_SIZE;
@@ -898,6 +899,7 @@ cleanup(LV2_Handle instance)
 	varchunk_free(handle->app_from_ui);
 	varchunk_free(handle->app_from_app);
 
+	munlock(handle, sizeof(plughandle_t));
 	free(handle);
 
 	eina_shutdown();

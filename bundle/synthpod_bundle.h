@@ -18,6 +18,13 @@
 #ifndef _SYNTHPOD_LV2_H
 #define _SYNTHPOD_LV2_H
 
+#ifdef _WIN32
+#	define mlock(...)
+#	define munlock(...)
+#else
+#	include <sys/mman.h> // mlock
+#endif
+
 #include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 
 // bundle uri

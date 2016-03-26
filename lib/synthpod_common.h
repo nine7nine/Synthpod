@@ -22,8 +22,12 @@
 
 #ifdef _WIN32
 #	define SYNTHPOD_SYMBOL_EXTERN __declspec(dllexport)
+#	include <Evil.h>
+#	define mlock(...)
+#	define munlock(...)
 #else
 #	define SYNTHPOD_SYMBOL_EXTERN __attribute__((visibility("default")))
+#	include <sys/mman.h> // mlock
 #endif
 
 #include <xpress.h>

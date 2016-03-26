@@ -21,12 +21,6 @@
 #include <ctype.h> // isspace
 #include <math.h>
 
-#if !defined(_WIN32)
-#	include <sys/mman.h> // mlock
-#else
-#	include <Evil.h>
-#endif
-
 #include <Eina.h>
 #include <Efreet.h>
 #include <Ecore_File.h>
@@ -666,14 +660,12 @@ _mod_alloc_pool(pool_t *pool)
 {
 #if defined(_WIN32)
 	pool->buf = _aligned_malloc(pool->size, 8);
-	if(pool->buf)
-	{
 #else
 	posix_memalign(&pool->buf, 8, pool->size);
+#endif
 	if(pool->buf)
 	{
 		mlock(pool->buf, pool->size);
-#endif
 		memset(pool->buf, 0x0, pool->size);
 
 		return 0;
@@ -687,9 +679,7 @@ _mod_free_pool(pool_t *pool)
 {
 	if(pool->buf)
 	{
-#if !defined(_WIN32)
 		munlock(pool->buf, pool->size);
-#endif
 		free(pool->buf);
 		pool->buf = NULL;
 	}
@@ -746,9 +736,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 		return NULL;
-#if !defined(_WIN32)
 	mlock(mod, sizeof(mod_t));
-#endif
 
 	// populate worker schedule
 	mod->worker.schedule.handle = mod;
@@ -938,9 +926,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		free(mod);
 		return NULL; // failed to alloc ports
 	}
-#if !defined(_WIN32)
 	mlock(mod->ports, mod->num_ports * sizeof(port_t));
-#endif
 
 	for(unsigned i=0; i<mod->num_ports; i++)
 	{
@@ -1191,18 +1177,14 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	// free ports
 	if(mod->ports)
 	{
-#if !defined(_WIN32)
 		munlock(mod->ports, mod->num_ports * sizeof(port_t));
-#endif
 		free(mod->ports);
 	}
 
 	if(mod->uri_str)
 		free(mod->uri_str);
 
-#if !defined(_WIN32)
 	munlock(mod, sizeof(mod_t));
-#endif
 	free(mod);
 
 	return 0; //success
@@ -2510,9 +2492,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	sp_app_t *app = calloc(1, sizeof(sp_app_t));
 	if(!app)
 		return NULL;
-#if !defined(_WIN32)
 	mlock(app, sizeof(sp_app_t));
-#endif
 
 	atomic_flag_clear_explicit(&app->dirty, memory_order_relaxed);
 
@@ -4108,9 +4088,7 @@ sp_app_free(sp_app_t *app)
 	if(app->sratom)
 		sratom_free(app->sratom);
 
-#if !defined(_WIN32)
 	munlock(app, sizeof(sp_app_t));
-#endif
 	free(app);
 
 	ecore_file_shutdown();
