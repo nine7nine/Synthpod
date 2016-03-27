@@ -100,6 +100,10 @@ endif()
 pkg_search_module(LV2 REQUIRED lv2>=1.10)
 include_directories(${LV2_INCLUDE_DIRS})
 
+# nanomsg
+pkg_search_module(NANOMSG REQUIRED libnanomsg>=4.0)
+include_directories(${NANOMSG_INCLUDE_DIRS})
+
 # elm
 pkg_search_module(ELM REQUIRED elementary>=1.8)
 include_directories(${ELM_INCLUDE_DIRS})
@@ -121,7 +125,7 @@ add_subdirectory(data)
 add_subdirectory(bundle)
 
 # CPack
-set(CPACK_GENERATOR "TBZ2;DEB")
+set(CPACK_GENERATOR "TBZ2")
 
 set(CPACK_PACKAGE_NAME "synthpod")
 set(CPACK_PACKAGE_VERSION "${SYNTHPOD_VERSION}")
@@ -135,32 +139,5 @@ SET(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
 SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
 SET(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
 SET(CPACK_STRIP_FILES ON)
-
-# Debian
-set(CPACK_DEBIAN_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
-set(CPACK_DEBIAN_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION})
-set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
-
-set(CPACK_DEBIAN_PACKAGE_BUILD_DEPENDS "cmake, libasound2-dev, libelementary-dev, liblilv-dev, libjack-dev, libzita-alsa-pcmi-dev, lv2-dev")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libasound2, libelementary2, libevas1-engines-x, liblilv-0-0, jackd, libzita-alsa-pcmi0")
-set(CPACK_DEBIAN_PACKAGE_PROVIDES "lv2-plugin, lv2-host")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER ${CPACK_PACKAGE_CONTACT})
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "http://open-music-kontrollers.ch/lv2/moony/")
-set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
-SET(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/copyright.in ${PROJECT_BINARY_DIR}/copyright)
-install(FILES "${PROJECT_BINARY_DIR}/copyright" DESTINATION "share/doc/${CPACK_DEBIAN_PACKAGE_NAME}")
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/changelog.in ${PROJECT_BINARY_DIR}/changelog)
-add_custom_command(
-	OUTPUT ${PROJECT_BINARY_DIR}/changelog.gz
-	COMMAND ${GZIP} ARGS
-		"-c9" ${PROJECT_BINARY_DIR}/changelog
-		">" ${PROJECT_BINARY_DIR}/changelog.gz
-	DEPENDS
-		${PROJECT_BINARY_DIR}/changelog)
-add_custom_target(CHANGELOG ALL DEPENDS ${PROJECT_BINARY_DIR}/changelog.gz)
-install(FILES "${PROJECT_BINARY_DIR}/changelog.gz" DESTINATION "share/doc/${CPACK_DEBIAN_PACKAGE_NAME}")
 
 include(CPack)
