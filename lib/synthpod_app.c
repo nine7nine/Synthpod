@@ -1602,7 +1602,7 @@ _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 				? descriptor->extension_data
 				: NULL;
 			_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-				mod->uid, mod->uri_str, mod->handle, data_access);
+				mod->uid, mod->uri_str);
 			_sp_app_to_ui_advance(app, size);
 		}
 	}
@@ -2349,7 +2349,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 						? descriptor->extension_data
 						: NULL;
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-						mod->uid, mod->uri_str, mod->handle, data_access);
+						mod->uid, mod->uri_str);
 					_sp_app_to_ui_advance(app, size);
 				}
 

@@ -542,7 +542,6 @@ bin_init(bin_t *bin)
 	bin->ui_driver.log = &bin->log;
 	bin->ui_driver.to_app_request = _ui_to_app_request;
 	bin->ui_driver.to_app_advance = _ui_to_app_advance;
-	bin->ui_driver.instance_access = 1; // enabled
 
 	bin->ui_driver.opened = _ui_opened;
 	bin->ui_driver.close = _ui_close;

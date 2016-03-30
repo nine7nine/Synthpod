@@ -32,7 +32,6 @@
 @prefix bufsz: <http://lv2plug.in/ns/ext/buf-size#> .
 @prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix kx:		<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
-@prefix inst:	<http://lv2plug.in/ns/ext/instance-access> .
 @prefix urid: <http://lv2plug.in/ns/ext/urid#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
 @prefix opts: <http://lv2plug.in/ns/ext/options#> .
@@ -99,7 +98,7 @@ synthpod:common_1_ui
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst:, zwrite:schedule, log:log ;
+	lv2:optionalFeature zwrite:schedule, log:log ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
 synthpod:common_2_kx
@@ -114,7 +113,7 @@ synthpod:common_2_kx
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature inst:, zwrite:schedule, log:log ;
+	lv2:optionalFeature zwrite:schedule, log:log ;
 	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
 synthpod:common_3_x11
 	a ui:X11UI ;
@@ -128,7 +127,7 @@ synthpod:common_3_x11
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature ui:resize, inst:, zwrite:schedule, log:log ;
+	lv2:optionalFeature ui:resize, zwrite:schedule, log:log ;
 	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
   lv2:extensionData ui:idleInterface, ui:resize .
 synthpod:common_4_eo
@@ -144,7 +143,7 @@ synthpod:common_4_eo
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:extensionData ui:resize ;
-	lv2:optionalFeature inst:, zwrite:schedule, ui:resize, log:log ;
+	lv2:optionalFeature zwrite:schedule, ui:resize, log:log ;
 	lv2:requiredFeature ui:portMap, urid:map .
 
 # Stereo Plugin

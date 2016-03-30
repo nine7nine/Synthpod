@@ -175,8 +175,16 @@ struct _reg_t {
 		reg_item_t kx_widget;
 		reg_item_t external;
 		reg_item_t x11;
+		reg_item_t gtk2;
+		reg_item_t gtk3;
+		reg_item_t qt4;
+		reg_item_t qt5;
 		reg_item_t plugin;
 		reg_item_t protocol;
+		reg_item_t period_start;
+		reg_item_t period_size;
+		reg_item_t peak;
+		reg_item_t port_subscribe;
 	} ui;
 
 	struct {
@@ -405,8 +413,16 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.kx_widget, world, map, LV2_EXTERNAL_UI__Widget);
 	_register(&regs->ui.external, world, map, LV2_EXTERNAL_UI_DEPRECATED_URI);
 	_register(&regs->ui.x11, world, map, LV2_UI__X11UI);
+	_register(&regs->ui.gtk2, world, map, LV2_UI__GtkUI);
+	_register(&regs->ui.gtk3, world, map, LV2_UI__Gtk3UI);
+	_register(&regs->ui.qt4, world, map, LV2_UI__Qt4UI);
+	_register(&regs->ui.qt5, world, map, LV2_UI__Qt5UI);
 	_register(&regs->ui.plugin, world, map, LV2_UI__plugin);
 	_register(&regs->ui.protocol, world, map, LV2_UI_PREFIX"protocol");
+	_register(&regs->ui.period_start, world, map, LV2_UI_PREFIX"periodStart");
+	_register(&regs->ui.period_size, world, map, LV2_UI_PREFIX"periodSize");
+	_register(&regs->ui.peak, world, map, LV2_UI_PREFIX"peak");
+	_register(&regs->ui.port_subscribe, world, map, LV2_UI__portSubscribe);
 
 #ifndef LV2_PRESETS__bank
 #	define LV2_PRESETS__bank LV2_PRESETS_PREFIX "bank"
@@ -591,8 +607,16 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->ui.kx_widget);
 	_unregister(&regs->ui.external);
 	_unregister(&regs->ui.x11);
+	_unregister(&regs->ui.gtk2);
+	_unregister(&regs->ui.gtk3);
+	_unregister(&regs->ui.qt4);
+	_unregister(&regs->ui.qt5);
 	_unregister(&regs->ui.plugin);
 	_unregister(&regs->ui.protocol);
+	_unregister(&regs->ui.period_start);
+	_unregister(&regs->ui.period_size);
+	_unregister(&regs->ui.peak);
+	_unregister(&regs->ui.port_subscribe);
 
 	_unregister(&regs->pset.preset);
 	_unregister(&regs->pset.preset_bank);
@@ -756,8 +780,6 @@ struct _transmit_module_list_t {
 struct _transmit_module_add_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
-	LV2_Atom_Long inst _ATOM_ALIGNED;
-	LV2_Atom_Long data _ATOM_ALIGNED;
 	LV2_Atom_String uri _ATOM_ALIGNED;
 		char uri_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
@@ -961,8 +983,7 @@ typedef const void *(*data_access_t)(const char * uri);
 static inline void
 _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_module_add_t *trans, uint32_t size,
-	u_id_t module_uid, const char *module_uri, const LV2_Handle *inst,
-	data_access_t data_access)
+	u_id_t module_uid, const char *module_uri)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -972,14 +993,6 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
-
-	trans->inst.atom.size = sizeof(int64_t);
-	trans->inst.atom.type = forge->Long;
-	trans->inst.body = (uintptr_t)inst;
-
-	trans->data.atom.size = sizeof(int64_t);
-	trans->data.atom.type = forge->Long;
-	trans->data.body = (uintptr_t)data_access;
 
 	if(module_uri)
 	{

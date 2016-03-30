@@ -75,7 +75,6 @@ struct _sp_ui_driver_t {
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 	xpress_map_t *xmap;
-	int instance_access;
 
 	// logging
 	LV2_Log_Log *log;

@@ -40,7 +40,16 @@ set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-z,relro ${CMAKE_SHARED_LINKER_FLAGS}")
 # options
 option(BUILD_JACK "Build JACK standalone host" ON)
 option(BUILD_ALSA "Build ALSA standalone host" OFF)
-option(BUILD_DUMMY "Build DUMMY standalone host (experimental)" OFF)
+option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
+
+include(CMakeDependentOption)
+option(BUILD_SANDBOX_LIB "Build sandbox library" OFF)
+cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_EFL "Build EFL sandbox" ON "BUILD_SANDBOX_LIB" OFF)
 
 # vectorization
 include(CheckCCompilerFlag)
@@ -99,6 +108,10 @@ endif()
 # lv2
 pkg_search_module(LV2 REQUIRED lv2>=1.10)
 include_directories(${LV2_INCLUDE_DIRS})
+
+# sratom
+pkg_search_module(SRATOM REQUIRED sratom-0>=0.4)
+include_directories(${SRATOM_INCLUDE_DIRS})
 
 # nanomsg
 pkg_search_module(NANOMSG REQUIRED libnanomsg>=4.0)

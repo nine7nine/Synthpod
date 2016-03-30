@@ -29,7 +29,9 @@
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 #include <zero_writer.h>
 
-#define NUM_UI_FEATURES 20
+#include <synthpod_sandbox_master.h>
+
+#define NUM_UI_FEATURES 18
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
 
@@ -70,10 +72,15 @@ enum _group_type_t {
 enum _mod_ui_type_t {
 	MOD_UI_TYPE_UNSUPPORTED = 0,
 
-	MOD_UI_TYPE_EO,
-	MOD_UI_TYPE_X11,
 	MOD_UI_TYPE_SHOW,
 	MOD_UI_TYPE_KX,
+
+	MOD_UI_TYPE_SANDBOX_X11,
+	MOD_UI_TYPE_SANDBOX_GTK2,
+	MOD_UI_TYPE_SANDBOX_GTK3,
+	MOD_UI_TYPE_SANDBOX_QT4,
+	MOD_UI_TYPE_SANDBOX_QT5,
+	MOD_UI_TYPE_SANDBOX_EFL,
 
 	MOD_UI_TYPE_MAX
 };
@@ -115,19 +122,14 @@ struct _mod_ui_t {
 			Ecore_Animator *anim;
 		} kx;
 
-		// X11 UI
 		struct {
-			const LV2UI_Idle_Interface *idle_iface;
-			const LV2UI_Resize *client_resize_iface;
-			Evas_Object *win;
-			Ecore_X_Window xwin;
-			Ecore_Animator *anim;
-		} x11;
-
-		// TODO MOD UI
-		// TODO GtkUI
-		// TODO Qt4UI
-		// TODO Qt5UI
+			sandbox_master_t *sb;
+			sandbox_master_driver_t driver;
+			Ecore_Exe *exe;
+			Ecore_Fd_Handler *fd;
+			Ecore_Event_Handler *del;
+			char socket_path [64]; //TODO how big
+		} sbox;
 	};
 };
 
@@ -144,9 +146,6 @@ struct _mod_t {
 	// features
 	LV2_Feature feature_list [NUM_UI_FEATURES];
 	const LV2_Feature *features [NUM_UI_FEATURES + 1];
-
-	// extension data
-	LV2_Extension_Data_Feature ext_data;
 
 	// self
 	const LilvPlugin *plug;
@@ -191,9 +190,7 @@ struct _mod_t {
 	struct {
 		LV2_External_UI_Host host;
 	} kx;
-	struct {
-		LV2UI_Resize host_resize_iface;
-	} x11;
+
 	Eina_List *mod_uis;
 	mod_ui_t *mod_ui;
 
@@ -1301,26 +1298,6 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		fprintf(stderr, "unknown protocol\n");
 }
 
-static inline void
-_eo_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
-	uint32_t protocol, const void *buf)
-{
-	mod_t *mod = handle;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	//printf("_eo_port_event: %u %u %u\n", index, size, protocol);
-
-	if(  mod_ui
-		&& mod_ui->ui
-		&& mod_ui->descriptor
-		&& mod_ui->descriptor->port_event
-		&& mod_ui->handle)
-	{
-		if(mod_ui->eo.win)
-			mod_ui->descriptor->port_event(mod_ui->handle, index, size, protocol, buf);
-	}
-}
-
 static uint32_t
 _port_index(LV2UI_Feature_Handle handle, const char *symbol)
 {
@@ -1573,29 +1550,33 @@ _kx_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 }
 
 static inline void
-_x11_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
+_sandbox_port_flush(void *data)
+{
+	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
+	
+	const bool sent = sandbox_master_flush(mod_ui->sbox.sb);
+	if(!sent)
+	{
+		fprintf(stderr, "_sandbox_port_flush failed\n");
+		// schedule flush
+		ecore_job_add(_sandbox_port_flush, mod);
+	}
+}
+
+static inline void
+_sandbox_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_t *mod = handle;
 	mod_ui_t *mod_ui = mod->mod_ui;
-	sp_ui_t *ui = mod->ui;
 
-	//printf("_x11_port_event: %u %u %u\n", index, size, protocol);
-
-	if(  mod_ui
-		&& mod_ui->ui
-		&& mod_ui->descriptor
-		&& mod_ui->descriptor->port_event
-		&& mod_ui->handle)
+	const bool sent = sandbox_master_send(mod_ui->sbox.sb, index, size, protocol, buf);
+	if(!sent)
 	{
-		mod_ui->descriptor->port_event(mod_ui->handle,
-			index, size, protocol, buf);
-		if(protocol == ui->regs.port.float_protocol.urid)
-		{
-			// send it twice for plugins that expect "0" instead of float_protocol URID
-			mod_ui->descriptor->port_event(mod_ui->handle,
-				index, size, 0, buf);
-		}
+		fprintf(stderr, "_sandbox_port_event failed\n");
+		// schedule flush
+		ecore_job_add(_sandbox_port_flush, mod);
 	}
 }
 
@@ -1612,14 +1593,28 @@ _ui_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	if(mod_ui)
 	{
-		if(mod_ui->type == MOD_UI_TYPE_EO)
-			_eo_port_event(mod, index, size, protocol, buf);
-		else if(mod_ui->type == MOD_UI_TYPE_SHOW)
-			_show_port_event(mod, index, size, protocol, buf);
-		else if(mod_ui->type == MOD_UI_TYPE_KX)
-			_kx_port_event(mod, index, size, protocol, buf);
-		else if(mod_ui->type == MOD_UI_TYPE_X11)
-			_x11_port_event(mod, index, size, protocol, buf);
+		switch(mod_ui->type)
+		{
+			case MOD_UI_TYPE_SHOW:
+				_show_port_event(mod, index, size, protocol, buf);
+				break;
+			case MOD_UI_TYPE_KX:
+				_kx_port_event(mod, index, size, protocol, buf);
+				break;
+			case MOD_UI_TYPE_SANDBOX_X11:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK2:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK3:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT4:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT5:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_EFL:
+				_sandbox_port_event(mod, index, size, protocol, buf);
+				break;
+		}
 	}
 }
 
@@ -1656,25 +1651,48 @@ _ext_ui_write_function(LV2UI_Controller controller, uint32_t port,
 }
 
 static void
-_std_ui_write_function(LV2UI_Controller controller, uint32_t port,
-	uint32_t size, uint32_t protocol, const void *buffer)
+_ext_ui_subscribe_function(LV2UI_Controller controller, uint32_t port,
+	uint32_t protocol, bool state)
+{
+	mod_t *mod = controller;
+
+	_port_subscription_set(mod, port, protocol, state);
+}
+
+static void
+_std_ui_write_function(LV2UI_Controller controller, uint32_t index,
+	uint32_t size, uint32_t protocol, const void *buf)
 {
 	mod_t *mod = controller;
 	mod_ui_t *mod_ui = mod->mod_ui;
 
 	// to rt-thread
-	_ui_write_function(controller, port, size, protocol, buffer);
+	_ui_write_function(controller, index, size, protocol, buf);
 
 	if(mod_ui)
 	{
-		if(mod_ui->type == MOD_UI_TYPE_EO)
-			_eo_port_event(controller, port, size, protocol, buffer);
-		if(mod_ui->type == MOD_UI_TYPE_SHOW)
-			_show_port_event(controller, port, size, protocol, buffer);
-		if(mod_ui->type == MOD_UI_TYPE_KX)
-			_kx_port_event(controller, port, size, protocol, buffer);
-		if(mod_ui->type == MOD_UI_TYPE_X11)
-			_x11_port_event(controller, port, size, protocol, buffer);
+		switch(mod_ui->type)
+		{
+			case MOD_UI_TYPE_SHOW:
+				_show_port_event(mod, index, size, protocol, buf);
+				break;
+			case MOD_UI_TYPE_KX:
+				_kx_port_event(mod, index, size, protocol, buf);
+				break;
+			case MOD_UI_TYPE_SANDBOX_X11:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK2:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK3:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT4:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT5:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_EFL:
+				_sandbox_port_event(mod, index, size, protocol, buf);
+				break;
+		}
 	}
 }
 
@@ -1804,6 +1822,65 @@ _mod_embedded_set(mod_t *mod, int state)
 	}
 }
 
+static const LV2UI_Descriptor *
+_ui_dlopen(const LilvUI *ui, Eina_Module **lib)
+{
+	const LilvNode *ui_uri = lilv_ui_get_uri(ui);
+	const LilvNode *binary_uri = lilv_ui_get_binary_uri(ui);
+	if(!ui_uri || !binary_uri)
+		return NULL;
+
+	const char *ui_string = lilv_node_as_string(ui_uri);
+#if defined(LILV_0_22)
+	char *binary_path = lilv_file_uri_parse(lilv_node_as_string(binary_uri), NULL);
+#else
+	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
+#endif
+	if(!ui_string || !binary_path)
+		return NULL;
+
+	*lib = eina_module_new(binary_path);
+
+#if defined(LILV_0_22)
+	lilv_free(binary_path);
+#endif
+
+	if(!*lib)
+		return NULL;
+
+	if(!eina_module_load(*lib))
+	{
+		eina_module_free(*lib);
+		*lib = NULL;
+
+		return NULL;
+	}
+
+	LV2UI_DescriptorFunction ui_descfunc = NULL;
+	ui_descfunc = eina_module_symbol_get(*lib, "lv2ui_descriptor");
+
+	if(!ui_descfunc)
+		goto fail;
+
+	// search for a matching UI
+	for(int i=0; 1; i++)
+	{
+		const LV2UI_Descriptor *ui_desc = ui_descfunc(i);
+
+		if(!ui_desc) // end of UI list
+			break;
+		else if(!strcmp(ui_desc->URI, ui_string))
+			return ui_desc; // matching UI found
+	}
+
+fail:
+	eina_module_unload(*lib);
+	eina_module_free(*lib);
+	*lib = NULL;
+
+	return NULL;
+}
+
 static void
 _show_ui_hide(mod_t *mod)
 {
@@ -1845,6 +1922,13 @@ _show_ui_hide(mod_t *mod)
 	mod_ui->show.idle_iface = NULL;
 	mod_ui->show.show_iface = NULL;
 
+	if(mod_ui->lib)
+	{
+		eina_module_unload(mod_ui->lib);
+		eina_module_free(mod_ui->lib);
+		mod_ui->lib = NULL;
+	}
+
 	mod->mod_ui = NULL;
 
 	_mod_visible_set(mod, 0, 0);
@@ -1876,6 +1960,7 @@ _show_ui_show(mod_t *mod)
 	sp_ui_t *ui = mod->ui;
 	mod_ui_t *mod_ui = mod->mod_ui;
 
+	mod_ui->descriptor = _ui_dlopen(mod_ui->ui, &mod_ui->lib);
 	if(!mod_ui->descriptor)
 		return;
 
@@ -1977,6 +2062,13 @@ _kx_ui_cleanup(mod_t *mod)
 	mod_ui->kx.widget = NULL;
 	mod_ui->kx.dead = 0;
 
+	if(mod_ui->lib)
+	{
+		eina_module_unload(mod_ui->lib);
+		eina_module_free(mod_ui->lib);
+		mod_ui->lib = NULL;
+	}
+
 	mod->mod_ui = NULL;
 }
 
@@ -2004,6 +2096,7 @@ _kx_ui_show(mod_t *mod)
 	sp_ui_t *ui = mod->ui;
 	mod_ui_t *mod_ui = mod->mod_ui;
 
+	mod_ui->descriptor = _ui_dlopen(mod_ui->ui, &mod_ui->lib);
 	if(!mod_ui->descriptor)
 		return;
 
@@ -2083,45 +2176,37 @@ _kx_ui_closed(LV2UI_Controller controller)
 	mod_ui->kx.dead = 1;
 }
 
-static int
-_ui_host_resize(LV2UI_Feature_Handle handle, int w, int h)
-{
-	mod_t *mod = handle;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	//printf("_ui_host_resize: %i %i\n", w, h);
-	if( (mod_ui->type == MOD_UI_TYPE_X11) && mod_ui->x11.win)
-		evas_object_resize(mod_ui->x11.win, w, h);
-	else if( (mod_ui->type == MOD_UI_TYPE_EO) && mod_ui->eo.win)
-		evas_object_resize(mod_ui->eo.win, w, h);
-
-	return 0;
-}
-
-static Eina_Bool
-_x11_ui_animator(void *data)
-{
-	mod_t *mod = data;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	if(mod_ui->x11.idle_iface && mod_ui->x11.idle_iface->idle && mod_ui->handle)
-		mod_ui->x11.idle_iface->idle(mod_ui->handle);
-
-	return EINA_TRUE; // retrigger animator
-}
-
 static void
-_x11_ui_hide(mod_t *mod)
+_sandbox_ui_hide(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
 	mod_ui_t *mod_ui = mod->mod_ui;
 
-	// stop animator
-	if(mod_ui->x11.anim)
+	if(mod_ui->sbox.del)
 	{
-		ecore_animator_del(mod_ui->x11.anim);
-		mod_ui->x11.anim = NULL;
+		ecore_event_handler_del(mod_ui->sbox.del);
+		mod_ui->sbox.del = NULL;
 	}
+
+	if(mod_ui->sbox.fd)
+	{
+		ecore_main_fd_handler_del(mod_ui->sbox.fd);
+		mod_ui->sbox.fd = NULL;
+	}
+
+	if(mod_ui->sbox.exe)
+	{
+		ecore_exe_interrupt(mod_ui->sbox.exe);
+		mod_ui->sbox.exe = NULL;
+	}
+
+	if(mod_ui->sbox.sb)
+		sandbox_master_free(mod_ui->sbox.sb);
+
+	/* FIXME
+	if(ecore_file_exists(&mod_ui->sbox.socket_path[6]))
+		ecore_file_remove(&mod_ui->sbox.socket_path[6]);
+	*/
 
 	// unsubscribe all ports
 	for(unsigned i=0; i<mod->num_ports; i++)
@@ -2135,64 +2220,8 @@ _x11_ui_hide(mod_t *mod)
 	// unsubscribe from notifications
 	_mod_subscription_set(mod, mod_ui->ui, 0);
 
-	// call cleanup 
-	if(mod_ui->descriptor && mod_ui->descriptor->cleanup && mod_ui->handle)
-		mod_ui->descriptor->cleanup(mod_ui->handle);
-	mod_ui->handle = NULL;
-
-	evas_object_del(mod_ui->x11.win);
-	mod_ui->x11.win = NULL;
-	mod_ui->x11.xwin = 0;
-	mod_ui->x11.idle_iface = NULL;
-
 	mod->mod_ui = NULL;
-
 	_mod_visible_set(mod, 0, 0);
-}
-
-static void
-_x11_delete_request(void *data, Evas_Object *obj, void *event_info)
-{
-	mod_t *mod = data;
-
-	_x11_ui_hide(mod);
-}
-
-static void
-_x11_ui_client_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	mod_t *mod = data;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	int w, h;
-	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
-
-	//printf("_x11_ui_client_resize: %i %i\n", w, h);
-	mod_ui->x11.client_resize_iface->ui_resize(mod_ui->handle, w, h);
-}
-
-static inline void
-_eo_ui_hide(mod_t *mod)
-{
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	if(mod_ui->eo.win)
-		evas_object_del(mod_ui->eo.win);
-	mod_ui->handle = NULL;
-	mod_ui->eo.widget = NULL;
-	mod_ui->eo.win = NULL;
-
-	mod->mod_ui = NULL;
-
-	_mod_visible_set(mod, 0, 0);
-}
-
-static void
-_full_delete_request(void *data, Evas_Object *obj, void *event_info)
-{
-	mod_t *mod = data;
-
-	_eo_ui_hide(mod);
 }
 
 static inline Evas_Object *
@@ -2257,47 +2286,6 @@ _eo_widget_create(Evas_Object *parent, mod_t *mod)
 	return mod_ui->eo.widget;
 }
 
-static inline void
-_eo_ui_show(mod_t *mod)
-{
-	mod_ui_t *mod_ui = mod->mod_ui;
-	sp_ui_t *ui = mod->ui;
-
-	// add fullscreen EoUI
-	Evas_Object *win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
-	if(win)
-	{
-		elm_win_title_set(win, mod->name);
-		evas_object_smart_callback_add(win, "delete,request", _full_delete_request, mod);
-		evas_object_resize(win, 800, 450);
-
-		mod_ui->eo.win = win;
-
-		Evas_Object *bg = elm_bg_add(win);
-		if(bg)
-		{
-			elm_bg_color_set(bg, 64, 64, 64);
-			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(bg);
-			elm_win_resize_object_add(win, bg);
-		} // bg
-
-		Evas_Object *widget = _eo_widget_create(win, mod);
-		if(widget)
-		{
-			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(widget);
-			elm_win_resize_object_add(win, widget);
-		} // widget
-
-		evas_object_show(win);
-
-		_mod_visible_set(mod, 1, mod_ui->urid);
-	} // win
-}
-
 static inline char *
 _mod_get_name(mod_t *mod)
 {
@@ -2322,24 +2310,70 @@ _mod_get_name(mod_t *mod)
 	return NULL;
 }
 
+static Eina_Bool
+_sandbox_ui_recv(void *data, Ecore_Fd_Handler *fd_handler)
+{
+	sandbox_master_t *sb = data;
+
+	sandbox_master_recv(sb);
+
+	return ECORE_CALLBACK_RENEW;
+}
+
+static Eina_Bool
+_sandbox_ui_exit(void *data, int type, void *event)
+{
+	Ecore_Exe_Event_Del *ev = event;
+	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(mod_ui && (ev->exe == mod_ui->sbox.exe) )
+	{
+		_sandbox_ui_hide(mod);
+		return ECORE_CALLBACK_CANCEL;
+	}
+
+	return ECORE_CALLBACK_PASS_ON;
+}
+
 static void
-_x11_ui_show(mod_t *mod)
+_sandbox_ui_show(mod_t *mod, const char *executable)
 {
 	sp_ui_t *ui = mod->ui;
 	mod_ui_t *mod_ui = mod->mod_ui;
 
-	if(!mod_ui->descriptor)
-		return;
+	const char *plugin_uri = lilv_node_as_uri(lilv_plugin_get_uri(mod->plug));
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_uri(lilv_plugin_get_bundle_uri(mod->plug)), NULL);
+	const char *ui_uri = lilv_node_as_uri(lilv_ui_get_uri(mod_ui->ui));
+	strcpy(mod_ui->sbox.socket_path, "ipc:///tmp/synthpod_XXXXXX");
+	int _fd = mkstemp(&mod_ui->sbox.socket_path[6]); //TODO check
+	if(_fd)
+		close(_fd);
 
-	const LilvNode *plugin_uri = lilv_plugin_get_uri(mod->plug);
-	const char *plugin_string = lilv_node_as_string(plugin_uri);
+	mod_ui->sbox.driver.socket_path = mod_ui->sbox.socket_path;
+	mod_ui->sbox.driver.map = ui->driver->map;
+	mod_ui->sbox.driver.unmap = ui->driver->unmap;
+	mod_ui->sbox.driver.recv_cb = _ext_ui_write_function;
+	mod_ui->sbox.driver.subscribe_cb = _ext_ui_subscribe_function;
 
-	const LilvNode *bundle_uri = lilv_ui_get_bundle_uri(mod_ui->ui);
-#if defined(LILV_0_22)
-	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
-#else
-	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
-#endif
+	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod);
+	if(!mod_ui->sbox.sb)
+		fprintf(stderr, "failed to initialize sandbox master\n");
+	int fd;
+	sandbox_master_fd_get(mod_ui->sbox.sb, &fd); //FIXME check
+
+	char *cmd = NULL;
+	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s'",
+		executable, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_path, mod->name); //FIXME check
+	//printf("cmd: %s\n", cmd);
+	lilv_free(bundle_path);
+
+	mod_ui->sbox.exe = ecore_exe_run(cmd, mod_ui); //FIXME check
+	mod_ui->sbox.fd= ecore_main_fd_handler_add(fd, ECORE_FD_READ,
+		_sandbox_ui_recv, mod_ui->sbox.sb, NULL, NULL);
+	mod_ui->sbox.del = ecore_event_handler_add(ECORE_EXE_EVENT_DEL, _sandbox_ui_exit, mod);
+
+	_mod_visible_set(mod, 1, mod_ui->urid);
 
 	// subscribe to ports
 	for(unsigned i=0; i<mod->num_ports; i++)
@@ -2351,118 +2385,9 @@ _x11_ui_show(mod_t *mod)
 
 	// subscribe to notifications
 	_mod_subscription_set(mod, mod_ui->ui, 1);
-
-	mod_ui->x11.win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
-	if(mod_ui->x11.win)
-	{
-		elm_win_title_set(mod_ui->x11.win, mod->name);
-		evas_object_smart_callback_add(mod_ui->x11.win, "delete,request", _x11_delete_request, mod);
-		evas_object_resize(mod_ui->x11.win, 800, 450);
-		evas_object_show(mod_ui->x11.win);
-		mod_ui->x11.xwin = elm_win_xwindow_get(mod_ui->x11.win);
-	}
-
-	void *dummy;
-	mod->feature_list[2].data = (void *)((uintptr_t)mod_ui->x11.xwin);
-
-	// instantiate UI
-	mod_ui->handle = mod_ui->descriptor->instantiate(
-		mod_ui->descriptor,
-		plugin_string,
-		bundle_path,
-		_ext_ui_write_function,
-		mod,
-		&dummy,
-		mod->features);
-
-#if defined(LILV_0_22)
-	lilv_free(bundle_path);
-#endif
-
-	mod->feature_list[2].data = NULL;
-
-	if(!mod_ui->handle)
-		return;
-
-	// get interfaces
-	if(mod_ui->descriptor->extension_data)
-	{
-		// get idle iface
-		mod_ui->x11.idle_iface = mod_ui->descriptor->extension_data(LV2_UI__idleInterface);
-
-		// get resize iface
-		mod_ui->x11.client_resize_iface = mod_ui->descriptor->extension_data(LV2_UI__resize);
-		if(mod_ui->x11.client_resize_iface)
-			evas_object_event_callback_add(mod_ui->x11.win, EVAS_CALLBACK_RESIZE, _x11_ui_client_resize, mod);
-	}
-
-	// start animator
-	if(mod_ui->x11.idle_iface)
-		mod_ui->x11.anim = ecore_animator_add(_x11_ui_animator, mod);
-	
-	_mod_visible_set(mod, 1, mod_ui->urid);
 }
 
 //XXX do code cleanup from here upwards
-
-static const LV2UI_Descriptor *
-_ui_dlopen(const LilvUI *ui, Eina_Module **lib)
-{
-	const LilvNode *ui_uri = lilv_ui_get_uri(ui);
-	const LilvNode *binary_uri = lilv_ui_get_binary_uri(ui);
-	if(!ui_uri || !binary_uri)
-		return NULL;
-
-	const char *ui_string = lilv_node_as_string(ui_uri);
-#if defined(LILV_0_22)
-	char *binary_path = lilv_file_uri_parse(lilv_node_as_string(binary_uri), NULL);
-#else
-	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(binary_uri));
-#endif
-	if(!ui_string || !binary_path)
-		return NULL;
-
-	*lib = eina_module_new(binary_path);
-
-#if defined(LILV_0_22)
-	lilv_free(binary_path);
-#endif
-
-	if(!*lib)
-		return NULL;
-
-	if(!eina_module_load(*lib))
-	{
-		eina_module_free(*lib);
-		*lib = NULL;
-
-		return NULL;
-	}
-
-	LV2UI_DescriptorFunction ui_descfunc = NULL;
-	ui_descfunc = eina_module_symbol_get(*lib, "lv2ui_descriptor");
-
-	if(!ui_descfunc)
-		goto fail;
-
-	// search for a matching UI
-	for(int i=0; 1; i++)
-	{
-		const LV2UI_Descriptor *ui_desc = ui_descfunc(i);
-
-		if(!ui_desc) // end of UI list
-			break;
-		else if(!strcmp(ui_desc->URI, ui_string))
-			return ui_desc; // matching UI found
-	}
-
-fail:
-	eina_module_unload(*lib);
-	eina_module_free(*lib);
-	*lib = NULL;
-
-	return NULL;
-}
 
 static void * //XXX check with _ui_write_function
 _zero_writer_request(Zero_Writer_Handle handle, uint32_t port, uint32_t size,
@@ -2830,8 +2755,7 @@ _sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, in
 }
 
 static mod_t *
-_sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
-	data_access_t data_access)
+_sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 {
 	LilvNode *uri_node = lilv_new_uri(ui->world, uri);
 	if(!uri_node)
@@ -2887,21 +2811,14 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->kx.host.ui_closed = _kx_ui_closed;
 	mod->kx.host.plugin_human_id = mod->name;
 
-	// populate extension_data
-	mod->ext_data.data_access = data_access;
-
 	// populate port_event for StdUI
 	mod->std.descriptor.port_event = _std_port_event;
-
-	// populate x11 resize
-	mod->x11.host_resize_iface.ui_resize = _ui_host_resize;
-	mod->x11.host_resize_iface.handle = mod;
 
 	// populate options
 	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
 	mod->opts.options[0].subject = 0;
 	mod->opts.options[0].key = ui->regs.ui.window_title.urid;
-	mod->opts.options[0].size = 8;
+	mod->opts.options[0].size = strlen(mod->name) + 1;
 	mod->opts.options[0].type = ui->forge.String;
 	mod->opts.options[0].value = mod->name;
 
@@ -2948,22 +2865,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 	mod->feature_list[nfeatures++].data = &mod->kx.host;
 
 	mod->feature_list[nfeatures].URI = LV2_UI__resize;
-	mod->feature_list[nfeatures++].data = &mod->x11.host_resize_iface;
+	mod->feature_list[nfeatures++].data = NULL; //FIXME
 
 	mod->feature_list[nfeatures].URI = LV2_OPTIONS__options;
 	mod->feature_list[nfeatures++].data = mod->opts.options;
-
-	if(data_access)
-	{
-		mod->feature_list[nfeatures].URI = LV2_DATA_ACCESS_URI;
-		mod->feature_list[nfeatures++].data = &mod->ext_data;
-	}
-
-	if(ui->driver->instance_access && inst)
-	{
-		mod->feature_list[nfeatures].URI = LV2_INSTANCE_ACCESS_URI;
-		mod->feature_list[nfeatures++].data = inst;
-	}
 
 	//FIXME do we want to support this? it's marked as DEPRECATED in LV2 spec
 	{
@@ -3051,6 +2956,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 			const LilvNode *ui_uri_node = lilv_ui_get_uri(lui);
 			if(!ui_uri_node)
 				continue;
+			
+			// nedded if ui ttl referenced via rdfs#seeAlso
+			lilv_world_load_resource(ui->world, ui_uri_node); //TODO unload
 
 			// check for missing features
 			int missing_required_feature = 0;
@@ -3082,6 +2990,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				}
 				lilv_nodes_free(required_features);
 			}
+
 			if(missing_required_feature)
 				continue; // plugin requires a feature we do not support
 
@@ -3102,7 +3011,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
 				{
 					//printf("has EoUI\n");
-					mod_ui->type = MOD_UI_TYPE_EO;
+					mod_ui->type = MOD_UI_TYPE_SANDBOX_EFL;
 				}
 			}
 
@@ -3112,16 +3021,56 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				if(lilv_ui_is_a(lui, ui->regs.ui.x11.node))
 				{
 					//printf("has x11-ui\n");
-					mod_ui->type = MOD_UI_TYPE_X11;
+					mod_ui->type = MOD_UI_TYPE_SANDBOX_X11;
+				}
+			}
+
+			// test for GtkUI
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.gtk2.node))
+				{
+					//printf("has gtk2-ui\n");
+					mod_ui->type = MOD_UI_TYPE_SANDBOX_GTK2;
+				}
+			}
+
+			// test for GtkUI
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.gtk3.node))
+				{
+					//printf("has gtk3-ui\n");
+					mod_ui->type = MOD_UI_TYPE_SANDBOX_GTK3;
+				}
+			}
+
+			// test for Qt4UI
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.qt4.node))
+				{
+					//printf("has qt4-ui\n");
+					mod_ui->type = MOD_UI_TYPE_SANDBOX_QT4;
+				}
+			}
+
+			// test for Qt5UI
+			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.qt5.node))
+				{
+					//printf("has qt5-ui\n");
+					mod_ui->type = MOD_UI_TYPE_SANDBOX_QT5;
 				}
 			}
 
 			// test for show UI
 			if(mod_ui->type == MOD_UI_TYPE_UNSUPPORTED)
-			{ //TODO add to reg_t
-				bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
+			{
+				const bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
 					ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
-				bool has_show_iface = lilv_world_ask(ui->world, ui_uri_node,
+				const bool has_show_iface = lilv_world_ask(ui->world, ui_uri_node,
 					ui->regs.core.extension_data.node, ui->regs.ui.show_interface.node);
 
 				if(has_show_iface)
@@ -3142,14 +3091,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid, LV2_Handle inst,
 				}
 			}
 		}
-	}
-
-	Eina_List *l;
-	mod_ui_t *mod_ui;
-	EINA_LIST_FOREACH(mod->mod_uis, l, mod_ui)
-	{
-		if(mod_ui->ui && mod_ui->type)
-			mod_ui->descriptor = _ui_dlopen(mod_ui->ui, &mod_ui->lib);
 	}
 
 	if(mod->system.source || mod->system.sink)
@@ -3234,12 +3175,6 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	mod_ui_t *mod_ui;
 	EINA_LIST_FREE(mod->mod_uis, mod_ui)
 	{
-		if(mod_ui->lib)
-		{
-			eina_module_unload(mod_ui->lib);
-			eina_module_free(mod_ui->lib);
-			mod_ui->lib = NULL;
-		}
 		free(mod_ui);
 	}
 
@@ -3471,8 +3406,7 @@ _pluglist_activated(void *data, Evas_Object *obj, void *event_info)
 	transmit_module_add_t *trans = _sp_ui_to_app_request(ui, size);
 	if(trans)
 	{
-		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str,
-			NULL, NULL);
+		_sp_transmit_module_add_fill(&ui->regs, &ui->forge, trans, size, 0, uri_str);
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
@@ -4051,17 +3985,30 @@ _mod_del_widgets(mod_t *mod)
 
 	if(mod_ui)
 	{
-		// close show ui
-		if(mod_ui->type == MOD_UI_TYPE_SHOW)
-			_show_ui_hide(mod);
-		// close kx ui
-		else if(mod_ui->type == MOD_UI_TYPE_KX)
-			_kx_ui_hide(mod);
-		// close x11 ui
-		else if(mod_ui->type == MOD_UI_TYPE_X11)
-			_x11_ui_hide(mod);
-		else if(mod_ui->type == MOD_UI_TYPE_EO)
-			_eo_ui_hide(mod);
+		switch(mod_ui->type)
+		{
+			case MOD_UI_TYPE_SHOW:
+				if(mod_ui->show.visible)
+					_show_ui_hide(mod);
+				break;
+			case MOD_UI_TYPE_KX:
+				if(mod_ui->kx.widget)
+					_kx_ui_hide(mod);
+				break;
+			case MOD_UI_TYPE_SANDBOX_X11:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK2:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK3:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT4:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT5:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_EFL:
+				_sandbox_ui_hide(mod);
+				break;
+		}
 	}
 }
 
@@ -4095,9 +4042,6 @@ _mod_ui_toggle_raw(mod_t *mod, mod_ui_t *mod_ui)
 
 	switch(mod_ui->type)
 	{
-		case MOD_UI_TYPE_EO:
-			_eo_ui_show(mod);
-			break;
 		case MOD_UI_TYPE_SHOW:
 			if(!mod_ui->show.visible)
 				_show_ui_show(mod);
@@ -4106,9 +4050,23 @@ _mod_ui_toggle_raw(mod_t *mod, mod_ui_t *mod_ui)
 			if(!mod_ui->kx.widget)
 				_kx_ui_show(mod);
 			break;
-		case MOD_UI_TYPE_X11:
-			if(!mod_ui->x11.win)
-				_x11_ui_show(mod);
+		case MOD_UI_TYPE_SANDBOX_X11:
+			_sandbox_ui_show(mod, "synthpod_sandbox_x11");
+			break;
+		case MOD_UI_TYPE_SANDBOX_GTK2:
+			_sandbox_ui_show(mod, "synthpod_sandbox_gtk2");
+			break;
+		case MOD_UI_TYPE_SANDBOX_GTK3:
+			_sandbox_ui_show(mod, "synthpod_sandbox_gtk3");
+			break;
+		case MOD_UI_TYPE_SANDBOX_QT4:
+			_sandbox_ui_show(mod, "synthpod_sandbox_qt4");
+			break;
+		case MOD_UI_TYPE_SANDBOX_QT5:
+			_sandbox_ui_show(mod, "synthpod_sandbox_qt5");
+			break;
+		case MOD_UI_TYPE_SANDBOX_EFL:
+			_sandbox_ui_show(mod, "synthpod_sandbox_efl");
 			break;
 	}
 }
@@ -4154,10 +4112,14 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 
 				switch(mod_ui->type)
 				{
-					case MOD_UI_TYPE_EO:
 					case MOD_UI_TYPE_SHOW:
 					case MOD_UI_TYPE_KX:
-					case MOD_UI_TYPE_X11:
+					case MOD_UI_TYPE_SANDBOX_X11:
+					case MOD_UI_TYPE_SANDBOX_GTK2:
+					case MOD_UI_TYPE_SANDBOX_GTK3:
+					case MOD_UI_TYPE_SANDBOX_QT4:
+					case MOD_UI_TYPE_SANDBOX_QT5:
+					case MOD_UI_TYPE_SANDBOX_EFL:
 						elm_menu_item_add(ui->uimenu, NULL, NULL, ui_uri_str, _mod_ui_toggle_chosen, mod_ui);
 						break;
 				}
@@ -4172,9 +4134,6 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 
 		switch(mod_ui->type)
 		{
-			case MOD_UI_TYPE_EO:
-				_eo_ui_hide(mod);
-				break;
 			case MOD_UI_TYPE_SHOW:
 				if(mod_ui->show.visible)
 					_show_ui_hide(mod);
@@ -4183,9 +4142,18 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 				if(mod_ui->kx.widget)
 					_kx_ui_hide(mod);
 				break;
-			case MOD_UI_TYPE_X11:
-				if(mod_ui->x11.win)
-					_x11_ui_hide(mod);
+			case MOD_UI_TYPE_SANDBOX_X11:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK2:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK3:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT4:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT5:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_EFL:
+				_sandbox_ui_hide(mod);
 				break;
 		}
 	}
@@ -5529,17 +5497,30 @@ _modlist_del(void *data, Evas_Object *obj)
 
 	if(mod_ui)
 	{
-		// close show ui
-		if( (mod_ui->type == MOD_UI_TYPE_SHOW) && mod_ui->descriptor)
-			_show_ui_hide(mod);
-		// close kx ui
-		else if( (mod_ui->type == MOD_UI_TYPE_KX) && mod_ui->descriptor)
-			_kx_ui_hide(mod);
-		// close x11 ui
-		else if( (mod_ui->type == MOD_UI_TYPE_X11) && mod_ui->descriptor)
-			_x11_ui_hide(mod);
-		else if( (mod_ui->type == MOD_UI_TYPE_EO) && mod_ui->eo.win && mod_ui->descriptor)
-			evas_object_del(mod_ui->eo.win);
+		switch(mod_ui->type)
+		{
+			case MOD_UI_TYPE_SHOW:
+				if(mod_ui->descriptor)
+					_show_ui_hide(mod);
+				break;
+			case MOD_UI_TYPE_KX:
+				if(mod_ui->descriptor)
+					_kx_ui_hide(mod);
+				break;
+			case MOD_UI_TYPE_SANDBOX_X11:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK2:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_GTK3:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT4:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_QT5:
+				// fall-through
+			case MOD_UI_TYPE_SANDBOX_EFL:
+				_sandbox_ui_hide(mod);
+				break;
+		}
 	}
 
 	_sp_ui_mod_del(ui, mod);
@@ -6623,8 +6604,7 @@ _sp_ui_from_app_module_add(sp_ui_t *ui, const LV2_Atom *atom)
 
 	const transmit_module_add_t *trans = (const transmit_module_add_t *)atom;
 
-	mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body,
-		(void *)(uintptr_t)trans->inst.body, (data_access_t)(uintptr_t)trans->data.body);
+	mod_t *mod = _sp_ui_mod_add(ui, trans->uri_str, trans->uid.body);
 	if(!mod)
 		return; //TODO report
 

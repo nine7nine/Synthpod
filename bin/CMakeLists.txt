@@ -4,6 +4,7 @@ include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/jackey)
+include_directories(${PROJECT_SOURCE_DIR}/symap)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
 add_definitions("-D_GNU_SOURCE=1") # asprintf
@@ -46,7 +47,7 @@ if(BUILD_JACK)
 	add_executable(synthpod.jack
 		synthpod_jack.c
 		synthpod_nsm.c
-		symap.c)
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.jack
 		${ECORE_CON_LDFLAGS}
 		${JACK_LIBS}
@@ -93,7 +94,7 @@ if(BUILD_ALSA)
 		pcmi.cpp
 		synthpod_alsa.c
 		synthpod_nsm.c
-		symap.c)
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.alsa
 		${ECORE_CON_LDFLAGS}
 		"-lasound" #FIXME
@@ -127,7 +128,7 @@ if(BUILD_DUMMY)
 	add_executable(synthpod.dummy
 		synthpod_dummy.c
 		synthpod_nsm.c
-		symap.c)
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.dummy
 		${ECORE_CON_LDFLAGS}
 		"-lm"
@@ -152,4 +153,98 @@ if(BUILD_DUMMY)
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod_dummy.1)
 	add_custom_target(SYNTHPOD_DUMMY_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz)
 	install(FILES "${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz" DESTINATION share/man/man1)
+endif()
+
+if(BUILD_SANDBOX_X11)
+# XCB
+	pkg_search_module(XCB REQUIRED xcb>=1.11)
+	include_directories(${XCB_INCLUDE_DIRS})
+
+	add_executable(synthpod.sandbox.x11
+		synthpod_sandbox_x11.c)
+	target_link_libraries(synthpod.sandbox.x11
+		${XCB_LDFLAGS}
+		synthpod_sandbox_slave.lib)
+	set_target_properties(synthpod.sandbox.x11 PROPERTIES OUTPUT_NAME "synthpod_sandbox_x11")
+	install(TARGETS synthpod.sandbox.x11 DESTINATION bin)
+endif()
+
+if(BUILD_SANDBOX_GTK2)
+# gtk+-2.0
+	pkg_search_module(GTK2 REQUIRED gtk+-2.0)
+	include_directories(${GTK2_INCLUDE_DIRS})
+
+	add_executable(synthpod.sandbox.gtk2
+		synthpod_sandbox_gtk.c)
+	target_link_libraries(synthpod.sandbox.gtk2
+		${GTK2_LDFLAGS}
+		synthpod_sandbox_slave.lib)
+	set_target_properties(synthpod.sandbox.gtk2 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk2")
+	install(TARGETS synthpod.sandbox.gtk2 DESTINATION bin)
+endif()
+
+if(BUILD_SANDBOX_GTK3)
+# gtk+-3.0
+	pkg_search_module(GTK3 REQUIRED gtk+-3.0)
+	include_directories(${GTK3_INCLUDE_DIRS})
+
+	add_executable(synthpod.sandbox.gtk3
+		synthpod_sandbox_gtk.c)
+	target_link_libraries(synthpod.sandbox.gtk3
+		${GTK3_LDFLAGS}
+		synthpod_sandbox_slave.lib)
+	set_target_properties(synthpod.sandbox.gtk3 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk3")
+	install(TARGETS synthpod.sandbox.gtk3 DESTINATION bin)
+endif()
+
+if(BUILD_SANDBOX_QT4)
+# Qt4
+	pkg_search_module(QT4 REQUIRED QtGui)
+	include_directories(${QT4_INCLUDE_DIRS})
+
+	add_executable(synthpod.sandbox.qt4
+		synthpod_sandbox_qt.cpp)
+	target_link_libraries(synthpod.sandbox.qt4
+		${QT4_LDFLAGS}
+		synthpod_sandbox_slave.lib)
+	set_target_properties(synthpod.sandbox.qt4 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt4")
+	set_target_properties(synthpod.sandbox.qt4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+	install(TARGETS synthpod.sandbox.qt4 DESTINATION bin)
+endif()
+
+if(BUILD_SANDBOX_QT5)
+	# Qt5Core
+	pkg_search_module(QT5CORE REQUIRED Qt5Core)
+	include_directories(${QT5CORE_INCLUDE_DIRS})
+	# Qt5Widgets
+	pkg_search_module(QT5WIDGETS REQUIRED Qt5Widgets)
+	include_directories(${QT5WIDGETS_INCLUDE_DIRS})
+	# Qt5Gui
+	pkg_search_module(QT5GUI REQUIRED Qt5Gui)
+	include_directories(${QT5GUI_INCLUDE_DIRS})
+
+	add_executable(synthpod.sandbox.qt5
+		synthpod_sandbox_qt.cpp)
+	target_link_libraries(synthpod.sandbox.qt5
+		${QT5CORE_LDFLAGS}
+		${QT5WIDGETS_LDFLAGS}
+		${QT5GUI_LDFLAGS}
+		synthpod_sandbox_slave.lib)
+	set_target_properties(synthpod.sandbox.qt5 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt5")
+	set_target_properties(synthpod.sandbox.qt5 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+	install(TARGETS synthpod.sandbox.qt5 DESTINATION bin)
+endif()
+
+if(BUILD_SANDBOX_EFL)
+	# EFL
+	pkg_search_module(EFL REQUIRED elementary>=1.8) # FIXME already defined
+	include_directories(${EFL_INCLUDE_DIRS})
+
+	add_executable(synthpod.sandbox.efl
+		synthpod_sandbox_efl.c)
+	target_link_libraries(synthpod.sandbox.efl
+		${EFL_LDFLAGS}
+		synthpod_sandbox_slave.lib)
+	set_target_properties(synthpod.sandbox.efl PROPERTIES OUTPUT_NAME "synthpod_sandbox_efl")
+	install(TARGETS synthpod.sandbox.efl DESTINATION bin)
 endif()
