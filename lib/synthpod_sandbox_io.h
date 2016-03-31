@@ -295,7 +295,7 @@ _sandbox_io_flush(sandbox_io_t *io)
 	if(ttl)
 	{
 		const size_t len = strlen(ttl) + 1;
-		printf("sending: %zu\n\n%s\n\n", len, ttl);
+		//printf("sending: %zu\n\n%s\n\n", len, ttl);
 
 		if(nn_send(io->sock, ttl, len, NN_DONTWAIT) == -1)
 		{
