@@ -63,6 +63,26 @@ set_target_properties(synthpod_ui.lib PROPERTIES
 install(TARGETS synthpod_ui.lib DESTINATION lib)
 
 if(BUILD_SANDBOX_LIB)
+	add_definitions("-DSANDBOX_LIB")
+	if(BUILD_SANDBOX_X11)
+		add_definitions("-DSANDBOX_X11")
+	endif()
+	if(BUILD_SANDBOX_GTK2)
+		add_definitions("-DSANDBOX_GTK2")
+	endif()
+	if(BUILD_SANDBOX_GTK3)
+		add_definitions("-DSANDBOX_GTK3")
+	endif()
+	if(BUILD_SANDBOX_QT4)
+		add_definitions("-DSANDBOX_QT4")
+	endif()
+	if(BUILD_SANDBOX_QT5)
+		add_definitions("-DSANDBOX_QT5")
+	endif()
+	if(BUILD_SANDBOX_EFL)
+		add_definitions("-DSANDBOX_EFL")
+	endif()
+
 # synthpod_sandbox_slave
 	add_library(synthpod_sandbox_slave.lib SHARED
 		synthpod_sandbox_slave.c

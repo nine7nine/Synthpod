@@ -43,7 +43,7 @@ option(BUILD_ALSA "Build ALSA standalone host" OFF)
 option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
 
 include(CMakeDependentOption)
-option(BUILD_SANDBOX_LIB "Build sandbox library" OFF)
+option(BUILD_SANDBOX_LIB "Build sandbox library" ON)
 cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
 cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
 cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
