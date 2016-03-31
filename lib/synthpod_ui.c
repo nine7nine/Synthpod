@@ -39,6 +39,7 @@
 
 typedef struct _mod_t mod_t;
 typedef struct _mod_ui_t mod_ui_t;
+typedef struct _mod_ui_driver_t mod_ui_driver_t;
 typedef struct _port_t port_t;
 typedef struct _group_t group_t;
 typedef struct _property_t property_t;
@@ -51,6 +52,16 @@ typedef struct _plug_info_t plug_info_t;
 
 typedef struct _from_app_t from_app_t;
 typedef void (*from_app_cb_t)(sp_ui_t *ui, const LV2_Atom *atom);
+
+typedef void (*mod_ui_driver_call_t)(mod_t *data);
+typedef void (*mod_ui_driver_event_t)(mod_t *data, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf);
+
+struct _mod_ui_driver_t {
+	mod_ui_driver_call_t show;
+	mod_ui_driver_call_t hide;
+	mod_ui_driver_event_t port_event;
+};
 
 enum _plug_info_type_t {
 	PLUG_INFO_TYPE_NAME = 0,
@@ -75,19 +86,30 @@ enum _group_type_t {
 enum _mod_ui_type_t {
 	MOD_UI_TYPE_UNSUPPORTED = 0,
 
+	MOD_UI_TYPE_EFL,
 	MOD_UI_TYPE_SHOW,
 	MOD_UI_TYPE_KX,
 
 #if defined(SANDBOX_LIB)
+#	if defined(SANDBOX_X11)
 	MOD_UI_TYPE_SANDBOX_X11,
+#	endif
+#	if defined(SANDBOX_GTK2)
 	MOD_UI_TYPE_SANDBOX_GTK2,
+#	endif
+#	if defined(SANDBOX_GTK3)
 	MOD_UI_TYPE_SANDBOX_GTK3,
+#	endif
+#	if defined(SANDBOX_QT4)
 	MOD_UI_TYPE_SANDBOX_QT4,
+#	endif
+#	if defined(SANDBOX_QT5)
 	MOD_UI_TYPE_SANDBOX_QT5,
+#	endif
+#	if defined(SANDBOX_EFL)
 	MOD_UI_TYPE_SANDBOX_EFL,
+#	endif
 #endif
-
-	MOD_UI_TYPE_MAX
 };
 
 struct _plug_info_t {
@@ -102,7 +124,8 @@ struct _mod_ui_t {
 	Eina_Module *lib;
 	const LV2UI_Descriptor *descriptor;
 	LV2UI_Handle handle;
-	int type;
+	mod_ui_type_t type;
+	const mod_ui_driver_t *driver;
 
 	union {
 		// Eo UI
@@ -1503,93 +1526,6 @@ _ui_write_function(LV2UI_Controller controller, uint32_t port,
 }
 
 static inline void
-_show_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
-	uint32_t protocol, const void *buf)
-{
-	mod_t *mod = handle;
-	mod_ui_t *mod_ui = mod->mod_ui;
-	sp_ui_t *ui = mod->ui;
-
-	//printf("_show_port_event: %u %u %u\n", index, size, protocol);
-
-	if(  mod_ui
-		&& mod_ui->ui
-		&& mod_ui->descriptor
-		&& mod_ui->descriptor->port_event
-		&& mod_ui->handle)
-	{
-		mod_ui->descriptor->port_event(mod_ui->handle,
-			index, size, protocol, buf);
-		if(protocol == ui->regs.port.float_protocol.urid)
-		{
-			// send it twice for plugins that expect "0" instead of float_protocol URID
-			mod_ui->descriptor->port_event(mod_ui->handle,
-				index, size, 0, buf);
-		}
-	}
-}
-
-static inline void
-_kx_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
-	uint32_t protocol, const void *buf)
-{
-	mod_t *mod = handle;
-	mod_ui_t *mod_ui = mod->mod_ui;
-	sp_ui_t *ui = mod->ui;
-
-	//printf("_kx_port_event: %u %u %u\n", index, size, protocol);
-
-	if(  mod_ui
-		&& mod_ui->ui
-		&& mod_ui->descriptor
-		&& mod_ui->descriptor->port_event
-		&& mod_ui->handle)
-	{
-		mod_ui->descriptor->port_event(mod_ui->handle,
-			index, size, protocol, buf);
-		if(protocol == ui->regs.port.float_protocol.urid)
-		{
-			// send it twice for plugins that expect "0" instead of float_protocol URID
-			mod_ui->descriptor->port_event(mod_ui->handle,
-				index, size, 0, buf);
-		}
-	}
-}
-
-#if defined(SANDBOX_LIB)
-static inline void
-_sandbox_port_flush(void *data)
-{
-	mod_t *mod = data;
-	mod_ui_t *mod_ui = mod->mod_ui;
-	
-	const bool sent = sandbox_master_flush(mod_ui->sbox.sb);
-	if(!sent)
-	{
-		fprintf(stderr, "_sandbox_port_flush failed\n");
-		// schedule flush
-		ecore_job_add(_sandbox_port_flush, mod);
-	}
-}
-
-static inline void
-_sandbox_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
-	uint32_t protocol, const void *buf)
-{
-	mod_t *mod = handle;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	const bool sent = sandbox_master_send(mod_ui->sbox.sb, index, size, protocol, buf);
-	if(!sent)
-	{
-		fprintf(stderr, "_sandbox_port_event failed\n");
-		// schedule flush
-		ecore_job_add(_sandbox_port_flush, mod);
-	}
-}
-#endif
-
-static inline void
 _ui_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
@@ -1601,32 +1537,7 @@ _ui_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	_std_port_event(mod, index, size, protocol, buf);
 
 	if(mod_ui)
-	{
-		switch(mod_ui->type)
-		{
-			case MOD_UI_TYPE_SHOW:
-				_show_port_event(mod, index, size, protocol, buf);
-				break;
-			case MOD_UI_TYPE_KX:
-				_kx_port_event(mod, index, size, protocol, buf);
-				break;
-#if defined(SANDBOX_LIB)
-			case MOD_UI_TYPE_SANDBOX_X11:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK2:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK3:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT4:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT5:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_EFL:
-				_sandbox_port_event(mod, index, size, protocol, buf);
-				break;
-#endif
-		}
-	}
+		mod_ui->driver->port_event(mod, index, size, protocol, buf);
 }
 
 static void
@@ -1681,32 +1592,7 @@ _std_ui_write_function(LV2UI_Controller controller, uint32_t index,
 	_ui_write_function(controller, index, size, protocol, buf);
 
 	if(mod_ui)
-	{
-		switch(mod_ui->type)
-		{
-			case MOD_UI_TYPE_SHOW:
-				_show_port_event(mod, index, size, protocol, buf);
-				break;
-			case MOD_UI_TYPE_KX:
-				_kx_port_event(mod, index, size, protocol, buf);
-				break;
-#if defined(SANDBOX_LIB)
-			case MOD_UI_TYPE_SANDBOX_X11:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK2:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK3:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT4:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT5:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_EFL:
-				_sandbox_port_event(mod, index, size, protocol, buf);
-				break;
-#endif
-		}
-	}
+		mod_ui->driver->port_event(mod, index, size, protocol, buf);
 }
 
 static void
@@ -1835,6 +1721,8 @@ _mod_embedded_set(mod_t *mod, int state)
 	}
 }
 
+// XXX
+
 static const LV2UI_Descriptor *
 _ui_dlopen(const LilvUI *ui, Eina_Module **lib)
 {
@@ -1943,7 +1831,6 @@ _show_ui_hide(mod_t *mod)
 	}
 
 	mod->mod_ui = NULL;
-
 	_mod_visible_set(mod, 0, 0);
 }
 
@@ -2044,6 +1931,38 @@ _show_ui_show(mod_t *mod)
 }
 
 static void
+_show_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf)
+{
+	mod_ui_t *mod_ui = mod->mod_ui;
+	sp_ui_t *ui = mod->ui;
+
+	//printf("_show_port_event: %u %u %u\n", index, size, protocol);
+
+	if(  mod_ui
+		&& mod_ui->ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->port_event
+		&& mod_ui->handle)
+	{
+		mod_ui->descriptor->port_event(mod_ui->handle,
+			index, size, protocol, buf);
+		if(protocol == ui->regs.port.float_protocol.urid)
+		{
+			// send it twice for plugins that expect "0" instead of float_protocol URID
+			mod_ui->descriptor->port_event(mod_ui->handle,
+				index, size, 0, buf);
+		}
+	}
+}
+
+static const mod_ui_driver_t show_ui_driver = {
+	.show = _show_ui_show,
+	.hide = _show_ui_hide,
+	.port_event = _show_ui_port_event,
+};
+
+static void
 _kx_ui_cleanup(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
@@ -2083,6 +2002,7 @@ _kx_ui_cleanup(mod_t *mod)
 	}
 
 	mod->mod_ui = NULL;
+	_mod_visible_set(mod, 0, 0);
 }
 
 static Eina_Bool
@@ -2101,6 +2021,20 @@ _kx_ui_animator(void *data)
 	}
 
 	return EINA_TRUE; // retrigger animator
+}
+ 
+// plugin ui has been closed manually
+static void
+_kx_ui_closed(LV2UI_Controller controller)
+{
+	mod_t *mod = controller;
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(!mod_ui || !mod_ui->ui)
+		return;
+
+	// mark for cleanup
+	mod_ui->kx.dead = 1;
 }
 
 static void
@@ -2171,27 +2105,53 @@ _kx_ui_hide(mod_t *mod)
 
 	// cleanup
 	_kx_ui_cleanup(mod);
-
-	_mod_visible_set(mod, 0, 0);
 }
- 
-// plugin ui has been closed manually
+
 static void
-_kx_ui_closed(LV2UI_Controller controller)
+_kx_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf)
 {
-	mod_t *mod = controller;
 	mod_ui_t *mod_ui = mod->mod_ui;
+	sp_ui_t *ui = mod->ui;
 
-	if(!mod_ui || !mod_ui->ui)
-		return;
+	//printf("_kx_port_event: %u %u %u\n", index, size, protocol);
 
-	// mark for cleanup
-	mod_ui->kx.dead = 1;
+	if(  mod_ui
+		&& mod_ui->ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->port_event
+		&& mod_ui->handle)
+	{
+		mod_ui->descriptor->port_event(mod_ui->handle,
+			index, size, protocol, buf);
+		if(protocol == ui->regs.port.float_protocol.urid)
+		{
+			// send it twice for plugins that expect "0" instead of float_protocol URID
+			mod_ui->descriptor->port_event(mod_ui->handle,
+				index, size, 0, buf);
+		}
+	}
 }
+
+static const mod_ui_driver_t kx_ui_driver = {
+	.show = _kx_ui_show,
+	.hide = _kx_ui_hide,
+	.port_event = _kx_ui_port_event,
+};
 
 #if defined(SANDBOX_LIB)
+static Eina_Bool
+_sbox_ui_recv(void *data, Ecore_Fd_Handler *fd_handler)
+{
+	sandbox_master_t *sb = data;
+
+	sandbox_master_recv(sb);
+
+	return ECORE_CALLBACK_RENEW;
+}
+
 static void
-_sandbox_ui_hide(mod_t *mod)
+_sbox_ui_hide(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
 	mod_ui_t *mod_ui = mod->mod_ui;
@@ -2237,7 +2197,184 @@ _sandbox_ui_hide(mod_t *mod)
 	mod->mod_ui = NULL;
 	_mod_visible_set(mod, 0, 0);
 }
+
+static Eina_Bool
+_sbox_ui_quit(void *data, int type, void *event)
+{
+	Ecore_Exe_Event_Del *ev = event;
+	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(mod_ui && (ev->exe == mod_ui->sbox.exe) )
+	{
+		_sbox_ui_hide(mod);
+		return ECORE_CALLBACK_CANCEL;
+	}
+
+	return ECORE_CALLBACK_PASS_ON;
+}
+
+static void
+_sbox_ui_show(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+	mod_ui_t *mod_ui = mod->mod_ui;
+	const char *executable;
+
+	switch(mod_ui->type)
+	{
+#if defined(SANDBOX_X11)
+		case MOD_UI_TYPE_SANDBOX_X11:
+			executable = "synthpod_sandbox_x11";
+			break;
 #endif
+#if defined(SANDBOX_GTK2)
+		case MOD_UI_TYPE_SANDBOX_GTK2:
+			executable = "synthpod_sandbox_gtk2";
+			break;
+#endif
+#if defined(SANDBOX_GTK3)
+		case MOD_UI_TYPE_SANDBOX_GTK3:
+			executable = "synthpod_sandbox_gtk3";
+			break;
+#endif
+#if defined(SANDBOX_QT4)
+		case MOD_UI_TYPE_SANDBOX_QT4:
+			executable = "synthpod_sandbox_qt4";
+			break;
+#endif
+#if defined(SANDBOX_QT5)
+		case MOD_UI_TYPE_SANDBOX_QT5:
+			executable = "synthpod_sandbox_qt5";
+			break;
+#endif
+#if defined(SANDBOX_EFL)
+		case MOD_UI_TYPE_SANDBOX_EFL:
+			executable = "synthpod_sandbox_efl";
+			break;
+#endif
+		default:
+			executable = NULL;
+			break;
+	}
+
+	if(!executable)
+		return;
+
+	const char *plugin_uri = lilv_node_as_uri(lilv_plugin_get_uri(mod->plug));
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_uri(lilv_plugin_get_bundle_uri(mod->plug)), NULL);
+	const char *ui_uri = lilv_node_as_uri(lilv_ui_get_uri(mod_ui->ui));
+	strcpy(mod_ui->sbox.socket_path, "ipc:///tmp/synthpod_XXXXXX");
+	int _fd = mkstemp(&mod_ui->sbox.socket_path[6]); //TODO check
+	if(_fd)
+		close(_fd);
+
+	mod_ui->sbox.driver.socket_path = mod_ui->sbox.socket_path;
+	mod_ui->sbox.driver.map = ui->driver->map;
+	mod_ui->sbox.driver.unmap = ui->driver->unmap;
+	mod_ui->sbox.driver.recv_cb = _ext_ui_write_function;
+	mod_ui->sbox.driver.subscribe_cb = _ext_ui_subscribe_function;
+
+	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod);
+	if(!mod_ui->sbox.sb)
+		fprintf(stderr, "failed to initialize sandbox master\n");
+	int fd;
+	sandbox_master_fd_get(mod_ui->sbox.sb, &fd); //FIXME check
+
+	char *cmd = NULL;
+	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s'",
+		executable, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_path, mod->name); //FIXME check
+	//printf("cmd: %s\n", cmd);
+	lilv_free(bundle_path);
+
+	mod_ui->sbox.exe = ecore_exe_run(cmd, mod_ui); //FIXME check
+	mod_ui->sbox.fd= ecore_main_fd_handler_add(fd, ECORE_FD_READ,
+		_sbox_ui_recv, mod_ui->sbox.sb, NULL, NULL);
+	mod_ui->sbox.del = ecore_event_handler_add(ECORE_EXE_EVENT_DEL, _sbox_ui_quit, mod);
+
+	_mod_visible_set(mod, 1, mod_ui->urid);
+
+	// subscribe to ports
+	for(unsigned i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+		if(port->type == PORT_TYPE_CONTROL)
+			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
+	}
+
+	// subscribe to notifications
+	_mod_subscription_set(mod, mod_ui->ui, 1);
+}
+
+static inline void
+_sbox_ui_flush(void *data)
+{
+	mod_t *mod = data;
+	mod_ui_t *mod_ui = mod->mod_ui;
+	
+	const bool sent = sandbox_master_flush(mod_ui->sbox.sb);
+	if(!sent)
+	{
+		fprintf(stderr, "_sbox_ui_flush failed\n");
+		// schedule flush
+		ecore_job_add(_sbox_ui_flush, mod);
+	}
+}
+
+static void
+_sbox_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf)
+{
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	const bool sent = sandbox_master_send(mod_ui->sbox.sb, index, size, protocol, buf);
+	if(!sent)
+	{
+		fprintf(stderr, "_sbox_ui_port_event failed\n");
+		// schedule flush
+		ecore_job_add(_sbox_ui_flush, mod);
+	}
+}
+
+static const mod_ui_driver_t sbox_ui_driver = {
+	.show = _sbox_ui_show,
+	.hide = _sbox_ui_hide,
+	.port_event = _sbox_ui_port_event,
+};
+#endif
+
+static void
+_efl_ui_show(mod_t *mod)
+{
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	//TODO
+
+	_mod_visible_set(mod, 1, mod_ui->urid);
+}
+
+static void
+_efl_ui_hide(mod_t *mod)
+{
+	//TODO
+	mod->mod_ui = NULL;
+	_mod_visible_set(mod, 0, 0);
+}
+
+static void
+_efl_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf)
+{
+	//TODO
+}
+
+static const mod_ui_driver_t efl_ui_driver = {
+	.show = _efl_ui_show,
+	.hide = _efl_ui_hide,
+	.port_event = _efl_ui_port_event,
+};
+
+//XXX
 
 static inline Evas_Object *
 _eo_widget_create(Evas_Object *parent, mod_t *mod)
@@ -2324,85 +2461,6 @@ _mod_get_name(mod_t *mod)
 
 	return NULL;
 }
-
-#if defined(SANDBOX_LIB)
-static Eina_Bool
-_sandbox_ui_recv(void *data, Ecore_Fd_Handler *fd_handler)
-{
-	sandbox_master_t *sb = data;
-
-	sandbox_master_recv(sb);
-
-	return ECORE_CALLBACK_RENEW;
-}
-
-static Eina_Bool
-_sandbox_ui_exit(void *data, int type, void *event)
-{
-	Ecore_Exe_Event_Del *ev = event;
-	mod_t *mod = data;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	if(mod_ui && (ev->exe == mod_ui->sbox.exe) )
-	{
-		_sandbox_ui_hide(mod);
-		return ECORE_CALLBACK_CANCEL;
-	}
-
-	return ECORE_CALLBACK_PASS_ON;
-}
-
-static void
-_sandbox_ui_show(mod_t *mod, const char *executable)
-{
-	sp_ui_t *ui = mod->ui;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	const char *plugin_uri = lilv_node_as_uri(lilv_plugin_get_uri(mod->plug));
-	char *bundle_path = lilv_file_uri_parse(lilv_node_as_uri(lilv_plugin_get_bundle_uri(mod->plug)), NULL);
-	const char *ui_uri = lilv_node_as_uri(lilv_ui_get_uri(mod_ui->ui));
-	strcpy(mod_ui->sbox.socket_path, "ipc:///tmp/synthpod_XXXXXX");
-	int _fd = mkstemp(&mod_ui->sbox.socket_path[6]); //TODO check
-	if(_fd)
-		close(_fd);
-
-	mod_ui->sbox.driver.socket_path = mod_ui->sbox.socket_path;
-	mod_ui->sbox.driver.map = ui->driver->map;
-	mod_ui->sbox.driver.unmap = ui->driver->unmap;
-	mod_ui->sbox.driver.recv_cb = _ext_ui_write_function;
-	mod_ui->sbox.driver.subscribe_cb = _ext_ui_subscribe_function;
-
-	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod);
-	if(!mod_ui->sbox.sb)
-		fprintf(stderr, "failed to initialize sandbox master\n");
-	int fd;
-	sandbox_master_fd_get(mod_ui->sbox.sb, &fd); //FIXME check
-
-	char *cmd = NULL;
-	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s'",
-		executable, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_path, mod->name); //FIXME check
-	//printf("cmd: %s\n", cmd);
-	lilv_free(bundle_path);
-
-	mod_ui->sbox.exe = ecore_exe_run(cmd, mod_ui); //FIXME check
-	mod_ui->sbox.fd= ecore_main_fd_handler_add(fd, ECORE_FD_READ,
-		_sandbox_ui_recv, mod_ui->sbox.sb, NULL, NULL);
-	mod_ui->sbox.del = ecore_event_handler_add(ECORE_EXE_EVENT_DEL, _sandbox_ui_exit, mod);
-
-	_mod_visible_set(mod, 1, mod_ui->urid);
-
-	// subscribe to ports
-	for(unsigned i=0; i<mod->num_ports; i++)
-	{
-		port_t *port = &mod->ports[i];
-		if(port->type == PORT_TYPE_CONTROL)
-			_port_subscription_set(mod, i, ui->regs.port.float_protocol.urid, 1);
-	}
-
-	// subscribe to notifications
-	_mod_subscription_set(mod, mod_ui->ui, 1);
-}
-#endif
 
 //XXX do code cleanup from here upwards
 
@@ -3012,20 +3070,9 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				continue; // plugin requires a feature we do not support
 
 			mod_ui_type_t mod_ui_type = MOD_UI_TYPE_UNSUPPORTED;
+			const mod_ui_driver_t *mod_ui_driver = NULL;
 
 #if defined(SANDBOX_LIB)
-#	if defined(SANDBOX_EFL)
-			// test for EoUI
-			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
-			{
-				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
-				{
-					//printf("has EoUI\n");
-					mod_ui_type = MOD_UI_TYPE_SANDBOX_EFL;
-				}
-			}
-#	endif
-
 #	if defined(SANDBOX_X11)
 			// test for X11UI
 			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
@@ -3034,6 +3081,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				{
 					//printf("has x11-ui\n");
 					mod_ui_type = MOD_UI_TYPE_SANDBOX_X11;
+					mod_ui_driver = &sbox_ui_driver;
 				}
 			}
 #	endif
@@ -3046,6 +3094,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				{
 					//printf("has gtk2-ui\n");
 					mod_ui_type = MOD_UI_TYPE_SANDBOX_GTK2;
+					mod_ui_driver = &sbox_ui_driver;
 				}
 			}
 #	endif
@@ -3058,6 +3107,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				{
 					//printf("has gtk3-ui\n");
 					mod_ui_type = MOD_UI_TYPE_SANDBOX_GTK3;
+					mod_ui_driver = &sbox_ui_driver;
 				}
 			}
 #	endif
@@ -3070,6 +3120,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				{
 					//printf("has qt4-ui\n");
 					mod_ui_type = MOD_UI_TYPE_SANDBOX_QT4;
+					mod_ui_driver = &sbox_ui_driver;
 				}
 			}
 #	endif
@@ -3082,10 +3133,35 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				{
 					//printf("has qt5-ui\n");
 					mod_ui_type = MOD_UI_TYPE_SANDBOX_QT5;
+					mod_ui_driver = &sbox_ui_driver;
+				}
+			}
+#	endif
+
+#	if defined(SANDBOX_EFL)
+			// test for EoUI
+			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
+				{
+					//printf("has EoUI\n");
+					mod_ui_type = MOD_UI_TYPE_SANDBOX_EFL;
+					mod_ui_driver = &sbox_ui_driver;
 				}
 			}
 #	endif
 #endif
+
+			// test for EoUI
+			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
+				{
+					//printf("has EoUI\n");
+					mod_ui_type = MOD_UI_TYPE_EFL;
+					mod_ui_driver = &efl_ui_driver;
+				}
+			}
 
 			// test for show UI
 			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
@@ -3099,6 +3175,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				{
 					//printf("has show UI\n");
 					mod_ui_type = MOD_UI_TYPE_SHOW;
+					mod_ui_driver = &show_ui_driver;
 				}
 			}
 
@@ -3110,6 +3187,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				{
 					//printf("has kx-ui\n");
 					mod_ui_type = MOD_UI_TYPE_KX;
+					mod_ui_driver = &kx_ui_driver;
 				}
 			}
 
@@ -3126,6 +3204,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 			mod_ui->urid = ui->driver->map->map(ui->driver->map->handle,
 				lilv_node_as_string(lilv_ui_get_uri(lui)));
 			mod_ui->type = mod_ui_type;
+			mod_ui->driver = mod_ui_driver;
 		}
 	}
 
@@ -4020,34 +4099,7 @@ _mod_del_widgets(mod_t *mod)
 	mod_ui_t *mod_ui = mod->mod_ui;
 
 	if(mod_ui)
-	{
-		switch(mod_ui->type)
-		{
-			case MOD_UI_TYPE_SHOW:
-				if(mod_ui->show.visible)
-					_show_ui_hide(mod);
-				break;
-			case MOD_UI_TYPE_KX:
-				if(mod_ui->kx.widget)
-					_kx_ui_hide(mod);
-				break;
-#if defined(SANDBOX_LIB)
-			case MOD_UI_TYPE_SANDBOX_X11:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK2:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK3:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT4:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT5:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_EFL:
-				_sandbox_ui_hide(mod);
-				break;
-#endif
-		}
-	}
+		mod_ui->driver->hide(mod);
 }
 
 static inline void
@@ -4078,37 +4130,7 @@ _mod_ui_toggle_raw(mod_t *mod, mod_ui_t *mod_ui)
 {
 	mod->mod_ui = mod_ui;
 
-	switch(mod_ui->type)
-	{
-		case MOD_UI_TYPE_SHOW:
-			if(!mod_ui->show.visible)
-				_show_ui_show(mod);
-			break;
-		case MOD_UI_TYPE_KX:
-			if(!mod_ui->kx.widget)
-				_kx_ui_show(mod);
-			break;
-#if defined(SANDBOX_LIB)
-		case MOD_UI_TYPE_SANDBOX_X11:
-			_sandbox_ui_show(mod, "synthpod_sandbox_x11");
-			break;
-		case MOD_UI_TYPE_SANDBOX_GTK2:
-			_sandbox_ui_show(mod, "synthpod_sandbox_gtk2");
-			break;
-		case MOD_UI_TYPE_SANDBOX_GTK3:
-			_sandbox_ui_show(mod, "synthpod_sandbox_gtk3");
-			break;
-		case MOD_UI_TYPE_SANDBOX_QT4:
-			_sandbox_ui_show(mod, "synthpod_sandbox_qt4");
-			break;
-		case MOD_UI_TYPE_SANDBOX_QT5:
-			_sandbox_ui_show(mod, "synthpod_sandbox_qt5");
-			break;
-		case MOD_UI_TYPE_SANDBOX_EFL:
-			_sandbox_ui_show(mod, "synthpod_sandbox_efl");
-			break;
-#endif
-	}
+	mod_ui->driver->show(mod);
 }
 
 static void
@@ -4150,21 +4172,7 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 				const LilvNode *ui_uri = lilv_ui_get_uri(mod_ui->ui);
 				const char *ui_uri_str = lilv_node_as_string(ui_uri);
 
-				switch(mod_ui->type)
-				{
-					case MOD_UI_TYPE_SHOW:
-					case MOD_UI_TYPE_KX:
-#if defined(SANDBOX_LIB)
-					case MOD_UI_TYPE_SANDBOX_X11:
-					case MOD_UI_TYPE_SANDBOX_GTK2:
-					case MOD_UI_TYPE_SANDBOX_GTK3:
-					case MOD_UI_TYPE_SANDBOX_QT4:
-					case MOD_UI_TYPE_SANDBOX_QT5:
-					case MOD_UI_TYPE_SANDBOX_EFL:
-#endif
-						elm_menu_item_add(ui->uimenu, NULL, NULL, ui_uri_str, _mod_ui_toggle_chosen, mod_ui);
-						break;
-				}
+				elm_menu_item_add(ui->uimenu, NULL, NULL, ui_uri_str, _mod_ui_toggle_chosen, mod_ui);
 			}
 			elm_menu_move(ui->uimenu, x+w, y+h);
 			evas_object_show(ui->uimenu);
@@ -4172,34 +4180,7 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 	}
 	else // hide it!
 	{
-		mod_ui_t *mod_ui = mod->mod_ui;
-
-		switch(mod_ui->type)
-		{
-			case MOD_UI_TYPE_SHOW:
-				if(mod_ui->show.visible)
-					_show_ui_hide(mod);
-				break;
-			case MOD_UI_TYPE_KX:
-				if(mod_ui->kx.widget)
-					_kx_ui_hide(mod);
-				break;
-#if defined(SANDBOX_LIB)
-			case MOD_UI_TYPE_SANDBOX_X11:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK2:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK3:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT4:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT5:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_EFL:
-				_sandbox_ui_hide(mod);
-				break;
-#endif
-		}
+		mod->mod_ui->driver->hide(mod);
 	}
 }
 
@@ -5540,34 +5521,7 @@ _modlist_del(void *data, Evas_Object *obj)
 	sp_ui_t *ui = mod->ui;
 
 	if(mod_ui)
-	{
-		switch(mod_ui->type)
-		{
-			case MOD_UI_TYPE_SHOW:
-				if(mod_ui->descriptor)
-					_show_ui_hide(mod);
-				break;
-			case MOD_UI_TYPE_KX:
-				if(mod_ui->descriptor)
-					_kx_ui_hide(mod);
-				break;
-#if defined(SANDBOX_LIB)
-			case MOD_UI_TYPE_SANDBOX_X11:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK2:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_GTK3:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT4:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_QT5:
-				// fall-through
-			case MOD_UI_TYPE_SANDBOX_EFL:
-				_sandbox_ui_hide(mod);
-				break;
-#endif
-		}
-	}
+		mod_ui->driver->hide(mod);
 
 	_sp_ui_mod_del(ui, mod);
 }
