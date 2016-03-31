@@ -113,10 +113,6 @@ include_directories(${LV2_INCLUDE_DIRS})
 pkg_search_module(SRATOM REQUIRED sratom-0>=0.4)
 include_directories(${SRATOM_INCLUDE_DIRS})
 
-# nanomsg
-pkg_search_module(NANOMSG REQUIRED libnanomsg>=4.0)
-include_directories(${NANOMSG_INCLUDE_DIRS})
-
 # elm
 pkg_search_module(ELM REQUIRED elementary>=1.8)
 include_directories(${ELM_INCLUDE_DIRS})

@@ -83,6 +83,10 @@ if(BUILD_SANDBOX_LIB)
 		add_definitions("-DSANDBOX_EFL")
 	endif()
 
+# nanomsg
+	pkg_search_module(NANOMSG REQUIRED libnanomsg>=4.0)
+	include_directories(${NANOMSG_INCLUDE_DIRS})
+
 # synthpod_sandbox_slave
 	add_library(synthpod_sandbox_slave.lib SHARED
 		synthpod_sandbox_slave.c
