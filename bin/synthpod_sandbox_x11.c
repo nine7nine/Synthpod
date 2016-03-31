@@ -44,7 +44,7 @@ struct _app_t {
 static volatile bool done = false;
 
 static inline void
-_sig() 
+_sig(int signum)
 {
 	done = true;
 }
