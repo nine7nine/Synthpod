@@ -12,7 +12,7 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 ### Mandatory dependencies
 
-* [Elementary](http://docs.enlightenment.org/auto/elementary/) (EFL UI toolkit)
+* [Elementary](https://www.enlightenment.org/about-efl) (EFL UI toolkit)
 * [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
 * [LV2](http://lv2plug.in) (LV2 plugin specification)
 
