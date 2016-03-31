@@ -2344,40 +2344,37 @@ static const mod_ui_driver_t sbox_ui_driver = {
 #endif
 
 static void
-_efl_ui_show(mod_t *mod)
+_efl_ui_hide(mod_t *mod)
 {
 	mod_ui_t *mod_ui = mod->mod_ui;
 
-	//TODO
+	if(mod_ui->eo.win)
+		evas_object_del(mod_ui->eo.win);
+	mod_ui->handle = NULL;
+	mod_ui->eo.widget = NULL;
+	mod_ui->eo.win = NULL;
 
-	_mod_visible_set(mod, 1, mod_ui->urid);
-}
+	if(mod_ui->lib)
+	{
+		eina_module_unload(mod_ui->lib);
+		eina_module_free(mod_ui->lib);
+		mod_ui->lib = NULL;
+	}
 
-static void
-_efl_ui_hide(mod_t *mod)
-{
-	//TODO
 	mod->mod_ui = NULL;
 	_mod_visible_set(mod, 0, 0);
 }
 
 static void
-_efl_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
-	uint32_t protocol, const void *buf)
+_efl_ui_delete_request(void *data, Evas_Object *obj, void *event_info)
 {
-	//TODO
+	mod_t *mod = data;
+
+	_efl_ui_hide(mod);
 }
 
-static const mod_ui_driver_t efl_ui_driver = {
-	.show = _efl_ui_show,
-	.hide = _efl_ui_hide,
-	.port_event = _efl_ui_port_event,
-};
-
-//XXX
-
 static inline Evas_Object *
-_eo_widget_create(Evas_Object *parent, mod_t *mod)
+_efl_ui_create(Evas_Object *parent, mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
 	mod_ui_t *mod_ui = mod->mod_ui;
@@ -2437,6 +2434,76 @@ _eo_widget_create(Evas_Object *parent, mod_t *mod)
 
 	return mod_ui->eo.widget;
 }
+
+static void
+_efl_ui_show(mod_t *mod)
+{
+	mod_ui_t *mod_ui = mod->mod_ui;
+	sp_ui_t *ui = mod->ui;
+
+	mod_ui->descriptor = _ui_dlopen(mod_ui->ui, &mod_ui->lib);
+	if(!mod_ui->descriptor)
+		return;
+
+	// add fullscreen EoUI
+	Evas_Object *win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
+	if(win)
+	{
+		elm_win_title_set(win, mod->name);
+		evas_object_smart_callback_add(win, "delete,request", _efl_ui_delete_request, mod);
+		evas_object_resize(win, 800, 450);
+
+		mod_ui->eo.win = win;
+
+		Evas_Object *bg = elm_bg_add(win);
+		if(bg)
+		{
+			elm_bg_color_set(bg, 64, 64, 64);
+			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(bg, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(bg);
+			elm_win_resize_object_add(win, bg);
+		} // bg
+
+		Evas_Object *widget = _efl_ui_create(win, mod);
+		if(widget)
+		{
+			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(widget);
+			elm_win_resize_object_add(win, widget);
+		} // widget
+
+		evas_object_show(win);
+
+		_mod_visible_set(mod, 1, mod_ui->urid);
+	} // win
+}
+
+static void
+_efl_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
+	uint32_t protocol, const void *buf)
+{
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(  mod_ui
+		&& mod_ui->ui
+		&& mod_ui->descriptor
+		&& mod_ui->descriptor->port_event
+		&& mod_ui->handle)
+	{
+		if(mod_ui->eo.win)
+			mod_ui->descriptor->port_event(mod_ui->handle, index, size, protocol, buf);
+	}
+}
+
+static const mod_ui_driver_t efl_ui_driver = {
+	.show = _efl_ui_show,
+	.hide = _efl_ui_hide,
+	.port_event = _efl_ui_port_event,
+};
+
+//XXX
 
 static inline char *
 _mod_get_name(mod_t *mod)
