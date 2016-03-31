@@ -10,14 +10,28 @@
 
 Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/#](http://open-music-kontrollers.ch/lv2/synthpod/#).
 
-### Dependencies
+### Mandatory dependencies
 
-* [ALSA](http://alsa-project.org) (Advanced Linux Sound Architecture)
 * [Elementary](http://docs.enlightenment.org/auto/elementary/) (EFL UI toolkit)
 * [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
-* [JACK](http://jackaudio.org/) (JACK audio connection kit)
-* [zita-alsa-pcmi](http://kokkinizita.linuxaudio.org/linuxaudio/) (ALSA PCM high-level API)
 * [LV2](http://lv2plug.in) (LV2 plugin specification)
+
+### Optional dependencies for JACK backend
+
+* [JACK](http://jackaudio.org/) (JACK audio connection kit)
+
+### Optional dependencies for ALSA backend
+
+* [ALSA](http://alsa-project.org) (Advanced Linux Sound Architecture)
+* [zita-alsa-pcmi](http://kokkinizita.linuxaudio.org/linuxaudio/) (ALSA PCM high-level API)
+
+### Optional dependencies for plugin UIs
+
+* [libxcb](https://xcb.freedesktop.org/) (X protocol C-language Binding)
+* [Gtk2](http://www.gtk.org/) (cross-platform UI toolkit)
+* [Gtk3](http://www.gtk.org/) (cross-platform UI toolkit)
+* [Qt4](https://www.qt.io/) (cross-platform UI toolkit)
+* [Qt5](https://www.qt.io/) (cross-platform UI toolkit)
 
 ### Build / install
 
@@ -31,32 +45,10 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 #### ArchLinux
 
-	# build dependencies
-	sudo pacman -S cmake alsa elementary lilv jack zita-alsa-pcmi lv2
-
-#### Debian Jessie, Ubuntu Vivid and derivatives
-
-	# build dependencies
-	sudo apt-get install cmake git libasound2-dev libelementary-dev libevas1-engines-x liblilv-dev libjack-dev libzita-alsa-pcmi-dev lv2-dev
-
-#### Ubuntu (<= 14.04)
-
-	# synthpod needs libefl(>=1.8) and libelementary(>=1.8), you may thus need to add a ppa
-	sudo add-apt-repository -y ppa:enlightenment-git/ppa
-
-#### Fedora 22 and derivatives
-
-	# build dependencies
-	sudo dnf install dnf-plugins-core
-	sudo dnf config-manager --add-repo http://download.opensuse.org/repositories/home:/edogawa/Fedora_22/home:edogawa.repo
-	sudo dnf install alsa-lib-devel cmake elementary-devel gcc gcc-c++ git lilv-devel lv2-devel make jack-audio-connection-kit-devel libzita-alsa-pcmi0-devel
-
-#### OpenSuse 13.2
-	
-	# build dependencies
-	sudo zypper addrepo http://download.opensuse.org/repositories/home:/edogawa/openSUSE_13.2/home:edogawa.repo
-	sudo zypper addrepo http://download.opensuse.org/repositories/home:/rncbc/openSUSE_13.2/home:rncbc.repo
-	sudo zypper install cmake gcc gcc-c++ git alsa-devel elementary-devel liblilv-devel libjack-devel libzita-alsa-pcmi0-devel lv2-devel pkg-config
+	# mandatory build dependencies
+	sudo pacman -S cmake elementary lilv lv2
+	# optional build dependencies
+	sudo pacman -S jack alsa zita-alsa-pcmi nanomsg libxcb gtk2 gtk3 qt4 qt
 
 ### License (everything but synthpod\_alsa)
 
