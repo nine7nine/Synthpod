@@ -44,12 +44,12 @@ option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
 
 include(CMakeDependentOption)
 option(BUILD_SANDBOX_LIB "Build sandbox library" OFF)
-cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" ON "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_EFL "Build EFL sandbox" ON "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_EFL "Build EFL sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
 
 # vectorization
 include(CheckCCompilerFlag)
