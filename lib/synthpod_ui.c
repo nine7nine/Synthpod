@@ -214,6 +214,8 @@ struct _mod_t {
 		LV2_Options_Option options [2];
 	} opts;
 
+	LV2UI_Resize resize;
+
 	// port-groups
 	Eina_Hash *groups;
 
@@ -2442,6 +2444,18 @@ static const mod_ui_driver_t sbox_ui_driver = {
 };
 #endif
 
+static int
+_efl_ui_resize(LV2UI_Feature_Handle handle, int w, int h)
+{
+	mod_t *mod = handle;
+	mod_ui_t *mod_ui = mod->mod_ui;
+
+	if(mod_ui->eo.win)
+		evas_object_resize(mod_ui->eo.win, w, h);
+
+	return 0;
+}
+
 static void
 _efl_ui_hide(mod_t *mod)
 {
@@ -3031,6 +3045,10 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod->port_subscribe.subscribe = _port_subscribe;
 	mod->port_subscribe.unsubscribe = _port_unsubscribe;
 
+	// populate resize 
+	mod->resize.handle = mod;
+	mod->resize.ui_resize = _efl_ui_resize;
+
 	// populate zero-writer
 	mod->zero_writer.handle = mod;
 	mod->zero_writer.request = _zero_writer_request;
@@ -3094,7 +3112,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod->feature_list[nfeatures++].data = &mod->kx.host;
 
 	mod->feature_list[nfeatures].URI = LV2_UI__resize;
-	mod->feature_list[nfeatures++].data = NULL; //FIXME
+	mod->feature_list[nfeatures++].data = &mod->resize;
 
 	mod->feature_list[nfeatures].URI = LV2_OPTIONS__options;
 	mod->feature_list[nfeatures++].data = mod->opts.options;
