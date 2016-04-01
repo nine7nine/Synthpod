@@ -267,7 +267,7 @@ struct _port_t {
 	bool is_bitmask;
 	bool logarithmic;
 	LilvScalePoints *points;
-	char *unit;
+	LV2_URID unit;
 
 	float dflt;
 	float min;
@@ -310,7 +310,7 @@ struct _property_t {
 	float maximum;
 
 	Eina_List *scale_points;
-	char *unit;
+	LV2_URID unit;
 };
 
 struct _sp_ui_t {
@@ -392,7 +392,7 @@ struct _from_app_t {
 	from_app_cb_t cb;
 };
 
-static const char *keys [12] = {
+static const char *midi_keys [12] = {
 	"C", "#C",
 	"D", "#D",
 	"E",
@@ -402,12 +402,136 @@ static const char *keys [12] = {
 	"H"
 };
 
-static inline const char *
-_note(uint8_t val, uint8_t *octave)
-{
-	*octave = val / 12;
+typedef struct _midi_controller_t midi_controller_t;
 
-	return keys[val % 12];
+struct _midi_controller_t {
+	uint8_t controller;
+	const char *symbol;
+};
+
+// ORDERED list of midi controller symbols
+static const midi_controller_t midi_controllers [72] = {
+	{ .controller = LV2_MIDI_CTL_MSB_BANK             , .symbol = "Bank Selection (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_MODWHEEL         , .symbol = "Modulation (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_BREATH           , .symbol = "Breath (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_FOOT             , .symbol = "Foot (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_PORTAMENTO_TIME  , .symbol = "Portamento Time (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_DATA_ENTRY       , .symbol = "Data Entry (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_MAIN_VOLUME      , .symbol = "Main Volume (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_BALANCE          , .symbol = "Balance (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_PAN              , .symbol = "Panpot (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_EXPRESSION       , .symbol = "Expression (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_EFFECT1          , .symbol = "Effect1 (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_EFFECT2          , .symbol = "Effect2 (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_GENERAL_PURPOSE1 , .symbol = "General Purpose 1 (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_GENERAL_PURPOSE2 , .symbol = "General Purpose 2 (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_GENERAL_PURPOSE3 , .symbol = "General Purpose 3 (MSB)" },
+	{ .controller = LV2_MIDI_CTL_MSB_GENERAL_PURPOSE4 , .symbol = "General Purpose 4 (MSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_BANK             , .symbol = "Bank Selection (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_MODWHEEL         , .symbol = "Modulation (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_BREATH           , .symbol = "Breath (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_FOOT             , .symbol = "Foot (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_PORTAMENTO_TIME  , .symbol = "Portamento Time (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_DATA_ENTRY       , .symbol = "Data Entry (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_MAIN_VOLUME      , .symbol = "Main Volume (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_BALANCE          , .symbol = "Balance (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_PAN              , .symbol = "Panpot (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_EXPRESSION       , .symbol = "Expression (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_EFFECT1          , .symbol = "Effect1 (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_EFFECT2          , .symbol = "Effect2 (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_GENERAL_PURPOSE1 , .symbol = "General Purpose 1 (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_GENERAL_PURPOSE2 , .symbol = "General Purpose 2 (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_GENERAL_PURPOSE3 , .symbol = "General Purpose 3 (LSB)" },
+	{ .controller = LV2_MIDI_CTL_LSB_GENERAL_PURPOSE4 , .symbol = "General Purpose 4 (LSB)" },
+	{ .controller = LV2_MIDI_CTL_SUSTAIN              , .symbol = "Sustain Pedal" },
+	{ .controller = LV2_MIDI_CTL_PORTAMENTO           , .symbol = "Portamento" },
+	{ .controller = LV2_MIDI_CTL_SOSTENUTO            , .symbol = "Sostenuto" },
+	{ .controller = LV2_MIDI_CTL_SOFT_PEDAL           , .symbol = "Soft Pedal" },
+	{ .controller = LV2_MIDI_CTL_LEGATO_FOOTSWITCH    , .symbol = "Legato Foot Switch" },
+	{ .controller = LV2_MIDI_CTL_HOLD2                , .symbol = "Hold2" },
+	{ .controller = LV2_MIDI_CTL_SC1_SOUND_VARIATION  , .symbol = "SC1 Sound Variation" },
+	{ .controller = LV2_MIDI_CTL_SC2_TIMBRE           , .symbol = "SC2 Timbre" },
+	{ .controller = LV2_MIDI_CTL_SC3_RELEASE_TIME     , .symbol = "SC3 Release Time" },
+	{ .controller = LV2_MIDI_CTL_SC4_ATTACK_TIME      , .symbol = "SC4 Attack Time" },
+	{ .controller = LV2_MIDI_CTL_SC5_BRIGHTNESS       , .symbol = "SC5 Brightness" },
+	{ .controller = LV2_MIDI_CTL_SC6                  , .symbol = "SC6" },
+	{ .controller = LV2_MIDI_CTL_SC7                  , .symbol = "SC7" },
+	{ .controller = LV2_MIDI_CTL_SC8                  , .symbol = "SC8" },
+	{ .controller = LV2_MIDI_CTL_SC9                  , .symbol = "SC9" },
+	{ .controller = LV2_MIDI_CTL_SC10                 , .symbol = "SC10" },
+	{ .controller = LV2_MIDI_CTL_GENERAL_PURPOSE5     , .symbol = "General Purpose 5" },
+	{ .controller = LV2_MIDI_CTL_GENERAL_PURPOSE6     , .symbol = "General Purpose 6" },
+	{ .controller = LV2_MIDI_CTL_GENERAL_PURPOSE7     , .symbol = "General Purpose 7" },
+	{ .controller = LV2_MIDI_CTL_GENERAL_PURPOSE8     , .symbol = "General Purpose 8" },
+	{ .controller = LV2_MIDI_CTL_PORTAMENTO_CONTROL   , .symbol = "Portamento Control" },
+	{ .controller = LV2_MIDI_CTL_E1_REVERB_DEPTH      , .symbol = "E1 Reverb Depth" },
+	{ .controller = LV2_MIDI_CTL_E2_TREMOLO_DEPTH     , .symbol = "E2 Tremolo Depth" },
+	{ .controller = LV2_MIDI_CTL_E3_CHORUS_DEPTH      , .symbol = "E3 Chorus Depth" },
+	{ .controller = LV2_MIDI_CTL_E4_DETUNE_DEPTH      , .symbol = "E4 Detune Depth" },
+	{ .controller = LV2_MIDI_CTL_E5_PHASER_DEPTH      , .symbol = "E5 Phaser Depth" },
+	{ .controller = LV2_MIDI_CTL_DATA_INCREMENT       , .symbol = "Data Increment" },
+	{ .controller = LV2_MIDI_CTL_DATA_DECREMENT       , .symbol = "Data Decrement" },
+	{ .controller = LV2_MIDI_CTL_NRPN_LSB             , .symbol = "Non-registered Parameter Number (LSB)" },
+	{ .controller = LV2_MIDI_CTL_NRPN_MSB             , .symbol = "Non-registered Parameter Number (MSB)" },
+	{ .controller = LV2_MIDI_CTL_RPN_LSB              , .symbol = "Registered Parameter Number (LSB)" },
+	{ .controller = LV2_MIDI_CTL_RPN_MSB              , .symbol = "Registered Parameter Number (MSB)" },
+	{ .controller = LV2_MIDI_CTL_ALL_SOUNDS_OFF       , .symbol = "All Sounds Off" },
+	{ .controller = LV2_MIDI_CTL_RESET_CONTROLLERS    , .symbol = "Reset Controllers" },
+	{ .controller = LV2_MIDI_CTL_LOCAL_CONTROL_SWITCH , .symbol = "Local Control Switch" },
+	{ .controller = LV2_MIDI_CTL_ALL_NOTES_OFF        , .symbol = "All Notes Off" },
+	{ .controller = LV2_MIDI_CTL_OMNI_OFF             , .symbol = "Omni Off" },
+	{ .controller = LV2_MIDI_CTL_OMNI_ON              , .symbol = "Omni On" },
+	{ .controller = LV2_MIDI_CTL_MONO1                , .symbol = "Mono1" },
+	{ .controller = LV2_MIDI_CTL_MONO2                , .symbol = "Mono2" }
+};
+
+static const char *
+_midi_note_lookup(float value)
+{
+	const uint8_t note = floor(value);
+
+	const uint8_t octave = note / 12;
+	const uint8_t offset = note % 12;
+
+	static char stat_str [8];
+	snprintf(stat_str, 8, "%s%u", midi_keys[offset], octave);
+
+	return stat_str;
+}
+
+static int
+_midi_controller_cmp(const void *data1, const void *data2)
+{
+	const midi_controller_t *controller1 = data1;
+	const midi_controller_t *controller2 = data2;
+
+	if(controller1->controller < controller2->controller)
+		return -1;
+	else if(controller1->controller > controller2->controller)
+		return 1;
+
+	return 0;
+}
+
+static const char *
+_midi_controller_lookup(float value)
+{
+	const uint8_t cntrl = floor(value);
+
+	const midi_controller_t tar = {
+		.controller = cntrl,
+		.symbol = NULL
+	};
+
+	const midi_controller_t *controller = bsearch(&tar, midi_controllers, 72,
+		sizeof(midi_controller_t), _midi_controller_cmp);
+	if(controller)
+		return controller->symbol;
+
+	static char stat_str [16];
+	snprintf(stat_str, 16, "Controller #%"PRIu8, cntrl);
+
+	return stat_str;
 }
 
 #define FROM_APP_NUM 18
@@ -723,9 +847,6 @@ _property_free(property_t *prop)
 	if(prop->comment)
 		free(prop->comment); // strdup
 
-	if(prop->unit)
-		free(prop->unit); // strdup
-
 	point_t *p;
 	EINA_LIST_FREE(prop->scale_points, p)
 	{
@@ -1031,11 +1152,8 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							const LV2_URID tar_urid = subject ? subject->body : 0;
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
-							if(prop && prop->unit)
-							{
-								free(prop->unit);
-								prop->unit = NULL;
-							}
+							if(prop)
+								prop->unit = 0;
 						}
 						else if(atom_prop->key == ui->regs.core.scale_point.urid)
 						{
@@ -1074,7 +1192,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->type_urid = 0; // not yet known
 								prop->minimum = 0.f; // not yet known
 								prop->maximum = 1.f; // not yet known
-								prop->unit = NULL; // not yet known
+								prop->unit = 0; // not yet known
 
 								mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
 
@@ -1115,7 +1233,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->type_urid = 0; // not yet known
 								prop->minimum = 0.f; // not yet known
 								prop->maximum = 1.f; // not yet known
-								prop->unit = NULL; // not yet known
+								prop->unit = 0; // not yet known
 
 								mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
 
@@ -1235,26 +1353,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							if(prop)
 							{
 								if(atom_prop->value.type == ui->forge.URID)
-								{
-									const char *uri = ui->driver->unmap->unmap(ui->driver->unmap->handle,
-										((const LV2_Atom_URID *)&atom_prop->value)->body);
-
-									if(uri)
-									{
-										LilvNode *unit = lilv_new_uri(ui->world, uri);
-										if(unit)
-										{
-											LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
-											if(symbol)
-											{
-												prop->unit = strdup(lilv_node_as_string(symbol));
-												lilv_node_free(symbol);
-											}
-
-											lilv_node_free(unit);
-										}
-									}
-								}
+									prop->unit = ((const LV2_Atom_URID *)&atom_prop)->body;
 
 								if(prop->std.elmnt)
 									elm_genlist_item_update(prop->std.elmnt);
@@ -2715,13 +2814,7 @@ _sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const Lilv
 	LilvNode *unit = lilv_port_get(mod->plug, tar->tar, ui->regs.units.unit.node);
 	if(unit)
 	{
-		LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
-		if(symbol)
-		{
-			tar->unit = strdup(lilv_node_as_string(symbol));
-			lilv_node_free(symbol);
-		}
-
+		tar->unit = ui->driver->map->map(ui->driver->map->handle, lilv_node_as_uri(unit));
 		lilv_node_free(unit);
 	}
 }
@@ -2744,7 +2837,7 @@ _sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, in
 	prop->type_urid = 0; // invalid type
 	prop->minimum = 0.f; // not yet known
 	prop->maximum = 1.f; // not yet known
-	prop->unit = NULL; // not yet known
+	prop->unit = 0; // not yet known
 	
 	// get lv2:parameterProperty
 	LilvNodes *paramprops = lilv_world_find_nodes(ui->world, writable,
@@ -2826,13 +2919,7 @@ _sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, in
 		ui->regs.units.unit.node, NULL);
 	if(unit)
 	{
-		LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
-		if(symbol)
-		{
-			prop->unit = strdup(lilv_node_as_string(symbol));
-			lilv_node_free(symbol);
-		}
-
+		prop->unit = ui->driver->map->map(ui->driver->map->handle, lilv_node_as_uri(unit));
 		lilv_node_free(unit);
 	}
 	
@@ -3337,9 +3424,6 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 
 		if(port->points)
 			lilv_scale_points_free(port->points);
-
-		if(port->unit)
-			free(port->unit);
 
 		if(port->group)
 			lilv_node_free(port->group);
@@ -4861,7 +4945,32 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 						smart_slider_format_set(child, integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
 						smart_slider_disabled_set(child, !prop->editable);
 						if(prop->unit)
-							smart_slider_unit_set(child, prop->unit);
+						{
+							if(prop->unit == ui->regs.units.midiController.urid)
+							{
+								smart_slider_lookup_set(child, _midi_controller_lookup);
+							}
+							else if(prop->unit == ui->regs.units.midiNote.urid)
+							{
+								smart_slider_lookup_set(child, _midi_note_lookup);
+							}
+							else
+							{
+								const char *uri = ui->driver->unmap->unmap(ui->driver->unmap->handle, prop->unit);
+								LilvNode *unit = uri ? lilv_new_uri(ui->world, uri) : NULL;
+								if(unit)
+								{
+									LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+									if(symbol)
+									{
+										smart_slider_unit_set(child, lilv_node_as_string(symbol));
+										lilv_node_free(symbol);
+									}
+									
+									lilv_node_free(unit);
+								}
+							}
+						}
 						if(prop->editable)
 							evas_object_smart_callback_add(child, "changed", _property_sldr_changed, prop);
 						evas_object_smart_callback_add(child, "cat,in", _smart_mouse_in, mod);
@@ -5296,8 +5405,34 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					smart_slider_integer_set(sldr, port->integer);
 					smart_slider_logarithmic_set(sldr, port->logarithmic);
 					smart_slider_format_set(sldr, port->integer ? "%.0f %s" : "%.4f %s"); //TODO handle MIDI notes
+
 					if(port->unit)
-						smart_slider_unit_set(sldr, port->unit);
+					{
+						if(port->unit == ui->regs.units.midiController.urid)
+						{
+							smart_slider_lookup_set(sldr, _midi_controller_lookup);
+						}
+						else if(port->unit == ui->regs.units.midiNote.urid)
+						{
+							smart_slider_lookup_set(sldr, _midi_note_lookup);
+						}
+						else // fallback
+						{
+							const char *uri = ui->driver->unmap->unmap(ui->driver->unmap->handle, port->unit);
+							LilvNode *unit = uri ? lilv_new_uri(ui->world, uri) : NULL;
+							if(unit)
+							{
+								LilvNode *symbol = lilv_world_get(ui->world, unit, ui->regs.units.symbol.node, NULL);
+								if(symbol)
+								{
+									smart_slider_unit_set(sldr, lilv_node_as_string(symbol));
+									lilv_node_free(symbol);
+								}
+								
+								lilv_node_free(unit);
+							}
+						}
+					}
 					smart_slider_disabled_set(sldr, port->direction == PORT_DIRECTION_OUTPUT);
 					if(port->direction == PORT_DIRECTION_INPUT)
 						evas_object_smart_callback_add(sldr, "changed", _sldr_changed, port);

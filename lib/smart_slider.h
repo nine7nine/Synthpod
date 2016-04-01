@@ -22,6 +22,8 @@
 
 #define SMART_SLIDER_UI "/synthpod/smart_slider/ui"
 
+typedef const char *(*smart_slider_lookup_t)(float value);
+
 Evas_Object *
 smart_slider_add(Evas *e);
 
@@ -40,6 +42,9 @@ smart_slider_format_set(Evas_Object *o, const char *format);
 
 void
 smart_slider_unit_set(Evas_Object *o, const char *unit);
+
+void
+smart_slider_lookup_set(Evas_Object *o, smart_slider_lookup_t lookup);
 
 void
 smart_slider_color_set(Evas_Object *o, int col);

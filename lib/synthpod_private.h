@@ -286,6 +286,7 @@ struct _reg_t {
 		reg_item_t m;
 		reg_item_t mhz;
 		reg_item_t midiNote;
+		reg_item_t midiController;
 		reg_item_t mile;
 		reg_item_t min;
 		reg_item_t mm;
@@ -507,6 +508,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->units.m, world, map, LV2_UNITS__m);
 	_register(&regs->units.mhz, world, map, LV2_UNITS__mhz);
 	_register(&regs->units.midiNote, world, map, LV2_UNITS__midiNote);
+	_register(&regs->units.midiController, world, map, LV2_UNITS_PREFIX"midiController");
 	_register(&regs->units.mile, world, map, LV2_UNITS__mile);
 	_register(&regs->units.min, world, map, LV2_UNITS__min);
 	_register(&regs->units.mm, world, map, LV2_UNITS__mm);
@@ -695,6 +697,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->units.m);
 	_unregister(&regs->units.mhz);
 	_unregister(&regs->units.midiNote);
+	_unregister(&regs->units.midiController);
 	_unregister(&regs->units.mile);
 	_unregister(&regs->units.min);
 	_unregister(&regs->units.mm);

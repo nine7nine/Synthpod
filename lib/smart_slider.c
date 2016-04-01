@@ -45,6 +45,7 @@ struct _smart_slider_t {
 	int disabled;
 	char format [32];
 	char unit [32];
+	smart_slider_lookup_t lookup;
 
 	int grabbed;
 };
@@ -124,8 +125,20 @@ _smart_slider_value_flush(Evas_Object *o)
 		edje_object_part_drag_size_set(priv->theme, "drag", drag_x, 1.f);
 
 		char label [64];
-		sprintf(label, priv->format, priv->value, priv->unit);
-		edje_object_part_text_set(priv->theme, "label", label);
+		const char *lbl = NULL;
+
+		if(priv->lookup) // try lookup function first
+		{
+			lbl = priv->lookup(priv->value);
+		}
+
+		if(!lbl) // use default render method
+		{
+			sprintf(label, priv->format, priv->value, priv->unit);
+			lbl = label;
+		}
+
+		edje_object_part_text_set(priv->theme, "label", lbl);
 
 		return 1;
 	}
@@ -389,6 +402,17 @@ smart_slider_unit_set(Evas_Object *o, const char *unit)
 		return;
 
 	strncpy(priv->unit, unit, 32);
+	_smart_slider_value_flush(o);
+}
+
+void
+smart_slider_lookup_set(Evas_Object *o, smart_slider_lookup_t lookup)
+{
+	smart_slider_t *priv = evas_object_smart_data_get(o);
+	if(!priv)
+		return;
+
+	priv->lookup = lookup;
 	_smart_slider_value_flush(o);
 }
 
