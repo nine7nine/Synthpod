@@ -272,14 +272,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		return NULL;
 
 	eo_ui_driver_t driver;
-	if(descriptor == &synthpod_keyboard_4_eo)
+	if(descriptor == &synthpod_keyboard_3_eo)
 		driver = EO_UI_DRIVER_EO;
-	else if(descriptor == &synthpod_keyboard_1_ui)
-		driver = EO_UI_DRIVER_UI;
-	else if(descriptor == &synthpod_keyboard_3_x11)
-		driver = EO_UI_DRIVER_X11;
-	else if(descriptor == &synthpod_keyboard_2_kx)
-		driver = EO_UI_DRIVER_KX;
 	else
 		return NULL;
 
@@ -343,34 +337,10 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 	// nothing
 }
 
-const LV2UI_Descriptor synthpod_keyboard_4_eo = {
+const LV2UI_Descriptor synthpod_keyboard_3_eo = {
 	.URI						= SYNTHPOD_KEYBOARD_EO_URI,
 	.instantiate		= instantiate,
 	.cleanup				= cleanup,
 	.port_event			= port_event,
 	.extension_data	= eoui_eo_extension_data
-};
-
-const LV2UI_Descriptor synthpod_keyboard_1_ui = {
-	.URI						= SYNTHPOD_KEYBOARD_UI_URI,
-	.instantiate		= instantiate,
-	.cleanup				= cleanup,
-	.port_event			= port_event,
-	.extension_data	= eoui_ui_extension_data
-};
-
-const LV2UI_Descriptor synthpod_keyboard_3_x11 = {
-	.URI						= SYNTHPOD_KEYBOARD_X11_URI,
-	.instantiate		= instantiate,
-	.cleanup				= cleanup,
-	.port_event			= port_event,
-	.extension_data	= eoui_x11_extension_data
-};
-
-const LV2UI_Descriptor synthpod_keyboard_2_kx = {
-	.URI						= SYNTHPOD_KEYBOARD_KX_URI,
-	.instantiate		= instantiate,
-	.cleanup				= cleanup,
-	.port_event			= port_event,
-	.extension_data	= eoui_kx_extension_data
 };

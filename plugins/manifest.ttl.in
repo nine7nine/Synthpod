@@ -39,8 +39,7 @@ synthpod:stereo
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	@UI_UI_WRAP@ui:ui synthpod:common_1_ui ;
 	@KX_UI_WRAP@ui:ui synthpod:common_2_kx ;
-	@X11_UI_WRAP@ui:ui synthpod:common_3_x11 ;
-	@EO_UI_WRAP@ui:ui synthpod:common_4_eo ;
+	@EO_UI_WRAP@ui:ui synthpod:common_3_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Synthpod Monoatom
@@ -51,8 +50,7 @@ synthpod:monoatom
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	@UI_UI_WRAP@ui:ui synthpod:common_1_ui ;
 	@KX_UI_WRAP@ui:ui synthpod:common_2_kx ;
-	@X11_UI_WRAP@ui:ui synthpod:common_3_x11 ;
-	@EO_UI_WRAP@ui:ui synthpod:common_4_eo ;
+	@EO_UI_WRAP@ui:ui synthpod:common_3_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_1_ui
@@ -63,13 +61,9 @@ synthpod:common_2_kx
 	a kx:Widget ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:common_3_x11
-	a ui:X11UI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:common_4_eo
+synthpod:common_3_eo
 	a ui:EoUI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # Synthpod Keyboard
@@ -80,8 +74,7 @@ synthpod:keyboard
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	@UI_UI_WRAP@ui:ui synthpod:keyboard_1_ui ;
 	@KX_UI_WRAP@ui:ui synthpod:keyboard_2_kx ;
-	@X11_UI_WRAP@ui:ui synthpod:keyboard_3_x11 ;
-	@EO_UI_WRAP@ui:ui synthpod:keyboard_4_eo ;
+	@EO_UI_WRAP@ui:ui synthpod:keyboard_3_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:keyboard_1_ui
@@ -92,13 +85,9 @@ synthpod:keyboard_2_kx
 	a kx:Widget ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:keyboard_3_x11
-	a ui:X11UI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:keyboard_4_eo
+synthpod:keyboard_3_eo
 	a ui:EoUI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # CV2Control

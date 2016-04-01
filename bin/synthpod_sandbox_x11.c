@@ -133,9 +133,7 @@ _run(sandbox_slave_t *sb, void *data)
 		sandbox_slave_recv(sb);
 		if(sandbox_slave_idle(sb))
 			done = true;
-		const bool sent = sandbox_slave_flush(sb);
-		if(!sent)
-			fprintf(stderr, "sandbox_slave_flush failed\n");
+		sandbox_slave_flush(sb);
 	}
 }
 

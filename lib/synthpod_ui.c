@@ -2276,7 +2276,10 @@ _sbox_ui_hide(mod_t *mod)
 	}
 
 	if(mod_ui->sbox.sb)
+	{
 		sandbox_master_free(mod_ui->sbox.sb);
+		mod_ui->sbox.sb = NULL;
+	}
 
 	/* FIXME
 	if(ecore_file_exists(&mod_ui->sbox.socket_path[6]))
@@ -2413,12 +2416,11 @@ _sbox_ui_flush(void *data)
 	mod_t *mod = data;
 	mod_ui_t *mod_ui = mod->mod_ui;
 	
-	const bool sent = sandbox_master_flush(mod_ui->sbox.sb);
-	if(!sent)
+	const bool more = sandbox_master_flush(mod_ui->sbox.sb);
+	if(more)
 	{
-		fprintf(stderr, "_sbox_ui_flush failed\n");
-		// schedule flush
-		ecore_job_add(_sbox_ui_flush, mod);
+		//fprintf(stderr, "_sbox_ui_flush there is more\n");
+		ecore_job_add(_sbox_ui_flush, mod); // schedule flush
 	}
 }
 
@@ -2428,12 +2430,11 @@ _sbox_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
 {
 	mod_ui_t *mod_ui = mod->mod_ui;
 
-	const bool sent = sandbox_master_send(mod_ui->sbox.sb, index, size, protocol, buf);
-	if(!sent)
+	const bool more = sandbox_master_send(mod_ui->sbox.sb, index, size, protocol, buf);
+	if(!more)
 	{
-		fprintf(stderr, "_sbox_ui_port_event failed\n");
-		// schedule flush
-		ecore_job_add(_sbox_ui_flush, mod);
+		//fprintf(stderr, "_sbox_ui_port_event there is more\n");
+		ecore_job_add(_sbox_ui_flush, mod); // schedule flush
 	}
 }
 
@@ -3244,6 +3245,17 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 			mod_ui_type_t mod_ui_type = MOD_UI_TYPE_UNSUPPORTED;
 			const mod_ui_driver_t *mod_ui_driver = NULL;
 
+			// test for EoUI (precedes MOD_UI_TYPE_SANDBOX_EFL)
+			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
+				{
+					//printf("has EoUI\n");
+					mod_ui_type = MOD_UI_TYPE_EFL;
+					mod_ui_driver = &efl_ui_driver;
+				}
+			}
+
 #if defined(SANDBOX_LIB)
 #	if defined(SANDBOX_X11)
 			// test for X11UI
@@ -3323,17 +3335,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 			}
 #	endif
 #endif
-
-			// test for EoUI
-			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
-			{
-				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
-				{
-					//printf("has EoUI\n");
-					mod_ui_type = MOD_UI_TYPE_EFL;
-					mod_ui_driver = &efl_ui_driver;
-				}
-			}
 
 			// test for show UI
 			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)

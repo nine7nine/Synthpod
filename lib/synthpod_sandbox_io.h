@@ -271,7 +271,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 			// do nothing
 			break;
 		case ETERM:
-			//FIXME _hide(ui);
+			//FIXME done
 			// fall-through
 		default:
 			fprintf(stderr, "nn_recv: %s\n", nn_strerror(nn_errno()));
@@ -283,10 +283,10 @@ static inline bool
 _sandbox_io_flush(sandbox_io_t *io)
 {
 	const LV2_Atom *atom = (const LV2_Atom *)io->ser.buf;
-	bool sent = true;
 
+	bool more = false;
 	if( (io->ser.offset == 0) || (atom->size == 0) )
-		return sent; // empty tuple
+		return more; // empty tuple
 
 	char *ttl = sratom_to_turtle(io->sratom, io->unmap,
 		io->base_uri, &io->subject, &io->predicate,
@@ -302,16 +302,15 @@ _sandbox_io_flush(sandbox_io_t *io)
 			switch(nn_errno())
 			{
 				case EAGAIN:
+					more = true;
 					break;
 				case ETERM:
-					//FIXME _hide(ui);
+					//FIXME done
 					// fall-through
 				default:
 					fprintf(stderr, "nn_send: %s\n", nn_strerror(nn_errno()));
 					break;
 			}
-
-			sent = false;
 		}
 		else
 		{
@@ -321,7 +320,7 @@ _sandbox_io_flush(sandbox_io_t *io)
 		free(ttl);
 	}
 
-	return sent;
+	return more;
 }
 
 static inline bool

@@ -236,15 +236,12 @@ if(BUILD_SANDBOX_QT5)
 endif()
 
 if(BUILD_SANDBOX_EFL)
-	# EFL
-	pkg_search_module(EFL REQUIRED elementary>=1.8) # FIXME already defined
-	include_directories(${EFL_INCLUDE_DIRS})
-
 	add_executable(synthpod.sandbox.efl
 		synthpod_sandbox_efl.c)
 	target_link_libraries(synthpod.sandbox.efl
-		${EFL_LDFLAGS}
+		${ELM_LDFLAGS}
 		synthpod_sandbox_slave.lib)
 	set_target_properties(synthpod.sandbox.efl PROPERTIES OUTPUT_NAME "synthpod_sandbox_efl")
 	install(TARGETS synthpod.sandbox.efl DESTINATION bin)
+	#install(TARGETS synthpod.sandbox.efl DESTINATION ${SYNTHPOD_PLUGIN_IR})
 endif()

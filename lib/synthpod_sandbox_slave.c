@@ -136,9 +136,8 @@ _write_function(LV2UI_Controller controller, uint32_t index,
 {
 	sandbox_slave_t *sb = controller;
 
-	const bool sent = _sandbox_io_send(&sb->io, index, size, protocol, buf);
-	if(!sent)
-		fprintf(stderr, "_sandbox_io_send failed\n");
+	const bool more = _sandbox_io_send(&sb->io, index, size, protocol, buf);
+	(void)more; //TODO
 }
 
 static inline uint32_t
@@ -326,7 +325,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 
 	if(!(sb->lib = dlopen(lilv_node_get_path(ui_path, NULL), RTLD_LAZY)))
 	{
-		fprintf(stderr, "dlopen failed\n");
+		fprintf(stderr, "dlopen failed: %s\n", dlerror());
 		goto fail;
 	}
 
