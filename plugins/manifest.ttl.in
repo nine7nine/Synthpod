@@ -82,7 +82,7 @@ synthpod:keyboard
 	@KX_UI_WRAP@ui:ui synthpod:keyboard_2_kx ;
 	@X11_UI_WRAP@ui:ui synthpod:keyboard_3_x11 ;
 	@EO_UI_WRAP@ui:ui synthpod:keyboard_4_eo ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
+	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:keyboard_1_ui
 	a ui:UI ;
