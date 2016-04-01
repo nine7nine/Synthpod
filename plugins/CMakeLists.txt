@@ -5,6 +5,7 @@ include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/props.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
@@ -23,6 +24,7 @@ add_library(synthpod.lv2 MODULE
 	synthpod_audioxfademono.c
 	synthpod_audioxfadestereo.c
 	synthpod_atom2control.c
+	synthpod_midi2control.c
 	synthpod_control2atom.c
 	synthpod_mixer.c
 	synthpod_anonymizer.c

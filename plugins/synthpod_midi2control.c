@@ -28,8 +28,8 @@
 
 #include <props.h>
 
-#define MAX_SLOTS 16
-#define MAX_NPROPS (4 * MAX_SLOTS)
+#define MAX_SLOTS 8
+#define MAX_NPROPS (5 * MAX_SLOTS)
 
 typedef struct _plughandle_t plughandle_t;
 
@@ -52,13 +52,13 @@ struct _plughandle_t {
 	int32_t cntrl [MAX_SLOTS];
 	int32_t min [MAX_SLOTS];
 	int32_t max [MAX_SLOTS];
+	int32_t raw [MAX_SLOTS];
 
 	LV2_URID learn_urid [MAX_SLOTS];
 	LV2_URID cntrl_urid [MAX_SLOTS];
 	LV2_URID min_urid [MAX_SLOTS];
 	LV2_URID max_urid [MAX_SLOTS];
 
-	uint8_t raw [MAX_SLOTS];
 	float value [MAX_SLOTS];
 	float divider [MAX_SLOTS];
 };
@@ -108,54 +108,6 @@ static const props_def_t stat_learn [MAX_SLOTS] = {
 	},
 	[7] = {
 		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_8",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[8] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_9",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[9] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_10",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[10] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_11",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[11] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_12",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[12] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_13",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[13] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_14",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[14] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_15",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Bool,
-		.mode = PROP_MODE_STATIC
-	},
-	[15] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_learn_16",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Bool,
 		.mode = PROP_MODE_STATIC
@@ -210,54 +162,6 @@ static const props_def_t stat_cntrl [MAX_SLOTS] = {
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
-	},
-	[8] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_9",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[9] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_10",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[10] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_11",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[11] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_12",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[12] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_13",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[13] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_14",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[14] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_15",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[15] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_cntrl_16",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
 	}
 };
 
@@ -306,54 +210,6 @@ static const props_def_t stat_min [MAX_SLOTS] = {
 	},
 	[7] = {
 		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_8",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[8] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_9",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[9] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_10",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[10] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_11",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[11] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_12",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[12] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_13",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[13] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_14",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[14] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_15",
-		.access = LV2_PATCH__writable,
-		.type = LV2_ATOM__Int,
-		.mode = PROP_MODE_STATIC
-	},
-	[15] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_min_16",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
@@ -408,51 +264,54 @@ static const props_def_t stat_max [MAX_SLOTS] = {
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
-	},
-	[8] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_9",
+	}
+};
+
+static const props_def_t stat_raw [MAX_SLOTS] = {
+	[0] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_1",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
 	},
-	[9] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_10",
+	[1] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_2",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
 	},
-	[10] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_11",
+	[2] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_3",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
 	},
-	[11] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_12",
+	[3] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_4",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
 	},
-	[12] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_13",
+	[4] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_5",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
 	},
-	[13] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_14",
+	[5] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_6",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
 	},
-	[14] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_15",
+	[6] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_7",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
 	},
-	[15] = {
-		.property = SYNTHPOD_MIDI2CONTROL_URI"_max_16",
+	[7] = {
+		.property = SYNTHPOD_MIDI2CONTROL_URI"_raw_8",
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Int,
 		.mode = PROP_MODE_STATIC
@@ -479,16 +338,6 @@ _intercept_learn(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		if(handle->ref)
 			handle->ref = props_set(&handle->props, forge, frames, handle->max_urid[i]);
 	}
-}
-
-static void
-_intercept_cntrl(void *data, LV2_Atom_Forge *forge, int64_t frames,
-	props_event_t event, props_impl_t *impl)
-{
-	plughandle_t *handle = data;
-
-	const int i = (int32_t *)impl->value  - handle->cntrl;
-	//TODO
 }
 
 static inline void
@@ -522,6 +371,16 @@ _intercept_max(void *data, LV2_Atom_Forge *forge, int64_t frames,
 
 	const int i = (int32_t *)impl->value  - handle->max;
 	_update_divider(handle, i);
+	_update_value(handle, i);
+}
+
+static void
+_intercept_raw(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	const int i = (int32_t *)impl->value  - handle->raw;
 	_update_value(handle, i);
 }
 
@@ -563,14 +422,16 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		handle->learn_urid[i] = props_register(&handle->props, &stat_learn[i],
 			PROP_EVENT_WRITE, _intercept_learn, &handle->learn[i]);
 		handle->cntrl_urid[i] = props_register(&handle->props, &stat_cntrl[i],
-			PROP_EVENT_WRITE, _intercept_cntrl, &handle->cntrl[i]);
+			PROP_EVENT_NONE, NULL, &handle->cntrl[i]);
 		handle->min_urid[i] = props_register(&handle->props, &stat_min[i],
 			PROP_EVENT_WRITE, _intercept_min, &handle->min[i]);
 		handle->max_urid[i] = props_register(&handle->props, &stat_max[i],
 			PROP_EVENT_WRITE, _intercept_max, &handle->max[i]);
+		LV2_URID raw_urid = props_register(&handle->props, &stat_raw[i],
+			PROP_EVENT_RESTORE, _intercept_raw, &handle->raw[i]);
 
 		if(  !handle->learn_urid[i] || !handle->cntrl_urid[i]
-			|| !handle->min_urid[i] || !handle->max_urid[i])
+			|| !handle->min_urid[i] || !handle->max_urid[i] || !raw_urid)
 			success = false;
 	}
 
@@ -604,13 +465,6 @@ static void
 activate(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
-
-	for(unsigned i=0; i<MAX_SLOTS; i++)
-	{
-		handle->raw[i] = 0;
-		handle->value[i] = 0.f;
-		handle->divider[i] = 1.f;
-	}
 
 	handle->learning = false;
 }

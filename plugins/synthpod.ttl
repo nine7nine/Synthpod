@@ -586,7 +586,6 @@ synthpod:cv2control
 	doap:name "Synthpod CV2Control" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -751,7 +750,6 @@ synthpod:control2cv
 	doap:name "Synthpod Control2CV" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -901,7 +899,7 @@ synthpod:cv2atom
 	doap:name "Synthpod CV2Atom" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1009,7 +1007,7 @@ synthpod:atom2cv
 	doap:name "Synthpod Atom2CV" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1117,7 +1115,7 @@ synthpod:midisplitter
 	doap:name "Synthpod MIDI Splitter" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1284,7 +1282,7 @@ synthpod:atom2event
 	doap:name "Synthpod Atom2Event" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1315,7 +1313,7 @@ synthpod:event2atom
 	doap:name "Synthpod Event2Atom" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1346,7 +1344,6 @@ synthpod:audioxfademono
 	doap:name "Synthpod AudioXFadeMono" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1401,7 +1398,6 @@ synthpod:audioxfadestereo
 	doap:name "Synthpod AudioXFadeStereo" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1491,7 +1487,7 @@ synthpod:atom2control
 	doap:name "Synthpod Atom2Control" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1696,6 +1692,379 @@ synthpod:atom2control
 		pg:group synthpod:group_out ;
 	] .
 
+synthpod:midi2control_learn_1
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 1" .
+synthpod:midi2control_learn_2
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 2" .
+synthpod:midi2control_learn_3
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 3" .
+synthpod:midi2control_learn_4
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 4" .
+synthpod:midi2control_learn_5
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 5" .
+synthpod:midi2control_learn_6
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 6" .
+synthpod:midi2control_learn_7
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 7" .
+synthpod:midi2control_learn_8
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Learn 8" .
+
+synthpod:midi2control_cntrl_1
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 1" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_cntrl_2
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 2" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_cntrl_3
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 3" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_cntrl_4
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 4" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_cntrl_5
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 5" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_cntrl_6
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 6" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_cntrl_7
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 7" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_cntrl_8
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Controller 8" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+
+synthpod:midi2control_min_1
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 1" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_min_2
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 2" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_min_3
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 3" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_min_4
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 4" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_min_5
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 5" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_min_6
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 6" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_min_7
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 7" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_min_8
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Minimum 8" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+
+synthpod:midi2control_max_1
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 1" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_max_2
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 2" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_max_3
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 3" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_max_4
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 4" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_max_5
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 5" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_max_6
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 6" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_max_7
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 7" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+synthpod:midi2control_max_8
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Maximum 8" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+
+# MIDI2Control Plugin
+synthpod:midi2control
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Synthpod MIDI2Control" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:synthpod ;
+	lv2:extensionData state:interface ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
+	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
+
+	lv2:port [
+		# atom_in
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent, patch:Message	;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event In" ;
+		pg:group synthpod:group_in ;
+		lv2:designation lv2:control ;
+	] , [
+		# atom_in
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports patch:Message ;
+		lv2:index 1 ;
+		lv2:symbol "notify" ;
+		lv2:name "Notify" ;
+		pg:group synthpod:group_out ;
+	] , [
+		# output
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "output_1" ;
+		lv2:name "Output 1" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "output_2" ;
+		lv2:name "Output 2" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "output_3" ;
+		lv2:name "Output 3" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "output_4" ;
+		lv2:name "Output 4" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "output_5" ;
+		lv2:name "Output 5" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 7 ;
+		lv2:symbol "output_6" ;
+		lv2:name "Output 6" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 8 ;
+		lv2:symbol "output_7" ;
+		lv2:name "Output 7" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 9 ;
+		lv2:symbol "output_8" ;
+		lv2:name "Output 8" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		pg:group synthpod:group_out ;
+	] ;
+
+	patch:writable
+		synthpod:midi2control_learn_1 ,
+		synthpod:midi2control_learn_2 ,
+		synthpod:midi2control_learn_3 ,
+		synthpod:midi2control_learn_4 ,
+		synthpod:midi2control_learn_5 ,
+		synthpod:midi2control_learn_6 ,
+		synthpod:midi2control_learn_7 ,
+		synthpod:midi2control_learn_8 ,
+
+		synthpod:midi2control_cntrl_1 ,
+		synthpod:midi2control_cntrl_2 ,
+		synthpod:midi2control_cntrl_3 ,
+		synthpod:midi2control_cntrl_4 ,
+		synthpod:midi2control_cntrl_5 ,
+		synthpod:midi2control_cntrl_6 ,
+		synthpod:midi2control_cntrl_7 ,
+		synthpod:midi2control_cntrl_7 ,
+		synthpod:midi2control_cntrl_8 ,
+
+		synthpod:midi2control_min_1 ,
+		synthpod:midi2control_min_2 ,
+		synthpod:midi2control_min_3 ,
+		synthpod:midi2control_min_4 ,
+		synthpod:midi2control_min_5 ,
+		synthpod:midi2control_min_6 ,
+		synthpod:midi2control_min_7 ,
+		synthpod:midi2control_min_7 ,
+		synthpod:midi2control_min_8 ,
+
+		synthpod:midi2control_max_1 ,
+		synthpod:midi2control_max_2 ,
+		synthpod:midi2control_max_3 ,
+		synthpod:midi2control_max_4 ,
+		synthpod:midi2control_max_5 ,
+		synthpod:midi2control_max_6 ,
+		synthpod:midi2control_max_7 ,
+		synthpod:midi2control_max_7 ,
+		synthpod:midi2control_max_8 ;
+
+	state:state [
+		synthpod:midi2control_learn_1 false ;
+		synthpod:midi2control_learn_2 false ;
+		synthpod:midi2control_learn_3 false ;
+		synthpod:midi2control_learn_4 false ;
+		synthpod:midi2control_learn_5 false ;
+		synthpod:midi2control_learn_6 false ;
+		synthpod:midi2control_learn_7 false ;
+		synthpod:midi2control_learn_8 false ;
+
+		synthpod:midi2control_cntrl_1 0 ;
+		synthpod:midi2control_cntrl_2 0 ;
+		synthpod:midi2control_cntrl_3 0 ;
+		synthpod:midi2control_cntrl_4 0 ;
+		synthpod:midi2control_cntrl_5 0 ;
+		synthpod:midi2control_cntrl_6 0 ;
+		synthpod:midi2control_cntrl_7 0 ;
+		synthpod:midi2control_cntrl_8 0 ;
+
+		synthpod:midi2control_min_1 0 ;
+		synthpod:midi2control_min_2 0 ;
+		synthpod:midi2control_min_3 0 ;
+		synthpod:midi2control_min_4 0 ;
+		synthpod:midi2control_min_5 0 ;
+		synthpod:midi2control_min_6 0 ;
+		synthpod:midi2control_min_7 0 ;
+		synthpod:midi2control_min_8 0 ;
+
+		synthpod:midi2control_max_1 127 ;
+		synthpod:midi2control_max_2 127 ;
+		synthpod:midi2control_max_3 127 ;
+		synthpod:midi2control_max_4 127 ;
+		synthpod:midi2control_max_5 127 ;
+		synthpod:midi2control_max_6 127 ;
+		synthpod:midi2control_max_7 127 ;
+		synthpod:midi2control_max_8 127 ;
+	] .
+
 # Control2Atom Plugin
 synthpod:control2atom
 	a lv2:Plugin ,
@@ -1703,7 +2072,7 @@ synthpod:control2atom
 	doap:name "Synthpod Control2Atom" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
+	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [
@@ -1867,7 +2236,6 @@ synthpod:mixer
 	doap:name "Synthpod Mixer" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable ;
 
 	lv2:port [

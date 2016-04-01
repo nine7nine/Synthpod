@@ -53,6 +53,7 @@ extern xpress_map_t voice_map_fallback;
 #define SYNTHPOD_AUDIOXFADEMONO_URI		SYNTHPOD_URI"#audioxfademono"
 #define SYNTHPOD_AUDIOXFADESTEREO_URI	SYNTHPOD_URI"#audioxfadestereo"
 #define SYNTHPOD_ATOM2CONTROL_URI			SYNTHPOD_URI"#atom2control"
+#define SYNTHPOD_MIDI2CONTROL_URI			SYNTHPOD_URI"#midi2control"
 #define SYNTHPOD_CONTROL2ATOM_URI			SYNTHPOD_URI"#control2atom"
 #define SYNTHPOD_MIXER_URI						SYNTHPOD_URI"#mixer"
 #define SYNTHPOD_MONOATOM_URI					SYNTHPOD_URI"#monoatom"
@@ -70,6 +71,7 @@ extern const LV2_Descriptor synthpod_event2atom;
 extern const LV2_Descriptor synthpod_audioxfademono;
 extern const LV2_Descriptor synthpod_audioxfadestereo;
 extern const LV2_Descriptor synthpod_atom2control;
+extern const LV2_Descriptor synthpod_midi2control;
 extern const LV2_Descriptor synthpod_control2atom;
 extern const LV2_Descriptor synthpod_mixer;
 extern const LV2_Descriptor synthpod_monoatom;

@@ -76,6 +76,8 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_event2atom;
 		case 15:
 			return &synthpod_midisplitter;
+		case 16:
+			return &synthpod_midi2control;
 		default:
 			return NULL;
 	}
