@@ -19,7 +19,6 @@
 @prefix foaf:	<http://xmlns.com/foaf/0.1/> .
 @prefix doap:	<http://usefulinc.com/ns/doap#> .
 @prefix lv2:	<http://lv2plug.in/ns/lv2core#> .
-@prefix ui:		<http://lv2plug.in/ns/extensions/ui#> .
 @prefix units: <http://lv2plug.in/ns/extensions/units#> .
 @prefix atom:	<http://lv2plug.in/ns/ext/atom#> .
 @prefix ev:	<http://lv2plug.in/ns/ext/event#> .
@@ -90,67 +89,6 @@ synthpod:group_out
 		pg:StereoGroup ;
 	lv2:name "Output" ;
 	lv2:symbol "out" .
-
-# Common UIs
-synthpod:common_1_ui
-	a ui:UI ;
-	ui:portNotification [
-		ui:plugin synthpod:stereo ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	lv2:optionalFeature zwrite:schedule, log:log ;
-	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
-  lv2:extensionData ui:idleInterface, ui:showInterface .
-synthpod:common_2_kx
-	a kx:Widget ;
-	ui:portNotification [
-		ui:plugin synthpod:stereo ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	lv2:optionalFeature zwrite:schedule, log:log ;
-	lv2:requiredFeature kx:Host, ui:portMap, urid:map .
-synthpod:common_3_x11
-	a ui:X11UI ;
-	ui:portNotification [
-		ui:plugin synthpod:stereo ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	lv2:optionalFeature ui:resize, zwrite:schedule, log:log ;
-	lv2:requiredFeature ui:idleInterface, ui:portMap, urid:map ;
-  lv2:extensionData ui:idleInterface, ui:resize .
-synthpod:common_4_eo
-	a ui:EoUI ;
-	ui:portNotification [
-		ui:plugin synthpod:stereo ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	lv2:extensionData ui:resize ;
-	lv2:optionalFeature zwrite:schedule, ui:resize, log:log ;
-	lv2:requiredFeature ui:portMap, urid:map .
 
 # Stereo Plugin
 synthpod:stereo
@@ -375,25 +313,6 @@ synthpod:monoatom
 		lv2:name "Notify" ;
 		rsz:minimumSize 65536;
 	] .
-
-# Keybaord UIs
-synthpod:keyboard_1_ui
-	a ui:UI ;
-	lv2:requiredFeature ui:idleInterface, urid:map ;
-  lv2:extensionData ui:idleInterface, ui:showInterface .
-synthpod:keyboard_2_kx
-	a kx:Widget ;
-	lv2:requiredFeature kx:Host, urid:map .
-synthpod:keyboard_3_x11
-	a ui:X11UI ;
-	lv2:requiredFeature ui:idleInterface, urid:map ;
-	lv2:optionalFeature ui:resize ;
-  lv2:extensionData ui:idleInterface, ui:resize .
-synthpod:keyboard_4_eo
-	a ui:EoUI ;
-	lv2:extensionData ui:resize ;
-	lv2:optionalFeature ui:resize ;
-	lv2:requiredFeature urid:map .
 
 # Keyboard Plugin
 synthpod:keyboard

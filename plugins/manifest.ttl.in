@@ -58,19 +58,19 @@ synthpod:monoatom
 synthpod:common_1_ui
 	a ui:UI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:common_2_kx
 	a kx:Widget ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:common_3_x11
 	a ui:X11UI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:common_4_eo
 	a ui:EoUI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # Synthpod Keyboard
 synthpod:keyboard
@@ -82,24 +82,24 @@ synthpod:keyboard
 	@KX_UI_WRAP@ui:ui synthpod:keyboard_2_kx ;
 	@X11_UI_WRAP@ui:ui synthpod:keyboard_3_x11 ;
 	@EO_UI_WRAP@ui:ui synthpod:keyboard_4_eo ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 
 synthpod:keyboard_1_ui
 	a ui:UI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:keyboard_2_kx
 	a kx:Widget ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:keyboard_3_x11
 	a ui:X11UI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:keyboard_4_eo
 	a ui:EoUI ;
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
+	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # CV2Control
 synthpod:cv2control
