@@ -260,9 +260,11 @@ struct _port_t {
 
 	float last;
 
-	float min;
 	float dflt;
+	float min;
 	float max;
+	float range;
+	float range_1;
 
 	// system_port iface
 	struct {
@@ -1029,6 +1031,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 			tar->dflt = dflt_node ? lilv_node_as_float(dflt_node) : 0.f;
 			tar->min = min_node ? lilv_node_as_float(min_node) : 0.f;
 			tar->max = max_node ? lilv_node_as_float(max_node) : 1.f;
+			tar->range = tar->max - tar->min;
+			tar->range_1 = 1.f / tar->range;
 			lilv_node_free(dflt_node);
 			lilv_node_free(min_node);
 			lilv_node_free(max_node);
@@ -3502,13 +3506,29 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 
 // rt
 static inline void
-_port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+_port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	//FIXME simplex needs spin_lock, too
 	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
 
-	float *val = PORT_BASE_ALIGNED(port);
-	*val = 0; // init
+	float *dst = PORT_BASE_ALIGNED(port);
+
+	port_t *src_port = port->sources[0].port;
+
+	// normalize
+	const float norm = (*dst - src_port->min) * src_port->range_1;
+	*dst = port->min + norm * port->range; //TODO handle exponential ranges
+
+	_sp_app_port_spin_unlock(port);
+}
+
+// rt
+static inline void
+_port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
+
+	float *dst = PORT_BASE_ALIGNED(port);
+	*dst = 0; // init
 
 	for(int s=0; s<port->num_sources; s++)
 	{
@@ -3517,7 +3537,10 @@ _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		_sp_app_port_spin_lock(src_port); // concurrent acess from worker and rt threads
 
 		const float *src = PORT_BASE_ALIGNED(src_port);
-		*val += *src;
+
+		// normalize
+		const float norm = (*src - src_port->min) * src_port->range_1;
+		*dst += port->min + norm * port->range; //TODO handle exponential ranges
 
 		_sp_app_port_spin_unlock(src_port);
 	}
@@ -3839,7 +3862,7 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 static const port_driver_t control_port_driver = {
-	.simplex = NULL,
+	.simplex = _port_control_simplex,
 	.multiplex = _port_control_multiplex,
 	.transfer = _port_float_protocol_update,
 	.sparse_update = true
