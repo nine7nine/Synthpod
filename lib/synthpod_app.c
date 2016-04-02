@@ -326,6 +326,9 @@ struct _sp_app_t {
 
 	Sratom *sratom;
 	app_prof_t prof;
+
+	int32_t ncols;
+	int32_t nrows;
 };
 
 struct _from_ui_t {
@@ -333,7 +336,7 @@ struct _from_ui_t {
 	from_ui_cb_t cb;
 };
 
-#define FROM_UI_NUM 19
+#define FROM_UI_NUM 21
 static from_ui_t from_uis [FROM_UI_NUM];
 
 static const port_driver_t control_port_driver;
@@ -2279,6 +2282,60 @@ _sp_app_from_ui_bundle_save(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
+static bool
+_sp_app_from_ui_grid_cols(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_grid_cols_t *grid = (const transmit_grid_cols_t *)atom;
+
+	if(grid->cols.body == -1)
+	{
+		// signal ui
+		const size_t size = sizeof(transmit_grid_cols_t);
+		transmit_grid_cols_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
+		{
+			_sp_transmit_grid_cols_fill(&app->regs, &app->forge, trans, size,
+				app->ncols);	
+			_sp_app_to_ui_advance(app, size);
+		}
+	}
+	else if(grid->cols.body > 0)
+	{
+		app->ncols = grid->cols.body;
+	}
+
+	return advance_ui[app->block_state];
+}
+
+static bool
+_sp_app_from_ui_grid_rows(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_grid_rows_t *grid = (const transmit_grid_rows_t *)atom;
+
+	if(grid->rows.body == -1)
+	{
+		// signal ui
+		const size_t size = sizeof(transmit_grid_rows_t);
+		transmit_grid_rows_t *trans = _sp_app_to_ui_request(app, size);
+		if(trans)
+		{
+			_sp_transmit_grid_rows_fill(&app->regs, &app->forge, trans, size,
+				app->nrows);	
+			_sp_app_to_ui_advance(app, size);
+		}
+	}
+	else if(grid->rows.body > 0)
+	{
+		app->nrows = grid->rows.body;
+	}
+
+	return advance_ui[app->block_state];
+}
+
 // rt
 bool
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
@@ -2612,6 +2669,12 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		from_uis[ptr].protocol = app->regs.synthpod.bundle_save.urid;
 		from_uis[ptr++].cb = _sp_app_from_ui_bundle_save;
 
+		from_uis[ptr].protocol = app->regs.synthpod.grid_cols.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_grid_cols;
+
+		from_uis[ptr].protocol = app->regs.synthpod.grid_rows.urid;
+		from_uis[ptr++].cb = _sp_app_from_ui_grid_rows;
+
 		assert(ptr == FROM_UI_NUM);
 		// sort according to URID
 		qsort(from_uis, FROM_UI_NUM, sizeof(from_ui_t), _from_ui_cmp);
@@ -2665,6 +2728,10 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	app->prof.max = 0;
 	app->prof.sum = 0;
 	app->prof.count = 0;
+
+	// initialize grid dimensions
+	app->ncols = 3;
+	app->nrows = 2;
 	
 	return app;
 }
@@ -4307,6 +4374,16 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		}
 	}
 
+	// store grid cols
+	store(hndl, app->regs.synthpod.grid_cols.urid,
+		&app->ncols, sizeof(int32_t), app->forge.Int,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+	// store grid rows
+	store(hndl, app->regs.synthpod.grid_rows.urid,
+		&app->nrows, sizeof(int32_t), app->forge.Int,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
 	// create temporary forge
 	LV2_Atom_Forge _forge;
 	LV2_Atom_Forge *forge = &_forge;
@@ -4483,6 +4560,19 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	uint32_t _flags;
 	uint32_t type;
 
+	// retrieve grid cols
+	const int32_t *grid_cols = retrieve(hndl, app->regs.synthpod.grid_cols.urid,
+		&size, &type, &_flags);
+	if(grid_cols)
+		app->ncols = *grid_cols;
+
+	// retrieve grid rows
+	const int32_t *grid_rows = retrieve(hndl, app->regs.synthpod.grid_rows.urid,
+		&size, &type, &_flags);
+	if(grid_rows)
+		app->nrows = *grid_rows;
+
+	// retrieve graph
 	const LV2_Atom_Tuple *graph_body = retrieve(hndl, app->regs.synthpod.graph.urid,
 		&size, &type, &_flags);
 	

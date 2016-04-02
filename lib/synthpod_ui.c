@@ -336,6 +336,8 @@ struct _sp_ui_t {
 	Evas_Object *mainmenu;
 	Evas_Object *uimenu;
 	Evas_Object *statusline;
+	Evas_Object *spin_cols;
+	Evas_Object *spin_rows;
 	Evas_Object *fileselector;
 
 	int colors_max;
@@ -536,7 +538,7 @@ _midi_controller_lookup(float value)
 	return stat_str;
 }
 
-#define FROM_APP_NUM 18
+#define FROM_APP_NUM 20
 static from_app_t from_apps [FROM_APP_NUM];
 
 static int
@@ -6068,12 +6070,37 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 static void
 _modlist_refresh(sp_ui_t *ui)
 {
-	size_t size = sizeof(transmit_module_list_t);
-	transmit_module_list_t *trans = _sp_ui_to_app_request(ui, size);
-	if(trans)
+	// request module list
 	{
-		_sp_transmit_module_list_fill(&ui->regs, &ui->forge, trans, size);
-		_sp_ui_to_app_advance(ui, size);
+		const size_t size = sizeof(transmit_module_list_t);
+		transmit_module_list_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_module_list_fill(&ui->regs, &ui->forge, trans, size);
+			_sp_ui_to_app_advance(ui, size);
+		}
+	}
+
+	// request grid cols
+	{
+		const size_t size = sizeof(transmit_grid_cols_t);
+		transmit_grid_cols_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_grid_cols_fill(&ui->regs, &ui->forge, trans, size, -1);
+			_sp_ui_to_app_advance(ui, size);
+		}
+	}
+
+	// request grid rows
+	{
+		const size_t size = sizeof(transmit_grid_rows_t);
+		transmit_grid_rows_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_grid_rows_fill(&ui->regs, &ui->forge, trans, size, -1);
+			_sp_ui_to_app_advance(ui, size);
+		}
 	}
 }
 
@@ -7256,6 +7283,15 @@ _columns_changed(void *data, Evas_Object *obj, void *event_info)
 
 	ui->ncols = elm_spinner_value_get(obj);
 	_modgrid_item_size_update(ui);
+
+	// notify app
+	const size_t size = sizeof(transmit_grid_cols_t);
+	transmit_grid_cols_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_grid_cols_fill(&ui->regs, &ui->forge, trans, size, ui->ncols);
+		_sp_ui_to_app_advance(ui, size);
+	}
 }
 
 static void
@@ -7264,6 +7300,39 @@ _rows_changed(void *data, Evas_Object *obj, void *event_info)
 	sp_ui_t *ui = data;
 
 	ui->nrows = elm_spinner_value_get(obj);
+	_modgrid_item_size_update(ui);
+
+	// notify app
+	const size_t size = sizeof(transmit_grid_rows_t);
+	transmit_grid_rows_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_grid_rows_fill(&ui->regs, &ui->forge, trans, size, ui->nrows);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static void
+_sp_ui_from_app_grid_cols(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_grid_cols_t *trans = (const transmit_grid_cols_t *)atom;
+
+	ui->ncols = trans->cols.body;
+	elm_spinner_value_set(ui->spin_cols, ui->ncols);
+	_modgrid_item_size_update(ui);
+}
+
+static void
+_sp_ui_from_app_grid_rows(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_grid_rows_t *trans = (const transmit_grid_rows_t *)atom;
+
+	ui->nrows = trans->rows.body;
+	elm_spinner_value_set(ui->spin_rows, ui->nrows);
 	_modgrid_item_size_update(ui);
 }
 
@@ -7723,34 +7792,34 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 					elm_box_pack_end(hbox, ui->statusline);
 				} // statusline
 
-				Evas_Object *spin = elm_spinner_add(hbox);
-				if(spin)
+				ui->spin_cols = elm_spinner_add(hbox);
+				if(ui->spin_cols)
 				{
-					elm_spinner_min_max_set(spin, 1, 8);
-					elm_spinner_value_set(spin, ui->ncols);
-					elm_spinner_step_set(spin, 1);
-					elm_spinner_wrap_set(spin, EINA_FALSE);
-					elm_spinner_label_format_set(spin, "%0.f col");
-					evas_object_size_hint_weight_set(spin, 0.f, EVAS_HINT_EXPAND);
-					evas_object_size_hint_align_set(spin, 0.f, EVAS_HINT_FILL);
-					evas_object_smart_callback_add(spin, "changed", _columns_changed, ui);
-					evas_object_show(spin);
-					elm_box_pack_end(hbox, spin);
+					elm_spinner_min_max_set(ui->spin_cols, 1, 8);
+					elm_spinner_value_set(ui->spin_cols, ui->ncols);
+					elm_spinner_step_set(ui->spin_cols, 1);
+					elm_spinner_wrap_set(ui->spin_cols, EINA_FALSE);
+					elm_spinner_label_format_set(ui->spin_cols, "%0.f col");
+					evas_object_size_hint_weight_set(ui->spin_cols, 0.f, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(ui->spin_cols, 0.f, EVAS_HINT_FILL);
+					evas_object_smart_callback_add(ui->spin_cols, "changed", _columns_changed, ui);
+					evas_object_show(ui->spin_cols);
+					elm_box_pack_end(hbox, ui->spin_cols);
 				}
 
-				spin = elm_spinner_add(hbox);
-				if(spin)
+				ui->spin_rows = elm_spinner_add(hbox);
+				if(ui->spin_rows)
 				{
-					elm_spinner_min_max_set(spin, 1, 4);
-					elm_spinner_value_set(spin, ui->nrows);
-					elm_spinner_step_set(spin, 1);
-					elm_spinner_wrap_set(spin, EINA_FALSE);
-					elm_spinner_label_format_set(spin, "%0.f row");
-					evas_object_size_hint_weight_set(spin, 0.f, EVAS_HINT_EXPAND);
-					evas_object_size_hint_align_set(spin, 0.f, EVAS_HINT_FILL);
-					evas_object_smart_callback_add(spin, "changed", _rows_changed, ui);
-					evas_object_show(spin);
-					elm_box_pack_end(hbox, spin);
+					elm_spinner_min_max_set(ui->spin_rows, 1, 4);
+					elm_spinner_value_set(ui->spin_rows, ui->nrows);
+					elm_spinner_step_set(ui->spin_rows, 1);
+					elm_spinner_wrap_set(ui->spin_rows, EINA_FALSE);
+					elm_spinner_label_format_set(ui->spin_rows, "%0.f row");
+					evas_object_size_hint_weight_set(ui->spin_rows, 0.f, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(ui->spin_rows, 0.f, EVAS_HINT_FILL);
+					evas_object_smart_callback_add(ui->spin_rows, "changed", _rows_changed, ui);
+					evas_object_show(ui->spin_rows);
+					elm_box_pack_end(hbox, ui->spin_rows);
 				}
 			}
 		} // theme
@@ -7819,6 +7888,12 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 		from_apps[ptr].protocol = ui->regs.synthpod.dsp_profiling.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_dsp_profiling;
+
+		from_apps[ptr].protocol = ui->regs.synthpod.grid_cols.urid;
+		from_apps[ptr++].cb = _sp_ui_from_app_grid_cols;
+
+		from_apps[ptr].protocol = ui->regs.synthpod.grid_rows.urid;
+		from_apps[ptr++].cb = _sp_ui_from_app_grid_rows;
 
 		assert(ptr == FROM_APP_NUM);
 		// sort according to URID
