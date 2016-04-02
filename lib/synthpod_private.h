@@ -251,6 +251,7 @@ struct _reg_t {
 		reg_item_t add;
 		reg_item_t remove;
 		reg_item_t put;
+		reg_item_t destination;
 	} patch;
 
 	struct {
@@ -338,8 +339,6 @@ struct _reg_t {
 		reg_item_t midi_port;
 		reg_item_t osc_port;
 		reg_item_t com_port;
-
-		reg_item_t feedback_block;
 	} synthpod;
 };
 
@@ -482,6 +481,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.add, world, map, LV2_PATCH__add);
 	_register(&regs->patch.remove, world, map, LV2_PATCH__remove);
 	_register(&regs->patch.put, world, map, LV2_PATCH__Put);
+	_register(&regs->patch.destination, world, map, LV2_PATCH__destination);
 
 	_register(&regs->xpress.message, world, map, "http://open-music-kontrollers.ch/lv2/xpress#Message");
 
@@ -555,8 +555,6 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.midi_port, world, map, SYNTHPOD_PREFIX"MIDIPort");
 	_register(&regs->synthpod.osc_port, world, map, SYNTHPOD_PREFIX"OSCPort");
 	_register(&regs->synthpod.com_port, world, map, SYNTHPOD_PREFIX"ComPort");
-
-	_register(&regs->synthpod.feedback_block, world, map, SYNTHPOD_PREFIX"feedbackBlock");
 }
 
 static inline void
@@ -671,6 +669,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.add);
 	_unregister(&regs->patch.remove);
 	_unregister(&regs->patch.put);
+	_unregister(&regs->patch.destination);
 
 	_unregister(&regs->xpress.message);
 
@@ -744,8 +743,6 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.midi_port);
 	_unregister(&regs->synthpod.osc_port);
 	_unregister(&regs->synthpod.com_port);
-
-	_unregister(&regs->synthpod.feedback_block);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))
@@ -935,6 +932,8 @@ struct _transfer_patch_set_obj_t {
 	LV2_URID subj_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
 	LV2_URID prop_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body dest _ATOM_ALIGNED;
+	LV2_URID dest_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body val _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
@@ -945,6 +944,8 @@ struct _transfer_patch_get_t {
 	LV2_URID subj_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
 	LV2_URID prop_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body dest _ATOM_ALIGNED;
+	LV2_URID dest_val _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transfer_patch_get_all_t {
@@ -952,6 +953,8 @@ struct _transfer_patch_get_all_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
 	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
 	LV2_URID subj_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body dest _ATOM_ALIGNED;
+	LV2_URID dest_val _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 static inline void
@@ -1459,7 +1462,7 @@ _sp_transfer_patch_set_obj_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	trans->obj.atom.size = obj_size;
 	trans->obj.atom.type = forge->Object;
-	trans->obj.body.id = regs->synthpod.feedback_block.urid; // prevent feedback from app FIXME better use that globally on _sp_transfer_fill
+	trans->obj.body.id =  0;
 	trans->obj.body.otype = regs->patch.set.urid;
 
 	trans->subj.key = regs->patch.subject.urid;
@@ -1475,6 +1478,13 @@ _sp_transfer_patch_set_obj_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->prop.value.type = forge->URID;
 
 	trans->prop_val = property;
+
+	trans->dest.key = regs->patch.destination.urid;
+	trans->dest.context = 0;
+	trans->dest.value.size = sizeof(LV2_URID);
+	trans->dest.value.type = forge->URID;
+
+	trans->dest_val = regs->core.plugin.urid;
 
 	trans->val.key = regs->patch.value.urid;
 	trans->val.context = 0;
@@ -1501,7 +1511,7 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	trans->obj.atom.size = obj_size;
 	trans->obj.atom.type = forge->Object;
-	trans->obj.body.id = regs->synthpod.feedback_block.urid; // prevent feedback from app
+	trans->obj.body.id =  0;
 	trans->obj.body.otype = regs->patch.get.urid;
 
 	trans->subj.key = regs->patch.subject.urid;
@@ -1517,6 +1527,13 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->prop.value.type = forge->URID;
 
 	trans->prop_val = property;
+
+	trans->dest.key = regs->patch.destination.urid;
+	trans->dest.context = 0;
+	trans->dest.value.size = sizeof(LV2_URID);
+	trans->dest.value.type = forge->URID;
+
+	trans->dest_val = regs->core.plugin.urid;
 }
 
 static inline void
@@ -1535,7 +1552,7 @@ _sp_transfer_patch_get_all_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	trans->obj.atom.size = obj_size;
 	trans->obj.atom.type = forge->Object;
-	trans->obj.body.id = regs->synthpod.feedback_block.urid; // prevent feedback from app
+	trans->obj.body.id = 0;
 	trans->obj.body.otype = regs->patch.get.urid;
 
 	trans->subj.key = regs->patch.subject.urid;
@@ -1544,6 +1561,13 @@ _sp_transfer_patch_get_all_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->subj.value.type = forge->URID;
 
 	trans->subj_val = subject;
+
+	trans->dest.key = regs->patch.destination.urid;
+	trans->dest.context = 0;
+	trans->dest.value.size = sizeof(LV2_URID);
+	trans->dest.value.type = forge->URID;
+
+	trans->dest_val = regs->core.plugin.urid;
 }
 
 // non-rt

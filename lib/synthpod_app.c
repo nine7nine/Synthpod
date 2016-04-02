@@ -3841,20 +3841,27 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 		{
 			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 
-			if(  lv2_atom_forge_is_object_type(&app->forge, obj->atom.type)
-				&& (obj->body.id != app->regs.synthpod.feedback_block.urid) // don't feedback patch messages from UI itself!
-				&& ( (obj->body.otype == app->regs.patch.set.urid)
+			if(lv2_atom_forge_is_object_type(&app->forge, obj->atom.type))
+			{ 
+				const LV2_Atom_URID *destination = NULL;
+				lv2_atom_object_get(obj, app->regs.patch.destination.urid, &destination, NULL);
+				if(destination && (destination->atom.type == app->forge.URID)
+						&& (destination->body == app->regs.core.plugin.urid) )
+					continue; // ignore feedback messages
+
+				if(  (obj->body.otype == app->regs.patch.set.urid)
 					|| (obj->body.otype == app->regs.patch.put.urid)
-					|| (obj->body.otype == app->regs.patch.patch.urid) ) ) //TODO support more patch messages
-			{
-				const uint32_t atom_size = sizeof(LV2_Atom) + obj->atom.size;
-				const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
-				transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-				if(trans)
+					|| (obj->body.otype == app->regs.patch.patch.urid) ) //TODO support more patch messages
 				{
-					_sp_transfer_event_fill(&app->regs, &app->forge, trans,
-						port->mod->uid, port->index, atom_size, &obj->atom);
-					_sp_app_to_ui_advance(app, size);
+					const uint32_t atom_size = sizeof(LV2_Atom) + obj->atom.size;
+					const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
+					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
+					if(trans)
+					{
+						_sp_transfer_event_fill(&app->regs, &app->forge, trans,
+							port->mod->uid, port->index, atom_size, &obj->atom);
+						_sp_app_to_ui_advance(app, size);
+					}
 				}
 			}
 		}

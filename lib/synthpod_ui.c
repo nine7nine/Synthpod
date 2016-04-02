@@ -966,9 +966,14 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	{
 		const LV2_Atom_Object *obj = buf;
 
-		if(  lv2_atom_forge_is_object_type(&ui->forge, obj->atom.type)
-			&& (obj->body.id != ui->regs.synthpod.feedback_block.urid) ) // dont' feedback patch messages from UI itself!
+		if(lv2_atom_forge_is_object_type(&ui->forge, obj->atom.type))
 		{
+			const LV2_Atom_URID *destination = NULL;
+			lv2_atom_object_get(obj, ui->regs.patch.destination.urid, &destination, NULL);
+			if(destination && (destination->atom.type == ui->forge.URID)
+					&& (destination->body == ui->regs.core.plugin.urid) )
+				return; // ignore feedback messages
+
 			// check for patch:Set
 			if(obj->body.otype == ui->regs.patch.set.urid)
 			{
@@ -1642,14 +1647,14 @@ _ui_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 }
 
 static void
-_ext_ui_write_function(LV2UI_Controller controller, uint32_t port,
+_ext_ui_write_function(LV2UI_Controller controller, uint32_t index,
 	uint32_t size, uint32_t protocol, const void *buffer)
 {
 	mod_t *mod = controller;
 	sp_ui_t *ui = mod->ui;
 
 	// to StdUI
-	_std_port_event(controller, port, size, protocol, buffer);
+	_std_port_event(controller, index, size, protocol, buffer);
 
 	// to rt-thread
 	const LV2_Atom_Object *obj = buffer;
@@ -1658,19 +1663,38 @@ _ext_ui_write_function(LV2UI_Controller controller, uint32_t port,
 			|| (obj->body.otype == ui->regs.patch.put.urid)
 			|| (obj->body.otype == ui->regs.patch.patch.urid) ) ) //TODO support more patch messages
 	{
-		// set feedback block flag on object id
-		// TODO can we do this without a malloc?
-		LV2_Atom_Object *clone = malloc(size);
-		if(clone)
+		assert(lv2_atom_pad_size(size) == size);
+	
+		// as we need to append a property to the object, we use
+		// _sp_ui_to_app_request/advance directly here,
+		// instead of indirectly via _ui_write_function
+
+		// append patch:destination for feedback message handling
+		const size_t nsize = size + 24;
+		const size_t len = sizeof(transfer_atom_t) + nsize;
+		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
+		if(trans)
 		{
-			memcpy(clone, obj, size);
-			clone->body.id = ui->regs.synthpod.feedback_block.urid;
-			_ui_write_function(controller, port, size, protocol, clone);
-			free(clone);
+			LV2_Atom_Object *clone= (LV2_Atom_Object *)_sp_transfer_event_fill(
+				&ui->regs, &ui->forge, trans, mod->uid, index, nsize, NULL);
+
+			memcpy(clone, obj, size); // clone original atom patch message
+			clone->atom.size += 24; // increase atom object size
+
+			// now fill destination property
+			LV2_Atom_Property_Body *prop = (void *)clone + size;
+			prop->key = ui->regs.patch.destination.urid;
+			prop->context = 0;
+			prop->value.size = sizeof(LV2_URID);
+			prop->value.type = ui->forge.URID;
+			LV2_URID *prop_val = LV2_ATOM_BODY(&prop->value);
+			*prop_val = ui->regs.core.plugin.urid;
+
+			_sp_ui_to_app_advance(ui, len); // finalize
 		}
 	}
 	else // no feedback block flag needed
-		_ui_write_function(controller, port, size, protocol, buffer);
+		_ui_write_function(controller, index, size, protocol, buffer);
 }
 
 static void
