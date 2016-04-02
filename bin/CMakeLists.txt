@@ -157,7 +157,7 @@ endif()
 
 if(BUILD_SANDBOX_X11)
 # XCB
-	pkg_search_module(XCB REQUIRED xcb>=1.11)
+	pkg_search_module(XCB REQUIRED xcb>=1.10)
 	include_directories(${XCB_INCLUDE_DIRS})
 
 	add_executable(synthpod.sandbox.x11
