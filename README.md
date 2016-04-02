@@ -27,6 +27,7 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 ### Optional dependencies for plugin UIs
 
+* [nanomsg](http://nanomsg.org/) (socket library)
 * [libxcb](https://xcb.freedesktop.org/) (X protocol C-language Binding)
 * [Gtk2](http://www.gtk.org/) (cross-platform UI toolkit)
 * [Gtk3](http://www.gtk.org/) (cross-platform UI toolkit)
