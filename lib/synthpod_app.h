@@ -161,9 +161,6 @@ SYNTHPOD_SYMBOL_EXTERN int
 sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples);
 
 SYNTHPOD_SYMBOL_EXTERN int
-sp_app_com_event(sp_app_t *app, LV2_URID id); 
-
-SYNTHPOD_SYMBOL_EXTERN int
-sp_app_transfer_event(sp_app_t *app, LV2_URID id); 
+sp_app_com_event(sp_app_t *app, LV2_URID otype); 
 
 #endif // _SYNTHPOD_APP_H

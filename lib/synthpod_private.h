@@ -304,8 +304,6 @@ struct _reg_t {
 	} state;
 
 	struct {
-		reg_item_t com_event;
-		reg_item_t transfer_event;
 		reg_item_t payload;
 		reg_item_t state;
 		reg_item_t graph;
@@ -521,8 +519,6 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->state.state, world, map, LV2_STATE__state);
 	_register(&regs->state.load_default_state, world, map, LV2_STATE__loadDefaultState);
 
-	_register(&regs->synthpod.com_event, world, map, SYNTHPOD_PREFIX"comEvent");
-	_register(&regs->synthpod.transfer_event, world, map, SYNTHPOD_PREFIX"transferEvent");
 	_register(&regs->synthpod.payload, world, map, SYNTHPOD_PREFIX"payload");
 	_register_string(&regs->synthpod.state, world, map, "state.ttl");
 	_register(&regs->synthpod.graph, world, map, SYNTHPOD_PREFIX"graph");
@@ -709,8 +705,6 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->state.state);
 	_unregister(&regs->state.load_default_state);
 
-	_unregister(&regs->synthpod.com_event);
-	_unregister(&regs->synthpod.transfer_event);
 	_unregister(&regs->synthpod.payload);
 	_unregister(&regs->synthpod.state);
 	_unregister(&regs->synthpod.graph);
@@ -959,13 +953,13 @@ struct _transfer_patch_get_all_t {
 
 static inline void
 _sp_transmit_fill(reg_t *regs, LV2_Atom_Forge *forge, transmit_t *trans, uint32_t size,
-	LV2_URID event, LV2_URID protocol)
+	LV2_URID protocol)
 {
 	trans = ASSUME_ALIGNED(trans);
 
 	trans->obj.atom.size = size - sizeof(LV2_Atom);
 	trans->obj.atom.type = forge->Object;
-	trans->obj.body.id = event;
+	trans->obj.body.id = 0;
 	trans->obj.body.otype = protocol;
 
 	trans->prop.key = regs->synthpod.payload.urid;
@@ -981,7 +975,7 @@ _sp_transmit_module_list_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size, 
-		regs->synthpod.com_event.urid, regs->synthpod.module_list.urid);
+		regs->synthpod.module_list.urid);
 }
 
 typedef const void *(*data_access_t)(const char * uri);
@@ -994,7 +988,7 @@ _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_add.urid);
+		regs->synthpod.module_add.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1017,7 +1011,7 @@ _sp_transmit_module_del_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_del.urid);
+		regs->synthpod.module_del.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1031,7 +1025,7 @@ _sp_transmit_module_move_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_move.urid);
+		regs->synthpod.module_move.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1049,7 +1043,7 @@ _sp_transmit_module_preset_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_preset_load.urid);
+		regs->synthpod.module_preset_load.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1071,7 +1065,7 @@ _sp_transmit_module_preset_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_preset_save.urid);
+		regs->synthpod.module_preset_save.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1093,7 +1087,7 @@ _sp_transmit_module_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_selected.urid);
+		regs->synthpod.module_selected.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1111,7 +1105,7 @@ _sp_transmit_module_embedded_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_embedded.urid);
+		regs->synthpod.module_embedded.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1130,7 +1124,7 @@ _sp_transmit_module_visible_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_visible.urid);
+		regs->synthpod.module_visible.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1152,7 +1146,7 @@ _sp_transmit_module_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.module_profiling.urid);
+		regs->synthpod.module_profiling.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1171,7 +1165,7 @@ _sp_transmit_port_connected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.port_connected.urid);
+		regs->synthpod.port_connected.urid);
 
 	trans->src_uid.atom.size = sizeof(int32_t);
 	trans->src_uid.atom.type = forge->Int;
@@ -1206,7 +1200,7 @@ _sp_transmit_port_subscribed_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.port_subscribed.urid);
+		regs->synthpod.port_subscribed.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1233,7 +1227,7 @@ _sp_transmit_port_monitored_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.port_monitored.urid);
+		regs->synthpod.port_monitored.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1256,7 +1250,7 @@ _sp_transmit_port_refresh_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.port_refresh.urid);
+		regs->synthpod.port_refresh.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1275,7 +1269,7 @@ _sp_transmit_port_selected_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.port_selected.urid);
+		regs->synthpod.port_selected.urid);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;
@@ -1298,7 +1292,7 @@ _sp_transmit_bundle_load_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.bundle_load.urid);
+		regs->synthpod.bundle_load.urid);
 
 	trans->status.atom.size = sizeof(int32_t);
 	trans->status.atom.type = forge->Int;
@@ -1321,7 +1315,7 @@ _sp_transmit_bundle_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.bundle_save.urid);
+		regs->synthpod.bundle_save.urid);
 
 	trans->status.atom.size = sizeof(int32_t);
 	trans->status.atom.type = forge->Int;
@@ -1344,7 +1338,7 @@ _sp_transmit_dsp_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.com_event.urid, regs->synthpod.dsp_profiling.urid);
+		regs->synthpod.dsp_profiling.urid);
 
 	trans->min.atom.size = sizeof(float);
 	trans->min.atom.type = forge->Float;
@@ -1370,7 +1364,7 @@ _sp_transfer_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_t *trans, uint32_
 	trans = ASSUME_ALIGNED(trans);
 
 	_sp_transmit_fill(regs, forge, &trans->transmit, size,
-		regs->synthpod.transfer_event.urid, protocol);
+		protocol);
 
 	trans->uid.atom.size = sizeof(int32_t);
 	trans->uid.atom.type = forge->Int;

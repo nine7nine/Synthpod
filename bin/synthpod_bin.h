@@ -291,7 +291,7 @@ _app_to_ui_advance(size_t size, void *data)
 	// copy com events to com buffer
 	const LV2_Atom_Object *obj = bin->app_to_ui->buf + bin->app_to_ui->head
 		+ sizeof(varchunk_elmnt_t);
-	if(sp_app_com_event(bin->app, obj->body.id))
+	if(sp_app_com_event(bin->app, obj->body.otype))
 	{
 		void *dst;
 		if((dst = varchunk_write_request(bin->app_from_com, size)))

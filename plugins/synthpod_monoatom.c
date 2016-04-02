@@ -538,7 +538,7 @@ _process_pre(plughandle_t *handle, uint32_t nsamples, bool bypassed)
 		if(atom->type == handle->forge.notify.Object)
 		{
 			// copy com events to com buffer 
-			if(sp_app_com_event(handle->app, obj->body.id))
+			if(sp_app_com_event(handle->app, obj->body.otype))
 			{
 				uint32_t size = obj->atom.size + sizeof(LV2_Atom);
 				if(handle->ref.com_in)

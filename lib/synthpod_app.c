@@ -4845,13 +4845,14 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 
 // rt
 int
-sp_app_com_event(sp_app_t *app, LV2_URID id)
+sp_app_com_event(sp_app_t *app, LV2_URID otype)
 {
-	return id == app->regs.synthpod.com_event.urid ? 1 : 0;
-}
+	// it is a com event, if it is not an official port protocol
+	if(  (otype == app->regs.port.float_protocol.urid)
+		|| (otype == app->regs.port.peak_protocol.urid)
+		|| (otype == app->regs.port.atom_transfer.urid)
+		|| (otype == app->regs.port.event_transfer.urid) )
+		return 0;
 
-int
-sp_app_transfer_event(sp_app_t *app, LV2_URID id)
-{
-	return id == app->regs.synthpod.transfer_event.urid ? 1 : 0;
+	return 1;
 }
