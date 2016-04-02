@@ -117,6 +117,13 @@ include_directories(${SRATOM_INCLUDE_DIRS})
 pkg_search_module(ELM REQUIRED elementary>=1.8)
 include_directories(${ELM_INCLUDE_DIRS})
 
+# evas-x11
+pkg_search_module(EVAS_OPENGL_X11 OPTIONAL evas-opengl-x11>=1.8)
+pkg_search_module(EVAS_SOFTWARE_X11 OPTIONAL evas-software-x11>=1.8)
+if( (NOT ${EVAS_OPENGL_X11_FOUND}) AND (NOT ${EVAS_SOFTWARE_X11_FOUND}) )
+	message(WARNING "No Evas engine for X11 has been found: UI may not be functional on X11!")
+endif()
+
 if((${ELM_VERSION} VERSION_EQUAL "1.10.0") OR (${ELM_VERSION} VERSION_GREATER "1.10.0"))
 	add_definitions("-DELM_1_10")
 endif()
@@ -124,8 +131,6 @@ endif()
 if((${ELM_VERSION} VERSION_EQUAL "1.13.0") OR (${ELM_VERSION} VERSION_GREATER "1.13.0"))
 	add_definitions("-DELM_1_13")
 endif()
-
-pkg_search_module(ECORE_X OPTIONAL ecore-x)
 
 add_subdirectory(lib)
 add_subdirectory(bin)
