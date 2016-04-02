@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
 
