@@ -2390,7 +2390,12 @@ _sbox_ui_show(mod_t *mod)
 		return;
 
 	const char *plugin_uri = lilv_node_as_uri(lilv_plugin_get_uri(mod->plug));
-	char *bundle_path = lilv_file_uri_parse(lilv_node_as_uri(lilv_plugin_get_bundle_uri(mod->plug)), NULL);
+	const LilvNode *bundle_uri = lilv_plugin_get_bundle_uri(mod->plug);
+#if defined(LILV_0_22)
+	char *bundle_path = lilv_file_uri_parse(lilv_node_as_string(bundle_uri), NULL);
+#else
+	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
+#endif
 	const char *ui_uri = lilv_node_as_uri(lilv_ui_get_uri(mod_ui->ui));
 	strcpy(mod_ui->sbox.socket_path, "ipc:///tmp/synthpod_XXXXXX");
 	int _fd = mkstemp(&mod_ui->sbox.socket_path[6]); //TODO check
@@ -2413,7 +2418,9 @@ _sbox_ui_show(mod_t *mod)
 	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s'",
 		executable, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_path, mod->name); //FIXME check
 	//printf("cmd: %s\n", cmd);
+#if defined(LILV_0_22)
 	lilv_free(bundle_path);
+#endif
 
 	mod_ui->sbox.exe = ecore_exe_run(cmd, mod_ui); //FIXME check
 	mod_ui->sbox.fd= ecore_main_fd_handler_add(fd, ECORE_FD_READ,

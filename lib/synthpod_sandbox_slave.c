@@ -323,11 +323,20 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
-	if(!(sb->lib = dlopen(lilv_node_get_path(ui_path, NULL), RTLD_LAZY)))
+#if defined(LILV_0_22)
+	char *binary_path = lilv_file_uri_parse(lilv_node_as_string(ui_path), NULL);
+#else
+	const char *binary_path = lilv_uri_to_path(lilv_node_as_string(ui_path));
+#endif
+	if(!(sb->lib = dlopen(binary_path, RTLD_LAZY)))
 	{
 		fprintf(stderr, "dlopen failed: %s\n", dlerror());
 		goto fail;
 	}
+
+#if defined(LILV_0_22)
+	lilv_free(binary_path);
+#endif
 
 	LV2UI_DescriptorFunction desc_func = dlsym(sb->lib, "lv2ui_descriptor");
 	if(!desc_func)

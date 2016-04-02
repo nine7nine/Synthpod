@@ -414,7 +414,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.gtk2, world, map, LV2_UI__GtkUI);
 	_register(&regs->ui.gtk3, world, map, LV2_UI__Gtk3UI);
 	_register(&regs->ui.qt4, world, map, LV2_UI__Qt4UI);
-	_register(&regs->ui.qt5, world, map, LV2_UI__Qt5UI);
+	_register(&regs->ui.qt5, world, map, LV2_UI_PREFIX"Qt5UI");
 	_register(&regs->ui.plugin, world, map, LV2_UI__plugin);
 	_register(&regs->ui.protocol, world, map, LV2_UI_PREFIX"protocol");
 	_register(&regs->ui.period_start, world, map, LV2_UI_PREFIX"periodStart");

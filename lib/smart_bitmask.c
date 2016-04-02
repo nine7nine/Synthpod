@@ -15,6 +15,8 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <inttypes.h>
+
 #include <Edje.h>
 
 #include <smart_bitmask.h>

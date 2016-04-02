@@ -30,6 +30,12 @@
 
 #define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
+#undef LV2_ATOM_TUPLE_FOREACH // there is a bug in LV2 1.10.0
+#define LV2_ATOM_TUPLE_FOREACH(tuple, iter) \
+	for (LV2_Atom* (iter) = lv2_atom_tuple_begin(tuple); \
+	     !lv2_atom_tuple_is_end(LV2_ATOM_BODY(tuple), (tuple)->atom.size, (iter)); \
+	     (iter) = lv2_atom_tuple_next(iter))
+
 typedef struct _atom_ser_t atom_ser_t;
 typedef struct _sandbox_io_subscription_t sandbox_io_subscription_t;
 typedef struct _sandbox_io_t sandbox_io_t;
@@ -450,13 +456,13 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 
 	lv2_atom_forge_init(&io->forge, map);
 
-	io->float_protocol = map->map(map->handle, LV2_UI__floatProtocol);
-	io->peak_protocol = map->map(map->handle, LV2_UI__peakProtocol);
+	io->float_protocol = map->map(map->handle, LV2_UI_PREFIX"floatProtocol");
+	io->peak_protocol = map->map(map->handle, LV2_UI_PREFIX"peakProtocol");
 	io->event_transfer = map->map(map->handle, LV2_ATOM__eventTransfer);
 	io->atom_transfer = map->map(map->handle, LV2_ATOM__atomTransfer);
 	io->core_index = map->map(map->handle, LV2_CORE__index);
 	io->rdf_value = map->map(map->handle, RDF_PREFIX"value");
-	io->ui_protocol = map->map(map->handle, LV2_UI__protocol);
+	io->ui_protocol = map->map(map->handle, LV2_UI_PREFIX"protocol");
 	io->ui_period_start = map->map(map->handle, LV2_UI_PREFIX"periodStart");
 	io->ui_period_size = map->map(map->handle, LV2_UI_PREFIX"periodSize");
 	io->ui_peak = map->map(map->handle, LV2_UI_PREFIX"peak");
