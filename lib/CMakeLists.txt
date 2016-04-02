@@ -84,7 +84,7 @@ if(BUILD_SANDBOX_LIB)
 	endif()
 
 # nanomsg
-	pkg_search_module(NANOMSG REQUIRED libnanomsg>=4.0)
+	pkg_search_module(NANOMSG REQUIRED libnanomsg>=2.0)
 	include_directories(${NANOMSG_INCLUDE_DIRS})
 
 # synthpod_sandbox_slave
