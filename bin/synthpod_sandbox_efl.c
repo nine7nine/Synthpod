@@ -60,6 +60,9 @@ _init(sandbox_slave_t *sb, void *data)
 {
 	app_t *app= data;
 
+	int w = 640;
+	int h = 360;
+
 	const char *title = sandbox_slave_title_get(sb);
 	app->win = elm_win_add(NULL, title, ELM_WIN_BASIC);
 	if(!app->win)
@@ -70,8 +73,6 @@ _init(sandbox_slave_t *sb, void *data)
 	elm_win_title_set(app->win, title);
 	elm_win_autodel_set(app->win, EINA_TRUE);
 	evas_object_smart_callback_add(app->win, "delete,request", _del_request, app);
-	evas_object_resize(app->win, 640, 360);
-	evas_object_show(app->win);
 
 	app->bg = elm_bg_add(app->win);
 	if(!app->bg)
@@ -93,8 +94,19 @@ _init(sandbox_slave_t *sb, void *data)
 	}
 	evas_object_size_hint_weight_set(app->widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 	evas_object_size_hint_align_set(app->widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
+
+	// get widget size hint
+	int W, H;
+	evas_object_size_hint_min_get(app->widget, &W, &H);
+	if(W != 0)
+		w = W;
+	if(H != 0)
+		h = H;
 	evas_object_show(app->widget);
 	elm_win_resize_object_add(app->win, app->widget);
+
+	evas_object_resize(app->win, w, h);
+	evas_object_show(app->win);
 
 	int fd;
 	sandbox_slave_fd_get(sb, &fd);
@@ -148,22 +160,11 @@ _deinit(void *data)
 	}
 }
 
-static inline int
-_resize(void *data, int w, int h)
-{
-	app_t *app = data;
-
-	if(app->win)
-		evas_object_resize(app->win, w, h);
-
-	return 0;
-}
-
 static const sandbox_slave_driver_t driver = {
 	.init_cb = _init,
 	.run_cb = _run,
 	.deinit_cb = _deinit,
-	.resize_cb = _resize
+	.resize_cb = NULL
 };
 
 static int

@@ -2617,9 +2617,11 @@ _efl_ui_show(mod_t *mod)
 	Evas_Object *win = elm_win_add(ui->win, mod->name, ELM_WIN_BASIC);
 	if(win)
 	{
+		int w = 800;
+		int h = 450;
+
 		elm_win_title_set(win, mod->name);
 		evas_object_smart_callback_add(win, "delete,request", _efl_ui_delete_request, mod);
-		evas_object_resize(win, 800, 450);
 
 		mod_ui->eo.win = win;
 
@@ -2636,12 +2638,21 @@ _efl_ui_show(mod_t *mod)
 		Evas_Object *widget = _efl_ui_create(win, mod);
 		if(widget)
 		{
+			// get size hint
+			int W, H;
+			evas_object_size_hint_min_get(widget, &W, &H);
+			if(W != 0)
+				w = W;
+			if(H != 0)
+				h = H;
+
 			evas_object_size_hint_weight_set(widget, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			evas_object_size_hint_align_set(widget, EVAS_HINT_FILL, EVAS_HINT_FILL);
 			evas_object_show(widget);
 			elm_win_resize_object_add(win, widget);
 		} // widget
 
+		evas_object_resize(win, w, h);
 		evas_object_show(win);
 
 		_mod_visible_set(mod, 1, mod_ui->urid);
@@ -6832,18 +6843,6 @@ _menu_plugin(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_theme_resize(void *data, Evas *e, Evas_Object *obj, void *event_info)
-{
-	sp_ui_t *ui = data;
-	int w, h, H;
-
-	evas_object_geometry_get(ui->mainmenu, NULL, NULL, NULL, &H);
-	evas_object_geometry_get(obj, NULL, NULL, &w, &h);
-	evas_object_move(ui->vbox, 0, H);
-	evas_object_resize(ui->vbox, w, h-H);
-}
-
-static void
 _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
@@ -7638,13 +7637,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				ui->colors_max = 20;
 			}
 
-#if defined(ELM_1_13)
-			if(elm_win_type_get(ui->win) == ELM_WIN_FAKE)
-				evas_object_event_callback_add(ui->win, EVAS_CALLBACK_RESIZE, _theme_resize, ui);
-			else
-#endif
-				elm_win_resize_object_add(ui->win, ui->vbox);
-
+			elm_win_resize_object_add(ui->win, ui->vbox);
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down, ui);
 
 			const Eina_Bool exclusive = EINA_FALSE;

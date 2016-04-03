@@ -25,20 +25,18 @@
 
 #include <Elementary.h>
 
-#include <lv2_eo_ui.h>
-
 #define MAX_NOTES 97
 
 typedef struct _midi_atom_t midi_atom_t;
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
-	eo_ui_t eoui;
-
 	struct {
 		LV2_URID event_transfer;
 		LV2_URID midi_event;
 	} uri;
+
+	Evas_Object *widget;
 
 	LV2_URID_Map *map;
 	LV2UI_Write_Function write_function;
@@ -200,18 +198,13 @@ _mouse_move(void *data, Evas *e, Evas_Object *obj, void *event_info)
 }
 
 static Evas_Object *
-_content_get(eo_ui_t *eoui)
+_content_get(plughandle_t *handle, Evas_Object *parent)
 {
-	plughandle_t *handle = (void *)eoui - offsetof(plughandle_t, eoui);
-
-	Evas_Object *widg = elm_table_add(eoui->win);
+	Evas_Object *widg = elm_table_add(parent);
 	elm_table_homogeneous_set(widg, EINA_TRUE);
 	elm_table_padding_set(widg, 1, 1);
+	evas_object_size_hint_min_set(widg, 1280, 100);
 	evas_object_pointer_mode_set(widg, EVAS_OBJECT_POINTER_MODE_NOGRAB);
-
-	// preserve aspect
-	evas_object_size_hint_aspect_set(widg, EVAS_ASPECT_CONTROL_BOTH,
-		eoui->w, eoui->h);
 
 	for(int i=0, pos=0; i<MAX_NOTES; i++)
 	{
@@ -271,32 +264,28 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	if(strcmp(plugin_uri, SYNTHPOD_KEYBOARD_URI))
 		return NULL;
 
-	eo_ui_driver_t driver;
-	if(descriptor == &synthpod_keyboard_3_eo)
-		driver = EO_UI_DRIVER_EO;
-	else
-		return NULL;
-
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
-	eo_ui_t *eoui = &handle->eoui;
-	eoui->driver = driver;
-	eoui->content_get = _content_get;
-	eoui->w = 1280,
-	eoui->h = 100;
-
 	handle->write_function = write_function;
 	handle->controller = controller;
 
+	Evas_Object *parent = NULL;
 	for(int i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
-			handle->map = (LV2_URID_Map *)features[i]->data;
+			handle->map = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_UI__parent))
+			parent = features[i]->data;
   }
 
 	if(!handle->map)
+	{
+		free(handle);
+		return NULL;
+	}
+	if(!parent)
 	{
 		free(handle);
 		return NULL;
@@ -307,13 +296,14 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->uri.midi_event = handle->map->map(handle->map->handle,
 		LV2_MIDI__MidiEvent);
 
-	if(eoui_instantiate(eoui, descriptor, plugin_uri, bundle_path, write_function,
-		controller, widget, features))
+	handle->widget = _content_get(handle, parent);
+	if(!handle->widget)
 	{
 		free(handle);
 		return NULL;
 	}
-	
+	*(Evas_Object **)widget = handle->widget;
+
 	return handle;
 }
 
@@ -321,10 +311,9 @@ static void
 cleanup(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
-	if(!handle)
-		return;
 
-	eoui_cleanup(&handle->eoui);
+	if(handle->widget)
+		evas_object_del(handle->widget);
 	free(handle);
 }
 
@@ -342,5 +331,5 @@ const LV2UI_Descriptor synthpod_keyboard_3_eo = {
 	.instantiate		= instantiate,
 	.cleanup				= cleanup,
 	.port_event			= port_event,
-	.extension_data	= eoui_eo_extension_data
+	.extension_data	= NULL 
 };
