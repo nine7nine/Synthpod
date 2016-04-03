@@ -260,6 +260,18 @@ struct _reg_t {
 
 	struct {
 		reg_item_t group;
+		reg_item_t left;
+		reg_item_t right;
+		reg_item_t center;
+		reg_item_t side;
+		reg_item_t center_left;
+		reg_item_t center_right;
+		reg_item_t side_left;
+		reg_item_t side_right;
+		reg_item_t rear_left;
+		reg_item_t rear_right;
+		reg_item_t rear_center;
+		reg_item_t low_frequency_effects;
 	} group;
 
 	struct {
@@ -487,6 +499,18 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->xpress.message, world, map, "http://open-music-kontrollers.ch/lv2/xpress#Message");
 
 	_register(&regs->group.group, world, map, LV2_PORT_GROUPS__group);
+	_register(&regs->group.left, world, map, LV2_PORT_GROUPS__left);
+	_register(&regs->group.right, world, map, LV2_PORT_GROUPS__right);
+	_register(&regs->group.center, world, map, LV2_PORT_GROUPS__center);
+	_register(&regs->group.side, world, map, LV2_PORT_GROUPS__side);
+	_register(&regs->group.center_left, world, map, LV2_PORT_GROUPS__centerLeft);
+	_register(&regs->group.center_right, world, map, LV2_PORT_GROUPS__centerRight);
+	_register(&regs->group.side_left, world, map, LV2_PORT_GROUPS__sideLeft);
+	_register(&regs->group.side_right, world, map, LV2_PORT_GROUPS__sideRight);
+	_register(&regs->group.rear_left, world, map, LV2_PORT_GROUPS__rearLeft);
+	_register(&regs->group.rear_right, world, map, LV2_PORT_GROUPS__rearRight);
+	_register(&regs->group.rear_center, world, map, LV2_PORT_GROUPS__rearCenter);
+	_register(&regs->group.low_frequency_effects, world, map, LV2_PORT_GROUPS__lowFrequencyEffects);
 
 	_register(&regs->units.conversion, world, map, LV2_UNITS__conversion);
 	_register(&regs->units.prefixConversion, world, map, LV2_UNITS__prefixConversion);
@@ -676,6 +700,18 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->xpress.message);
 
 	_unregister(&regs->group.group);
+	_unregister(&regs->group.left);
+	_unregister(&regs->group.right);
+	_unregister(&regs->group.center);
+	_unregister(&regs->group.side);
+	_unregister(&regs->group.center_left);
+	_unregister(&regs->group.center_right);
+	_unregister(&regs->group.side_left);
+	_unregister(&regs->group.side_right);
+	_unregister(&regs->group.rear_left);
+	_unregister(&regs->group.rear_right);
+	_unregister(&regs->group.rear_center);
+	_unregister(&regs->group.low_frequency_effects);
 
 	_unregister(&regs->units.conversion);
 	_unregister(&regs->units.prefixConversion);

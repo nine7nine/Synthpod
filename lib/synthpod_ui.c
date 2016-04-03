@@ -45,6 +45,7 @@ typedef struct _group_t group_t;
 typedef struct _property_t property_t;
 typedef struct _point_t point_t;
 
+typedef enum _port_designation_t port_designation_t;
 typedef enum _plug_info_type_t plug_info_type_t;
 typedef enum _group_type_t group_type_t;
 typedef enum _mod_ui_type_t mod_ui_type_t;
@@ -61,6 +62,23 @@ struct _mod_ui_driver_t {
 	mod_ui_driver_call_t show;
 	mod_ui_driver_call_t hide;
 	mod_ui_driver_event_t port_event;
+};
+
+enum _port_designation_t {
+	PORT_DESIGNATION_ALL = 0,
+
+	PORT_DESIGNATION_LEFT,
+	PORT_DESIGNATION_RIGHT,
+	PORT_DESIGNATION_CENTER,
+	PORT_DESIGNATION_SIDE,
+	PORT_DESIGNATION_CENTER_LEFT,
+	PORT_DESIGNATION_CENTER_RIGHT,
+	PORT_DESIGNATION_SIDE_LEFT,
+	PORT_DESIGNATION_SIDE_RIGHT,
+	PORT_DESIGNATION_REAR_LEFT,
+	PORT_DESIGNATION_REAR_RIGHT,
+	PORT_DESIGNATION_REAR_CENTER,
+	PORT_DESIGNATION_LOW_FREQUENCY_EFFECTS
 };
 
 enum _plug_info_type_t {
@@ -261,6 +279,7 @@ struct _port_t {
 	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
 	port_atom_type_t atom_type; // MIDI, OSC, Time
+	port_designation_t designation; // left, right, ...
 	port_buffer_type_t buffer_type; // none, sequence
 	int patchable; // support patch:Message
 
@@ -354,6 +373,7 @@ struct _sp_ui_t {
 	float zoom;
 	port_type_t matrix_type;
 	Elm_Object_Item *matrix_audio;
+	port_designation_t matrix_audio_designation;
 	Elm_Object_Item *matrix_atom;
 	Elm_Object_Item *matrix_event;
 	Elm_Object_Item *matrix_control;
@@ -2779,6 +2799,39 @@ _sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const Lilv
 	tar->direction = lilv_port_is_a(mod->plug, port, ui->regs.port.input.node)
 		? PORT_DIRECTION_INPUT
 		: PORT_DIRECTION_OUTPUT;
+			
+	// discover port designation
+	tar->designation = PORT_DESIGNATION_ALL; // default
+	LilvNode *port_designation= lilv_port_get(mod->plug, port, ui->regs.core.designation.node);
+	if(port_designation)
+	{
+		if(lilv_node_equals(port_designation, ui->regs.group.left.node))
+			tar->designation = PORT_DESIGNATION_LEFT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.right.node))
+			tar->designation = PORT_DESIGNATION_RIGHT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.center.node))
+			tar->designation = PORT_DESIGNATION_CENTER;
+		else if(lilv_node_equals(port_designation, ui->regs.group.side.node))
+			tar->designation = PORT_DESIGNATION_SIDE;
+		else if(lilv_node_equals(port_designation, ui->regs.group.center_left.node))
+			tar->designation = PORT_DESIGNATION_CENTER_LEFT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.center_right.node))
+			tar->designation = PORT_DESIGNATION_CENTER_RIGHT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.side_left.node))
+			tar->designation = PORT_DESIGNATION_SIDE_LEFT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.side_right.node))
+			tar->designation = PORT_DESIGNATION_SIDE_RIGHT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.rear_left.node))
+			tar->designation = PORT_DESIGNATION_REAR_LEFT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.rear_right.node))
+			tar->designation = PORT_DESIGNATION_REAR_RIGHT;
+		else if(lilv_node_equals(port_designation, ui->regs.group.rear_center.node))
+			tar->designation = PORT_DESIGNATION_REAR_CENTER;
+		else if(lilv_node_equals(port_designation, ui->regs.group.low_frequency_effects.node))
+			tar->designation = PORT_DESIGNATION_LOW_FREQUENCY_EFFECTS;
+
+		lilv_node_free(port_designation);
+	}
 
 	if(lilv_port_is_a(mod->plug, port, ui->regs.port.audio.node))
 	{
