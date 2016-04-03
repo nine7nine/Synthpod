@@ -331,6 +331,7 @@ struct _reg_t {
 		reg_item_t dsp_profiling;
 		reg_item_t grid_cols;
 		reg_item_t grid_rows;
+		reg_item_t pane_left;
 
 		reg_item_t system_ports;
 		reg_item_t control_port;
@@ -547,6 +548,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.dsp_profiling, world, map, SYNTHPOD_PREFIX"DSPProfiling");
 	_register(&regs->synthpod.grid_cols, world, map, SYNTHPOD_PREFIX"gridCols");
 	_register(&regs->synthpod.grid_rows, world, map, SYNTHPOD_PREFIX"gridRows");
+	_register(&regs->synthpod.pane_left, world, map, SYNTHPOD_PREFIX"paneLeft");
 	
 	_register(&regs->synthpod.system_ports, world, map, SYNTHPOD_PREFIX"systemPorts");
 	_register(&regs->synthpod.control_port, world, map, SYNTHPOD_PREFIX"ControlPort");
@@ -735,6 +737,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.dsp_profiling);
 	_unregister(&regs->synthpod.grid_cols);
 	_unregister(&regs->synthpod.grid_rows);
+	_unregister(&regs->synthpod.pane_left);
 	
 	_unregister(&regs->synthpod.system_ports);
 	_unregister(&regs->synthpod.control_port);
@@ -769,6 +772,7 @@ typedef struct _transmit_bundle_save_t transmit_bundle_save_t;
 typedef struct _transmit_dsp_profiling_t transmit_dsp_profiling_t;
 typedef struct _transmit_grid_cols_t transmit_grid_cols_t;
 typedef struct _transmit_grid_rows_t transmit_grid_rows_t;
+typedef struct _transmit_pane_left_t transmit_pane_left_t;
 
 struct _transmit_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
@@ -904,6 +908,11 @@ struct _transmit_grid_cols_t {
 struct _transmit_grid_rows_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int rows _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_pane_left_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Float left _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 // app <-> ui communication for port notifications
@@ -1401,6 +1410,20 @@ _sp_transmit_grid_rows_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->rows.atom.size = sizeof(int32_t);
 	trans->rows.atom.type = forge->Int;
 	trans->rows.body = rows;
+}
+
+static inline void
+_sp_transmit_pane_left_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_pane_left_t *trans, uint32_t size, float left)
+{
+	trans = ASSUME_ALIGNED(trans);
+
+	_sp_transmit_fill(regs, forge, &trans->transmit, size,
+		regs->synthpod.pane_left.urid);
+
+	trans->left.atom.size = sizeof(float);
+	trans->left.atom.type = forge->Float;
+	trans->left.body = left;
 }
 
 static inline void

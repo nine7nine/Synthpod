@@ -389,6 +389,7 @@ struct _sp_ui_t {
 
 	int ncols;
 	int nrows;
+	float nleft;
 };
 
 struct _from_app_t {
@@ -538,7 +539,7 @@ _midi_controller_lookup(float value)
 	return stat_str;
 }
 
-#define FROM_APP_NUM 20
+#define FROM_APP_NUM 21
 static from_app_t from_apps [FROM_APP_NUM];
 
 static int
@@ -6102,6 +6103,17 @@ _modlist_refresh(sp_ui_t *ui)
 			_sp_ui_to_app_advance(ui, size);
 		}
 	}
+
+	// request pane left 
+	{
+		const size_t size = sizeof(transmit_pane_left_t);
+		transmit_pane_left_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_pane_left_fill(&ui->regs, &ui->forge, trans, size, -1.f);
+			_sp_ui_to_app_advance(ui, size);
+		}
+	}
 }
 
 static void
@@ -7277,6 +7289,23 @@ _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 }
 
 static void
+_panes_changed(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	ui->nleft = elm_panes_content_left_size_get(ui->mainpane);
+
+	// notify app
+	const size_t size = sizeof(transmit_pane_left_t);
+	transmit_pane_left_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_pane_left_fill(&ui->regs, &ui->forge, trans, size, ui->nleft);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static void
 _columns_changed(void *data, Evas_Object *obj, void *event_info)
 {
 	sp_ui_t *ui = data;
@@ -7336,6 +7365,17 @@ _sp_ui_from_app_grid_rows(sp_ui_t *ui, const LV2_Atom *atom)
 	_modgrid_item_size_update(ui);
 }
 
+static void
+_sp_ui_from_app_pane_left(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_pane_left_t *trans = (const transmit_pane_left_t *)atom;
+
+	ui->nleft = trans->left.body;
+	elm_panes_content_left_size_set(ui->mainpane, ui->nleft);
+}
+
 sp_ui_t *
 sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	void *data, int show_splash)
@@ -7360,8 +7400,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	if(!ui)
 		return NULL;
 
-	ui->ncols = 3; //TODO load from state
-	ui->nrows = 2; //TODO load from state
+	ui->ncols = 3;
+	ui->nrows = 2;
+	ui->nleft = 0.2;
 
 	ui->win = win;
 	ui->driver = driver;
@@ -7728,7 +7769,8 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			if(ui->mainpane)
 			{
 				elm_panes_horizontal_set(ui->mainpane, EINA_FALSE);
-				elm_panes_content_left_size_set(ui->mainpane, 0.2);
+				elm_panes_content_left_size_set(ui->mainpane, ui->nleft);
+				evas_object_smart_callback_add(ui->mainpane, "unpress", _panes_changed, ui);
 				evas_object_size_hint_weight_set(ui->mainpane, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 				evas_object_size_hint_align_set(ui->mainpane, EVAS_HINT_FILL, EVAS_HINT_FILL);
 				evas_object_show(ui->mainpane);
@@ -7894,6 +7936,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 
 		from_apps[ptr].protocol = ui->regs.synthpod.grid_rows.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_grid_rows;
+
+		from_apps[ptr].protocol = ui->regs.synthpod.pane_left.urid;
+		from_apps[ptr++].cb = _sp_ui_from_app_pane_left;
 
 		assert(ptr == FROM_APP_NUM);
 		// sort according to URID
