@@ -25,7 +25,7 @@
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
 
 #include <synthpod_lv2.h>
-#include <synthpod_sandbox_master.h>
+#include <sandbox_master.h>
 #include <lv2_external_ui.h> // kxstudio external-ui extension
 
 #define SOCKET_PATH_LEN 32

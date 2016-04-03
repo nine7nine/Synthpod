@@ -15,13 +15,13 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#ifndef _SYNTHPOD_SANDBOX_SLAVE_H
-#define _SYNTHPOD_SANDBOX_SLAVE_H
+#ifndef _SANDBOX_SLAVE_H
+#define _SANDBOX_SLAVE_H
 
 #ifdef _WIN32
-#	define SYNTHPOD_SYMBOL_EXTERN __declspec(dllexport)
+#	define SANDBOX_SYMBOL_EXTERN __declspec(dllexport)
 #else
-#	define SYNTHPOD_SYMBOL_EXTERN __attribute__((visibility("default")))
+#	define SANDBOX_SYMBOL_EXTERN __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus
@@ -43,31 +43,31 @@ struct _sandbox_slave_driver_t {
 	sandbox_slave_driver_resize_t resize_cb;
 };
 
-SYNTHPOD_SYMBOL_EXTERN sandbox_slave_t *
+SANDBOX_SYMBOL_EXTERN sandbox_slave_t *
 sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, void *data);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SANDBOX_SYMBOL_EXTERN void
 sandbox_slave_free(sandbox_slave_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN int
+SANDBOX_SYMBOL_EXTERN int
 sandbox_slave_instantiate(sandbox_slave_t *sb, void *parent, void *widget);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SANDBOX_SYMBOL_EXTERN void
 sandbox_slave_recv(sandbox_slave_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN bool
+SANDBOX_SYMBOL_EXTERN bool
 sandbox_slave_flush(sandbox_slave_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN int
+SANDBOX_SYMBOL_EXTERN int
 sandbox_slave_idle(sandbox_slave_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SANDBOX_SYMBOL_EXTERN void
 sandbox_slave_run(sandbox_slave_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SANDBOX_SYMBOL_EXTERN void
 sandbox_slave_fd_get(sandbox_slave_t *sb, int *fd);
 
-SYNTHPOD_SYMBOL_EXTERN const char *
+SANDBOX_SYMBOL_EXTERN const char *
 sandbox_slave_title_get(sandbox_slave_t *sb);
 
 #ifdef __cplusplus

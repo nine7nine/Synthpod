@@ -1,4 +1,5 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/ext_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
@@ -89,7 +90,7 @@ if(BUILD_SANDBOX_LIB)
 
 # synthpod_sandbox_slave
 	add_library(synthpod_sandbox_slave.lib SHARED
-		synthpod_sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
 		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod_sandbox_slave.lib
 		${NANOMSG_LDFLAGS}
@@ -104,7 +105,7 @@ if(BUILD_SANDBOX_LIB)
 
 # synthpod_sandbox_master
 	add_library(synthpod_sandbox_master.lib SHARED
-		synthpod_sandbox_master.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
 	target_link_libraries(synthpod_sandbox_master.lib
 		${NANOMSG_LDFLAGS}
 		${SRATOM_LDFLAGS})

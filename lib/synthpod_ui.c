@@ -30,7 +30,7 @@
 #include <zero_writer.h>
 
 #if defined(SANDBOX_LIB)
-#	include <synthpod_sandbox_master.h>
+#	include <sandbox_master.h>
 #endif
 
 #define NUM_UI_FEATURES 18

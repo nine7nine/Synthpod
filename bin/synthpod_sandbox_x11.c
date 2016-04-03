@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include <synthpod_sandbox_slave.h>
+#include <sandbox_slave.h>
 
 #include <xcb/xcb.h>
 #include <signal.h>

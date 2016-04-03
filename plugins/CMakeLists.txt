@@ -1,5 +1,6 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../bin)
+include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/ext_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)

@@ -23,8 +23,8 @@
 #include <string.h>
 #include <ctype.h>
 
-#include <synthpod_sandbox_slave.h>
-#include <synthpod_sandbox_io.h>
+#include <sandbox_slave.h>
+#include <sandbox_io.h>
 
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>

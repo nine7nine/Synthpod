@@ -15,8 +15,8 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#ifndef _SYNTHPOD_SANDBOX_IO_H
-#define _SYNTHPOD_SANDBOX_IO_H
+#ifndef _SANDBOX_IO_H
+#define _SANDBOX_IO_H
 
 #include <sratom/sratom.h>
 

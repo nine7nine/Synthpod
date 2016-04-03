@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <synthpod_sandbox_slave.h>
+#include <sandbox_slave.h>
 
 #include <gtk/gtk.h>
 #include <glib-unix.h>

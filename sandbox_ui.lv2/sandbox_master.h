@@ -15,15 +15,15 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#ifndef _SYNTHPOD_SANDBOX_MASTER_H
-#define _SYNTHPOD_SANDBOX_MASTER_H
+#ifndef _SANDBOX_MASTER_H
+#define _SANDBOX_MASTER_H
 
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 
 #ifdef _WIN32
-#	define SYNTHPOD_SYMBOL_EXTERN __declspec(dllexport)
+#	define SANDBOX_SYMBOL_EXTERN __declspec(dllexport)
 #else
-#	define SYNTHPOD_SYMBOL_EXTERN __attribute__((visibility("default")))
+#	define SANDBOX_SYMBOL_EXTERN __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus
@@ -45,23 +45,23 @@ struct _sandbox_master_driver_t {
 	sandbox_master_subscribe_cb_t subscribe_cb;
 };
 
-SYNTHPOD_SYMBOL_EXTERN sandbox_master_t *
+SANDBOX_SYMBOL_EXTERN sandbox_master_t *
 sandbox_master_new(sandbox_master_driver_t *driver, void *data);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SANDBOX_SYMBOL_EXTERN void
 sandbox_master_free(sandbox_master_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SANDBOX_SYMBOL_EXTERN void
 sandbox_master_recv(sandbox_master_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN bool
+SANDBOX_SYMBOL_EXTERN bool
 sandbox_master_send(sandbox_master_t *sb, uint32_t index, uint32_t size,
 	uint32_t format, const void *buf);
 
-SYNTHPOD_SYMBOL_EXTERN bool
+SANDBOX_SYMBOL_EXTERN bool
 sandbox_master_flush(sandbox_master_t *sb);
 
-SYNTHPOD_SYMBOL_EXTERN void
+SANDBOX_SYMBOL_EXTERN void
 sandbox_master_fd_get(sandbox_master_t *sb, int *fd);
 
 #ifdef __cplusplus

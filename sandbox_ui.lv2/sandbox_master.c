@@ -20,8 +20,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <synthpod_sandbox_master.h>
-#include <synthpod_sandbox_io.h>
+#include <sandbox_master.h>
+#include <sandbox_io.h>
 
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
