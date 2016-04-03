@@ -343,7 +343,10 @@ _intercept_learn(void *data, LV2_Atom_Forge *forge, int64_t frames,
 static inline void
 _update_divider(plughandle_t *handle, int i)
 {
-	handle->divider[i] = 1.f / (handle->max[i] - handle->min[i]);
+	if(handle->max[i] != handle->min[i])
+		handle->divider[i] = 1.f / (handle->max[i] - handle->min[i]);
+	else
+		handle->divider[i] = 1.f;
 }
 
 static inline void
@@ -493,9 +496,10 @@ run(LV2_Handle instance, uint32_t nsamples)
 			if( (msg[0] & 0xf0) != LV2_MIDI_MSG_CONTROLLER)
 				continue; // ignore non-controller messages
 
+			const uint8_t cntrl = msg[1];
+
 			if(handle->learning)
 			{
-				const uint8_t cntrl = msg[1];
 
 				for(unsigned i=0; i<MAX_SLOTS; i++)
 				{
@@ -513,37 +517,33 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 				handle->learning = false;
 			}
-			else // !learning
+
+			for(unsigned i=0; i<MAX_SLOTS; i++) //FIXME use bsearch?
 			{
-				const uint8_t cntrl = msg[1];
-
-				for(unsigned i=0; i<MAX_SLOTS; i++) //FIXME use bsearch?
+				if(handle->cntrl[i] == cntrl)
 				{
-					if(handle->cntrl[i] == cntrl)
+					const uint8_t value = msg[2];
+
+					if(value < handle->min[i])
 					{
-						const uint8_t value = msg[2];
+						handle->min[i] = value;
+						_update_divider(handle, i);
 
-						if(value < handle->min[i])
-						{
-							handle->min[i] = value;
-							_update_divider(handle, i);
-
-							if(handle->ref)
-								handle->ref = props_set(&handle->props, forge, frames, handle->min_urid[i]);
-						}
-
-						if(value > handle->max[i])
-						{
-							handle->max[i] = value;
-							_update_divider(handle, i);
-
-							if(handle->ref)
-								handle->ref = props_set(&handle->props, forge, frames, handle->max_urid[i]);
-						}
-
-						handle->raw[i] = value;
-						_update_value(handle, i);
+						if(handle->ref)
+							handle->ref = props_set(&handle->props, forge, frames, handle->min_urid[i]);
 					}
+
+					if(value > handle->max[i])
+					{
+						handle->max[i] = value;
+						_update_divider(handle, i);
+
+						if(handle->ref)
+							handle->ref = props_set(&handle->props, forge, frames, handle->max_urid[i]);
+					}
+
+					handle->raw[i] = value;
+					_update_value(handle, i);
 				}
 			}
 		}
