@@ -329,6 +329,41 @@ _sandbox_io_flush(sandbox_io_t *io)
 	return more;
 }
 
+static inline void
+_sandbox_io_clean(LV2_Atom_Forge *forge, LV2_Atom *atom)
+{
+	if(atom->type == forge->Object)
+	{
+		LV2_Atom_Object *obj = (LV2_Atom_Object *)atom;
+
+		if(obj->body.id != 0)
+			obj->body.id = 0; // if not, sratom will fail
+
+		LV2_ATOM_OBJECT_FOREACH(obj, prop)
+		{
+			_sandbox_io_clean(forge, &prop->value);
+		}
+	}
+	else if(atom->type == forge->Tuple)
+	{
+		LV2_Atom_Tuple *tup = (LV2_Atom_Tuple *)atom;
+
+		LV2_ATOM_TUPLE_FOREACH(tup, itm)
+		{
+			_sandbox_io_clean(forge, itm);
+		}
+	}
+	else if(atom->type == forge->Sequence)
+	{
+		LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)atom;
+
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+		{
+			_sandbox_io_clean(forge, &ev->body);
+		}
+	}
+}
+
 static inline bool
 _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	uint32_t size, uint32_t protocol, const void *buf)
@@ -366,18 +401,26 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	else if(protocol == io->event_transfer)
 	{
 		const LV2_Atom *atom = buf;
+		LV2_Atom_Forge_Ref ref;
 
 		lv2_atom_forge_key(&io->forge, io->rdf_value);
-		lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
+		ref = lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
 		lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
+
+		LV2_Atom *src= lv2_atom_forge_deref(&io->forge, ref);
+		_sandbox_io_clean(&io->forge, src);
 	}
 	else if(protocol == io->atom_transfer)
 	{
 		const LV2_Atom *atom = buf;
+		LV2_Atom_Forge_Ref ref;
 
 		lv2_atom_forge_key(&io->forge, io->rdf_value);
-		lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
+		ref = lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
 		lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
+
+		LV2_Atom *src= lv2_atom_forge_deref(&io->forge, ref);
+		_sandbox_io_clean(&io->forge, src);
 	}
 	else if(protocol == io->ui_port_subscribe)
 	{
