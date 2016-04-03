@@ -549,7 +549,7 @@ sandbox_slave_fd_get(sandbox_slave_t *sb, int *fd)
 {
 	if(sb && fd)
 		*fd = _sandbox_io_fd_get(&sb->io);
-	else
+	else if(fd)
 		*fd = -1;
 }
 

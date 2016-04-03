@@ -95,6 +95,6 @@ sandbox_master_fd_get(sandbox_master_t *sb, int *fd)
 {
 	if(sb && fd)
 		*fd = _sandbox_io_fd_get(&sb->io);
-	else
+	else if(fd)
 		*fd = -1;
 }

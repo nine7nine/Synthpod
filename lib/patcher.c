@@ -512,7 +512,7 @@ static void
 _resize_gl(Evas_Object *obj)
 {
 	debugf("_resize_gl\n");
-	patcher_t *priv = evas_object_data_get(obj, "priv");
+	//patcher_t *priv = evas_object_data_get(obj, "priv");
 	Evas_GL_API *gl = elm_glview_gl_api_get(obj);
 	int x, y, w, h;
 

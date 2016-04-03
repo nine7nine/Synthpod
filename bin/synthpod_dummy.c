@@ -151,7 +151,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	
 			if(sp_app_bypassed(app))
 			{
-				const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
+				//const sp_app_system_sink_t *sinks = sp_app_get_system_sinks(app);
 
 				//fprintf(stderr, "app is bypassed\n");
 

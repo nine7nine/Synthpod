@@ -220,7 +220,7 @@ _smart_bitmask_smart_add(Evas_Object *o)
 static void
 _smart_bitmask_smart_del(Evas_Object *o)
 {
-	smart_bitmask_t *priv = evas_object_smart_data_get(o);
+	//smart_bitmask_t *priv = evas_object_smart_data_get(o);
 
 	_smart_bitmask_smart_deinit(o);
 	_smart_bitmask_parent_sc->del(o);

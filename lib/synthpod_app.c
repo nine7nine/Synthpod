@@ -1605,10 +1605,6 @@ _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 		transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 		if(trans)
 		{
-			const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
-			const data_access_t data_access = descriptor
-				? descriptor->extension_data
-				: NULL;
 			_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
 				mod->uid, mod->uri_str);
 			_sp_app_to_ui_advance(app, size);
@@ -2433,10 +2429,6 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
 				if(trans)
 				{
-					const LV2_Descriptor *descriptor = lilv_instance_get_descriptor(mod->inst);
-					const data_access_t data_access = descriptor
-						? descriptor->extension_data
-						: NULL;
 					_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
 						mod->uid, mod->uri_str);
 					_sp_app_to_ui_advance(app, size);
@@ -3776,7 +3768,7 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 static inline void
 _port_ev_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+	//const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 
 	//FIXME FIXME FIXME actually implement me FIXME FIXME FIXME
 }

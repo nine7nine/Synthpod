@@ -1383,7 +1383,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							if(prop)
 							{
 								if(atom_prop->value.type == ui->forge.URID)
-									prop->unit = ((const LV2_Atom_URID *)&atom_prop)->body;
+									prop->unit = ((const LV2_Atom_URID *)&atom_prop->value)->body;
 
 								if(prop->std.elmnt)
 									elm_genlist_item_update(prop->std.elmnt);
@@ -3437,8 +3437,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 			// test for show UI
 			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
 			{
-				const bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
-					ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
+				//const bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
+				//	ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
 				const bool has_show_iface = lilv_world_ask(ui->world, ui_uri_node,
 					ui->regs.core.extension_data.node, ui->regs.ui.show_interface.node);
 
@@ -4406,7 +4406,6 @@ _mod_ui_toggle_chosen(void *data, Evas_Object *obj, void *event_info)
 {
 	mod_ui_t *mod_ui = data;
 	mod_t *mod = mod_ui->mod;
-	sp_ui_t *ui = mod->ui;
 
 	_mod_ui_toggle_raw(mod, mod_ui);
 }
@@ -6124,6 +6123,7 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 					info->plug = plug;
 					Elm_Object_Item *elmnt = elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
 						ELM_GENLIST_ITEM_NONE, NULL, NULL);
+					(void)elmnt;
 				}
 			}
 
@@ -7229,7 +7229,7 @@ _sp_ui_from_app_port_selected(sp_ui_t *ui, const LV2_Atom *atom)
 		port->selected = trans->state.body;
 
 		// FIXME update port itm
-		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+		//mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
 		/* FIXME
 		if(mod && mod->std.elmnt)
 			elm_genlist_item_update(mod->std.elmnt);
@@ -7254,7 +7254,7 @@ _sp_ui_from_app_port_monitored(sp_ui_t *ui, const LV2_Atom *atom)
 		port->std.monitored = trans->state.body;
 
 		// FIXME update port itm
-		mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+		//mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
 		/* FIXME
 		if(mod && mod->std.elmnt)
 			elm_genlist_item_update(mod->std.elmnt);
