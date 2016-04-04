@@ -41,35 +41,13 @@ install(TARGETS synthpod.lib DESTINATION lib)
 
 # synthpod_ui
 if(BUILD_SANDBOX_LIB)
+# nanomsg
+	pkg_search_module(NANOMSG REQUIRED libnanomsg>=2.0)
+	include_directories(${NANOMSG_INCLUDE_DIRS})
+
 	set(SANDBOX_MASTER_SOURCE ${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
-else()
-	unset(SANDBOX_MASTER_SOURCE)
-endif()
+	set(SANDBOX_MASTER_LIBS ${NANOMSG_LDFLAGS})
 
-add_library(synthpod_ui.lib SHARED
-	synthpod_ui.c
-	patcher.c
-	smart_slider.c
-	smart_meter.c
-	smart_spinner.c
-	smart_toggle.c
-	smart_bitmask.c
-	${SANDBOX_MASTER_SOURCE})
-target_link_libraries(synthpod_ui.lib
-	${ELM_LDFLAGS}
-	${LILV_LDFLAGS}
-	${LV2_LDFLAGS})
-if(BUILD_SANDBOX_LIB)
-	target_link_libraries(synthpod_ui.lib
-		${NANOMSG_LDFLAGS})
-endif()
-set_target_properties(synthpod_ui.lib PROPERTIES
-	OUTPUT_NAME "synthpod_ui"
-	VERSION "${SYNTHPOD_VERSION}"
-	SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
-install(TARGETS synthpod_ui.lib DESTINATION lib)
-
-if(BUILD_SANDBOX_LIB)
 	add_definitions("-DSANDBOX_LIB")
 	if(BUILD_SANDBOX_X11)
 		add_definitions("-DSANDBOX_X11")
@@ -89,8 +67,27 @@ if(BUILD_SANDBOX_LIB)
 	if(BUILD_SANDBOX_EFL)
 		add_definitions("-DSANDBOX_EFL")
 	endif()
-
-# nanomsg
-	pkg_search_module(NANOMSG REQUIRED libnanomsg>=2.0)
-	include_directories(${NANOMSG_INCLUDE_DIRS})
+else()
+	unset(SANDBOX_MASTER_SOURCE)
+	unset(SANDBOX_MASTER_LIBS)
 endif()
+
+add_library(synthpod_ui.lib SHARED
+	synthpod_ui.c
+	patcher.c
+	smart_slider.c
+	smart_meter.c
+	smart_spinner.c
+	smart_toggle.c
+	smart_bitmask.c
+	${SANDBOX_MASTER_SOURCE})
+target_link_libraries(synthpod_ui.lib
+	${ELM_LDFLAGS}
+	${LILV_LDFLAGS}
+	${LV2_LDFLAGS}
+	${SANDBOX_MASTER_LIBS})
+set_target_properties(synthpod_ui.lib PROPERTIES
+	OUTPUT_NAME "synthpod_ui"
+	VERSION "${SYNTHPOD_VERSION}"
+	SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
+install(TARGETS synthpod_ui.lib DESTINATION lib)
