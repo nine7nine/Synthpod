@@ -1,6 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../bin)
 include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/symap)
 include_directories(${PROJECT_SOURCE_DIR}/ext_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
@@ -9,6 +10,8 @@ include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/props.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
+
+add_definitions("-D_GNU_SOURCE=1") # asprintf
 
 # synthpod
 add_library(synthpod.lv2 MODULE
@@ -41,10 +44,24 @@ if(BUILD_SANDBOX_EFL)
 	set(KX_UI_WRAP "")
 # synthpod_ui
 	add_library(synthpod_ui.lv2 MODULE
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_ui.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c
 		synthpod_lv2_ui.c)
-	target_link_libraries(synthpod_ui.lv2 synthpod_sandbox_master.lib)
+	target_link_libraries(synthpod_ui.lv2
+		${NANOMSG_LDFLAGS}
+		${SRATOM_LDFLAGS})
 	set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
 	install(TARGETS synthpod_ui.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+
+	add_executable(sandbox_efl
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_efl.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
+	target_link_libraries(sandbox_efl
+		${ELM_LDFLAGS}
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
+	install(TARGETS sandbox_efl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 else()
 	set(UI_UI_WRAP "#")
 	set(KX_UI_WRAP "#")

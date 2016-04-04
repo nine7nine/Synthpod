@@ -40,6 +40,12 @@ set_target_properties(synthpod.lib PROPERTIES
 install(TARGETS synthpod.lib DESTINATION lib)
 
 # synthpod_ui
+if(BUILD_SANDBOX_LIB)
+	set(SANDBOX_MASTER_SOURCE ${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
+else()
+	unset(SANDBOX_MASTER_SOURCE)
+endif()
+
 add_library(synthpod_ui.lib SHARED
 	synthpod_ui.c
 	patcher.c
@@ -47,15 +53,15 @@ add_library(synthpod_ui.lib SHARED
 	smart_meter.c
 	smart_spinner.c
 	smart_toggle.c
-	smart_bitmask.c)
+	smart_bitmask.c
+	${SANDBOX_MASTER_SOURCE})
 target_link_libraries(synthpod_ui.lib
 	${ELM_LDFLAGS}
 	${LILV_LDFLAGS}
-	${LV2_LDFLAGS}
-	${NANOMSG_LDFLAGS})
+	${LV2_LDFLAGS})
 if(BUILD_SANDBOX_LIB)
 	target_link_libraries(synthpod_ui.lib
-		synthpod_sandbox_master.lib)
+		${NANOMSG_LDFLAGS})
 endif()
 set_target_properties(synthpod_ui.lib PROPERTIES
 	OUTPUT_NAME "synthpod_ui"
@@ -87,31 +93,4 @@ if(BUILD_SANDBOX_LIB)
 # nanomsg
 	pkg_search_module(NANOMSG REQUIRED libnanomsg>=2.0)
 	include_directories(${NANOMSG_INCLUDE_DIRS})
-
-# synthpod_sandbox_slave
-	add_library(synthpod_sandbox_slave.lib SHARED
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
-	target_link_libraries(synthpod_sandbox_slave.lib
-		${NANOMSG_LDFLAGS}
-		${SRATOM_LDFLAGS}
-		${LILV_LDFLAGS}
-		dl)
-	set_target_properties(synthpod_sandbox_slave.lib PROPERTIES
-		OUTPUT_NAME "synthpod_sandbox_slave"
-		VERSION "${SYNTHPOD_VERSION}"
-		SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
-	install(TARGETS synthpod_sandbox_slave.lib DESTINATION lib)
-
-# synthpod_sandbox_master
-	add_library(synthpod_sandbox_master.lib SHARED
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
-	target_link_libraries(synthpod_sandbox_master.lib
-		${NANOMSG_LDFLAGS}
-		${SRATOM_LDFLAGS})
-	set_target_properties(synthpod_sandbox_master.lib PROPERTIES
-		OUTPUT_NAME "synthpod_sandbox_master"
-		VERSION "${SYNTHPOD_VERSION}"
-		SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
-	install(TARGETS synthpod_sandbox_master.lib DESTINATION lib)
 endif()

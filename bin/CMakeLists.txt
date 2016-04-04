@@ -162,10 +162,13 @@ if(BUILD_SANDBOX_X11)
 	include_directories(${XCB_INCLUDE_DIRS})
 
 	add_executable(synthpod.sandbox.x11
-		synthpod_sandbox_x11.c)
+		synthpod_sandbox_x11.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.x11
 		${XCB_LDFLAGS}
-		synthpod_sandbox_slave.lib)
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
 	set_target_properties(synthpod.sandbox.x11 PROPERTIES OUTPUT_NAME "synthpod_sandbox_x11")
 	install(TARGETS synthpod.sandbox.x11 DESTINATION bin)
 endif()
@@ -176,10 +179,13 @@ if(BUILD_SANDBOX_GTK2)
 	include_directories(${GTK2_INCLUDE_DIRS})
 
 	add_executable(synthpod.sandbox.gtk2
-		synthpod_sandbox_gtk.c)
+		synthpod_sandbox_gtk.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.gtk2
 		${GTK2_LDFLAGS}
-		synthpod_sandbox_slave.lib)
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
 	set_target_properties(synthpod.sandbox.gtk2 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk2")
 	install(TARGETS synthpod.sandbox.gtk2 DESTINATION bin)
 endif()
@@ -190,10 +196,13 @@ if(BUILD_SANDBOX_GTK3)
 	include_directories(${GTK3_INCLUDE_DIRS})
 
 	add_executable(synthpod.sandbox.gtk3
-		synthpod_sandbox_gtk.c)
+		synthpod_sandbox_gtk.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.gtk3
 		${GTK3_LDFLAGS}
-		synthpod_sandbox_slave.lib)
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
 	set_target_properties(synthpod.sandbox.gtk3 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk3")
 	install(TARGETS synthpod.sandbox.gtk3 DESTINATION bin)
 endif()
@@ -204,10 +213,13 @@ if(BUILD_SANDBOX_QT4)
 	include_directories(${QT4_INCLUDE_DIRS})
 
 	add_executable(synthpod.sandbox.qt4
-		synthpod_sandbox_qt.cpp)
+		synthpod_sandbox_qt.cpp
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.qt4
 		${QT4_LDFLAGS}
-		synthpod_sandbox_slave.lib)
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
 	set_target_properties(synthpod.sandbox.qt4 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt4")
 	set_target_properties(synthpod.sandbox.qt4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 	install(TARGETS synthpod.sandbox.qt4 DESTINATION bin)
@@ -225,12 +237,15 @@ if(BUILD_SANDBOX_QT5)
 	include_directories(${QT5GUI_INCLUDE_DIRS})
 
 	add_executable(synthpod.sandbox.qt5
-		synthpod_sandbox_qt.cpp)
+		synthpod_sandbox_qt.cpp
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.qt5
 		${QT5CORE_LDFLAGS}
 		${QT5WIDGETS_LDFLAGS}
 		${QT5GUI_LDFLAGS}
-		synthpod_sandbox_slave.lib)
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
 	set_target_properties(synthpod.sandbox.qt5 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt5")
 	set_target_properties(synthpod.sandbox.qt5 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 	install(TARGETS synthpod.sandbox.qt5 DESTINATION bin)
@@ -238,11 +253,13 @@ endif()
 
 if(BUILD_SANDBOX_EFL)
 	add_executable(synthpod.sandbox.efl
-		synthpod_sandbox_efl.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_efl.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.efl
 		${ELM_LDFLAGS}
-		synthpod_sandbox_slave.lib)
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
 	set_target_properties(synthpod.sandbox.efl PROPERTIES OUTPUT_NAME "synthpod_sandbox_efl")
 	install(TARGETS synthpod.sandbox.efl DESTINATION bin)
-	#install(TARGETS synthpod.sandbox.efl DESTINATION ${SYNTHPOD_PLUGIN_IR})
 endif()
