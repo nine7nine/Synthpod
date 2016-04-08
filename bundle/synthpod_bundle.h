@@ -27,6 +27,9 @@
 
 #include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 
+#define __realtime __attribute__((annotate("realtime")))
+#define __non_realtime __attribute__((annotate("non-realtime")))
+
 // bundle uri
 #define SYNTHPOD_URI			"http://open-music-kontrollers.ch/lv2/synthpod"
 

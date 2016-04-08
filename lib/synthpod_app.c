@@ -355,7 +355,7 @@ static const port_driver_t ev_port_driver;
 #define PORT_BUF_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->buf)
 #define PORT_SIZE(PORT) ((PORT)->size)
 
-static int
+__non_realtime static int
 _from_ui_cmp(const void *itm1, const void *itm2)
 {
 	const from_ui_t *from_ui1 = itm1;
@@ -498,8 +498,8 @@ _sp_worker_to_app_advance(sp_app_t *app, size_t size)
 		app->driver->to_app_advance(size, app->data);
 }
 
-// non-rt || rt with LV2_LOG__Trace
-static int
+//FIXME is actually __realtime
+__non_realtime static int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
 {
 	mod_t *mod = handle;
@@ -522,8 +522,8 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	return 0;
 }
 
-// non-rt || rt with LV2_LOG__Trace
-static int
+//FIXME is actually __realtime
+__non_realtime static int
 _log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
 {
   va_list args;
@@ -633,8 +633,7 @@ sp_app_get_system_sinks(sp_app_t *app)
 	return app->system_sinks;
 }
 
-// rt
-static LV2_Worker_Status
+__realtime static LV2_Worker_Status
 _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *data)
 {
 	mod_t *mod = handle;
@@ -655,8 +654,7 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
-// rt
-static void *
+__realtime static void *
 _zero_sched_request(Zero_Worker_Handle handle, uint32_t size)
 {
 	mod_t *mod = handle;
@@ -675,8 +673,7 @@ _zero_sched_request(Zero_Worker_Handle handle, uint32_t size)
 	return NULL;
 }
 
-// rt
-static Zero_Worker_Status
+__realtime static Zero_Worker_Status
 _zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
 {
 	mod_t *mod = handle;
@@ -688,8 +685,7 @@ _zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
 	return ZERO_WORKER_SUCCESS;
 }
 
-// non-rt
-static char *
+__non_realtime static char *
 _mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 {
 	mod_t *mod = instance;
@@ -1563,7 +1559,7 @@ _eject_module(sp_app_t *app, mod_t *mod)
 	}
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1585,7 +1581,7 @@ _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_atom_transfer(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1606,7 +1602,7 @@ _sp_app_from_ui_atom_transfer(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1646,7 +1642,7 @@ _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 {
 	// iterate over existing modules and send module_add_t
@@ -1669,7 +1665,7 @@ _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_add(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1692,7 +1688,7 @@ _sp_app_from_ui_module_add(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_del(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1730,7 +1726,7 @@ _sp_app_from_ui_module_del(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_move(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1785,7 +1781,7 @@ _sp_app_from_ui_module_move(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1870,7 +1866,7 @@ _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_preset_save(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1924,7 +1920,7 @@ _sp_app_from_ui_module_preset_save(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_selected(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1961,7 +1957,7 @@ _sp_app_from_ui_module_selected(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_visible(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -1998,7 +1994,7 @@ _sp_app_from_ui_module_visible(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_module_embedded(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2035,7 +2031,7 @@ _sp_app_from_ui_module_embedded(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_port_connected(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2105,7 +2101,7 @@ _sp_app_from_ui_port_connected(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_port_subscribed(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2130,7 +2126,7 @@ _sp_app_from_ui_port_subscribed(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_port_refresh(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2151,7 +2147,7 @@ _sp_app_from_ui_port_refresh(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_port_selected(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2188,7 +2184,7 @@ _sp_app_from_ui_port_selected(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_port_monitored(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2225,7 +2221,7 @@ _sp_app_from_ui_port_monitored(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_bundle_load(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2282,7 +2278,7 @@ _sp_app_from_ui_bundle_load(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_bundle_save(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2334,7 +2330,7 @@ _sp_app_from_ui_bundle_save(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_grid_cols(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2361,7 +2357,7 @@ _sp_app_from_ui_grid_cols(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_grid_rows(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2388,7 +2384,7 @@ _sp_app_from_ui_grid_rows(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-static bool
+__realtime static bool
 _sp_app_from_ui_pane_left(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -2608,7 +2604,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 	return advance_work[app->block_state];
 }
 
-static uint32_t
+__non_realtime static uint32_t
 _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 {
 	sp_app_t *app = handle;
@@ -2813,8 +2809,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	return app;
 }
 
-// non-rt worker-thread
-static LV2_Worker_Status
+__non_realtime static LV2_Worker_Status
 _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *data)
 {
 	mod_t *mod = handle;
@@ -2835,8 +2830,7 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
-// non-rt
-static void *
+__non_realtime static void *
 _sp_zero_request(Zero_Worker_Handle handle, uint32_t size)
 {
 	mod_t *mod = handle;
@@ -2855,8 +2849,7 @@ _sp_zero_request(Zero_Worker_Handle handle, uint32_t size)
 	return NULL;
 }
 
-// non-rt
-static Zero_Worker_Status
+__non_realtime static Zero_Worker_Status
 _sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
 {
 	mod_t *mod = handle;
@@ -2868,7 +2861,7 @@ _sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
 	return ZERO_WORKER_SUCCESS;
 }
 
-static char *
+__non_realtime static char *
 _abstract_path(LV2_State_Map_Path_Handle instance, const char *absolute_path)
 {
 	const char *prefix_path = instance;
@@ -2878,7 +2871,7 @@ _abstract_path(LV2_State_Map_Path_Handle instance, const char *absolute_path)
 	return strdup(offset);
 }
 
-static char *
+__non_realtime static char *
 _absolute_path(LV2_State_Map_Path_Handle instance, const char *abstract_path)
 {
 	const char *prefix_path = instance;
@@ -2889,7 +2882,7 @@ _absolute_path(LV2_State_Map_Path_Handle instance, const char *abstract_path)
 	return absolute_path;
 }
 
-static char *
+__non_realtime static char *
 _make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 {
 	char *absolute_path = _absolute_path(instance, abstract_path);
@@ -3157,7 +3150,7 @@ _deserialize_from_turtle(Sratom *sratom, LV2_URID_Unmap *unmap, const char *path
 #undef CUINT8
 
 // non-rt / rt
-static LV2_State_Status
+__non_realtime static LV2_State_Status
 _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	size_t size, uint32_t type, uint32_t flags)
 {
@@ -3177,7 +3170,7 @@ _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	return LV2_STATE_ERR_UNKNOWN;
 }
 
-static const void *
+__non_realtime static const void *
 _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	uint32_t *type, uint32_t *flags)
 {
@@ -3252,7 +3245,7 @@ struct _atom_ser_t {
 	uint32_t offset;
 };
 
-static inline LV2_Atom_Forge_Ref
+__non_realtime static inline LV2_Atom_Forge_Ref
 _sink(LV2_Atom_Forge_Sink_Handle handle, const void *buf, uint32_t size)
 {
 	atom_ser_t *ser = handle;
@@ -3278,7 +3271,7 @@ _sink(LV2_Atom_Forge_Sink_Handle handle, const void *buf, uint32_t size)
 	return ref;
 }
 
-static inline LV2_Atom *
+__non_realtime static inline LV2_Atom *
 _deref(LV2_Atom_Forge_Sink_Handle handle, LV2_Atom_Forge_Ref ref)
 {
 	atom_ser_t *ser = handle;
@@ -3649,7 +3642,7 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
@@ -3666,7 +3659,7 @@ _port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
@@ -3693,7 +3686,7 @@ _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	float *val = PORT_BASE_ALIGNED(port);
@@ -3723,7 +3716,7 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	source_t *source = &port->sources[0];
@@ -3740,7 +3733,7 @@ _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	float *val = PORT_BASE_ALIGNED(port);
@@ -3757,7 +3750,7 @@ _port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	// create forge to append to sequence (may contain events from UI)
@@ -3818,7 +3811,7 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_ev_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	//const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
@@ -3827,7 +3820,7 @@ _port_ev_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
@@ -3866,7 +3859,7 @@ _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
@@ -3892,7 +3885,7 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	const float *vec = PORT_BASE_ALIGNED(port);
@@ -3929,7 +3922,7 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	const LV2_Atom *atom = PORT_BASE_ALIGNED(port);
@@ -3952,7 +3945,7 @@ _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 // rt
-static inline void
+__realtime static inline void
 _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	const LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
@@ -4276,7 +4269,7 @@ sp_app_free(sp_app_t *app)
 }
 
 // non-rt / rt
-static void
+__non_realtime static void
 _state_set_value(const char *symbol, void *data,
 	const void *value, uint32_t size, uint32_t type)
 {
@@ -4324,7 +4317,7 @@ _state_set_value(const char *symbol, void *data,
 }
 
 // non-rt / rt
-static const void *
+__non_realtime static const void *
 _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 {
 	mod_t *mod = data;
@@ -4877,7 +4870,7 @@ sp_app_bypassed(sp_app_t *app)
 	return app->load_bundle && (app->block_state == BLOCKING_STATE_WAIT);
 }
 
-uint32_t
+__realtime uint32_t
 sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options)
 {
 	LV2_Options_Status status = LV2_OPTIONS_SUCCESS;

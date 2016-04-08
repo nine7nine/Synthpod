@@ -134,7 +134,7 @@ activate(LV2_Handle instance)
 	// nothing
 }
 
-static void
+__realtime static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;

@@ -32,4 +32,7 @@
 
 #include <xpress.h>
 
+#define __realtime __attribute__((annotate("realtime")))
+#define __non_realtime __attribute__((annotate("non-realtime")))
+
 #endif // _SYNTHPOD_COMMON_H

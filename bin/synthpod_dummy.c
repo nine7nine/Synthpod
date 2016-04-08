@@ -86,7 +86,7 @@ _ntp_diff(struct timespec *from, struct timespec *to)
 	return diff;
 }
 
-static inline void
+__realtime static inline void
 _process(prog_t *handle)
 {
 	bin_t *bin = &handle->bin;
@@ -254,7 +254,7 @@ _process(prog_t *handle)
 	}
 }
 
-static void *
+__non_realtime static void *
 _rt_thread(void *data, Eina_Thread thread)
 {
 	prog_t *handle = data;
@@ -276,7 +276,7 @@ _rt_thread(void *data, Eina_Thread thread)
 	return NULL;
 }
 
-static void *
+__non_realtime static void *
 _system_port_add(void *data, system_port_t type, const char *short_name,
 	const char *pretty_name, const char *designation, bool input, uint32_t order)
 {
@@ -300,7 +300,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 	return NULL;
 }
 
-static void
+__non_realtime static void
 _system_port_del(void *data, void *sys_port)
 {
 	bin_t *bin = data;
@@ -310,7 +310,7 @@ _system_port_del(void *data, void *sys_port)
 	// unsupported, skip
 }
 
-static void
+__non_realtime static void
 _ui_saved(void *data, int status)
 {
 	bin_t *bin = data;
@@ -329,7 +329,7 @@ _ui_saved(void *data, int status)
 	}
 }
 
-static int 
+__non_realtime static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
 	bin_t *bin = data;
@@ -361,7 +361,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	return 0; // success
 }
 
-static int
+__non_realtime static int
 _save(void *data)
 {
 	bin_t *bin = data;
@@ -381,7 +381,7 @@ static const synthpod_nsm_driver_t nsm_driver = {
 };
 
 // rt
-static double
+__realtime static double
 _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 {
 	prog_t *handle = instance;
@@ -404,7 +404,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 }
 
 // rt
-static uint64_t
+__realtime static uint64_t
 _osc_schedule_frames2osc(osc_schedule_handle_t instance, double frames)
 {
 	prog_t *handle = instance;

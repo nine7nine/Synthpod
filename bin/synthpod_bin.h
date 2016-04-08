@@ -113,7 +113,7 @@ struct _bin_t {
 
 static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
 
-static xpress_uuid_t
+__realtime static xpress_uuid_t
 _voice_map_new_uuid(void *handle)
 {
 	_Atomic xpress_uuid_t *uuid = handle;
@@ -187,21 +187,20 @@ _light_sem_signal(light_sem_t *lsem, int count)
 		eina_semaphore_release(&lsem->sem, to_release);
 }
 
-// non-rt ui-thread
-static void
+__non_realtime static void
 _ui_delete_request(void *data, Evas_Object *obj, void *event)
 {
 	elm_exit();	
 }
 
-static void
+__non_realtime static void
 _ui_close(void *data)
 {
 	//printf("_ui_close\n");
 	elm_exit();
 }
 
-	static void
+__non_realtime static void
 _ui_opened(void *data, int status)
 {
 	bin_t *bin = data;
@@ -210,8 +209,7 @@ _ui_opened(void *data, int status)
 	synthpod_nsm_opened(bin->nsm, status);
 }
 
-// non-rt ui-thread
-static Eina_Bool
+__non_realtime static Eina_Bool
 _ui_animator(void *data)
 {
 	bin_t *bin = data;
@@ -233,8 +231,7 @@ _ui_animator(void *data)
 	return EINA_TRUE; // continue animator
 }
 
-// non-rt worker-thread
-static void *
+__non_realtime static void *
 _worker_thread(void *data, Eina_Thread thread)
 {
 	bin_t *bin = data;
@@ -275,15 +272,14 @@ _worker_thread(void *data, Eina_Thread thread)
 	return NULL;
 }
 
-// rt
-static void *
+__realtime static void *
 _app_to_ui_request(size_t size, void *data)
 {
 	bin_t *bin = data;
 
 	return varchunk_write_request(bin->app_to_ui, size);
 }
-static void
+__realtime static void
 _app_to_ui_advance(size_t size, void *data)
 {
 	bin_t *bin = data;
@@ -304,8 +300,7 @@ _app_to_ui_advance(size_t size, void *data)
 	varchunk_write_advance(bin->app_to_ui, size);
 }
 
-// non-rt ui-thread
-static void *
+__non_realtime static void *
 _ui_to_app_request(size_t size, void *data)
 {
 	bin_t *bin = data;
@@ -319,7 +314,7 @@ _ui_to_app_request(size_t size, void *data)
 
 	return ptr;
 }
-static void
+__non_realtime static void
 _ui_to_app_advance(size_t size, void *data)
 {
 	bin_t *bin = data;
@@ -327,15 +322,14 @@ _ui_to_app_advance(size_t size, void *data)
 	varchunk_write_advance(bin->app_from_ui, size);
 }
 
-// rt
-static void *
+__realtime static void *
 _app_to_worker_request(size_t size, void *data)
 {
 	bin_t *bin = data;
 
 	return varchunk_write_request(bin->app_to_worker, size);
 }
-static void
+__realtime static void
 _app_to_worker_advance(size_t size, void *data)
 {
 	bin_t *bin = data;
@@ -344,8 +338,7 @@ _app_to_worker_advance(size_t size, void *data)
 	_light_sem_signal(&bin->worker_sem, 1);
 }
 
-// non-rt worker-thread
-static void *
+__non_realtime static void *
 _worker_to_app_request(size_t size, void *data)
 {
 	bin_t *bin = data;
@@ -359,7 +352,7 @@ _worker_to_app_request(size_t size, void *data)
 
 	return ptr;
 }
-static void
+__non_realtime static void
 _worker_to_app_advance(size_t size, void *data)
 {
 	bin_t *bin = data;
@@ -367,8 +360,7 @@ _worker_to_app_advance(size_t size, void *data)
 	varchunk_write_advance(bin->app_from_worker, size);
 }
 
-// non-rt || rt with LV2_LOG__Trace
-static int
+__non_realtime static int
 _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
 	bin_t *bin = data;
@@ -415,8 +407,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	return -1;
 }
 
-// non-rt || rt with LV2_LOG__Trace
-static int
+__non_realtime static int
 _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 {
   va_list args;
@@ -429,7 +420,7 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
-static int
+__non_realtime static int
 _show(void *data)
 {
 	bin_t *bin = data;
@@ -440,7 +431,7 @@ _show(void *data)
 	return 0;
 }
 
-static int
+__non_realtime static int
 _hide(void *data)
 {
 	bin_t *bin = data;
@@ -466,7 +457,7 @@ _map_unlock(bin_t *bin)
 	atomic_flag_clear_explicit(&bin->map_lock, memory_order_release);
 }
 
-static uint32_t
+__non_realtime static uint32_t
 _map(void *data, const char *uri)
 {
 	bin_t *bin = data;
@@ -478,7 +469,7 @@ _map(void *data, const char *uri)
 	return urid;
 }
 
-static const char *
+__non_realtime static const char *
 _unmap(void *data, uint32_t urid)
 {
 	bin_t *bin = data;

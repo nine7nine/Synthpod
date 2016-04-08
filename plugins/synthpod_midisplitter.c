@@ -80,7 +80,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 		handle->atom_out[port-1] = (LV2_Atom_Sequence *)data;
 }
 
-static void
+__realtime static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;

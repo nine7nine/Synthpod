@@ -159,8 +159,7 @@ _work(LV2_Handle instance,
 	return LV2_WORKER_SUCCESS;
 }
 
-// rt-thread
-static LV2_Worker_Status
+__realtime static LV2_Worker_Status
 _work_response(LV2_Handle instance, uint32_t size, const void *body)
 {
 	//plughandle_t *handle = instance;
@@ -168,8 +167,7 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 	return LV2_WORKER_SUCCESS;
 }
 
-// rt-thread
-static LV2_Worker_Status
+__realtime static LV2_Worker_Status
 _end_run(LV2_Handle instance)
 {
 	//plughandle_t *handle = instance;
@@ -204,8 +202,7 @@ _zero_work(LV2_Handle instance, Zero_Worker_Request_Function request,
 	return ZERO_WORKER_SUCCESS;
 }
 
-// rt-thread
-static Zero_Worker_Status
+__realtime static Zero_Worker_Status
 _zero_response(LV2_Handle instance, uint32_t size,
 	const void* body)
 {
@@ -214,8 +211,7 @@ _zero_response(LV2_Handle instance, uint32_t size,
 	return ZERO_WORKER_SUCCESS;
 }
 
-// rt-thread
-static Zero_Worker_Status
+__realtime static Zero_Worker_Status
 _zero_end(LV2_Handle instance)
 {
 	//plughandle_t *handle = instance;
@@ -229,15 +225,14 @@ static const Zero_Worker_Interface zero_iface = {
 	.end = _zero_end
 };
 
-// rt-thread
-static void *
+__realtime static void *
 _to_ui_request(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 
 	return handle->buf;
 }
-static void
+__realtime static void
 _to_ui_advance(size_t size, void *data)
 {
 	plughandle_t *handle = data;
@@ -257,15 +252,14 @@ _to_ui_advance(size_t size, void *data)
 		lv2_atom_forge_pad(forge, size);
 }
 
-// rt
-static void *
+__realtime static void *
 _to_worker_request(size_t size, void *data)
 {
 	plughandle_t *handle = data;
 
 	return varchunk_write_request(handle->app_to_worker, size);
 }
-static void
+__realtime static void
 _to_worker_advance(size_t size, void *data)
 {
 	plughandle_t *handle = data;
@@ -627,7 +621,7 @@ _process_post(plughandle_t *handle)
 	}
 }
 
-static void
+__realtime static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
@@ -798,7 +792,7 @@ cleanup(LV2_Handle instance)
 	eina_shutdown();
 }
 
-static uint32_t
+__realtime static uint32_t
 _opts_get(LV2_Handle instance, LV2_Options_Option *options)
 {
 	// we have no options
@@ -806,7 +800,7 @@ _opts_get(LV2_Handle instance, LV2_Options_Option *options)
 	return LV2_OPTIONS_ERR_BAD_KEY;
 }
 
-static uint32_t
+__realtime static uint32_t
 _opts_set(LV2_Handle instance, const LV2_Options_Option *options)
 {
 	plughandle_t *handle = instance;

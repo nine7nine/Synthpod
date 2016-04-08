@@ -156,8 +156,7 @@ _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t 
 	return ref;
 }
 
-// rt
-static void
+__realtime static void
 _bundle_in(osc_time_t timestamp, void *data)
 {
 	prog_t *handle = data;
@@ -168,8 +167,7 @@ _bundle_in(osc_time_t timestamp, void *data)
 			handle->frame[handle->frame_cnt++], timestamp);
 }
 
-// rt
-static void
+__realtime static void
 _bundle_out(osc_time_t timestamp, void *data)
 {
 	prog_t *handle = data;
@@ -180,8 +178,7 @@ _bundle_out(osc_time_t timestamp, void *data)
 			handle->frame[--handle->frame_cnt]);
 }
 
-// rt
-static int
+__realtime static int
 _message(osc_time_t timestamp, const char *path, const char *fmt,
 	const osc_data_t *buf, size_t size, void *data)
 {
@@ -297,8 +294,7 @@ static const osc_method_t methods [] = {
 	{NULL, NULL, NULL}
 };
 
-// rt
-static void
+__realtime static void
 _bundle_push_cb(uint64_t timestamp, void *data)
 {
 	prog_t *handle = data;
@@ -307,8 +303,7 @@ _bundle_push_cb(uint64_t timestamp, void *data)
 		&handle->bndl[handle->bndl_cnt++]);
 }
 
-// rt
-static void
+__realtime static void
 _bundle_pop_cb(void *data)
 {
 	prog_t *handle = data;
@@ -317,8 +312,7 @@ _bundle_pop_cb(void *data)
 		handle->bndl[--handle->bndl_cnt]);
 }
 
-// rt
-static void
+__realtime static void
 _message_cb(const char *path, const char *fmt, const LV2_Atom_Tuple *body,
 	void *data)
 {
@@ -414,7 +408,7 @@ _message_cb(const char *path, const char *fmt, const LV2_Atom_Tuple *body,
 }
 
 // rt
-static int
+__realtime static int
 _process(jack_nframes_t nsamples, void *data)
 {
 	prog_t *handle = data;
@@ -750,8 +744,7 @@ _process(jack_nframes_t nsamples, void *data)
 	return 0;
 }
 
-// ui
-static void
+__non_realtime static void
 _session_async(void *data)
 {
 	prog_t *handle = data;
@@ -791,8 +784,7 @@ _session_async(void *data)
 		free(synthpod_dir);
 }
 
-// non-rt
-static void
+__non_realtime static void
 _session(jack_session_event_t *ev, void *data)
 {
 	prog_t *handle = data;
@@ -802,7 +794,7 @@ _session(jack_session_event_t *ev, void *data)
 }
 
 // rt, but can do non-rt stuff, as process won't be called
-static int
+__non_realtime static int
 _buffer_size(jack_nframes_t block_size, void *data)
 {
 	prog_t *handle = data;
@@ -817,8 +809,7 @@ _buffer_size(jack_nframes_t block_size, void *data)
 	return 0;
 }
 
-// non-rt
-static int
+__non_realtime static int
 _sample_rate(jack_nframes_t sample_rate, void *data)
 {
 	prog_t *handle = data;
@@ -830,7 +821,7 @@ _sample_rate(jack_nframes_t sample_rate, void *data)
 	return 0;
 }
 
-static void
+__non_realtime static void
 _ui_saved(void *data, int status)
 {
 	bin_t *bin = data;
@@ -861,7 +852,7 @@ _ui_saved(void *data, int status)
 	}
 }
 
-static void *
+__non_realtime static void *
 _system_port_add(void *data, system_port_t type, const char *short_name,
 	const char *pretty_name, const char *designation, bool input, uint32_t order)
 {
@@ -974,7 +965,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 	return jack_port;
 }
 
-static void
+__non_realtime static void
 _system_port_del(void *data, void *sys_port)
 {
 	bin_t *bin = data;
@@ -994,13 +985,13 @@ _system_port_del(void *data, void *sys_port)
 	jack_port_unregister(handle->client, jack_port);
 }
 
-static void
+__non_realtime static void
 _shutdown_async(void *data)
 {
 	elm_exit();
 }
 
-static void
+__non_realtime static void
 _shutdown(void *data)
 {
 	prog_t *handle = data;
@@ -1009,13 +1000,13 @@ _shutdown(void *data)
 	ecore_main_loop_thread_safe_call_async(_shutdown_async, handle);
 }
 
-static void
+__non_realtime static void
 _xrun_async(void *data)
 {
 	fprintf(stderr, "JACK XRun\n");
 }
 
-static int
+__non_realtime static int
 _xrun(void *data)
 {
 	prog_t *handle = data;
@@ -1101,7 +1092,7 @@ _jack_deinit(prog_t *handle)
 	}
 }
 
-static int 
+__non_realtime static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
 	bin_t *bin = data;
@@ -1138,7 +1129,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	return 0; // success
 }
 
-static int
+__non_realtime static int
 _save(void *data)
 {
 	bin_t *bin = data;
@@ -1159,7 +1150,7 @@ static const synthpod_nsm_driver_t nsm_driver = {
 
 #if defined(JACK_HAS_CYCLE_TIMES)
 // rt
-static double
+__realtime static double
 _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 {
 	prog_t *handle = instance;
@@ -1182,7 +1173,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 }
 
 // rt
-static uint64_t
+__realtime static uint64_t
 _osc_schedule_frames2osc(osc_schedule_handle_t instance, double frames)
 {
 	prog_t *handle = instance;
