@@ -36,6 +36,7 @@
 #define NUM_UI_FEATURES 18
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
+#define FROM_APP_NUM 21
 
 typedef struct _mod_t mod_t;
 typedef struct _mod_ui_t mod_ui_t;
@@ -334,6 +335,11 @@ struct _property_t {
 	LV2_URID unit;
 };
 
+struct _from_app_t {
+	LV2_URID protocol;
+	from_app_cb_t cb;
+};
+
 struct _sp_ui_t {
 	sp_ui_driver_t *driver;
 	void *data;
@@ -410,11 +416,8 @@ struct _sp_ui_t {
 	int ncols;
 	int nrows;
 	float nleft;
-};
 
-struct _from_app_t {
-	LV2_URID protocol;
-	from_app_cb_t cb;
+	from_app_t from_apps [FROM_APP_NUM];
 };
 
 static const char *midi_keys [12] = {
@@ -524,18 +527,26 @@ _midi_note_lookup(float value)
 	return stat_str;
 }
 
-static int
-_midi_controller_cmp(const void *data1, const void *data2)
+static inline const midi_controller_t *
+_midi_controller_bsearch(uint8_t p, const midi_controller_t *a, unsigned n)
 {
-	const midi_controller_t *controller1 = data1;
-	const midi_controller_t *controller2 = data2;
+	unsigned start = 0;
+	unsigned end = n;
 
-	if(controller1->controller < controller2->controller)
-		return -1;
-	else if(controller1->controller > controller2->controller)
-		return 1;
+	while(start < end)
+	{
+		const unsigned mid = start + (end - start)/2;
+		const midi_controller_t *dst = &a[mid];
 
-	return 0;
+		if(p < dst->controller)
+			end = mid;
+		else if(p > dst->controller)
+			start = mid + 1;
+		else
+			return dst;
+	}
+
+	return NULL;
 }
 
 static const char *
@@ -543,13 +554,7 @@ _midi_controller_lookup(float value)
 {
 	const uint8_t cntrl = floor(value);
 
-	const midi_controller_t tar = {
-		.controller = cntrl,
-		.symbol = NULL
-	};
-
-	const midi_controller_t *controller = bsearch(&tar, midi_controllers, 72,
-		sizeof(midi_controller_t), _midi_controller_cmp);
+	const midi_controller_t *controller = _midi_controller_bsearch(cntrl, midi_controllers, 72);
 	if(controller)
 		return controller->symbol;
 
@@ -559,9 +564,6 @@ _midi_controller_lookup(float value)
 	return stat_str;
 }
 
-#define FROM_APP_NUM 21
-static from_app_t from_apps [FROM_APP_NUM];
-
 static int
 _from_app_cmp(const void *itm1, const void *itm2)
 {
@@ -569,6 +571,28 @@ _from_app_cmp(const void *itm1, const void *itm2)
 	const from_app_t *from_app2 = itm2;
 
 	return _signum(from_app1->protocol, from_app2->protocol);
+}
+
+static inline const from_app_t *
+_from_app_bsearch(uint32_t p, from_app_t *a, unsigned n)
+{
+	unsigned start = 0;
+	unsigned end = n;
+
+	while(start < end)
+	{
+		const unsigned mid = start + (end - start)/2;
+		const from_app_t *dst = &a[mid];
+
+		if(p < dst->protocol)
+			end = mid;
+		else if(p > dst->protocol)
+			start = mid + 1;
+		else
+			return dst;
+	}
+
+	return NULL;
 }
 
 static Eina_Bool
@@ -7317,13 +7341,10 @@ sp_ui_from_app(sp_ui_t *ui, const LV2_Atom *atom)
 		return;
 
 	// what we want to search for
-	const from_app_t cmp = {
-		.protocol = transmit->obj.body.otype,
-		.cb = NULL
-	};
+	const uint32_t protocol = transmit->obj.body.otype;
 
 	// search for corresponding callback
-	const from_app_t *from_app = bsearch(&cmp, from_apps, FROM_APP_NUM, sizeof(from_app_t), _from_app_cmp);
+	const from_app_t *from_app = _from_app_bsearch(protocol, ui->from_apps, FROM_APP_NUM);
 
 	// run callback if found
 	if(from_app)
@@ -7922,6 +7943,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	// fill from_app binary callback tree
 	{
 		unsigned ptr = 0;
+		from_app_t *from_apps = ui->from_apps;
 
 		from_apps[ptr].protocol = ui->regs.synthpod.module_add.urid;
 		from_apps[ptr++].cb = _sp_ui_from_app_module_add;

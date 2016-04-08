@@ -38,6 +38,7 @@
 #define NUM_FEATURES 16
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
+#define FROM_UI_NUM 22
 
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
@@ -275,6 +276,11 @@ struct _port_t {
 	atomic_flag lock;
 };
 
+struct _from_ui_t {
+	LV2_URID protocol;
+	from_ui_cb_t cb;
+};
+
 struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
@@ -330,15 +336,9 @@ struct _sp_app_t {
 	int32_t ncols;
 	int32_t nrows;
 	float nleft;
-};
 
-struct _from_ui_t {
-	LV2_URID protocol;
-	from_ui_cb_t cb;
+	from_ui_t from_uis [FROM_UI_NUM];
 };
-
-#define FROM_UI_NUM 22
-static from_ui_t from_uis [FROM_UI_NUM];
 
 static const port_driver_t control_port_driver;
 static const port_driver_t audio_port_driver;
@@ -364,22 +364,77 @@ _from_ui_cmp(const void *itm1, const void *itm2)
 	return _signum(from_ui1->protocol, from_ui2->protocol);
 }
 
-static int
-_mod_cmp(const void *itm1, const void *itm2)
+static inline const from_ui_t *
+_from_ui_bsearch(uint32_t p, from_ui_t *a, unsigned n)
 {
-	const u_id_t *uid = itm1;
-	const mod_t *const *mod = itm2;
+	unsigned start = 0;
+	unsigned end = n;
 
-	return _signum(*uid, (*mod)->uid);
+	while(start < end)
+	{
+		const unsigned mid = start + (end - start)/2;
+		const from_ui_t *dst = &a[mid];
+
+		if(p < dst->protocol)
+			end = mid;
+		else if(p > dst->protocol)
+			start = mid + 1;
+		else
+			return dst;
+	}
+
+	return NULL;
 }
 
-static int
-_mod_sort(const void *itm1, const void *itm2)
+static inline mod_t *
+_mod_bsearch(u_id_t p, mod_t **a, unsigned n)
 {
-	const mod_t *const *mod1 = itm1;
-	const mod_t *const *mod2 = itm2;
+	unsigned start = 0;
+	unsigned end = n;
 
-	return _signum((*mod1)->uid, (*mod2)->uid);
+	while(start < end)
+	{
+		const unsigned mid = start + (end - start)/2;
+		mod_t *dst = a[mid];
+
+		if(p < dst->uid)
+			end = mid;
+		else if(p > dst->uid)
+			start = mid + 1;
+		else
+			return dst;
+	}
+
+	return NULL;
+}
+
+static inline void
+_mod_qsort(mod_t **a, unsigned n)
+{
+	if(n < 2)
+		return;
+
+	const mod_t *p = a[n/2];
+
+	unsigned i, j;
+	for(i=0, j=n-1; ; i++, j--)
+	{
+		while(a[i]->uid < p->uid)
+			i++;
+
+		while(p->uid < a[j]->uid)
+			j--;
+
+		if(i >= j)
+			break;
+
+		mod_t *t = a[i];
+		a[i] = a[j];
+		a[j] = t;
+	}
+
+	_mod_qsort(a, i);
+	_mod_qsort(&a[i], n - i);
 }
 
 static void
@@ -1207,9 +1262,9 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 static inline mod_t *
 _sp_app_mod_get(sp_app_t *app, u_id_t uid)
 {
-	mod_t *const *mod = bsearch(&uid, app->ords, app->num_mods, sizeof(mod_t *), _mod_cmp);
+	mod_t *mod = _mod_bsearch(uid, app->ords, app->num_mods);
 	if(mod)
-		return *mod;
+		return mod;
 
 	return NULL;
 }
@@ -2375,13 +2430,10 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		return advance_ui[app->block_state];
 
 	// what we want to search for
-	const from_ui_t cmp = {
-		.protocol = transmit->obj.body.otype,
-		.cb = NULL
-	};
+	const uint32_t protocol = transmit->obj.body.otype;
 
 	// search for corresponding callback
-	const from_ui_t *from_ui = bsearch(&cmp, from_uis, FROM_UI_NUM, sizeof(from_ui_t), _from_ui_cmp);
+	const from_ui_t *from_ui = _from_ui_bsearch(protocol, app->from_uis, FROM_UI_NUM);
 
 	// run callback if found
 	if(from_ui)
@@ -2421,7 +2473,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				app->num_mods += 1;
 
 				// sort ordered list
-				qsort(app->ords, app->num_mods, sizeof(mod_t *), _mod_sort);
+				_mod_qsort(app->ords, app->num_mods);
 
 				//signal to UI
 				size_t size = sizeof(transmit_module_add_t)
@@ -2631,6 +2683,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	// fill from_ui binary callback tree
 	{
 		unsigned ptr = 0;
+		from_ui_t *from_uis = app->from_uis;
 
 		from_uis[ptr].protocol = app->regs.port.float_protocol.urid;
 		from_uis[ptr++].cb = _sp_app_from_ui_float_protocol;
@@ -4700,7 +4753,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	}
 
 	// sort ordered list
-	qsort(app->ords, app->num_mods, sizeof(mod_t *), _mod_sort);
+	_mod_qsort(app->ords, app->num_mods);
 
 	LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, iter)
 	{
