@@ -86,25 +86,12 @@ _ntp_diff(struct timespec *from, struct timespec *to)
 	return diff;
 }
 
-static void *
-_rt_thread(void *data, Eina_Thread thread)
+static inline void
+_process(prog_t *handle)
 {
-	prog_t *handle = data;
 	bin_t *bin = &handle->bin;
 	sp_app_t *app = bin->app;
-	
-	pthread_t self = pthread_self();
 
-	struct sched_param schedp;
-	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = 70; //TODO make configurable
-	
-	if(schedp.sched_priority)
-	{
-		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-			fprintf(stderr, "pthread_setschedparam error\n");
-	}
-		
 	const uint32_t nsamples = handle->frsize;
 
 	const uint64_t nanos_per_period = (uint64_t)nsamples * NANO_SECONDS / handle->srate;
@@ -265,6 +252,26 @@ _rt_thread(void *data, Eina_Thread thread)
 		// increase cur_frames
 		handle->cycle.cur_frames = handle->cycle.ref_frames;
 	}
+}
+
+static void *
+_rt_thread(void *data, Eina_Thread thread)
+{
+	prog_t *handle = data;
+
+	pthread_t self = pthread_self();
+
+	struct sched_param schedp;
+	memset(&schedp, 0, sizeof(struct sched_param));
+	schedp.sched_priority = 70; //TODO make configurable
+
+	if(schedp.sched_priority)
+	{
+		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
+			fprintf(stderr, "pthread_setschedparam error\n");
+	}
+
+	_process(handle);
 
 	return NULL;
 }

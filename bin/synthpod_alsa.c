@@ -132,26 +132,13 @@ _ntp_diff(struct timespec *from, struct timespec *to)
 	return diff;
 }
 
-static void *
-_rt_thread(void *data, Eina_Thread thread)
+static inline void
+_process(prog_t *handle)
 {
-	prog_t *handle = data;
 	pcmi_t *pcmi = handle->pcmi;
 	bin_t *bin = &handle->bin;
 	sp_app_t *app = bin->app;
-	
-	pthread_t self = pthread_self();
 
-	struct sched_param schedp;
-	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = 70; //TODO make configurable
-	
-	if(schedp.sched_priority)
-	{
-		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-			fprintf(stderr, "pthread_setschedparam error\n");
-	}
-		
 	const uint32_t nsamples = handle->frsize;
 	int nplay = pcmi_nplay(pcmi);
 	int ncapt = pcmi_ncapt(pcmi);
@@ -362,13 +349,19 @@ _rt_thread(void *data, Eina_Thread thread)
 								lv2_atom_forge_pad(forge, len);
 						}
 						else
-							fprintf(stderr, "event decode failed\n");
+						{
+							//fprintf(stderr, "event decode failed\n");
+						}
 					}
 					else
-						fprintf(stderr, "no matching port for event\n");
+					{
+						//fprintf(stderr, "no matching port for event\n");
+					}
 
 					if(snd_seq_free_event(sev))
-						fprintf(stderr, "event free failed\n");
+					{
+						//fprintf(stderr, "event free failed\n");
+					}
 				}
 			}
 						
@@ -440,7 +433,7 @@ _rt_thread(void *data, Eina_Thread thread)
 							const uint8_t *buf = LV2_ATOM_BODY_CONST(atom);
 							if( (consumed = snd_midi_event_encode(chan->midi.trans, buf, atom->size, &sev)) != atom->size)
 							{
-								fprintf(stderr, "encode event failed: %li\n", consumed);
+								//fprintf(stderr, "encode event failed: %li\n", consumed);
 								continue;
 							}
 
@@ -521,6 +514,26 @@ _rt_thread(void *data, Eina_Thread thread)
 	pcmi_pcm_stop(handle->pcmi);
 	
 	snd_seq_queue_status_free(stat);
+}
+
+static void *
+_rt_thread(void *data, Eina_Thread thread)
+{
+	prog_t *handle = data;
+
+	pthread_t self = pthread_self();
+
+	struct sched_param schedp;
+	memset(&schedp, 0, sizeof(struct sched_param));
+	schedp.sched_priority = 70; //TODO make configurable
+
+	if(schedp.sched_priority)
+	{
+		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
+			fprintf(stderr, "pthread_setschedparam error\n");
+	}
+
+	_process(handle);
 
 	return NULL;
 }
