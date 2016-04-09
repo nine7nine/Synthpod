@@ -2951,7 +2951,9 @@ _sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const Lilv
 	LilvNode *unit = lilv_port_get(mod->plug, tar->tar, ui->regs.units.unit.node);
 	if(unit)
 	{
-		tar->unit = ui->driver->map->map(ui->driver->map->handle, lilv_node_as_uri(unit));
+		const char *unit_uri = lilv_node_as_uri(unit);
+		if(unit_uri)
+			tar->unit = ui->driver->map->map(ui->driver->map->handle, unit_uri);
 		lilv_node_free(unit);
 	}
 }
@@ -3056,7 +3058,9 @@ _sp_ui_mod_static_prop_add(sp_ui_t *ui, mod_t *mod, const LilvNode *writable, in
 		ui->regs.units.unit.node, NULL);
 	if(unit)
 	{
-		prop->unit = ui->driver->map->map(ui->driver->map->handle, lilv_node_as_uri(unit));
+		const char *unit_uri = lilv_node_as_uri(unit);
+		if(unit_uri)
+			prop->unit = ui->driver->map->map(ui->driver->map->handle, unit_uri);
 		lilv_node_free(unit);
 	}
 	
