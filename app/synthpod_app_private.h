@@ -474,8 +474,14 @@ _sp_app_port_spin_lock(port_t *port)
 	}
 }
 
+static inline bool
+_sp_app_port_try_lock(port_t *port)
+{
+	return atomic_flag_test_and_set_explicit(&port->lock, memory_order_acquire) == false;
+}
+
 static inline void
-_sp_app_port_spin_unlock(port_t *port)
+_sp_app_port_unlock(port_t *port)
 {
 	atomic_flag_clear_explicit(&port->lock, memory_order_release);
 }

@@ -136,7 +136,7 @@ _state_set_value(const char *symbol, void *data,
 		*buf_ptr = val;
 		tar->last = val - 0.1; // triggers notification
 
-		_sp_app_port_spin_unlock(tar);
+		_sp_app_port_unlock(tar);
 	}
 }
 
@@ -189,7 +189,7 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 			ptr = &tar->f32;
 		}
 
-		_sp_app_port_spin_unlock(tar);
+		_sp_app_port_unlock(tar);
 
 		return ptr;
 	}

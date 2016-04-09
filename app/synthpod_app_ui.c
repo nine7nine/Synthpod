@@ -58,14 +58,15 @@ _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 	if(!port) // port not found
 		return advance_ui[app->block_state];
 
-	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
-
-	// set port value
-	void *buf = PORT_BASE_ALIGNED(port);
-	*(float *)buf = trans->value.body;
-	port->last = trans->value.body;
-
-	_sp_app_port_spin_unlock(port);
+	if(_sp_app_port_try_lock(port))
+	{
+		// set port value
+		void *buf = PORT_BASE_ALIGNED(port);
+		*(float *)buf = trans->value.body;
+		port->last = trans->value.body;
+	}
+	// TODO do it later
+	_sp_app_port_unlock(port);
 
 	return advance_ui[app->block_state];
 }
@@ -80,13 +81,14 @@ _sp_app_from_ui_atom_transfer(sp_app_t *app, const LV2_Atom *atom)
 	if(!port) // port not found
 		return advance_ui[app->block_state];
 
-	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
-
-	// set port value
-	void *buf = PORT_BASE_ALIGNED(port);
-	memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
-
-	_sp_app_port_spin_unlock(port);
+	if(_sp_app_port_try_lock(port))
+	{
+		// set port value
+		void *buf = PORT_BASE_ALIGNED(port);
+		memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+	} 
+	// TODO do it later
+	_sp_app_port_unlock(port);
 
 	return advance_ui[app->block_state];
 }
@@ -626,12 +628,13 @@ _sp_app_from_ui_port_refresh(sp_app_t *app, const LV2_Atom *atom)
 	if(!port)
 		return advance_ui[app->block_state];
 
-	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
-	
-	float *buf_ptr = PORT_BASE_ALIGNED(port);
-	port->last = *buf_ptr - 0.1; // will force notification
-
-	_sp_app_port_spin_unlock(port);
+	if(_sp_app_port_try_lock(port))
+	{
+		float *buf_ptr = PORT_BASE_ALIGNED(port);
+		port->last = *buf_ptr - 0.1; // will force notification
+	}
+	//TODO do it later
+	_sp_app_port_unlock(port);
 
 	return advance_ui[app->block_state];
 }

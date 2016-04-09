@@ -296,51 +296,51 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 	}
 }
 
-// rt
 __realtime static inline void
 _port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
+	if(_sp_app_port_try_lock(port))
+	{
+		float *dst = PORT_BASE_ALIGNED(port);
 
-	float *dst = PORT_BASE_ALIGNED(port);
+		port_t *src_port = port->sources[0].port;
 
-	port_t *src_port = port->sources[0].port;
-
-	// normalize
-	const float norm = (*dst - src_port->min) * src_port->range_1;
-	*dst = port->min + norm * port->range; //TODO handle exponential ranges
-
-	_sp_app_port_spin_unlock(port);
+		// normalize
+		const float norm = (*dst - src_port->min) * src_port->range_1;
+		*dst = port->min + norm * port->range; //TODO handle exponential ranges
+	}
+	// TODO do it later
+	_sp_app_port_unlock(port);
 }
 
-// rt
 __realtime static inline void
 _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
-
-	float *dst = PORT_BASE_ALIGNED(port);
-	*dst = 0; // init
-
-	for(int s=0; s<port->num_sources; s++)
+	if(_sp_app_port_try_lock(port))
 	{
-		port_t *src_port = port->sources[s].port;
+		float *dst = PORT_BASE_ALIGNED(port);
+		*dst = 0; // init
 
-		_sp_app_port_spin_lock(src_port); // concurrent acess from worker and rt threads
+		for(int s=0; s<port->num_sources; s++)
+		{
+			port_t *src_port = port->sources[s].port;
 
-		const float *src = PORT_BASE_ALIGNED(src_port);
+			if(_sp_app_port_try_lock(src_port))
+			{
+				const float *src = PORT_BASE_ALIGNED(src_port);
 
-		// normalize
-		const float norm = (*src - src_port->min) * src_port->range_1;
-		*dst += port->min + norm * port->range; //TODO handle exponential ranges
-
-		_sp_app_port_spin_unlock(src_port);
+				// normalize
+				const float norm = (*src - src_port->min) * src_port->range_1;
+				*dst += port->min + norm * port->range; //TODO handle exponential ranges
+			}
+			// TODO do it later
+			_sp_app_port_unlock(src_port);
+		}
 	}
-
-	_sp_app_port_spin_unlock(port);
+	// TODO do it later
+	_sp_app_port_unlock(port);
 }
 
-// rt
 __realtime static inline void
 _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -370,7 +370,6 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
-// rt
 __realtime static inline void
 _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -387,7 +386,6 @@ _port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
-// rt
 __realtime static inline void
 _port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -404,7 +402,6 @@ _port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
-// rt
 __realtime static inline void
 _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -465,7 +462,6 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		lv2_atom_forge_pop(forge, &frame);
 }
 
-// rt
 __realtime static inline void
 _port_ev_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -474,7 +470,6 @@ _port_ev_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	//FIXME FIXME FIXME actually implement me FIXME FIXME FIXME
 }
 
-// rt
 __realtime static inline void
 _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -513,19 +508,23 @@ _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
-// rt
 __realtime static inline void
 _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	_sp_app_port_spin_lock(port); // concurrent acess from worker and rt threads
+	bool needs_update = false;
+	float new_val = 0.f;
 
-	const float *val = PORT_BASE_ALIGNED(port);
-	const bool needs_update = *val != port->last;
+	if(_sp_app_port_try_lock(port))
+	{
+		const float *val = PORT_BASE_ALIGNED(port);
+		new_val = *val;
+		needs_update = new_val != port->last;
 
-	if(needs_update) // update last value
-		port->last = *val;
-
-	_sp_app_port_spin_unlock(port);
+		if(needs_update) // update last value
+			port->last = new_val;
+	}
+	// TODO do it later
+	_sp_app_port_unlock(port);
 
 	if(needs_update)
 	{
@@ -533,13 +532,12 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 		transfer_float_t *trans = _sp_app_to_ui_request(app, size);
 		if(trans)
 		{
-			_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, val);
+			_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, &new_val);
 			_sp_app_to_ui_advance(app, size);
 		}
 	}
 }
 
-// rt
 __realtime static inline void
 _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -576,7 +574,6 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
-// rt
 __realtime static inline void
 _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -599,7 +596,6 @@ _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
-// rt
 __realtime static inline void
 _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
