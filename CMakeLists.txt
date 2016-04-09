@@ -37,6 +37,18 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro ${CMAKE_EXE_LINKER_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
 set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-z,relro ${CMAKE_SHARED_LINKER_FLAGS}")
 
+include(CheckCSourceCompiles)
+CHECK_C_SOURCE_COMPILES("
+	int main(int argc, char **argv)
+	{
+		void *src;
+		void *dst = __builtin_assume_aligned(src, 16);
+		return 0;
+	}" HAS_BUILTIN_ASSUME_ALIGNED)
+if(${HAS_BUILTIN_ASSUME_ALIGNED})
+	add_definitions("-DHAS_BUILTIN_ASSUME_ALIGNED")
+endif()
+
 # options
 option(BUILD_JACK "Build JACK standalone host" ON)
 option(BUILD_ALSA "Build ALSA standalone host" OFF)
@@ -132,7 +144,8 @@ if((${ELM_VERSION} VERSION_EQUAL "1.13.0") OR (${ELM_VERSION} VERSION_GREATER "1
 	add_definitions("-DELM_1_13")
 endif()
 
-add_subdirectory(lib)
+add_subdirectory(app)
+add_subdirectory(ui)
 add_subdirectory(bin)
 add_subdirectory(plugins)
 add_subdirectory(data)
