@@ -9,7 +9,12 @@ add_definitions("-D_GNU_SOURCE=1") # asprintf
 
 # synthpod
 add_library(synthpod.lib SHARED
-	synthpod_app.c)
+	synthpod_app.c
+	synthpod_app_state.c
+	synthpod_app_worker.c
+	synthpod_app_ui.c
+	synthpod_app_mod.c
+	synthpod_app_port.c)
 target_link_libraries(synthpod.lib
 	${EINA_LDFLAGS}
 	${ECORE_LDFLAGS}
