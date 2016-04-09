@@ -158,9 +158,7 @@ if(BUILD_DUMMY)
 endif()
 
 if(BUILD_SANDBOX_X11)
-# XCB
-	pkg_search_module(XCB REQUIRED xcb>=1.10)
-	include_directories(${XCB_INCLUDE_DIRS})
+	pkg_search_module(XCB REQUIRED xcb>=1.10) # XCB
 
 	add_executable(synthpod.sandbox.x11
 		synthpod_sandbox_x11.c
@@ -170,14 +168,13 @@ if(BUILD_SANDBOX_X11)
 		${XCB_LDFLAGS}
 		${NANOMSG_LDFLAGS}
 		${LILV_LDFLAGS})
+	target_include_directories(synthpod.sandbox.x11 PUBLIC ${XCB_INCLUDE_DIRS})
 	set_target_properties(synthpod.sandbox.x11 PROPERTIES OUTPUT_NAME "synthpod_sandbox_x11")
 	install(TARGETS synthpod.sandbox.x11 DESTINATION bin)
 endif()
 
 if(BUILD_SANDBOX_GTK2)
-# gtk+-2.0
-	pkg_search_module(GTK2 REQUIRED gtk+-2.0)
-	include_directories(${GTK2_INCLUDE_DIRS})
+	pkg_search_module(GTK2 REQUIRED gtk+-2.0) # gtk+-2.0
 
 	add_executable(synthpod.sandbox.gtk2
 		synthpod_sandbox_gtk.c
@@ -187,14 +184,13 @@ if(BUILD_SANDBOX_GTK2)
 		${GTK2_LDFLAGS}
 		${NANOMSG_LDFLAGS}
 		${LILV_LDFLAGS})
+	target_include_directories(synthpod.sandbox.gtk2 PUBLIC ${GTK2_INCLUDE_DIRS})
 	set_target_properties(synthpod.sandbox.gtk2 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk2")
 	install(TARGETS synthpod.sandbox.gtk2 DESTINATION bin)
 endif()
 
 if(BUILD_SANDBOX_GTK3)
-# gtk+-3.0
-	pkg_search_module(GTK3 REQUIRED gtk+-3.0)
-	include_directories(${GTK3_INCLUDE_DIRS})
+	pkg_search_module(GTK3 REQUIRED gtk+-3.0) # gtk+-3.0
 
 	add_executable(synthpod.sandbox.gtk3
 		synthpod_sandbox_gtk.c
@@ -204,38 +200,36 @@ if(BUILD_SANDBOX_GTK3)
 		${GTK3_LDFLAGS}
 		${NANOMSG_LDFLAGS}
 		${LILV_LDFLAGS})
+	target_include_directories(synthpod.sandbox.gtk3 PUBLIC ${GTK3_INCLUDE_DIRS})
 	set_target_properties(synthpod.sandbox.gtk3 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk3")
 	install(TARGETS synthpod.sandbox.gtk3 DESTINATION bin)
 endif()
 
 if(BUILD_SANDBOX_QT4)
-# Qt4
-	pkg_search_module(QT4 REQUIRED QtGui)
-	include_directories(${QT4_INCLUDE_DIRS})
+	pkg_search_module(QT4CORE REQUIRED QtCore) # Qt4Core
+	pkg_search_module(QT4GUI REQUIRED QtGui) # Qt4Gui
 
 	add_executable(synthpod.sandbox.qt4
 		synthpod_sandbox_qt.cpp
 		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
 		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.qt4
-		${QT4_LDFLAGS}
+		${QT4CORE_LDFLAGS}
+		${QT4GUI_LDFLAGS}
 		${NANOMSG_LDFLAGS}
 		${LILV_LDFLAGS})
+	target_include_directories(synthpod.sandbox.qt4 PUBLIC ${QT4CORE_INCLUDE_DIRS})
+	target_include_directories(synthpod.sandbox.qt4 PUBLIC ${QT4GUI_INCLUDE_DIRS})
+	set_target_properties(synthpod.sandbox.qt4 PROPERTIES COMPILE_DEFINITIONS "SYNTHPOD_SANDBOX_QT=4")
 	set_target_properties(synthpod.sandbox.qt4 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt4")
 	set_target_properties(synthpod.sandbox.qt4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 	install(TARGETS synthpod.sandbox.qt4 DESTINATION bin)
 endif()
 
 if(BUILD_SANDBOX_QT5)
-	# Qt5Core
-	pkg_search_module(QT5CORE REQUIRED Qt5Core)
-	include_directories(${QT5CORE_INCLUDE_DIRS})
-	# Qt5Widgets
-	pkg_search_module(QT5WIDGETS REQUIRED Qt5Widgets)
-	include_directories(${QT5WIDGETS_INCLUDE_DIRS})
-	# Qt5Gui
-	pkg_search_module(QT5GUI REQUIRED Qt5Gui)
-	include_directories(${QT5GUI_INCLUDE_DIRS})
+	pkg_search_module(QT5CORE REQUIRED Qt5Core) # Qt5Core
+	pkg_search_module(QT5WIDGETS REQUIRED Qt5Widgets) # Qt5Widgets
+	pkg_search_module(QT5GUI REQUIRED Qt5Gui) # Qt5Gui
 
 	add_executable(synthpod.sandbox.qt5
 		synthpod_sandbox_qt.cpp
@@ -247,6 +241,10 @@ if(BUILD_SANDBOX_QT5)
 		${QT5GUI_LDFLAGS}
 		${NANOMSG_LDFLAGS}
 		${LILV_LDFLAGS})
+	target_include_directories(synthpod.sandbox.qt5 PUBLIC ${QT5CORE_INCLUDE_DIRS})
+	target_include_directories(synthpod.sandbox.qt5 PUBLIC ${QT5WIDGETS_INCLUDE_DIRS})
+	target_include_directories(synthpod.sandbox.qt5 PUBLIC ${QT5GUI_INCLUDE_DIRS})
+	set_target_properties(synthpod.sandbox.qt5 PROPERTIES COMPILE_DEFINITIONS "SYNTHPOD_SANDBOX_QT=5")
 	set_target_properties(synthpod.sandbox.qt5 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt5")
 	set_target_properties(synthpod.sandbox.qt5 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 	install(TARGETS synthpod.sandbox.qt5 DESTINATION bin)

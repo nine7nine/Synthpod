@@ -22,10 +22,15 @@
 
 #include <sandbox_slave.h>
 
-//#include <QtGui/QApplication> // Qt4
-//#include <QtGui/QMainWindow> // Qt4
-#include <QtWidgets/QApplication> // Qt5
-#include <QtWidgets/QMainWindow> // Qt5
+#if (SYNTHPOD_SANDBOX_QT == 4)
+#	include <QtGui/QApplication>
+#	include <QtGui/QMainWindow>
+#elif (SYNTHPOD_SANDBOX_QT == 5)
+#	include <QtWidgets/QApplication>
+#	include <QtWidgets/QMainWindow>
+#else
+#	error "SYNTHPOD_QT is invalid"
+#endif
 
 typedef struct _app_t app_t;
 
