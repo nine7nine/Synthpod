@@ -27,11 +27,11 @@ set(SYNTHPOD_MICRO_VERSION 1)
 set(SYNTHPOD_VERSION "${SYNTHPOD_MAJOR_VERSION}.${SYNTHPOD_MINOR_VERSION}.${SYNTHPOD_MICRO_VERSION}")
 add_definitions("-DSYNTHPOD_VERSION=\"${SYNTHPOD_VERSION}\"")
 
-set(CMAKE_C_FLAGS "-std=gnu11 -Wextra -Wno-unused-parameter -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-std=gnu11 -Wextra -Wno-unused-parameter -Wno-attributes -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
 set(CMAKE_C_FLAGS "-Wshadow -Wimplicit-function-declaration -Wmissing-prototypes -Wstrict-prototypes ${CMAKE_C_FLAGS}")
 
 set(CMAKE_CXX_FLAGS "-std=gnu++11 -Wextra -ffast-math -fvisibility=hidden ${CMAKE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS "-Wshadow -Wredundant-decls -Weffc++ ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "-Wshadow -Wredundant-decls -Wno-effc++ ${CMAKE_CXX_FLAGS}")
 
 set(CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro ${CMAKE_EXE_LINKER_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
