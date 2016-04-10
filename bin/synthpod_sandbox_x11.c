@@ -144,6 +144,7 @@ _deinit(void *data)
 
 	xcb_destroy_subwindows(app->conn, app->win);
 	xcb_destroy_window(app->conn, app->win);
+	xcb_disconnect(app->conn);
 }
 
 static const sandbox_slave_driver_t driver = {
