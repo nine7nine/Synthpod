@@ -42,6 +42,8 @@ struct _app_t {
 	QWidget *widget;
 };
 
+//TODO handle SIGINT and gracefully terminate
+
 static inline int
 _init(sandbox_slave_t *sb, void *data)
 {
@@ -50,13 +52,17 @@ _init(sandbox_slave_t *sb, void *data)
 	int argc = 0;
 	app->a = new QApplication(argc, NULL, true);
 	app->win = new QMainWindow();
-	app->win->resize(640, 360);
 
 	if(sandbox_slave_instantiate(sb, (void *)app->win, (void *)&app->widget))
 		return -1;
 
 	if(app->widget)
+	{
 		app->widget->show();
+		app->win->setCentralWidget(app->widget);
+	}
+
+	app->win->adjustSize();
 	app->win->show();
 
 	return 0;
