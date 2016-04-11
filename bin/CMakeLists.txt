@@ -264,3 +264,18 @@ if(BUILD_SANDBOX_EFL)
 	set_target_properties(synthpod.sandbox.efl PROPERTIES OUTPUT_NAME "synthpod_sandbox_efl")
 	install(TARGETS synthpod.sandbox.efl DESTINATION bin)
 endif()
+
+if(BUILD_SANDBOX_X11 OR BUILD_SANDBOX_EFL
+OR BUILD_SANDBOX_GTK2 OR BUILD_SANDBOX_GTK3
+OR BUILD_SANDBOX_QT4 OR BUILD_SANDBOX_QT5)
+# man page 
+	add_custom_command(
+		OUTPUT ${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz
+		COMMAND ${GZIP} ARGS
+		"-c9" ${CMAKE_CURRENT_SOURCE_DIR}/synthpod_sandbox.1
+			">" ${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz
+		DEPENDS
+			${CMAKE_CURRENT_SOURCE_DIR}/synthpod_sandbox.1)
+	add_custom_target(SYNTHPOD_SANDBOX_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz)
+	install(FILES "${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz" DESTINATION share/man/man1)
+endif()
