@@ -128,6 +128,12 @@ enum _mod_ui_type_t {
 #	if defined(SANDBOX_EFL)
 	MOD_UI_TYPE_SANDBOX_EFL,
 #	endif
+#	if defined(SANDBOX_SHOW)
+	MOD_UI_TYPE_SANDBOX_SHOW,
+#	endif
+#	if defined(SANDBOX_KX)
+	MOD_UI_TYPE_SANDBOX_KX,
+#	endif
 #endif
 };
 
@@ -2426,6 +2432,16 @@ _sbox_ui_show(mod_t *mod)
 #if defined(SANDBOX_EFL)
 		case MOD_UI_TYPE_SANDBOX_EFL:
 			executable = "synthpod_sandbox_efl";
+			break;
+#endif
+#if defined(SANDBOX_SHOW)
+		case MOD_UI_TYPE_SANDBOX_SHOW:
+			executable = "synthpod_sandbox_show";
+			break;
+#endif
+#if defined(SANDBOX_KX)
+		case MOD_UI_TYPE_SANDBOX_KX:
+			executable = "synthpod_sandbox_kx";
 			break;
 #endif
 		default:

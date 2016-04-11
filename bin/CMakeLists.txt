@@ -265,6 +265,32 @@ if(BUILD_SANDBOX_EFL)
 	install(TARGETS synthpod.sandbox.efl DESTINATION bin)
 endif()
 
+if(BUILD_SANDBOX_SHOW)
+	add_executable(synthpod.sandbox.show
+		synthpod_sandbox_show.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
+	target_link_libraries(synthpod.sandbox.show
+		${ELM_LDFLAGS}
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
+	set_target_properties(synthpod.sandbox.show PROPERTIES OUTPUT_NAME "synthpod_sandbox_show")
+	install(TARGETS synthpod.sandbox.show DESTINATION bin)
+endif()
+
+if(BUILD_SANDBOX_KX)
+	add_executable(synthpod.sandbox.kx
+		synthpod_sandbox_kx.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
+	target_link_libraries(synthpod.sandbox.kx
+		${ELM_LDFLAGS}
+		${NANOMSG_LDFLAGS}
+		${LILV_LDFLAGS})
+	set_target_properties(synthpod.sandbox.kx PROPERTIES OUTPUT_NAME "synthpod_sandbox_kx")
+	install(TARGETS synthpod.sandbox.kx DESTINATION bin)
+endif()
+
 if(BUILD_SANDBOX_X11 OR BUILD_SANDBOX_EFL
 OR BUILD_SANDBOX_GTK2 OR BUILD_SANDBOX_GTK3
 OR BUILD_SANDBOX_QT4 OR BUILD_SANDBOX_QT5)
