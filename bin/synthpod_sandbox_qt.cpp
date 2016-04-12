@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include <sandbox_slave.h>
+#include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #if (SYNTHPOD_SANDBOX_QT == 4)
 #	include <QtGui/QApplication>
@@ -53,14 +54,18 @@ _init(sandbox_slave_t *sb, void *data)
 	app->a = new QApplication(argc, NULL, true);
 	app->win = new QMainWindow();
 
-	if(sandbox_slave_instantiate(sb, (void *)app->win, (void *)&app->widget))
+	const LV2_Feature parent_feature = {
+		.URI = LV2_UI__parent,
+		.data = (void *)app->win
+	};
+
+	if(!sandbox_slave_instantiate(sb, &parent_feature, (void *)&app->widget))
+		return -1;
+	if(!app->widget)
 		return -1;
 
-	if(app->widget)
-	{
-		app->widget->show();
-		app->win->setCentralWidget(app->widget);
-	}
+	app->widget->show();
+	app->win->setCentralWidget(app->widget);
 
 	app->win->adjustSize();
 	app->win->show();

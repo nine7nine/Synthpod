@@ -23,6 +23,7 @@
 
 #include <sandbox_slave.h>
 #include <lv2_external_ui.h>
+#include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 typedef struct _app_t app_t;
 
@@ -41,6 +42,15 @@ _sig(int signum)
 	done = true;
 }
 
+static inline void
+_ui_closed(LV2UI_Controller controller)
+{
+	sandbox_slave_t *sb = controller;
+	(void)sb;
+
+	done = true;
+}
+
 static inline int
 _init(sandbox_slave_t *sb, void *data)
 {
@@ -48,8 +58,20 @@ _init(sandbox_slave_t *sb, void *data)
 
 	signal(SIGINT, _sig);
 
-	if(sandbox_slave_instantiate(sb, &app->host, &app->widget))
+	app->host.ui_closed = _ui_closed;
+	app->host.plugin_human_id = NULL; //FIXME
+
+	const LV2_Feature parent_feature = {
+		.URI = LV2_EXTERNAL_UI__Host,
+		.data = &app->host
+	};
+
+	if(!sandbox_slave_instantiate(sb, &parent_feature, &app->widget))
 		return -1;
+	if(!app->widget)
+		return -1;
+
+	LV2_EXTERNAL_UI_SHOW(app->widget);
 
 	return 0; //success
 }
@@ -64,8 +86,7 @@ _run(sandbox_slave_t *sb, void *data)
 		usleep(40000); // 25 fps
 
 		sandbox_slave_recv(sb);
-		if(sandbox_slave_idle(sb))
-			done = true;
+		LV2_EXTERNAL_UI_RUN(app->widget);
 		sandbox_slave_flush(sb);
 	}
 }
@@ -74,7 +95,8 @@ static inline void
 _deinit(void *data)
 {
 	app_t *app = data;
-	(void)app;
+
+	LV2_EXTERNAL_UI_HIDE(app->widget);
 }
 
 static const sandbox_slave_driver_t driver = {

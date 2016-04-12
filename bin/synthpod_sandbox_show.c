@@ -22,11 +22,15 @@
 #include <signal.h>
 
 #include <sandbox_slave.h>
+#include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 typedef struct _app_t app_t;
 
 struct _app_t {
 	sandbox_slave_t *sb;
+	LV2UI_Handle *handle;
+	const LV2UI_Idle_Interface *idle_iface;
+	const LV2UI_Show_Interface *show_iface;
 };
 
 static volatile bool done = false;
@@ -44,10 +48,15 @@ _init(sandbox_slave_t *sb, void *data)
 
 	signal(SIGINT, _sig);
 
-	void *parent = NULL;
 	void *widget = NULL;
-	if(sandbox_slave_instantiate(sb, parent, &widget))
+	if(!(app->handle = sandbox_slave_instantiate(sb, NULL, &widget)))
 		return -1;
+
+	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
+	app->show_iface = sandbox_slave_extension_data(sb, LV2_UI__showInterface);
+
+	if(app->show_iface)
+		app->show_iface->show(app->handle);
 
 	return 0; //success
 }
@@ -62,8 +71,11 @@ _run(sandbox_slave_t *sb, void *data)
 		usleep(40000); // 25 fps
 
 		sandbox_slave_recv(sb);
-		if(sandbox_slave_idle(sb))
-			done = true;
+		if(app->idle_iface)
+		{
+			if(app->idle_iface->idle(app->handle))
+				done = true;
+		}
 		sandbox_slave_flush(sb);
 	}
 }
@@ -72,7 +84,9 @@ static inline void
 _deinit(void *data)
 {
 	app_t *app = data;
-	(void)app;
+
+	if(app->show_iface)
+		app->show_iface->hide(app->handle);
 }
 
 static const sandbox_slave_driver_t driver = {

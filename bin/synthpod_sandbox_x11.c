@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <sandbox_slave.h>
+#include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <xcb/xcb.h>
 #include <signal.h>
@@ -30,6 +31,8 @@ typedef struct _app_t app_t;
 
 struct _app_t {
 	sandbox_slave_t *sb;
+	LV2UI_Handle *handle;
+	const LV2UI_Idle_Interface *idle_iface;
 
 	xcb_connection_t *conn;
 	xcb_screen_t *screen;
@@ -99,8 +102,17 @@ _init(sandbox_slave_t *sb, void *data)
   xcb_map_window(app->conn, app->win);
   xcb_flush(app->conn);
 
-	if(sandbox_slave_instantiate(sb, (void *)(uintptr_t)app->win, (void *)(uintptr_t *)&app->widget))
+	const LV2_Feature parent_feature = {
+		.URI = LV2_UI__parent,
+		.data = (void *)(uintptr_t)app->win
+	};
+
+	if(!(app->handle = sandbox_slave_instantiate(sb, &parent_feature, (uintptr_t *)&app->widget)))
 		return -1;
+	if(!app->widget)
+		return -1;
+
+	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
 
 	return 0;
 }
@@ -131,8 +143,11 @@ _run(sandbox_slave_t *sb, void *data)
 		usleep(40000); // 25 fps
 
 		sandbox_slave_recv(sb);
-		if(sandbox_slave_idle(sb))
-			done = true;
+		if(app->idle_iface)
+		{
+			if(app->idle_iface->idle(app->handle))
+				done = true;
+		}
 		sandbox_slave_flush(sb);
 	}
 }
