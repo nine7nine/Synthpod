@@ -105,9 +105,15 @@ enum _group_type_t {
 enum _mod_ui_type_t {
 	MOD_UI_TYPE_UNSUPPORTED = 0,
 
+#if !defined(SANDBOX_LIB) || !defined(SANDBOX_EFL)
 	MOD_UI_TYPE_EFL,
+#endif
+#if !defined(SANDBOX_LIB) || !defined(SANDBOX_SHOW)
 	MOD_UI_TYPE_SHOW,
+#endif
+#if !defined(SANDBOX_LIB) || !defined(SANDBOX_KX)
 	MOD_UI_TYPE_KX,
+#endif
 
 #if defined(SANDBOX_LIB)
 #	if defined(SANDBOX_X11)
@@ -3393,8 +3399,51 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
 				{
 					//printf("has EoUI\n");
+#if defined(SANDBOX_LIB) && defined(SANDBOX_EFL)
+					mod_ui_type = MOD_UI_TYPE_SANDBOX_EFL;
+					mod_ui_driver = &sbox_ui_driver;
+#else
 					mod_ui_type = MOD_UI_TYPE_EFL;
 					mod_ui_driver = &efl_ui_driver;
+#endif
+				}
+			}
+
+			// test for show UI (precedes MOD_UI_TYPE_SANDBOX_SHOW)
+			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				//const bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
+				//	ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
+				const bool has_show_iface = lilv_world_ask(ui->world, ui_uri_node,
+					ui->regs.core.extension_data.node, ui->regs.ui.show_interface.node);
+
+				if(has_show_iface)
+				{
+					//printf("has show UI\n");
+#if defined(SANDBOX_LIB) && defined(SANDBOX_SHOW)
+					mod_ui_type = MOD_UI_TYPE_SANDBOX_SHOW;
+					mod_ui_driver = &sbox_ui_driver;
+#else
+					mod_ui_type = MOD_UI_TYPE_SHOW;
+					mod_ui_driver = &show_ui_driver;
+#endif
+				}
+			}
+
+			// test for kxstudio kx_ui (precedes MOD_UI_TYPE_SANDBOX_KX)
+			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
+			{
+				if(  lilv_ui_is_a(lui, ui->regs.ui.kx_widget.node)
+					|| lilv_ui_is_a(lui, ui->regs.ui.external.node) )
+				{
+					//printf("has kx-ui\n");
+#if defined(SANDBOX_LIB) && defined(SANDBOX_KX)
+					mod_ui_type = MOD_UI_TYPE_SANDBOX_KX;
+					mod_ui_driver = &sbox_ui_driver;
+#else
+					mod_ui_type = MOD_UI_TYPE_KX;
+					mod_ui_driver = &kx_ui_driver;
+#endif
 				}
 			}
 
@@ -3463,48 +3512,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 				}
 			}
 #	endif
-
-#	if defined(SANDBOX_EFL)
-			// test for EoUI
-			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
-			{
-				if(lilv_ui_is_a(lui, ui->regs.ui.eo.node))
-				{
-					//printf("has EoUI\n");
-					mod_ui_type = MOD_UI_TYPE_SANDBOX_EFL;
-					mod_ui_driver = &sbox_ui_driver;
-				}
-			}
-#	endif
 #endif
-
-			// test for show UI
-			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
-			{
-				//const bool has_idle_iface = lilv_world_ask(ui->world, ui_uri_node,
-				//	ui->regs.core.extension_data.node, ui->regs.ui.idle_interface.node);
-				const bool has_show_iface = lilv_world_ask(ui->world, ui_uri_node,
-					ui->regs.core.extension_data.node, ui->regs.ui.show_interface.node);
-
-				if(has_show_iface)
-				{
-					//printf("has show UI\n");
-					mod_ui_type = MOD_UI_TYPE_SHOW;
-					mod_ui_driver = &show_ui_driver;
-				}
-			}
-
-			// test for kxstudio kx_ui
-			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
-			{
-				if(  lilv_ui_is_a(lui, ui->regs.ui.kx_widget.node)
-					|| lilv_ui_is_a(lui, ui->regs.ui.external.node) )
-				{
-					//printf("has kx-ui\n");
-					mod_ui_type = MOD_UI_TYPE_KX;
-					mod_ui_driver = &kx_ui_driver;
-				}
-			}
 
 			if(mod_ui_type == MOD_UI_TYPE_UNSUPPORTED)
 				continue;
@@ -4483,7 +4491,20 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 				const LilvNode *ui_uri = lilv_ui_get_uri(mod_ui->ui);
 				const char *ui_uri_str = lilv_node_as_string(ui_uri);
 
+				const char *ui_uri_fmt = (mod_ui->driver == &sbox_ui_driver)
+					? "%s (sandboxed)"
+					: "%s (native)";
+
+				char *ui_uri_ptr = NULL;
+				if(asprintf(&ui_uri_ptr, ui_uri_fmt, ui_uri_str) != -1)
+					ui_uri_str = ui_uri_ptr;
+				else
+					ui_uri_ptr = NULL;
+
 				elm_menu_item_add(ui->uimenu, NULL, NULL, ui_uri_str, _mod_ui_toggle_chosen, mod_ui);
+
+				if(ui_uri_ptr)
+					free(ui_uri_ptr);
 			}
 			elm_menu_move(ui->uimenu, x+w, y+h);
 			evas_object_show(ui->uimenu);
