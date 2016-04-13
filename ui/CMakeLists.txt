@@ -49,12 +49,32 @@ endif()
 
 add_library(synthpod_ui.lib SHARED
 	synthpod_ui.c
+	synthpod_ui_app.c
+	synthpod_ui_efl.c
+	synthpod_ui_group.c
+	synthpod_ui_kx.c
+	synthpod_ui_matrix.c
+	synthpod_ui_menu.c
+	synthpod_ui_midi.c
+	synthpod_ui_mod.c
+	synthpod_ui_modgrid.c
+	synthpod_ui_modlist.c
+	synthpod_ui_patcher.c
+	synthpod_ui_pluglist.c
+	synthpod_ui_port.c
+	synthpod_ui_prop.c
+	synthpod_ui_sbox.c
+	synthpod_ui_show.c
+	synthpod_ui_std.c
+
 	patcher.c
+
 	smart_slider.c
 	smart_meter.c
 	smart_spinner.c
 	smart_toggle.c
 	smart_bitmask.c
+
 	${SANDBOX_MASTER_SOURCE})
 target_link_libraries(synthpod_ui.lib
 	${ELM_LDFLAGS}
