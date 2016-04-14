@@ -64,9 +64,10 @@ _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 		void *buf = PORT_BASE_ALIGNED(port);
 		*(float *)buf = trans->value.body;
 		port->last = trans->value.body;
+
+		_sp_app_port_unlock(port);
 	}
 	// TODO do it later
-	_sp_app_port_unlock(port);
 
 	return advance_ui[app->block_state];
 }
@@ -86,9 +87,10 @@ _sp_app_from_ui_atom_transfer(sp_app_t *app, const LV2_Atom *atom)
 		// set port value
 		void *buf = PORT_BASE_ALIGNED(port);
 		memcpy(buf, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
+
+		_sp_app_port_unlock(port);
 	} 
 	// TODO do it later
-	_sp_app_port_unlock(port);
 
 	return advance_ui[app->block_state];
 }
@@ -632,9 +634,10 @@ _sp_app_from_ui_port_refresh(sp_app_t *app, const LV2_Atom *atom)
 	{
 		float *buf_ptr = PORT_BASE_ALIGNED(port);
 		port->last = *buf_ptr - 0.1; // will force notification
+
+		_sp_app_port_unlock(port);
 	}
 	//TODO do it later
-	_sp_app_port_unlock(port);
 
 	return advance_ui[app->block_state];
 }

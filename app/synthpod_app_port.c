@@ -308,9 +308,10 @@ _port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		// normalize
 		const float norm = (*dst - src_port->min) * src_port->range_1;
 		*dst = port->min + norm * port->range; //TODO handle exponential ranges
+
+		_sp_app_port_unlock(port);
 	}
 	// TODO do it later
-	_sp_app_port_unlock(port);
 }
 
 __realtime static inline void
@@ -332,13 +333,15 @@ _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 				// normalize
 				const float norm = (*src - src_port->min) * src_port->range_1;
 				*dst += port->min + norm * port->range; //TODO handle exponential ranges
+
+				_sp_app_port_unlock(src_port);
 			}
 			// TODO do it later
-			_sp_app_port_unlock(src_port);
 		}
+
+		_sp_app_port_unlock(port);
 	}
 	// TODO do it later
-	_sp_app_port_unlock(port);
 }
 
 __realtime static inline void
@@ -522,9 +525,10 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 		if(needs_update) // update last value
 			port->last = new_val;
+
+		_sp_app_port_unlock(port);
 	}
 	// TODO do it later
-	_sp_app_port_unlock(port);
 
 	if(needs_update)
 	{
