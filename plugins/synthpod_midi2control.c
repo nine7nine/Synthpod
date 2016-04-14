@@ -30,6 +30,8 @@
 
 #define MAX_SLOTS 8
 #define MAX_NPROPS (5 * MAX_SLOTS)
+#define MIN_VAL 0
+#define MAX_VAL 127
 
 typedef struct _plughandle_t plughandle_t;
 
@@ -58,6 +60,7 @@ struct _plughandle_t {
 	LV2_URID cntrl_urid [MAX_SLOTS];
 	LV2_URID min_urid [MAX_SLOTS];
 	LV2_URID max_urid [MAX_SLOTS];
+	LV2_URID raw_urid [MAX_SLOTS];
 
 	float value [MAX_SLOTS];
 	float divider [MAX_SLOTS];
@@ -330,13 +333,38 @@ _intercept_learn(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	{
 		handle->learning = true;
 
-		handle->min[i] = 127;
-		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->min_urid[i]);
+		const int32_t min = MAX_VAL;
+		if(props_set_writable(&handle->props, handle->min_urid[i], forge->Int, &min))
+		{
+			if(handle->ref)
+				handle->ref = props_set(&handle->props, forge, frames, handle->min_urid[i]);
+		}
 
-		handle->max[i] = 0;
+		const int32_t max = MIN_VAL;
+		if(props_set_writable(&handle->props, handle->max_urid[i], forge->Int, &max))
+		{
+			if(handle->ref)
+				handle->ref = props_set(&handle->props, forge, frames, handle->max_urid[i]);
+		}
+	}
+
+	if(event == PROP_EVENT_APPLY)
+	{
 		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->max_urid[i]);
+			handle->ref = props_set(&handle->props, forge, frames, impl->property);
+	}
+}
+
+static void
+_intercept_cntrl(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	if(event == PROP_EVENT_APPLY)
+	{
+		if(handle->ref)
+			handle->ref = props_set(&handle->props, forge, frames, impl->property);
 	}
 }
 
@@ -364,6 +392,12 @@ _intercept_min(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	const int i = (int32_t *)impl->value  - handle->min;
 	_update_divider(handle, i);
 	_update_value(handle, i);
+
+	if(event == PROP_EVENT_APPLY)
+	{
+		if(handle->ref)
+			handle->ref = props_set(&handle->props, forge, frames, impl->property);
+	}
 }
 
 static void
@@ -375,6 +409,12 @@ _intercept_max(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	const int i = (int32_t *)impl->value  - handle->max;
 	_update_divider(handle, i);
 	_update_value(handle, i);
+
+	if(event == PROP_EVENT_APPLY)
+	{
+		if(handle->ref)
+			handle->ref = props_set(&handle->props, forge, frames, impl->property);
+	}
 }
 
 static void
@@ -425,16 +465,16 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		handle->learn_urid[i] = props_register(&handle->props, &stat_learn[i],
 			PROP_EVENT_WRITE, _intercept_learn, &handle->learn[i]);
 		handle->cntrl_urid[i] = props_register(&handle->props, &stat_cntrl[i],
-			PROP_EVENT_NONE, NULL, &handle->cntrl[i]);
+			PROP_EVENT_APPLY, _intercept_cntrl, &handle->cntrl[i]);
 		handle->min_urid[i] = props_register(&handle->props, &stat_min[i],
 			PROP_EVENT_WRITE, _intercept_min, &handle->min[i]);
 		handle->max_urid[i] = props_register(&handle->props, &stat_max[i],
 			PROP_EVENT_WRITE, _intercept_max, &handle->max[i]);
-		LV2_URID raw_urid = props_register(&handle->props, &stat_raw[i],
-			PROP_EVENT_RESTORE, _intercept_raw, &handle->raw[i]);
+		handle->raw_urid[i] = props_register(&handle->props, &stat_raw[i],
+			PROP_EVENT_RESTORE | PROP_EVENT_APPLY, _intercept_raw, &handle->raw[i]);
 
 		if(  !handle->learn_urid[i] || !handle->cntrl_urid[i]
-			|| !handle->min_urid[i] || !handle->max_urid[i] || !raw_urid)
+			|| !handle->min_urid[i] || !handle->max_urid[i] || !handle->raw_urid[i])
 			success = false;
 	}
 
@@ -496,7 +536,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			if( (msg[0] & 0xf0) != LV2_MIDI_MSG_CONTROLLER)
 				continue; // ignore non-controller messages
 
-			const uint8_t cntrl = msg[1];
+			const int32_t cntrl = msg[1];
 
 			if(handle->learning)
 			{
@@ -505,13 +545,18 @@ run(LV2_Handle instance, uint32_t nsamples)
 				{
 					if(handle->learn[i])
 					{
-						handle->cntrl[i] = cntrl;
-						handle->learn[i] = false;
+						const int32_t _false = false;
+						if(props_set_writable(&handle->props, handle->learn_urid[i], forge->Int, &_false))
+						{
+							if(handle->ref)
+								handle->ref = props_set(&handle->props, forge, frames, handle->learn_urid[i]);
+						}
 
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->learn_urid[i]);
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->cntrl_urid[i]);
+						if(props_set_writable(&handle->props, handle->cntrl_urid[i], forge->Int, &cntrl))
+						{
+							if(handle->ref)
+								handle->ref = props_set(&handle->props, forge, frames, handle->cntrl_urid[i]);
+						}
 					}
 				}
 
@@ -522,28 +567,34 @@ run(LV2_Handle instance, uint32_t nsamples)
 			{
 				if(handle->cntrl[i] == cntrl)
 				{
-					const uint8_t value = msg[2];
+					const int32_t value = msg[2];
 
 					if(value < handle->min[i])
 					{
-						handle->min[i] = value;
-						_update_divider(handle, i);
+						if(props_set_writable(&handle->props, handle->min_urid[i], forge->Int, &value))
+						{
+							_update_divider(handle, i);
 
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->min_urid[i]);
+							if(handle->ref)
+								handle->ref = props_set(&handle->props, forge, frames, handle->min_urid[i]);
+						}
 					}
 
 					if(value > handle->max[i])
 					{
-						handle->max[i] = value;
-						_update_divider(handle, i);
+						if(props_set_writable(&handle->props, handle->max_urid[i], forge->Int, &value))
+						{
+							_update_divider(handle, i);
 
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->max_urid[i]);
+							if(handle->ref)
+								handle->ref = props_set(&handle->props, forge, frames, handle->max_urid[i]);
+						}
 					}
 
-					handle->raw[i] = value;
-					_update_value(handle, i);
+					if(props_set_writable(&handle->props, handle->raw_urid[i], forge->Int, &value))
+					{
+						_update_value(handle, i);
+					}
 				}
 			}
 		}
