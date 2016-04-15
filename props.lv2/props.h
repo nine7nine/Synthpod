@@ -220,8 +220,13 @@ props_advance(props_t *props, LV2_Atom_Forge *forge, uint32_t frames,
 	const LV2_Atom_Object *obj, LV2_Atom_Forge_Ref *ref);
 
 // rt-safe
-static inline LV2_Atom_Forge_Ref
-props_set(props_t *props, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID property);
+static inline void
+props_set(props_t *props, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID property,
+	LV2_Atom_Forge_Ref *ref);
+
+// rt-safe
+static inline void
+props_stash(props_t *props, LV2_URID property);
 
 // non-rt
 static inline LV2_State_Status
@@ -1126,18 +1131,27 @@ props_advance(props_t *props, LV2_Atom_Forge *forge, uint32_t frames,
 	return 0; // did not handle a patch event
 }
 
-static inline LV2_Atom_Forge_Ref
-props_set(props_t *props, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID property)
+static inline void
+props_set(props_t *props, LV2_Atom_Forge *forge, uint32_t frames, LV2_URID property,
+	LV2_Atom_Forge_Ref *ref)
 {
 	props_impl_t *impl = _props_impl_search(props, property);
 
 	if(impl)
 	{
 		_props_stash(props, impl);
-		return _props_get(props, forge, frames, impl);
+		if(*ref)
+			*ref = _props_get(props, forge, frames, impl);
 	}
+}
 
-	return 1; // we have not written anything, ref thus is set to 'good'
+static inline void
+props_stash(props_t *props, LV2_URID property)
+{
+	props_impl_t *impl = _props_impl_search(props, property);
+
+	if(impl)
+		_props_stash(props, impl);
 }
 
 static inline LV2_State_Status

@@ -146,8 +146,7 @@ _intercept_dyn1(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	{
 		handle->dyn.val2 = handle->dyn.val1 * 2;
 
-		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->urid.dyn2);
+		props_set(&handle->props, forge, frames, handle->urid.dyn2, &handle->ref);
 	}
 }
 
@@ -163,8 +162,7 @@ _intercept_dyn3(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	{
 		handle->dyn.val4 = handle->dyn.val3 * 2;
 
-		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->urid.dyn4);
+		props_set(&handle->props, forge, frames, handle->urid.dyn4, &handle->ref);
 	}
 }
 
@@ -180,8 +178,7 @@ _intercept_stat1(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	{
 		handle->stat.val2 = handle->stat.val1 * 2;
 
-		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->urid.stat2);
+		props_set(&handle->props, forge, frames, handle->urid.stat2, &handle->ref);
 	}
 }
 
@@ -197,8 +194,7 @@ _intercept_stat3(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	{
 		handle->stat.val4 = handle->stat.val3 * 2;
 
-		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->urid.stat4);
+		props_set(&handle->props, forge, frames, handle->urid.stat4, &handle->ref);
 	}
 }
 
