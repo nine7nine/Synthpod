@@ -86,12 +86,10 @@ _intercept_learn(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		handle->learning = true;
 
 		handle->state.min[i] = MAX_VAL;
-		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->urid.min[i]);
+		props_set(&handle->props, forge, frames, handle->urid.min[i], &handle->ref);
 
 		handle->state.max[i] = MIN_VAL;
-		if(handle->ref)
-			handle->ref = props_set(&handle->props, forge, frames, handle->urid.max[i]);
+		props_set(&handle->props, forge, frames, handle->urid.max[i], &handle->ref);
 	}
 }
 
@@ -361,12 +359,10 @@ run(LV2_Handle instance, uint32_t nsamples)
 					if(handle->state.learn[i])
 					{
 						handle->state.learn[i] = false;
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->urid.learn[i]);
+						props_set(&handle->props, forge, frames, handle->urid.learn[i], &handle->ref);
 
 						handle->state.cntrl[i] = cntrl;
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->urid.cntrl[i]);
+						props_set(&handle->props, forge, frames, handle->urid.cntrl[i], &handle->ref);
 					}
 				}
 
@@ -383,23 +379,19 @@ run(LV2_Handle instance, uint32_t nsamples)
 					{
 						handle->state.min[i] = value;
 						_update_divider(handle, i);
-
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->urid.min[i]);
+						props_set(&handle->props, forge, frames, handle->urid.min[i], &handle->ref);
 					}
 
 					if(value > handle->state.max[i])
 					{
 						handle->state.max[i] = value;
 						_update_divider(handle, i);
-
-						if(handle->ref)
-							handle->ref = props_set(&handle->props, forge, frames, handle->urid.max[i]);
+						props_set(&handle->props, forge, frames, handle->urid.max[i], &handle->ref);
 					}
 
 					handle->state.raw[i] = value;
 					_update_value(handle, i);
-					//FIXME props_stash(&handle->props, handle->urid.raw[i]);
+					props_stash(&handle->props, handle->urid.raw[i]);
 				}
 			}
 		}
