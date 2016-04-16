@@ -37,9 +37,9 @@ synthpod:stereo
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	@UI_UI_WRAP@ui:ui synthpod:common_1_ui ;
-	@KX_UI_WRAP@ui:ui synthpod:common_2_kx ;
-	@EO_UI_WRAP@ui:ui synthpod:common_3_eo ;
+	ui:ui synthpod:common_1_ui ;
+	ui:ui synthpod:common_2_kx ;
+	ui:ui synthpod:common_3_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Synthpod Monoatom
@@ -48,9 +48,9 @@ synthpod:monoatom
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	@UI_UI_WRAP@ui:ui synthpod:common_1_ui ;
-	@KX_UI_WRAP@ui:ui synthpod:common_2_kx ;
-	@EO_UI_WRAP@ui:ui synthpod:common_3_eo ;
+	ui:ui synthpod:common_1_ui ;
+	ui:ui synthpod:common_2_kx ;
+	ui:ui synthpod:common_3_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_1_ui
@@ -72,9 +72,9 @@ synthpod:keyboard
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	@UI_UI_WRAP@ui:ui synthpod:keyboard_1_ui ;
-	@KX_UI_WRAP@ui:ui synthpod:keyboard_2_kx ;
-	@EO_UI_WRAP@ui:ui synthpod:keyboard_3_eo ;
+	ui:ui synthpod:keyboard_1_ui ;
+	ui:ui synthpod:keyboard_2_kx ;
+	ui:ui synthpod:keyboard_3_eo ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:keyboard_1_ui
