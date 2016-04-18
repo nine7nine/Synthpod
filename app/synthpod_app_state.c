@@ -129,14 +129,12 @@ _state_set_value(const char *symbol, void *data,
 		else
 			return; //TODO warning
 
-		_sp_app_port_spin_lock(tar); // concurrent acess from worker and rt threads
-
 		//printf("%u %f\n", index, val);
 		float *buf_ptr = PORT_BASE_ALIGNED(tar);
 		*buf_ptr = val;
 		tar->last = val - 0.1; // triggers notification
 
-		_sp_app_port_unlock(tar);
+		_sp_app_port_control_stash(tar);
 	}
 }
 
@@ -159,37 +157,36 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 	port_t *tar = &mod->ports[index];
 
 	if(  (tar->direction == PORT_DIRECTION_INPUT)
-		&& (tar->type == PORT_TYPE_CONTROL)
-		&& (tar->num_sources == 0) ) //FIXME do the multiplexing
+		&& (tar->type == PORT_TYPE_CONTROL) )
 	{
-		const float *val = PORT_BASE_ALIGNED(tar);
-		const void *ptr = NULL;
-
 		_sp_app_port_spin_lock(tar); // concurrent acess from worker and rt threads
 
+		const float stash = tar->stash;
+
+		_sp_app_port_unlock(tar);
+
+		const void *ptr = NULL;
 		if(tar->toggled)
 		{
 			*size = sizeof(int32_t);
 			*type = app->forge.Bool;
-			tar->i32 = floor(*val);
+			tar->i32 = floor(stash);
 			ptr = &tar->i32;
 		}
 		else if(tar->integer)
 		{
 			*size = sizeof(int32_t);
 			*type = app->forge.Int;
-			tar->i32 = floor(*val);
+			tar->i32 = floor(stash);
 			ptr = &tar->i32;
 		}
 		else // float
 		{
 			*size = sizeof(float);
 			*type = app->forge.Float;
-			tar->f32 = *val;
+			tar->f32 = stash;
 			ptr = &tar->f32;
 		}
-
-		_sp_app_port_unlock(tar);
 
 		return ptr;
 	}

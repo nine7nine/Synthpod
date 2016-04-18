@@ -296,52 +296,55 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 	}
 }
 
-__realtime static inline void
-_port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+__realtime void
+_sp_app_port_control_stash(port_t *port)
 {
+	void *buf = PORT_BASE_ALIGNED(port);
+
 	if(_sp_app_port_try_lock(port))
 	{
-		float *dst = PORT_BASE_ALIGNED(port);
-
-		port_t *src_port = port->sources[0].port;
-
-		// normalize
-		const float norm = (*dst - src_port->min) * src_port->range_1;
-		*dst = port->min + norm * port->range; //TODO handle exponential ranges
+		port->stash = *(float *)buf;
 
 		_sp_app_port_unlock(port);
 	}
-	// TODO do it later
+	else
+	{
+		port->stashing = true;
+	}
+}
+
+__realtime static inline void
+_port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
+{
+	float *dst = PORT_BASE_ALIGNED(port);
+
+	port_t *src_port = port->sources[0].port;
+
+	// normalize
+	const float norm = (*dst - src_port->min) * src_port->range_1;
+	*dst = port->min + norm * port->range; //TODO handle exponential ranges
+
+	_sp_app_port_control_stash(port);
 }
 
 __realtime static inline void
 _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
-	if(_sp_app_port_try_lock(port))
+	float *dst = PORT_BASE_ALIGNED(port);
+	*dst = 0; // init
+
+	for(int s=0; s<port->num_sources; s++)
 	{
-		float *dst = PORT_BASE_ALIGNED(port);
-		*dst = 0; // init
+		port_t *src_port = port->sources[s].port;
 
-		for(int s=0; s<port->num_sources; s++)
-		{
-			port_t *src_port = port->sources[s].port;
+		const float *src = PORT_BASE_ALIGNED(src_port);
 
-			if(_sp_app_port_try_lock(src_port))
-			{
-				const float *src = PORT_BASE_ALIGNED(src_port);
-
-				// normalize
-				const float norm = (*src - src_port->min) * src_port->range_1;
-				*dst += port->min + norm * port->range; //TODO handle exponential ranges
-
-				_sp_app_port_unlock(src_port);
-			}
-			// TODO do it later
-		}
-
-		_sp_app_port_unlock(port);
+		// normalize
+		const float norm = (*src - src_port->min) * src_port->range_1;
+		*dst += port->min + norm * port->range; //TODO handle exponential ranges
 	}
-	// TODO do it later
+
+	_sp_app_port_control_stash(port);
 }
 
 __realtime static inline void
@@ -517,18 +520,12 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 	bool needs_update = false;
 	float new_val = 0.f;
 
-	if(_sp_app_port_try_lock(port))
-	{
-		const float *val = PORT_BASE_ALIGNED(port);
-		new_val = *val;
-		needs_update = new_val != port->last;
+	const float *val = PORT_BASE_ALIGNED(port);
+	new_val = *val;
+	needs_update = new_val != port->last;
 
-		if(needs_update) // update last value
-			port->last = new_val;
-
-		_sp_app_port_unlock(port);
-	}
-	// TODO do it later
+	if(needs_update) // update last value
+		port->last = new_val;
 
 	if(needs_update)
 	{
