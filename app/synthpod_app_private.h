@@ -276,6 +276,8 @@ struct _port_t {
 		void *data;
 	} sys;
 
+	float stash;
+	bool stashing;
 	atomic_flag lock;
 };
 
@@ -461,6 +463,9 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port);
 int
 _sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
 	ramp_state_t ramp_state);
+
+void
+_sp_app_port_control_stash(port_t *port);
 
 int
 _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port);

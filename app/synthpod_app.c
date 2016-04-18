@@ -264,14 +264,21 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		else if(mod->worker.iface && mod->worker.iface->end_run)
 			mod->worker.iface->end_run(mod->handle);
 	
-		// clear atom sequence input buffers
 		for(unsigned p=0; p<mod->num_ports; p++)
 		{
 			port_t *port = &mod->ports[p];
 
+			// stash control port values
+			if(port->stashing)
+			{
+				port->stashing = false;
+				_sp_app_port_control_stash(port);
+			}
+
 			if(port->direction == PORT_DIRECTION_OUTPUT)
 				continue; // ignore output ports
 
+			// clear atom sequence input buffers
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
