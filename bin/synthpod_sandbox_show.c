@@ -15,6 +15,7 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,12 +34,12 @@ struct _app_t {
 	const LV2UI_Show_Interface *show_iface;
 };
 
-static volatile bool done = false;
+static atomic_flag done = ATOMIC_FLAG_INIT;
 
 static inline void
 _sig(int signum)
 {
-	done = true;
+	atomic_flag_test_and_set(&done);
 }
 
 static inline int
@@ -66,15 +67,17 @@ _run(sandbox_slave_t *sb, void *data)
 {
 	app_t *app = data;
 
-	while(!done)
+	while(!atomic_flag_test_and_set(&done))
 	{
+		atomic_flag_clear(&done);
+
 		usleep(40000); // 25 fps
 
 		sandbox_slave_recv(sb);
 		if(app->idle_iface)
 		{
 			if(app->idle_iface->idle(app->handle))
-				done = true;
+				atomic_flag_test_and_set(&done);
 		}
 		sandbox_slave_flush(sb);
 	}

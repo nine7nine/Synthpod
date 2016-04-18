@@ -15,6 +15,7 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,12 +35,12 @@ struct _app_t {
 	LV2_External_UI_Widget *widget;
 };
 
-static volatile bool done = false;
+static atomic_flag done = ATOMIC_FLAG_INIT;
 
 static inline void
 _sig(int signum)
 {
-	done = true;
+	atomic_flag_test_and_set(&done);
 }
 
 static inline void
@@ -48,7 +49,7 @@ _ui_closed(LV2UI_Controller controller)
 	sandbox_slave_t *sb = controller;
 	(void)sb;
 
-	done = true;
+	atomic_flag_test_and_set(&done);
 }
 
 static inline int
@@ -81,8 +82,10 @@ _run(sandbox_slave_t *sb, void *data)
 {
 	app_t *app = data;
 
-	while(!done)
+	while(!atomic_flag_test_and_set(&done))
 	{
+		atomic_flag_clear(&done);
+
 		usleep(40000); // 25 fps
 
 		sandbox_slave_recv(sb);

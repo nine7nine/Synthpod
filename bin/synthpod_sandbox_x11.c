@@ -15,6 +15,7 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,12 +45,12 @@ struct _app_t {
  	xcb_intern_atom_reply_t* reply2;
 };
 
-static volatile bool done = false;
+static atomic_flag done = ATOMIC_FLAG_INIT;
 
 static inline void
 _sig(int signum)
 {
-	done = true;
+	atomic_flag_test_and_set(&done);
 }
 
 static inline int
@@ -122,8 +123,10 @@ _run(sandbox_slave_t *sb, void *data)
 {
 	app_t *app = data;
 
-	while(!done)
+	while(!atomic_flag_test_and_set(&done))
 	{
+		atomic_flag_clear(&done);
+
 		xcb_generic_event_t *e;
 		if((e = xcb_poll_for_event(app->conn)))
 		{
@@ -134,7 +137,7 @@ _run(sandbox_slave_t *sb, void *data)
 					break;
 				case XCB_CLIENT_MESSAGE:
 					if( (*(xcb_client_message_event_t*)e).data.data32[0] == (*app->reply2).atom)
-						done = true;
+						atomic_flag_test_and_set(&done);
 					break;
 			}
 			free(e);
@@ -146,7 +149,7 @@ _run(sandbox_slave_t *sb, void *data)
 		if(app->idle_iface)
 		{
 			if(app->idle_iface->idle(app->handle))
-				done = true;
+				atomic_flag_test_and_set(&done);
 		}
 		sandbox_slave_flush(sb);
 	}
