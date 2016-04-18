@@ -19,6 +19,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
+
+#include <atomic>
 
 #include <sandbox_slave.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
@@ -35,24 +38,69 @@
 
 typedef struct _app_t app_t;
 
+static QApplication *a;
+static std::atomic_flag done = ATOMIC_FLAG_INIT;
+
+class MyWindow : public QMainWindow
+{
+	Q_OBJECT
+
+public:
+	MyWindow();
+	~MyWindow();
+
+protected:
+	void timerEvent(QTimerEvent *event);
+
+protected:
+	int timer_id;
+};
+
+MyWindow::MyWindow()
+	: QMainWindow()
+{
+	timer_id = startTimer(100); //0.1s
+}
+
+MyWindow::~MyWindow()
+{
+	killTimer(timer_id);
+}
+
+void
+MyWindow::timerEvent(QTimerEvent *event)
+{
+	(void)event;
+	if(done.test_and_set())
+		a->quit();
+	else
+		done.clear();
+}
+
 struct _app_t {
 	sandbox_slave_t *sb;
 
-	QApplication *a;
 	QMainWindow *win;
 	QWidget *widget;
 };
 
-//TODO handle SIGINT and gracefully terminate
+static inline void
+_sig(int signum)
+{
+	(void)signum;
+	done.test_and_set();
+}
 
 static inline int
 _init(sandbox_slave_t *sb, void *data)
 {
 	app_t *app= (app_t *)data;
 
+	signal(SIGINT, _sig);
+
 	int argc = 0;
-	app->a = new QApplication(argc, NULL, true);
-	app->win = new QMainWindow();
+	a = new QApplication(argc, NULL, true);
+	app->win = new MyWindow();
 
 	const LV2_Feature parent_feature = {
 		.URI = LV2_UI__parent,
@@ -79,7 +127,7 @@ _run(sandbox_slave_t *sb, void *data)
 	app_t *app = (app_t *)data;
 	(void)sb;
 
-	app->a->exec();
+	a->exec();
 }
 
 static inline void
@@ -89,7 +137,8 @@ _deinit(void *data)
 
 	app->win->hide();
 	delete app->win;
-	delete app->a;
+
+	delete a;
 }
 
 static const sandbox_slave_driver_t driver = {
@@ -116,3 +165,11 @@ main(int argc, char **argv)
 	printf("fail from %s\n", argv[0]);
 	return -1;
 }
+
+#if (SYNTHPOD_SANDBOX_QT == 4)
+#	include <synthpod_sandbox_qt4_moc.h>
+#elif (SYNTHPOD_SANDBOX_QT == 5)
+#	include <synthpod_sandbox_qt5_moc.h>
+#else
+#	error "SYNTHPOD_QT is invalid"
+#endif
