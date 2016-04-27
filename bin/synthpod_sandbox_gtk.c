@@ -113,9 +113,11 @@ _init(sandbox_slave_t *sb, void *data)
 	if(!app->widget)
 		goto fail;
 
+	gtk_widget_set_can_focus(app->widget, true);
+	gtk_widget_grab_focus(app->widget);
+
 	gtk_container_add(GTK_CONTAINER(app->win), app->widget);
-	gtk_widget_show(app->widget);
-  gtk_widget_show(app->win);
+	gtk_widget_show_all(app->win);
 
 	int fd;
 	sandbox_slave_fd_get(sb, &fd);
