@@ -300,8 +300,21 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	elm_config_first_item_focus_on_first_focusin_set(EINA_TRUE);
 #endif
 
+	// register theme (if not already registered by its parent)
 	Elm_Theme *default_theme = elm_theme_default_get();
-	elm_theme_extension_add(default_theme, SYNTHPOD_DATA_DIR"/synthpod.edj");
+	if(default_theme)
+	{
+		const Eina_List *exts = elm_theme_extension_list_get(default_theme);
+
+		const char *ext;
+		Eina_List *l;
+		bool already_registered = false;
+		EINA_LIST_FOREACH((Eina_List *)exts, l, ext)
+			already_registered = already_registered || !strcmp(ext, SYNTHPOD_DATA_DIR"/synthpod.edj");
+
+		if(!already_registered)
+			elm_theme_extension_add(default_theme, SYNTHPOD_DATA_DIR"/synthpod.edj");
+	}
 
 	sp_ui_t *ui = calloc(1, sizeof(sp_ui_t));
 	if(!ui)
