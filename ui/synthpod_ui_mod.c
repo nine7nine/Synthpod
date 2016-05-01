@@ -659,10 +659,15 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	mod->opts.options[0].type = ui->forge.String;
 	mod->opts.options[0].value = mod->name;
 
-	//TODO provide sample rate, buffer size, etc
+	mod->opts.options[1].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[1].subject = 0;
+	mod->opts.options[1].key = ui->regs.param.sample_rate.urid;
+	mod->opts.options[1].size = sizeof(float);
+	mod->opts.options[1].type = ui->forge.Float;
+	mod->opts.options[1].value = &ui->driver->sample_rate;
 
-	mod->opts.options[1].key = 0; // sentinel
-	mod->opts.options[1].value = NULL; // sentinel
+	mod->opts.options[2].key = 0; // sentinel
+	mod->opts.options[2].value = NULL; // sentinel
 
 	// populate UI feature list
 	int nfeatures = 0;

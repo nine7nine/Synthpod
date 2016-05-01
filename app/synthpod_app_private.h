@@ -190,7 +190,7 @@ struct _mod_t {
 
 	// opts
 	struct {
-		LV2_Options_Option options [5];
+		LV2_Options_Option options [6];
 		const LV2_Options_Interface *iface;
 	} opts;
 

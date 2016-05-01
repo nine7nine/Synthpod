@@ -354,8 +354,15 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->opts.options[3].type = app->forge.Int;
 	mod->opts.options[3].value = &app->driver->max_block_size; // set to max by default
 
-	mod->opts.options[4].key = 0; // sentinel
-	mod->opts.options[4].value = NULL; // sentinel
+	mod->opts.options[4].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[4].subject = 0;
+	mod->opts.options[4].key = app->regs.param.sample_rate.urid;
+	mod->opts.options[4].size = sizeof(float);
+	mod->opts.options[4].type = app->forge.Float;
+	mod->opts.options[4].value = &app->driver->sample_rate;
+
+	mod->opts.options[5].key = 0; // sentinel
+	mod->opts.options[5].value = NULL; // sentinel
 
 	// populate feature list
 	int nfeatures = 0;

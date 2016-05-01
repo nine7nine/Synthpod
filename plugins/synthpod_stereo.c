@@ -391,13 +391,19 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->uri.synthpod.event = handle->driver.map->map(handle->driver.map->handle,
 		SYNTHPOD_EVENT_URI);
 
+	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
+	lv2_atom_forge_init(&handle->forge.com_in, handle->driver.map);
+	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);
+
 	for(LV2_Options_Option *opt = handle->opts;
 		(opt->key != 0) && (opt->value != NULL);
 		opt++)
 	{
-		if(opt->key == handle->uri.bufsz.max_block_length)
+		if( (opt->key == handle->uri.bufsz.max_block_length)
+				&& (opt->type == handle->forge.notify.Int) )
 			handle->driver.max_block_size = *(int32_t *)opt->value;
-		else if(opt->key == handle->uri.bufsz.sequence_size)
+		else if( (opt->key == handle->uri.bufsz.sequence_size)
+				&& (opt->type == handle->forge.notify.Int) )
 			handle->driver.min_block_size = *(int32_t *)opt->value;
 		//TODO handle more options
 	}
@@ -425,10 +431,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
-
-	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
-	lv2_atom_forge_init(&handle->forge.com_in, handle->driver.map);
-	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);
 
 	return handle;
 }

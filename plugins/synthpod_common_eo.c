@@ -22,6 +22,8 @@
 
 #include <zero_writer.h>
 
+#include <lv2/lv2plug.in/ns/ext/parameters/parameters.h>
+
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
@@ -136,6 +138,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->world = NULL;
 
 	Evas_Object *parent = NULL;
+	LV2_Options_Option *opts;
 	for(int i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
@@ -154,6 +157,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->driver.log = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_UI__parent))
 			parent = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
+			opts = features[i]->data;
   }
 
 	if(!handle->driver.xmap)
@@ -187,6 +192,27 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	{
 		fprintf(stderr, "%s: Host supports zero-writer:schedule\n", descriptor->URI);
 	}
+
+	LV2_URID atom_float = handle->driver.map->map(handle->driver.map->handle,
+		LV2_ATOM__Float);
+	LV2_URID params_sample_rate = handle->driver.map->map(handle->driver.map->handle,
+		LV2_PARAMETERS__sampleRate);
+
+	handle->driver.sample_rate = 44100; // fall-back
+
+	if(opts)
+	{
+		for(LV2_Options_Option *opt = opts;
+			(opt->key != 0) && (opt->value != NULL);
+			opt++)
+		{
+			if( (opt->key == params_sample_rate) && (opt->type == atom_float) )
+				handle->driver.sample_rate = *(float*)opt->value;
+			//TODO handle more options
+		}
+	}
+
+	printf("sample_rate: %f\n", handle->driver.sample_rate);
 
 	handle->driver.features = SP_UI_FEATURE_NEW
 		| SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;

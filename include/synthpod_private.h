@@ -46,6 +46,7 @@
 #include <lv2/lv2plug.in/ns/ext/port-groups/port-groups.h>
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/time/time.h>
+#include <lv2/lv2plug.in/ns/ext/parameters/parameters.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
@@ -228,6 +229,10 @@ struct _reg_t {
 		reg_item_t applies_to;
 		reg_item_t designation;
 	} core;
+
+	struct {
+		reg_item_t sample_rate;
+	} param;
 
 	struct {
 		reg_item_t nominal_block_length;
@@ -475,6 +480,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.applies_to, world, map, LV2_CORE__appliesTo);
 	_register(&regs->core.designation, world, map, LV2_CORE__designation);
 
+	_register(&regs->param.sample_rate, world, map, LV2_PARAMETERS__sampleRate);
+
 	_register(&regs->bufsz.nominal_block_length, world, map, LV2_BUF_SIZE_PREFIX "nominalBlockLength");
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
 	_register(&regs->bufsz.min_block_length, world, map, LV2_BUF_SIZE__minBlockLength);
@@ -675,6 +682,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.plugin);
 	_unregister(&regs->core.applies_to);
 	_unregister(&regs->core.designation);
+
+	_unregister(&regs->param.sample_rate);
 
 	_unregister(&regs->bufsz.nominal_block_length);
 	_unregister(&regs->bufsz.max_block_length);

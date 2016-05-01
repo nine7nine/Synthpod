@@ -1111,6 +1111,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	}
 
 	// synthpod init
+	bin->ui_driver.sample_rate = jack_get_sample_rate(handle->client);
 	bin->app_driver.sample_rate = jack_get_sample_rate(handle->client);
 	bin->app_driver.max_block_size = jack_get_buffer_size(handle->client);
 	bin->app_driver.min_block_size = 1;

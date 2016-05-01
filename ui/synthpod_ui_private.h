@@ -246,7 +246,7 @@ struct _mod_t {
 
 	// opts
 	struct {
-		LV2_Options_Option options [2];
+		LV2_Options_Option options [3];
 	} opts;
 
 	// port-groups
