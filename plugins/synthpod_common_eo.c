@@ -212,8 +212,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		}
 	}
 
-	printf("sample_rate: %f\n", handle->driver.sample_rate);
-
 	handle->driver.features = SP_UI_FEATURE_NEW
 		| SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
 	
