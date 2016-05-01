@@ -566,6 +566,9 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	// ui init
 	bin->ui = sp_ui_new(bin->win, NULL, &bin->ui_driver, bin, 1);
 
+	if(bin->has_gui)
+		elm_win_resize_object_add(bin->win, sp_ui_widget_get(bin->ui));
+
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path

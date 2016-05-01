@@ -384,7 +384,6 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 				ui->colors_max = 20;
 			}
 
-			elm_win_resize_object_add(ui->win, ui->vbox);
 			evas_object_event_callback_add(ui->win, EVAS_CALLBACK_KEY_DOWN, _theme_key_down, ui);
 
 			const Eina_Bool exclusive = EINA_FALSE;
