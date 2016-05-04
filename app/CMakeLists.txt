@@ -16,9 +16,8 @@ add_library(synthpod.lib SHARED
 	synthpod_app_mod.c
 	synthpod_app_port.c)
 target_link_libraries(synthpod.lib
-	${EINA_LDFLAGS}
+	m
 	${ECORE_LDFLAGS}
-	${ECORE_CON_LDFLAGS}
 	${ECORE_FILE_LDFLAGS}
 	${EFREET_LDFLAGS}
 	${LILV_LDFLAGS}

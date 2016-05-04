@@ -36,8 +36,6 @@
 #include <lv2_osc.h>
 #include <varchunk.h>
 
-#include <Eina.h>
-
 #define CHUNK_SIZE 0x10000
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
@@ -295,8 +293,6 @@ static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
 {
-	eina_init();
-
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
@@ -788,8 +784,6 @@ cleanup(LV2_Handle instance)
 
 	munlock(handle, sizeof(plughandle_t));
 	free(handle);
-
-	eina_shutdown();
 }
 
 __realtime static uint32_t

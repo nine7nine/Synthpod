@@ -33,9 +33,9 @@ set(CMAKE_C_FLAGS "-Wshadow -Wimplicit-function-declaration -Wmissing-prototypes
 set(CMAKE_CXX_FLAGS "-std=gnu++11 -Wextra -ffast-math -fvisibility=hidden ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "-Wshadow -Wredundant-decls -Wno-effc++ ${CMAKE_CXX_FLAGS}")
 
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro ${CMAKE_EXE_LINKER_FLAGS}")
-set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
-set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-z,relro ${CMAKE_SHARED_LINKER_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,defs ${CMAKE_EXE_LINKER_FLAGS}")
+set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,nodelete -Wl,-z,defs ${CMAKE_MODULE_LINKER_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,defs ${CMAKE_SHARED_LINKER_FLAGS}")
 
 include(CheckCSourceCompiles)
 CHECK_C_SOURCE_COMPILES("
