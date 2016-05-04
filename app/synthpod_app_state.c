@@ -242,7 +242,7 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	char *bndl = NULL;
 
 	// create bundle path
-	asprintf(&dir, "%s/.lv2/%s_%s.lv2", app->dir.home, name, target);
+	asprintf(&dir, "%s/.lv2/%s_%s.preset.lv2", app->dir.home, name, target);
 	if(!dir)
 		return -1;
 
