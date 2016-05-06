@@ -598,7 +598,19 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					{
 						elm_fileselector_button_inwin_mode_set(child, EINA_FALSE);
 						elm_fileselector_button_window_title_set(child, "Select file");
+
+						const LilvNode *bundle_uri = lilv_plugin_get_bundle_uri(mod->plug);
+						char *mod_path = lilv_file_uri_parse(lilv_node_as_uri(bundle_uri), NULL);
+						if(mod_path)
+						{
+							elm_fileselector_path_set(child, mod_path);
+							free(mod_path);
+						}
 						elm_fileselector_is_save_set(child, EINA_TRUE);
+						elm_fileselector_folder_only_set(child, EINA_FALSE);
+						elm_fileselector_expandable_set(child, EINA_TRUE);
+						elm_fileselector_multi_select_set(child, EINA_FALSE);
+						elm_fileselector_hidden_visible_set(child, EINA_TRUE);
 						elm_object_text_set(child, "Select file");
 						evas_object_smart_callback_add(child, "file,chosen",
 							_property_path_chosen, prop);
