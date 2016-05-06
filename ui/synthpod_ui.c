@@ -353,7 +353,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			lilv_node_free(node_false);
 		}
 		lilv_world_load_all(ui->world);
-		LilvNode *synthpod_bundle = lilv_new_uri(ui->world, "file://"SYNTHPOD_BUNDLE_DIR"/");
+		LilvNode *synthpod_bundle = lilv_new_file_uri(ui->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
 		if(synthpod_bundle)
 		{
 			lilv_world_load_bundle(ui->world, synthpod_bundle);

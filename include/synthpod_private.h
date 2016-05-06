@@ -1687,21 +1687,14 @@ _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 	if(presets)
 		lilv_nodes_free(presets);
 
-	char *bndl_path;
-	asprintf(&bndl_path, "file://%s", bndl); // convert absolute path to proper URI
-	if(bndl_path)
+	LilvNode *bndl_node = lilv_new_file_uri(world, NULL, bndl);
+	if(bndl_node)
 	{
-		LilvNode *bndl_node = lilv_new_uri(world, bndl_path);
-		if(bndl_node)
-		{
-			lilv_world_unload_bundle(world, bndl_node);
+		lilv_world_unload_bundle(world, bndl_node);
 
-			//reload presets for this module
-			lilv_world_load_bundle(world, bndl_node);
-			lilv_node_free(bndl_node);
-		}
-
-		free(bndl_path);
+		//reload presets for this module
+		lilv_world_load_bundle(world, bndl_node);
+		lilv_node_free(bndl_node);
 	}
 
 	return lilv_plugin_get_related(plugin, regs->pset.preset.node);
