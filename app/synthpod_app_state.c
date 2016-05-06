@@ -274,7 +274,7 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
 		app->driver->map, NULL, NULL, NULL, dir,
 		_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
-		_state_features(app, dir));
+		NULL);
 
 	if(state)
 	{
@@ -737,7 +737,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				{
 					LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
 						app->driver->map, NULL, NULL, NULL, path,
-						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
+						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 
 					if(state)
 					{
@@ -987,7 +987,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		if(state)
 		{
 			lilv_state_restore(state, mod->inst, _state_set_value, mod,
-				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, features);
+				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 		}
 		else
 			fprintf(stderr, "failed to load state from file\n");
