@@ -1683,21 +1683,43 @@ static LilvNodes *
 _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 	LilvNodes *presets, const char *bndl)
 {
-	// unload presets for this module
 	if(presets)
+	{
+		// unload resources for this module's presets
+		LILV_FOREACH(nodes, itr, presets)
+		{
+			const LilvNode *preset = lilv_nodes_get(presets, itr);
+
+			lilv_world_unload_resource(world, preset);
+		}
+
+		// free presets for this module
 		lilv_nodes_free(presets);
+	}
 
 	LilvNode *bndl_node = lilv_new_file_uri(world, NULL, bndl);
 	if(bndl_node)
 	{
+		// unload bundle (if it should already be loaded)
 		lilv_world_unload_bundle(world, bndl_node);
 
-		//reload presets for this module
+		// load bundle
 		lilv_world_load_bundle(world, bndl_node);
 		lilv_node_free(bndl_node);
 	}
 
-	return lilv_plugin_get_related(plugin, regs->pset.preset.node);
+	// discover presets for this module
+	presets = lilv_plugin_get_related(plugin, regs->pset.preset.node);
+
+	// load resources for this module's presets
+	LILV_FOREACH(nodes, itr, presets)
+	{
+		const LilvNode *preset = lilv_nodes_get(presets, itr);
+
+		lilv_world_load_resource(world, preset);
+	}
+
+	return presets;
 }
 
 static inline LV2_Atom_Forge_Ref

@@ -982,6 +982,14 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, ui->regs.pset.preset.node);
 
+	// load resources for this module's presets
+	LILV_FOREACH(nodes, itr, mod->presets)
+	{
+		const LilvNode *preset = lilv_nodes_get(mod->presets, itr);
+
+		lilv_world_load_resource(ui->world, preset);
+	}
+
 	// load preset banks
 	mod->banks = NULL;
 	LILV_FOREACH(nodes, i, mod->presets)
