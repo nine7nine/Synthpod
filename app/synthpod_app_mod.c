@@ -303,6 +303,42 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	if(!plug)
 		return NULL;
 
+	const LilvNode *library_uri= lilv_plugin_get_library_uri(plug);
+	if(!library_uri)
+		return NULL;
+
+	// check whether DSP and UI code is mixed into same binary
+	bool mixed_binary = false;
+	LilvUIs *all_uis = lilv_plugin_get_uis(plug);
+	if(all_uis)
+	{
+		LILV_FOREACH(uis, ptr, all_uis)
+		{
+			const LilvUI *ui = lilv_uis_get(all_uis, ptr);
+			const LilvNode *ui_uri_node = lilv_ui_get_uri(ui);
+
+			if(!ui || !ui_uri_node)
+				continue;
+			
+			// nedded if ui ttl referenced via rdfs#seeAlso
+			lilv_world_load_resource(app->world, ui_uri_node);
+	
+			const LilvNode *ui_library_uri= lilv_ui_get_binary_uri(ui);
+			if(ui_library_uri && lilv_node_equals(library_uri, ui_library_uri))
+				mixed_binary = true; // this is bad, we don't support that
+
+			lilv_world_unload_resource(app->world, ui_uri_node);
+		}
+
+		lilv_uis_free(all_uis);
+	}
+
+	if(mixed_binary)
+	{
+		fprintf(stderr, "Plugin mixes DSP and UI code in same binary which is not supported.\n");
+		return NULL;
+	}
+
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 		return NULL;
@@ -480,9 +516,14 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->app = app;
 	mod->uid = uid != 0 ? uid : app->uid++;
 	mod->plug = plug;
-	mod->uri_str = strdup(uri); //TODO check
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
+	if(!mod->inst)
+	{
+		free(mod);
+		return NULL;
+	}
+	mod->uri_str = strdup(uri); //TODO check
 	mod->handle = lilv_instance_get_handle(mod->inst),
 	mod->worker.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_WORKER__interface);
