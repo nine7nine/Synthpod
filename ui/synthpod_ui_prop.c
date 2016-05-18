@@ -144,6 +144,15 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 					if(prop->editable)
 						elm_fileselector_path_set(prop->std.widget, val);
 				}
+				else if(prop->type_urid == ui->forge.Chunk)
+				{
+					char *sz = NULL;
+					if(asprintf(&sz, "sz: %u", value->size) != -1)
+					{
+						elm_object_text_set(prop->std.widget, sz);
+						free(sz);
+					}
+				}
 				else if(prop->type_urid == ui->forge.Int)
 				{
 					int32_t val = ((const LV2_Atom_Int *)value)->body;
@@ -229,6 +238,96 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 			free(trans);
 		}
 	}
+}
+
+static inline uint8_t *
+_file_content(const char *path, size_t *fsize)
+{
+	uint8_t *chunk = NULL;
+
+	// load file
+	FILE *f = fopen(path, "rb");
+	if(f)
+	{
+		fseek(f, 0, SEEK_END);
+		*fsize = ftell(f);
+		fseek(f, 0, SEEK_SET);
+
+		chunk = malloc(*fsize);
+		if(chunk)
+		{
+			if(fread(chunk, *fsize, 1, f) != 1) // failed to read
+			{
+				*fsize = 0;
+				free(chunk);
+				chunk = NULL;
+			}
+		}
+
+		fclose(f);
+	}
+
+	return chunk;
+}
+
+static void
+_property_chunk_chosen(void *data, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+	mod_t *mod = prop->mod;
+	sp_ui_t *ui = mod->ui;
+
+	const char *path = event_info;
+	if(!path)
+		return;
+
+	//printf("_property_chunk_chosen: %s\n", path);
+	size_t fsize;
+	uint8_t *chunk = _file_content(path, &fsize);
+
+	if(!chunk)
+		return;
+
+	char *sz= NULL;
+	if(asprintf(&sz, "sz: %zu", fsize) != -1)
+	{
+		elm_object_text_set(prop->std.widget, sz);
+		free(sz);
+	}
+
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(fsize);
+
+	for(unsigned index=0; index<mod->num_ports; index++)
+	{
+		port_t *port = &mod->ports[index];
+
+		// only consider event ports which support patch:Message
+		if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
+			|| (port->direction != PORT_DIRECTION_INPUT)
+			|| !port->patchable)
+		{
+			continue; // skip
+		}
+
+		transfer_patch_set_obj_t *trans = malloc(len);
+		if(trans)
+		{
+			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
+				&ui->forge, trans, fsize,
+				mod->subject, prop->tar_urid, prop->type_urid);
+			if(atom)
+			{
+				uint8_t *dst = LV2_ATOM_BODY(atom);
+				memcpy(dst, chunk, fsize);
+
+				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
+					ui->regs.port.event_transfer.urid, &trans->obj);
+			}
+			free(trans);
+		}
+	}
+
+	free(chunk);
 }
 
 static void
@@ -606,7 +705,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 							elm_fileselector_path_set(child, mod_path);
 							free(mod_path);
 						}
-						elm_fileselector_is_save_set(child, EINA_TRUE);
+						elm_fileselector_is_save_set(child, EINA_FALSE);
 						elm_fileselector_folder_only_set(child, EINA_FALSE);
 						elm_fileselector_expandable_set(child, EINA_TRUE);
 						elm_fileselector_multi_select_set(child, EINA_FALSE);
@@ -614,6 +713,41 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 						elm_object_text_set(child, "Select file");
 						evas_object_smart_callback_add(child, "file,chosen",
 							_property_path_chosen, prop);
+						//TODO MIME type
+					}
+				}
+				else // !editable
+				{
+					child = elm_label_add(lay);
+					if(child)
+						evas_object_size_hint_align_set(child, 0.f, EVAS_HINT_FILL);
+				}
+			}
+			else if(prop->type_urid == ui->forge.Chunk)
+			{
+				if(prop->editable)
+				{
+					child = elm_fileselector_button_add(lay);
+					if(child)
+					{
+						elm_fileselector_button_inwin_mode_set(child, EINA_FALSE);
+						elm_fileselector_button_window_title_set(child, "Select file");
+
+						const LilvNode *bundle_uri = lilv_plugin_get_bundle_uri(mod->plug);
+						char *mod_path = lilv_file_uri_parse(lilv_node_as_uri(bundle_uri), NULL);
+						if(mod_path)
+						{
+							elm_fileselector_path_set(child, mod_path);
+							free(mod_path);
+						}
+						elm_fileselector_is_save_set(child, EINA_FALSE);
+						elm_fileselector_folder_only_set(child, EINA_FALSE);
+						elm_fileselector_expandable_set(child, EINA_TRUE);
+						elm_fileselector_multi_select_set(child, EINA_FALSE);
+						elm_fileselector_hidden_visible_set(child, EINA_TRUE);
+						elm_object_text_set(child, "Select file");
+						evas_object_smart_callback_add(child, "file,chosen",
+							_property_chunk_chosen, prop);
 						//TODO MIME type
 					}
 				}
