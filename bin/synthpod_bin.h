@@ -28,8 +28,7 @@
 
 #include <symap.h>
 #include <varchunk.h>
-#include <lv2_osc.h>
-#include <osc.h>
+#include <osc.lv2/osc.h>
 
 #include <synthpod_nsm.h>
 

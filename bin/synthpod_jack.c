@@ -32,6 +32,9 @@
 # include <jackey.h>
 #endif
 
+#include <osc.lv2/forge.h>
+#include <osc.lv2/writer.h>
+
 #ifndef MAX
 #	define MAX(A, B) ((A) > (B) ? (A) : (B))
 #endif
@@ -45,16 +48,9 @@ struct _prog_t {
 
 	LV2_Atom_Forge forge;
 
-	osc_data_t osc_buf [OSC_SIZE]; //TODO how big?
-	osc_data_t *osc_ptr;
-	osc_data_t *osc_end;
-	int bndl_cnt;
-	osc_data_t *bndl [32]; // 32 nested bundles should be enough
+	uint8_t osc_buf [OSC_SIZE]; //TODO how big?
 
-	osc_forge_t oforge;
-	int frame_cnt;
-	LV2_Atom_Forge_Frame frame [32][2]; // 32 nested bundles should be enough
-	LV2_Atom_Forge_Ref ref;
+	LV2_OSC_URID osc_urid;
 
 	LV2_URID midi_MidiEvent;
 
@@ -87,7 +83,7 @@ struct _prog_t {
 	} trans;
 
 #if defined(JACK_HAS_CYCLE_TIMES)
-	osc_schedule_t osc_sched;
+	LV2_OSC_Schedule osc_sched;
 	struct timespec cur_ntp;
 	struct {
 		jack_nframes_t cur_frames;
@@ -154,257 +150,6 @@ _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t 
 		lv2_atom_forge_pop(forge, &frame);
 
 	return ref;
-}
-
-__realtime static void
-_bundle_in(osc_time_t timestamp, void *data)
-{
-	prog_t *handle = data;
-	LV2_Atom_Forge *forge = &handle->forge;
-
-	if(handle->ref)
-		handle->ref = osc_forge_bundle_push(&handle->oforge, forge,
-			handle->frame[handle->frame_cnt++], timestamp);
-}
-
-__realtime static void
-_bundle_out(osc_time_t timestamp, void *data)
-{
-	prog_t *handle = data;
-	LV2_Atom_Forge *forge = &handle->forge;
-
-	if(handle->ref)
-		osc_forge_bundle_pop(&handle->oforge, forge,
-			handle->frame[--handle->frame_cnt]);
-}
-
-__realtime static int
-_message(osc_time_t timestamp, const char *path, const char *fmt,
-	const osc_data_t *buf, size_t size, void *data)
-{
-	prog_t *handle = data;
-	LV2_Atom_Forge *forge = &handle->forge;
-	LV2_Atom_Forge_Frame frame [2];
-
-	const osc_data_t *ptr = buf;
-
-	LV2_Atom_Forge_Ref ref = handle->ref;
-	if(ref)
-		ref = osc_forge_message_push(&handle->oforge, forge, frame, path, fmt);
-
-	for(const char *type = fmt; *type; type++)
-		switch(*type)
-		{
-			case 'i':
-			{
-				int32_t i = 0;
-				ptr = osc_get_int32(ptr, &i);
-				if(ref)
-					ref = osc_forge_int32(&handle->oforge, forge, i);
-				break;
-			}
-			case 'f':
-			{
-				float f = 0.f;
-				ptr = osc_get_float(ptr, &f);
-				if(ref)
-					ref = osc_forge_float(&handle->oforge, forge, f);
-				break;
-			}
-			case 's':
-			case 'S':
-			{
-				const char *s = "";
-				ptr = osc_get_string(ptr, &s);
-				if(ref)
-					ref = osc_forge_string(&handle->oforge, forge, s);
-				break;
-			}
-			case 'b':
-			{
-				osc_blob_t b = {.size = 0, .payload=NULL};
-				ptr = osc_get_blob(ptr, &b);
-				if(ref)
-					ref = osc_forge_blob(&handle->oforge, forge, b.size, b.payload);
-				break;
-			}
-
-			case 'h':
-			{
-				int64_t h = 0;
-				ptr = osc_get_int64(ptr, &h);
-				if(ref)
-					ref = osc_forge_int64(&handle->oforge, forge, h);
-				break;
-			}
-			case 'd':
-			{
-				double d = 0.f;
-				ptr = osc_get_double(ptr, &d);
-				if(ref)
-					ref = osc_forge_double(&handle->oforge, forge, d);
-				break;
-			}
-			case 't':
-			{
-				uint64_t t = 0;
-				ptr = osc_get_timetag(ptr, &t);
-				if(ref)
-					ref = osc_forge_timestamp(&handle->oforge, forge, t);
-				break;
-			}
-
-			case 'T':
-			case 'F':
-			case 'N':
-			case 'I':
-			{
-				break;
-			}
-
-			case 'c':
-			{
-				char c = '\0';
-				ptr = osc_get_char(ptr, &c);
-				if(ref)
-					ref = osc_forge_char(&handle->oforge, forge, c);
-				break;
-			}
-			case 'm':
-			{
-				const uint8_t *m = NULL;
-				ptr = osc_get_midi(ptr, &m);
-				if(ref)
-					ref = osc_forge_midi(&handle->oforge, forge, 3, m + 1); // skip port byte
-				break;
-			}
-		}
-
-	if(ref)
-		osc_forge_message_pop(&handle->oforge, forge, frame);
-
-	handle->ref = ref;
-
-	return 1;
-}
-
-static const osc_method_t methods [] = {
-	{NULL, NULL, _message},
-
-	{NULL, NULL, NULL}
-};
-
-__realtime static void
-_bundle_push_cb(uint64_t timestamp, void *data)
-{
-	prog_t *handle = data;
-
-	handle->osc_ptr = osc_start_bundle(handle->osc_ptr, handle->osc_end, timestamp,
-		&handle->bndl[handle->bndl_cnt++]);
-}
-
-__realtime static void
-_bundle_pop_cb(void *data)
-{
-	prog_t *handle = data;
-
-	handle->osc_ptr = osc_end_bundle(handle->osc_ptr, handle->osc_end,
-		handle->bndl[--handle->bndl_cnt]);
-}
-
-__realtime static void
-_message_cb(const char *path, const char *fmt, const LV2_Atom_Tuple *body,
-	void *data)
-{
-	prog_t *handle = data;
-
-	osc_data_t *ptr = handle->osc_ptr;
-	const osc_data_t *end = handle->osc_end;
-
-	osc_data_t *itm = NULL;
-	if(handle->bndl_cnt)
-		ptr = osc_start_bundle_item(ptr, end, &itm);
-
-	ptr = osc_set_path(ptr, end, path);
-	ptr = osc_set_fmt(ptr, end, fmt);
-
-	const LV2_Atom *itr = lv2_atom_tuple_begin(body);
-	for(const char *type = fmt;
-		*type && !lv2_atom_tuple_is_end(LV2_ATOM_BODY(body), body->atom.size, itr);
-		type++, itr = lv2_atom_tuple_next(itr))
-	{
-		switch(*type)
-		{
-			case 'i':
-			{
-				ptr = osc_set_int32(ptr, end, ((const LV2_Atom_Int *)itr)->body);
-				break;
-			}
-			case 'f':
-			{
-				ptr = osc_set_float(ptr, end, ((const LV2_Atom_Float *)itr)->body);
-				break;
-			}
-			case 's':
-			case 'S':
-			{
-				ptr = osc_set_string(ptr, end, LV2_ATOM_BODY_CONST(itr));
-				break;
-			}
-			case 'b':
-			{
-				ptr = osc_set_blob(ptr, end, itr->size, LV2_ATOM_BODY(itr));
-				break;
-			}
-
-			case 'h':
-			{
-				ptr = osc_set_int64(ptr, end, ((const LV2_Atom_Long *)itr)->body);
-				break;
-			}
-			case 'd':
-			{
-				ptr = osc_set_double(ptr, end, ((const LV2_Atom_Double *)itr)->body);
-				break;
-			}
-			case 't':
-			{
-				ptr = osc_set_timetag(ptr, end, ((const LV2_Atom_Long *)itr)->body);
-				break;
-			}
-
-			case 'T':
-			case 'F':
-			case 'N':
-			case 'I':
-			{
-				break;
-			}
-
-			case 'c':
-			{
-				ptr = osc_set_char(ptr, end, ((const LV2_Atom_Int *)itr)->body);
-				break;
-			}
-			case 'm':
-			{
-				const uint8_t *src = LV2_ATOM_BODY_CONST(itr);
-				const uint8_t dst [4] = {
-					0x00, // port byte
-					itr->size >= 1 ? src[0] : 0x00,
-					itr->size >= 2 ? src[1] : 0x00,
-					itr->size >= 3 ? src[2] : 0x00
-				};
-				ptr = osc_set_midi(ptr, end, dst);
-				break;
-			}
-		}
-	}
-	
-	if(handle->bndl_cnt)
-		ptr = osc_end_bundle_item(ptr, end, itm);
-
-	handle->osc_ptr = ptr;
 }
 
 // rt
@@ -565,16 +310,11 @@ _process(jack_nframes_t nsamples, void *data)
 					jack_midi_event_t mev;
 					jack_midi_event_get(&mev, (void *)in_buf, i);
 
-					//add jack osc event to in_buf
-					if(osc_check_packet(mev.buffer, mev.size))
-					{
-						if(ref)
-							ref = lv2_atom_forge_frame_time(forge, mev.time);
-						handle->ref = ref;
-						osc_dispatch_method(mev.buffer, mev.size, methods,
-							_bundle_in, _bundle_out, handle);
-						ref = handle->ref;
-					}
+					if(ref)
+						ref = lv2_atom_forge_frame_time(forge, mev.time);
+					if(ref)
+						ref = lv2_osc_forge_packet(forge, &handle->osc_urid, &handle->bin.map,
+							mev.buffer, mev.size); // Note: an invalid packet will return 0
 				}
 				if(ref)
 					lv2_atom_forge_pop(forge, &frame);
@@ -685,20 +425,17 @@ _process(jack_nframes_t nsamples, void *data)
 					{
 						const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 
-						handle->osc_ptr = handle->osc_buf;
-						handle->osc_end = handle->osc_buf + OSC_SIZE;
-
-						osc_atom_event_unroll(&handle->oforge, obj, _bundle_push_cb,
-							_bundle_pop_cb, _message_cb, handle);
-
-						size_t size = handle->osc_ptr
-							? handle->osc_ptr - handle->osc_buf
-							: 0;
+						LV2_OSC_Writer writer;
+						lv2_osc_writer_initialize(&writer, handle->osc_buf, OSC_SIZE);
+						lv2_osc_writer_packet(&writer, &handle->osc_urid, &handle->bin.unmap,
+							obj->atom.size, &obj->body);
+						size_t size;
+						uint8_t *osc_buf = lv2_osc_writer_finalize(&writer, &size);
 
 						if(size)
 						{
 							jack_midi_event_write(out_buf, ev->time.frames,
-								handle->osc_buf, size);
+								osc_buf, size);
 						}
 					}
 				}
@@ -1152,7 +889,7 @@ static const synthpod_nsm_driver_t nsm_driver = {
 #if defined(JACK_HAS_CYCLE_TIMES)
 // rt
 __realtime static double
-_osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
+_osc_schedule_osc2frames(LV2_OSC_Schedule_Handle instance, uint64_t timestamp)
 {
 	prog_t *handle = instance;
 
@@ -1175,7 +912,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 
 // rt
 __realtime static uint64_t
-_osc_schedule_frames2osc(osc_schedule_handle_t instance, double frames)
+_osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 {
 	prog_t *handle = instance;
 
@@ -1289,7 +1026,7 @@ elm_main(int argc, char **argv)
 	LV2_URID_Map *map = &bin->map;
 
 	lv2_atom_forge_init(&handle.forge, map);
-	osc_forge_init(&handle.oforge, map);
+	lv2_osc_urid_init(&handle.osc_urid, map);
 	
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 

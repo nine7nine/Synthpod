@@ -85,7 +85,7 @@ struct _prog_t {
 	const char *play_name;
 	const char *capt_name;
 
-	osc_schedule_t osc_sched;
+	LV2_OSC_Schedule osc_sched;
 	struct timespec cur_ntp;
 	struct timespec nxt_ntp;
 	struct {
@@ -803,7 +803,7 @@ static const synthpod_nsm_driver_t nsm_driver = {
 
 // rt
 __realtime static double
-_osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
+_osc_schedule_osc2frames(LV2_OSC_Schedule_Handle instance, uint64_t timestamp)
 {
 	prog_t *handle = instance;
 
@@ -826,7 +826,7 @@ _osc_schedule_osc2frames(osc_schedule_handle_t instance, uint64_t timestamp)
 
 // rt
 __realtime static uint64_t
-_osc_schedule_frames2osc(osc_schedule_handle_t instance, double frames)
+_osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 {
 	prog_t *handle = instance;
 

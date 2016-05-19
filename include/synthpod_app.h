@@ -31,7 +31,7 @@
 #include <lilv/lilv.h>
 
 #include <synthpod_common.h>
-#include <lv2_osc.h>
+#include <osc.lv2/osc.h>
 
 typedef enum _sp_app_features_t sp_app_features_t;
 typedef enum _system_port_t system_port_t;
@@ -105,7 +105,7 @@ struct _sp_app_driver_t {
 	sp_system_port_del system_port_del;
 
 	// clock_sync
-	osc_schedule_t *osc_sched;
+	LV2_OSC_Schedule *osc_sched;
 
 	sp_app_features_t features;
 };

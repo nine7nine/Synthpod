@@ -33,7 +33,7 @@
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
 
 #include <zero_worker.h>
-#include <lv2_osc.h>
+#include <osc.lv2/osc.h>
 #include <varchunk.h>
 
 #define CHUNK_SIZE 0x10000
@@ -333,8 +333,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			world = (const LilvWorld *)features[i]->data;
 		else if(!strcmp(features[i]->URI, ZERO_WORKER__schedule))
 			handle->zero_sched = (Zero_Worker_Schedule *)features[i]->data;
-		else if(!strcmp(features[i]->URI, OSC__schedule))
-			handle->driver.osc_sched = (osc_schedule_t *)features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_OSC__schedule))
+			handle->driver.osc_sched = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_BUF_SIZE__fixedBlockLength))
 			handle->driver.features |= SP_APP_FEATURE_FIXED_BLOCK_LENGTH;
 		else if(!strcmp(features[i]->URI, LV2_BUF_SIZE__powerOf2BlockLength))

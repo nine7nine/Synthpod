@@ -453,7 +453,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 	if(app->driver->osc_sched)
 	{
-		mod->feature_list[nfeatures].URI = OSC__schedule;
+		mod->feature_list[nfeatures].URI = LV2_OSC__schedule;
 		mod->feature_list[nfeatures++].data = app->driver->osc_sched;
 	}
 
