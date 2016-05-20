@@ -1,4 +1,4 @@
-.TH SYNTHPOD "1" "April 11, 2016"
+.TH SYNTHPOD "1" "May 05, 2016"
 
 .SH NAME
 synthpod \- a lightweight nonlinear LV2 plugin container
@@ -66,6 +66,27 @@ Notify about XRuns
 Do NOT notify about XRuns
 
 .HP
+\fB\-y\fR audio-priority
+.IP
+Audio thread realtime priority (70)
+
+.HP
+\fB\-Y\fR
+.IP
+Disable audio thread realtime priority
+
+.HP
+\fB\-w\fR worker-priority
+.IP
+Worker thread realtime priority (60)
+
+.HP
+\fB\-W\fR
+.IP
+Disable worker thread realtime priority
+
+
+.HP
 \fB\-d\fR device
 .IP
 Use same device for Playback and Capture ("hw:0")
@@ -119,6 +140,8 @@ disable-playback=false
 disable-capture=false
 force-two-channel=false
 notify-xruns=true
+audio-priority=70
+worker-priority=60
 device=hw:0
 sample-rate=48000
 sample-period=1024

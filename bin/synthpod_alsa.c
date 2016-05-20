@@ -523,14 +523,17 @@ _rt_thread(void *data, Eina_Thread thread)
 
 	pthread_t self = pthread_self();
 
-	struct sched_param schedp;
-	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = 70; //TODO make configurable
-
-	if(schedp.sched_priority)
+	if(handle->bin.audio_prio)
 	{
-		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-			fprintf(stderr, "pthread_setschedparam error\n");
+		struct sched_param schedp;
+		memset(&schedp, 0, sizeof(struct sched_param));
+		schedp.sched_priority = handle->bin.audio_prio;
+
+		if(schedp.sched_priority)
+		{
+			if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
+				fprintf(stderr, "pthread_setschedparam error\n");
+		}
 	}
 
 	_process(handle);
@@ -883,6 +886,10 @@ _read_config(prog_t *handle)
 					if((valuestring = efreet_ini_string_get(ini, "playback-device")))
 						handle->play_name = valuestring;
 					
+					if((valueint = efreet_ini_int_get(ini, "audio-priority")) != -1)
+						handle->bin.audio_prio = valueint;
+					if((valueint = efreet_ini_int_get(ini, "worker-priority")) != -1)
+						handle->bin.worker_prio = valueint;
 					if((valueint = efreet_ini_int_get(ini, "sample-rate")) != -1)
 						handle->srate = valueint;
 					if((valueint = efreet_ini_int_get(ini, "sample-period")) != -1)
@@ -930,6 +937,8 @@ elm_main(int argc, char **argv)
 	handle.capt_name = NULL;
 
 	bin->has_gui = true;
+	bin->audio_prio = 70;
+	bin->worker_prio = 60;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -940,7 +949,7 @@ elm_main(int argc, char **argv)
 	Efreet_Ini *ini = _read_config(&handle);
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGIOtTxXd:i:o:r:p:n:s:")) != -1)
+	while((c = getopt(argc, argv, "vhgGIOtTxXy:Yw:Wd:i:o:r:p:n:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -977,6 +986,10 @@ elm_main(int argc, char **argv)
 					"   [-T]                 do NOT force 2 channel mode (default)\n"
 					"   [-x]                 notify about XRuns\n"
 					"   [-X]                 do NOT notify about XRuns (default)\n"
+					"   [-y] audio-priority  audio thread realtime priority (70)\n"
+					"   [-Y]                 do NOT use audio thread realtime priority\n"
+					"   [-w] worker-priority worker thread realtime priority (60)\n"
+					"   [-W]                 do NOT use worker thread realtime priority\n"
 					"   [-d] device          capture/playback device (\"hw:0\")\n"
 					"   [-i] capture-device  capture device (\"hw:0\")\n"
 					"   [-o] playback-device playback device (\"hw:0\")\n"
@@ -1010,7 +1023,21 @@ elm_main(int argc, char **argv)
 			case 'X':
 				handle.debug = false;
 				break;
+			case 'y':
+				bin->audio_prio = atoi(optarg);
+				break;
+			case 'Y':
+				bin->audio_prio = 0;
+				break;
+			case 'w':
+				bin->worker_prio = atoi(optarg);
+				break;
+			case 'W':
+				bin->worker_prio = 0;
+				break;
 			case 'd':
+				handle.do_capt = optarg != NULL;
+				handle.do_play = optarg != NULL;
 				handle.io_name = optarg;
 				break;
 			case 'i':

@@ -261,14 +261,17 @@ _rt_thread(void *data, Eina_Thread thread)
 
 	pthread_t self = pthread_self();
 
-	struct sched_param schedp;
-	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = 70; //TODO make configurable
-
-	if(schedp.sched_priority)
+	if(handle->bin.audio_prio)
 	{
-		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-			fprintf(stderr, "pthread_setschedparam error\n");
+		struct sched_param schedp;
+		memset(&schedp, 0, sizeof(struct sched_param));
+		schedp.sched_priority = handle->bin.audio_prio;
+
+		if(schedp.sched_priority)
+		{
+			if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
+				fprintf(stderr, "pthread_setschedparam error\n");
+		}
 	}
 
 	_process(handle);
@@ -445,6 +448,8 @@ elm_main(int argc, char **argv)
 	handle.seq_size = SEQ_SIZE;
 
 	bin->has_gui = true;
+	bin->audio_prio = 70;
+	bin->worker_prio = 60;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -452,7 +457,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGr:p:s:")) != -1)
+	while((c = getopt(argc, argv, "vhgGy:Yw:Wr:p:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -483,6 +488,10 @@ elm_main(int argc, char **argv)
 					"   [-h]                 print usage information\n"
 					"   [-g]                 enable GUI (default)\n"
 					"   [-G]                 disable GUI\n"
+					"   [-y] audio-priority  audio thread realtime priority (70)\n"
+					"   [-Y]                 do NOT use audio thread realtime priority\n"
+					"   [-w] worker-priority worker thread realtime priority (60)\n"
+					"   [-W]                 do NOT use worker thread realtime priority\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
 					"   [-p] sample-period   frames per period (1024)\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
@@ -493,6 +502,18 @@ elm_main(int argc, char **argv)
 				break;
 			case 'G':
 				bin->has_gui = false;
+				break;
+			case 'y':
+				bin->audio_prio = atoi(optarg);
+				break;
+			case 'Y':
+				bin->audio_prio = 0;
+				break;
+			case 'w':
+				bin->worker_prio = atoi(optarg);
+				break;
+			case 'W':
+				bin->worker_prio = 0;
 				break;
 			case 'r':
 				handle.srate = atoi(optarg);

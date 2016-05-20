@@ -108,6 +108,9 @@ struct _bin_t {
 	LV2_Log_Log log;
 
 	Eina_Thread self;
+
+	int audio_prio;
+	int worker_prio;
 };
 
 static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
@@ -237,14 +240,17 @@ _worker_thread(void *data, Eina_Thread thread)
 	
 	pthread_t self = pthread_self();
 
-	struct sched_param schedp;
-	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = 60; //TODO make configurable
-	
-	if(schedp.sched_priority)
+	if(bin->worker_prio)
 	{
-		if(pthread_setschedparam(self, SCHED_RR, &schedp))
-			fprintf(stderr, "pthread_setschedparam error\n");
+		struct sched_param schedp;
+		memset(&schedp, 0, sizeof(struct sched_param));
+		schedp.sched_priority = bin->worker_prio;
+		
+		if(schedp.sched_priority)
+		{
+			if(pthread_setschedparam(self, SCHED_RR, &schedp))
+				fprintf(stderr, "pthread_setschedparam error\n");
+		}
 	}
 
 	while(!atomic_load_explicit(&bin->worker_dead, memory_order_relaxed))

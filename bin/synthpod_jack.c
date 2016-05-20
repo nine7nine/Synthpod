@@ -952,6 +952,8 @@ elm_main(int argc, char **argv)
 	handle.seq_size = SEQ_SIZE;
 
 	bin->has_gui = true;
+	bin->audio_prio = 70; // not used
+	bin->worker_prio = 60;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -959,7 +961,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGn:u:s:")) != -1)
+	while((c = getopt(argc, argv, "vhgGw:Wn:u:s:")) != -1)
 	{
 		switch(c)
 		{
@@ -990,6 +992,8 @@ elm_main(int argc, char **argv)
 					"   [-h]                 print usage information\n"
 					"   [-g]                 enable GUI (default)\n"
 					"   [-G]                 disable GUI\n"
+					"   [-w] worker-priority worker thread realtime priority (60)\n"
+					"   [-W]                 do NOT use worker thread realtime priority\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-u] client-uuid     client UUID for JACK session management\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
@@ -1000,6 +1004,12 @@ elm_main(int argc, char **argv)
 				break;
 			case 'G':
 				bin->has_gui = false;
+				break;
+			case 'w':
+				bin->worker_prio = atoi(optarg);
+				break;
+			case 'W':
+				bin->worker_prio = 0;
 				break;
 			case 'n':
 				handle.server_name = optarg;
