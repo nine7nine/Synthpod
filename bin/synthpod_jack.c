@@ -941,6 +941,8 @@ elm_main(int argc, char **argv);
 EAPI_MAIN int
 elm_main(int argc, char **argv)
 {
+	mlockall(MCL_CURRENT | MCL_FUTURE);
+
 	static prog_t handle;
 	mlock(&handle, sizeof(prog_t));
 	bin_t *bin = &handle.bin;
@@ -1074,6 +1076,7 @@ elm_main(int argc, char **argv)
 	bin_deinit(bin);
 
 	munlock(&handle, sizeof(prog_t));
+	munlockall();
 
 	return 0;
 }
