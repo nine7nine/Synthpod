@@ -39,7 +39,7 @@
 #define NUM_UI_FEATURES 17
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
-#define FROM_APP_NUM 21
+#define FROM_APP_NUM 22
 
 typedef struct _mod_t mod_t;
 typedef struct _mod_ui_t mod_ui_t;
@@ -563,6 +563,9 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state);
 group_t *
 _mod_group_get(mod_t *mod, const char *group_lbl, int group_type,
 	LilvNode *node, Elm_Object_Item **parent, bool expand);
+
+void
+_module_patch_get_all(mod_t *mod);
 
 /*
  * ui_port

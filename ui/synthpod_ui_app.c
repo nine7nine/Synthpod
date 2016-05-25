@@ -144,6 +144,20 @@ _sp_ui_from_app_module_del(sp_ui_t *ui, const LV2_Atom *atom)
 }
 
 static void
+_sp_ui_from_app_module_preset_load(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_preset_load_t *trans = (const transmit_module_preset_load_t *)atom;
+	mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+	if(!mod)
+		return;
+
+	// refresh state
+	_module_patch_get_all(mod);
+}
+
+static void
 _sp_ui_from_app_module_preset_save(sp_ui_t *ui, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -485,6 +499,9 @@ sp_ui_from_app_fill(sp_ui_t *ui)
 
 	from_apps[ptr].protocol = ui->regs.synthpod.module_del.urid;
 	from_apps[ptr++].cb = _sp_ui_from_app_module_del;
+
+	from_apps[ptr].protocol = ui->regs.synthpod.module_preset_load.urid;
+	from_apps[ptr++].cb = _sp_ui_from_app_module_preset_load;
 
 	from_apps[ptr].protocol = ui->regs.synthpod.module_preset_save.urid;
 	from_apps[ptr++].cb = _sp_ui_from_app_module_preset_save;

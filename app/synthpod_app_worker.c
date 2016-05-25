@@ -113,7 +113,15 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					}
 				}
 
-				//FIXME signal to UI
+				//signal to UI
+				size_t size = sizeof(transmit_module_preset_load_t);
+				transmit_module_preset_load_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transmit_module_preset_load_fill(&app->regs, &app->forge, trans, size,
+						mod->uid, NULL);
+					_sp_app_to_ui_advance(app, size);
+				}
 
 				break;
 			}

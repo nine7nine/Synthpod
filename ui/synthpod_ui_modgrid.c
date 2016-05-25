@@ -397,29 +397,8 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 			// expand all groups by default
 			eina_hash_foreach(mod->groups, _groups_foreach, ui);
 
-			// request all properties
-			size_t len = sizeof(transfer_patch_get_t);
-			for(unsigned index=0; index<mod->num_ports; index++)
-			{
-				port_t *port = &mod->ports[index];
-
-				// only consider event ports which support patch:Message
-				if(  (port->buffer_type != PORT_BUFFER_TYPE_SEQUENCE)
-					|| (port->direction != PORT_DIRECTION_INPUT)
-					|| !port->patchable)
-				{
-					continue; // skip
-				}
-
-				transfer_patch_get_all_t *trans = _sp_ui_to_app_request(ui, len);
-				if(trans)
-				{
-					_sp_transfer_patch_get_all_fill(&ui->regs,
-						&ui->forge, trans, mod->uid, index,
-						mod->subject);
-					_sp_ui_to_app_advance(ui, len);
-				}
-			}
+			// refresh state
+			_module_patch_get_all(mod);
 		} // modlist
 	}
 
