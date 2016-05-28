@@ -39,7 +39,7 @@
 typedef struct _app_t app_t;
 
 static QApplication *a;
-static std::atomic_flag done = ATOMIC_FLAG_INIT;
+static std::atomic<bool> done = ATOMIC_VAR_INIT(false);
 
 class MyWindow : public QMainWindow
 {
@@ -71,10 +71,8 @@ void
 MyWindow::timerEvent(QTimerEvent *event)
 {
 	(void)event;
-	if(done.test_and_set())
+	if(done.load(std::memory_order_relaxed))
 		a->quit();
-	else
-		done.clear();
 }
 
 struct _app_t {
@@ -88,7 +86,7 @@ static inline void
 _sig(int signum)
 {
 	(void)signum;
-	done.test_and_set();
+	done.store(true, std::memory_order_relaxed);
 }
 
 static inline int

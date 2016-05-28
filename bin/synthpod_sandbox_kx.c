@@ -35,12 +35,12 @@ struct _app_t {
 	LV2_External_UI_Widget *widget;
 };
 
-static atomic_flag done = ATOMIC_FLAG_INIT;
+static _Atomic bool done = ATOMIC_VAR_INIT(false);
 
 static inline void
 _sig(int signum)
 {
-	atomic_flag_test_and_set(&done);
+	atomic_store_explicit(&done, true, memory_order_relaxed);
 }
 
 static inline void
@@ -49,7 +49,7 @@ _ui_closed(LV2UI_Controller controller)
 	sandbox_slave_t *sb = controller;
 	(void)sb;
 
-	atomic_flag_test_and_set(&done);
+	atomic_store_explicit(&done, true, memory_order_relaxed);
 }
 
 static inline int
@@ -82,10 +82,8 @@ _run(sandbox_slave_t *sb, void *data)
 {
 	app_t *app = data;
 
-	while(!atomic_flag_test_and_set(&done))
+	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
-		atomic_flag_clear(&done);
-
 		usleep(40000); // 25 fps
 
 		sandbox_slave_recv(sb);

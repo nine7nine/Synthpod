@@ -34,12 +34,12 @@ struct _app_t {
 	const LV2UI_Show_Interface *show_iface;
 };
 
-static atomic_flag done = ATOMIC_FLAG_INIT;
+static _Atomic bool done = ATOMIC_VAR_INIT(false);
 
 static inline void
 _sig(int signum)
 {
-	atomic_flag_test_and_set(&done);
+	atomic_store_explicit(&done, true, memory_order_relaxed);
 }
 
 static inline int
@@ -67,17 +67,15 @@ _run(sandbox_slave_t *sb, void *data)
 {
 	app_t *app = data;
 
-	while(!atomic_flag_test_and_set(&done))
+	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
-		atomic_flag_clear(&done);
-
 		usleep(40000); // 25 fps
 
 		sandbox_slave_recv(sb);
 		if(app->idle_iface)
 		{
 			if(app->idle_iface->idle(app->handle))
-				atomic_flag_test_and_set(&done);
+				atomic_store_explicit(&done, true, memory_order_relaxed);
 		}
 		sandbox_slave_flush(sb);
 	}
