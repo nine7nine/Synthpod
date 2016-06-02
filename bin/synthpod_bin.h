@@ -384,6 +384,8 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 			size_t written = strlen(trace) + 1;
 			varchunk_write_advance(bin->app_to_log, written);
 			_light_sem_signal(&bin->worker_sem, 1);
+
+			return written;
 		}
 	}
 	else // !log_trace OR not DSP thread ID
@@ -401,9 +403,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		//TODO send to UI?
 
 		fprintf(stderr, "%s", prefix);
-		vfprintf(stderr, fmt, args);
-
-		return 0;
+		return vfprintf(stderr, fmt, args);
 	}
 
 	return -1;
