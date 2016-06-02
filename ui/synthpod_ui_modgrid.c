@@ -303,6 +303,19 @@ _list_contract_request(void *data, Evas_Object *obj, void *event_info)
 	elm_genlist_item_expanded_set(itm, EINA_FALSE);
 }
 
+static void
+_content_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+
+	if(mod)
+	{
+		mod->std.grid = NULL;
+		mod->std.frame = NULL;
+		mod->std.list = NULL;
+	}
+}
+
 static Evas_Object *
 _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -316,6 +329,7 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	if(frame)
 	{
 		elm_object_text_set(frame, mod->name);
+		evas_object_event_callback_add(frame, EVAS_CALLBACK_DEL, _content_del, mod);
 		evas_object_size_hint_weight_set(frame, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(frame, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(frame);
@@ -405,19 +419,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	return frame;
 }
 
-static void
-_modgrid_del(void *data, Evas_Object *obj)
-{
-	mod_t *mod = data;
-
-	if(mod)
-	{
-		mod->std.grid = NULL;
-		mod->std.frame = NULL;
-		mod->std.list = NULL;
-	}
-}
-
 void
 _modgrid_itc_add(sp_ui_t *ui)
 {
@@ -428,7 +429,7 @@ _modgrid_itc_add(sp_ui_t *ui)
 		ui->griditc->func.text_get = NULL;
 		ui->griditc->func.content_get = _modgrid_content_get;
 		ui->griditc->func.state_get = NULL;
-		ui->griditc->func.del = _modgrid_del;
+		ui->griditc->func.del = NULL;
 	}
 }
 

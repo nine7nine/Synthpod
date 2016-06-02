@@ -262,7 +262,9 @@ struct _mod_t {
 	// standard "automatic" UI
 	struct {
 		LV2UI_Descriptor descriptor;
+		// genlist item
 		Elm_Object_Item *elmnt;
+		// gengrid item
 		Elm_Object_Item *grid;
 		Evas_Object *frame;
 		Evas_Object *list;
