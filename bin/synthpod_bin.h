@@ -99,7 +99,6 @@ struct _bin_t {
 	Eina_Thread worker_thread;
 	light_sem_t worker_sem;
 
-	LV2_URID log_entry;
 	LV2_URID log_error;
 	LV2_URID log_note;
 	LV2_URID log_trace;
@@ -392,8 +391,6 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		const char *prefix = "[Log]   ";
 		if(type == bin->log_trace)
 			prefix = "[Trace] ";
-		else if(type == bin->log_entry)
-			prefix = "[Entry] ";
 		else if(type == bin->log_error)
 			prefix = "[Error] ";
 		else if(type == bin->log_note)
@@ -511,7 +508,6 @@ bin_init(bin_t *bin)
 	bin->xmap.new_uuid = _voice_map_new_uuid;
 	bin->xmap.handle = &voice_uuid;
 
-	bin->log_entry = map->map(map->handle, LV2_LOG__Entry);
 	bin->log_error = map->map(map->handle, LV2_LOG__Error);
 	bin->log_note = map->map(map->handle, LV2_LOG__Note);
 	bin->log_trace = map->map(map->handle, LV2_LOG__Trace);
