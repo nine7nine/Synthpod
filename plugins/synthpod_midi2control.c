@@ -178,7 +178,7 @@ static const props_def_t stat_cntrl [MAX_SLOTS] = {
 	[4] = STAT_CNTRL(5),
 	[5] = STAT_CNTRL(6),
 	[6] = STAT_CNTRL(7),
-	[7] = STAT_CNTRL(7)
+	[7] = STAT_CNTRL(8)
 };
 
 #define STAT_MIN(NUM) \
