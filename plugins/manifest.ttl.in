@@ -178,6 +178,14 @@ synthpod:midi2control
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
+# String2Control
+synthpod:string2control
+	a lv2:Plugin ;
+	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
+	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
+	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod.ttl> .
+
 # Control2Atom
 synthpod:control2atom
 	a lv2:Plugin ;

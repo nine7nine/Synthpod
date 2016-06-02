@@ -78,6 +78,8 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_midisplitter;
 		case 16:
 			return &synthpod_midi2control;
+		case 17:
+			return &synthpod_string2control;
 		default:
 			return NULL;
 	}

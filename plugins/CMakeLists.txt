@@ -29,6 +29,7 @@ add_library(synthpod.lv2 MODULE
 	synthpod_audioxfadestereo.c
 	synthpod_atom2control.c
 	synthpod_midi2control.c
+	synthpod_string2control.c
 	synthpod_control2atom.c
 	synthpod_mixer.c
 	synthpod_anonymizer.c
