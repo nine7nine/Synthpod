@@ -226,9 +226,13 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 				const LilvNode *ui_uri = lilv_ui_get_uri(mod_ui->ui);
 				const char *ui_uri_str = lilv_node_as_string(ui_uri);
 
+#if defined(SANDBOX_LIB)
 				const char *ui_uri_fmt = (mod_ui->driver == &sbox_ui_driver)
 					? "%s (sandboxed)"
 					: "%s (native)";
+#else
+				const char *ui_uri_fmt = "%s (native)";
+#endif
 
 				char *ui_uri_ptr = NULL;
 				if(asprintf(&ui_uri_ptr, ui_uri_fmt, ui_uri_str) != -1)

@@ -10,10 +10,6 @@ add_definitions("-D_GNU_SOURCE=1") # asprintf
 
 # synthpod_ui
 if(BUILD_SANDBOX_LIB)
-# nanomsg
-	pkg_search_module(NANOMSG REQUIRED libnanomsg>=2.0)
-	include_directories(${NANOMSG_INCLUDE_DIRS})
-
 	set(SANDBOX_MASTER_SOURCE ${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
 	set(SANDBOX_MASTER_LIBS ${NANOMSG_LDFLAGS})
 
