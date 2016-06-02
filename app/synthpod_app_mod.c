@@ -289,117 +289,9 @@ _sp_app_mod_reinitialize(mod_t *mod)
 	_sp_app_mod_slice_pool(mod, PORT_TYPE_CV);
 }
 
-
-mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
+static inline int 
+_sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 {
-	LilvNode *uri_node = lilv_new_uri(app->world, uri);
-	if(!uri_node)
-		return NULL;
-
-	const LilvPlugin *plug = lilv_plugins_get_by_uri(app->plugs, uri_node);
-	lilv_node_free(uri_node);
-			
-	if(!plug)
-		return NULL;
-
-	const LilvNode *library_uri= lilv_plugin_get_library_uri(plug);
-	if(!library_uri)
-		return NULL;
-
-	// check whether DSP and UI code is mixed into same binary
-	bool mixed_binary = false;
-	LilvUIs *all_uis = lilv_plugin_get_uis(plug);
-	if(all_uis)
-	{
-		LILV_FOREACH(uis, ptr, all_uis)
-		{
-			const LilvUI *ui = lilv_uis_get(all_uis, ptr);
-			const LilvNode *ui_uri_node = lilv_ui_get_uri(ui);
-
-			if(!ui || !ui_uri_node)
-				continue;
-			
-			// nedded if ui ttl referenced via rdfs#seeAlso
-			lilv_world_load_resource(app->world, ui_uri_node);
-	
-			const LilvNode *ui_library_uri= lilv_ui_get_binary_uri(ui);
-			if(ui_library_uri && lilv_node_equals(library_uri, ui_library_uri))
-				mixed_binary = true; // this is bad, we don't support that
-
-			lilv_world_unload_resource(app->world, ui_uri_node);
-		}
-
-		lilv_uis_free(all_uis);
-	}
-
-	if(mixed_binary)
-	{
-		fprintf(stderr, "Plugin mixes DSP and UI code in same binary which is not supported.\n");
-		return NULL;
-	}
-
-	mod_t *mod = calloc(1, sizeof(mod_t));
-	if(!mod)
-		return NULL;
-	mlock(mod, sizeof(mod_t));
-
-	// populate worker schedule
-	mod->worker.schedule.handle = mod;
-	mod->worker.schedule.schedule_work = _schedule_work;
-
-	// populate zero_worker schedule
-	mod->zero.schedule.handle = mod;
-	mod->zero.schedule.request = _zero_sched_request;
-	mod->zero.schedule.advance = _zero_sched_advance;
-
-	// populate log
-	mod->log.handle = mod;
-	mod->log.printf = _log_printf;
-	mod->log.vprintf = _log_vprintf;
-
-	mod->make_path.handle = mod;
-	mod->make_path.path = _mod_make_path;
-		
-	// populate options
-	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
-	mod->opts.options[0].subject = 0;
-	mod->opts.options[0].key = app->regs.bufsz.max_block_length.urid;
-	mod->opts.options[0].size = sizeof(int32_t);
-	mod->opts.options[0].type = app->forge.Int;
-	mod->opts.options[0].value = &app->driver->max_block_size;
-	
-	mod->opts.options[1].context = LV2_OPTIONS_INSTANCE;
-	mod->opts.options[1].subject = 0;
-	mod->opts.options[1].key = app->regs.bufsz.min_block_length.urid;
-	mod->opts.options[1].size = sizeof(int32_t);
-	mod->opts.options[1].type = app->forge.Int;
-	mod->opts.options[1].value = &app->driver->min_block_size;
-	
-	mod->opts.options[2].context = LV2_OPTIONS_INSTANCE;
-	mod->opts.options[2].subject = 0;
-	mod->opts.options[2].key = app->regs.bufsz.sequence_size.urid;
-	mod->opts.options[2].size = sizeof(int32_t);
-	mod->opts.options[2].type = app->forge.Int;
-	mod->opts.options[2].value = &app->driver->seq_size;
-	
-	mod->opts.options[3].context = LV2_OPTIONS_INSTANCE;
-	mod->opts.options[3].subject = 0;
-	mod->opts.options[3].key = app->regs.bufsz.nominal_block_length.urid;
-	mod->opts.options[3].size = sizeof(int32_t);
-	mod->opts.options[3].type = app->forge.Int;
-	mod->opts.options[3].value = &app->driver->max_block_size; // set to max by default
-
-	mod->opts.options[4].context = LV2_OPTIONS_INSTANCE;
-	mod->opts.options[4].subject = 0;
-	mod->opts.options[4].key = app->regs.param.sample_rate.urid;
-	mod->opts.options[4].size = sizeof(float);
-	mod->opts.options[4].type = app->forge.Float;
-	mod->opts.options[4].value = &app->driver->sample_rate;
-
-	mod->opts.options[5].key = 0; // sentinel
-	mod->opts.options[5].value = NULL; // sentinel
-
 	// populate feature list
 	int nfeatures = 0;
 	mod->feature_list[nfeatures].URI = LV2_URID__map;
@@ -478,6 +370,64 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		mod->features[i] = &mod->feature_list[i];
 	mod->features[nfeatures] = NULL; // sentinel
 
+	return nfeatures;
+}
+
+const LilvPlugin *
+_sp_app_mod_is_supported(sp_app_t *app, const void *uri)
+{
+	LilvNode *uri_node = lilv_new_uri(app->world, uri);
+	if(!uri_node)
+		return NULL;
+
+	const LilvPlugin *plug = lilv_plugins_get_by_uri(app->plugs, uri_node);
+	lilv_node_free(uri_node);
+			
+	if(!plug)
+		return NULL;
+
+	const LilvNode *library_uri= lilv_plugin_get_library_uri(plug);
+	if(!library_uri)
+		return NULL;
+
+	// check whether DSP and UI code is mixed into same binary
+	bool mixed_binary = false;
+	LilvUIs *all_uis = lilv_plugin_get_uis(plug);
+	if(all_uis)
+	{
+		LILV_FOREACH(uis, ptr, all_uis)
+		{
+			const LilvUI *ui = lilv_uis_get(all_uis, ptr);
+			if(!ui)
+				continue;
+
+			const LilvNode *ui_uri_node = lilv_ui_get_uri(ui);
+			if(!ui_uri_node)
+				continue;
+			
+			// nedded if ui ttl referenced via rdfs#seeAlso
+			lilv_world_load_resource(app->world, ui_uri_node);
+	
+			const LilvNode *ui_library_uri= lilv_ui_get_binary_uri(ui);
+			if(ui_library_uri && lilv_node_equals(library_uri, ui_library_uri))
+				mixed_binary = true; // this is bad, we don't support that
+
+			lilv_world_unload_resource(app->world, ui_uri_node);
+		}
+
+		lilv_uis_free(all_uis);
+	}
+
+	if(mixed_binary)
+	{
+		fprintf(stderr, "<%s> NOT supported: mixes DSP and UI code in same binary.\n", uri);
+		return NULL;
+	}
+
+	// populate feature list in dummy mod structure
+	mod_t mod;
+	const int nfeatures = _sp_app_mod_features_populate(app, &mod);
+
 	// check for missing features
 	int missing_required_feature = 0;
 	LilvNodes *required_features = lilv_plugin_get_required_features(plug);
@@ -491,7 +441,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 			for(int f=0; f<nfeatures; f++)
 			{
-				if(!strcmp(mod->feature_list[f].URI, required_feature_uri))
+				if(!strcmp(mod.feature_list[f].URI, required_feature_uri))
 				{
 					missing_required_feature = 0;
 					break;
@@ -500,19 +450,91 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 			if(missing_required_feature)
 			{
-				fprintf(stderr, "plugin '%s' requires non-supported feature: %s\n",
+				fprintf(stderr, "<%s> NOT supported: required feature <%s>\n",
 					uri, required_feature_uri);
 				break;
 			}
 		}
 		lilv_nodes_free(required_features);
 	}
+
 	if(missing_required_feature)
-	{
-		free(mod);
-		return NULL; // plugin requires a feature we do not support
-	}
+		return NULL;
+
+	return plug;
+}
+
+mod_t *
+_sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
+{
+	const LilvPlugin *plug;
+
+	if(!(plug = _sp_app_mod_is_supported(app, uri)))
+		return NULL;
+
+	mod_t *mod = calloc(1, sizeof(mod_t));
+	if(!mod)
+		return NULL;
+	mlock(mod, sizeof(mod_t));
+
+	// populate worker schedule
+	mod->worker.schedule.handle = mod;
+	mod->worker.schedule.schedule_work = _schedule_work;
+
+	// populate zero_worker schedule
+	mod->zero.schedule.handle = mod;
+	mod->zero.schedule.request = _zero_sched_request;
+	mod->zero.schedule.advance = _zero_sched_advance;
+
+	// populate log
+	mod->log.handle = mod;
+	mod->log.printf = _log_printf;
+	mod->log.vprintf = _log_vprintf;
+
+	mod->make_path.handle = mod;
+	mod->make_path.path = _mod_make_path;
 		
+	// populate options
+	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[0].subject = 0;
+	mod->opts.options[0].key = app->regs.bufsz.max_block_length.urid;
+	mod->opts.options[0].size = sizeof(int32_t);
+	mod->opts.options[0].type = app->forge.Int;
+	mod->opts.options[0].value = &app->driver->max_block_size;
+	
+	mod->opts.options[1].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[1].subject = 0;
+	mod->opts.options[1].key = app->regs.bufsz.min_block_length.urid;
+	mod->opts.options[1].size = sizeof(int32_t);
+	mod->opts.options[1].type = app->forge.Int;
+	mod->opts.options[1].value = &app->driver->min_block_size;
+	
+	mod->opts.options[2].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[2].subject = 0;
+	mod->opts.options[2].key = app->regs.bufsz.sequence_size.urid;
+	mod->opts.options[2].size = sizeof(int32_t);
+	mod->opts.options[2].type = app->forge.Int;
+	mod->opts.options[2].value = &app->driver->seq_size;
+	
+	mod->opts.options[3].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[3].subject = 0;
+	mod->opts.options[3].key = app->regs.bufsz.nominal_block_length.urid;
+	mod->opts.options[3].size = sizeof(int32_t);
+	mod->opts.options[3].type = app->forge.Int;
+	mod->opts.options[3].value = &app->driver->max_block_size; // set to max by default
+
+	mod->opts.options[4].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[4].subject = 0;
+	mod->opts.options[4].key = app->regs.param.sample_rate.urid;
+	mod->opts.options[4].size = sizeof(float);
+	mod->opts.options[4].type = app->forge.Float;
+	mod->opts.options[4].value = &app->driver->sample_rate;
+
+	mod->opts.options[5].key = 0; // sentinel
+	mod->opts.options[5].value = NULL; // sentinel
+
+	_sp_app_mod_features_populate(app, mod);
+
 	mod->app = app;
 	mod->uid = uid != 0 ? uid : app->uid++;
 	mod->plug = plug;

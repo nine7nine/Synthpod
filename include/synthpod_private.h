@@ -329,6 +329,7 @@ struct _reg_t {
 		reg_item_t monoatom;
 
 		reg_item_t module_list;
+		reg_item_t module_supported;
 		reg_item_t module_add;
 		reg_item_t module_del;
 		reg_item_t module_move;
@@ -560,6 +561,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.stereo, world, map, SYNTHPOD_PREFIX"stereo");
 	_register(&regs->synthpod.monoatom, world, map, SYNTHPOD_PREFIX"monoatom");
 	_register(&regs->synthpod.module_list, world, map, SYNTHPOD_PREFIX"moduleList");
+	_register(&regs->synthpod.module_supported, world, map, SYNTHPOD_PREFIX"moduleSupported");
 	_register(&regs->synthpod.module_add, world, map, SYNTHPOD_PREFIX"moduleAdd");
 	_register(&regs->synthpod.module_del, world, map, SYNTHPOD_PREFIX"moduleDel");
 	_register(&regs->synthpod.module_move, world, map, SYNTHPOD_PREFIX"moduleMove");
@@ -763,6 +765,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.stereo);
 	_unregister(&regs->synthpod.monoatom);
 	_unregister(&regs->synthpod.module_list);
+	_unregister(&regs->synthpod.module_supported);
 	_unregister(&regs->synthpod.module_add);
 	_unregister(&regs->synthpod.module_del);
 	_unregister(&regs->synthpod.module_move);
@@ -798,6 +801,7 @@ sp_regs_deinit(reg_t *regs)
 // app <-> ui communication for module/port manipulations
 typedef struct _transmit_t transmit_t;
 typedef struct _transmit_module_list_t transmit_module_list_t;
+typedef struct _transmit_module_supported_t transmit_module_supported_t;
 typedef struct _transmit_module_add_t transmit_module_add_t;
 typedef struct _transmit_module_del_t transmit_module_del_t;
 typedef struct _transmit_module_move_t transmit_module_move_t;
@@ -826,6 +830,13 @@ struct _transmit_t {
 
 struct _transmit_module_list_t {
 	transmit_t transmit _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_module_supported_t {
+	transmit_t transmit _ATOM_ALIGNED;
+	LV2_Atom_Int state _ATOM_ALIGNED;
+	LV2_Atom_String uri _ATOM_ALIGNED;
+		char uri_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_module_add_t {
@@ -1050,7 +1061,29 @@ _sp_transmit_module_list_fill(reg_t *regs, LV2_Atom_Forge *forge,
 		regs->synthpod.module_list.urid);
 }
 
-typedef const void *(*data_access_t)(const char * uri);
+static inline void
+_sp_transmit_module_supported_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_module_supported_t *trans, uint32_t size,
+	int32_t state, const char *module_uri)
+{
+	trans = ASSUME_ALIGNED(trans);
+
+	_sp_transmit_fill(regs, forge, &trans->transmit, size,
+		regs->synthpod.module_supported.urid);
+
+	trans->state.atom.size = sizeof(int32_t);
+	trans->state.atom.type = forge->Int;
+	trans->state.body = state;
+
+	if(module_uri)
+	{
+		trans->uri.atom.size = strlen(module_uri) + 1;
+		strcpy(trans->uri_str, module_uri);
+	}
+	else
+		trans->uri.atom.size = 0;
+	trans->uri.atom.type = forge->String;
+}
 
 static inline void
 _sp_transmit_module_add_fill(reg_t *regs, LV2_Atom_Forge *forge,

@@ -149,6 +149,32 @@ _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 }
 
 __realtime static bool
+_sp_app_from_ui_module_supported(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_supported_t *module_supported = (const transmit_module_supported_t *)atom;
+
+	if(module_supported->state.body == -1) // query
+	{
+		// send request to worker thread
+		size_t size = sizeof(work_t) + sizeof(job_t) + module_supported->uri.atom.size;
+		work_t *work = _sp_app_to_worker_request(app, size);
+		if(work)
+		{
+			work->target = app;
+			work->size = size - sizeof(work_t);
+			job_t *job = (job_t *)work->payload;
+			job->request = JOB_TYPE_REQUEST_MODULE_SUPPORTED;
+			memcpy(job->uri, module_supported->uri_str, module_supported->uri.atom.size);
+			_sp_app_to_worker_advance(app, size);
+		}
+	}
+
+	return advance_ui[app->block_state];
+}
+
+__realtime static bool
 _sp_app_from_ui_module_add(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -907,6 +933,9 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.synthpod.module_list.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_module_list;
+
+	from_uis[ptr].protocol = app->regs.synthpod.module_supported.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_module_supported;
 
 	from_uis[ptr].protocol = app->regs.synthpod.module_add.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_module_add;

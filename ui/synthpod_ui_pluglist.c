@@ -42,6 +42,22 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			if(node)
 				lilv_node_free(node);
 
+			// is this module supported at all?
+			const LilvNode *uri_node = lilv_plugin_get_uri(info->plug);
+			if(uri_node)
+			{
+				const char *uri_str = lilv_node_as_string(uri_node);
+
+				size_t size = sizeof(transmit_module_supported_t)
+					+ lv2_atom_pad_size(strlen(uri_str) + 1);
+				transmit_module_supported_t *trans = _sp_ui_to_app_request(ui, size);
+				if(trans)
+				{
+					_sp_transmit_module_supported_fill(&ui->regs, &ui->forge, trans, size, -1, uri_str);
+					_sp_ui_to_app_advance(ui, size);
+				}
+			}
+
 			return str;
 		}
 		case PLUG_INFO_TYPE_URI:

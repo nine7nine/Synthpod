@@ -49,6 +49,21 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 
 		switch(job->reply)
 		{
+			case JOB_TYPE_REPLY_MODULE_SUPPORTED:
+			{
+				//signal to UI
+				size_t size = sizeof(transmit_module_supported_t)
+					+ lv2_atom_pad_size(strlen(job->uri) + 1);
+				transmit_module_supported_t *trans = _sp_app_to_ui_request(app, size);
+				if(trans)
+				{
+					_sp_transmit_module_supported_fill(&app->regs, &app->forge, trans, size,
+						job->status, job->uri);
+					_sp_app_to_ui_advance(app, size);
+				}
+
+				break;
+			}
 			case JOB_TYPE_REPLY_MODULE_ADD:
 			{
 				mod_t *mod = job->mod;
@@ -271,6 +286,25 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 
 		switch(job->request)
 		{
+			case JOB_TYPE_REQUEST_MODULE_SUPPORTED:
+			{
+				const int32_t status= _sp_app_mod_is_supported(app, job->uri) ? 1 : 0;
+
+				// signal to app
+				size_t work_size = sizeof(work_t) + sizeof(job_t) + strlen(job->uri) + 1;
+				work_t *work = _sp_worker_to_app_request(app, work_size);
+				if(work)
+				{
+						work->target = app;
+						work->size = sizeof(job_t);
+					job_t *job1 = (job_t *)work->payload;
+						job1->reply = JOB_TYPE_REPLY_MODULE_SUPPORTED;
+						job1->status = status;
+						memcpy(job1->uri, job->uri, strlen(job->uri) + 1);
+					_sp_worker_to_app_advance(app, work_size);
+				}
+				break;
+			}
 			case JOB_TYPE_REQUEST_MODULE_ADD:
 			{
 				mod_t *mod = _sp_app_mod_add(app, job->uri, 0);

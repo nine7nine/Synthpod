@@ -41,7 +41,7 @@
 #define NUM_FEATURES 16
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
-#define FROM_UI_NUM 22
+#define FROM_UI_NUM 23
 
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
@@ -102,6 +102,7 @@ enum _ramp_state_t {
 };
 
 enum _job_type_request_t {
+	JOB_TYPE_REQUEST_MODULE_SUPPORTED,
 	JOB_TYPE_REQUEST_MODULE_ADD,
 	JOB_TYPE_REQUEST_MODULE_DEL,
 	JOB_TYPE_REQUEST_PRESET_LOAD,
@@ -112,6 +113,7 @@ enum _job_type_request_t {
 };
 
 enum _job_type_reply_t {
+	JOB_TYPE_REPLY_MODULE_SUPPORTED,
 	JOB_TYPE_REPLY_MODULE_ADD,
 	JOB_TYPE_REPLY_MODULE_DEL,
 	JOB_TYPE_REPLY_PRESET_LOAD,
@@ -425,6 +427,9 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path);
  */
 mod_t *
 _sp_app_mod_get(sp_app_t *app, u_id_t uid);
+
+const LilvPlugin *
+_sp_app_mod_is_supported(sp_app_t *app, const void *uri);
 
 mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid);

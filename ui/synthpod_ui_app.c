@@ -77,6 +77,36 @@ _sp_ui_port_get(sp_ui_t *ui, u_id_t uid, uint32_t index)
 }
 
 static void
+_sp_ui_from_app_module_supported(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_supported_t *trans = (const transmit_module_supported_t *)atom;
+
+	if(trans->state.body == 0) // not supported -> disable it in pluglist
+	{
+		if(ui->pluglist)
+		{
+			for(Elm_Object_Item *elmnt = elm_genlist_first_item_get(ui->pluglist);
+				elmnt;
+				elmnt = elm_genlist_item_next_get(elmnt))
+			{
+				plug_info_t *info = elm_object_item_data_get(elmnt);
+				if(info && info->plug)
+				{
+					const LilvNode *plug_uri = lilv_plugin_get_uri(info->plug);
+					if(plug_uri && !strcmp(lilv_node_as_uri(plug_uri), trans->uri_str))
+					{
+						elm_object_item_disabled_set(elmnt, EINA_TRUE);
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+static void
 _sp_ui_from_app_module_add(sp_ui_t *ui, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -493,6 +523,9 @@ sp_ui_from_app_fill(sp_ui_t *ui)
 {
 	unsigned ptr = 0;
 	from_app_t *from_apps = ui->from_apps;
+
+	from_apps[ptr].protocol = ui->regs.synthpod.module_supported.urid;
+	from_apps[ptr++].cb = _sp_ui_from_app_module_supported;
 
 	from_apps[ptr].protocol = ui->regs.synthpod.module_add.urid;
 	from_apps[ptr++].cb = _sp_ui_from_app_module_add;
