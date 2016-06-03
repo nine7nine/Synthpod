@@ -19,7 +19,8 @@
 
 images {
 	image: "book-circular-button.png" COMP;
-	image: "icon_arrow_right.png" COMP;
+	image: "source.png" COMP;
+	image: "sink.png" COMP;
 	image: "close-circular-button.png" COMP;
 	image: "rec-circular-button.png" COMP;
 	image: "favourite-button-of-circular-shape.png" COMP;
@@ -299,7 +300,7 @@ group {
 			description { state: "default" 0.20; fixed: 1 1; color: COL20; }
 		}
 		part {
-			name: "sink";
+			name: "direction";
 			type: IMAGE;
 			mouse_events: 0;
 			clip_to: "clip";
@@ -311,40 +312,13 @@ group {
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
 				min: 16 16;
-				image.normal: "icon_arrow_right.png";
-				color: 255 255 255 0;
+				image.normal: "sink.png";
+				color: 255 255 255 255;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				color: 255 255 255 255;
-			}
-		}
-		part {
-			name: "link";
-			type: IMAGE;
-			mouse_events: 1;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				align: 0.0 0.5;
-				aspect: 1.0 1.0;
-				rel1.to_x: "sink";
-				rel1.relative: 1 0;
-				rel2.to_x: "sink";
-				rel2.relative: 1 1;
-				image.normal: "favourite-button-of-circular-shape.png";
-				color: 255 255 255 0;
-			}
-			description {
-				state: "default" 0.5;
-				inherit: "default" 0.0;
-				color: 255 255 255 64;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 255 255 255 255;
+				image.normal: "source.png";
 			}
 		}
 		part {
@@ -355,7 +329,7 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				rel1.to_x: "link";
+				rel1.to_x: "direction";
 				rel1.relative: 1 0;
 				rel2.relative: 0.4 1;
 				text {
@@ -386,10 +360,10 @@ group {
 				fixed: 1 1;
 				align: 1.0 0.5;
 				aspect: 1.0 1.0;
-				rel1.relative: -1.0 0.0;
-				rel1.to_x: "source";
-				rel2.relative: 0.0 1.0;
-				rel2.to_x: "source";
+				rel1.to_x: "link";
+				rel1.relative: -1 0;
+				rel2.to_x: "link";
+				rel2.relative: 0 1;
 				image.normal: "rec-circular-button.png";
 				color: 255 255 255 0;
 			}
@@ -405,10 +379,9 @@ group {
 			}
 		}
 		part {
-			name: "source";
+			name: "link";
 			type: IMAGE;
-			mouse_events: 0;
-			clip_to: "clip";
+			mouse_events: 1;
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
@@ -416,9 +389,13 @@ group {
 				aspect: 1.0 1.0;
 				rel1.relative: 1 0;
 				rel2.relative: 1 1;
-				min: 16 16;
-				image.normal: "icon_arrow_right.png";
+				image.normal: "favourite-button-of-circular-shape.png";
 				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 0.5;
+				inherit: "default" 0.0;
+				color: 255 255 255 64;
 			}
 			description {
 				state: "default" 1.0;
@@ -496,23 +473,23 @@ group {
 		program {
 			signal: "source,show";
 			action: STATE_SET "default" 1.0;
-			target: "source";
+			target: "direction";
 		}
 		program {
 			signal: "source,hide";
 			action: STATE_SET "default" 0.0;
-			target: "source";
+			target: "direction";
 		}
 
 		program {
 			signal: "sink,show";
-			action: STATE_SET "default" 1.0;
-			target: "sink";
+			action: STATE_SET "default" 0.0;
+			target: "direction";
 		}
 		program {
 			signal: "sink,hide";
-			action: STATE_SET "default" 0.0;
-			target: "sink";
+			action: STATE_SET "default" 1.0;
+			target: "direction";
 		}
 	}
 }
