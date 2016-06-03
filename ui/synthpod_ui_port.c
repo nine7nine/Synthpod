@@ -280,13 +280,11 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		elm_layout_signal_emit(lay, col, MODLIST_UI);
 		if(port->direction == PORT_DIRECTION_OUTPUT)
 		{
-			elm_layout_signal_emit(lay, "source,show", "");
-			elm_layout_signal_emit(lay, "sink,hide", "");
+			elm_layout_signal_emit(lay, "source,on", "");
 		}
 		else
 		{
-			elm_layout_signal_emit(lay, "source,hide", "");
-			elm_layout_signal_emit(lay, "sink,show", "");
+			elm_layout_signal_emit(lay, "source,off", "");
 		}
 
 		LilvNode *name_node = lilv_port_get_name(mod->plug, port->tar);

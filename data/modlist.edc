@@ -471,24 +471,13 @@ group {
 		}
 		
 		program {
-			signal: "source,show";
+			signal: "source,on";
 			action: STATE_SET "default" 1.0;
 			target: "direction";
 		}
 		program {
-			signal: "source,hide";
+			signal: "source,off";
 			action: STATE_SET "default" 0.0;
-			target: "direction";
-		}
-
-		program {
-			signal: "sink,show";
-			action: STATE_SET "default" 0.0;
-			target: "direction";
-		}
-		program {
-			signal: "sink,hide";
-			action: STATE_SET "default" 1.0;
 			target: "direction";
 		}
 	}

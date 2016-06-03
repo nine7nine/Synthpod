@@ -654,13 +654,11 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 		elm_layout_signal_emit(lay, col, MODLIST_UI);
 		if(!prop->editable)
 		{
-			elm_layout_signal_emit(lay, "source,show", "");
-			elm_layout_signal_emit(lay, "sink,hide", "");
+			elm_layout_signal_emit(lay, "source,on", "");
 		}
 		else
 		{
-			elm_layout_signal_emit(lay, "source,hide", "");
-			elm_layout_signal_emit(lay, "sink,show", "");
+			elm_layout_signal_emit(lay, "source,off", "");
 		}
 
 		if(prop->label)
