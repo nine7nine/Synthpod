@@ -19,7 +19,6 @@
 
 images {
 	image: "icon_arrow_up_right.png" COMP;
-	image: "icon_arrow_up.png" COMP;
 	image: "icon_arrow_right.png" COMP;
 	image: "icon_close.png" COMP;
 	image: "monitor_on.png" COMP;
@@ -427,7 +426,7 @@ group {
 				rel1.relative: 1 0;
 				rel2.relative: 1 1;
 				min: 16 16;
-				image.normal: "icon_arrow_up.png";
+				image.normal: "icon_arrow_right.png";
 				color: 255 255 255 0;
 			}
 			description {
