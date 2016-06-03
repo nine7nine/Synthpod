@@ -13,6 +13,7 @@ add_custom_command(
 	COMMAND ${EDJE_CC} ARGS
 		"-fd" ${CMAKE_CURRENT_SOURCE_DIR}/font
 		"-id" ${CMAKE_CURRENT_SOURCE_DIR}/pix
+		"-id" ${CMAKE_CURRENT_SOURCE_DIR}/rounded_ui
 		${CMAKE_CURRENT_SOURCE_DIR}/synthpod.edc
 		${PROJECT_BINARY_DIR}/synthpod.edj
 	DEPENDS

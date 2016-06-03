@@ -18,13 +18,11 @@
 #define MODLIST_UI "/synthpod/modlist/ui"
 
 images {
-	image: "icon_arrow_up_right.png" COMP;
+	image: "book-circular-button.png" COMP;
 	image: "icon_arrow_right.png" COMP;
-	image: "icon_close.png" COMP;
-	image: "monitor_on.png" COMP;
-	image: "monitor_off.png" COMP;
-	image: "link_on.png" COMP;
-	image: "link_off.png" COMP;
+	image: "close-circular-button.png" COMP;
+	image: "rec-circular-button.png" COMP;
+	image: "favourite-button-of-circular-shape.png" COMP;
 	image: "module_border.png" COMP;
 }
 
@@ -121,14 +119,13 @@ group {
 				aspect: 1.0 1.0;
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
-				min: 16 16;
-				image.normal: "link_off.png";
+				image.normal: "favourite-button-of-circular-shape.png";
+				color: 255 255 255 64;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
 				color: 255 255 255 255;
-				image.normal: "link_on.png";
 			}
 		}
 		part {
@@ -166,7 +163,7 @@ group {
 				rel2.to_x: "close";
 				rel2.relative: 0 1;
 				min: 16 16;
-				image.normal: "icon_arrow_up_right.png";
+				image.normal: "book-circular-button.png";
 				color: 255 255 255 0;
 			}
 			description {
@@ -187,7 +184,7 @@ group {
 				rel1.relative: 1 0;
 				rel2.relative: 1 1;
 				min: 16 16;
-				image.normal: "icon_close.png";
+				image.normal: "close-circular-button.png";
 				color: 255 255 255 0;
 			}
 			description {
@@ -336,20 +333,17 @@ group {
 				rel1.relative: 1 0;
 				rel2.to_x: "sink";
 				rel2.relative: 1 1;
-				min: 16 16;
-				image.normal: "link_off.png";
+				image.normal: "favourite-button-of-circular-shape.png";
 				color: 255 255 255 0;
 			}
 			description {
 				state: "default" 0.5;
 				inherit: "default" 0.0;
-				image.normal: "link_off.png";
-				color: 255 255 255 255;
+				color: 255 255 255 64;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				image.normal: "link_on.png";
 				color: 255 255 255 255;
 			}
 		}
@@ -392,24 +386,21 @@ group {
 				fixed: 1 1;
 				align: 1.0 0.5;
 				aspect: 1.0 1.0;
-				rel1.relative: -1 0;
+				rel1.relative: -1.0 0.0;
 				rel1.to_x: "source";
-				rel2.relative: 0 1;
+				rel2.relative: 0.0 1.0;
 				rel2.to_x: "source";
-				min: 16 16;
-				image.normal: "monitor_off.png";
+				image.normal: "rec-circular-button.png";
 				color: 255 255 255 0;
 			}
 			description {
 				state: "default" 0.5;
 				inherit: "default" 0.0;
-				image.normal: "monitor_off.png";
-				color: 255 255 255 255;
+				color: 255 255 255 64;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				image.normal: "monitor_on.png";
 				color: 255 255 255 255;
 			}
 		}
