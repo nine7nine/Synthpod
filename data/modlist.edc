@@ -24,6 +24,9 @@ images {
 	image: "close-circular-button.png" COMP;
 	image: "rec-circular-button.png" COMP;
 	image: "favourite-button-of-circular-shape.png" COMP;
+	image: "verification-sign-in-a-circle-outline.png" COMP;
+	image: "keyboard-of-four-buttons-circular-button-symbol.png" COMP;
+	image: "list-circular-button.png" COMP;
 	image: "module_border.png" COMP;
 }
 
@@ -58,61 +61,10 @@ group {
 			description { state: "default" 0.20; fixed: 1 1; color: COL20; }
 		}
 		part {
-			name: "text.left";
-			type: RECT;
-			mouse_events: 0;
-			clip_to: "clip";
-			description {
-				state: "default" 0.0;
-				rel1.to: "link";
-				rel2.to: "link";
-			}
-		}
-		part {
-			name: "text.right";
-			type: RECT;
-			mouse_events: 0;
-			clip_to: "clip";
-			description {
-				state: "default" 0.0;
-				rel1.to: "ui";
-				rel2.to: "close";
-			}
-		}
-		part {
-			name: "text.bg";
-			type: RECT;
-			mouse_events: 0;
-			clip_to: "clip";
-			description {
-				state: "default" 0.0;
-				rel1.to: "text.border";
-				rel2.to: "text.border";
-				color: 48 48 48 255;
-			}
-		}
-		part {
-			name: "text.border";
-			type: IMAGE;
-			mouse_events: 0;
-			clip_to: "clip";
-			description {
-				state: "default" 0.0;
-				rel1.to: "link";
-				rel1.relative: 1 0;
-				rel2.to: "ui";
-				rel2.relative: 0 1;
-				image {
-					normal: "module_border.png";
-					border: 6 6 6 6;
-					middle: 0;
-				}
-			}
-		}
-		part {
-			name: "link";
+			name: "enable";
 			type: IMAGE;
 			mouse_events: 1;
+			clip_to: "clip";
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
@@ -120,7 +72,30 @@ group {
 				aspect: 1.0 1.0;
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
-				image.normal: "favourite-button-of-circular-shape.png";
+				image.normal: "verification-sign-in-a-circle-outline.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
+			}
+		}
+		part {
+			name: "auto";
+			type: IMAGE;
+			mouse_events: 1;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				align: 0.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.to_x: "enable";
+				rel1.relative: 1 0;
+				rel2.to_x: "enable";
+				rel2.relative: 2 1;
+				image.normal: "list-circular-button.png";
 				color: 255 255 255 64;
 			}
 			description {
@@ -130,42 +105,21 @@ group {
 			}
 		}
 		part {
-			name: "elm.text";
-			type: TEXT;
-			mouse_events: 0;
-			scale: 1;
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				rel1.to_x: "link";
-				rel1.relative: 1 0;
-				rel1.offset: 6 0; // from text.border
-				rel2.to_x: "ui";
-				rel2.relative: 0 1;
-				text {
-					text: "";
-					size: 10;
-					align: 0.0 0.5;
-				};
-				color: 255 255 255 255;
-			}
-		}
-		part {
-			name: "ui";
+			name: "link";
 			type: IMAGE;
 			mouse_events: 1;
+			clip_to: "clip";
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				align: 1.0 0.5;
+				align: 0.0 0.5;
 				aspect: 1.0 1.0;
-				rel1.to_x: "close";
-				rel1.relative: -1 0;
-				rel2.to_x: "close";
-				rel2.relative: 0 1;
-				min: 16 16;
-				image.normal: "book-circular-button.png";
-				color: 255 255 255 0;
+				rel1.relative: 1 0;
+				rel1.to_x: "auto";
+				rel2.relative: 2 1;
+				rel2.to_x: "auto";
+				image.normal: "favourite-button-of-circular-shape.png";
+				color: 255 255 255 64;
 			}
 			description {
 				state: "default" 1.0;
@@ -173,10 +127,35 @@ group {
 				color: 255 255 255 255;
 			}
 		}
+
 		part {
 			name: "close";
 			type: IMAGE;
 			mouse_events: 1;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				align: 0.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.to_x: "ui";
+				rel1.relative: -1 0;
+				rel2.to_x: "ui";
+				rel2.relative: 0 1;
+				image.normal: "close-circular-button.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 64;
+			}
+		}
+		part {
+			name: "ui";
+			type: IMAGE;
+			mouse_events: 1;
+			clip_to: "clip";
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
@@ -184,14 +163,13 @@ group {
 				aspect: 1.0 1.0;
 				rel1.relative: 1 0;
 				rel2.relative: 1 1;
-				min: 16 16;
-				image.normal: "close-circular-button.png";
+				image.normal: "keyboard-of-four-buttons-circular-button-symbol.png";
 				color: 255 255 255 0;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				color: 255 255 255 255;
+				color: 255 255 255 64;
 			}
 		}
 	}
@@ -252,6 +230,22 @@ group {
 		}
 
 		program {
+			signal: "enable,show";
+			action: STATE_SET "default" 1.0;
+			target: "enable";
+		}
+		program {
+			signal: "enable,hide";
+			action: STATE_SET "default" 0.0;
+			target: "enable";
+		}
+		program {
+			signal: "mouse,down,*";
+			source: "enable";
+			action: SIGNAL_EMIT "enable,click" "";
+		}
+
+		program {
 			signal: "ui,show";
 			action: STATE_SET "default" 1.0;
 			target: "ui";
@@ -265,6 +259,22 @@ group {
 			signal: "mouse,down,*";
 			source: "ui";
 			action: SIGNAL_EMIT "ui,toggle" "";
+		}
+
+		program {
+			signal: "auto,on";
+			action: STATE_SET "default" 1.0;
+			target: "auto";
+		}
+		program {
+			signal: "auto,off";
+			action: STATE_SET "default" 0.0;
+			target: "auto";
+		}
+		program {
+			signal: "mouse,down,*";
+			source: "auto";
+			action: SIGNAL_EMIT "auto,toggle" "";
 		}
 	}
 }

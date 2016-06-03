@@ -70,6 +70,8 @@ _mod_embedded_set(mod_t *mod, int state)
 {
 	sp_ui_t *ui = mod->ui;
 
+	mod->embedded = state;
+
 	// set module embedded state
 	const size_t size = sizeof(transmit_module_embedded_t);
 	transmit_module_embedded_t *trans1 = _sp_ui_to_app_request(ui, size);
@@ -77,32 +79,6 @@ _mod_embedded_set(mod_t *mod, int state)
 	{
 		_sp_transmit_module_embedded_fill(&ui->regs, &ui->forge, trans1, size, mod->uid, state);
 		_sp_ui_to_app_advance(ui, size);
-	}
-}
-
-static void
-_modlist_activated(void *data, Evas_Object *obj, void *event_info)
-{
-	Elm_Object_Item *itm = event_info;
-	sp_ui_t *ui = data;
-
-	const Elm_Genlist_Item_Class *class = elm_genlist_item_item_class_get(itm);
-
-	if(class == ui->listitc)
-	{
-		mod_t *mod = elm_object_item_data_get(itm);
-
-		if(mod->std.grid)
-		{
-			elm_object_item_del(mod->std.grid);
-			_mod_embedded_set(mod, 0);
-		}
-		else
-		{
-			mod->std.grid = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
-				NULL, NULL);
-			_mod_embedded_set(mod, 1);
-		}
 	}
 }
 
@@ -177,6 +153,25 @@ _mod_link_toggle(void *data, Evas_Object *lay, const char *emission, const char 
 	{
 		_sp_transmit_module_selected_fill(&ui->regs, &ui->forge, trans, size, mod->uid, mod->selected);
 		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static void
+_mod_auto_toggle(void *data, Evas_Object *lay, const char *emission, const char *source)
+{
+	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
+
+	if(mod->std.grid)
+	{
+		elm_object_item_del(mod->std.grid);
+		_mod_embedded_set(mod, 0);
+	}
+	else
+	{
+		mod->std.grid = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
+			NULL, NULL);
+		_mod_embedded_set(mod, 1);
 	}
 }
 
@@ -286,7 +281,6 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	if(strcmp(part, "elm.swallow.content"))
 		return NULL;
 
-	/* FIXME implement me!
 	Evas_Object *frame = elm_frame_add(obj);
 	if(frame)
 	{
@@ -296,76 +290,61 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_min_set(frame, ELM_SCALE_SIZE(50), ELM_SCALE_SIZE(50));
 		evas_object_show(frame);
 
-		Evas_Object *hbox = elm_box_add(frame);
-		if(hbox)
+		Evas_Object *lay = elm_layout_add(obj);
+		if(lay)
 		{
-			elm_box_homogeneous_set(hbox, EINA_TRUE);
-			elm_box_horizontal_set(hbox, EINA_TRUE);
-			evas_object_size_hint_weight_set(hbox, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			evas_object_size_hint_align_set(hbox, EVAS_HINT_FILL, EVAS_HINT_FILL);
-			evas_object_show(hbox);
-			elm_object_content_set(frame, hbox);
+			elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
+				"/synthpod/modlist/module");
+			evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+			evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
+			evas_object_show(lay);
+			elm_object_content_set(frame, lay);
 
-			Evas_Object *lbl = elm_label_add(hbox);
-			if(lbl)
+			elm_layout_text_set(lay, "elm.text", mod->name);
+
+			char col [7];
+			sprintf(col, "col,%02i", mod->col);
+			elm_layout_signal_emit(lay, col, MODLIST_UI);
+
+			// link
+			elm_layout_signal_callback_add(lay, "link,toggle", "", _mod_link_toggle, mod);
+			elm_layout_signal_emit(lay, mod->selected ? "link,on" : "link,off", "");
+
+			// enable 
+			//FIXME elm_layout_signal_callback_add(lay, "enable,toggle", "", _mod_enable_toggle, mod);
+			elm_layout_signal_emit(lay, "enable,show", ""); //FIXME
+
+			// auto 
+			elm_layout_signal_callback_add(lay, "auto,toggle", "", _mod_auto_toggle, mod);
+			elm_layout_signal_emit(lay, mod->embedded ? "auto,on" : "auto,off", "");
+
+			// close
+			if(!mod->system.source && !mod->system.sink)
 			{
-				elm_object_text_set(lbl, "<font=mono align=right>0.1%</font>");
-				evas_object_size_hint_weight_set(lbl, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-				evas_object_size_hint_align_set(lbl, EVAS_HINT_FILL, EVAS_HINT_FILL);
-				evas_object_show(lbl);
-				elm_box_pack_end(hbox, lbl);
+				elm_layout_signal_callback_add(lay, "close,click", "", _mod_close_click, mod);
+				elm_layout_signal_emit(lay, "close,show", "");
 			}
-		}
+			else
+			{
+				// system mods cannot be removed
+				elm_layout_signal_emit(lay, "close,hide", "");
+			}
+
+			// window
+			//if(mod->show.ui || mod->kx.ui || mod->eo.ui || mod->x11.ui) //TODO also check for descriptor
+			if(eina_list_count(mod->mod_uis) > 0)
+			{
+				elm_layout_signal_callback_add(lay, "ui,toggle", "", _mod_ui_toggle, mod);
+				elm_layout_signal_emit(lay, "ui,show", "");
+			}
+			else
+			{
+				elm_layout_signal_emit(lay, "ui,hide", "");
+			}
+		} // lay
 	}
 
 	return frame;
-	*/
-
-	Evas_Object *lay = elm_layout_add(obj);
-	if(lay)
-	{
-		elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
-			"/synthpod/modlist/module");
-		evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_show(lay);
-
-		elm_layout_text_set(lay, "elm.text", mod->name);
-
-		char col [7];
-		sprintf(col, "col,%02i", mod->col);
-		elm_layout_signal_emit(lay, col, MODLIST_UI);
-
-		// link
-		elm_layout_signal_callback_add(lay, "link,toggle", "", _mod_link_toggle, mod);
-		elm_layout_signal_emit(lay, mod->selected ? "link,on" : "link,off", "");
-
-		// close
-		if(!mod->system.source && !mod->system.sink)
-		{
-			elm_layout_signal_callback_add(lay, "close,click", "", _mod_close_click, mod);
-			elm_layout_signal_emit(lay, "close,show", "");
-		}
-		else
-		{
-			// system mods cannot be removed
-			elm_layout_signal_emit(lay, "close,hide", "");
-		}
-
-		// window
-		//if(mod->show.ui || mod->kx.ui || mod->eo.ui || mod->x11.ui) //TODO also check for descriptor
-		if(eina_list_count(mod->mod_uis) > 0)
-		{
-			elm_layout_signal_callback_add(lay, "ui,toggle", "", _mod_ui_toggle, mod);
-			elm_layout_signal_emit(lay, "ui,show", "");
-		}
-		else
-		{
-			elm_layout_signal_emit(lay, "ui,hide", "");
-		}
-	} // lay
-
-	return lay;
 }
 
 void
@@ -679,8 +658,6 @@ _modlist_itc_add(sp_ui_t *ui)
 void
 _modlist_set_callbacks(sp_ui_t *ui)
 {
-	evas_object_smart_callback_add(ui->modlist, "activated",
-		_modlist_activated, ui);
 	evas_object_smart_callback_add(ui->modlist, "moved",
 		_modlist_moved, ui);
 }
