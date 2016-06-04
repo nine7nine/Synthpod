@@ -310,7 +310,6 @@ _content_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 
 	if(mod)
 	{
-		mod->std.grid = NULL;
 		mod->std.frame = NULL;
 		mod->std.list = NULL;
 	}
@@ -419,6 +418,21 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 	return frame;
 }
 
+static void
+_modgrid_del(void *data, Evas_Object *obj)
+{
+	mod_t *mod = data;
+
+	if(mod)
+	{
+		mod->std.grid = NULL; // clear item pointer
+
+		// refresh modlist item
+		if(mod->std.elmnt)
+			elm_genlist_item_update(mod->std.elmnt);
+	}
+}
+
 void
 _modgrid_itc_add(sp_ui_t *ui)
 {
@@ -429,7 +443,7 @@ _modgrid_itc_add(sp_ui_t *ui)
 		ui->griditc->func.text_get = NULL;
 		ui->griditc->func.content_get = _modgrid_content_get;
 		ui->griditc->func.state_get = NULL;
-		ui->griditc->func.del = NULL;
+		ui->griditc->func.del = _modgrid_del;
 	}
 }
 

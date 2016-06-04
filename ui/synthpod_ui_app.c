@@ -298,13 +298,17 @@ _sp_ui_from_app_module_embedded(sp_ui_t *ui, const LV2_Atom *atom)
 	if(!mod)
 		return;
 
-	//FIXME call _mod_embedded_set(mod_t *mod, int state)
-	mod->embedded = trans->state.body;
 	if(mod->std.grid && !trans->state.body)
 		elm_object_item_del(mod->std.grid);
 	else if(!mod->std.grid && trans->state.body)
+	{
 		mod->std.grid = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
 			NULL, NULL);
+
+		// refresh modlist item
+		if(mod->std.elmnt)
+			elm_genlist_item_update(mod->std.elmnt);
+	}
 }
 
 static void

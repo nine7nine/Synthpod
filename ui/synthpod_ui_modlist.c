@@ -70,8 +70,6 @@ _mod_embedded_set(mod_t *mod, int state)
 {
 	sp_ui_t *ui = mod->ui;
 
-	mod->embedded = state;
-
 	// set module embedded state
 	const size_t size = sizeof(transmit_module_embedded_t);
 	transmit_module_embedded_t *trans1 = _sp_ui_to_app_request(ui, size);
@@ -172,6 +170,10 @@ _mod_auto_toggle(void *data, Evas_Object *lay, const char *emission, const char 
 		mod->std.grid = elm_gengrid_item_append(ui->modgrid, ui->griditc, mod,
 			NULL, NULL);
 		_mod_embedded_set(mod, 1);
+
+		// refresh modlist item
+		if(mod->std.elmnt)
+			elm_genlist_item_update(mod->std.elmnt);
 	}
 }
 
@@ -316,7 +318,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 
 			// auto 
 			elm_layout_signal_callback_add(lay, "auto,toggle", "", _mod_auto_toggle, mod);
-			elm_layout_signal_emit(lay, mod->embedded ? "auto,on" : "auto,off", "");
+			elm_layout_signal_emit(lay, mod->std.grid ? "auto,on" : "auto,off", "");
 
 			// close
 			if(!mod->system.source && !mod->system.sink)

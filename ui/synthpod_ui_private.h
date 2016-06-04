@@ -274,8 +274,6 @@ struct _mod_t {
 		int source;
 		int sink;
 	} system;
-
-	int embedded;
 };
 
 struct _group_t {
