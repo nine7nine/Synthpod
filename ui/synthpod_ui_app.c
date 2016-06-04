@@ -264,7 +264,7 @@ _sp_ui_from_app_module_profiling(sp_ui_t *ui, const LV2_Atom *atom)
 	if(mod->std.frame)
 	{
 		char dsp [128]; //TODO size?
-		snprintf(dsp, 128, "%4.1f%% | %s", trans->avg.body, mod->name);
+		snprintf(dsp, 128, "%s | %.1f%%", mod->name, trans->avg.body);
 		elm_object_text_set(mod->std.frame, dsp);
 	}
 }

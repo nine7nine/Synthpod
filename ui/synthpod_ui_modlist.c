@@ -296,7 +296,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	if(frame)
 	{
 		char dsp [128]; //TODO size?
-		snprintf(dsp, 128, "%4.1f%% | %s", 0.f, mod->name);
+		snprintf(dsp, 128, "%s | %.1f%%", mod->name, 0.f);
 		elm_object_text_set(frame, dsp);
 		evas_object_event_callback_add(frame, EVAS_CALLBACK_DEL, _content_del, mod);
 		evas_object_size_hint_weight_set(frame, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
