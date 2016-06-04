@@ -289,7 +289,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		elm_object_text_set(frame, mod->name);
 		evas_object_size_hint_weight_set(frame, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(frame, EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_size_hint_min_set(frame, ELM_SCALE_SIZE(50), ELM_SCALE_SIZE(50));
+		evas_object_size_hint_min_set(frame, ELM_SCALE_SIZE(48), ELM_SCALE_SIZE(48));
 		evas_object_show(frame);
 
 		Evas_Object *lay = elm_layout_add(obj);
