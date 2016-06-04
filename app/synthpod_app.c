@@ -285,12 +285,14 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
+				seq->body.unit = 0;
+				seq->body.pad = 0;
 			}
 			else if(port->type == PORT_TYPE_EVENT)
 			{
 				LV2_Event_Buffer *evbuf = PORT_BUF_ALIGNED(port);
 				size_t offset = lv2_atom_pad_size(sizeof(LV2_Event_Buffer));
-				lv2_event_buffer_reset(evbuf, 0, (uint8_t*)evbuf + offset);
+				lv2_event_buffer_reset(evbuf, 0, (uint8_t *)evbuf + offset);
 				evbuf->capacity = port->size - offset;
 			}
 		}
@@ -354,13 +356,15 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = port->size;
+				seq->body.unit = 0;
+				seq->body.pad = 0;
 			}
 			else if((port->type == PORT_TYPE_EVENT)
 				&& (port->direction == PORT_DIRECTION_OUTPUT) )
 			{
 				LV2_Event_Buffer *evbuf = PORT_BUF_ALIGNED(port);
 				size_t offset = lv2_atom_pad_size(sizeof(LV2_Event_Buffer));
-				lv2_event_buffer_reset(evbuf, 0, (uint8_t*)evbuf + offset);
+				lv2_event_buffer_reset(evbuf, 0, (uint8_t *)evbuf + offset);
 				evbuf->capacity = port->size - offset;
 			}
 		}
