@@ -263,6 +263,10 @@ _mod_visible_set(mod_t *mod, int state, LV2_URID urid)
 		_sp_transmit_module_visible_fill(&ui->regs, &ui->forge, trans1, size, mod->uid, state, urid);
 		_sp_ui_to_app_advance(ui, size);
 	}
+
+	// refresh modlist item
+	if(mod->std.elmnt)
+		elm_genlist_item_update(mod->std.elmnt);
 }
 
 static inline void

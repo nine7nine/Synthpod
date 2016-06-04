@@ -325,8 +325,8 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_layout_signal_callback_add(lay, "link,toggle", "", _mod_link_toggle, mod);
 			elm_layout_signal_emit(lay, mod->selected ? "link,on" : "link,off", "");
 
-			// enable 
-			//FIXME elm_layout_signal_callback_add(lay, "enable,toggle", "", _mod_enable_toggle, mod);
+			// enable
+			//elm_layout_signal_callback_add(lay, "enable,toggle", "", _mod_enable_toggle, mod); //FIXME
 			elm_layout_signal_emit(lay, "enable,show", ""); //FIXME
 
 			// auto 
@@ -346,11 +346,10 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			}
 
 			// window
-			//if(mod->show.ui || mod->kx.ui || mod->eo.ui || mod->x11.ui) //TODO also check for descriptor
 			if(eina_list_count(mod->mod_uis) > 0)
 			{
 				elm_layout_signal_callback_add(lay, "ui,toggle", "", _mod_ui_toggle, mod);
-				elm_layout_signal_emit(lay, "ui,show", "");
+				elm_layout_signal_emit(lay, mod->mod_ui ? "ui,on" : "ui,off", "");
 			}
 			else
 			{

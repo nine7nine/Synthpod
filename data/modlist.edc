@@ -148,7 +148,7 @@ group {
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				color: 255 255 255 64;
+				color: 255 255 255 128;
 			}
 		}
 		part {
@@ -167,9 +167,14 @@ group {
 				color: 255 255 255 0;
 			}
 			description {
-				state: "default" 1.0;
+				state: "default" 0.5;
 				inherit: "default" 0.0;
 				color: 255 255 255 64;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				color: 255 255 255 255;
 			}
 		}
 	}
@@ -246,8 +251,13 @@ group {
 		}
 
 		program {
-			signal: "ui,show";
+			signal: "ui,on";
 			action: STATE_SET "default" 1.0;
+			target: "ui";
+		}
+		program {
+			signal: "ui,off";
+			action: STATE_SET "default" 0.5;
 			target: "ui";
 		}
 		program {
