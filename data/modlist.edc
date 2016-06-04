@@ -18,16 +18,16 @@
 #define MODLIST_UI "/synthpod/modlist/ui"
 
 images {
-	image: "book-circular-button.png" COMP;
 	image: "source.png" COMP;
 	image: "sink.png" COMP;
+
+	image: "book-circular-button.png" COMP;
 	image: "close-circular-button.png" COMP;
 	image: "rec-circular-button.png" COMP;
 	image: "favourite-button-of-circular-shape.png" COMP;
 	image: "verification-sign-in-a-circle-outline.png" COMP;
 	image: "keyboard-of-four-buttons-circular-button-symbol.png" COMP;
 	image: "list-circular-button.png" COMP;
-	image: "module_border.png" COMP;
 }
 
 group {
