@@ -309,10 +309,7 @@ _content_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	mod_t *mod = data;
 
 	if(mod)
-	{
-		mod->std.frame = NULL;
 		mod->std.list = NULL;
-	}
 }
 
 static Evas_Object *
@@ -333,7 +330,6 @@ _modgrid_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_size_hint_align_set(frame, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(frame);
 		evas_object_show(frame);
-		mod->std.frame = frame;
 
 		Evas_Object *modlist = elm_genlist_add(frame);
 		if(modlist)

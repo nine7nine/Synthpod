@@ -275,6 +275,15 @@ _mod_close_click(void *data, Evas_Object *lay, const char *emission, const char 
 	_mod_del_propagate(mod);
 }
 
+static void
+_content_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	mod_t *mod = data;
+
+	if(mod)
+		mod->std.list = NULL;
+}
+
 static Evas_Object *
 _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -286,11 +295,15 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 	Evas_Object *frame = elm_frame_add(obj);
 	if(frame)
 	{
-		elm_object_text_set(frame, mod->name);
+		char dsp [128]; //TODO size?
+		snprintf(dsp, 128, "%4.1f%% | %s", 0.f, mod->name);
+		elm_object_text_set(frame, dsp);
+		evas_object_event_callback_add(frame, EVAS_CALLBACK_DEL, _content_del, mod);
 		evas_object_size_hint_weight_set(frame, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(frame, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_size_hint_min_set(frame, ELM_SCALE_SIZE(48), ELM_SCALE_SIZE(48));
 		evas_object_show(frame);
+		mod->std.frame = frame;
 
 		Evas_Object *lay = elm_layout_add(obj);
 		if(lay)
