@@ -21,13 +21,19 @@ images {
 	image: "source.png" COMP;
 	image: "sink.png" COMP;
 
-	image: "book-circular-button.png" COMP;
-	image: "close-circular-button.png" COMP;
-	image: "rec-circular-button.png" COMP;
 	image: "favourite-button-of-circular-shape.png" COMP;
-	image: "verification-sign-in-a-circle-outline.png" COMP;
 	image: "keyboard-of-four-buttons-circular-button-symbol.png" COMP;
 	image: "list-circular-button.png" COMP;
+	image: "rec-circular-button.png" COMP;
+	image: "verification-sign-in-a-circle-outline.png" COMP;
+
+	image: "favourite-button-of-circular-shape_filled.png" COMP;
+	image: "keyboard-of-four-buttons-circular-button-symbol_filled.png" COMP;
+	image: "list-circular-button_filled.png" COMP;
+	image: "rec-circular-button_filled.png" COMP;
+	image: "verification-sign-in-a-circle-outline_filled.png" COMP;
+
+	image: "close-square-button.png" COMP;
 }
 
 group {
@@ -73,34 +79,12 @@ group {
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
 				image.normal: "verification-sign-in-a-circle-outline.png";
-				color: 255 255 255 0;
+				color: 255 255 255 128;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
-				color: 255 255 255 255;
-			}
-		}
-		part {
-			name: "auto";
-			type: IMAGE;
-			mouse_events: 1;
-			clip_to: "clip";
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
-				align: 0.0 0.5;
-				aspect: 1.0 1.0;
-				rel1.to_x: "enable";
-				rel1.relative: 1 0;
-				rel2.to_x: "enable";
-				rel2.relative: 2 1;
-				image.normal: "list-circular-button.png";
-				color: 255 255 255 64;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
+				image.normal: "verification-sign-in-a-circle-outline_filled.png";
 				color: 255 255 255 255;
 			}
 		}
@@ -115,15 +99,69 @@ group {
 				align: 0.0 0.5;
 				aspect: 1.0 1.0;
 				rel1.relative: 1 0;
-				rel1.to_x: "auto";
+				rel1.to_x: "enable";
 				rel2.relative: 2 1;
-				rel2.to_x: "auto";
+				rel2.to_x: "enable";
 				image.normal: "favourite-button-of-circular-shape.png";
-				color: 255 255 255 64;
+				color: 255 255 255 128;
 			}
 			description {
 				state: "default" 1.0;
 				inherit: "default" 0.0;
+				image.normal: "favourite-button-of-circular-shape_filled.png";
+				color: 255 255 255 255;
+			}
+		}
+		part {
+			name: "auto";
+			type: IMAGE;
+			mouse_events: 1;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				align: 0.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.to_x: "link";
+				rel1.relative: 1 0;
+				rel2.to_x: "link";
+				rel2.relative: 2 1;
+				image.normal: "list-circular-button.png";
+				color: 255 255 255 128;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				image.normal: "list-circular-button_filled.png";
+				color: 255 255 255 255;
+			}
+		}
+		part {
+			name: "ui";
+			type: IMAGE;
+			mouse_events: 1;
+			clip_to: "clip";
+			description {
+				state: "default" 0.0;
+				fixed: 1 1;
+				align: 0.0 0.5;
+				aspect: 1.0 1.0;
+				rel1.to_x: "auto";
+				rel1.relative: 1 0;
+				rel2.to_x: "auto";
+				rel2.relative: 2 1;
+				image.normal: "keyboard-of-four-buttons-circular-button-symbol.png";
+				color: 255 255 255 0;
+			}
+			description {
+				state: "default" 0.5;
+				inherit: "default" 0.0;
+				color: 255 255 255 128;
+			}
+			description {
+				state: "default" 1.0;
+				inherit: "default" 0.0;
+				image.normal: "keyboard-of-four-buttons-circular-button-symbol_filled.png";
 				color: 255 255 255 255;
 			}
 		}
@@ -136,40 +174,12 @@ group {
 			description {
 				state: "default" 0.0;
 				fixed: 1 1;
-				align: 0.0 0.5;
-				aspect: 1.0 1.0;
-				rel1.to_x: "ui";
-				rel1.relative: -1 0;
-				rel2.to_x: "ui";
-				rel2.relative: 0 1;
-				image.normal: "close-circular-button.png";
-				color: 255 255 255 0;
-			}
-			description {
-				state: "default" 1.0;
-				inherit: "default" 0.0;
-				color: 255 255 255 128;
-			}
-		}
-		part {
-			name: "ui";
-			type: IMAGE;
-			mouse_events: 1;
-			clip_to: "clip";
-			description {
-				state: "default" 0.0;
-				fixed: 1 1;
 				align: 1.0 0.5;
 				aspect: 1.0 1.0;
 				rel1.relative: 1 0;
 				rel2.relative: 1 1;
-				image.normal: "keyboard-of-four-buttons-circular-button-symbol.png";
+				image.normal: "close-square-button.png";
 				color: 255 255 255 0;
-			}
-			description {
-				state: "default" 0.5;
-				inherit: "default" 0.0;
-				color: 255 255 255 64;
 			}
 			description {
 				state: "default" 1.0;

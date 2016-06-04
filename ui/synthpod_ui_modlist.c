@@ -199,9 +199,9 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 {
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
-	int x, y, w, h;
+	int x, y;
 
-	evas_object_geometry_get(lay, &x, &y, &w, &h);
+	evas_pointer_canvas_xy_get(evas_object_evas_get(lay), &x, &y);
 
 	Elm_Object_Item *itm;
 	while((itm = elm_menu_first_item_get(ui->uimenu)))
@@ -242,7 +242,7 @@ _mod_ui_toggle(void *data, Evas_Object *lay, const char *emission, const char *s
 				if(ui_uri_ptr)
 					free(ui_uri_ptr);
 			}
-			elm_menu_move(ui->uimenu, x+w, y+h);
+			elm_menu_move(ui->uimenu, x, y);
 			evas_object_show(ui->uimenu);
 		}
 	}

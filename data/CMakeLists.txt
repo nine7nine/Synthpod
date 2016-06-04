@@ -14,6 +14,8 @@ add_custom_command(
 		"-fd" ${CMAKE_CURRENT_SOURCE_DIR}/font
 		"-id" ${CMAKE_CURRENT_SOURCE_DIR}/pix
 		"-id" ${CMAKE_CURRENT_SOURCE_DIR}/rounded_ui
+		"-id" ${CMAKE_CURRENT_SOURCE_DIR}/rounded_ui_filled
+		"-id" ${CMAKE_CURRENT_SOURCE_DIR}/squared_ui
 		${CMAKE_CURRENT_SOURCE_DIR}/synthpod.edc
 		${PROJECT_BINARY_DIR}/synthpod.edj
 	DEPENDS
