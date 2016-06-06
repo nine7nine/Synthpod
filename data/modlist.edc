@@ -79,7 +79,7 @@ group {
 				rel1.relative: 0 0;
 				rel2.relative: 0 1;
 				image.normal: "verification-sign-in-a-circle-outline.png";
-				color: 255 255 255 128;
+				color: 255 255 255 255;
 			}
 			description {
 				state: "default" 1.0;
@@ -103,7 +103,7 @@ group {
 				rel2.relative: 2 1;
 				rel2.to_x: "enable";
 				image.normal: "favourite-button-of-circular-shape.png";
-				color: 255 255 255 128;
+				color: 255 255 255 255;
 			}
 			description {
 				state: "default" 1.0;
@@ -127,7 +127,7 @@ group {
 				rel2.to_x: "link";
 				rel2.relative: 2 1;
 				image.normal: "list-circular-button.png";
-				color: 255 255 255 128;
+				color: 255 255 255 255;
 			}
 			description {
 				state: "default" 1.0;
@@ -156,7 +156,7 @@ group {
 			description {
 				state: "default" 0.5;
 				inherit: "default" 0.0;
-				color: 255 255 255 128;
+				color: 255 255 255 255;
 			}
 			description {
 				state: "default" 1.0;
