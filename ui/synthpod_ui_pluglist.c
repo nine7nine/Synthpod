@@ -73,6 +73,20 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 
 			return str;
 		}
+		case PLUG_INFO_TYPE_CLASS:
+		{
+			const LilvPluginClass *class = lilv_plugin_get_class(info->plug);
+			const LilvNode *node = class
+				? lilv_plugin_class_get_label(class)
+				: NULL;
+
+			char *str = NULL;
+			asprintf(&str, INFO_PRE"Class   "INFO_POST" %s", node && lilv_node_is_string(node)
+				? lilv_node_as_string(node)
+				: "-");
+		
+			return str;
+		}
 		case PLUG_INFO_TYPE_VERSION:
 		{
 			LilvNodes *nodes = lilv_plugin_get_value(info->plug,

@@ -88,6 +88,7 @@ enum _port_designation_t {
 
 enum _plug_info_type_t {
 	PLUG_INFO_TYPE_NAME = 0,
+	PLUG_INFO_TYPE_CLASS,
 	PLUG_INFO_TYPE_URI,
 	PLUG_INFO_TYPE_VERSION,
 	PLUG_INFO_TYPE_LICENSE,
