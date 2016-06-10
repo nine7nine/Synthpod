@@ -270,6 +270,9 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 	if(!ui || !ui->plugs || !ui->pluglist || !ui->plugitc)
 		return;
 
+	if(ui->pluginfo)
+		elm_genlist_clear(ui->pluginfo);
+
 	LILV_FOREACH(plugins, itr, ui->plugs)
 	{
 		const LilvPlugin *plug = lilv_plugins_get(ui->plugs, itr);
