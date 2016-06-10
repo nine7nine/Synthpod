@@ -160,14 +160,14 @@ _sp_ui_from_app_module_del(sp_ui_t *ui, const LV2_Atom *atom)
 		evas_object_del(mod->std.list);
 		mod->std.list = NULL;
 	}
+	if(mod->std.grid)
+	{
+		elm_object_item_del(mod->std.grid);
+	}
 	if(mod->std.elmnt)
 	{
 		elm_object_item_del(mod->std.elmnt);
 		mod->std.elmnt = NULL;
-	}
-	if(mod->std.grid)
-	{
-		elm_object_item_del(mod->std.grid);
 	}
 
 	_patches_update(ui);
