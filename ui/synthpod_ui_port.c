@@ -39,7 +39,7 @@ _ui_port_tooltip_add(sp_ui_t *ui, Elm_Object_Item *elmnt, port_t *port)
 	LilvNodes *nodes = lilv_port_get_value(mod->plug, port->tar,
 		ui->regs.rdfs.comment.node);
 	LilvNode *node = nodes
-		? lilv_nodes_get_first(nodes) //FIXME delete?
+		? lilv_nodes_get_first(nodes)
 		: NULL;
 
 	if(node)

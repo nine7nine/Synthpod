@@ -20,6 +20,8 @@
 
 #define INFO_PRE "<color=#bbb font=Mono>"
 #define INFO_POST "</color>"
+#define LINK_PRE "<underline=on underline_color=#bbb>"
+#define LINK_POST "</underline>"
 
 static char * 
 _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
@@ -65,7 +67,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			const LilvNode *node = lilv_plugin_get_uri(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"URI     "INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"URI     "INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
 				? lilv_node_as_uri(node)
 				: "-");
 
@@ -76,18 +78,21 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNodes *nodes = lilv_plugin_get_value(info->plug,
 				ui->regs.core.minor_version.node);
 			LilvNode *node = nodes
-				? lilv_nodes_get_first(nodes) //FIXME delete?
+				? lilv_nodes_get_first(nodes)
 				: NULL;
 			LilvNodes *nodes2 = lilv_plugin_get_value(info->plug,
 				ui->regs.core.micro_version.node);
 			LilvNode *node2 = nodes2
-				? lilv_nodes_get_first(nodes2) //FIXME delete?
+				? lilv_nodes_get_first(nodes2)
 				: NULL;
 
 			char *str = NULL;
 			if(node && node2)
-				asprintf(&str, INFO_PRE"Version "INFO_POST" 0.%i.%i",
-					lilv_node_as_int(node), lilv_node_as_int(node2));
+			{
+				const int minor = lilv_node_as_int(node);
+				const int micro = lilv_node_as_int(node2);
+				asprintf(&str, INFO_PRE"Version "INFO_POST" %i . %i", minor, micro);
+			}
 			else
 				asprintf(&str, INFO_PRE"Version "INFO_POST" -");
 			if(nodes)
@@ -102,11 +107,11 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNodes *nodes = lilv_plugin_get_value(info->plug,
 				ui->regs.doap.license.node);
 			LilvNode *node = nodes
-				? lilv_nodes_get_first(nodes) //FIXME delete?
+				? lilv_nodes_get_first(nodes)
 				: NULL;
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"License "INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"License "INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
 				? lilv_node_as_uri(node)
 				: "-");
 			if(nodes)
@@ -119,7 +124,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			const LilvNode *node = lilv_plugin_get_bundle_uri(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Bundle  "INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"Bundle  "INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
 				? lilv_node_as_uri(node)
 				: "-");
 
@@ -130,7 +135,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNode *node = lilv_plugin_get_project(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Project "INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"Project "INFO_POST" "LINK_PRE"%s"LINK_POST, node
 				? lilv_node_as_string(node)
 				: "-");
 			if(node)
@@ -156,7 +161,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNode *node = lilv_plugin_get_author_email(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Email   "INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"Email   "INFO_POST" "LINK_PRE"%s"LINK_POST, node
 				? lilv_node_as_string(node)
 				: "-");
 			if(node)
@@ -169,7 +174,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNode *node = lilv_plugin_get_author_homepage(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Homepage"INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"Homepage"INFO_POST" "LINK_PRE"%s"LINK_POST, node
 				? lilv_node_as_string(node)
 				: "-");
 			if(node)
@@ -182,7 +187,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNodes *nodes = lilv_plugin_get_value(info->plug,
 				ui->regs.rdfs.comment.node);
 			LilvNode *node = nodes
-				? lilv_nodes_get_first(nodes) //FIXME delete?
+				? lilv_nodes_get_first(nodes)
 				: NULL;
 
 			char *str = NULL;
@@ -257,10 +262,99 @@ _pluglist_selected(void *data, Evas_Object *obj, void *event_info)
 				child->plug = info->plug;
 				elmnt = elm_genlist_item_append(ui->pluginfo, ui->plugitc,
 					child, NULL, ELM_GENLIST_ITEM_NONE, NULL, NULL);
-				if(elmnt)
-					elm_genlist_item_select_mode_set(elmnt, ELM_OBJECT_SELECT_MODE_NONE);
 			}
 		}
+	}
+}
+
+static inline void
+_open_uri(const LilvNode *node)
+{
+	if(!node || !lilv_node_is_uri(node))
+		return;
+
+	const char *uri = lilv_node_as_uri(node);
+	if(!uri)
+		return;
+
+	char *cmd = NULL;
+	if(asprintf(&cmd, "xdg-open %s", uri) != -1) //FIXME make this platform independent
+	{
+		ecore_exe_run(cmd, NULL); //TODO do we need to call ecore_exe_del?
+		free(cmd);
+	}
+}
+
+static void
+_pluginfo_activated(void *data, Evas_Object *obj, void *event_info)
+{
+	Elm_Object_Item *itm = event_info;
+	sp_ui_t *ui = data;
+	plug_info_t *info = elm_object_item_data_get(itm);
+	if(!info)
+		return;
+
+	switch(info->type)
+	{
+		case PLUG_INFO_TYPE_URI:
+		{
+			const LilvNode *node = lilv_plugin_get_uri(info->plug);
+			if(node)
+				_open_uri(node);
+			break;
+		}
+		case PLUG_INFO_TYPE_LICENSE:
+		{
+			LilvNodes *nodes = lilv_plugin_get_value(info->plug,
+				ui->regs.doap.license.node);
+			LilvNode *node = nodes
+				? lilv_nodes_get_first(nodes)
+				: NULL;
+			if(node)
+				_open_uri(node);
+			if(nodes)
+				lilv_nodes_free(nodes);
+			break;
+		}
+		case PLUG_INFO_TYPE_BUNDLE_URI:
+		{
+			const LilvNode *node = lilv_plugin_get_bundle_uri(info->plug);
+			if(node)
+				_open_uri(node);
+			break;
+		}
+		case PLUG_INFO_TYPE_PROJECT:
+		{
+			LilvNode *node = lilv_plugin_get_project(info->plug);
+			if(node)
+			{
+				_open_uri(node);
+				lilv_node_free(node);
+			}
+			break;
+		}
+		case PLUG_INFO_TYPE_AUTHOR_EMAIL:
+		{
+			LilvNode *node = lilv_plugin_get_author_email(info->plug);
+			if(node)
+			{
+				_open_uri(node);
+				lilv_node_free(node);
+			}
+			break;
+		}
+		case PLUG_INFO_TYPE_AUTHOR_HOMEPAGE:
+		{
+			LilvNode *node = lilv_plugin_get_author_homepage(info->plug);
+			if(node)
+			{
+				_open_uri(node);
+				lilv_node_free(node);
+			}
+			break;
+		}
+		default:
+			break;
 	}
 }
 
@@ -412,6 +506,8 @@ _menu_plugin_new(sp_ui_t *ui)
 				elm_genlist_homogeneous_set(ui->pluginfo, EINA_TRUE); // needef for lazy-loading
 				elm_genlist_mode_set(ui->pluginfo, ELM_LIST_COMPRESS);
 				elm_genlist_block_count_set(ui->pluginfo, 64); // needef for lazy-loading
+				evas_object_smart_callback_add(ui->pluginfo, "activated",
+					_pluginfo_activated, ui);
 				evas_object_data_set(ui->pluginfo, "ui", ui);
 				evas_object_size_hint_weight_set(ui->pluginfo, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 				evas_object_size_hint_align_set(ui->pluginfo, EVAS_HINT_FILL, EVAS_HINT_FILL);
