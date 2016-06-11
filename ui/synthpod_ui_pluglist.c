@@ -23,6 +23,8 @@
 #define LINK_PRE "<underline=on underline_color=#bbb>"
 #define LINK_POST "</underline>"
 
+typedef bool (*populate_t)(sp_ui_t *ui, const LilvPlugin *plug, const char *match);
+
 static char * 
 _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 {
@@ -38,9 +40,9 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNode *node = lilv_plugin_get_name(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, "%s", node
+			asprintf(&str, "%s", node && lilv_node_is_string(node)
 				? lilv_node_as_string(node)
-				: "-");
+				: "");
 			if(node)
 				lilv_node_free(node);
 
@@ -69,7 +71,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			char *str = NULL;
 			asprintf(&str, INFO_PRE"URI     "INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
 				? lilv_node_as_uri(node)
-				: "-");
+				: "");
 
 			return str;
 		}
@@ -83,7 +85,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			char *str = NULL;
 			asprintf(&str, INFO_PRE"Class   "INFO_POST" %s", node && lilv_node_is_string(node)
 				? lilv_node_as_string(node)
-				: "-");
+				: "");
 		
 			return str;
 		}
@@ -101,14 +103,14 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 				: NULL;
 
 			char *str = NULL;
-			if(node && node2)
+			if(node && node2 && lilv_node_is_int(node) && lilv_node_is_int(node2))
 			{
 				const int minor = lilv_node_as_int(node);
 				const int micro = lilv_node_as_int(node2);
 				asprintf(&str, INFO_PRE"Version "INFO_POST" %i . %i", minor, micro);
 			}
 			else
-				asprintf(&str, INFO_PRE"Version "INFO_POST" -");
+				asprintf(&str, INFO_PRE"Version "INFO_POST);
 			if(nodes)
 				lilv_nodes_free(nodes);
 			if(nodes2)
@@ -127,7 +129,7 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			char *str = NULL;
 			asprintf(&str, INFO_PRE"License "INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
 				? lilv_node_as_uri(node)
-				: "-");
+				: "");
 			if(nodes)
 				lilv_nodes_free(nodes);
 
@@ -140,18 +142,37 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			char *str = NULL;
 			asprintf(&str, INFO_PRE"Bundle  "INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
 				? lilv_node_as_uri(node)
-				: "-");
+				: "");
 
 			return str;
 		}
 		case PLUG_INFO_TYPE_PROJECT:
 		{
 			LilvNode *node = lilv_plugin_get_project(info->plug);
+			LilvNode *name = node
+				? lilv_world_get(ui->world, node, ui->regs.doap.name.node, NULL)
+				: NULL;
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Project "INFO_POST" "LINK_PRE"%s"LINK_POST, node
-				? lilv_node_as_string(node)
-				: "-");
+			if(node && lilv_node_is_uri(node))
+			{
+				if(name && lilv_node_is_string(name))
+				{
+					asprintf(&str, INFO_PRE"Project "INFO_POST" "LINK_PRE"%s"LINK_POST" (%s)",
+						lilv_node_as_uri(node), lilv_node_as_string(name));
+				}
+				else
+				{
+					asprintf(&str, INFO_PRE"Project "INFO_POST" "LINK_PRE"%s"LINK_POST,
+						lilv_node_as_uri(node));
+				}
+			}
+			else
+			{
+				asprintf(&str, INFO_PRE"Project "INFO_POST);
+			}
+			if(name)
+				lilv_node_free(name);
 			if(node)
 				lilv_node_free(node);
 
@@ -162,9 +183,9 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNode *node = lilv_plugin_get_author_name(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Author  "INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"Author  "INFO_POST" %s", node && lilv_node_is_string(node)
 				? lilv_node_as_string(node)
-				: "-");
+				: "");
 			if(node)
 				lilv_node_free(node);
 
@@ -175,9 +196,9 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNode *node = lilv_plugin_get_author_email(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Email   "INFO_POST" "LINK_PRE"%s"LINK_POST, node
-				? lilv_node_as_string(node)
-				: "-");
+			asprintf(&str, INFO_PRE"Email   "INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
+				? lilv_node_as_uri(node)
+				: "");
 			if(node)
 				lilv_node_free(node);
 
@@ -188,9 +209,9 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 			LilvNode *node = lilv_plugin_get_author_homepage(info->plug);
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Homepage"INFO_POST" "LINK_PRE"%s"LINK_POST, node
-				? lilv_node_as_string(node)
-				: "-");
+			asprintf(&str, INFO_PRE"Homepage"INFO_POST" "LINK_PRE"%s"LINK_POST, node && lilv_node_is_uri(node)
+				? lilv_node_as_uri(node)
+				: "");
 			if(node)
 				lilv_node_free(node);
 
@@ -205,9 +226,9 @@ _pluglist_label_get(void *data, Evas_Object *obj, const char *part)
 				: NULL;
 
 			char *str = NULL;
-			asprintf(&str, INFO_PRE"Comment "INFO_POST" %s", node
+			asprintf(&str, INFO_PRE"Comment "INFO_POST" %s", node && lilv_node_is_string(node)
 				? lilv_node_as_string(node)
-				: "-");
+				: "");
 			if(nodes)
 				lilv_nodes_free(nodes);
 
@@ -372,14 +393,106 @@ _pluginfo_activated(void *data, Evas_Object *obj, void *event_info)
 	}
 }
 
+static inline bool
+_pluglist_populate_name(sp_ui_t *ui, const LilvPlugin *plug, const char *match)
+{
+	bool valid = false;
+
+	LilvNode *name = lilv_plugin_get_name(plug);
+	if(name)
+	{
+		if(lilv_node_is_string(name) && strcasestr(lilv_node_as_string(name), match))
+			valid = true;
+
+		lilv_node_free(name);
+	}
+
+	return valid;
+}
+
+static inline bool
+_pluglist_populate_class(sp_ui_t *ui, const LilvPlugin *plug, const char *match)
+{
+	bool valid = false;
+
+	const LilvPluginClass *class = lilv_plugin_get_class(plug);
+	if(class)
+	{
+		const LilvNode *label = lilv_plugin_class_get_label(class);
+		if(label && lilv_node_is_string(label))
+		{
+			const char *label_str = lilv_node_as_string(label);
+
+			if(strcasestr(label_str, match))
+				valid = true;
+		}
+	}
+
+	return valid;
+}
+
+static inline bool
+_pluglist_populate_project(sp_ui_t *ui, const LilvPlugin *plug, const char *match)
+{
+	bool valid = false;
+
+	LilvNode *project = lilv_plugin_get_project(plug);
+	if(project)
+	{
+		LilvNode *name = lilv_world_get(ui->world, project, ui->regs.doap.name.node, NULL);
+		if(name)
+		{
+			if(lilv_node_is_string(name) && strcasestr(lilv_node_as_string(name), match))
+				valid = true;
+
+			lilv_node_free(name);
+		}
+		lilv_node_free(project);
+	}
+
+	return valid;
+}
+
+static inline bool
+_pluglist_populate_author(sp_ui_t *ui, const LilvPlugin *plug, const char *match)
+{
+	bool valid = false;
+
+	LilvNode *author = lilv_plugin_get_author_name(plug);
+	if(author)
+	{
+		if(lilv_node_is_string(author) && strcasestr(lilv_node_as_string(author), match))
+			valid = true;
+
+		lilv_node_free(author);
+	}
+
+	return valid;
+}
+
 static void
 _pluglist_populate(sp_ui_t *ui, const char *match)
 {
-	if(!ui || !ui->plugs || !ui->pluglist || !ui->plugitc)
+	if(!ui || !ui->plugs || !ui->pluglist || !ui->plugitc || !ui->plugbar)
 		return;
 
 	if(ui->pluginfo)
 		elm_genlist_clear(ui->pluginfo);
+
+	populate_t populate = NULL;
+	Elm_Object_Item *tool = elm_toolbar_selected_item_get(ui->plugbar);
+	//FIXME won't work with internationalization, use tool pointer instead 
+	if(!strcmp(elm_object_item_text_get(tool), "Name"))
+		populate = _pluglist_populate_name;
+	else if(!strcmp(elm_object_item_text_get(tool), "Class"))
+		populate = _pluglist_populate_class;
+	else if(!strcmp(elm_object_item_text_get(tool), "Project"))
+		populate = _pluglist_populate_project;
+	else if(!strcmp(elm_object_item_text_get(tool), "Author"))
+		populate = _pluglist_populate_author;
+
+	if(!populate)
+		return;
 
 	LILV_FOREACH(plugins, itr, ui->plugs)
 	{
@@ -387,25 +500,17 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 		if(!plug)
 			continue;
 
-		LilvNode *name_node = lilv_plugin_get_name(plug);
-		if(name_node)
+		if(populate(ui, plug, match))
 		{
-			const char *name_str = lilv_node_as_string(name_node);
-
-			if(strcasestr(name_str, match))
+			plug_info_t *info = calloc(1, sizeof(plug_info_t));
+			if(info)
 			{
-				plug_info_t *info = calloc(1, sizeof(plug_info_t));
-				if(info)
-				{
-					info->type = PLUG_INFO_TYPE_NAME;
-					info->plug = plug;
-					Elm_Object_Item *elmnt = elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
-						ELM_GENLIST_ITEM_NONE, NULL, NULL);
-					(void)elmnt;
-				}
+				info->type = PLUG_INFO_TYPE_NAME;
+				info->plug = plug;
+				Elm_Object_Item *elmnt = elm_genlist_item_append(ui->pluglist, ui->plugitc, info, NULL,
+					ELM_GENLIST_ITEM_NONE, NULL, NULL);
+				(void)elmnt;
 			}
-
-			lilv_node_free(name_node);
 		}
 	}
 }
@@ -432,7 +537,17 @@ _menu_plugin_del(void *data, Evas_Object *obj, void *event_info)
 
 	ui->plugwin = NULL;
 	ui->pluglist = NULL;
+	ui->plugentry = NULL;
+	ui->plugbar = NULL;
 	ui->pluginfo = NULL;
+}
+
+static void
+_plugbar_selected(void *data, Evas_Object *obj, void *event_info)
+{
+	sp_ui_t *ui = data;
+
+	_plugentry_changed(ui, ui->plugentry, NULL);
 }
 
 static inline Evas_Object *
@@ -479,19 +594,49 @@ _menu_plugin_new(sp_ui_t *ui)
 				evas_object_show(plugbox);
 				elm_object_part_content_set(plugpane, "left", plugbox);
 
-				Evas_Object *plugentry = elm_entry_add(plugbox);
-				if(plugentry)
+				ui->plugbar = elm_toolbar_add(plugbox);
+				if(ui->plugbar)
 				{
-					elm_entry_entry_set(plugentry, "");
-					elm_entry_editable_set(plugentry, EINA_TRUE);
-					elm_entry_single_line_set(plugentry, EINA_TRUE);
-					elm_entry_scrollable_set(plugentry, EINA_TRUE);
-					evas_object_smart_callback_add(plugentry, "changed,user", _plugentry_changed, ui);
-					evas_object_data_set(plugentry, "ui", ui);
-					//evas_object_size_hint_weight_set(plugentry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-					evas_object_size_hint_align_set(plugentry, EVAS_HINT_FILL, EVAS_HINT_FILL);
-					evas_object_show(plugentry);
-					elm_box_pack_end(plugbox, plugentry);
+					elm_toolbar_horizontal_set(ui->plugbar, EINA_TRUE);
+					elm_toolbar_homogeneous_set(ui->plugbar, EINA_TRUE);
+					elm_toolbar_align_set(ui->plugbar, 0.f);
+					elm_toolbar_select_mode_set(ui->plugbar, ELM_OBJECT_SELECT_MODE_ALWAYS);
+					elm_toolbar_shrink_mode_set(ui->plugbar, ELM_TOOLBAR_SHRINK_SCROLL);
+					evas_object_smart_callback_add(ui->plugbar, "selected", _plugbar_selected, ui);
+					//evas_object_size_hint_weight_set(ui->plugbar, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(ui->plugbar, EVAS_HINT_FILL, EVAS_HINT_FILL);
+					evas_object_show(ui->plugbar);
+					elm_box_pack_end(plugbox, ui->plugbar);
+
+					Elm_Object_Item *elmnt;
+
+					elmnt = elm_toolbar_item_append(ui->plugbar, NULL, "Name", NULL, NULL);
+					elm_toolbar_item_selected_set(elmnt, EINA_TRUE);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'N'");
+
+					elmnt = elm_toolbar_item_append(ui->plugbar, NULL, "Class", NULL, NULL);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'C'");
+
+					elmnt = elm_toolbar_item_append(ui->plugbar, NULL, "Project", NULL, NULL);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'B'");
+
+					elmnt = elm_toolbar_item_append(ui->plugbar, NULL, "Author", NULL, NULL);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'A'");
+				} // plugbar
+
+				ui->plugentry = elm_entry_add(plugbox);
+				if(ui->plugentry)
+				{
+					elm_entry_entry_set(ui->plugentry, "");
+					elm_entry_editable_set(ui->plugentry, EINA_TRUE);
+					elm_entry_single_line_set(ui->plugentry, EINA_TRUE);
+					elm_entry_scrollable_set(ui->plugentry, EINA_TRUE);
+					evas_object_smart_callback_add(ui->plugentry, "changed,user", _plugentry_changed, ui);
+					evas_object_data_set(ui->plugentry, "ui", ui);
+					//evas_object_size_hint_weight_set(ui->plugentry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+					evas_object_size_hint_align_set(ui->plugentry, EVAS_HINT_FILL, EVAS_HINT_FILL);
+					evas_object_show(ui->plugentry);
+					elm_box_pack_end(plugbox, ui->plugentry);
 				} // plugentry
 
 				ui->pluglist = elm_genlist_add(plugbox);

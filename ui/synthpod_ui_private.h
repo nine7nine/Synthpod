@@ -389,6 +389,8 @@ struct _sp_ui_t {
 
 	Evas_Object *plugwin;
 	Evas_Object *pluglist;
+	Evas_Object *plugentry;
+	Evas_Object *plugbar;
 	Evas_Object *pluginfo;
 
 	Evas_Object *patchwin;

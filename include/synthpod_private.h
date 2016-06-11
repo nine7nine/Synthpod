@@ -208,6 +208,7 @@ struct _reg_t {
 
 	struct {
 		reg_item_t license;
+		reg_item_t name;
 	} doap;
 
 	struct {
@@ -462,6 +463,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->rdfs.see_also, world, map, LILV_NS_RDFS"seeAlso");
 
 	_register(&regs->doap.license, world, map, LILV_NS_DOAP"license");
+	_register(&regs->doap.name, world, map, LILV_NS_DOAP"name");
 
 	_register(&regs->core.optional_feature, world, map, LV2_CORE__optionalFeature);
 	_register(&regs->core.required_feature, world, map, LV2_CORE__requiredFeature);
@@ -666,6 +668,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->rdfs.see_also);
 
 	_unregister(&regs->doap.license);
+	_unregister(&regs->doap.name);
 
 	_unregister(&regs->core.optional_feature);
 	_unregister(&regs->core.required_feature);
