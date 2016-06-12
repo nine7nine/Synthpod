@@ -411,6 +411,23 @@ _pluglist_populate_name(sp_ui_t *ui, const LilvPlugin *plug, const char *match)
 }
 
 static inline bool
+_pluglist_populate_description(sp_ui_t *ui, const LilvPlugin *plug, const char *match)
+{
+	bool valid = false;
+
+	LilvNode *nodes = lilv_plugin_get_value(plug, ui->regs.rdfs.comment.node);
+	if(nodes)
+	{
+		LilvNode *node = lilv_nodes_get_first(nodes);
+		if(node && lilv_node_is_string(node) && strcasestr(lilv_node_as_string(node), match))
+			valid = true;
+		lilv_nodes_free(nodes);
+	}
+
+	return valid;
+}
+
+static inline bool
 _pluglist_populate_class(sp_ui_t *ui, const LilvPlugin *plug, const char *match)
 {
 	bool valid = false;
@@ -490,6 +507,8 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 		populate = _pluglist_populate_project;
 	else if(!strcmp(elm_object_item_text_get(tool), "Author"))
 		populate = _pluglist_populate_author;
+	else if(!strcmp(elm_object_item_text_get(tool), "Description"))
+		populate = _pluglist_populate_description;
 
 	if(!populate)
 		return;
@@ -500,7 +519,7 @@ _pluglist_populate(sp_ui_t *ui, const char *match)
 		if(!plug)
 			continue;
 
-		if(populate(ui, plug, match))
+		if( (strlen(match) == 0) || populate(ui, plug, match))
 		{
 			plug_info_t *info = calloc(1, sizeof(plug_info_t));
 			if(info)
@@ -618,10 +637,13 @@ _menu_plugin_new(sp_ui_t *ui)
 					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'C'");
 
 					elmnt = elm_toolbar_item_append(ui->plugbar, NULL, "Project", NULL, NULL);
-					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'B'");
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'P'");
 
 					elmnt = elm_toolbar_item_append(ui->plugbar, NULL, "Author", NULL, NULL);
 					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'A'");
+
+					elmnt = elm_toolbar_item_append(ui->plugbar, NULL, "Description", NULL, NULL);
+					elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'D'");
 				} // plugbar
 
 				ui->plugentry = elm_entry_add(plugbox);
