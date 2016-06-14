@@ -492,54 +492,60 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 							property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
-							if(prop)
+							if(prop && (atom_prop->value.type == ui->forge.Tuple) )
 							{
-								const LV2_Atom_Object *point_obj = (const LV2_Atom_Object *)&atom_prop->value;
-
-								const LV2_Atom_String *point_label = NULL;
-								const LV2_Atom *point_value = NULL;
-
-								LV2_Atom_Object_Query point_q[] = {
-									{ ui->regs.rdfs.label.urid, (const LV2_Atom **)&point_label },
-									{ ui->regs.rdf.value.urid, (const LV2_Atom **)&point_value },
-									{ 0, NULL }
-								};
-								lv2_atom_object_query(point_obj, point_q);
-
-								if(point_label && point_value)
+								LV2_ATOM_TUPLE_FOREACH((const LV2_Atom_Tuple *)&atom_prop->value, point_atom)
 								{
-									point_t *p = calloc(1, sizeof(point_t));
-									p->label = strndup(LV2_ATOM_BODY_CONST(point_label), point_label->atom.size);
-									if(point_value->type == ui->forge.Int)
-									{
-										p->d = calloc(1, sizeof(double));
-										*p->d = ((const LV2_Atom_Int *)point_value)->body;
-									}
-									else if(point_value->type == ui->forge.Float)
-									{
-										p->d = calloc(1, sizeof(double));
-										*p->d = ((const LV2_Atom_Float *)point_value)->body;
-									}
-									else if(point_value->type == ui->forge.Long)
-									{
-										p->d = calloc(1, sizeof(double));
-										*p->d = ((const LV2_Atom_Long *)point_value)->body;
-									}
-									else if(point_value->type == ui->forge.Double)
-									{
-										p->d = calloc(1, sizeof(double));
-										*p->d = ((const LV2_Atom_Double *)point_value)->body;
-									}
-									//FIXME do other types
-									else if(point_value->type == ui->forge.String)
-									{
-										p->s = strndup(LV2_ATOM_BODY_CONST(point_value), point_value->size);
-									}
+									if(!lv2_atom_forge_is_object_type(&ui->forge, point_atom->type))
+										continue; // skip non-objects
 
-									prop->scale_points = eina_list_append(prop->scale_points, p);
+									const LV2_Atom_Object *point_obj = (const LV2_Atom_Object *)point_atom;
 
-									if(prop->std.elmnt)
-										elm_genlist_item_update(prop->std.elmnt);
+									const LV2_Atom_String *point_label = NULL;
+									const LV2_Atom *point_value = NULL;
+
+									LV2_Atom_Object_Query point_q[] = {
+										{ ui->regs.rdfs.label.urid, (const LV2_Atom **)&point_label },
+										{ ui->regs.rdf.value.urid, (const LV2_Atom **)&point_value },
+										{ 0, NULL }
+									};
+									lv2_atom_object_query(point_obj, point_q);
+
+									if(point_label && point_value)
+									{
+										point_t *p = calloc(1, sizeof(point_t));
+										p->label = strndup(LV2_ATOM_BODY_CONST(point_label), point_label->atom.size);
+										if(point_value->type == ui->forge.Int)
+										{
+											p->d = calloc(1, sizeof(double));
+											*p->d = ((const LV2_Atom_Int *)point_value)->body;
+										}
+										else if(point_value->type == ui->forge.Float)
+										{
+											p->d = calloc(1, sizeof(double));
+											*p->d = ((const LV2_Atom_Float *)point_value)->body;
+										}
+										else if(point_value->type == ui->forge.Long)
+										{
+											p->d = calloc(1, sizeof(double));
+											*p->d = ((const LV2_Atom_Long *)point_value)->body;
+										}
+										else if(point_value->type == ui->forge.Double)
+										{
+											p->d = calloc(1, sizeof(double));
+											*p->d = ((const LV2_Atom_Double *)point_value)->body;
+										}
+										//FIXME do other types
+										else if(point_value->type == ui->forge.String)
+										{
+											p->s = strndup(LV2_ATOM_BODY_CONST(point_value), point_value->size);
+										}
+
+										prop->scale_points = eina_list_append(prop->scale_points, p);
+
+										if(prop->std.elmnt)
+											elm_genlist_item_update(prop->std.elmnt);
+									}
 								}
 							}
 						}
