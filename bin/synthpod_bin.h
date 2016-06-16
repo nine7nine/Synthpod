@@ -41,6 +41,13 @@
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/time/time.h>
 
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
 #define SEQ_SIZE 0x2000
 #define CHUNK_SIZE 0x10000
 #define JAN_1970 (uint64_t)0x83aa7e80
@@ -267,7 +274,7 @@ _worker_thread(void *data, Eina_Thread thread)
 		const char *trace;
 		while((trace = varchunk_read_request(bin->app_to_log, &size)))
 		{
-			fprintf(stderr, "[Trace] %s", trace);
+			fprintf(stderr, "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] %s", trace);
 
 			varchunk_read_advance(bin->app_to_log);
 		}
@@ -390,15 +397,15 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	}
 	else // !log_trace OR not DSP thread ID
 	{
-		const char *prefix = "[Log]   ";
+		const char *prefix = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]   ";
 		if(type == bin->log_trace)
-			prefix = "[Trace] ";
+			prefix = "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] ";
 		else if(type == bin->log_error)
-			prefix = "[Error] ";
+			prefix = "["ANSI_COLOR_RED"Error"ANSI_COLOR_RESET"] ";
 		else if(type == bin->log_note)
-			prefix = "[Note]  ";
+			prefix = "["ANSI_COLOR_GREEN"Note"ANSI_COLOR_RESET"]  ";
 		else if(type == bin->log_warning)
-			prefix = "[Warn]  ";
+			prefix = "["ANSI_COLOR_YELLOW"Warn"ANSI_COLOR_RESET"]  ";
 
 		//TODO send to UI?
 

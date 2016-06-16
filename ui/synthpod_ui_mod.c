@@ -17,6 +17,10 @@
 
 #include <synthpod_ui_private.h>
 
+#define ANSI_COLOR_BOLD    "\x1b[1m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
 // non-rt || rt with LV2_LOG__Trace
 static int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
@@ -27,7 +31,7 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	char prefix [32]; //TODO how big?
 	char buf [1024]; //TODO how big?
 
-	snprintf(prefix, 32, "(UI)  {%i} ", mod->uid);
+	snprintf(prefix, 32, "("ANSI_COLOR_CYAN"UI"ANSI_COLOR_RESET")  {"ANSI_COLOR_BOLD"%i"ANSI_COLOR_RESET"} ", mod->uid);
 	vsnprintf(buf, 1024, fmt, args);
 
 	char *pch = strtok(buf, "\n");
