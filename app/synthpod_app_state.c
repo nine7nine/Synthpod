@@ -696,6 +696,18 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		}
 	}
 
+	// store minor version
+	const int32_t minor_version = SYNTHPOD_MINOR_VERSION;
+	store(hndl, app->regs.core.minor_version.urid,
+		&minor_version, sizeof(int32_t), app->forge.Int,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+	// store micro version
+	const int32_t micro_version = SYNTHPOD_MICRO_VERSION;
+	store(hndl, app->regs.core.micro_version.urid,
+		&micro_version, sizeof(int32_t), app->forge.Int,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
 	// store grid cols
 	store(hndl, app->regs.synthpod.grid_cols.urid,
 		&app->ncols, sizeof(int32_t), app->forge.Int,
@@ -886,22 +898,38 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	uint32_t _flags;
 	uint32_t type;
 
+	// retrieve minor version
+	const int32_t *minor_version = retrieve(hndl, app->regs.core.minor_version.urid,
+		&size, &type, &_flags);
+	if(minor_version && (type == app->forge.Int) && (size == sizeof(int32_t)) )
+	{
+		//TODO check with running version
+	}
+
+	// retrieve micro version
+	const int32_t *micro_version = retrieve(hndl, app->regs.core.micro_version.urid,
+		&size, &type, &_flags);
+	if(micro_version && (type == app->forge.Int) && (size == sizeof(int32_t)) )
+	{
+		//TODO check with running version
+	}
+
 	// retrieve grid cols
 	const int32_t *grid_cols = retrieve(hndl, app->regs.synthpod.grid_cols.urid,
 		&size, &type, &_flags);
-	if(grid_cols)
+	if(grid_cols && (type == app->forge.Int) && (size == sizeof(int32_t)) )
 		app->ncols = *grid_cols;
 
 	// retrieve grid rows
 	const int32_t *grid_rows = retrieve(hndl, app->regs.synthpod.grid_rows.urid,
 		&size, &type, &_flags);
-	if(grid_rows)
+	if(grid_rows && (type == app->forge.Int) && (size == sizeof(int32_t)) )
 		app->nrows = *grid_rows;
 
 	// retrieve grid rows
 	const float *pane_left = retrieve(hndl, app->regs.synthpod.pane_left.urid,
 		&size, &type, &_flags);
-	if(pane_left)
+	if(pane_left && (type == app->forge.Float) && (size == sizeof(float)) )
 		app->nleft = *pane_left;
 
 	// retrieve graph
