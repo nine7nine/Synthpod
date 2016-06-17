@@ -137,6 +137,23 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 					else
 						elm_object_text_set(prop->std.widget, val);
 				}
+				else if(prop->type_urid == ui->forge.Literal)
+				{
+					const char *val = LV2_ATOM_CONTENTS_CONST(LV2_Atom_Literal, value);
+					if(prop->editable)
+						elm_entry_entry_set(prop->std.entry, val);
+					else
+						elm_object_text_set(prop->std.widget, val);
+				}
+				else if(prop->type_urid == ui->forge.URID)
+				{
+					uint32_t val = ((const LV2_Atom_URID *)value)->body;
+					const char *uri = ui->driver->unmap->unmap(ui->driver->unmap->handle, val);
+					if(prop->editable)
+						elm_entry_entry_set(prop->std.entry, uri);
+					else
+						elm_object_text_set(prop->std.widget, uri);
+				}
 				else if(prop->type_urid == ui->forge.Path)
 				{
 					const char *val = LV2_ATOM_BODY_CONST(value);
@@ -160,11 +177,6 @@ _mod_set_property(mod_t *mod, LV2_URID property_val, const LV2_Atom *value)
 						smart_bitmask_value_set(prop->std.widget, val);
 					else
 						smart_slider_value_set(prop->std.widget, val);
-				}
-				else if(prop->type_urid == ui->forge.URID)
-				{
-					uint32_t val = ((const LV2_Atom_URID *)value)->body;
-					smart_slider_value_set(prop->std.widget, val);
 				}
 				else if(prop->type_urid == ui->forge.Long)
 				{
@@ -343,8 +355,14 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 
 	//printf("_property_string_activated: %s\n", entered);
 
-	size_t strsize = strlen(entered) + 1;
-	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(strsize);
+	size_t bodysize;
+	if(prop->type_urid == ui->forge.URID)
+		bodysize = sizeof(LV2_URID);
+	else if(prop->type_urid == ui->forge.Literal)
+		bodysize = sizeof(LV2_Atom_Literal_Body) + strlen(entered) + 1;
+	else
+		bodysize = strlen(entered) + 1;
+	size_t len = sizeof(transfer_patch_set_obj_t) + lv2_atom_pad_size(bodysize);
 
 	for(unsigned index=0; index<mod->num_ports; index++)
 	{
@@ -362,10 +380,24 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 		if(trans)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
-				&ui->forge, trans, strsize,
+				&ui->forge, trans, bodysize,
 				mod->subject, prop->tar_urid, prop->type_urid);
-			if(atom) {
-				strcpy(LV2_ATOM_BODY(atom), entered);
+			if(atom)
+			{
+				if(prop->type_urid == ui->forge.URID)
+				{
+					((LV2_Atom_URID *)atom)->body = ui->driver->map->map(ui->driver->map->handle, entered);
+				}
+				else if(prop->type_urid == ui->forge.Literal)
+				{
+					((LV2_Atom_Literal *)atom)->body.datatype = 0; //TODO
+					((LV2_Atom_Literal *)atom)->body.lang = 0; //TODO
+					strcpy(LV2_ATOM_CONTENTS(LV2_Atom_Literal, atom), entered);
+				}
+				else
+				{
+					strcpy(LV2_ATOM_BODY(atom), entered);
+				}
 
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
@@ -386,8 +418,7 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 
 	size_t body_size = 0;
 	if(  (prop->type_urid == ui->forge.Int)
-		|| (prop->type_urid == ui->forge.Float)
-		|| (prop->type_urid == ui->forge.URID) )
+		|| (prop->type_urid == ui->forge.Float) )
 	{
 		body_size = sizeof(int32_t);
 	}
@@ -427,8 +458,6 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 					((LV2_Atom_Float *)atom)->body = value;
 				else if(prop->type_urid == ui->forge.Double)
 					((LV2_Atom_Double *)atom)->body = value;
-				else if(prop->type_urid == ui->forge.URID)
-					((LV2_Atom_URID *)atom)->body = value;
 
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
@@ -481,12 +510,6 @@ _property_bitmask_changed(void *data, Evas_Object *obj, void *event_info)
 					((LV2_Atom_Int *)atom)->body = value;
 				else if(prop->type_urid == ui->forge.Long)
 					((LV2_Atom_Long *)atom)->body = value;
-				else if(prop->type_urid == ui->forge.Float)
-					((LV2_Atom_Float *)atom)->body = value;
-				else if(prop->type_urid == ui->forge.Double)
-					((LV2_Atom_Double *)atom)->body = value;
-				else if(prop->type_urid == ui->forge.URID)
-					((LV2_Atom_URID *)atom)->body = value;
 
 				_std_ui_write_function(mod, index, lv2_atom_total_size(&trans->obj.atom),
 					ui->regs.port.event_transfer.urid, &trans->obj);
@@ -669,7 +692,9 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 		if(!prop->scale_points)
 		{
 			if(  (prop->type_urid == ui->forge.String)
-				|| (prop->type_urid == ui->forge.URI) )
+				|| (prop->type_urid == ui->forge.Literal)
+				|| (prop->type_urid == ui->forge.URI)
+				|| (prop->type_urid == ui->forge.URID) )
 			{
 				if(prop->editable)
 				{
@@ -769,7 +794,6 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 				}
 			}
 			else if( (prop->type_urid == ui->forge.Int)
-				|| (prop->type_urid == ui->forge.URID)
 				|| (prop->type_urid == ui->forge.Long)
 				|| (prop->type_urid == ui->forge.Float)
 				|| (prop->type_urid == ui->forge.Double) )
@@ -795,7 +819,6 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 					if(child)
 					{
 						int integer = (prop->type_urid == ui->forge.Int)
-							|| (prop->type_urid == ui->forge.URID)
 							|| (prop->type_urid == ui->forge.Long);
 						double min = prop->minimum;
 						double max = prop->maximum;
