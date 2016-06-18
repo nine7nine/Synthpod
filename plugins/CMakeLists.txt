@@ -32,6 +32,7 @@ add_library(synthpod.lv2 MODULE
 	synthpod_string2control.c
 	synthpod_control2atom.c
 	synthpod_mixer.c
+	synthpod_panic.c
 	synthpod_anonymizer.c
 	synthpod_monoatom.c)
 target_link_libraries(synthpod.lv2 synthpod.lib)
