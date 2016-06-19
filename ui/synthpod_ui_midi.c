@@ -18,12 +18,12 @@
 #include <synthpod_ui_private.h>
 
 static const char *midi_keys [12] = {
-	"C", "#C",
-	"D", "#D",
+	"C", "C#",
+	"D", "D#",
 	"E",
-	"F", "#F",
-	"G", "#G",
-	"A", "#A",
+	"F", "F#",
+	"G", "G#",
+	"A", "A#",
 	"H"
 };
 
@@ -111,8 +111,8 @@ _midi_note_lookup(float value)
 	const uint8_t octave = note / 12;
 	const uint8_t offset = note % 12;
 
-	static char stat_str [8];
-	snprintf(stat_str, 8, "%s%u", midi_keys[offset], octave);
+	static char stat_str [16];
+	snprintf(stat_str, 16, "%s-%u", midi_keys[offset], octave);
 
 	return stat_str;
 }
