@@ -138,7 +138,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->world = NULL;
 
 	Evas_Object *parent = NULL;
-	LV2_Options_Option *opts;
+	LV2_Options_Option *opts = NULL;
 	for(int i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
@@ -200,16 +200,13 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->driver.sample_rate = 44100; // fall-back
 
-	if(opts)
+	for(LV2_Options_Option *opt = opts;
+		opt && (opt->key != 0) && (opt->value != NULL);
+		opt++)
 	{
-		for(LV2_Options_Option *opt = opts;
-			(opt->key != 0) && (opt->value != NULL);
-			opt++)
-		{
-			if( (opt->key == params_sample_rate) && (opt->type == atom_float) )
-				handle->driver.sample_rate = *(float*)opt->value;
-			//TODO handle more options
-		}
+		if( (opt->key == params_sample_rate) && (opt->type == atom_float) )
+			handle->driver.sample_rate = *(float*)opt->value;
+		//TODO handle more options
 	}
 
 	handle->driver.features = SP_UI_FEATURE_NEW
