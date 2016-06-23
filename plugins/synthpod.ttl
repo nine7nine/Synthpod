@@ -472,6 +472,9 @@ synthpod:cv2control
 		lv2:index 1 ;
 		lv2:symbol "cv_in_1" ;
 		lv2:name "CV In 1" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -479,6 +482,9 @@ synthpod:cv2control
 		lv2:index 2 ;
 		lv2:symbol "cv_in_2" ;
 		lv2:name "CV In 2" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -486,6 +492,9 @@ synthpod:cv2control
 		lv2:index 3 ;
 		lv2:symbol "cv_in_3" ;
 		lv2:name "CV In 3" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -493,6 +502,9 @@ synthpod:cv2control
 		lv2:index 4 ;
 		lv2:symbol "cv_in_4" ;
 		lv2:name "CV In 4" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -500,6 +512,9 @@ synthpod:cv2control
 		lv2:index 5 ;
 		lv2:symbol "cv_in_5" ;
 		lv2:name "CV In 5" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -507,6 +522,9 @@ synthpod:cv2control
 		lv2:index 6 ;
 		lv2:symbol "cv_in_6" ;
 		lv2:name "CV In 6" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -514,6 +532,9 @@ synthpod:cv2control
 		lv2:index 7 ;
 		lv2:symbol "cv_in_7" ;
 		lv2:name "CV In 7" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -521,6 +542,9 @@ synthpod:cv2control
 		lv2:index 8 ;
 		lv2:symbol "cv_in_8" ;
 		lv2:name "CV In 8" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 		# control_out
@@ -799,6 +823,9 @@ synthpod:cv2atom
 		lv2:index 1 ;
 		lv2:symbol "cv_in_1" ;
 		lv2:name "CV In 1" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -806,6 +833,9 @@ synthpod:cv2atom
 		lv2:index 2 ;
 		lv2:symbol "cv_in_2" ;
 		lv2:name "CV In 2" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -813,6 +843,9 @@ synthpod:cv2atom
 		lv2:index 3 ;
 		lv2:symbol "cv_in_3" ;
 		lv2:name "CV In 3" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -820,6 +853,9 @@ synthpod:cv2atom
 		lv2:index 4 ;
 		lv2:symbol "cv_in_4" ;
 		lv2:name "CV In 4" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -827,6 +863,9 @@ synthpod:cv2atom
 		lv2:index 5 ;
 		lv2:symbol "cv_in_5" ;
 		lv2:name "CV In 5" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -834,6 +873,9 @@ synthpod:cv2atom
 		lv2:index 6 ;
 		lv2:symbol "cv_in_6" ;
 		lv2:name "CV In 6" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -841,6 +883,9 @@ synthpod:cv2atom
 		lv2:index 7 ;
 		lv2:symbol "cv_in_7" ;
 		lv2:name "CV In 7" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -848,6 +893,9 @@ synthpod:cv2atom
 		lv2:index 8 ;
 		lv2:symbol "cv_in_8" ;
 		lv2:name "CV In 8" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 		# control_out
