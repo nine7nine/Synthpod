@@ -174,6 +174,9 @@ synthpod:stereo
 		lv2:index 6 ;
 		lv2:symbol "control_in_1" ;
 		lv2:name "Input 1" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -181,6 +184,9 @@ synthpod:stereo
 		lv2:index 7 ;
 		lv2:symbol "control_in_2" ;
 		lv2:name "Input 2" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -188,6 +194,9 @@ synthpod:stereo
 		lv2:index 8 ;
 		lv2:symbol "control_in_3" ;
 		lv2:name "Input 3" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -195,6 +204,9 @@ synthpod:stereo
 		lv2:index 9 ;
 		lv2:symbol "control_in_4" ;
 		lv2:name "Input 4" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 		# control out
@@ -609,9 +621,9 @@ synthpod:control2cv
 		lv2:index 0 ;
 		lv2:symbol "control_in_1" ;
 		lv2:name "Input 1" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -619,9 +631,9 @@ synthpod:control2cv
 		lv2:index 1 ;
 		lv2:symbol "control_in_2" ;
 		lv2:name "Input 2" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -629,9 +641,9 @@ synthpod:control2cv
 		lv2:index 2 ;
 		lv2:symbol "control_in_3" ;
 		lv2:name "Input 3" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -639,9 +651,9 @@ synthpod:control2cv
 		lv2:index 3 ;
 		lv2:symbol "control_in_4" ;
 		lv2:name "Input 4" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -649,9 +661,9 @@ synthpod:control2cv
 		lv2:index 4 ;
 		lv2:symbol "control_in_5" ;
 		lv2:name "Input 5" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -659,9 +671,9 @@ synthpod:control2cv
 		lv2:index 5 ;
 		lv2:symbol "control_in_6" ;
 		lv2:name "Input 6" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -669,9 +681,9 @@ synthpod:control2cv
 		lv2:index 6 ;
 		lv2:symbol "control_in_7" ;
 		lv2:name "Input 7" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -679,9 +691,9 @@ synthpod:control2cv
 		lv2:index 7 ;
 		lv2:symbol "control_in_8" ;
 		lv2:name "Input 8" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 		# cv_out
@@ -759,9 +771,9 @@ synthpod:cv2atom
 		lv2:index 0 ;
 		lv2:symbol "offset" ;
 		lv2:name "Offset" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 120.0 ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 120 ;
 		lv2:portProperty lv2:integer, lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label   "0" ; rdf:value   0 ] ;
 		lv2:scalePoint [ rdfs:label   "8" ; rdf:value   8 ] ;
@@ -878,9 +890,9 @@ synthpod:atom2cv
 		lv2:index 1 ;
 		lv2:symbol "offset" ;
 		lv2:name "Offset" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 120.0 ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 120 ;
 		lv2:portProperty lv2:integer, lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label   "0" ; rdf:value   0 ] ;
 		lv2:scalePoint [ rdfs:label   "8" ; rdf:value   8 ] ;
@@ -1358,9 +1370,9 @@ synthpod:atom2control
 		lv2:index 1 ;
 		lv2:symbol "offset" ;
 		lv2:name "Offset" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 240.0 ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 240 ;
 		lv2:portProperty lv2:integer, lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label   "0" ; rdf:value   0 ] ;
 		lv2:scalePoint [ rdfs:label  "16" ; rdf:value  16 ] ;
@@ -1545,40 +1557,49 @@ synthpod:atom2control
 synthpod:midi2control_learn_1
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 1" ;
 	rdfs:label "Learn 1" .
 synthpod:midi2control_learn_2
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 2" ;
 	rdfs:label "Learn 2" .
 synthpod:midi2control_learn_3
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 3" ;
 	rdfs:label "Learn 3" .
 synthpod:midi2control_learn_4
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 4" ;
 	rdfs:label "Learn 4" .
 synthpod:midi2control_learn_5
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 5" ;
 	rdfs:label "Learn 5" .
 synthpod:midi2control_learn_6
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 6" ;
 	rdfs:label "Learn 6" .
 synthpod:midi2control_learn_7
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 7" ;
 	rdfs:label "Learn 7" .
 synthpod:midi2control_learn_8
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable learning slot 8" ;
 	rdfs:label "Learn 8" .
 
 synthpod:midi2control_cntrl_1
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 1" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 1" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1586,6 +1607,7 @@ synthpod:midi2control_cntrl_2
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 2" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 2" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1593,6 +1615,7 @@ synthpod:midi2control_cntrl_3
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 3" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 3" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1600,6 +1623,7 @@ synthpod:midi2control_cntrl_4
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 4" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 4" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1607,6 +1631,7 @@ synthpod:midi2control_cntrl_5
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 5" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 5" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1614,6 +1639,7 @@ synthpod:midi2control_cntrl_6
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 6" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 6" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1621,6 +1647,7 @@ synthpod:midi2control_cntrl_7
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 7" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 7" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1628,6 +1655,7 @@ synthpod:midi2control_cntrl_8
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Controller 8" ;
+	rdfs:comment "learnt or manually set MIDI controller for slot 8" ;
 	units:unit units:midiController ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -1636,48 +1664,56 @@ synthpod:midi2control_min_1
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 1" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 1" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_min_2
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 2" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 2" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_min_3
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 3" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 3" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_min_4
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 4" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 4" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_min_5
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 5" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 5" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_min_6
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 6" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 6" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_min_7
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 7" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 7" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_min_8
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Minimum 8" ;
+	rdfs:comment "learnt or manually set minimum MIDI controller value for slot 8" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 
@@ -1685,82 +1721,98 @@ synthpod:midi2control_max_1
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 1" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 1" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_max_2
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 2" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 2" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_max_3
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 3" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 3" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_max_4
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 4" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 4" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_max_5
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 5" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 5" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_max_6
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 6" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 6" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_max_7
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 7" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 7" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 synthpod:midi2control_max_8
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Maximum 8" ;
+	rdfs:comment "learnt or manually set maximum MIDI controller value for slot 8" ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 
 synthpod:string2control_in_1
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 1" ;
 	rdfs:label "Input 1" .
 synthpod:string2control_in_2
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 2" ;
 	rdfs:label "Input 2" .
 synthpod:string2control_in_3
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 3" ;
 	rdfs:label "Input 3" .
 synthpod:string2control_in_4
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 4" ;
 	rdfs:label "Input 4" .
 synthpod:string2control_in_5
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 5" ;
 	rdfs:label "Input 5" .
 synthpod:string2control_in_6
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 6" ;
 	rdfs:label "Input 6" .
 synthpod:string2control_in_7
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 7" ;
 	rdfs:label "Input 7" .
 synthpod:string2control_in_8
 	a lv2:Parameter ;
 	rdfs:range atom:String ;
+	rdfs:comment "character string input for slot 8" ;
 	rdfs:label "Input 8" .
 
 # MIDI2Control Plugin
@@ -2094,6 +2146,7 @@ synthpod:midi2control
 synthpod:panic_alarm
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to send MIDI note and sound off events on all channels" ;
 	rdfs:label "Alarm" .
 
 # Panic Plugin
@@ -2156,9 +2209,9 @@ synthpod:control2atom
 		lv2:index 0 ;
 		lv2:symbol "offset" ;
 		lv2:name "Offset" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 240.0 ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 240 ;
 		lv2:portProperty lv2:integer, lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label   "0" ; rdf:value   0 ] ;
 		lv2:scalePoint [ rdfs:label  "16" ; rdf:value  16 ] ;
@@ -2184,6 +2237,9 @@ synthpod:control2atom
 		lv2:index 1 ;
 		lv2:symbol "input_1" ;
 		lv2:name "Input 1" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2191,6 +2247,9 @@ synthpod:control2atom
 		lv2:index 2 ;
 		lv2:symbol "input_2" ;
 		lv2:name "Input 2" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2198,6 +2257,9 @@ synthpod:control2atom
 		lv2:index 3 ;
 		lv2:symbol "input_3" ;
 		lv2:name "Input 3" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2205,6 +2267,9 @@ synthpod:control2atom
 		lv2:index 4 ;
 		lv2:symbol "input_4" ;
 		lv2:name "Input 4" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2212,6 +2277,9 @@ synthpod:control2atom
 		lv2:index 5 ;
 		lv2:symbol "input_5" ;
 		lv2:name "Input 5" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2219,6 +2287,9 @@ synthpod:control2atom
 		lv2:index 6 ;
 		lv2:symbol "input_6" ;
 		lv2:name "Input 6" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2226,6 +2297,9 @@ synthpod:control2atom
 		lv2:index 7 ;
 		lv2:symbol "input_7" ;
 		lv2:name "Input 7" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2233,6 +2307,9 @@ synthpod:control2atom
 		lv2:index 8 ;
 		lv2:symbol "input_8" ;
 		lv2:name "Input 8" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2240,6 +2317,9 @@ synthpod:control2atom
 		lv2:index 9 ;
 		lv2:symbol "input_9" ;
 		lv2:name "Input 9" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2247,6 +2327,9 @@ synthpod:control2atom
 		lv2:index 10 ;
 		lv2:symbol "input_10" ;
 		lv2:name "Input 10" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2254,6 +2337,9 @@ synthpod:control2atom
 		lv2:index 11 ;
 		lv2:symbol "input_11" ;
 		lv2:name "Input 11" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2261,6 +2347,9 @@ synthpod:control2atom
 		lv2:index 12 ;
 		lv2:symbol "input_12" ;
 		lv2:name "Input 12" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2268,6 +2357,9 @@ synthpod:control2atom
 		lv2:index 13 ;
 		lv2:symbol "input_13" ;
 		lv2:name "Input 13" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2275,6 +2367,9 @@ synthpod:control2atom
 		lv2:index 14 ;
 		lv2:symbol "input_14" ;
 		lv2:name "Input 14" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2282,6 +2377,9 @@ synthpod:control2atom
 		lv2:index 15 ;
 		lv2:symbol "input_15" ;
 		lv2:name "Input 15" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 	  a lv2:InputPort ,
@@ -2289,6 +2387,9 @@ synthpod:control2atom
 		lv2:index 16 ;
 		lv2:symbol "input_16" ;
 		lv2:name "Input 16" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_in ;
 	] , [
 		# control_out
@@ -2349,9 +2450,9 @@ synthpod:mixer
 		lv2:index 4 ;
 		lv2:symbol "gain_1" ;
 		lv2:name "Gain 1" ;
-		lv2:default 0 ;
-		lv2:minimum -96 ;
-		lv2:maximum 96 ;
+		lv2:default 0.0 ;
+		lv2:minimum -96.0 ;
+		lv2:maximum 96.0 ;
 		units:unit units:db ;
 		pg:group synthpod:group_in ;
 	] , [
@@ -2360,9 +2461,9 @@ synthpod:mixer
 		lv2:index 5 ;
 		lv2:symbol "gain_2" ;
 		lv2:name "Gain 2" ;
-		lv2:default 0 ;
-		lv2:minimum -96 ;
-		lv2:maximum 96 ;
+		lv2:default 0.0 ;
+		lv2:minimum -96.0 ;
+		lv2:maximum 96.0 ;
 		units:unit units:db ;
 		pg:group synthpod:group_in ;
 	] , [
@@ -2371,9 +2472,9 @@ synthpod:mixer
 		lv2:index 6 ;
 		lv2:symbol "gain_3" ;
 		lv2:name "Gain 3" ;
-		lv2:default 0 ;
-		lv2:minimum -96 ;
-		lv2:maximum 96 ;
+		lv2:default 0.0 ;
+		lv2:minimum -96.0 ;
+		lv2:maximum 96.0 ;
 		units:unit units:db ;
 		pg:group synthpod:group_in ;
 	] , [
@@ -2382,9 +2483,9 @@ synthpod:mixer
 		lv2:index 7 ;
 		lv2:symbol "gain_4" ;
 		lv2:name "Gain 4" ;
-		lv2:default 0 ;
-		lv2:minimum -96 ;
-		lv2:maximum 96 ;
+		lv2:default 0.0 ;
+		lv2:minimum -96.0 ;
+		lv2:maximum 96.0 ;
 		units:unit units:db ;
 		pg:group synthpod:group_in ;
 	] , [

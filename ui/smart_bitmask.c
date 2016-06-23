@@ -168,7 +168,10 @@ _smart_bitmask_smart_init(Evas_Object *o)
 			*/
 
 			char label [16];
-			snprintf(label, 16, "%"PRIu8, i + 1);
+			if(priv->nbits > 16)
+				snprintf(label, 16, "%"PRIX8"%"PRIX8, row, col);
+			else
+				snprintf(label, 16, "%"PRIX8, col);
 			edje_object_part_text_set(bit, "label", label);
 
 			evas_object_show(bit);

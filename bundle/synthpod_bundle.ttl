@@ -159,6 +159,9 @@ synthpod:sink
 		lv2:symbol "control_sink_1" ;
 		lv2:name "Control 1" ,
 	 		"Kontroller 1"@de	;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
@@ -168,6 +171,9 @@ synthpod:sink
 		lv2:symbol "control_sink_2" ;
 		lv2:name "Control 2" ,
 	 		"Kontroller 2"@de	;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
@@ -177,6 +183,9 @@ synthpod:sink
 		lv2:symbol "control_sink_3" ;
 		lv2:name "Control 3" ,
 	 		"Kontroller 3"@de	;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
@@ -186,6 +195,9 @@ synthpod:sink
 		lv2:symbol "control_sink_4" ;
 		lv2:name "Control 4" ,
 	 		"Kontroller 4"@de	;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] , [
 		# com in
