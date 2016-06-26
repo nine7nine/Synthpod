@@ -400,7 +400,6 @@ struct _sp_ui_t {
 	Elm_Object_Item *matrix_audio;
 	port_designation_t matrix_audio_designation;
 	Elm_Object_Item *matrix_atom;
-	Elm_Object_Item *matrix_event;
 	Elm_Object_Item *matrix_control;
 	Elm_Object_Item *matrix_cv;
 	port_atom_type_t matrix_atom_type;

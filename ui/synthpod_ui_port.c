@@ -263,7 +263,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 		elm_layout_signal_emit(lay, port->selected ? "link,on" : "link,off", "");
 
 		// monitor
-		if( (port->type != PORT_TYPE_ATOM) && (port->type != PORT_TYPE_EVENT) )
+		if(port->type != PORT_TYPE_ATOM)
 		{
 			elm_layout_signal_callback_add(lay, "monitor,toggle", "", _port_monitor_toggle, port);
 			elm_layout_signal_emit(lay, port->std.monitored ? "monitor,on" : "monitor,off", "");
@@ -430,18 +430,6 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 					_table_add_icon(tab, SYNTHPOD_DATA_DIR"/xpress.png", 4);
 
 				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/atom_inverted.png", 6);
-			}
-
-			child = tab;
-		}
-		else if(port->type == PORT_TYPE_EVENT)
-		{
-			Evas_Object *tab = elm_table_add(lay);
-			if(tab)
-			{
-				elm_table_homogeneous_set(tab, EINA_TRUE);
-
-				_table_add_icon(tab, SYNTHPOD_DATA_DIR"/event_inverted.png", 6);
 			}
 
 			child = tab;

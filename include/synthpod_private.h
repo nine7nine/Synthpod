@@ -34,8 +34,6 @@
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/ext/uri-map/uri-map.h>
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
-#include <lv2/lv2plug.in/ns/ext/event/event.h>
-#include <lv2/lv2plug.in/ns/ext/event/event-helpers.h>
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
@@ -63,7 +61,6 @@ enum _port_type_t {
 	PORT_TYPE_CONTROL,
 	PORT_TYPE_CV,
 	PORT_TYPE_ATOM,
-	PORT_TYPE_EVENT,
 
 	PORT_TYPE_NUM
 };
@@ -119,7 +116,6 @@ struct _reg_t {
 		reg_item_t audio;
 		reg_item_t cv;
 		reg_item_t atom;
-		reg_item_t event;
 
 		// atom buffer type
 		reg_item_t sequence;
@@ -393,7 +389,6 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->port.audio, world, map, LV2_CORE__AudioPort);
 	_register(&regs->port.cv, world, map, LV2_CORE__CVPort);
 	_register(&regs->port.atom, world, map, LV2_ATOM__AtomPort);
-	_register(&regs->port.event, world, map, LV2_EVENT__EventPort);
 
 	_register(&regs->port.sequence, world, map, LV2_ATOM__Sequence);
 	_register(&regs->port.midi, world, map, LV2_MIDI__MidiEvent);
@@ -604,7 +599,6 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->port.audio);
 	_unregister(&regs->port.cv);
 	_unregister(&regs->port.atom);
-	_unregister(&regs->port.event);
 
 	_unregister(&regs->port.sequence);
 	_unregister(&regs->port.midi);

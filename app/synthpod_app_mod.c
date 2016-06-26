@@ -701,26 +701,16 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 			tar->selected = control_port == port; // only select control ports by default
 		}
-		else if(lilv_port_is_a(plug, port, app->regs.port.event.node)) 
-		{
-			tar->size = app->driver->seq_size;
-			tar->type = PORT_TYPE_EVENT;
-			tar->selected = 0;
-			tar->monitored = 0;
-			tar->protocol = app->regs.port.event_transfer.urid; //FIXME handle atom_transfer
-			tar->driver = &ev_port_driver;
-
-			// check whether this is a control port
-			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
-				tar->direction == PORT_DIRECTION_INPUT
-					? app->regs.port.input.node
-					: app->regs.port.output.node
-					, app->regs.core.control.node);
-
-			tar->selected = control_port == port; // only select control ports by default
-		}
 		else
+		{
 			fprintf(stderr, "unknown port type\n"); //FIXME plugin should fail to initialize here
+
+			free(mod->uri_str);
+			free(mod->ports);
+			free(mod);
+
+			return NULL;
+		}
 		
 		// get minimum port size if specified
 		LilvNode *minsize = lilv_port_get(plug, port, app->regs.port.minimum_size.node);

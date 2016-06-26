@@ -391,12 +391,6 @@ _sp_ui_mod_port_add(sp_ui_t *ui, mod_t *mod, uint32_t i, port_t *tar, const Lilv
 		if(lilv_port_supports_event(mod->plug, port, ui->regs.xpress.message.node))
 			tar->atom_type |= PORT_ATOM_TYPE_XPRESS;
 	}
-	else if(lilv_port_is_a(mod->plug, port, ui->regs.port.event.node)) 
-	{
-		tar->type = PORT_TYPE_EVENT;
-
-		tar->atom_type = 0;
-	}
 
 	// get port unit
 	LilvNode *unit = lilv_port_get(mod->plug, tar->tar, ui->regs.units.unit.node);

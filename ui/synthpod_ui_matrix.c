@@ -125,7 +125,6 @@ _menu_matrix_del(void *data, Evas_Object *obj, void *event_info)
 	ui->matrix_audio = NULL;
 	ui->matrix_control = NULL;
 	ui->matrix_cv = NULL;
-	ui->matrix_event = NULL;
 	ui->matrix_atom = NULL;
 	ui->matrix_atom_midi = NULL;
 	ui->matrix_atom_osc = NULL;
@@ -156,8 +155,6 @@ _matrix_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 			elm_toolbar_item_selected_set(ui->matrix_control, EINA_TRUE);
 		else if(!strcmp(ev->key, "c"))
 			elm_toolbar_item_selected_set(ui->matrix_cv, EINA_TRUE);
-		else if(!strcmp(ev->key, "e"))
-			elm_toolbar_item_selected_set(ui->matrix_event, EINA_TRUE);
 		else if(!strcmp(ev->key, "l"))
 			elm_toolbar_item_selected_set(ui->matrix_atom, EINA_TRUE);
 
@@ -191,10 +188,6 @@ _patchbar_selected(void *data, Evas_Object *obj, void *event_info)
 	else if(itm == ui->matrix_cv)
 	{
 		ui->matrix_type = PORT_TYPE_CV;
-	}
-	else if(itm == ui->matrix_event)
-	{
-		ui->matrix_type = PORT_TYPE_EVENT;
 	}
 	else if(itm == ui->matrix_atom)
 	{
@@ -249,9 +242,6 @@ _patchbar_restore(sp_ui_t *ui)
 			break;
 		case PORT_TYPE_CV:
 			elm_toolbar_item_selected_set(ui->matrix_cv, EINA_TRUE);
-			break;
-		case PORT_TYPE_EVENT:
-			elm_toolbar_item_selected_set(ui->matrix_event, EINA_TRUE);
 			break;
 		case PORT_TYPE_ATOM:
 			switch(ui->matrix_atom_type)
@@ -372,10 +362,6 @@ _menu_matrix_new(sp_ui_t *ui)
 				ui->matrix_cv = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/cv.png", "CV", NULL, NULL);
 				elm_object_item_tooltip_text_set(ui->matrix_cv, "Ctrl + 'C'");
-
-				ui->matrix_event = elm_toolbar_item_append(patchbar,
-					SYNTHPOD_DATA_DIR"/event.png", "Event", NULL, NULL);
-				elm_object_item_tooltip_text_set(ui->matrix_event, "Ctrl + 'E'");
 
 				ui->matrix_atom = elm_toolbar_item_append(patchbar,
 					SYNTHPOD_DATA_DIR"/atom.png", "Atom", NULL, NULL);

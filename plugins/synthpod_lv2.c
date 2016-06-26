@@ -71,16 +71,12 @@ lv2_descriptor(uint32_t index)
 		case 12:
 			return &synthpod_anonymizer;
 		case 13:
-			return &synthpod_atom2event;
-		case 14:
-			return &synthpod_event2atom;
-		case 15:
 			return &synthpod_midisplitter;
-		case 16:
+		case 14:
 			return &synthpod_midi2control;
-		case 17:
+		case 15:
 			return &synthpod_string2control;
-		case 18:
+		case 16:
 			return &synthpod_panic;
 		default:
 			return NULL;
