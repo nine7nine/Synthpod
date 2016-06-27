@@ -787,6 +787,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 							&& lv2_atom_forge_urid(forge, mod->visible);
 					}
 
+					if(ref && mod->disabled)
+					{
+						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_disabled.urid)
+							&& lv2_atom_forge_bool(forge, mod->disabled);
+					}
+
 					if(ref && mod->embedded)
 					{
 						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_embedded.urid)
@@ -964,11 +970,13 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		const LV2_Atom_Int *mod_index = NULL;
 		const LV2_Atom_Bool *mod_selected = NULL;
 		const LV2_Atom_Bool *mod_visible = NULL;
+		const LV2_Atom_Bool *mod_disabled = NULL;
 		const LV2_Atom_Bool *mod_embedded = NULL;
 		LV2_Atom_Object_Query mod_q[] = {
 			{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
 			{ app->regs.synthpod.module_selected.urid, (const LV2_Atom **)&mod_selected },
 			{ app->regs.synthpod.module_visible.urid, (const LV2_Atom **)&mod_visible },
+			{ app->regs.synthpod.module_disabled.urid, (const LV2_Atom **)&mod_disabled },
 			{ app->regs.synthpod.module_embedded.urid, (const LV2_Atom **)&mod_embedded },
 			{ 0, NULL }
 		};
@@ -989,11 +997,13 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->num_mods += 1;
 
 		mod->selected = mod_selected && (mod_selected->atom.type == app->forge.Bool)
-			? mod_selected->body : 0;
+			? mod_selected->body : false;
 		mod->visible = mod_visible && (mod_visible->atom.type == app->forge.URID)
 			? mod_visible->body : 0;
+		mod->disabled = mod_disabled && (mod_disabled->atom.type == app->forge.Bool)
+			? mod_disabled->body : false;
 		mod->embedded = mod_embedded && (mod_embedded->atom.type == app->forge.Bool)
-			? mod_embedded->body : 0;
+			? mod_embedded->body : false;
 
 		if(mod->uid > app->uid - 1)
 			app->uid = mod->uid + 1;

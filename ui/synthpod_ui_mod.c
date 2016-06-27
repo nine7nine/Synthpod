@@ -240,6 +240,21 @@ _ui_mod_visible_request(mod_t *mod)
 }
 
 static inline void
+_ui_mod_disabled_request(mod_t *mod)
+{
+	sp_ui_t *ui = mod->ui;
+
+	// request module disabled state
+	size_t size = sizeof(transmit_module_disabled_t);
+	transmit_module_disabled_t *trans0 = _sp_ui_to_app_request(ui, size);
+	if(trans0)
+	{
+		_sp_transmit_module_disabled_fill(&ui->regs, &ui->forge, trans0, size, mod->uid, -1);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}
+
+static inline void
 _ui_mod_embedded_request(mod_t *mod)
 {
 	sp_ui_t *ui = mod->ui;
@@ -1026,6 +1041,7 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	// request selected state
 	_ui_mod_selected_request(mod);
 	_ui_mod_visible_request(mod);
+	_ui_mod_disabled_request(mod);
 	_ui_mod_embedded_request(mod);
 
 	//TODO save visibility in synthpod state?

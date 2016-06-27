@@ -139,7 +139,7 @@ _mod_link_toggle(void *data, Evas_Object *lay, const char *emission, const char 
 	mod_t *mod = data;
 	sp_ui_t *ui = mod->ui;
 
-	mod->selected ^= 1; // toggle
+	mod->selected = !mod->selected; // toggle
 	elm_layout_signal_emit(lay, mod->selected ? "link,on" : "link,off", "");
 
 	_patches_update(ui);
@@ -174,6 +174,25 @@ _mod_auto_toggle(void *data, Evas_Object *lay, const char *emission, const char 
 		// refresh modlist item
 		if(mod->std.elmnt)
 			elm_genlist_item_update(mod->std.elmnt);
+	}
+}
+
+static void
+_mod_enable_toggle(void *data, Evas_Object *lay, const char *emission, const char *source)
+{
+	mod_t *mod = data;
+	sp_ui_t *ui = mod->ui;
+
+	mod->disabled = !mod->disabled; // toggle
+	elm_layout_signal_emit(lay, mod->disabled ? "enable,off" : "enable,on", "");
+
+	// signal app
+	size_t size = sizeof(transmit_module_disabled_t);
+	transmit_module_disabled_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_module_disabled_fill(&ui->regs, &ui->forge, trans, size, mod->uid, mod->disabled);
+		_sp_ui_to_app_advance(ui, size);
 	}
 }
 
@@ -326,8 +345,8 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 			elm_layout_signal_emit(lay, mod->selected ? "link,on" : "link,off", "");
 
 			// enable
-			//elm_layout_signal_callback_add(lay, "enable,toggle", "", _mod_enable_toggle, mod); //FIXME
-			elm_layout_signal_emit(lay, "enable,show", ""); //FIXME
+			elm_layout_signal_callback_add(lay, "enable,toggle", "", _mod_enable_toggle, mod);
+			elm_layout_signal_emit(lay, mod->disabled ? "enable,off" : "enable,on", "");
 
 			// auto 
 			elm_layout_signal_callback_add(lay, "auto,toggle", "", _mod_auto_toggle, mod);

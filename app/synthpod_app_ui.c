@@ -456,10 +456,10 @@ _sp_app_from_ui_module_selected(sp_app_t *app, const LV2_Atom *atom)
 			break;
 		}
 		case 0: // deselect
-			mod->selected = 0;
+			mod->selected = false;
 			break;
 		case 1: // select
-			mod->selected = 1;
+			mod->selected = true;
 			break;
 	}
 
@@ -504,6 +504,45 @@ _sp_app_from_ui_module_visible(sp_app_t *app, const LV2_Atom *atom)
 }
 
 __realtime static bool
+_sp_app_from_ui_module_disabled(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_disabled_t *disabled = (const transmit_module_disabled_t *)atom;
+
+	mod_t *mod = _sp_app_mod_get(app, disabled->uid.body);
+	if(!mod)
+		return advance_ui[app->block_state];
+
+	switch(disabled->state.body)
+	{
+		case -1: // query
+		{
+			// signal ui
+			size_t size = sizeof(transmit_module_disabled_t);
+			transmit_module_disabled_t *trans = _sp_app_to_ui_request(app, size);
+			if(trans)
+			{
+				_sp_transmit_module_disabled_fill(&app->regs, &app->forge, trans, size,
+					mod->uid, mod->disabled);
+				_sp_app_to_ui_advance(app, size);
+			}
+			break;
+		}
+		case 0: // deselect
+			//FIXME ramp this
+			mod->disabled = false;
+			break;
+		case 1: // select
+			//FIXME ramp this
+			mod->disabled = true;
+			break;
+	}
+
+	return advance_ui[app->block_state];
+}
+
+__realtime static bool
 _sp_app_from_ui_module_embedded(sp_app_t *app, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -530,10 +569,10 @@ _sp_app_from_ui_module_embedded(sp_app_t *app, const LV2_Atom *atom)
 			break;
 		}
 		case 0: // deselect
-			mod->embedded = 0;
+			mod->embedded = false;
 			break;
 		case 1: // select
-			mod->embedded = 1;
+			mod->embedded = true;
 			break;
 	}
 
@@ -957,6 +996,9 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.synthpod.module_visible.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_module_visible;
+
+	from_uis[ptr].protocol = app->regs.synthpod.module_disabled.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_module_disabled;
 
 	from_uis[ptr].protocol = app->regs.synthpod.module_embedded.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_module_embedded;

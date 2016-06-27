@@ -248,6 +248,24 @@ _sp_ui_from_app_module_visible(sp_ui_t *ui, const LV2_Atom *atom)
 }
 
 static void
+_sp_ui_from_app_module_disabled(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_module_disabled_t *trans = (const transmit_module_disabled_t *)atom;
+	mod_t *mod = _sp_ui_mod_get(ui, trans->uid.body);
+	if(!mod)
+		return;
+
+	if(mod->disabled != trans->state.body)
+	{
+		mod->disabled = trans->state.body;
+		if(mod->std.elmnt)
+			elm_genlist_item_update(mod->std.elmnt);
+	}
+}
+
+static void
 _sp_ui_from_app_module_profiling(sp_ui_t *ui, const LV2_Atom *atom)
 {
 	atom = ASSUME_ALIGNED(atom);
@@ -550,6 +568,9 @@ sp_ui_from_app_fill(sp_ui_t *ui)
 
 	from_apps[ptr].protocol = ui->regs.synthpod.module_visible.urid;
 	from_apps[ptr++].cb = _sp_ui_from_app_module_visible;
+
+	from_apps[ptr].protocol = ui->regs.synthpod.module_disabled.urid;
+	from_apps[ptr++].cb = _sp_ui_from_app_module_disabled;
 
 	from_apps[ptr].protocol = ui->regs.synthpod.module_profiling.urid;
 	from_apps[ptr++].cb = _sp_ui_from_app_module_profiling;

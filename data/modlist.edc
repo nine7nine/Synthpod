@@ -245,19 +245,19 @@ group {
 		}
 
 		program {
-			signal: "enable,show";
+			signal: "enable,on";
 			action: STATE_SET "default" 1.0;
 			target: "enable";
 		}
 		program {
-			signal: "enable,hide";
+			signal: "enable,off";
 			action: STATE_SET "default" 0.0;
 			target: "enable";
 		}
 		program {
 			signal: "mouse,down,*";
 			source: "enable";
-			action: SIGNAL_EMIT "enable,click" "";
+			action: SIGNAL_EMIT "enable,toggle" "";
 		}
 
 		program {

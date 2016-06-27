@@ -41,7 +41,7 @@
 #define NUM_FEATURES 16
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
-#define FROM_UI_NUM 23
+#define FROM_UI_NUM 24
 
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
@@ -162,9 +162,10 @@ struct _mod_prof_t {
 struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
-	int selected;
-	int visible;
-	int embedded;
+	bool selected;
+	LV2_URID visible;
+	bool disabled;
+	bool embedded;
 
 	bool delete_request;
 	bool bypassed;

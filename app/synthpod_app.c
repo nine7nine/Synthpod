@@ -359,7 +359,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		clock_gettime(CLOCK_MONOTONIC, &mod_t1);
 
 		// run plugin
-		lilv_instance_run(mod->inst, nsamples);
+		if(!mod->disabled)
+		{
+			lilv_instance_run(mod->inst, nsamples);
+		}
 
 		clock_gettime(CLOCK_MONOTONIC, &mod_t2);
 
