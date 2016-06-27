@@ -288,8 +288,6 @@ synthpod_nsm_t *
 synthpod_nsm_new(const char *exe, const char *path,
 	const synthpod_nsm_driver_t *nsm_driver, void *data)
 {
-	efreet_init();
-
 	if(!nsm_driver)
 		return NULL;
 
@@ -368,10 +366,14 @@ synthpod_nsm_new(const char *exe, const char *path,
 		}
 		else
 		{
-			const char *data_dir = efreet_data_home_get();
+#if !defined(_WIN32)
+			const char *home_dir = getenv("HOME");
+#else
+			const char *home_dir = evil_homedir_get();
+#endif
 
 			char *synthpod_dir = NULL;
-			asprintf(&synthpod_dir, "%s/synthpod", data_dir);
+			asprintf(&synthpod_dir, "%s/.lv2/Synthpod_default.preset.lv2", home_dir);
 			if(synthpod_dir)
 			{
 				ecore_file_mkpath(synthpod_dir); // path may not exist yet
@@ -419,8 +421,6 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 
 		free(nsm);
 	}
-
-	efreet_shutdown();
 }
 
 void
