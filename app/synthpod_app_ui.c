@@ -290,6 +290,46 @@ _sp_app_from_ui_module_move(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
+static inline bool
+_mod_needs_ramping(mod_t *mod, ramp_state_t state, bool silencing)
+{
+	sp_app_t *app = mod->app;
+
+	// ramping
+	int needs_ramping = 0;
+	for(unsigned p1=0; p1<mod->num_ports; p1++)
+	{
+		port_t *port = &mod->ports[p1];
+
+		// silence sources
+		/* TODO is this needed?
+		for(int s=0; s<port->num_sources; s++)
+		{
+			_sp_app_port_silence_request(app,
+				port->sources[s].port, port, state);
+		}
+		*/
+
+		// silence sinks
+		for(unsigned m=0; m<app->num_mods; m++)
+			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
+			{
+				if(silencing)
+				{
+					needs_ramping += _sp_app_port_silence_request(app,
+						port, &app->mods[m]->ports[p2], state);
+				}
+				else
+				{
+					needs_ramping += _sp_app_port_desilence(app,
+						port, &app->mods[m]->ports[p2]);
+				}
+			}
+	}
+
+	return needs_ramping > 0;
+}
+
 __realtime static bool
 _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 {
@@ -305,30 +345,8 @@ _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 		|| (app->block_state == BLOCKING_STATE_BLOCK) );
 	if(app->block_state == BLOCKING_STATE_RUN)
 	{
-		// ramping
-		int needs_ramping = 0;
-		for(unsigned p1=0; p1<mod->num_ports; p1++)
-		{
-			port_t *port = &mod->ports[p1];
-
-			// silence sources
-			/* TODO is this needed?
-			for(int s=0; s<port->num_sources; s++)
-			{
-				_sp_app_port_silence_request(app,
-					port->sources[s].port, port, RAMP_STATE_DOWN_DRAIN);
-			}
-			*/
-
-			// silence sinks
-			for(unsigned m=0; m<app->num_mods; m++)
-				for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
-				{
-					needs_ramping += _sp_app_port_silence_request(app,
-						port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DRAIN);
-				}
-		}
-		app->silence_state = needs_ramping == 0
+		const bool needs_ramping = _mod_needs_ramping(mod, RAMP_STATE_DOWN_DRAIN, true);
+		app->silence_state = !needs_ramping
 			? SILENCING_STATE_RUN
 			: SILENCING_STATE_BLOCK;
 
@@ -530,13 +548,18 @@ _sp_app_from_ui_module_disabled(sp_app_t *app, const LV2_Atom *atom)
 			break;
 		}
 		case 0: // deselect
-			//FIXME ramp this
+		{
 			mod->disabled = false;
+			_mod_needs_ramping(mod, RAMP_STATE_UP, false);
 			break;
+		}
 		case 1: // select
-			//FIXME ramp this
-			mod->disabled = true;
+		{
+			const bool needs_ramping = _mod_needs_ramping(mod, RAMP_STATE_DOWN_DISABLE, true);
+			if(!needs_ramping) // disable it right now
+				mod->disabled = true;
 			break;
+		}
 	}
 
 	return advance_ui[app->block_state];

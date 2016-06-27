@@ -99,6 +99,7 @@ enum _ramp_state_t {
 	RAMP_STATE_DOWN,
 	RAMP_STATE_DOWN_DEL,
 	RAMP_STATE_DOWN_DRAIN,
+	RAMP_STATE_DOWN_DISABLE,
 };
 
 enum _job_type_request_t {

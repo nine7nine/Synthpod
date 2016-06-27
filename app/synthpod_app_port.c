@@ -280,6 +280,13 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 			source->ramp.value = 0.f;
 			return; // stay in RAMP_STATE_DOWN_DRAIN
 		}
+		else if(source->ramp.state == RAMP_STATE_DOWN_DISABLE)
+		{
+			source->port->mod->disabled = true; // disable module in graph
+			source->ramp.value = 0.f;
+			return; // stay in RAMP_STATE_DOWN_DISABLE
+			//FIXME make this more efficient, e.g. without multiplexing while disabled
+		}
 		else if(source->ramp.state == RAMP_STATE_UP)
 		{
 			_sp_app_port_reconnect(app, source->port, port, false); // handles port_connect
