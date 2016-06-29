@@ -78,6 +78,8 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_string2control;
 		case 16:
 			return &synthpod_panic;
+		case 17:
+			return &synthpod_heavyload;
 		default:
 			return NULL;
 	}

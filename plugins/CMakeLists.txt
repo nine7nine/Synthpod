@@ -23,6 +23,7 @@ add_library(synthpod.lv2 MODULE
 	synthpod_cv2atom.c
 	synthpod_atom2cv.c
 	synthpod_midisplitter.c
+	synthpod_heavyload.c
 	synthpod_audioxfademono.c
 	synthpod_audioxfadestereo.c
 	synthpod_atom2control.c
