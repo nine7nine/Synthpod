@@ -56,6 +56,7 @@ endif()
 option(BUILD_JACK "Build JACK standalone host" ON)
 option(BUILD_ALSA "Build ALSA standalone host" OFF)
 option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
+option(BUILD_DOT "Build Dot exporter" ON)
 
 include(CMakeDependentOption)
 option(BUILD_SANDBOX_LIB "Build sandbox library" ON)

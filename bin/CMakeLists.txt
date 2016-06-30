@@ -305,3 +305,14 @@ OR BUILD_SANDBOX_QT4 OR BUILD_SANDBOX_QT5)
 	add_custom_target(SYNTHPOD_SANDBOX_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz)
 	install(FILES "${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz" DESTINATION share/man/man1)
 endif()
+
+if(BUILD_DOT)
+# synthpod
+	add_executable(synthpod.dot
+		synthpod_dot.c
+		${PROJECT_SOURCE_DIR}/symap/symap.c)
+	target_link_libraries(synthpod.dot
+		${SRATOM_LDFLAGS})
+	set_target_properties(synthpod.dot PROPERTIES OUTPUT_NAME "synthpod_dot")
+	install(TARGETS synthpod.dot DESTINATION bin)
+endif()
