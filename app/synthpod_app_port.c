@@ -424,8 +424,8 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	LV2_Atom_Forge_Ref ref;
 	ref = _lv2_atom_forge_sequence_append(forge, &frame, PORT_BASE_ALIGNED(port), port->size);
 
-	const LV2_Atom_Sequence *seq [32]; //TODO how big?
-	const LV2_Atom_Event *itr [32]; //TODO how big?
+	const LV2_Atom_Sequence *seq [port->num_sources];
+	const LV2_Atom_Event *itr [port->num_sources];
 	for(int s=0; s<port->num_sources; s++)
 	{
 		seq[s] = PORT_BASE_ALIGNED(port->sources[s].port);
