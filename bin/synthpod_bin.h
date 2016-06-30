@@ -534,6 +534,7 @@ bin_init(bin_t *bin)
 	bin->app_driver.to_worker_advance = _app_to_worker_advance;
 	bin->app_driver.to_app_request = _worker_to_app_request;
 	bin->app_driver.to_app_advance = _worker_to_app_advance;
+	bin->app_driver.num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1; //TODO make this configurable
 
 	bin->ui_driver.map = &bin->map;
 	bin->ui_driver.unmap = &bin->unmap;

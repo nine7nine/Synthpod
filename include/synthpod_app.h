@@ -108,6 +108,8 @@ struct _sp_app_driver_t {
 	LV2_OSC_Schedule *osc_sched;
 
 	sp_app_features_t features;
+
+	unsigned num_slaves;
 };
 
 SYNTHPOD_SYMBOL_EXTERN sp_app_t *

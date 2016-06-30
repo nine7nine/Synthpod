@@ -304,6 +304,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.system_port_del = NULL;
 	handle->driver.osc_sched = NULL;
 	handle->driver.features = 0;
+	handle->driver.num_slaves = 0;
 
 	const LilvWorld *world = NULL;
 
