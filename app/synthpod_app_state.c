@@ -494,7 +494,10 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 	}
 	else if(!ecore_file_exists(state_dst)) // new project?
 	{
-		atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed);
+		while(atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed))
+		{
+			// spin
+		}
 	}
 
 	free(state_dst);
@@ -1147,7 +1150,10 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		}
 	}
 
-	atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed);
+	while(atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed))
+	{
+		// spin
+	}
 
 	return LV2_STATE_SUCCESS;
 }
