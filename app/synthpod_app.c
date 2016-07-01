@@ -295,6 +295,136 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		_sp_app_mod_eject(app, del_me);
 }
 
+static void inline
+_sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
+{
+	sp_app_t *app = mod->app;
+
+	// multiplex multiple sources to single sink where needed
+	for(unsigned p=0; p<mod->num_ports; p++)
+	{
+		port_t *port = &mod->ports[p];
+
+		if(port->direction == PORT_DIRECTION_OUTPUT)
+			continue; // not a sink
+
+		if(SINK_IS_MULTIPLEX(port))
+		{
+			if(port->driver->multiplex)
+				port->driver->multiplex(app, port, nsamples);
+		}
+		else if(SINK_IS_SIMPLEX(port))
+		{
+			if(port->driver->simplex)
+				port->driver->simplex(app, port, nsamples);
+		}
+	}
+
+	// clear atom sequence output buffers
+	for(unsigned i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		if(  (port->type == PORT_TYPE_ATOM)
+			&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+			&& (port->direction == PORT_DIRECTION_OUTPUT)
+			&& (!mod->system_ports) ) // don't overwrite source buffer events
+		{
+			LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
+			seq->atom.type = app->regs.port.sequence.urid;
+			seq->atom.size = port->size;
+			seq->body.unit = 0;
+			seq->body.pad = 0;
+		}
+	}
+
+	struct timespec mod_t1;
+	struct timespec mod_t2;
+	clock_gettime(CLOCK_MONOTONIC, &mod_t1);
+
+	// run plugin
+	if(!mod->disabled)
+	{
+		lilv_instance_run(mod->inst, nsamples);
+	}
+
+	clock_gettime(CLOCK_MONOTONIC, &mod_t2);
+
+	// profiling
+	const unsigned run_time = (mod_t2.tv_sec - mod_t1.tv_sec)*1000000000
+		+ mod_t2.tv_nsec - mod_t1.tv_nsec;
+	mod->prof.sum += run_time;
+}
+
+static void inline
+_sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_timeout)
+{
+	sp_app_t *app = mod->app;
+
+	// handle mod ui post
+	for(unsigned i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		// no notification/subscription and no support for patch:Message
+		const bool subscribed = port->subscriptions != 0;
+		if(!(subscribed || port->patchable))
+			continue; // skip this port
+
+		/*
+		if(port->patchable)
+			printf("patchable %i %i %i\n", mod->uid, i, subscribed);
+		*/
+
+		if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
+			port->driver->transfer(app, port, nsamples);
+	}
+}
+
+static void inline
+_sp_app_process_serial(sp_app_t *app, uint32_t nsamples, bool sparse_update_timeout)
+{
+	// iterate over all modules
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		if(mod->bypassed)
+			continue; // skip this plugin, it is loading a preset
+
+		_sp_app_process_single_run(mod, nsamples);
+		_sp_app_process_single_post(mod, nsamples, sparse_update_timeout);
+	}
+}
+
+static void inline
+_sp_app_process_parallel(sp_app_t *app, uint32_t nsamples, bool sparse_update_timeout)
+{
+	//FIXME start parallel section
+	// iterate over all modules
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		if(mod->bypassed)
+			continue; // skip this plugin, it is loading a preset
+
+		_sp_app_process_single_run(mod, nsamples);
+	}
+	//FIXME end parallel section
+
+	// iterate over all modules
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		if(mod->bypassed)
+			continue; // skip this plugin, it is loading a preset
+
+		_sp_app_process_single_post(mod, nsamples, sparse_update_timeout);
+	}
+}
+
 void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 {
@@ -308,88 +438,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		app->fps.counter -= app->fps.bound; // reset sample counter
 	}
 
-	// iterate over all modules
-	for(unsigned m=0; m<app->num_mods; m++)
-	{
-		mod_t *mod = app->mods[m];
-
-		if(mod->bypassed)
-			continue; // skip this plugin, it is loading a preset
-	
-		// multiplex multiple sources to single sink where needed
-		for(unsigned p=0; p<mod->num_ports; p++)
-		{
-			port_t *port = &mod->ports[p];
-
-			if(port->direction == PORT_DIRECTION_OUTPUT)
-				continue; // not a sink
-
-			if(SINK_IS_MULTIPLEX(port))
-			{
-				if(port->driver->multiplex)
-					port->driver->multiplex(app, port, nsamples);
-			}
-			else if(SINK_IS_SIMPLEX(port))
-			{
-				if(port->driver->simplex)
-					port->driver->simplex(app, port, nsamples);
-			}
-		}
-
-		// clear atom sequence output buffers
-		for(unsigned i=0; i<mod->num_ports; i++)
-		{
-			port_t *port = &mod->ports[i];
-
-			if(  (port->type == PORT_TYPE_ATOM)
-				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-				&& (port->direction == PORT_DIRECTION_OUTPUT)
-				&& (!mod->system_ports) ) // don't overwrite source buffer events
-			{
-				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
-				seq->atom.type = app->regs.port.sequence.urid;
-				seq->atom.size = port->size;
-				seq->body.unit = 0;
-				seq->body.pad = 0;
-			}
-		}
-
-		struct timespec mod_t1;
-		struct timespec mod_t2;
-		clock_gettime(CLOCK_MONOTONIC, &mod_t1);
-
-		// run plugin
-		if(!mod->disabled)
-		{
-			lilv_instance_run(mod->inst, nsamples);
-		}
-
-		clock_gettime(CLOCK_MONOTONIC, &mod_t2);
-
-		// profiling
-		const unsigned run_time = (mod_t2.tv_sec - mod_t1.tv_sec)*1000000000
-			+ mod_t2.tv_nsec - mod_t1.tv_nsec;
-		mod->prof.sum += run_time;
-
-		// handle mod ui post
-		for(unsigned i=0; i<mod->num_ports; i++)
-		{
-			port_t *port = &mod->ports[i];
-
-			// no notification/subscription and no support for patch:Message
-			const bool subscribed = port->subscriptions != 0;
-			if(!(subscribed || port->patchable))
-				continue; // skip this port
-
-			/*
-			if(port->patchable)
-				printf("patchable %i %i %i\n", mod->uid, i, subscribed);
-			*/
-
-			if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
-				port->driver->transfer(app, port, nsamples);
-		}
-	}
+	if(app->driver->num_slaves > 0)
+		_sp_app_process_parallel(app, nsamples, sparse_update_timeout);
+	else
+		_sp_app_process_serial(app, nsamples, sparse_update_timeout);
 
 	// profiling
 	struct timespec app_t2;
