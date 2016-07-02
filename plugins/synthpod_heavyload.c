@@ -18,18 +18,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
+#include <time.h>
 
 #include <synthpod_lv2.h>
-
-#include <lv2/lv2plug.in/ns/ext/atom/atom.h>
-#include <lv2/lv2plug.in/ns/ext/atom/forge.h>
-#include <lv2/lv2plug.in/ns/ext/atom/util.h>
 
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
-	unsigned a;
+	double srate_1;
+	const float *audio_in;
+	float *audio_out;
 	const float *load;
 };
 
@@ -42,6 +40,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	mlock(handle, sizeof(plughandle_t));
 
+	handle->srate_1 = 1e-2 / rate; // (seconds per sample) * 1%
+
 	return handle;
 }
 
@@ -53,6 +53,12 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
+			handle->audio_in = (const float *)data;
+			break;
+		case 1:
+			handle->audio_out = (float *)data;
+			break;
+		case 2:
 			handle->load= (const float *)data;
 			break;
 		default:
@@ -65,15 +71,15 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 
-	unsigned a = handle->a;
-	
-	for(unsigned i = 0; i < ( (UINT32_MAX >> 8) * *handle->load); i++)
+	const unsigned thresh = *handle->load * 10000;
+
+	volatile unsigned count = 0; // don't optimize away loop
+	for(unsigned i=0; i<thresh; i++)
 	{
-		a += 2;
-		a %= 2;
+		count++;
 	}
 
-	handle->a = a;
+	memmove(handle->audio_out, handle->audio_in, nsamples * sizeof(float));
 }
 
 static void
