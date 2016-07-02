@@ -42,12 +42,17 @@
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 #define FROM_UI_NUM 24
+#define MAX_SLAVES 7 // e.g. 8-core machines
 
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
 typedef enum _blocking_state_t blocking_state_t;
 typedef enum _silencing_state_t silencing_state_t;
 typedef enum _ramp_state_t ramp_state_t;
+
+typedef struct _dsp_slave_t dsp_slave_t;
+typedef struct _dsp_client_t dsp_client_t;
+typedef struct _dsp_master_t dsp_master_t;
 
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
@@ -122,6 +127,31 @@ enum _job_type_reply_t {
 	JOB_TYPE_REPLY_BUNDLE_LOAD,
 	JOB_TYPE_REPLY_BUNDLE_SAVE,
 	JOB_TYPE_REPLY_DRAIN
+};
+
+struct _dsp_slave_t {
+	dsp_master_t *dsp_master;
+	sem_t sem;
+	pthread_t thread;
+};
+
+struct _dsp_client_t {
+	atomic_flag flag;
+	atomic_uint ref_count;
+	unsigned num_sinks;
+	unsigned num_sources;
+	dsp_client_t *sinks [64]; //FIXME
+	unsigned count;
+	unsigned mark;
+};
+
+struct _dsp_master_t {
+	dsp_slave_t dsp_slaves [MAX_SLAVES];
+	atomic_bool kill;
+	atomic_bool roll;
+	unsigned concurrent;
+	unsigned num_slaves;
+	uint32_t nsamples;
 };
 
 struct _job_t {
@@ -215,6 +245,8 @@ struct _mod_t {
 
 	pool_t pools [PORT_TYPE_NUM];
 	mod_prof_t prof;
+
+	dsp_client_t dsp_client;
 };
 
 struct _port_driver_t {
@@ -347,6 +379,8 @@ struct _sp_app_t {
 	float nleft;
 
 	from_ui_t from_uis [FROM_UI_NUM];
+
+	dsp_master_t dsp_master;
 };
 
 extern const port_driver_t control_port_driver;

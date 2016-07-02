@@ -19,6 +19,144 @@
 
 #define PORT_SIZE(PORT) ((PORT)->size)
 
+__realtime static inline void 
+_dsp_master_concurrent(sp_app_t *app)
+{
+	dsp_master_t *dsp_master = &app->dsp_master;
+
+	dsp_master->concurrent = 0;
+
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+		dsp_client_t *dsp_client = &mod->dsp_client;
+
+		dsp_client->count = dsp_client->num_sources;
+		dsp_client->mark = 0;
+	}
+
+	while(true)
+	{
+		bool done = true;
+		unsigned sum = 0;
+
+		for(unsigned m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+			dsp_client_t *dsp_client = &mod->dsp_client;
+
+			const int count = dsp_client->count;
+			if(count == 0)
+				sum += 1;
+			else if(count > 0)
+				done = false;
+		}
+
+		//printf("sum: %u, concurrent: %u\n", sum, dsp_master->concurrent);
+		if(sum > dsp_master->concurrent)
+			dsp_master->concurrent = sum;
+
+		if(done)
+			break;
+
+		for(unsigned m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+			dsp_client_t *dsp_client = &mod->dsp_client;
+
+			const int count = dsp_client->count;
+			if(count == 0)
+			{
+				dsp_client->mark += 1;
+				dsp_client->count -= 1;
+
+				for(unsigned j=0; j<dsp_client->num_sinks; j++)
+				{
+					dsp_client_t *sink = dsp_client->sinks[j];
+
+					sink->mark += 1;
+				}
+			}
+		}
+
+		for(unsigned m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+			dsp_client_t *dsp_client = &mod->dsp_client;
+
+			if(dsp_client->mark)
+			{
+				dsp_client->count -= dsp_client->mark;
+				dsp_client->mark = 0;
+			}
+		}
+	}
+
+	//printf("concurrent: %u\n", dsp_master->concurrent);
+}
+
+__realtime static inline void
+_dsp_master_reorder(sp_app_t *app)
+{
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+		dsp_client_t *dsp_client = &mod->dsp_client;
+
+		dsp_client->num_sinks = 0;
+		dsp_client->num_sources = 0;
+	}
+
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod1 = app->mods[m];
+
+		for(unsigned n=0; n<m; n++)
+		{
+			mod_t *mod2= app->mods[n];
+			bool is_connected = false;
+
+			for(unsigned p1=0; p1<mod1->num_ports; p1++)
+			{
+				port_t *port1 = &mod1->ports[p1];
+
+				for(int s1=0; s1<port1->num_sources; s1++)
+				{
+					source_t *source1 =  &port1->sources[s1];
+
+					if(source1->port->mod == mod2)
+					{
+						is_connected = true;
+						break;
+					}
+				}
+
+				if(is_connected)
+				{
+					break;
+				}
+			}
+
+			if(is_connected)
+			{
+				mod2->dsp_client.sinks[mod2->dsp_client.num_sinks] = &mod1->dsp_client;
+				mod2->dsp_client.num_sinks += 1;
+				mod1->dsp_client.num_sources += 1;
+			}
+		}
+	}
+
+	/*
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod1 = app->mods[m];
+		printf("%u: %u, %u\n", mod1->uid, mod1->dsp_client.num_sources, mod1->dsp_client.num_sinks);
+	}
+	*/
+
+	_dsp_master_concurrent(app);
+}
+
 port_t *
 _sp_app_port_get(sp_app_t *app, u_id_t uid, uint32_t index)
 {
@@ -93,6 +231,7 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	}
 
 	_sp_app_port_rewire(snk_port);
+	_dsp_master_reorder(app);
 	return 1;
 }
 
@@ -120,6 +259,7 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	snk_port->is_ramping = false;
 
 	_sp_app_port_rewire(snk_port);
+	_dsp_master_reorder(app);
 }
 
 static inline void

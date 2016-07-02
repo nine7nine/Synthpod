@@ -120,6 +120,201 @@ _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 	return map->map(map->handle, uri);
 }
 
+__realtime static void inline
+_sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
+{
+	sp_app_t *app = mod->app;
+
+	// multiplex multiple sources to single sink where needed
+	for(unsigned p=0; p<mod->num_ports; p++)
+	{
+		port_t *port = &mod->ports[p];
+
+		if(port->direction == PORT_DIRECTION_OUTPUT)
+			continue; // not a sink
+
+		if(SINK_IS_MULTIPLEX(port))
+		{
+			if(port->driver->multiplex)
+				port->driver->multiplex(app, port, nsamples);
+		}
+		else if(SINK_IS_SIMPLEX(port))
+		{
+			if(port->driver->simplex)
+				port->driver->simplex(app, port, nsamples);
+		}
+	}
+
+	// clear atom sequence output buffers
+	for(unsigned i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		if(  (port->type == PORT_TYPE_ATOM)
+			&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+			&& (port->direction == PORT_DIRECTION_OUTPUT)
+			&& (!mod->system_ports) ) // don't overwrite source buffer events
+		{
+			LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
+			seq->atom.type = app->regs.port.sequence.urid;
+			seq->atom.size = port->size;
+			seq->body.unit = 0;
+			seq->body.pad = 0;
+		}
+	}
+
+	struct timespec mod_t1;
+	struct timespec mod_t2;
+	clock_gettime(CLOCK_MONOTONIC, &mod_t1);
+
+	// run plugin
+	if(!mod->disabled)
+	{
+		lilv_instance_run(mod->inst, nsamples);
+	}
+
+	clock_gettime(CLOCK_MONOTONIC, &mod_t2);
+
+	// profiling
+	const unsigned run_time = (mod_t2.tv_sec - mod_t1.tv_sec)*1000000000
+		+ mod_t2.tv_nsec - mod_t1.tv_nsec;
+	mod->prof.sum += run_time;
+}
+
+__realtime static void inline
+_sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_timeout)
+{
+	sp_app_t *app = mod->app;
+
+	// handle mod ui post
+	for(unsigned i=0; i<mod->num_ports; i++)
+	{
+		port_t *port = &mod->ports[i];
+
+		// no notification/subscription and no support for patch:Message
+		const bool subscribed = port->subscriptions != 0;
+		if(!(subscribed || port->patchable))
+			continue; // skip this port
+
+		/*
+		if(port->patchable)
+			printf("patchable %i %i %i\n", mod->uid, i, subscribed);
+		*/
+
+		if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
+			port->driver->transfer(app, port, nsamples);
+	}
+}
+
+__realtime static inline bool 
+_dsp_slave_fetch(dsp_master_t *dsp_master, int num)
+{
+	sp_app_t *app = (void *)dsp_master - offsetof(sp_app_t, dsp_master);
+
+	bool done = true;
+
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+		dsp_client_t *dsp_client = &mod->dsp_client;
+
+		if(atomic_load_explicit(&dsp_client->ref_count, memory_order_acquire) == 0)
+		{
+			if(atomic_flag_test_and_set(&dsp_client->flag) == false) // run by an other thread already?
+			{
+				_sp_app_process_single_run(mod, dsp_master->nsamples);
+
+				for(unsigned j = 0; j < dsp_client->num_sinks; j++)
+				{
+					dsp_client_t *sink = dsp_client->sinks[j];
+					atomic_fetch_sub_explicit(&sink->ref_count, 1, memory_order_release);
+				}
+			}
+		}
+		else
+		{
+			done = false;
+		}
+	}
+
+	return done;
+}
+
+__realtime static inline void
+_dsp_slave_spin(dsp_master_t *dsp_master, int num, bool wait)
+{
+	while(atomic_load_explicit(&dsp_master->roll, memory_order_acquire))
+	{
+		if(_dsp_slave_fetch(dsp_master, num))
+		{
+			if(wait)
+				atomic_store_explicit(&dsp_master->roll, false, memory_order_release);
+			break;
+		}
+	}
+
+	//printf("done: %i\n", num);
+}
+
+__realtime static void *
+_dsp_slave_thread(void *data)
+{
+	dsp_slave_t *dsp_slave = data;
+	dsp_master_t *dsp_master = dsp_slave->dsp_master;
+	int num = dsp_slave - dsp_master->dsp_slaves + 1;
+	printf("thread: %i\n", num);
+
+	struct sched_param schedp;
+	memset(&schedp, 0, sizeof(struct sched_param));
+	schedp.sched_priority = 70;
+
+	const pthread_t self = pthread_self();
+	if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
+		fprintf(stderr, "pthread_setschedparam error\n");
+
+	while(!atomic_load_explicit(&dsp_master->kill, memory_order_acquire))
+	{
+		sem_wait(&dsp_slave->sem);
+
+		_dsp_slave_spin(dsp_master, num, false);
+	}
+
+	return NULL;
+}
+
+__realtime static inline void
+_dsp_master_post(dsp_master_t *dsp_master, unsigned num)
+{
+	for(unsigned i=0; i<num; i++)
+	{
+		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
+
+		sem_post(&dsp_slave->sem);
+	}
+}
+
+__realtime static inline void
+_dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
+{
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+		dsp_client_t *dsp_client = &mod->dsp_client;
+
+		atomic_flag_clear(&dsp_client->flag);
+		atomic_store_explicit(&dsp_client->ref_count, dsp_client->num_sources, memory_order_release);
+	}
+
+	atomic_store_explicit(&dsp_master->roll, true, memory_order_release);
+	unsigned num_slaves = dsp_master->concurrent - 1;
+	if(num_slaves > dsp_master->num_slaves)
+		num_slaves = dsp_master->num_slaves;
+	dsp_master->nsamples = nsamples;
+	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
+	_dsp_slave_spin(dsp_master, 0, true); // runs jobs itself 
+	//printf("stop\n");
+}
+
 sp_app_t *
 sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 {
@@ -236,6 +431,23 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	app->ncols = 3;
 	app->nrows = 2;
 	app->nleft = 0.2;
+
+	// initialize parallel processing
+	dsp_master_t *dsp_master = &app->dsp_master;
+	atomic_init(&dsp_master->kill, false);
+	atomic_init(&dsp_master->roll, false);
+	dsp_master->num_slaves = driver->num_slaves;
+	dsp_master->concurrent = 1; // this is a safe fallback
+	for(unsigned i=0; i<dsp_master->num_slaves; i++)
+	{
+		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
+
+		dsp_slave->dsp_master = dsp_master;
+		sem_init(&dsp_slave->sem, 0, 0);
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+		pthread_create(&dsp_slave->thread, &attr, _dsp_slave_thread, dsp_slave);
+	}
 	
 	return app;
 }
@@ -296,92 +508,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 }
 
 static void inline
-_sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
-{
-	sp_app_t *app = mod->app;
-
-	// multiplex multiple sources to single sink where needed
-	for(unsigned p=0; p<mod->num_ports; p++)
-	{
-		port_t *port = &mod->ports[p];
-
-		if(port->direction == PORT_DIRECTION_OUTPUT)
-			continue; // not a sink
-
-		if(SINK_IS_MULTIPLEX(port))
-		{
-			if(port->driver->multiplex)
-				port->driver->multiplex(app, port, nsamples);
-		}
-		else if(SINK_IS_SIMPLEX(port))
-		{
-			if(port->driver->simplex)
-				port->driver->simplex(app, port, nsamples);
-		}
-	}
-
-	// clear atom sequence output buffers
-	for(unsigned i=0; i<mod->num_ports; i++)
-	{
-		port_t *port = &mod->ports[i];
-
-		if(  (port->type == PORT_TYPE_ATOM)
-			&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-			&& (port->direction == PORT_DIRECTION_OUTPUT)
-			&& (!mod->system_ports) ) // don't overwrite source buffer events
-		{
-			LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
-			seq->atom.type = app->regs.port.sequence.urid;
-			seq->atom.size = port->size;
-			seq->body.unit = 0;
-			seq->body.pad = 0;
-		}
-	}
-
-	struct timespec mod_t1;
-	struct timespec mod_t2;
-	clock_gettime(CLOCK_MONOTONIC, &mod_t1);
-
-	// run plugin
-	if(!mod->disabled)
-	{
-		lilv_instance_run(mod->inst, nsamples);
-	}
-
-	clock_gettime(CLOCK_MONOTONIC, &mod_t2);
-
-	// profiling
-	const unsigned run_time = (mod_t2.tv_sec - mod_t1.tv_sec)*1000000000
-		+ mod_t2.tv_nsec - mod_t1.tv_nsec;
-	mod->prof.sum += run_time;
-}
-
-static void inline
-_sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_timeout)
-{
-	sp_app_t *app = mod->app;
-
-	// handle mod ui post
-	for(unsigned i=0; i<mod->num_ports; i++)
-	{
-		port_t *port = &mod->ports[i];
-
-		// no notification/subscription and no support for patch:Message
-		const bool subscribed = port->subscriptions != 0;
-		if(!(subscribed || port->patchable))
-			continue; // skip this port
-
-		/*
-		if(port->patchable)
-			printf("patchable %i %i %i\n", mod->uid, i, subscribed);
-		*/
-
-		if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
-			port->driver->transfer(app, port, nsamples);
-	}
-}
-
-static void inline
 _sp_app_process_serial(sp_app_t *app, uint32_t nsamples, bool sparse_update_timeout)
 {
 	// iterate over all modules
@@ -400,18 +526,7 @@ _sp_app_process_serial(sp_app_t *app, uint32_t nsamples, bool sparse_update_time
 static void inline
 _sp_app_process_parallel(sp_app_t *app, uint32_t nsamples, bool sparse_update_timeout)
 {
-	//FIXME start parallel section
-	// iterate over all modules
-	for(unsigned m=0; m<app->num_mods; m++)
-	{
-		mod_t *mod = app->mods[m];
-
-		if(mod->bypassed)
-			continue; // skip this plugin, it is loading a preset
-
-		_sp_app_process_single_run(mod, nsamples);
-	}
-	//FIXME end parallel section
+	_dsp_master_process(app, &app->dsp_master, nsamples);
 
 	// iterate over all modules
 	for(unsigned m=0; m<app->num_mods; m++)
@@ -438,7 +553,8 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		app->fps.counter -= app->fps.bound; // reset sample counter
 	}
 
-	if(app->driver->num_slaves > 0)
+	dsp_master_t *dsp_master = &app->dsp_master;
+	if(dsp_master->num_slaves > 0)
 		_sp_app_process_parallel(app, nsamples, sparse_update_timeout);
 	else
 		_sp_app_process_serial(app, nsamples, sparse_update_timeout);
@@ -536,6 +652,20 @@ sp_app_free(sp_app_t *app)
 {
 	if(!app)
 		return;
+
+	// deinit parallel processing
+	dsp_master_t *dsp_master = &app->dsp_master;
+	atomic_store_explicit(&dsp_master->kill, true, memory_order_release);
+	printf("finish\n");
+	_dsp_master_post(dsp_master, dsp_master->num_slaves);
+	for(unsigned i=0; i<dsp_master->num_slaves; i++)
+	{
+		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
+
+		void *ret;
+		pthread_join(dsp_slave->thread, &ret);
+		sem_destroy(&dsp_slave->sem);
+	}
 
 	// free mods
 	for(unsigned m=0; m<app->num_mods; m++)
