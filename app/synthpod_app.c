@@ -264,12 +264,13 @@ _dsp_slave_thread(void *data)
 {
 	dsp_slave_t *dsp_slave = data;
 	dsp_master_t *dsp_master = dsp_slave->dsp_master;
+	sp_app_t *app = (void *)dsp_master - offsetof(sp_app_t, dsp_master);
 	int num = dsp_slave - dsp_master->dsp_slaves + 1;
 	//printf("thread: %i\n", num);
 
 	struct sched_param schedp;
 	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = 70; //FIXME
+	schedp.sched_priority = app->driver->audio_prio;
 
 	const pthread_t self = pthread_self();
 	if(pthread_setschedparam(self, SCHED_FIFO, &schedp))

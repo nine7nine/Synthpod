@@ -110,6 +110,8 @@ struct _sp_app_driver_t {
 	sp_app_features_t features;
 
 	unsigned num_slaves;
+
+	int audio_prio;
 };
 
 SYNTHPOD_SYMBOL_EXTERN sp_app_t *

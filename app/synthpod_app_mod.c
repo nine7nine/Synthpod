@@ -499,7 +499,7 @@ _mod_worker_thread(void *data)
 	mod_t *mod = data;
 	mod_worker_t *mod_worker = &mod->mod_worker;
 
-	//FIXME set thread prio
+	// will inherit thread priority from main worker thread
 	
 	while(!atomic_load_explicit(&mod_worker->kill, memory_order_acquire))
 	{
