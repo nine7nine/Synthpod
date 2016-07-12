@@ -158,13 +158,10 @@ _sp_app_from_ui_module_supported(sp_app_t *app, const LV2_Atom *atom)
 	if(module_supported->state.body == -1) // query
 	{
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + module_supported->uri.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t) + module_supported->uri.atom.size;
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_MODULE_SUPPORTED;
 			memcpy(job->uri, module_supported->uri_str, module_supported->uri.atom.size);
 			_sp_app_to_worker_advance(app, size);
@@ -182,13 +179,10 @@ _sp_app_from_ui_module_add(sp_app_t *app, const LV2_Atom *atom)
 	const transmit_module_add_t *module_add = (const transmit_module_add_t *)atom;
 
 	// send request to worker thread
-	size_t size = sizeof(work_t) + sizeof(job_t) + module_add->uri.atom.size;
-	work_t *work = _sp_app_to_worker_request(app, size);
-	if(work)
+	size_t size = sizeof(job_t) + module_add->uri.atom.size;
+	job_t *job = _sp_app_to_worker_request(app, size);
+	if(job)
 	{
-		work->target = app;
-		work->size = size - sizeof(work_t);
-		job_t *job = (job_t *)work->payload;
 		job->request = JOB_TYPE_REQUEST_MODULE_ADD;
 		memcpy(job->uri, module_add->uri_str, module_add->uri.atom.size);
 		_sp_app_to_worker_advance(app, size);
@@ -351,15 +345,12 @@ _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 			: SILENCING_STATE_BLOCK;
 
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t);
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t);
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_DRAIN;
 			job->status = 0;
 			_sp_app_to_worker_advance(app, size);
@@ -371,16 +362,13 @@ _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 			return false; // not fully silenced yet, wait
 
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + pset->uri.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t) + pset->uri.atom.size;
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_WAIT; // wait for job
 			mod->bypassed = true;
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
 			job->mod = mod;
 			memcpy(job->uri, pset->uri_str, pset->uri.atom.size);
@@ -409,15 +397,12 @@ _sp_app_from_ui_module_preset_save(sp_app_t *app, const LV2_Atom *atom)
 	if(app->block_state == BLOCKING_STATE_RUN)
 	{
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t);
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t);
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_DRAIN;
 			job->status = 0;
 			_sp_app_to_worker_advance(app, size);
@@ -426,15 +411,12 @@ _sp_app_from_ui_module_preset_save(sp_app_t *app, const LV2_Atom *atom)
 	else if(app->block_state == BLOCKING_STATE_BLOCK)
 	{
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + pset->label.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t) + pset->label.atom.size;
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_WAIT; // wait for job
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_PRESET_SAVE;
 			job->mod = mod;
 			memcpy(job->uri, pset->label_str, pset->label.atom.size);
@@ -804,15 +786,12 @@ _sp_app_from_ui_bundle_load(sp_app_t *app, const LV2_Atom *atom)
 		//FIXME ramp down system outputs
 
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t);
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t);
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_DRAIN;
 			job->status = 0;
 			_sp_app_to_worker_advance(app, size);
@@ -823,16 +802,13 @@ _sp_app_from_ui_bundle_load(sp_app_t *app, const LV2_Atom *atom)
 		//FIXME ramp up system outputs
 
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + load->path.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t) + load->path.atom.size;
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_WAIT; // wait for job
 			app->load_bundle = true; // for sp_app_bypassed
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
 			job->status = load->status.body;
 			memcpy(job->uri, load->path_str, load->path.atom.size);
@@ -859,15 +835,12 @@ _sp_app_from_ui_bundle_save(sp_app_t *app, const LV2_Atom *atom)
 	if(app->block_state == BLOCKING_STATE_RUN)
 	{
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t);
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t);
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_DRAIN;
 			job->status = 0;
 			_sp_app_to_worker_advance(app, size);
@@ -876,15 +849,12 @@ _sp_app_from_ui_bundle_save(sp_app_t *app, const LV2_Atom *atom)
 	else if(app->block_state == BLOCKING_STATE_BLOCK)
 	{
 		// send request to worker thread
-		size_t size = sizeof(work_t) + sizeof(job_t) + save->path.atom.size;
-		work_t *work = _sp_app_to_worker_request(app, size);
-		if(work)
+		size_t size = sizeof(job_t) + save->path.atom.size;
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
 		{
 			app->block_state = BLOCKING_STATE_WAIT; // wait for job
 
-			work->target = app;
-			work->size = size - sizeof(work_t);
-			job_t *job = (job_t *)work->payload;
 			job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
 			job->status = save->status.body;
 			memcpy(job->uri, save->path_str, save->path.atom.size);

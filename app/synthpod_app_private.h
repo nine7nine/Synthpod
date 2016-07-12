@@ -32,6 +32,7 @@
 #include <synthpod_private.h>
 
 #include <sratom/sratom.h>
+#include <varchunk.h>
 
 #define XSD_PREFIX "http://www.w3.org/2001/XMLSchema#"
 #define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -54,9 +55,9 @@ typedef struct _dsp_slave_t dsp_slave_t;
 typedef struct _dsp_client_t dsp_client_t;
 typedef struct _dsp_master_t dsp_master_t;
 
+typedef struct _mod_worker_t mod_worker_t;
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
-typedef struct _work_t work_t;
 typedef struct _job_t job_t;
 typedef struct _source_t source_t;
 typedef struct _pool_t pool_t;
@@ -137,11 +138,12 @@ struct _dsp_slave_t {
 
 struct _dsp_client_t {
 	atomic_flag flag;
+	atomic_bool done;
 	atomic_uint ref_count;
 	unsigned num_sinks;
 	unsigned num_sources;
 	dsp_client_t *sinks [64]; //FIXME
-	unsigned count;
+	int count;
 	unsigned mark;
 };
 
@@ -166,12 +168,6 @@ struct _job_t {
 	char uri [0];
 };
 
-struct _work_t {
-	void *target;
-	uint32_t size;
-	uint8_t payload [0];
-};
-
 struct _pool_t {
 	size_t size;
 	void *buf;
@@ -188,6 +184,14 @@ struct _app_prof_t {
 
 struct _mod_prof_t {
 	unsigned sum;
+};
+
+struct _mod_worker_t {
+	sem_t sem;
+	pthread_t thread;
+	atomic_bool kill;
+	varchunk_t *app_to_worker;
+	varchunk_t *app_from_worker;
 };
 
 struct _mod_t {
@@ -212,6 +216,8 @@ struct _mod_t {
 		const Zero_Worker_Interface *iface;
 		Zero_Worker_Schedule schedule;
 	} zero;
+
+	mod_worker_t mod_worker;
 
 	// system_port
 	bool system_ports;	

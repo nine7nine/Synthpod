@@ -207,7 +207,7 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 }
 
 __realtime static inline bool 
-_dsp_slave_fetch(dsp_master_t *dsp_master, int num)
+_dsp_slave_fetch(dsp_master_t *dsp_master)
 {
 	sp_app_t *app = (void *)dsp_master - offsetof(sp_app_t, dsp_master);
 
@@ -218,21 +218,24 @@ _dsp_slave_fetch(dsp_master_t *dsp_master, int num)
 		mod_t *mod = app->mods[m];
 		dsp_client_t *dsp_client = &mod->dsp_client;
 
-		if(atomic_load_explicit(&dsp_client->ref_count, memory_order_acquire) == 0)
+		if(!atomic_load_explicit(&dsp_client->done, memory_order_acquire))
 		{
-			if(atomic_flag_test_and_set(&dsp_client->flag) == false) // run by an other thread already?
+			if(atomic_load_explicit(&dsp_client->ref_count, memory_order_acquire) == 0) // no more dependencies
 			{
-				_sp_app_process_single_run(mod, dsp_master->nsamples);
-
-				for(unsigned j = 0; j < dsp_client->num_sinks; j++)
+				if(atomic_flag_test_and_set(&dsp_client->flag) == false) // not run by another thread
 				{
-					dsp_client_t *sink = dsp_client->sinks[j];
-					atomic_fetch_sub_explicit(&sink->ref_count, 1, memory_order_release);
+					_sp_app_process_single_run(mod, dsp_master->nsamples);
+
+					for(unsigned j=0; j<dsp_client->num_sinks; j++)
+					{
+						dsp_client_t *sink = dsp_client->sinks[j];
+						atomic_fetch_sub_explicit(&sink->ref_count, 1, memory_order_release);
+					}
+
+					atomic_store_explicit(&dsp_client->done, true, memory_order_release);
 				}
 			}
-		}
-		else
-		{
+
 			done = false;
 		}
 	}
@@ -241,19 +244,19 @@ _dsp_slave_fetch(dsp_master_t *dsp_master, int num)
 }
 
 __realtime static inline void
-_dsp_slave_spin(dsp_master_t *dsp_master, int num, bool wait)
+_dsp_slave_spin(dsp_master_t *dsp_master, bool is_master)
 {
 	while(atomic_load_explicit(&dsp_master->roll, memory_order_acquire))
 	{
-		if(_dsp_slave_fetch(dsp_master, num))
+		const bool done = _dsp_slave_fetch(dsp_master);
+		if(done)
 		{
-			if(wait)
+			if(is_master)
 				atomic_store_explicit(&dsp_master->roll, false, memory_order_release);
-			break;
+			else // is_slave
+				break;
 		}
 	}
-
-	//printf("done: %i\n", num);
 }
 
 __realtime static void *
@@ -262,11 +265,11 @@ _dsp_slave_thread(void *data)
 	dsp_slave_t *dsp_slave = data;
 	dsp_master_t *dsp_master = dsp_slave->dsp_master;
 	int num = dsp_slave - dsp_master->dsp_slaves + 1;
-	printf("thread: %i\n", num);
+	//printf("thread: %i\n", num);
 
 	struct sched_param schedp;
 	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = 70;
+	schedp.sched_priority = 70; //FIXME
 
 	const pthread_t self = pthread_self();
 	if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
@@ -276,7 +279,7 @@ _dsp_slave_thread(void *data)
 	{
 		sem_wait(&dsp_slave->sem);
 
-		_dsp_slave_spin(dsp_master, num, false);
+		_dsp_slave_spin(dsp_master, false);
 	}
 
 	return NULL;
@@ -302,17 +305,17 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 		dsp_client_t *dsp_client = &mod->dsp_client;
 
 		atomic_flag_clear(&dsp_client->flag);
+		atomic_store_explicit(&dsp_client->done, false, memory_order_release);
 		atomic_store_explicit(&dsp_client->ref_count, dsp_client->num_sources, memory_order_release);
 	}
 
-	atomic_store_explicit(&dsp_master->roll, true, memory_order_release);
 	unsigned num_slaves = dsp_master->concurrent - 1;
 	if(num_slaves > dsp_master->num_slaves)
 		num_slaves = dsp_master->num_slaves;
 	dsp_master->nsamples = nsamples;
+	atomic_store_explicit(&dsp_master->roll, true, memory_order_release);
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
-	_dsp_slave_spin(dsp_master, 0, true); // runs jobs itself 
-	//printf("stop\n");
+	_dsp_slave_spin(dsp_master, true); // runs jobs itself 
 }
 
 sp_app_t *
@@ -470,6 +473,29 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			mod->delete_request = false;
 		}
 
+		mod_worker_t *mod_worker = &mod->mod_worker;
+		if(mod_worker->app_from_worker)
+		{
+			const void *payload;
+			size_t size;
+			while((payload = varchunk_read_request(mod_worker->app_from_worker, &size)))
+			{
+				// zero worker takes precedence over standard worker
+				if(mod->zero.iface && mod->zero.iface->response)
+				{
+					mod->zero.iface->response(mod->handle, size, payload);
+					//TODO check return status
+				}
+				else if(mod->worker.iface && mod->worker.iface->work_response)
+				{
+					mod->worker.iface->work_response(mod->handle, size, payload);
+					//TODO check return status
+				}
+
+				varchunk_read_advance(mod_worker->app_from_worker);
+			}
+		}
+
 		// handle end of work
 		if(mod->zero.iface && mod->zero.iface->end)
 			mod->zero.iface->end(mod->handle);
@@ -554,7 +580,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	}
 
 	dsp_master_t *dsp_master = &app->dsp_master;
-	if(dsp_master->num_slaves > 0)
+	if( (dsp_master->num_slaves > 0) && (dsp_master->concurrent > 1) ) // parallel processing makes sense here
 		_sp_app_process_parallel(app, nsamples, sparse_update_timeout);
 	else
 		_sp_app_process_serial(app, nsamples, sparse_update_timeout);
@@ -656,7 +682,7 @@ sp_app_free(sp_app_t *app)
 	// deinit parallel processing
 	dsp_master_t *dsp_master = &app->dsp_master;
 	atomic_store_explicit(&dsp_master->kill, true, memory_order_release);
-	printf("finish\n");
+	//printf("finish\n");
 	_dsp_master_post(dsp_master, dsp_master->num_slaves);
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
 	{

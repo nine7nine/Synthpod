@@ -63,17 +63,15 @@ __realtime static LV2_Worker_Status
 _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *data)
 {
 	mod_t *mod = handle;
-	sp_app_t *app = mod->app;
+	mod_worker_t *mod_worker = &mod->mod_worker;
 
-	size_t work_size = sizeof(work_t) + size;
-	work_t *work = _sp_app_to_worker_request(app, work_size);
-	if(work)
+	void *target;
+	if((target = varchunk_write_request(mod_worker->app_to_worker, size)))
 	{
-		work->target = mod;
-		work->size = size;
-		memcpy(work->payload, data, size);
-		_sp_app_to_worker_advance(app, work_size);
-		
+		memcpy(target, data, size);
+		varchunk_write_advance(mod_worker->app_to_worker, size);
+		sem_post(&mod_worker->sem);
+
 		return LV2_WORKER_SUCCESS;
 	}
 
@@ -84,29 +82,19 @@ __realtime static void *
 _zero_sched_request(Zero_Worker_Handle handle, uint32_t size)
 {
 	mod_t *mod = handle;
-	sp_app_t *app = mod->app;
+	mod_worker_t *mod_worker = &mod->mod_worker;
 
-	size_t work_size = sizeof(work_t) + size;
-	work_t *work = _sp_app_to_worker_request(app, work_size);
-	if(work)
-	{
-		work->target = mod;
-		work->size = size; //TODO overwrite in _zero_advance if size != written
-
-		return work->payload;
-	}
-
-	return NULL;
+	return varchunk_write_request(mod_worker->app_to_worker, size);
 }
 
 __realtime static Zero_Worker_Status
 _zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
 {
 	mod_t *mod = handle;
-	sp_app_t *app = mod->app;
+	mod_worker_t *mod_worker = &mod->mod_worker;
 
-	size_t work_written = sizeof(work_t) + written;
-	_sp_app_to_worker_advance(app, work_written);
+	varchunk_write_advance(mod_worker->app_to_worker, written);
+	sem_post(&mod_worker->sem);
 
 	return ZERO_WORKER_SUCCESS;
 }
@@ -468,6 +456,82 @@ _sp_app_mod_is_supported(sp_app_t *app, const void *uri)
 	return plug;
 }
 
+__non_realtime static LV2_Worker_Status
+_sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *data)
+{
+	mod_t *mod = handle;
+	mod_worker_t *mod_worker = &mod->mod_worker;
+
+	void *payload;
+	if((payload = varchunk_write_request(mod_worker->app_from_worker, size)))
+	{
+		memcpy(payload, data, size);
+		varchunk_write_advance(mod_worker->app_from_worker, size);
+		return LV2_WORKER_SUCCESS;
+	}
+
+	return LV2_WORKER_ERR_NO_SPACE;
+}
+
+__non_realtime static void *
+_sp_zero_request(Zero_Worker_Handle handle, uint32_t size)
+{
+	mod_t *mod = handle;
+	mod_worker_t *mod_worker = &mod->mod_worker;
+
+	return varchunk_write_request(mod_worker->app_from_worker, size);
+}
+
+__non_realtime static Zero_Worker_Status
+_sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
+{
+	mod_t *mod = handle;
+	mod_worker_t *mod_worker = &mod->mod_worker;
+
+	varchunk_write_advance(mod_worker->app_from_worker, written);
+
+	return ZERO_WORKER_SUCCESS;
+}
+
+__non_realtime static void *
+_mod_worker_thread(void *data)
+{
+	mod_t *mod = data;
+	mod_worker_t *mod_worker = &mod->mod_worker;
+
+	//FIXME set thread prio
+	
+	while(!atomic_load_explicit(&mod_worker->kill, memory_order_acquire))
+	{
+		sem_wait(&mod_worker->sem);
+
+		const void *payload;
+		size_t size;
+		while((payload = varchunk_read_request(mod_worker->app_to_worker, &size)))
+		{
+			//printf("_mod_worker_thread: %u, %zu\n", mod->uid, size);
+
+			// zero worker takes precedence over standard worker
+			if(mod->zero.iface && mod->zero.iface->work)
+			{
+				mod->zero.iface->work(mod->handle, _sp_zero_request, _sp_zero_advance,
+					mod, size, payload);
+				//TODO check return status
+			}
+			else if(mod->worker.iface && mod->worker.iface->work)
+			{
+				mod->worker.iface->work(mod->handle, _sp_worker_respond, mod,
+					size, payload);
+				//TODO check return status
+			}
+
+			varchunk_read_advance(mod_worker->app_to_worker);
+		}
+	}
+
+	return NULL;
+}
+
 mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 {
@@ -550,7 +614,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		return NULL;
 	}
 	mod->uri_str = strdup(uri); //TODO check
-	mod->handle = lilv_instance_get_handle(mod->inst),
+	mod->handle = lilv_instance_get_handle(mod->inst);
 	mod->worker.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_WORKER__interface);
 	mod->zero.iface = lilv_instance_get_extension_data(mod->inst,
@@ -775,11 +839,26 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->selected = 1;
 	mod->embedded = 1;
 
+	// spawn worker thread
+	if(mod->worker.iface)
+	{
+		mod_worker_t *mod_worker = &mod->mod_worker;
+
+		sem_init(&mod_worker->sem, 0, 0);
+		atomic_init(&mod_worker->kill, false);
+		mod_worker->app_to_worker = varchunk_new(2048, true); //FIXME how big
+		mod_worker->app_from_worker = varchunk_new(2048, true); //FIXME how big
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+		pthread_create(&mod_worker->thread, &attr, _mod_worker_thread, mod);
+	}
+
+	// activate
+	lilv_instance_activate(mod->inst);
+
 	// load default state
 	if(load_default_state && _sp_app_state_preset_load(app, mod, uri))
 		fprintf(stderr, "default state loading failed\n");
-
-	lilv_instance_activate(mod->inst);
 
 	// initialize profiling reference time
 	mod->prof.sum = 0;
@@ -790,6 +869,20 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 int
 _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 {
+	// deinit worker thread
+	if(mod->worker.iface)
+	{
+		mod_worker_t *mod_worker = &mod->mod_worker;
+
+		atomic_store_explicit(&mod_worker->kill, true, memory_order_release);
+		sem_post(&mod_worker->sem);
+		void *ret;
+		pthread_join(mod_worker->thread, &ret);
+		varchunk_free(mod_worker->app_to_worker);
+		varchunk_free(mod_worker->app_from_worker);
+		sem_destroy(&mod_worker->sem);
+	}
+
 	// deinit instance
 	lilv_nodes_free(mod->presets);
 	lilv_instance_deactivate(mod->inst);
@@ -870,13 +963,10 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 	}
 
 	// send request to worker thread
-	size_t size = sizeof(work_t) + sizeof(job_t);
-	work_t *work = _sp_app_to_worker_request(app, size);
-	if(work)
+	size_t size = sizeof(job_t);
+	job_t *job = _sp_app_to_worker_request(app, size);
+	if(job)
 	{
-		work->target = app;
-		work->size = size - sizeof(work_t);
-		job_t *job = (job_t *)work->payload;
 		job->request = JOB_TYPE_REQUEST_MODULE_DEL;
 		job->mod = mod;
 		_sp_app_to_worker_advance(app, size);
