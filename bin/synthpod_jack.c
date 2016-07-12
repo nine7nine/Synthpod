@@ -954,6 +954,7 @@ elm_main(int argc, char **argv)
 	bin->has_gui = true;
 	bin->audio_prio = 70; // not used
 	bin->worker_prio = 60;
+	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -961,7 +962,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGw:Wn:u:s:")) != -1)
+	while((c = getopt(argc, argv, "vhgGw:Wn:u:s:c:")) != -1)
 	{
 		switch(c)
 		{
@@ -996,7 +997,8 @@ elm_main(int argc, char **argv)
 					"   [-W]                 do NOT use worker thread realtime priority\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-u] client-uuid     client UUID for JACK session management\n"
-					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
+					"   [-s] sequence-size   minimum sequence size (8192)\n"
+					"   [-c] slave-cores     number of slave cores (auto)\n\n"
 					, argv[0]);
 				return 0;
 			case 'g':
@@ -1020,8 +1022,12 @@ elm_main(int argc, char **argv)
 			case 's':
 				handle.seq_size = MAX(SEQ_SIZE, atoi(optarg));
 				break;
+			case 'c':
+				if(atoi(optarg) < bin->num_slaves)
+					bin->num_slaves = atoi(optarg);
+				break;
 			case '?':
-				if( (optopt == 'n') || (optopt == 'u') || (optopt == 's') )
+				if( (optopt == 'n') || (optopt == 'u') || (optopt == 's') || (optopt == 'c') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);

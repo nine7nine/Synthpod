@@ -117,6 +117,7 @@ struct _bin_t {
 
 	int audio_prio;
 	int worker_prio;
+	int num_slaves;
 };
 
 static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
@@ -534,7 +535,7 @@ bin_init(bin_t *bin)
 	bin->app_driver.to_worker_advance = _app_to_worker_advance;
 	bin->app_driver.to_app_request = _worker_to_app_request;
 	bin->app_driver.to_app_advance = _worker_to_app_advance;
-	bin->app_driver.num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1; //TODO make this configurable
+	bin->app_driver.num_slaves = bin->num_slaves;
 
 	bin->app_driver.audio_prio = bin->audio_prio;
 

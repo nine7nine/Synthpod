@@ -450,6 +450,7 @@ elm_main(int argc, char **argv)
 	bin->has_gui = true;
 	bin->audio_prio = 70;
 	bin->worker_prio = 60;
+	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -457,7 +458,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGy:Yw:Wr:p:s:")) != -1)
+	while((c = getopt(argc, argv, "vhgGy:Yw:Wr:p:s:c:")) != -1)
 	{
 		switch(c)
 		{
@@ -494,7 +495,8 @@ elm_main(int argc, char **argv)
 					"   [-W]                 do NOT use worker thread realtime priority\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
 					"   [-p] sample-period   frames per period (1024)\n"
-					"   [-s] sequence-size   minimum sequence size (8192)\n\n"
+					"   [-s] sequence-size   minimum sequence size (8192)\n"
+					"   [-c] slave-cores     number of slave cores (auto)\n\n"
 					, argv[0]);
 				return 0;
 			case 'g':
@@ -524,8 +526,12 @@ elm_main(int argc, char **argv)
 			case 's':
 				handle.seq_size = MAX(SEQ_SIZE, atoi(optarg));
 				break;
+			case 'c':
+				if(atoi(optarg) < bin->num_slaves)
+					bin->num_slaves = atoi(optarg);
+				break;
 			case '?':
-				if( (optopt == 'r') || (optopt == 'p') || (optopt == 's') )
+				if( (optopt == 'r') || (optopt == 'p') || (optopt == 's') || (optopt == 'c') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
