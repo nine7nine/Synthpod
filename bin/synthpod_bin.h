@@ -114,6 +114,7 @@ struct _bin_t {
 	LV2_Log_Log log;
 
 	Eina_Thread self;
+	atomic_flag trace_lock;
 
 	int audio_prio;
 	int worker_prio;
@@ -372,6 +373,21 @@ _worker_to_app_advance(size_t size, void *data)
 	varchunk_write_advance(bin->app_from_worker, size);
 }
 
+static inline void
+_atomic_spin_lock(atomic_flag *flag)
+{
+	while(atomic_flag_test_and_set_explicit(flag, memory_order_acquire))
+	{
+		// spin
+	}
+}
+
+static inline void
+_atomic_unlock(atomic_flag *flag)
+{
+	atomic_flag_clear_explicit(flag, memory_order_release);
+}
+
 __non_realtime static int
 _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
@@ -384,6 +400,8 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		&& !eina_thread_equal(this, bin->self) // not UI thread ID
 		&& !eina_thread_equal(this, bin->worker_thread) ) // not worker thread ID
 	{
+		printf("_log_vprintf TRACE\n");
+		_atomic_spin_lock(&bin->trace_lock);
 		char *trace;
 		if((trace = varchunk_write_request(bin->app_to_log, 1024)))
 		{
@@ -391,10 +409,12 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 
 			size_t written = strlen(trace) + 1;
 			varchunk_write_advance(bin->app_to_log, written);
+			_atomic_unlock(&bin->trace_lock);
 			_light_sem_signal(&bin->worker_sem, 1);
 
 			return written;
 		}
+		_atomic_unlock(&bin->trace_lock);
 	}
 	else // !log_trace OR not DSP thread ID
 	{
@@ -452,29 +472,14 @@ _hide(void *data)
 	return 0;
 }
 
-static inline void
-_map_lock(bin_t *bin)
-{
-	while(atomic_flag_test_and_set_explicit(&bin->map_lock, memory_order_acquire))
-	{
-		// spin
-	}
-}
-
-static inline void
-_map_unlock(bin_t *bin)
-{
-	atomic_flag_clear_explicit(&bin->map_lock, memory_order_release);
-}
-
 __non_realtime static uint32_t
 _map(void *data, const char *uri)
 {
 	bin_t *bin = data;
 
-	_map_lock(bin);
+	_atomic_spin_lock(&bin->map_lock);
 	const uint32_t urid = symap_map(bin->symap, uri);
-	_map_unlock(bin);
+	_atomic_unlock(&bin->map_lock);
 	
 	return urid;
 }
@@ -484,9 +489,9 @@ _unmap(void *data, uint32_t urid)
 {
 	bin_t *bin = data;
 
-	_map_lock(bin);
+	_atomic_spin_lock(&bin->map_lock);
 	const char *uri = symap_unmap(bin->symap, urid);
-	_map_unlock(bin);
+	_atomic_unlock(&bin->map_lock);
 	
 	return uri;
 }
@@ -524,6 +529,7 @@ bin_init(bin_t *bin)
 	bin->log.handle = bin;
 	bin->log.printf = _log_printf;
 	bin->log.vprintf = _log_vprintf;
+	atomic_flag_clear_explicit(&bin->trace_lock, memory_order_relaxed);
 	
 	bin->app_driver.map = &bin->map;
 	bin->app_driver.unmap = &bin->unmap;
