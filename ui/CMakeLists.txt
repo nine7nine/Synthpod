@@ -62,6 +62,7 @@ add_library(synthpod_ui.lib SHARED
 	synthpod_ui_sbox.c
 	synthpod_ui_show.c
 	synthpod_ui_std.c
+	synthpod_ui_preset.c
 
 	patcher.c
 

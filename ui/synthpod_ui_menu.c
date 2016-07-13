@@ -252,6 +252,10 @@ _theme_key_down(void *data, Evas *e, Evas_Object *obj, void *event_info)
 		{
 			_menu_plugin(ui, NULL, NULL);
 		}
+		else if(!strcmp(ev->key, "r"))
+		{
+			_menu_preset(ui, NULL, NULL);
+		}
 	}
 }
 
@@ -307,6 +311,9 @@ _menu_add(sp_ui_t *ui)
 
 		elmnt = elm_menu_item_add(ui->mainmenu, NULL, "list-add", "Plugin", _menu_plugin, ui);
 		elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'P'");
+
+		elmnt = elm_menu_item_add(ui->mainmenu, NULL, "document-properties", "Preset", _menu_preset, ui);
+		elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'R'");
 
 		elmnt = elm_menu_item_add(ui->mainmenu, NULL, "applications-system", "Matrix", _menu_matrix, ui);
 		elm_object_item_tooltip_text_set(elmnt, "Ctrl + 'M'");

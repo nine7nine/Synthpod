@@ -394,6 +394,8 @@ struct _sp_ui_t {
 	Evas_Object *plugbar;
 	Evas_Object *pluginfo;
 
+	Evas_Object *presetwin;
+
 	Evas_Object *patchwin;
 	Evas_Object *matrix;
 	float zoom;
@@ -425,6 +427,7 @@ struct _sp_ui_t {
 	Elm_Gengrid_Item_Class *griditc;
 	Elm_Genlist_Item_Class *propitc;
 	Elm_Genlist_Item_Class *grpitc;
+	Elm_Genlist_Item_Class *presetitc;
 
 	Elm_Object_Item *sink_itm;
 
@@ -685,6 +688,15 @@ _pluglist_itc_add(sp_ui_t *ui);
 
 void
 _menu_plugin(void *data, Evas_Object *obj, void *event_info);
+
+/*
+ * ui_preset
+ */
+void
+_presetlist_itc_add(sp_ui_t *ui);
+
+void
+_menu_preset(void *data, Evas_Object *obj, void *event_info);
 
 /*
  * ui_menu

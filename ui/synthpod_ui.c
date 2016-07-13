@@ -369,6 +369,7 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 		_modlist_itc_add(ui);
 		_port_itc_add(ui);
 		_modgrid_itc_add(ui);
+		_presetlist_itc_add(ui);
 
 		ui->vbox = elm_box_add(ui->win);
 		if(ui->vbox)
@@ -431,6 +432,9 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 			// plugin
 			if(!evas_object_key_grab(ui->win, "p", ctrl_mask, 0, exclusive))
 				fprintf(stderr, "could not grab 'p' key\n");
+			// preset 
+			if(!evas_object_key_grab(ui->win, "r", ctrl_mask, 0, exclusive))
+				fprintf(stderr, "could not grab 'r' key\n");
 
 			ui->uimenu = elm_menu_add(ui->win);
 			if(ui->uimenu)
