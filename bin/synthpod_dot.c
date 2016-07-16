@@ -27,6 +27,12 @@
 
 #define CUINT8(str) ((const uint8_t *)(str))
 
+#undef LV2_ATOM_TUPLE_FOREACH // there is a bug in LV2 1.10.0
+#define LV2_ATOM_TUPLE_FOREACH(tuple, iter) \
+	for (LV2_Atom* (iter) = lv2_atom_tuple_begin(tuple); \
+	     !lv2_atom_tuple_is_end(LV2_ATOM_BODY(tuple), (tuple)->atom.size, (iter)); \
+	     (iter) = lv2_atom_tuple_next(iter))
+
 typedef struct _prog_t prog_t;
 
 struct _prog_t {

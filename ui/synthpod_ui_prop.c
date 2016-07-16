@@ -734,11 +734,17 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 						elm_fileselector_button_window_title_set(child, "Select file");
 
 						const LilvNode *bundle_uri = lilv_plugin_get_bundle_uri(mod->plug);
+#if defined(LILV_0_22)
 						char *mod_path = lilv_file_uri_parse(lilv_node_as_uri(bundle_uri), NULL);
+#else
+						const char *mod_path = lilv_uri_to_path(lilv_node_as_uri(bundle_uri));
+#endif
 						if(mod_path)
 						{
 							elm_fileselector_path_set(child, mod_path);
+#if defined(LILV_0_22)
 							free(mod_path);
+#endif
 						}
 						elm_fileselector_is_save_set(child, EINA_FALSE);
 						elm_fileselector_folder_only_set(child, EINA_FALSE);
@@ -769,11 +775,17 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 						elm_fileselector_button_window_title_set(child, "Select file");
 
 						const LilvNode *bundle_uri = lilv_plugin_get_bundle_uri(mod->plug);
+#if defined(LILV_0_22)
 						char *mod_path = lilv_file_uri_parse(lilv_node_as_uri(bundle_uri), NULL);
+#else
+						const char *mod_path = lilv_uri_to_path(lilv_node_as_uri(bundle_uri));
+#endif
 						if(mod_path)
 						{
 							elm_fileselector_path_set(child, mod_path);
+#if defined(LILV_0_22)
 							free(mod_path);
+#endif
 						}
 						elm_fileselector_is_save_set(child, EINA_FALSE);
 						elm_fileselector_folder_only_set(child, EINA_FALSE);
