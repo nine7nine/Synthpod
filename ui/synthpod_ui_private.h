@@ -208,8 +208,6 @@ struct _mod_t {
 
 	char *name;
 
-	char *pset_label;
-
 	// features
 	LV2_Feature feature_list [NUM_UI_FEATURES];
 	const LV2_Feature *features [NUM_UI_FEATURES + 1];
@@ -219,7 +217,6 @@ struct _mod_t {
 	LilvUIs *all_uis;
 	LilvNodes *presets;
 	LV2_URID subject;
-	Eina_List *banks;
 
 	// ports
 	unsigned num_ports;
@@ -420,14 +417,16 @@ struct _sp_ui_t {
 	Elm_Genlist_Item_Class *listitc;
 	Elm_Genlist_Item_Class *moditc;
 	Elm_Genlist_Item_Class *stditc;
-	Elm_Genlist_Item_Class *psetitc;
-	Elm_Genlist_Item_Class *psetbnkitc;
-	Elm_Genlist_Item_Class *psetitmitc;
-	Elm_Genlist_Item_Class *psetsaveitc;
 	Elm_Gengrid_Item_Class *griditc;
 	Elm_Genlist_Item_Class *propitc;
 	Elm_Genlist_Item_Class *grpitc;
 	Elm_Genlist_Item_Class *presetitc;
+	Elm_Genlist_Item_Class *bankitc;
+	
+	Evas_Object *psetlist;
+	Evas_Object *psetentry;
+	Evas_Object *psetinfo;
+	mod_t *psetmod;
 
 	Elm_Object_Item *sink_itm;
 
@@ -697,6 +696,9 @@ _presetlist_itc_add(sp_ui_t *ui);
 
 void
 _menu_preset(void *data, Evas_Object *obj, void *event_info);
+
+void
+_psetlist_populate(sp_ui_t *ui, const char *match);
 
 /*
  * ui_menu

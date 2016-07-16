@@ -200,6 +200,17 @@ _sp_ui_from_app_module_preset_save(sp_ui_t *ui, const LV2_Atom *atom)
 	// reload presets for this module
 	mod->presets = _preset_reload(ui->world, &ui->regs, mod->plug, mod->presets,
 		trans->label_str);
+
+	// repopulate preset window
+	if(ui->psetentry)
+	{
+		const char *match = elm_object_text_get(ui->psetentry);
+		if(ui->psetlist)
+		{
+			elm_genlist_clear(ui->psetlist);
+			_psetlist_populate(ui, match);
+		}
+	}
 }
 
 static void

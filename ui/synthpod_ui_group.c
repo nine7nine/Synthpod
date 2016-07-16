@@ -23,14 +23,6 @@ _grpitc_cmp(const void *data1, const void *data2)
 	const Elm_Object_Item *itm1 = data1;
 	const Elm_Object_Item *itm2 = data2;
 
-	const Elm_Genlist_Item_Class *class1 = elm_genlist_item_item_class_get(itm1);
-	const Elm_Genlist_Item_Class *class2 = elm_genlist_item_item_class_get(itm2);
-
-	if(class1->refcount < class2->refcount)
-		return -1;
-	else if(class1->refcount > class2->refcount)
-		return 1;
-
 	group_t *grp1 = elm_object_item_data_get(itm1);
 	group_t *grp2 = elm_object_item_data_get(itm2);
 
@@ -174,8 +166,5 @@ _group_itc_add(sp_ui_t *ui)
 		ui->grpitc->func.content_get = _group_content_get;
 		ui->grpitc->func.state_get = NULL;
 		ui->grpitc->func.del = _group_del;
-
-		elm_genlist_item_class_ref(ui->grpitc); // used for genlist ordering
-		elm_genlist_item_class_ref(ui->grpitc); // used for genlist ordering
 	}
 }

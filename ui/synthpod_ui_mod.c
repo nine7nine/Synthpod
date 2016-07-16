@@ -632,8 +632,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 	if(!mod)
 		return NULL;
 
-	mod->pset_label = strdup("unnamed"); // TODO check
-
 	mod->ui = ui;
 	mod->uid = uid;
 	mod->plug = plug;
@@ -1007,37 +1005,6 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 		lilv_world_load_resource(ui->world, preset);
 	}
 
-	// load preset banks
-	mod->banks = NULL;
-	LILV_FOREACH(nodes, i, mod->presets)
-	{
-		const LilvNode* preset = lilv_nodes_get(mod->presets, i);
-		if(!preset)
-			continue;
-
-		lilv_world_load_resource(ui->world, preset);
-
-		LilvNodes *preset_banks = lilv_world_find_nodes(ui->world,
-			preset, ui->regs.pset.preset_bank.node, NULL);
-
-		LILV_FOREACH(nodes, j, preset_banks)
-		{
-			const LilvNode *bank = lilv_nodes_get(preset_banks, j);
-			if(!bank)
-				continue;
-
-			LilvNode *bank_dup = eina_list_search_unsorted(mod->banks, _bank_cmp, bank);
-			if(!bank_dup)
-			{
-				bank_dup = lilv_node_duplicate(bank); //TODO
-				mod->banks = eina_list_append(mod->banks, bank_dup);
-			}
-		}
-		lilv_nodes_free(preset_banks);
-		
-		//lilv_world_unload_resource(ui->world, preset); //FIXME
-	}
-
 	// request selected state
 	_ui_mod_selected_request(mod);
 	_ui_mod_visible_request(mod);
@@ -1069,12 +1036,17 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 	if(mod->ports)
 		free(mod->ports);
 
-	LilvNode *bank;
-	EINA_LIST_FREE(mod->banks, bank)
-		lilv_node_free(bank);
-
 	if(mod->presets)
+	{
+		// unload resources for this module's presets
+		LILV_FOREACH(nodes, itr, mod->presets)
+		{
+			const LilvNode *preset = lilv_nodes_get(mod->presets, itr);
+
+			lilv_world_unload_resource(ui->world, preset);
+		}
 		lilv_nodes_free(mod->presets);
+	}
 
 	mod_ui_t *mod_ui;
 	EINA_LIST_FREE(mod->mod_uis, mod_ui)
@@ -1107,9 +1079,6 @@ _sp_ui_mod_del(sp_ui_t *ui, mod_t *mod)
 
 	if(mod->name)
 		free(mod->name);
-
-	if(mod->pset_label)
-		free(mod->pset_label);
 
 	if(mod->groups)
 		eina_hash_free(mod->groups);

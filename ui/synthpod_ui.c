@@ -679,33 +679,22 @@ sp_ui_free(sp_ui_t *ui)
 
 	if(ui->plugitc)
 		elm_genlist_item_class_free(ui->plugitc);
-	if(ui->griditc)
-		elm_gengrid_item_class_free(ui->griditc);
 	if(ui->listitc)
 		elm_genlist_item_class_free(ui->listitc);
 	if(ui->moditc)
 		elm_genlist_item_class_free(ui->moditc);
-	if(ui->grpitc)
-	{
-		elm_genlist_item_class_unref(ui->grpitc);
-		elm_genlist_item_class_unref(ui->grpitc);
-		elm_genlist_item_class_free(ui->grpitc);
-	}
-	if(ui->psetitc)
-	{
-		elm_genlist_item_class_unref(ui->psetitc);
-		elm_genlist_item_class_free(ui->psetitc);
-	}
 	if(ui->stditc)
 		elm_genlist_item_class_free(ui->stditc);
-	if(ui->psetbnkitc)
-		elm_genlist_item_class_free(ui->psetbnkitc);
-	if(ui->psetitmitc)
-		elm_genlist_item_class_free(ui->psetitmitc);
-	if(ui->psetsaveitc)
-		elm_genlist_item_class_free(ui->psetsaveitc);
+	if(ui->griditc)
+		elm_gengrid_item_class_free(ui->griditc);
 	if(ui->propitc)
 		elm_genlist_item_class_free(ui->propitc);
+	if(ui->grpitc)
+		elm_genlist_item_class_free(ui->grpitc);
+	if(ui->presetitc)
+		elm_genlist_item_class_free(ui->presetitc);
+	if(ui->bankitc)
+		elm_genlist_item_class_free(ui->bankitc);
 
 	sp_regs_deinit(&ui->regs);
 

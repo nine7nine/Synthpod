@@ -133,6 +133,26 @@ _modlist_moved(void *data, Evas_Object *obj, void *event_info)
 	_patches_update(ui);
 }
 
+// only called upon user interaction
+static void
+_modlist_selected(void *data, Evas_Object *obj, void *event_info)
+{
+	Elm_Object_Item *itm = event_info;
+	sp_ui_t *ui = data;
+	mod_t *mod = elm_object_item_data_get(itm);
+
+	ui->psetmod = mod;
+
+	// repopulate preset window
+	if(ui->psetentry)
+		elm_object_text_set(ui->psetentry, "");
+	if(ui->psetlist)
+	{
+		elm_genlist_clear(ui->psetlist);
+		_psetlist_populate(ui, "");
+	}
+}
+
 static void
 _mod_link_toggle(void *data, Evas_Object *lay, const char *emission, const char *source)
 {
@@ -406,209 +426,6 @@ _modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate)
 	}
 }
 
-static Evas_Object * 
-_modlist_psets_content_get(void *data, Evas_Object *obj, const char *part)
-{
-	if(!data) // mepty item
-		return NULL;
-
-	mod_t *mod = data;
-
-	if(strcmp(part, "elm.swallow.content"))
-		return NULL;
-
-	Evas_Object *lay = elm_layout_add(obj);
-	if(lay)
-	{
-		elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
-			"/synthpod/group/theme");
-		char col [7];
-		sprintf(col, "col,%02i", mod->col);
-		elm_layout_signal_emit(lay, col, "/synthpod/group/ui");
-		elm_object_part_text_set(lay, "elm.text", "Presets");
-		evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
-		evas_object_show(lay);
-	}
-
-	return lay;
-}
-
-static char * 
-_modlist_bank_label_get(void *data, Evas_Object *obj, const char *part)
-{
-	const LilvNode* bank = data;
-	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	if(!ui)
-		return NULL;
-
-	if(!strcmp(part, "elm.text"))
-	{
-		char *lbl = NULL;
-
-		//lilv_world_load_resource(ui->world, bank); //FIXME
-		LilvNode *label = lilv_world_get(ui->world, bank,
-			ui->regs.rdfs.label.node, NULL);
-		if(label)
-		{
-			const char *label_str = lilv_node_as_string(label);
-			if(label_str)
-				lbl = strdup(label_str);
-			lilv_node_free(label);
-		}
-		//lilv_world_unload_resource(ui->world, bank); //FIXME
-
-		return lbl;
-	}
-
-	return NULL;
-}
-
-static char * 
-_modlist_pset_label_get(void *data, Evas_Object *obj, const char *part)
-{
-	const LilvNode* preset = data;
-	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	if(!ui)
-		return NULL;
-
-	if(!strcmp(part, "elm.text"))
-	{
-		char *lbl = NULL;
-
-		//lilv_world_load_resource(ui->world, preset); //FIXME
-		LilvNode *label = lilv_world_get(ui->world, preset,
-			ui->regs.rdfs.label.node, NULL);
-		if(label)
-		{
-			const char *label_str = lilv_node_as_string(label);
-			if(label_str)
-				lbl = strdup(label_str);
-			lilv_node_free(label);
-		}
-		//lilv_world_unload_resource(ui->world, preset); //FIXME
-
-		return lbl;
-	}
-
-	return NULL;
-}
-
-static void
-_pset_markup(void *data, Evas_Object *obj, char **txt)
-{
-	// intercept enter
-	if(!strcmp(*txt, "<tab/>") || !strcmp(*txt, " "))
-	{
-		free(*txt);
-		*txt = strdup("_"); //TODO check
-	}
-}
-
-static void
-_pset_changed(void *data, Evas_Object *obj, void *event_info)
-{
-	mod_t *mod = data;
-
-	const char *chunk = elm_entry_entry_get(obj);
-	char *utf8 = elm_entry_markup_to_utf8(chunk);
-
-	if(mod->pset_label)
-		free(mod->pset_label);
-
-	mod->pset_label = strdup(utf8); //TODO check
-	free(utf8);
-}
-
-static void
-_pset_clicked(void *data, Evas_Object *obj, void *event_info)
-{
-	mod_t *mod = data;
-	sp_ui_t *ui = mod->ui;
-
-	if(!mod->pset_label)
-		return;
-
-	// signal app
-	size_t size = sizeof(transmit_module_preset_save_t)
-		+ lv2_atom_pad_size(strlen(mod->pset_label) + 1);
-	transmit_module_preset_save_t *trans = _sp_ui_to_app_request(ui, size);
-	if(trans)
-	{
-		_sp_transmit_module_preset_save_fill(&ui->regs, &ui->forge, trans, size, mod->uid, mod->pset_label);
-		_sp_ui_to_app_advance(ui, size);
-	}
-
-	// reset pset_label
-	free(mod->pset_label);
-	mod->pset_label = strdup("unknown"); //TODO check
-
-	// contract parent list item
-	for(Elm_Object_Item *itm = elm_genlist_first_item_get(mod->std.list);
-		itm != NULL;
-		itm = elm_genlist_item_next_get(itm))
-	{
-		const Elm_Genlist_Item_Class *itc = elm_genlist_item_item_class_get(itm);
-		if(itc != ui->psetitc) // is not a parent preset item
-			continue; // skip 
-
-		if(elm_object_item_data_get(itm) != mod) // does not belong to this module
-			continue; // skip
-
-		evas_object_smart_callback_call(mod->std.list, "contract,request", itm);
-		break;
-	}
-}
-
-static Evas_Object * 
-_modlist_pset_content_get(void *data, Evas_Object *obj, const char *part)
-{
-	mod_t *mod = data;
-	sp_ui_t *ui = evas_object_data_get(obj, "ui");
-	if(!ui)
-		return NULL;
-
-	if(!strcmp(part, "elm.swallow.content"))
-	{
-		Evas_Object *hbox = elm_box_add(obj);
-		if(hbox)
-		{
-			elm_box_horizontal_set(hbox, EINA_TRUE);
-			elm_box_homogeneous_set(hbox, EINA_FALSE);
-			elm_box_padding_set(hbox, 5, 0);
-			evas_object_show(hbox);
-
-			Evas_Object *entry = elm_entry_add(hbox);
-			if(entry)
-			{
-				elm_entry_single_line_set(entry, EINA_TRUE);
-				elm_entry_entry_set(entry, mod->pset_label);
-				elm_entry_editable_set(entry, EINA_TRUE);
-				elm_entry_markup_filter_append(entry, _pset_markup, mod);
-				evas_object_smart_callback_add(entry, "changed,user", _pset_changed, mod);
-				evas_object_size_hint_weight_set(entry, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-				evas_object_size_hint_align_set(entry, EVAS_HINT_FILL, EVAS_HINT_FILL);
-				evas_object_show(entry);
-				elm_box_pack_end(hbox, entry);
-			}
-
-			Evas_Object *but = elm_button_add(hbox);
-			if(but)
-			{
-				elm_object_text_set(but, "+");
-				evas_object_smart_callback_add(but, "clicked", _pset_clicked, mod);
-				evas_object_size_hint_align_set(but, 0.f, EVAS_HINT_FILL);
-				evas_object_show(but);
-				elm_box_pack_start(hbox, but);
-			}
-		}
-
-		return hbox;
-	}
-
-	return NULL;
-}
-
 static void
 _modlist_del(void *data, Evas_Object *obj)
 {
@@ -635,36 +452,6 @@ _modlist_itc_add(sp_ui_t *ui)
 		ui->listitc->func.del = _modlist_del;
 	}
 
-	ui->psetbnkitc = elm_genlist_item_class_new();
-	if(ui->psetbnkitc)
-	{
-		ui->psetbnkitc->item_style = "default";
-		ui->psetbnkitc->func.text_get = _modlist_bank_label_get;
-		ui->psetbnkitc->func.content_get = NULL;
-		ui->psetbnkitc->func.state_get = NULL;
-		ui->psetbnkitc->func.del = NULL;
-	}
-
-	ui->psetitmitc = elm_genlist_item_class_new();
-	if(ui->psetitmitc)
-	{
-		ui->psetitmitc->item_style = "default";
-		ui->psetitmitc->func.text_get = _modlist_pset_label_get;
-		ui->psetitmitc->func.content_get = NULL;
-		ui->psetitmitc->func.state_get = NULL;
-		ui->psetitmitc->func.del = NULL;
-	}
-
-	ui->psetsaveitc = elm_genlist_item_class_new();
-	if(ui->psetsaveitc)
-	{
-		ui->psetsaveitc->item_style = "full";
-		ui->psetsaveitc->func.text_get = NULL;
-		ui->psetsaveitc->func.content_get = _modlist_pset_content_get;
-		ui->psetsaveitc->func.state_get = NULL;
-		ui->psetsaveitc->func.del = NULL;
-	}
-
 	ui->moditc = elm_genlist_item_class_new();
 	if(ui->moditc)
 	{
@@ -674,18 +461,6 @@ _modlist_itc_add(sp_ui_t *ui)
 		ui->moditc->func.state_get = NULL;
 		ui->moditc->func.del = NULL;
 	}
-
-	ui->psetitc = elm_genlist_item_class_new();
-	if(ui->psetitc)
-	{
-		ui->psetitc->item_style = "full";
-		ui->psetitc->func.text_get = NULL;
-		ui->psetitc->func.content_get = _modlist_psets_content_get;
-		ui->psetitc->func.state_get = NULL;
-		ui->psetitc->func.del = NULL;
-
-		elm_genlist_item_class_ref(ui->psetitc);
-	}
 }
 
 void
@@ -693,4 +468,6 @@ _modlist_set_callbacks(sp_ui_t *ui)
 {
 	evas_object_smart_callback_add(ui->modlist, "moved",
 		_modlist_moved, ui);
+	evas_object_smart_callback_add(ui->modlist, "selected",
+		_modlist_selected, ui);
 }

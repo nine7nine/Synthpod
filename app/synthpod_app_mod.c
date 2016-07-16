@@ -826,14 +826,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, app->regs.pset.preset.node);
-
-	// load resources for this module's presets
-	LILV_FOREACH(nodes, itr, mod->presets)
-	{
-		const LilvNode *preset = lilv_nodes_get(mod->presets, itr);
-
-		lilv_world_load_resource(app->world, preset);
-	}
 	
 	// selection
 	mod->selected = 1;
