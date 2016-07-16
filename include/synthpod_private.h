@@ -900,7 +900,9 @@ struct _transmit_module_disabled_t {
 struct _transmit_module_profiling_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int uid _ATOM_ALIGNED;
+	LV2_Atom_Float min _ATOM_ALIGNED;
 	LV2_Atom_Float avg _ATOM_ALIGNED;
+	LV2_Atom_Float max _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_port_connected_t {
@@ -960,7 +962,6 @@ struct _transmit_dsp_profiling_t {
 	LV2_Atom_Float min _ATOM_ALIGNED;
 	LV2_Atom_Float avg _ATOM_ALIGNED;
 	LV2_Atom_Float max _ATOM_ALIGNED;
-	LV2_Atom_Float ovh _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_grid_cols_t {
@@ -1271,7 +1272,8 @@ _sp_transmit_module_disabled_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 static inline void
 _sp_transmit_module_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
-	transmit_module_profiling_t *trans, uint32_t size, u_id_t module_uid, float avg)
+	transmit_module_profiling_t *trans, uint32_t size, u_id_t module_uid,
+	float min, float avg, float max)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -1282,9 +1284,17 @@ _sp_transmit_module_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->uid.atom.type = forge->Int;
 	trans->uid.body = module_uid;
 
+	trans->min.atom.size = sizeof(float);
+	trans->min.atom.type = forge->Float;
+	trans->min.body = min;
+
 	trans->avg.atom.size = sizeof(float);
 	trans->avg.atom.type = forge->Float;
 	trans->avg.body = avg;
+
+	trans->max.atom.size = sizeof(float);
+	trans->max.atom.type = forge->Float;
+	trans->max.body = max;
 }
 
 static inline void
@@ -1463,7 +1473,7 @@ _sp_transmit_bundle_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 static inline void
 _sp_transmit_dsp_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transmit_dsp_profiling_t *trans, uint32_t size,
-	float min, float avg, float max, float ovh)
+	float min, float avg, float max)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -1481,10 +1491,6 @@ _sp_transmit_dsp_profiling_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->max.atom.size = sizeof(float);
 	trans->max.atom.type = forge->Float;
 	trans->max.body = max;
-
-	trans->ovh.atom.size = sizeof(float);
-	trans->ovh.atom.type = forge->Float;
-	trans->ovh.body = ovh;
 }
 
 static inline void

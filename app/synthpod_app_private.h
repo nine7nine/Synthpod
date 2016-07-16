@@ -184,6 +184,8 @@ struct _app_prof_t {
 
 struct _mod_prof_t {
 	unsigned sum;
+	unsigned min;
+	unsigned max;
 };
 
 struct _mod_worker_t {

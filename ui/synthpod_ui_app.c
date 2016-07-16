@@ -287,13 +287,13 @@ _sp_ui_from_app_module_profiling(sp_ui_t *ui, const LV2_Atom *atom)
 	if(!mod)
 		return;
 
-	//printf("%u: %2.1f%% %2.1f%% %2.1f%%\n",
-	//	mod->uid, trans->min.body, trans->avg.body, trans->max.body);
-
 	if(mod->std.frame)
 	{
 		char dsp [128]; //TODO size?
-		snprintf(dsp, 128, "%s | %.1f%%", mod->name, trans->avg.body);
+		snprintf(dsp, 128, "%s | %.0f/%.0f/%.0f‰", mod->name,
+			trans->min.body * 10.f,
+			trans->avg.body * 10.f,
+			trans->max.body * 10.f);
 		elm_object_text_set(mod->std.frame, dsp);
 	}
 }
@@ -308,11 +308,10 @@ _sp_ui_from_app_dsp_profiling(sp_ui_t *ui, const LV2_Atom *atom)
 	if(ui->statusline)
 	{
 		char dsp [80];
-		snprintf(dsp, 80, "<font=Mono align=left>DSP | min: %4.1f%% | avg: %4.1f%% | max: %4.1f%% | ovh: %4.1f%% |</font>",
+		snprintf(dsp, 80, "<font=Mono align=left>DSP | min: %4.1f%% | avg: %4.1f%% | max: %4.1f%% |</font>",
 			trans->min.body,
 			trans->avg.body,
-			trans->max.body,
-			trans->ovh.body);
+			trans->max.body);
 		elm_object_text_set(ui->statusline, dsp);
 	}
 }
