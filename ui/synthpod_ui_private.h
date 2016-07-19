@@ -348,6 +348,8 @@ struct _property_t {
 
 	Eina_List *scale_points;
 	LV2_URID unit;
+
+	bool free_me;
 };
 
 struct _from_app_t {
@@ -598,7 +600,7 @@ void
 _property_free(property_t *prop);
 
 void
-_property_remove(mod_t *mod, group_t *group, property_t *prop);
+_property_remove_request(mod_t *mod, group_t *group, property_t *prop);
 
 void
 _ui_property_tooltip_add(sp_ui_t *ui, Elm_Object_Item *elmnt, property_t *prop);

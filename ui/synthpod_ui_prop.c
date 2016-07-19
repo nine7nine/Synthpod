@@ -70,7 +70,7 @@ _property_free(property_t *prop)
 }
 
 void
-_property_remove(mod_t *mod, group_t *group, property_t *prop)
+_property_remove_request(mod_t *mod, group_t *group, property_t *prop)
 {
 	if(group)
 		group->children = eina_list_remove(group->children, prop);
@@ -78,7 +78,14 @@ _property_remove(mod_t *mod, group_t *group, property_t *prop)
 	mod->dynamic_properties = eina_list_remove(mod->dynamic_properties, prop);
 
 	if(prop->std.elmnt)
+	{
+		prop->free_me = true;
 		elm_object_item_del(prop->std.elmnt);
+	}
+	else
+	{
+		_property_free(prop);
+	}
 }
 
 void
@@ -631,14 +638,22 @@ _property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
 }
 
 static void
-_property_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
+_property_del(void *data, Evas_Object *obj)
 {
 	property_t *prop = data;
 
-	if(prop)
-		prop->std.elmnt = NULL;
+	prop->std.elmnt = NULL;
 
-	// we don't free it here, as this is only a reference from group->children
+	if(prop->free_me)
+		_property_free(prop);
+}
+
+static void
+_property_widget_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
+{
+	property_t *prop = data;
+
+	prop->std.widget = NULL;
 }
 
 static Evas_Object *
@@ -659,7 +674,7 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 	{
 		elm_layout_file_set(lay, SYNTHPOD_DATA_DIR"/synthpod.edj",
 			"/synthpod/modlist/port");
-		evas_object_event_callback_add(lay, EVAS_CALLBACK_DEL, _property_del, prop);
+		evas_object_event_callback_add(lay, EVAS_CALLBACK_DEL, _property_widget_del, prop);
 		evas_object_size_hint_weight_set(lay, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(lay, EVAS_HINT_FILL, EVAS_HINT_FILL);
 		evas_object_show(lay);
@@ -959,6 +974,6 @@ _property_itc_add(sp_ui_t *ui)
 		ui->propitc->func.text_get = NULL;
 		ui->propitc->func.content_get = _property_content_get;
 		ui->propitc->func.state_get = NULL;
-		ui->propitc->func.del = NULL;
+		ui->propitc->func.del = _property_del;
 	}
 }

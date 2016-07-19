@@ -91,7 +91,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
 		const LV2_Atom_Object *obj = buf;
-
+		
 		if(lv2_atom_forge_is_object_type(&ui->forge, obj->atom.type))
 		{
 			const LV2_Atom_URID *destination = NULL;
@@ -188,8 +188,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									if(prop->editable)
 										continue; // skip writable
 
-									_property_remove(mod, group, prop);
-									_property_free(prop);
+									_property_remove_request(mod, group, prop);
 								}
 							}
 							else // !wildcard
@@ -197,10 +196,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 								if(prop)
-								{
-									_property_remove(mod, group, prop);
-									_property_free(prop);
-								}
+									_property_remove_request(mod, group, prop);
 							}
 						}
 						else if(atom_prop->key == ui->regs.patch.writable.urid)
@@ -219,8 +215,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 									if(!prop->editable)
 										continue; // skip readable
 
-									_property_remove(mod, group, prop);
-									_property_free(prop);
+									_property_remove_request(mod, group, prop);
 								}
 							}
 							else // !wildcard
@@ -228,10 +223,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								property_t *prop = eina_list_search_sorted(mod->dynamic_properties, _urid_find, &tar_urid);
 
 								if(prop)
-								{
-									_property_remove(mod, group, prop);
-									_property_free(prop);
-								}
+									_property_remove_request(mod, group, prop);
 							}
 						}
 						else if(atom_prop->key == ui->regs.rdfs.label.urid)
@@ -326,6 +318,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->minimum = 0.f; // not yet known
 								prop->maximum = 1.f; // not yet known
 								prop->unit = 0; // not yet known
+								prop->free_me = false;
 
 								mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
 
@@ -367,6 +360,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 								prop->minimum = 0.f; // not yet known
 								prop->maximum = 1.f; // not yet known
 								prop->unit = 0; // not yet known
+								prop->free_me = false;
 
 								mod->dynamic_properties = eina_list_sorted_insert(mod->dynamic_properties, _urid_cmp, prop);
 
