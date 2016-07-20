@@ -18,6 +18,7 @@
 #include <synthpod_ui_private.h>
 
 static const char *new_preset_label = "(enter label and store as new preset)";
+static const char *default_preset = "Default Factory Preset";
 
 static int
 _pset_cmp(const void *data1, const void *data2)
@@ -108,10 +109,14 @@ _presetlist_label_get(void *data, Evas_Object *obj, const char *part)
 	sp_ui_t *ui = evas_object_data_get(obj, "ui");
 	if(!ui)
 		return NULL;
+	mod_t *mod = ui->psetmod;
 
 	if(!strcmp(part, "elm.text"))
 	{
 		char *lbl = NULL;
+
+		if(preset == lilv_plugin_get_uri(mod->plug))
+			return strdup(default_preset);
 
 		LilvNode *label = lilv_world_get(ui->world, preset,
 			ui->regs.rdfs.label.node, NULL);
@@ -292,6 +297,15 @@ _psetlist_populate(sp_ui_t *ui, const char *match)
 				(void)elmnt;
 			}
 		}
+	}
+
+	// add default state
+	if( (strlen(match) == 0) || strcasestr(default_preset, match) )
+	{
+		Elm_Object_Item *parent =  _psetlist_get_bank(ui, NULL);
+		Elm_Object_Item *elmnt = elm_genlist_item_sorted_insert(ui->psetlist, ui->presetitc, lilv_plugin_get_uri(mod->plug), parent,
+			ELM_GENLIST_ITEM_NONE, _pset_cmp, NULL, NULL);
+		(void)elmnt;
 	}
 }
 
