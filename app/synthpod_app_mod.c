@@ -382,38 +382,41 @@ _sp_app_mod_is_supported(sp_app_t *app, const void *uri)
 	if(!library_uri)
 		return NULL;
 
-	// check whether DSP and UI code is mixed into same binary
-	bool mixed_binary = false;
-	LilvUIs *all_uis = lilv_plugin_get_uis(plug);
-	if(all_uis)
+	if(!app->driver->bad_plugins)
 	{
-		LILV_FOREACH(uis, ptr, all_uis)
+		// check whether DSP and UI code is mixed into same binary
+		bool mixed_binary = false;
+		LilvUIs *all_uis = lilv_plugin_get_uis(plug);
+		if(all_uis)
 		{
-			const LilvUI *ui = lilv_uis_get(all_uis, ptr);
-			if(!ui)
-				continue;
+			LILV_FOREACH(uis, ptr, all_uis)
+			{
+				const LilvUI *ui = lilv_uis_get(all_uis, ptr);
+				if(!ui)
+					continue;
 
-			const LilvNode *ui_uri_node = lilv_ui_get_uri(ui);
-			if(!ui_uri_node)
-				continue;
-			
-			// nedded if ui ttl referenced via rdfs#seeAlso
-			lilv_world_load_resource(app->world, ui_uri_node);
-	
-			const LilvNode *ui_library_uri= lilv_ui_get_binary_uri(ui);
-			if(ui_library_uri && lilv_node_equals(library_uri, ui_library_uri))
-				mixed_binary = true; // this is bad, we don't support that
+				const LilvNode *ui_uri_node = lilv_ui_get_uri(ui);
+				if(!ui_uri_node)
+					continue;
+				
+				// nedded if ui ttl referenced via rdfs#seeAlso
+				lilv_world_load_resource(app->world, ui_uri_node);
+		
+				const LilvNode *ui_library_uri= lilv_ui_get_binary_uri(ui);
+				if(ui_library_uri && lilv_node_equals(library_uri, ui_library_uri))
+					mixed_binary = true; // this is bad, we don't support that
 
-			lilv_world_unload_resource(app->world, ui_uri_node);
+				lilv_world_unload_resource(app->world, ui_uri_node);
+			}
+
+			lilv_uis_free(all_uis);
 		}
 
-		lilv_uis_free(all_uis);
-	}
-
-	if(mixed_binary)
-	{
-		fprintf(stderr, "<%s> NOT supported: mixes DSP and UI code in same binary.\n", uri);
-		return NULL;
+		if(mixed_binary)
+		{
+			fprintf(stderr, "<%s> NOT supported: mixes DSP and UI code in same binary.\n", uri);
+			return NULL;
+		}
 	}
 
 	// populate feature list in dummy mod structure

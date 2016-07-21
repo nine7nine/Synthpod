@@ -305,6 +305,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.osc_sched = NULL;
 	handle->driver.features = 0;
 	handle->driver.num_slaves = 0;
+	handle->driver.bad_plugins = false; //FIXME
 
 	const LilvWorld *world = NULL;
 

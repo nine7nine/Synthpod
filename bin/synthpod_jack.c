@@ -955,6 +955,7 @@ elm_main(int argc, char **argv)
 	bin->audio_prio = 70; // not used
 	bin->worker_prio = 60;
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
+	bin->bad_plugins = false;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -962,7 +963,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGw:Wn:u:s:c:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbBw:Wn:u:s:c:")) != -1)
 	{
 		switch(c)
 		{
@@ -993,6 +994,8 @@ elm_main(int argc, char **argv)
 					"   [-h]                 print usage information\n"
 					"   [-g]                 enable GUI (default)\n"
 					"   [-G]                 disable GUI\n"
+					"   [-b]                 enable bad plugins\n"
+					"   [-B]                 disable bad plugins (default)\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
@@ -1006,6 +1009,12 @@ elm_main(int argc, char **argv)
 				break;
 			case 'G':
 				bin->has_gui = false;
+				break;
+			case 'b':
+				bin->bad_plugins = true;
+				break;
+			case 'B':
+				bin->bad_plugins = false;
 				break;
 			case 'w':
 				bin->worker_prio = atoi(optarg);

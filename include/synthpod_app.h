@@ -112,6 +112,7 @@ struct _sp_app_driver_t {
 	unsigned num_slaves;
 
 	int audio_prio;
+	bool bad_plugins;
 };
 
 SYNTHPOD_SYMBOL_EXTERN sp_app_t *

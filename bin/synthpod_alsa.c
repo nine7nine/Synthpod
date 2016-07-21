@@ -878,6 +878,7 @@ _read_config(prog_t *handle)
 					handle->do_capt = !efreet_ini_boolean_get(ini, "disable-capture");
 					handle->twochan = efreet_ini_boolean_get(ini, "force-two-channel");
 					handle->debug = efreet_ini_boolean_get(ini, "notify-xruns");
+					handle->bin.bad_plugins = efreet_ini_boolean_get(ini, "bad-plugins");
 
 					if((valuestring = efreet_ini_string_get(ini, "device")))
 						handle->io_name = valuestring;
@@ -942,6 +943,7 @@ elm_main(int argc, char **argv)
 	bin->audio_prio = 70;
 	bin->worker_prio = 60;
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
+	bin->bad_plugins = false;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -952,7 +954,7 @@ elm_main(int argc, char **argv)
 	Efreet_Ini *ini = _read_config(&handle);
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGIOtTxXy:Yw:Wd:i:o:r:p:n:s:c:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbBIOtTxXy:Yw:Wd:i:o:r:p:n:s:c:")) != -1)
 	{
 		switch(c)
 		{
@@ -983,6 +985,8 @@ elm_main(int argc, char **argv)
 					"   [-h]                 print usage information\n"
 					"   [-g]                 enable GUI (default)\n"
 					"   [-G]                 disable GUI\n"
+					"   [-b]                 enable bad plugins\n"
+					"   [-B]                 disable bad plugins (default)\n"
 					"   [-I]                 disable capture\n"
 					"   [-O]                 disable playback\n"
 					"   [-t]                 force 2 channel mode\n"
@@ -1008,6 +1012,12 @@ elm_main(int argc, char **argv)
 				break;
 			case 'G':
 				bin->has_gui = false;
+				break;
+			case 'b':
+				bin->bad_plugins = true;
+				break;
+			case 'B':
+				bin->bad_plugins = false;
 				break;
 			case 'I':
 				handle.do_capt = false;

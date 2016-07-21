@@ -119,6 +119,7 @@ struct _bin_t {
 	int audio_prio;
 	int worker_prio;
 	int num_slaves;
+	bool bad_plugins;
 };
 
 static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
@@ -544,6 +545,7 @@ bin_init(bin_t *bin)
 	bin->app_driver.num_slaves = bin->num_slaves;
 
 	bin->app_driver.audio_prio = bin->audio_prio;
+	bin->app_driver.bad_plugins = bin->bad_plugins;
 
 	bin->ui_driver.map = &bin->map;
 	bin->ui_driver.unmap = &bin->unmap;
