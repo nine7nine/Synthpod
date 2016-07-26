@@ -401,7 +401,6 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		&& !eina_thread_equal(this, bin->self) // not UI thread ID
 		&& !eina_thread_equal(this, bin->worker_thread) ) // not worker thread ID
 	{
-		printf("_log_vprintf TRACE\n");
 		_atomic_spin_lock(&bin->trace_lock);
 		char *trace;
 		if((trace = varchunk_write_request(bin->app_to_log, 1024)))

@@ -280,6 +280,25 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	{
 		// actually save the state to disk
 		lilv_state_set_label(state, target);
+
+		/*FIXME for lilv 0.24
+		const char *comment = "this is a comment";
+		lilv_state_set_metadata(state, app->regs.rdfs.comment.urid,
+			comment, strlen(comment)+1, app->forge.String,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+		const char *license = "http://opensource.org/licenses/Artistic-2.0";
+		lilv_state_set_metadata(state, app->regs.doap.license.urid,
+			license, strlen(license)+1, app->forge.URI,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+		const LV2_URID bank = app->driver->map->map(app->driver->map->handle,
+			"http://open-music-kontrollers.ch/banks#Bank1");
+		lilv_state_set_metadata(state, app->regs.pset.preset_bank.urid,
+			&bank, sizeof(LV2_URID), app->forge.URID,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+		*/
+
 		lilv_state_save(app->world, app->driver->map, app->driver->unmap,
 			state, NULL, dir, filename);
 		lilv_state_free(state);
