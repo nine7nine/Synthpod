@@ -39,7 +39,7 @@
 #define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
 #define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
 
-#define NUM_FEATURES 16
+#define NUM_FEATURES 17
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 #define FROM_UI_NUM 24

@@ -356,6 +356,9 @@ _sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 	mod->feature_list[nfeatures].URI = LV2_URI_MAP_URI;
 	mod->feature_list[nfeatures++].data = &app->uri_to_id;
 
+	mod->feature_list[nfeatures].URI = LV2_CORE__inPlaceBroken;
+	mod->feature_list[nfeatures++].data = NULL;
+
 	assert(nfeatures <= NUM_FEATURES);
 
 	for(int i=0; i<nfeatures; i++)
