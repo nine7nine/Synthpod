@@ -27,6 +27,6 @@ target_link_libraries(synthpod.lib
 	${SRATOM_LDFLAGS})
 set_target_properties(synthpod.lib PROPERTIES
 	OUTPUT_NAME "synthpod"
-	VERSION "${SYNTHPOD_VERSION}"
+	#VERSION "${SYNTHPOD_VERSION}"
 	SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
 install(TARGETS synthpod.lib DESTINATION lib)

@@ -80,6 +80,6 @@ target_link_libraries(synthpod_ui.lib
 	${SANDBOX_MASTER_LIBS})
 set_target_properties(synthpod_ui.lib PROPERTIES
 	OUTPUT_NAME "synthpod_ui"
-	VERSION "${SYNTHPOD_VERSION}"
+	#VERSION "${SYNTHPOD_VERSION}"
 	SOVERSION "${SYNTHPOD_MAJOR_VERSION}")
 install(TARGETS synthpod_ui.lib DESTINATION lib)

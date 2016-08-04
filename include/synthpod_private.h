@@ -254,6 +254,7 @@ struct _reg_t {
 		reg_item_t remove;
 		reg_item_t put;
 		reg_item_t destination;
+		reg_item_t sequence_number;
 	} patch;
 
 	struct {
@@ -501,6 +502,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.remove, world, map, LV2_PATCH__remove);
 	_register(&regs->patch.put, world, map, LV2_PATCH__Put);
 	_register(&regs->patch.destination, world, map, LV2_PATCH__destination);
+	_register(&regs->patch.sequence_number, world, map, LV2_PATCH__sequenceNumber);
 
 	_register(&regs->xpress.message, world, map, "http://open-music-kontrollers.ch/lv2/xpress#Message");
 
@@ -706,6 +708,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.remove);
 	_unregister(&regs->patch.put);
 	_unregister(&regs->patch.destination);
+	_unregister(&regs->patch.sequence_number);
 
 	_unregister(&regs->xpress.message);
 
@@ -1015,6 +1018,8 @@ struct _transfer_patch_set_obj_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
 	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
 	LV2_URID subj_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body seq _ATOM_ALIGNED;
+	int32_t seq_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
 	LV2_URID prop_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body dest _ATOM_ALIGNED;
@@ -1027,6 +1032,8 @@ struct _transfer_patch_get_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
 	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
 	LV2_URID subj_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body seq _ATOM_ALIGNED;
+	int32_t seq_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body prop _ATOM_ALIGNED;
 	LV2_URID prop_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body dest _ATOM_ALIGNED;
@@ -1038,6 +1045,8 @@ struct _transfer_patch_get_all_t {
 	LV2_Atom_Object obj _ATOM_ALIGNED;
 	LV2_Atom_Property_Body subj _ATOM_ALIGNED;
 	LV2_URID subj_val _ATOM_ALIGNED;
+	LV2_Atom_Property_Body seq _ATOM_ALIGNED;
+	int32_t seq_val _ATOM_ALIGNED;
 	LV2_Atom_Property_Body dest _ATOM_ALIGNED;
 	LV2_URID dest_val _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
@@ -1626,7 +1635,9 @@ _sp_transfer_event_fill(reg_t *regs, LV2_Atom_Forge *forge, transfer_atom_t *tra
 static inline LV2_Atom *
 _sp_transfer_patch_set_obj_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transfer_patch_set_obj_t *trans,
-	uint32_t body_size, LV2_URID subject, LV2_URID property, LV2_URID type)
+	uint32_t body_size, LV2_URID subject,
+	LV2_URID property, LV2_URID type,
+	int32_t sequence_number)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -1643,6 +1654,13 @@ _sp_transfer_patch_set_obj_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->subj.value.type = forge->URID;
 
 	trans->subj_val = subject;
+
+	trans->seq.key = regs->patch.sequence_number.urid;
+	trans->seq.context = 0;
+	trans->seq.value.size = sizeof(int32_t);
+	trans->seq.value.type = forge->Int;
+
+	trans->seq_val = sequence_number;
 
 	trans->prop.key = regs->patch.property.urid;
 	trans->prop.context = 0;
@@ -1670,7 +1688,7 @@ _sp_transfer_patch_set_obj_fill(reg_t *regs, LV2_Atom_Forge *forge,
 static inline void
 _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transfer_patch_get_t *trans, u_id_t module_uid, uint32_t port_index,
-	LV2_URID subject, LV2_URID property)
+	LV2_URID subject, LV2_URID property, int32_t sequence_number)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -1693,6 +1711,13 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	trans->subj_val = subject;
 
+	trans->seq.key = regs->patch.sequence_number.urid;
+	trans->seq.context = 0;
+	trans->seq.value.size = sizeof(int32_t);
+	trans->seq.value.type = forge->Int;
+
+	trans->seq_val = sequence_number;
+
 	trans->prop.key = regs->patch.property.urid;
 	trans->prop.context = 0;
 	trans->prop.value.size = sizeof(LV2_URID);
@@ -1711,7 +1736,7 @@ _sp_transfer_patch_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
 static inline void
 _sp_transfer_patch_get_all_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	transfer_patch_get_all_t *trans, u_id_t module_uid, uint32_t port_index,
-	LV2_URID subject)
+	LV2_URID subject, int32_t sequence_number)
 {
 	trans = ASSUME_ALIGNED(trans);
 
@@ -1733,6 +1758,13 @@ _sp_transfer_patch_get_all_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->subj.value.type = forge->URID;
 
 	trans->subj_val = subject;
+
+	trans->seq.key = regs->patch.sequence_number.urid;
+	trans->seq.context = 0;
+	trans->seq.value.size = sizeof(int32_t);
+	trans->seq.value.type = forge->Int;
+
+	trans->seq_val = sequence_number;
 
 	trans->dest.key = regs->patch.destination.urid;
 	trans->dest.context = 0;

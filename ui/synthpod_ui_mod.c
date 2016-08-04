@@ -1257,7 +1257,7 @@ _module_patch_get_all(mod_t *mod)
 		{
 			_sp_transfer_patch_get_all_fill(&ui->regs,
 				&ui->forge, trans, mod->uid, index,
-				mod->subject);
+				mod->subject, ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			_sp_ui_to_app_advance(ui, len);
 		}
 	}

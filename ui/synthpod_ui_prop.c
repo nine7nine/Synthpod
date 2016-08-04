@@ -246,7 +246,8 @@ _property_path_chosen(void *data, Evas_Object *obj, void *event_info)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
 				&ui->forge, trans, strsize,
-				mod->subject, prop->tar_urid, prop->type_urid);
+				mod->subject, prop->tar_urid, prop->type_urid,
+				ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			if(atom)
 			{
 				strcpy(LV2_ATOM_BODY(atom), path);
@@ -333,7 +334,8 @@ _property_chunk_chosen(void *data, Evas_Object *obj, void *event_info)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
 				&ui->forge, trans, fsize,
-				mod->subject, prop->tar_urid, prop->type_urid);
+				mod->subject, prop->tar_urid, prop->type_urid,
+				ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			if(atom)
 			{
 				uint8_t *dst = LV2_ATOM_BODY(atom);
@@ -388,7 +390,8 @@ _property_string_activated(void *data, Evas_Object *obj, void *event_info)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
 				&ui->forge, trans, bodysize,
-				mod->subject, prop->tar_urid, prop->type_urid);
+				mod->subject, prop->tar_urid, prop->type_urid,
+				ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			if(atom)
 			{
 				if(prop->type_urid == ui->forge.URID)
@@ -454,7 +457,8 @@ _property_sldr_changed(void *data, Evas_Object *obj, void *event_info)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
 				&ui->forge, trans, body_size,
-				mod->subject, prop->tar_urid, prop->type_urid);
+				mod->subject, prop->tar_urid, prop->type_urid,
+				ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			if(atom)
 			{
 				if(prop->type_urid == ui->forge.Int)
@@ -510,7 +514,8 @@ _property_bitmask_changed(void *data, Evas_Object *obj, void *event_info)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
 				&ui->forge, trans, body_size,
-				mod->subject, prop->tar_urid, prop->type_urid);
+				mod->subject, prop->tar_urid, prop->type_urid,
+				ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			if(atom)
 			{
 				if(prop->type_urid == ui->forge.Int)
@@ -555,7 +560,8 @@ _property_check_changed(void *data, Evas_Object *obj, void *event_info)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
 				&ui->forge, trans, body_size,
-				mod->subject, prop->tar_urid, prop->type_urid);
+				mod->subject, prop->tar_urid, prop->type_urid,
+				ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			if(atom)
 			{
 				((LV2_Atom_Bool *)atom)->body = value;
@@ -614,7 +620,8 @@ _property_spinner_changed(void *data, Evas_Object *obj, void *event_info)
 		{
 			LV2_Atom *atom = _sp_transfer_patch_set_obj_fill(&ui->regs,
 				&ui->forge, trans, body_size,
-				mod->subject, prop->tar_urid, prop->type_urid);
+				mod->subject, prop->tar_urid, prop->type_urid,
+				ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 			if(atom)
 			{
 				if(prop->type_urid == ui->forge.String)
@@ -947,7 +954,8 @@ _property_content_get(void *data, Evas_Object *obj, const char *part)
 			{
 				_sp_transfer_patch_get_fill(&ui->regs,
 					&ui->forge, trans, mod->uid, index,
-					mod->subject, prop->tar_urid);
+					mod->subject, prop->tar_urid,
+					ui->driver->xmap->new_uuid(ui->driver->xmap->handle));
 				_sp_ui_to_app_advance(ui, len);
 			}
 		}
