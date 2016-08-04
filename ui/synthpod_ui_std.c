@@ -105,11 +105,13 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 			{
 				const LV2_Atom_URID *subject = NULL;
 				const LV2_Atom_URID *property = NULL;
+				const LV2_Atom_Int *sequence = NULL;
 				const LV2_Atom *value = NULL;
 
 				LV2_Atom_Object_Query q[] = {
 					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
 					{ ui->regs.patch.property.urid, (const LV2_Atom **)&property },
+					{ ui->regs.patch.sequence_number.urid, (const LV2_Atom **)&sequence},
 					{ ui->regs.patch.value.urid, &value },
 					{ 0, NULL }
 				};
@@ -119,17 +121,34 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					? subject->body == mod->subject
 					: true;
 
+				int32_t sequence_num = 0;
+				if(sequence && (sequence->atom.type == ui->forge.Int))
+					sequence_num = sequence->body;
+
 				if(subject_match && property && (property->atom.type == ui->forge.URID) && value)
+				{
 					_mod_set_property(mod, property->body, value);
+
+					if(sequence_num)
+					{
+						//FIXME patch:Ack
+					}
+				}
+				else if(sequence_num)
+				{
+					//FIXME patch:Error
+				}
 			}
 			// check for patch:Put
 			else if(obj->body.otype == ui->regs.patch.put.urid)
 			{
 				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_Int *sequence = NULL;
 				const LV2_Atom_Object *body = NULL;
 
 				LV2_Atom_Object_Query q[] = {
 					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+					{ ui->regs.patch.sequence_number.urid, (const LV2_Atom **)&sequence},
 					{ ui->regs.patch.body.urid, (const LV2_Atom **)&body },
 					{ 0, NULL }
 				};
@@ -139,28 +158,47 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 					? subject->body == mod->subject
 					: true;
 
+				int32_t sequence_num = 0;
+				if(sequence && (sequence->atom.type == ui->forge.Int))
+					sequence_num = sequence->body;
+
 				if(subject_match && body && lv2_atom_forge_is_object_type(&ui->forge, body->atom.type))
 				{
 					LV2_ATOM_OBJECT_FOREACH(body, prop)
 					{
 						_mod_set_property(mod, prop->key, &prop->value);
 					}
+
+					if(sequence_num)
+					{
+						//FIXME patch:Ack
+					}
+				}
+				else if(sequence_num)
+				{
+					//FIXME patch:Error
 				}
 			}
 			// check for patch:Patch
 			else if(obj->body.otype == ui->regs.patch.patch.urid)
 			{
 				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_URID *sequence = NULL;
 				const LV2_Atom_Object *add = NULL;
 				const LV2_Atom_Object *remove = NULL;
 
 				LV2_Atom_Object_Query q[] = {
 					{ ui->regs.patch.subject.urid, (const LV2_Atom **)&subject },
+					{ ui->regs.patch.sequence_number.urid, (const LV2_Atom **)&sequence },
 					{ ui->regs.patch.add.urid, (const LV2_Atom **)&add },
 					{ ui->regs.patch.remove.urid, (const LV2_Atom **)&remove },
 					{ 0, NULL }
 				};
 				lv2_atom_object_query(obj, q);
+
+				int32_t sequence_num = 0;
+				if(sequence && (sequence->atom.type == ui->forge.Int))
+					sequence_num = sequence->body;
 
 				if(  (!subject || (subject->atom.type == ui->forge.URID))
 					&& add && lv2_atom_forge_is_object_type(&ui->forge, add->atom.type)
@@ -550,9 +588,20 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 							}
 						}
 					}
+
+					if(sequence_num)
+					{
+						//FIXME patch:Ack
+					}
 				}
 				else
+				{
+					if(sequence_num)
+					{
+						//FIXME patch:Error
+					}
 					fprintf(stderr, "patch:Patch one of patch:subject, patch:add, patch:add missing\n");
+				}
 			}
 		}
 	}
