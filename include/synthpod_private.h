@@ -255,6 +255,8 @@ struct _reg_t {
 		reg_item_t put;
 		reg_item_t destination;
 		reg_item_t sequence_number;
+		reg_item_t error;
+		reg_item_t ack;
 	} patch;
 
 	struct {
@@ -503,6 +505,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->patch.put, world, map, LV2_PATCH__Put);
 	_register(&regs->patch.destination, world, map, LV2_PATCH__destination);
 	_register(&regs->patch.sequence_number, world, map, LV2_PATCH__sequenceNumber);
+	_register(&regs->patch.error, world, map, LV2_PATCH__Error);
+	_register(&regs->patch.ack, world, map, LV2_PATCH__Ack);
 
 	_register(&regs->xpress.message, world, map, "http://open-music-kontrollers.ch/lv2/xpress#Message");
 
@@ -709,6 +713,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.put);
 	_unregister(&regs->patch.destination);
 	_unregister(&regs->patch.sequence_number);
+	_unregister(&regs->patch.error);
+	_unregister(&regs->patch.ack);
 
 	_unregister(&regs->xpress.message);
 

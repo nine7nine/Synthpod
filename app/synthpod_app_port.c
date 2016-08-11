@@ -787,7 +787,9 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 				if(  (obj->body.otype == app->regs.patch.set.urid)
 					|| (obj->body.otype == app->regs.patch.put.urid)
-					|| (obj->body.otype == app->regs.patch.patch.urid) ) //TODO support more patch messages
+					|| (obj->body.otype == app->regs.patch.patch.urid)
+					|| (obj->body.otype == app->regs.patch.error.urid)
+					|| (obj->body.otype == app->regs.patch.ack.urid) ) //TODO support more patch messages
 				{
 					const uint32_t atom_size = sizeof(LV2_Atom) + obj->atom.size;
 					const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
