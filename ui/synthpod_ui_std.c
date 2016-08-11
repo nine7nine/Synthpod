@@ -183,7 +183,7 @@ _std_port_event(LV2UI_Handle handle, uint32_t index, uint32_t size,
 			else if(obj->body.otype == ui->regs.patch.patch.urid)
 			{
 				const LV2_Atom_URID *subject = NULL;
-				const LV2_Atom_URID *sequence = NULL;
+				const LV2_Atom_Int *sequence = NULL;
 				const LV2_Atom_Object *add = NULL;
 				const LV2_Atom_Object *remove = NULL;
 
