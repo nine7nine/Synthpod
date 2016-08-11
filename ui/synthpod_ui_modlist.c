@@ -320,7 +320,7 @@ _content_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 	mod_t *mod = data;
 
 	if(mod)
-		mod->std.list = NULL;
+		mod->std.frame = NULL;
 }
 
 static Evas_Object *
