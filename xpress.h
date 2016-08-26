@@ -247,23 +247,16 @@ _xpress_qsort(xpress_voice_t *a, unsigned n)
 static inline xpress_voice_t *
 _xpress_bsearch(xpress_uuid_t p, xpress_voice_t *a, unsigned n)
 {
-	unsigned start = 0;
-	unsigned end = n;
+	xpress_voice_t *base = a;
 
-	while(start < end)
+	for(unsigned N = n, half; N > 1; N -= half)
 	{
-		const unsigned mid = start + (end - start)/2;
-		xpress_voice_t *dst = &a[mid];
-
-		if(p > dst->uuid)
-			end = mid;
-		else if(p < dst->uuid)
-			start = mid + 1;
-		else
-			return dst;
+		half = N/2;
+		xpress_voice_t *dst = &base[half];
+		base = (dst->uuid > p) ? base : dst;
 	}
 
-	return NULL;
+	return (base->uuid == p) ? base : NULL;
 }
 
 static inline void
