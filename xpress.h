@@ -253,7 +253,7 @@ _xpress_bsearch(xpress_uuid_t p, xpress_voice_t *a, unsigned n)
 	{
 		half = N/2;
 		xpress_voice_t *dst = &base[half];
-		base = (dst->uuid > p) ? base : dst;
+		base = (dst->uuid < p) ? base : dst;
 	}
 
 	return (base->uuid == p) ? base : NULL;
