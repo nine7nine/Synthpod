@@ -86,7 +86,10 @@ _ext_ui_write_function(LV2UI_Controller controller, uint32_t index,
 	const LV2_Atom_Object *obj = buffer;
 	if(  lv2_atom_forge_is_object_type(&ui->forge, obj->atom.type)
 		&& ( (obj->body.otype == ui->regs.patch.set.urid)
+			|| (obj->body.otype == ui->regs.patch.get.urid)
 			|| (obj->body.otype == ui->regs.patch.put.urid)
+			|| (obj->body.otype == ui->regs.patch.ack.urid)
+			|| (obj->body.otype == ui->regs.patch.error.urid)
 			|| (obj->body.otype == ui->regs.patch.patch.urid) ) ) //TODO support more patch messages
 	{
 		assert(lv2_atom_pad_size(size) == size);

@@ -660,7 +660,11 @@ _property_widget_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 {
 	property_t *prop = data;
 
-	prop->std.widget = NULL;
+	if(!prop->std.elmnt)
+	{
+		prop->std.widget = NULL;
+		prop->std.entry = NULL;
+	}
 }
 
 static Evas_Object *
