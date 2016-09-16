@@ -79,12 +79,6 @@ _run(sandbox_slave_t *sb, void *data)
 		}
 		sandbox_slave_flush(sb);
 	}
-}
-
-static inline void
-_deinit(void *data)
-{
-	app_t *app = data;
 
 	if(app->show_iface)
 		app->show_iface->hide(app->handle);
@@ -93,7 +87,7 @@ _deinit(void *data)
 static const sandbox_slave_driver_t driver = {
 	.init_cb = _init,
 	.run_cb = _run,
-	.deinit_cb = _deinit,
+	.deinit_cb = NULL,
 	.resize_cb = NULL
 };
 

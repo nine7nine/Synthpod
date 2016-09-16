@@ -90,12 +90,6 @@ _run(sandbox_slave_t *sb, void *data)
 		LV2_EXTERNAL_UI_RUN(app->widget);
 		sandbox_slave_flush(sb);
 	}
-}
-
-static inline void
-_deinit(void *data)
-{
-	app_t *app = data;
 
 	LV2_EXTERNAL_UI_HIDE(app->widget);
 }
@@ -103,7 +97,7 @@ _deinit(void *data)
 static const sandbox_slave_driver_t driver = {
 	.init_cb = _init,
 	.run_cb = _run,
-	.deinit_cb = _deinit,
+	.deinit_cb = NULL,
 	.resize_cb = NULL
 };
 
