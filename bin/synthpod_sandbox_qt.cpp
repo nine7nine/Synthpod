@@ -99,6 +99,12 @@ _init(sandbox_slave_t *sb, void *data)
 	int argc = 0;
 	a = new QApplication(argc, NULL, true);
 	app->win = new MyWindow();
+	if(!app->win)
+		return -1;
+
+	const char *title = sandbox_slave_title_get(sb);
+	if(title)
+		app->win->setWindowTitle(title);
 
 	const LV2_Feature parent_feature = {
 		.URI = LV2_UI__parent,
