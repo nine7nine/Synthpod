@@ -203,6 +203,7 @@ _sbox_ui_show(mod_t *mod)
 #endif
 
 	mod_ui->sbox.exe = ecore_exe_run(cmd, mod_ui); //FIXME check
+	free(cmd);
 	mod_ui->sbox.fd= ecore_main_fd_handler_add(fd, ECORE_FD_READ,
 		_sbox_ui_recv, mod_ui->sbox.sb, NULL, NULL);
 	mod_ui->sbox.del = ecore_event_handler_add(ECORE_EXE_EVENT_DEL, _sbox_ui_quit, mod);
@@ -226,7 +227,7 @@ _sbox_ui_flush(void *data)
 {
 	mod_t *mod = data;
 	mod_ui_t *mod_ui = mod->mod_ui;
-	
+
 	const bool more = sandbox_master_flush(mod_ui->sbox.sb);
 	if(more)
 	{
