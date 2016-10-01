@@ -24,10 +24,19 @@
 #include <Ecore_File.h>
 #include <Efreet.h>
 
-#include <osc.h>
+#include <osc.lv2/writer.h>
+#include <osc.lv2/reader.h>
 
 #include <synthpod_app.h>
 #include <synthpod_nsm.h>
+
+typedef void (*osc_cb_t)(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm);
+typedef struct _osc_msg_t osc_msg_t;
+
+struct _osc_msg_t {
+	const char *path;
+	osc_cb_t cb;
+};
 
 struct _synthpod_nsm_t {
 	int managed;
@@ -44,69 +53,55 @@ struct _synthpod_nsm_t {
 	Ecore_Event_Handler *del;
 	Ecore_Event_Handler *dat;
 
-	osc_data_t send [0x10000];
-	osc_data_t recv [0x10000];
+	uint8_t send [0x10000];
 };
 
-static int
-_reply(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
+static void
+_reply(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
 	const char *target = NULL;
-
-	const osc_data_t *ptr = buf;
-	ptr = osc_get_string(ptr, &target);
+	lv2_osc_reader_get_string(reader, &target);
 
 	//fprintf(stdout, "synthpod_nsm reply: %s\n", target);
 
 	if(target && !strcmp(target, "/nsm/server/announce"))
 	{
-		const char *message;
-		const char *manager;
-		const char *capabilities;
+		const char *message = NULL;
+		const char *manager = NULL;
+		const char *capabilities = NULL;
 
-		ptr = osc_get_string(ptr, &message);
-		ptr = osc_get_string(ptr, &manager);
-		osc_get_string(ptr, &capabilities);
+		lv2_osc_reader_get_string(reader, &message);
+		lv2_osc_reader_get_string(reader, &manager);
+		lv2_osc_reader_get_string(reader, &capabilities);
 
 		//TODO, e.g. toggle SM LED
 	}
-
-	return 1;
 }
 
-static int
-_error(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
+static void
+_error(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
 	const char *msg = NULL;
 	int32_t code = 0;
 	const char *err = NULL;
 
-	const osc_data_t *ptr = buf;
-	ptr = osc_get_string(ptr, &msg);
-	ptr = osc_get_int32(ptr, &code);
-	osc_get_string(ptr, &err);
+	lv2_osc_reader_get_string(reader, &msg);
+	lv2_osc_reader_get_int32(reader, &code);
+	lv2_osc_reader_get_string(reader, &err);
 
 	fprintf(stderr, "synthpod_nsm error: #%i in %s: %s\n", code, msg, err);
-
-	return 1;
 }
 
-static int
-_client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
+static void
+_client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
-	synthpod_nsm_t *nsm = data;	
-	
 	const char *dir = NULL;
 	const char *name = NULL;
 	const char *id = NULL;
 
-	const osc_data_t *ptr = buf;
-	ptr = osc_get_string(ptr, &dir);
-	ptr = osc_get_string(ptr, &name);
-	osc_get_string(ptr, &id);
+	lv2_osc_reader_get_string(reader, &dir);
+	lv2_osc_reader_get_string(reader, &name);
+	lv2_osc_reader_get_string(reader, &id);
 
 	// open/create app
 	ecore_file_mkpath(dir); // path may not exist yet
@@ -118,77 +113,58 @@ _client_open(osc_time_t time, const char *path, const char *fmt, const osc_data_
 
 	if(synthpod_dir)
 		free(synthpod_dir);
-
-	return 1;
 }
 
-static int
-_client_save(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
+static void
+_client_save(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
-	synthpod_nsm_t *nsm = data;	
-	
 	// save app
 	if(nsm->driver->save(nsm->data))
 		fprintf(stderr, "NSM save failed:\n");
-
-	return 1;
 }
 
-static int
-_client_show_optional_gui(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
+static void
+_client_show_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
-	synthpod_nsm_t *nsm = data;	
-
 	// show gui
 	if(nsm->driver->show(nsm->data))
 	{
 		fprintf(stderr, "NSM show GUI failed\n");
-		return 1;
+		return;
 	}
 
 	// reply
-	const osc_data_t *ptr;
-	osc_data_t *buf0 = nsm->send;
+	LV2_OSC_Writer writer;
+	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
+	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
 
-	ptr = osc_set_vararg(buf0, buf0+256, "/nsm/client/gui_is_shown", "");
-
-	size_t written = ptr ? ptr - buf0 : 0;
-	if(written)
+	size_t written;
+	if(lv2_osc_writer_finalize(&writer, &written))
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
 		fprintf(stderr, "OSC sending failed\n");
-
-	return 1;
 }
 
-static int
-_client_hide_optional_gui(osc_time_t time, const char *path, const char *fmt, const osc_data_t *buf,
-	size_t size, void *data)
+static void
+_client_hide_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
-	synthpod_nsm_t *nsm = data;	
-
 	// hide gui
 	if(nsm->driver->hide(nsm->data))
 	{
 		fprintf(stderr, "NSM hide GUI failed\n");
-		return 1;
+		return;
 	}
 
 	// reply
-	const osc_data_t *ptr;
-	osc_data_t *buf0 = nsm->send;
+	LV2_OSC_Writer writer;
+	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
+	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
 
-	ptr = osc_set_vararg(buf0, buf0+256, "/nsm/client/gui_is_hidden", "");
-
-	size_t written = ptr ? ptr - buf0 : 0;
-	if(written)
+	size_t written;
+	if(lv2_osc_writer_finalize(&writer, &written))
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
 		fprintf(stderr, "OSC sending failed\n");
-
-	return 1;
 }
 
 static void
@@ -202,42 +178,42 @@ _announce(synthpod_nsm_t *nsm)
 		? ":message:optional-gui:"
 		: ":message:";
 
-	osc_data_t *buf0 = nsm->send;
-	osc_data_t *ptr = buf0;
-	osc_data_t *end = buf0 + 512;
-	osc_data_t *bndl = NULL;
-	osc_data_t *itm = NULL;
+	LV2_OSC_Writer writer;
+	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
 
-	ptr = osc_start_bundle(ptr, end, OSC_IMMEDIATE, &bndl);
-	ptr = osc_start_bundle_item(ptr, end, &itm);
-	ptr = osc_set_vararg(ptr, end, "/nsm/server/announce", "sssiii",
-		nsm->call, capabilities, nsm->exe, 1, 2, pid);
-	ptr = osc_end_bundle_item(ptr, end, itm);
+	LV2_OSC_Writer_Frame bndl, itm;
+	lv2_osc_writer_push_bundle(&writer, &bndl, LV2_OSC_IMMEDIATE);
+	{
+		lv2_osc_writer_push_item(&writer, &itm);
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/announce", "sssiii",
+			nsm->call, capabilities, nsm->exe, 1, 2, pid);
+		lv2_osc_writer_pop_item(&writer, &itm);
+	}
 	if(has_gui)
 	{
-		ptr = osc_start_bundle_item(ptr, end, &itm);
-		ptr = osc_set_vararg(ptr, end, "/nsm/client/gui_is_shown", "");
-		ptr = osc_end_bundle_item(ptr, end, itm);
+		lv2_osc_writer_push_item(&writer, &itm);
+		lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+		lv2_osc_writer_pop_item(&writer, &itm);
 	}
-	ptr = osc_end_bundle(ptr, end, bndl);
+	lv2_osc_writer_pop_bundle(&writer, &bndl);
 
-	size_t written = ptr ? ptr - buf0 : 0;
-	if(written)
+	size_t written;
+	if(lv2_osc_writer_finalize(&writer, &written))
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
 		fprintf(stderr, "OSC sending failed\n");
 }
 
-static const osc_method_t methods [] = {
-	{"/reply", NULL, _reply},
-	{"/error", "sis", _error},
-	
-	{"/nsm/client/open", "sss", _client_open},
-	{"/nsm/client/save", "", _client_save},
-	{"/nsm/client/show_optional_gui", "", _client_show_optional_gui},
-	{"/nsm/client/hide_optional_gui", "", _client_hide_optional_gui},
+static const osc_msg_t messages [] = {
+	{"/reply", _reply},
+	{"/error", _error},
 
-	{NULL, NULL, NULL}
+	{"/nsm/client/open", _client_open},
+	{"/nsm/client/save", _client_save},
+	{"/nsm/client/show_optional_gui", _client_show_optional_gui},
+	{"/nsm/client/hide_optional_gui", _client_hide_optional_gui},
+
+	{NULL, NULL}
 };
 
 static Eina_Bool
@@ -266,6 +242,35 @@ _con_del(void *data, int type, void *info)
 	return EINA_TRUE;
 }
 
+static void
+_unpack_messages(LV2_OSC_Reader *reader, size_t len, synthpod_nsm_t *nsm)
+{
+	if(lv2_osc_reader_is_message(reader))
+	{
+		const char *path;
+		const char *fmt;
+		lv2_osc_reader_get_string(reader, &path);
+		lv2_osc_reader_get_string(reader, &fmt);
+		for(const osc_msg_t *msg = messages; msg->cb; msg++)
+		{
+			if(!strcmp(msg->path, path))
+			{
+				msg->cb(reader, nsm);
+				break;
+			}
+		}
+	}
+	else if(lv2_osc_reader_is_bundle(reader))
+	{
+		OSC_READER_BUNDLE_FOREACH(reader, itm, len)
+		{
+			LV2_OSC_Reader reader2;
+			lv2_osc_reader_initialize(&reader2, itm->body, itm->size);
+			_unpack_messages(&reader2, itm->size, nsm);
+		}
+	}
+}
+
 static Eina_Bool
 _con_dat(void *data, int type, void *info)
 {
@@ -274,12 +279,11 @@ _con_dat(void *data, int type, void *info)
 
 	assert(type == ECORE_CON_EVENT_SERVER_DATA);
 	
-	//printf("_client_data\n");
+	printf("_client_data\n");
 
-	if(osc_check_packet(ev->data, ev->size))
-		osc_dispatch_method(ev->data, ev->size, methods, NULL, NULL, nsm);
-	else
-		fprintf(stderr, "_client_dat: malformed OSC packet\n");
+	LV2_OSC_Reader reader;
+	lv2_osc_reader_initialize(&reader, ev->data, ev->size);
+	_unpack_messages(&reader, ev->size, nsm);
 
 	return EINA_TRUE;
 }
@@ -335,6 +339,9 @@ synthpod_nsm_new(const char *exe, const char *path,
 			goto fail;
 		
 		printf("NSM URL: %s, dst: %hu\n", addr, port);
+
+		if(strstr(addr, "localhost"))
+			addr = "127.0.0.1"; // forces ecore_con to use IPv4
 
 		nsm->serv = ecore_con_server_connect(type,
 			addr, port, nsm);
@@ -429,22 +436,23 @@ synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
 	if(!nsm)
 		return;
 
-	const osc_data_t *ptr;
-	osc_data_t *buf0 = nsm->send;
+	LV2_OSC_Writer writer;
+	bool ret = false;
+	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
 
 	if(status == 0)
 	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
+		ret = lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
 			"/nsm/client/open", "opened");
 	}
 	else
 	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
+		ret = lv2_osc_writer_message_vararg(&writer, "/error", "sis",
 			"/nsm/client/open", 2, "opening failed");
 	}
 
-	size_t written = ptr ? ptr - buf0 : 0;
-	if(written)
+	size_t written;
+	if(lv2_osc_writer_finalize(&writer, &written))
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
 		fprintf(stderr, "OSC sending failed\n");
@@ -456,22 +464,23 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 	if(!nsm)
 		return;
 
-	const osc_data_t *ptr;
-	osc_data_t *buf0 = nsm->send;
+	LV2_OSC_Writer writer;
+	bool ret = false;
+	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
 
 	if(status == 0)
 	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/reply", "ss",
+		ret = lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
 			"/nsm/client/save", "saved");
 	}
 	else
 	{
-		ptr = osc_set_vararg(buf0, buf0+256, "/error", "sis",
+		ret = lv2_osc_writer_message_vararg(&writer, "/error", "sis",
 			"/nsm/client/save", 1, "save failed");
 	}
 
-	size_t written = ptr ? ptr - buf0 : 0;
-	if(written)
+	size_t written;
+	if(lv2_osc_writer_finalize(&writer, &written))
 		ecore_con_server_send(nsm->serv, nsm->send, written);
 	else
 		fprintf(stderr, "OSC sending failed\n");
