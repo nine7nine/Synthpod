@@ -34,12 +34,14 @@
 #include <sratom/sratom.h>
 #include <varchunk.h>
 
+#include <lv2_extensions.h> // ardour's inline display
+
 #define XSD_PREFIX "http://www.w3.org/2001/XMLSchema#"
 #define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 #define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
 #define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
 
-#define NUM_FEATURES 17
+#define NUM_FEATURES 18
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 #define FROM_UI_NUM 24
@@ -229,6 +231,12 @@ struct _mod_t {
 
 	// make_path
 	LV2_State_Make_Path make_path;
+
+	struct {
+		const LV2_Inline_Display_Interface *iface;
+		const LV2_Inline_Display_Image_Surface *surf;
+		LV2_Inline_Display queue_draw;
+	} idisp;
 
 	// opts
 	struct {

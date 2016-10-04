@@ -5,6 +5,7 @@ include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
+include_directories(${PROJECT_SOURCE_DIR}/ardour.lv2)
 		
 add_definitions("-D_GNU_SOURCE=1") # asprintf
 

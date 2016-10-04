@@ -359,6 +359,9 @@ _sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 	mod->feature_list[nfeatures].URI = LV2_CORE__inPlaceBroken;
 	mod->feature_list[nfeatures++].data = NULL;
 
+	mod->feature_list[nfeatures].URI = LV2_INLINEDISPLAY__queue_draw;
+	mod->feature_list[nfeatures++].data = &mod->idisp.queue_draw;
+
 	assert(nfeatures <= NUM_FEATURES);
 
 	for(int i=0; i<nfeatures; i++)
@@ -538,6 +541,17 @@ _mod_worker_thread(void *data)
 	return NULL;
 }
 
+__realtime static void
+_mod_queue_draw(void *data)
+{
+	mod_t *mod = data;
+
+	if(mod->idisp.iface)
+	{
+		//FIXME signal worker thread to call :render
+	}
+}
+
 mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 {
@@ -567,6 +581,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 	mod->make_path.handle = mod;
 	mod->make_path.path = _mod_make_path;
+
+	mod->idisp.queue_draw.handle = mod;
+	mod->idisp.queue_draw.queue_draw = _mod_queue_draw;
 		
 	// populate options
 	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
@@ -627,6 +644,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		ZERO_WORKER__interface);
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_OPTIONS__interface);
+	mod->idisp.iface = lilv_instance_get_extension_data(mod->inst,
+		LV2_INLINEDISPLAY__interface);
 	mod->system_ports = lilv_plugin_has_feature(plug, app->regs.synthpod.system_ports.node);
 	bool load_default_state = lilv_plugin_has_feature(plug, app->regs.state.load_default_state.node);
 
