@@ -26,6 +26,7 @@
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <xcb/xcb.h>
+#include <xcb/xcb_icccm.h>
 #include <signal.h>
 
 typedef struct _app_t app_t;
@@ -34,6 +35,7 @@ struct _app_t {
 	sandbox_slave_t *sb;
 	LV2UI_Handle *handle;
 	const LV2UI_Idle_Interface *idle_iface;
+	const LV2UI_Resize *resize_iface;
 
 	xcb_connection_t *conn;
 	xcb_screen_t *screen;
@@ -43,6 +45,8 @@ struct _app_t {
  	xcb_intern_atom_reply_t* reply;
 	xcb_intern_atom_cookie_t cookie2;
  	xcb_intern_atom_reply_t* reply2;
+	int w;
+	int h;
 };
 
 static _Atomic bool done = ATOMIC_VAR_INIT(false);
@@ -57,6 +61,9 @@ static inline int
 _resize(void *data, int w, int h)
 {
 	app_t *app= data;
+
+	app->w = w;
+	app->h = h;
 
 	const uint32_t values[] = {w, h};
 	xcb_configure_window(app->conn, app->win,
@@ -78,11 +85,13 @@ _init(sandbox_slave_t *sb, void *data)
   const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
   const uint32_t values [2] = {
 		app->screen->white_pixel,
-		XCB_EVENT_MASK_EXPOSURE
+		XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY
 	};
 
+	app->w = 640;
+	app->h = 360;
   xcb_create_window(app->conn, XCB_COPY_FROM_PARENT, app->win, app->screen->root,
-		0, 0, 640, 360, 0,
+		0, 0, app->w, app->h, 0,
 		XCB_WINDOW_CLASS_INPUT_OUTPUT, app->screen->root_visual, mask, values);
 
 	const char *title = sandbox_slave_title_get(sb);
@@ -113,7 +122,14 @@ _init(sandbox_slave_t *sb, void *data)
 	if(!app->widget)
 		return -1;
 
+	// disable scaling FIXME
+	xcb_size_hints_t hints;
+	xcb_icccm_size_hints_set_min_size(&hints, app->w, app->h);
+	xcb_icccm_size_hints_set_max_size(&hints, app->w, app->h);
+	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &hints);
+
 	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
+	app->resize_iface = sandbox_slave_extension_data(sb, LV2_UI__resize);
 
 	return 0;
 }
@@ -128,15 +144,37 @@ _run(sandbox_slave_t *sb, void *data)
 		xcb_generic_event_t *e;
 		if((e = xcb_poll_for_event(app->conn)))
 		{
-			switch(e->response_type & ~0x80)
+			switch(e->response_type)
 			{
 				case XCB_EXPOSE:
+				{
 					xcb_flush(app->conn);
 					break;
+				}
+				case XCB_CONFIGURE_NOTIFY:
+				{
+					const xcb_configure_notify_event_t *ev = (const xcb_configure_notify_event_t *)e;
+					const int w = ev->width;
+					const int h = ev->height;
+					if( (app->w != w) || (app->h != h) )
+					{
+						if(app->resize_iface)
+						{
+							app->w = w;
+							app->h = h;
+							app->resize_iface->ui_resize(app->resize_iface->handle, w, h);
+						}
+					}
+					xcb_flush(app->conn);
+					break;
+				}
 				case XCB_CLIENT_MESSAGE:
-					if( (*(xcb_client_message_event_t*)e).data.data32[0] == (*app->reply2).atom)
+				{
+					const xcb_client_message_event_t *ev = (const xcb_client_message_event_t *)e;
+					if(ev->data.data32[0] == (*app->reply2).atom)
 						atomic_store_explicit(&done, true, memory_order_relaxed);
 					break;
+				}
 			}
 			free(e);
 		}

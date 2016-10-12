@@ -158,6 +158,7 @@ endif()
 
 if(BUILD_SANDBOX_X11)
 	pkg_search_module(XCB REQUIRED xcb>=1.10) # XCB
+	pkg_search_module(XCB_ICCCM REQUIRED xcb-icccm>=0.4) # XCB-ICCCM
 
 	add_executable(synthpod.sandbox.x11
 		synthpod_sandbox_x11.c
@@ -165,9 +166,11 @@ if(BUILD_SANDBOX_X11)
 		${PROJECT_SOURCE_DIR}/symap/symap.c)
 	target_link_libraries(synthpod.sandbox.x11
 		${XCB_LDFLAGS}
+		${XCB_ICCCM_LDFLAGS}
 		${NANOMSG_LDFLAGS}
 		${LILV_LDFLAGS})
 	target_include_directories(synthpod.sandbox.x11 PUBLIC ${XCB_INCLUDE_DIRS})
+	target_include_directories(synthpod.sandbox.x11 PUBLIC ${XCB_ICCCM_INCLUDE_DIRS})
 	set_target_properties(synthpod.sandbox.x11 PROPERTIES OUTPUT_NAME "synthpod_sandbox_x11")
 	install(TARGETS synthpod.sandbox.x11 DESTINATION bin)
 endif()
