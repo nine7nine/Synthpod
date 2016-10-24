@@ -313,7 +313,7 @@ _modlist_std_content_get(void *data, Evas_Object *obj, const char *part)
 
 				child = check;
 			}
-			if(port->is_bitmask)
+			else if(port->is_bitmask)
 			{
 				Evas_Object *bitmask = smart_bitmask_add(evas_object_evas_get(lay));
 				if(bitmask)
