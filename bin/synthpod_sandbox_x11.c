@@ -65,9 +65,15 @@ _resize(void *data, int w, int h)
 	app->w = w;
 	app->h = h;
 
-	const uint32_t values[] = {w, h};
+	const uint32_t values [2] = {app->w, app->h};
 	xcb_configure_window(app->conn, app->win,
 		XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
+
+	if(app->widget)
+	{
+		xcb_configure_window(app->conn, app->widget,
+			XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
+	}
 
 	return 0;
 }
@@ -122,11 +128,13 @@ _init(sandbox_slave_t *sb, void *data)
 	if(!app->widget)
 		return -1;
 
-	// disable scaling FIXME
-	xcb_size_hints_t hints;
-	xcb_icccm_size_hints_set_min_size(&hints, app->w, app->h);
-	xcb_icccm_size_hints_set_max_size(&hints, app->w, app->h);
-	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &hints);
+	if(sandbox_slave_no_user_resize_get(sb))
+	{
+		xcb_size_hints_t hints;
+		xcb_icccm_size_hints_set_min_size(&hints, app->w, app->h);
+		xcb_icccm_size_hints_set_max_size(&hints, app->w, app->h);
+		xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &hints);
+	}
 
 	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
 	app->resize_iface = sandbox_slave_extension_data(sb, LV2_UI__resize);
@@ -142,7 +150,7 @@ _run(sandbox_slave_t *sb, void *data)
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
 		xcb_generic_event_t *e;
-		if((e = xcb_poll_for_event(app->conn)))
+		while((e = xcb_poll_for_event(app->conn)))
 		{
 			switch(e->response_type)
 			{
@@ -154,15 +162,19 @@ _run(sandbox_slave_t *sb, void *data)
 				case XCB_CONFIGURE_NOTIFY:
 				{
 					const xcb_configure_notify_event_t *ev = (const xcb_configure_notify_event_t *)e;
-					const int w = ev->width;
-					const int h = ev->height;
-					if( (app->w != w) || (app->h != h) )
+					if( (app->w != ev->width) || (app->h != ev->height) )
 					{
+						app->w = ev->width;
+						app->h = ev->height;
+
+						const uint32_t values [2] = {app->w, app->h};
+						xcb_configure_window(app->conn, app->widget,
+							XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+							&values);
+
 						if(app->resize_iface)
 						{
-							app->w = w;
-							app->h = h;
-							app->resize_iface->ui_resize(app->resize_iface->handle, w, h);
+							app->resize_iface->ui_resize(app->resize_iface->handle, app->w, app->h);
 						}
 					}
 					xcb_flush(app->conn);
