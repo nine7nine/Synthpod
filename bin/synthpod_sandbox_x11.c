@@ -68,12 +68,7 @@ _resize(void *data, int w, int h)
 	const uint32_t values [2] = {app->w, app->h};
 	xcb_configure_window(app->conn, app->win,
 		XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
-
-	if(app->widget)
-	{
-		xcb_configure_window(app->conn, app->widget,
-			XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
-	}
+	xcb_flush(app->conn);
 
 	return 0;
 }
@@ -91,7 +86,7 @@ _init(sandbox_slave_t *sb, void *data)
   const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
   const uint32_t values [2] = {
 		app->screen->white_pixel,
-		XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY
+		XCB_EVENT_MASK_STRUCTURE_NOTIFY
 	};
 
 	app->w = 640;
@@ -154,11 +149,6 @@ _run(sandbox_slave_t *sb, void *data)
 		{
 			switch(e->response_type)
 			{
-				case XCB_EXPOSE:
-				{
-					xcb_flush(app->conn);
-					break;
-				}
 				case XCB_CONFIGURE_NOTIFY:
 				{
 					const xcb_configure_notify_event_t *ev = (const xcb_configure_notify_event_t *)e;
@@ -171,13 +161,13 @@ _run(sandbox_slave_t *sb, void *data)
 						xcb_configure_window(app->conn, app->widget,
 							XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
 							&values);
+						xcb_flush(app->conn);
 
 						if(app->resize_iface)
 						{
 							app->resize_iface->ui_resize(app->resize_iface->handle, app->w, app->h);
 						}
 					}
-					xcb_flush(app->conn);
 					break;
 				}
 				case XCB_CLIENT_MESSAGE:
