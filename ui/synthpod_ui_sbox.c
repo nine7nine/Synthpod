@@ -111,52 +111,59 @@ _sbox_ui_show(mod_t *mod)
 	mod_ui_t *mod_ui = mod->mod_ui;
 	const char *executable;
 
-#if 0
-#	define VALGRIND "valgrind --leak-check=full --show-leak-kinds=all --show-reachable=no --show-possibly-lost=no "
+//#define VALGRIND
+//#define GDB
+
+#ifdef VALGRIND
+#	define DBG_PRE "valgrind --leak-check=full --show-leak-kinds=all --show-reachable=no --show-possibly-lost=no "
 #else
-# define VALGRIND
+#	ifdef GDB
+#		define DBG_PRE "gdb -ex 'run' --args "
+#	else
+#		define DBG_PRE
+#	endif
 #endif
 
 	switch(mod_ui->type)
 	{
 #if defined(SANDBOX_X11)
 		case MOD_UI_TYPE_SANDBOX_X11:
-			executable = VALGRIND"synthpod_sandbox_x11";
+			executable = DBG_PRE"synthpod_sandbox_x11";
 			break;
 #endif
 #if defined(SANDBOX_GTK2)
 		case MOD_UI_TYPE_SANDBOX_GTK2:
-			executable = VALGRIND"synthpod_sandbox_gtk2";
+			executable = DBG_PRE"synthpod_sandbox_gtk2";
 			break;
 #endif
 #if defined(SANDBOX_GTK3)
 		case MOD_UI_TYPE_SANDBOX_GTK3:
-			executable = VALGRIND"synthpod_sandbox_gtk3";
+			executable = DBG_PRE"synthpod_sandbox_gtk3";
 			break;
 #endif
 #if defined(SANDBOX_QT4)
 		case MOD_UI_TYPE_SANDBOX_QT4:
-			executable = VALGRIND"synthpod_sandbox_qt4";
+			executable = DBG_PRE"synthpod_sandbox_qt4";
 			break;
 #endif
 #if defined(SANDBOX_QT5)
 		case MOD_UI_TYPE_SANDBOX_QT5:
-			executable = VALGRIND"synthpod_sandbox_qt5";
+			executable = DBG_PRE"synthpod_sandbox_qt5";
 			break;
 #endif
 #if defined(SANDBOX_EFL)
 		case MOD_UI_TYPE_SANDBOX_EFL:
-			executable = VALGRIND"synthpod_sandbox_efl";
+			executable = DBG_PRE"synthpod_sandbox_efl";
 			break;
 #endif
 #if defined(SANDBOX_SHOW)
 		case MOD_UI_TYPE_SANDBOX_SHOW:
-			executable = VALGRIND"synthpod_sandbox_show";
+			executable = DBG_PRE"synthpod_sandbox_show";
 			break;
 #endif
 #if defined(SANDBOX_KX)
 		case MOD_UI_TYPE_SANDBOX_KX:
-			executable = VALGRIND"synthpod_sandbox_kx";
+			executable = DBG_PRE"synthpod_sandbox_kx";
 			break;
 #endif
 		default:
@@ -164,7 +171,7 @@ _sbox_ui_show(mod_t *mod)
 			break;
 	}
 
-#undef VALGRIND
+#undef DBG_PRE
 
 	if(!executable)
 		return;

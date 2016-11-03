@@ -833,7 +833,7 @@ _osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 {
 	prog_t *handle = instance;
 
-	double diff = (frames - handle->cycle.cur_frames - handle->cycle.ref_frames)
+	double diff = (frames - handle->cycle.cur_frames + handle->cycle.ref_frames)
 		* handle->cycle.dTm1;
 	diff += handle->cur_ntp.tv_nsec * 1e-9;
 	diff += handle->cur_ntp.tv_sec;
