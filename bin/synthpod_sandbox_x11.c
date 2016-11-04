@@ -147,7 +147,7 @@ _run(sandbox_slave_t *sb, void *data)
 		xcb_generic_event_t *e;
 		while((e = xcb_poll_for_event(app->conn)))
 		{
-			switch(e->response_type)
+			switch(e->response_type & ~0x80)
 			{
 				case XCB_CONFIGURE_NOTIFY:
 				{
