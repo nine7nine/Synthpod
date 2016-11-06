@@ -340,7 +340,11 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 		evas_object_event_callback_add(frame, EVAS_CALLBACK_DEL, _content_del, mod);
 		evas_object_size_hint_weight_set(frame, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 		evas_object_size_hint_align_set(frame, EVAS_HINT_FILL, EVAS_HINT_FILL);
+#ifdef ELM_1_13
 		evas_object_size_hint_min_set(frame, ELM_SCALE_SIZE(48), ELM_SCALE_SIZE(48));
+#else
+		evas_object_size_hint_min_set(frame, 48, 48);
+#endif
 		evas_object_show(frame);
 		mod->std.frame = frame;
 
