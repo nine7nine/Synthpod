@@ -328,7 +328,7 @@ _ui_saved(void *data, int status)
 
 	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
-		elm_exit();
+		ecore_main_loop_quit();
 	}
 }
 
@@ -344,7 +344,6 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->path = strdup(path);
 
 	// synthpod init
-	bin->ui_driver.sample_rate = handle->srate;
 	bin->app_driver.sample_rate = handle->srate;
 	bin->app_driver.max_block_size = handle->frsize;
 	bin->app_driver.min_block_size = 1;
@@ -360,7 +359,9 @@ _open(const char *path, const char *name, const char *id, void *data)
 	if(!status)
 		fprintf(stderr, "creation of rt thread failed\n");
 
+	/*FIXME
 	sp_ui_bundle_load(bin->ui, bin->path, 1);
+	*/
 
 	return 0; // success
 }
@@ -372,7 +373,9 @@ _save(void *data)
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
 	handle->save_state = SAVE_STATE_NSM;
+	/*FIXME
 	sp_ui_bundle_save(bin->ui, bin->path, 1);
+	*/
 
 	return 0; // success
 }
@@ -431,11 +434,8 @@ _osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 	return timestamp;
 }
 
-EAPI_MAIN int
-elm_main(int argc, char **argv);
-	
-EAPI_MAIN int
-elm_main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	mlockall(MCL_CURRENT | MCL_FUTURE);
 
@@ -452,6 +452,7 @@ elm_main(int argc, char **argv)
 	bin->worker_prio = 60;
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 	bin->bad_plugins = false;
+	bin->socket_path = "ipc:///tmp/synthpod_bin";
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -459,7 +460,7 @@ elm_main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGbBy:Yw:Wr:p:s:c:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbBy:Yw:Wl:r:p:s:c:")) != -1)
 	{
 		switch(c)
 		{
@@ -496,6 +497,7 @@ elm_main(int argc, char **argv)
 					"   [-Y]                 do NOT use audio thread realtime priority\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
+					"   [-l] link-path       link path (ipc:///tmp/synthpod_bin)\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
 					"   [-p] sample-period   frames per period (1024)\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n"
@@ -526,6 +528,9 @@ elm_main(int argc, char **argv)
 			case 'W':
 				bin->worker_prio = 0;
 				break;
+			case 'l':
+				bin->socket_path = optarg;
+				break;
 			case 'r':
 				handle.srate = atoi(optarg);
 				break;
@@ -540,7 +545,8 @@ elm_main(int argc, char **argv)
 					bin->num_slaves = atoi(optarg);
 				break;
 			case '?':
-				if( (optopt == 'r') || (optopt == 'p') || (optopt == 's') || (optopt == 'c') )
+				if(  (optopt == 'r') || (optopt == 'p') || (optopt == 's') || (optopt == 'c')
+					|| (optopt == 'l') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -569,14 +575,6 @@ elm_main(int argc, char **argv)
   if(handle.frsize && !(handle.frsize & (handle.frsize - 1))) // check for powerOf2
 		bin->app_driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
 
-	bin->ui_driver.saved = _ui_saved;
-
-	bin->ui_driver.features = SP_UI_FEATURE_NEW | SP_UI_FEATURE_SAVE | SP_UI_FEATURE_CLOSE;
-	if(synthpod_nsm_managed())
-		bin->ui_driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
-	else
-		bin->ui_driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_SAVE_AS;
-
 	// run
 	bin_run(bin, argv, &nsm_driver);
 
@@ -598,5 +596,3 @@ elm_main(int argc, char **argv)
 
 	return 0;
 }
-
-ELM_MAIN()

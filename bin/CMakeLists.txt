@@ -14,6 +14,9 @@ set(SYNTHPOD_BIN_DIR "bin")
 set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
 set(SYNTHPOD_DESKTOP_DIR "share/applications")
 
+#FIXME use option
+install(PROGRAMS ${PROJECT_SOURCE_DIR}/bin/synthpod_ui DESTINATION bin)
+
 if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 # icon
 	install(FILES ${PROJECT_SOURCE_DIR}/data/pix/synthpod.png DESTINATION
@@ -48,13 +51,15 @@ if(BUILD_JACK)
 	add_executable(synthpod.jack
 		synthpod_jack.c
 		synthpod_nsm.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/symap/symap.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
 	target_link_libraries(synthpod.jack
+		${EINA_LDFLAGS}
 		${ECORE_CON_LDFLAGS}
 		${JACK_LIBS}
+		${NANOMSG_LDFLAGS}
 		"-lm"
-		synthpod.lib
-		synthpod_ui.lib)
+		synthpod.lib)
 	set_target_properties(synthpod.jack PROPERTIES OUTPUT_NAME "synthpod_jack")
 	install(TARGETS synthpod.jack DESTINATION bin)
 
@@ -95,14 +100,16 @@ if(BUILD_ALSA)
 		pcmi.cpp
 		synthpod_alsa.c
 		synthpod_nsm.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/symap/symap.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
 	target_link_libraries(synthpod.alsa
+		${EINA_LDFLAGS}
 		${ECORE_CON_LDFLAGS}
 		"-lasound" #FIXME
 		${ZITA_ALSA_PCMI_LIBRARY}
+		${NANOMSG_LDFLAGS}
 		"-lm"
-		synthpod.lib
-		synthpod_ui.lib)
+		synthpod.lib)
 	set_target_properties(synthpod.alsa PROPERTIES OUTPUT_NAME "synthpod_alsa")
 	install(TARGETS synthpod.alsa DESTINATION bin)
 
@@ -129,12 +136,14 @@ if(BUILD_DUMMY)
 	add_executable(synthpod.dummy
 		synthpod_dummy.c
 		synthpod_nsm.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/symap/symap.c
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
 	target_link_libraries(synthpod.dummy
+		${EINA_LDFLAGS}
 		${ECORE_CON_LDFLAGS}
+		${NANOMSG_LDFLAGS}
 		"-lm"
-		synthpod.lib
-		synthpod_ui.lib)
+		synthpod.lib)
 	set_target_properties(synthpod.dummy PROPERTIES OUTPUT_NAME "synthpod_dummy")
 	install(TARGETS synthpod.dummy DESTINATION bin)
 

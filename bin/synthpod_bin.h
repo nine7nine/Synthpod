@@ -20,15 +20,17 @@
 
 #include <synthpod_app.h>
 
-#	include <synthpod_ui.h>
-
 #include <Eina.h>
+#include <Ecore.h>
+#include <Ecore_File.h>
+#include <Efreet.h>
 
 #include <stdatomic.h>
 
 #include <symap.h>
 #include <varchunk.h>
 #include <osc.lv2/osc.h>
+#include <sandbox_master.h>
 
 #include <synthpod_nsm.h>
 
@@ -93,14 +95,11 @@ struct _bin_t {
 	synthpod_nsm_t *nsm;
 
 	bool has_gui;
-	sp_ui_t *ui;
-	sp_ui_driver_t ui_driver;
-	
+
 	varchunk_t *app_to_ui;
 	varchunk_t *app_from_ui;
 	
 	Ecore_Animator *ui_anim;
-	Evas_Object *win;
 	
 	_Atomic int worker_dead;
 	Eina_Thread worker_thread;
@@ -110,6 +109,7 @@ struct _bin_t {
 	LV2_URID log_note;
 	LV2_URID log_trace;
 	LV2_URID log_warning;
+	LV2_URID atom_eventTransfer;
 
 	LV2_Log_Log log;
 
@@ -120,6 +120,11 @@ struct _bin_t {
 	int worker_prio;
 	int num_slaves;
 	bool bad_plugins;
+	const char *socket_path;
+
+	sandbox_master_driver_t sb_driver;
+	sandbox_master_t *sb;
+	Ecore_Fd_Handler *hndl;
 };
 
 static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
@@ -199,16 +204,10 @@ _light_sem_signal(light_sem_t *lsem, int count)
 }
 
 __non_realtime static void
-_ui_delete_request(void *data, Evas_Object *obj, void *event)
-{
-	elm_exit();	
-}
-
-__non_realtime static void
 _ui_close(void *data)
 {
 	//printf("_ui_close\n");
-	elm_exit();
+	ecore_main_loop_quit();
 }
 
 __non_realtime static void
@@ -220,6 +219,7 @@ _ui_opened(void *data, int status)
 	synthpod_nsm_opened(bin->nsm, status);
 }
 
+//FIXME use a semaphore
 __non_realtime static Eina_Bool
 _ui_animator(void *data)
 {
@@ -227,15 +227,11 @@ _ui_animator(void *data)
 
 	size_t size;
 	const LV2_Atom *atom;
-	unsigned n = 0;
-	while((atom = varchunk_read_request(bin->app_to_ui, &size))
-#if 0
-		&& (n++ < MAX_MSGS) )
-#else
-		)
-#endif
+	while( (atom = varchunk_read_request(bin->app_to_ui, &size)) )
 	{
-		sp_ui_from_app(bin->ui, atom);
+		sandbox_master_send(bin->sb, 15, size, bin->atom_eventTransfer, atom); //TODO check
+		sandbox_master_flush(bin->sb);
+
 		varchunk_read_advance(bin->app_to_ui);
 	}
 
@@ -455,8 +451,7 @@ _show(void *data)
 {
 	bin_t *bin = data;
 
-	if(bin->win)
-		evas_object_show(bin->win);
+	//FIXME
 	
 	return 0;
 }
@@ -466,8 +461,7 @@ _hide(void *data)
 {
 	bin_t *bin = data;
 
-	if(bin->win)
-		evas_object_hide(bin->win);
+	//FIXME
 
 	return 0;
 }
@@ -496,9 +490,49 @@ _unmap(void *data, uint32_t urid)
 	return uri;
 }
 
+__non_realtime static void
+_sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
+	const void *buf)
+{
+	bin_t *bin = data;
+
+	if(index == 14) // control for synthpod:stereo
+	{
+		void *dst;
+		if( (dst = _ui_to_app_request(size, bin)) )
+		{
+			memcpy(dst, buf, size);
+
+			_ui_to_app_advance(size, bin);
+		}
+	}
+}
+
+__non_realtime static void
+_sb_subscribe_cb(void *data, uint32_t index, uint32_t protocol, bool state)
+{
+	bin_t *bin = data;
+
+	//FIXME
+}
+
+__non_realtime static Eina_Bool
+_sb_recv(void *data, Ecore_Fd_Handler *fd_handler)
+{
+	sandbox_master_t *sb = data;
+
+	sandbox_master_recv(sb);
+
+	return ECORE_CALLBACK_RENEW;
+}
+
 static void
 bin_init(bin_t *bin)
 {
+	ecore_init();
+	ecore_file_init();
+	eina_init();
+
 	// varchunk init
 	bin->app_to_ui = varchunk_new(CHUNK_SIZE, true);
 	bin->app_from_ui = varchunk_new(CHUNK_SIZE, true);
@@ -525,6 +559,7 @@ bin_init(bin_t *bin)
 	bin->log_note = map->map(map->handle, LV2_LOG__Note);
 	bin->log_trace = map->map(map->handle, LV2_LOG__Trace);
 	bin->log_warning = map->map(map->handle, LV2_LOG__Warning);
+	bin->atom_eventTransfer = map->map(map->handle, LV2_ATOM__eventTransfer);
 
 	bin->log.handle = bin;
 	bin->log.printf = _log_printf;
@@ -546,17 +581,19 @@ bin_init(bin_t *bin)
 	bin->app_driver.audio_prio = bin->audio_prio;
 	bin->app_driver.bad_plugins = bin->bad_plugins;
 
-	bin->ui_driver.map = &bin->map;
-	bin->ui_driver.unmap = &bin->unmap;
-	bin->ui_driver.xmap = &bin->xmap;
-	bin->ui_driver.log = &bin->log;
-	bin->ui_driver.to_app_request = _ui_to_app_request;
-	bin->ui_driver.to_app_advance = _ui_to_app_advance;
-
-	bin->ui_driver.opened = _ui_opened;
-	bin->ui_driver.close = _ui_close;
-
 	bin->self = eina_thread_self(); // thread ID of UI thread
+
+	bin->sb_driver.socket_path = bin->socket_path;
+	bin->sb_driver.map = &bin->map;
+	bin->sb_driver.unmap = &bin->unmap;
+	bin->sb_driver.recv_cb = _sb_recv_cb;
+	bin->sb_driver.subscribe_cb = _sb_subscribe_cb;
+
+	bin->sb = sandbox_master_new(&bin->sb_driver, bin); //TODO check
+	int fd;
+	sandbox_master_fd_get(bin->sb, &fd); //TODO check
+	bin->hndl = ecore_main_fd_handler_add(fd, ECORE_FD_READ,
+		_sb_recv, bin->sb, NULL, NULL); //TODO check
 }
 
 static void
@@ -564,29 +601,6 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 {
 	// create main window
 	bin->ui_anim = ecore_animator_add(_ui_animator, bin);
-
-	bin->win = NULL;
-	if(bin->has_gui)
-	{
-#ifdef ELM_1_10
-		elm_config_accel_preference_set("gl");
-#endif
-		elm_policy_set(ELM_POLICY_QUIT, ELM_POLICY_QUIT_LAST_WINDOW_CLOSED);
-
-		bin->win = elm_win_util_standard_add("synthpod", "Synthpod");
-		if(bin->win)
-		{
-			evas_object_smart_callback_add(bin->win, "delete,request", _ui_delete_request, NULL);
-			evas_object_resize(bin->win, 1280, 720);
-			evas_object_show(bin->win);
-		}
-	}
-
-	// ui init
-	bin->ui = sp_ui_new(bin->win, NULL, &bin->ui_driver, bin, 1);
-
-	if(bin->has_gui)
-		elm_win_resize_object_add(bin->win, sp_ui_widget_get(bin->ui));
 
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
@@ -604,14 +618,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 		fprintf(stderr, "creation of worker thread failed\n");
 
 	// main loop
-	elm_run();
-
-	// ui deinit
-	sp_ui_del(bin->ui, true);
-	sp_ui_free(bin->ui);
-
-	if(bin->win)
-		evas_object_del(bin->win);
+	ecore_main_loop_begin();
 
 	if(bin->ui_anim)
 		ecore_animator_del(bin->ui_anim);
@@ -638,6 +645,11 @@ bin_stop(bin_t *bin)
 static void
 bin_deinit(bin_t *bin)
 {
+	if(bin->sb)
+		sandbox_master_free(bin->sb);
+	if(bin->hndl)
+		ecore_main_fd_handler_del(bin->hndl);
+
 	// synthpod deinit
 	sp_app_free(bin->app);
 
@@ -652,6 +664,10 @@ bin_deinit(bin_t *bin)
 	varchunk_free(bin->app_from_worker);
 	varchunk_free(bin->app_from_com);
 	varchunk_free(bin->app_from_app);
+
+	eina_shutdown();
+	ecore_file_shutdown();
+	ecore_shutdown();
 }
 
 static inline void
