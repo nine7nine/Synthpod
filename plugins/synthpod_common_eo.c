@@ -122,12 +122,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	LV2UI_Controller controller, LV2UI_Widget *widget,
 	const LV2_Feature *const *features)
 {
-	if(  strcmp(plugin_uri, SYNTHPOD_STEREO_URI)
-		&& strcmp(plugin_uri, SYNTHPOD_MONOATOM_URI) )
-	{
-		return NULL;
-	}
-
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
@@ -209,8 +203,17 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		//TODO handle more options
 	}
 
-	handle->driver.features = SP_UI_FEATURE_NEW
-		| SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
+	handle->driver.features = SP_UI_FEATURE_NEW;
+
+	if(!strcmp(descriptor->URI, SYNTHPOD_ROOT_EO_URI)) // is root window
+	{
+		handle->driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_CLOSE
+			| SP_UI_FEATURE_SAVE | SP_UI_FEATURE_SAVE_AS;
+	}
+	else
+	{
+		handle->driver.features |= SP_UI_FEATURE_IMPORT_FROM | SP_UI_FEATURE_EXPORT_TO;
+	}
 	
 	// query port indeces of "control" and "notify" ports
 	handle->control_port = handle->port_map->port_index(handle->port_map->handle, "control");
@@ -265,6 +268,14 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 const LV2UI_Descriptor synthpod_common_3_eo = {
 	.URI						= SYNTHPOD_COMMON_EO_URI,
+	.instantiate		= instantiate,
+	.cleanup				= cleanup,
+	.port_event			= port_event,
+	.extension_data	= NULL
+};
+
+const LV2UI_Descriptor synthpod_root_3_eo = {
+	.URI						= SYNTHPOD_ROOT_EO_URI,
 	.instantiate		= instantiate,
 	.cleanup				= cleanup,
 	.port_event			= port_event,

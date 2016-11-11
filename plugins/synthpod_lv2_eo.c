@@ -47,6 +47,8 @@ lv2ui_descriptor(uint32_t index)
 		case 0:
 			return &synthpod_common_3_eo;
 		case 1:
+			return &synthpod_root_3_eo;
+		case 2:
 			return &synthpod_keyboard_3_eo;
 
 		default:

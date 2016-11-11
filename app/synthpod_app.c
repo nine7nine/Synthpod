@@ -846,3 +846,43 @@ sp_app_com_event(sp_app_t *app, LV2_URID otype)
 
 	return 1;
 }
+
+//TODO keep in-line with sp_ui_bundle_load
+void
+sp_app_bundle_load(sp_app_t *app, const char *bundle_path,
+	sp_to_request_t req, sp_to_advance_t adv, void *data)
+{
+	if(!bundle_path)
+		return;
+
+	// signal to app
+	size_t size = sizeof(transmit_bundle_load_t)
+		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
+	transmit_bundle_load_t *trans = req(size, data);
+	if(trans)
+	{
+		_sp_transmit_bundle_load_fill(&app->regs, &app->forge, trans, size,
+			-1, bundle_path);
+		adv(size, data);
+	}
+}
+
+//TODO keep in-line with sp_ui_bundle_save
+void
+sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
+	sp_to_request_t req, sp_to_advance_t adv, void *data)
+{
+	if(!bundle_path)
+		return;
+
+	// signal to app
+	size_t size = sizeof(transmit_bundle_save_t)
+		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
+	transmit_bundle_save_t *trans = req(size, data);
+	if(trans)
+	{
+		_sp_transmit_bundle_save_fill(&app->regs, &app->forge, trans, size,
+			-1, bundle_path);
+		adv(size, data);
+	}
+}

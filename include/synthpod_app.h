@@ -168,4 +168,12 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples);
 SYNTHPOD_SYMBOL_EXTERN int
 sp_app_com_event(sp_app_t *app, LV2_URID otype); 
 
+SYNTHPOD_SYMBOL_EXTERN void
+sp_app_bundle_load(sp_app_t *app, const char *bundle_path,
+	sp_to_request_t req, sp_to_advance_t adv, void *data);
+
+SYNTHPOD_SYMBOL_EXTERN void
+sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
+	sp_to_request_t req, sp_to_advance_t adv, void *data);
+
 #endif // _SYNTHPOD_APP_H

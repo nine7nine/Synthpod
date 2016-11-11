@@ -32,11 +32,6 @@ synthpod:common_1_ui
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
 	lv2:optionalFeature log:log, ui:portSubscribe, opts:options ;
 	lv2:requiredFeature ui:idleInterface, urid:map, urid:unmap ;
   lv2:extensionData ui:idleInterface, ui:showInterface .
@@ -44,11 +39,6 @@ synthpod:common_2_kx
 	a kx:Widget ;
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
-		lv2:symbol "notify" ;
-		ui:protocol atom:eventTransfer ;
-	] ;
-	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
@@ -61,8 +51,14 @@ synthpod:common_3_eo
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
+	lv2:extensionData ui:resize ;
+	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
+	lv2:requiredFeature ui:portMap, urid:map .
+
+synthpod:root_3_eo
+	a ui:EoUI ;
 	ui:portNotification [
-		ui:plugin synthpod:monoatom ;
+		ui:plugin synthpod:stereo ;
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;

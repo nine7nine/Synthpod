@@ -359,9 +359,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	if(!status)
 		fprintf(stderr, "creation of rt thread failed\n");
 
-	/*FIXME
-	sp_ui_bundle_load(bin->ui, bin->path, 1);
-	*/
+	bin_bundle_load(bin, bin->path);
 
 	return 0; // success
 }
@@ -373,9 +371,7 @@ _save(void *data)
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
 	handle->save_state = SAVE_STATE_NSM;
-	/*FIXME
-	sp_ui_bundle_save(bin->ui, bin->path, 1);
-	*/
+	bin_bundle_save(bin, bin->path);
 
 	return 0; // success
 }
@@ -383,8 +379,8 @@ _save(void *data)
 static const synthpod_nsm_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
-	.show = _show,
-	.hide = _hide
+	.show = NULL,
+	.hide = NULL
 };
 
 // rt
@@ -452,7 +448,7 @@ main(int argc, char **argv)
 	bin->worker_prio = 60;
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 	bin->bad_plugins = false;
-	bin->socket_path = "ipc:///tmp/synthpod_bin";
+	bin->socket_path = "ipc:///tmp/synthpod";
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"

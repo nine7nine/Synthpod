@@ -810,6 +810,8 @@ _sp_ui_mod_add(sp_ui_t *ui, const char *uri, u_id_t uid)
 			const LilvNode *ui_uri_node = lilv_ui_get_uri(lui);
 			if(!ui_uri_node)
 				continue;
+			if(!strcmp(SYNTHPOD_PREFIX"root_3_eo", lilv_node_as_uri(ui_uri_node))) //FIXME
+				continue;
 			
 			// nedded if ui ttl referenced via rdfs#seeAlso
 			lilv_world_load_resource(ui->world, ui_uri_node); //TODO unload

@@ -259,7 +259,31 @@ synthpod:stereo
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		rsz:minimumSize 65536;
+	] ;
+
+	state:state [
+		synthpod:graph [
+			a atom:Tuple ;
+			rdf:value (
+				[
+					a synthpod:source ;
+					lv2:index 1 ;
+				] [
+					a synthpod:sink ;
+					lv2:index 2 ;
+				]
+			)
+		]
 	] .
+
+# FIXME needed for sord_validate
+synthpod:source
+	a rdfs:Class .
+synthpod:sink
+	a rdfs:Class .
+synthpod:graph
+	a lv2:Parameter ;
+	rdfs:label "graph" .
 
 # Monoatom Plugin
 synthpod:monoatom
@@ -324,6 +348,21 @@ synthpod:monoatom
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		rsz:minimumSize 65536;
+	] ;
+
+	state:state [
+		synthpod:graph [
+			a atom:Tuple ;
+			rdf:value (
+				[
+					a synthpod:source ;
+					lv2:index 1 ;
+				] [
+					a synthpod:sink ;
+					lv2:index 2 ;
+				]
+			)
+		]
 	] .
 
 # Keyboard Plugin

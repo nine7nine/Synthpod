@@ -40,17 +40,7 @@ synthpod:stereo
 	ui:ui synthpod:common_1_ui ;
 	ui:ui synthpod:common_2_kx ;
 	ui:ui synthpod:common_3_eo ;
-	rdfs:seeAlso <synthpod.ttl> .
-
-# Synthpod Monoatom
-synthpod:monoatom
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	ui:ui synthpod:common_1_ui ;
-	ui:ui synthpod:common_2_kx ;
-	ui:ui synthpod:common_3_eo ;
+	ui:ui synthpod:root_3_eo ; #FIXME
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_1_ui
@@ -62,6 +52,11 @@ synthpod:common_2_kx
 	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:common_3_eo
+	a ui:EoUI ;
+	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod_ui.ttl> .
+
+synthpod:root_3_eo
 	a ui:EoUI ;
 	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .

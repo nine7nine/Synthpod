@@ -776,6 +776,11 @@ sp_ui_bundle_new(sp_ui_t *ui)
 	if(!ui)
 		return;
 
+	// simply load the default state
+	/*TODO
+	sp_ui_bundle_load(ui, SYNTHPOD_PREFIX"stereo", 0);
+	*/
+
 	_modlist_clear(ui, false, true); // do not clear system ports
 }
 

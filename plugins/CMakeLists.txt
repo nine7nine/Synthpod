@@ -32,8 +32,7 @@ add_library(synthpod.lv2 MODULE
 	synthpod_control2atom.c
 	synthpod_mixer.c
 	synthpod_panic.c
-	synthpod_anonymizer.c
-	synthpod_monoatom.c)
+	synthpod_anonymizer.c)
 target_link_libraries(synthpod.lv2 synthpod.lib)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 install(TARGETS synthpod.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})

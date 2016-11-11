@@ -108,7 +108,7 @@ _client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	char *synthpod_dir = ecore_file_realpath(dir);
 	const char *realpath = synthpod_dir && synthpod_dir[0] ? synthpod_dir : dir;
 
-	if(nsm->driver->open(realpath, name, id, nsm->data))
+	if(nsm->driver->open && nsm->driver->open(realpath, name, id, nsm->data))
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
 
 	if(synthpod_dir)
@@ -119,7 +119,7 @@ static void
 _client_save(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
 	// save app
-	if(nsm->driver->save(nsm->data))
+	if(nsm->driver->save && nsm->driver->save(nsm->data))
 		fprintf(stderr, "NSM save failed:\n");
 }
 
@@ -127,7 +127,7 @@ static void
 _client_show_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
 	// show gui
-	if(nsm->driver->show(nsm->data))
+	if(nsm->driver->show && nsm->driver->show(nsm->data))
 	{
 		fprintf(stderr, "NSM show GUI failed\n");
 		return;
@@ -149,7 +149,7 @@ static void
 _client_hide_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 {
 	// hide gui
-	if(nsm->driver->hide(nsm->data))
+	if(nsm->driver->hide && nsm->driver->hide(nsm->data))
 	{
 		fprintf(stderr, "NSM hide GUI failed\n");
 		return;
@@ -365,7 +365,7 @@ synthpod_nsm_new(const char *exe, const char *path,
 			char *synthpod_dir = ecore_file_realpath(path);
 			const char *realpath = synthpod_dir && synthpod_dir[0] ? synthpod_dir : path;
 
-			if(nsm->driver->open(realpath, nsm->call, nsm->exe, nsm->data))
+			if(nsm->driver->open && nsm->driver->open(realpath, nsm->call, nsm->exe, nsm->data))
 				fprintf(stderr, "NSM load failed: '%s'\n", path);
 
 			if(synthpod_dir)
@@ -385,7 +385,7 @@ synthpod_nsm_new(const char *exe, const char *path,
 			{
 				ecore_file_mkpath(synthpod_dir); // path may not exist yet
 
-				if(nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
+				if(nsm->driver->open && nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
 					fprintf(stderr, "NSM load failed: '%s'\n", synthpod_dir);
 
 				free(synthpod_dir);
