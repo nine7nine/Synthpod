@@ -46,6 +46,8 @@ struct _plughandle_t {
 	uint32_t control_port;
 	uint32_t notify_port;
 
+	bool is_root;
+
 	struct {
 		uint8_t app [CHUNK_SIZE] _ATOM_ALIGNED;
 	} buf;
@@ -114,6 +116,32 @@ _content_get(plughandle_t *handle, Evas_Object *parent)
 	evas_object_size_hint_min_set(widg, 1280, 720);
 
 	return widg;
+}
+
+static void
+_opened(void *data, int status)
+{
+	plughandle_t *handle = data;
+
+	fprintf(stderr, "_opened: %i\n", status);
+	//FIXME
+}
+
+static void
+_saved(void *data, int status)
+{
+	plughandle_t *handle = data;
+
+	fprintf(stderr, "_saved: %i\n", status);
+	//FIXME
+}
+
+static void
+_close(void *data)
+{
+	plughandle_t *handle = data;
+
+	sp_ui_quit(handle->ui);
 }
 
 static LV2UI_Handle
@@ -205,7 +233,10 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->driver.features = SP_UI_FEATURE_NEW;
 
-	if(!strcmp(descriptor->URI, SYNTHPOD_ROOT_EO_URI)) // is root window
+	// is root window
+	handle->is_root = !strcmp(descriptor->URI, SYNTHPOD_ROOT_EO_URI);
+
+	if(handle->is_root)
 	{
 		handle->driver.features |= SP_UI_FEATURE_OPEN | SP_UI_FEATURE_CLOSE
 			| SP_UI_FEATURE_SAVE | SP_UI_FEATURE_SAVE_AS;
@@ -226,9 +257,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->driver.to_app_request = _to_app_request;
 	handle->driver.to_app_advance = _to_app_advance;
-	handle->driver.opened = NULL; //TODO
-	handle->driver.saved = NULL; //TODO
-	handle->driver.close = NULL; //TODO
+	handle->driver.opened = _opened;
+	handle->driver.saved = _saved;
+	handle->driver.close = _close;
 
 	handle->widget = _content_get(handle, parent);
 	if(!handle->widget)

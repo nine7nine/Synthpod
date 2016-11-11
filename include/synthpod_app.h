@@ -49,6 +49,8 @@ typedef void *(*sp_system_port_add)(void *data, system_port_t type,
 	bool input, uint32_t order);
 typedef void (*sp_system_port_del)(void *data, void *sys_port);
 
+typedef void (*sp_close_request_t)(void *data);
+
 enum _sp_app_features_t {
 	SP_APP_FEATURE_FIXED_BLOCK_LENGTH				= (1 << 0),
 	SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH	= (1 << 1)
@@ -113,6 +115,8 @@ struct _sp_app_driver_t {
 
 	int audio_prio;
 	bool bad_plugins;
+
+	sp_close_request_t close_request;
 };
 
 SYNTHPOD_SYMBOL_EXTERN sp_app_t *

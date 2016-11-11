@@ -118,13 +118,16 @@ _sb_quit(void *data, int type, void *event)
 	return ECORE_CALLBACK_PASS_ON;
 }
 
-__non_realtime static void
-_ui_close(void *data)
+__realtime static void
+_close_request(void *data)
 {
-	//printf("_ui_close\n");
-	ecore_main_loop_quit();
+	bin_t *bin = data;
+
+	if(bin->has_gui) // UI has actually been started by app
+		atomic_store_explicit(&bin->ui_is_done, true, memory_order_relaxed);
 }
 
+//FIXME handle this somewhere
 __non_realtime static void
 _ui_opened(void *data, int status)
 {
@@ -138,6 +141,9 @@ __non_realtime static Eina_Bool
 _ui_animator(void *data)
 {
 	bin_t *bin = data;
+
+	if(atomic_load_explicit(&bin->ui_is_done, memory_order_relaxed))
+		ecore_main_loop_quit();
 
 	size_t size;
 	const LV2_Atom *atom;
@@ -477,6 +483,7 @@ bin_init(bin_t *bin)
 
 	bin->app_driver.audio_prio = bin->audio_prio;
 	bin->app_driver.bad_plugins = bin->bad_plugins;
+	bin->app_driver.close_request = _close_request;
 
 	bin->self = eina_thread_self(); // thread ID of UI thread
 
@@ -539,6 +546,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 		EINA_THREAD_URGENT, -1, _worker_thread, bin);
 	if(!status)
 		fprintf(stderr, "creation of worker thread failed\n");
+
+	atomic_init(&bin->ui_is_done , false);
 
 	// main loop
 	ecore_main_loop_begin();

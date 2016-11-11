@@ -111,6 +111,8 @@ struct _bin_t {
 	Ecore_Fd_Handler *hndl;
 	Ecore_Event_Handler *del;
 	Ecore_Exe *exe;
+
+	_Atomic bool ui_is_done;
 };
 
 void

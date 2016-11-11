@@ -809,3 +809,19 @@ sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path, int update_path)
 		_sp_ui_to_app_advance(ui, size);
 	}
 }
+
+void
+sp_ui_quit(sp_ui_t *ui)
+{
+	if(!ui)
+		return;
+
+	// signal to app
+	size_t size = sizeof(transmit_quit_t);
+	transmit_quit_t *trans = _sp_ui_to_app_request(ui, size);
+	if(trans)
+	{
+		_sp_transmit_quit_fill(&ui->regs, &ui->forge, trans, size);
+		_sp_ui_to_app_advance(ui, size);
+	}
+}

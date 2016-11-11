@@ -128,6 +128,8 @@ _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 __realtime static bool
 _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 {
+	printf("_sp_app_rom_ui_module_list\n");
+
 	// iterate over existing modules and send module_add_t
 	for(unsigned m=0; m<app->num_mods; m++)
 	{
@@ -948,6 +950,19 @@ _sp_app_from_ui_pane_left(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
+__realtime static bool
+_sp_app_from_ui_quit(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_quit_t *quit = (const transmit_quit_t *)atom;
+
+	if(app->driver->close_request)
+		app->driver->close_request(app->data);
+
+	return advance_ui[app->block_state];
+}
+
 void
 sp_app_from_ui_fill(sp_app_t *app)
 {
@@ -1025,6 +1040,9 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.synthpod.pane_left.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_pane_left;
+
+	from_uis[ptr].protocol = app->regs.synthpod.quit.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_quit;
 
 	assert(ptr == FROM_UI_NUM);
 	// sort according to URID
