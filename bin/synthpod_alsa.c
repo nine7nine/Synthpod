@@ -993,7 +993,7 @@ main(int argc, char **argv)
 					"   [-Y]                 do NOT use audio thread realtime priority\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
-					"   [-l] link-path       link path (ipc:///tmp/synthpod_bin)\n"
+					"   [-l] link-path       socket link path (ipc:///tmp/synthpod)\n"
 					"   [-d] device          capture/playback device (\"hw:0\")\n"
 					"   [-i] capture-device  capture device (\"hw:0\")\n"
 					"   [-o] playback-device playback device (\"hw:0\")\n"

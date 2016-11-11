@@ -994,7 +994,7 @@ main(int argc, char **argv)
 					"   [-B]                 disable bad plugins (default)\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
-					"   [-l] link-path       link path (ipc:///tmp/synthpod_bin)\n"
+					"   [-l] link-path       socket link path (ipc:///tmp/synthpod)\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-u] client-uuid     client UUID for JACK session management\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n"

@@ -493,7 +493,7 @@ main(int argc, char **argv)
 					"   [-Y]                 do NOT use audio thread realtime priority\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
-					"   [-l] link-path       link path (ipc:///tmp/synthpod_bin)\n"
+					"   [-l] link-path       socket link path (ipc:///tmp/synthpod)\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
 					"   [-p] sample-period   frames per period (1024)\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n"
