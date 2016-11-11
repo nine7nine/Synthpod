@@ -103,6 +103,21 @@ _light_sem_signal(light_sem_t *lsem, int count)
 		eina_semaphore_release(&lsem->sem, to_release);
 }
 
+static Eina_Bool
+_sb_quit(void *data, int type, void *event)
+{
+	bin_t *bin = data;
+	Ecore_Exe_Event_Del *ev = event;
+
+	if(bin->exe == ev->exe) // UI has quit, quit too
+	{
+		ecore_main_loop_quit();
+		return ECORE_CALLBACK_CANCEL;
+	}
+
+	return ECORE_CALLBACK_PASS_ON;
+}
+
 __non_realtime static void
 _ui_close(void *data)
 {
@@ -479,8 +494,27 @@ bin_init(bin_t *bin)
 
 		if(fd)
 		{
+			// automatically start gui in separate process
+			if(bin->has_gui && !strncmp(bin->socket_path, "ipc://", 6))
+			{
+				char *cmd = NULL;
+				if(asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w 'Synthpod - %s'",
+					"synthpod_sandbox_efl",
+					SYNTHPOD_PREFIX"stereo",
+					SYNTHPOD_PLUGIN_DIR, //FIXME look up dynamically
+					SYNTHPOD_PREFIX"root_3_eo",
+					bin->socket_path,
+					bin->socket_path) != -1)
+				{
+					bin->exe = ecore_exe_run(cmd, bin);
+
+					free(cmd);
+				}
+			}
+
 			bin->hndl = ecore_main_fd_handler_add(fd, ECORE_FD_READ,
 				_sb_recv, bin->sb, NULL, NULL);
+			bin->del = ecore_event_handler_add(ECORE_EXE_EVENT_DEL, _sb_quit, bin);
 		}
 	}
 }
@@ -534,8 +568,12 @@ bin_stop(bin_t *bin)
 void
 bin_deinit(bin_t *bin)
 {
+	if(bin->del)
+		ecore_event_handler_del(bin->del);
 	if(bin->hndl)
 		ecore_main_fd_handler_del(bin->hndl);
+	if(bin->exe)
+		ecore_exe_interrupt(bin->exe);
 	if(bin->sb)
 		sandbox_master_free(bin->sb);
 

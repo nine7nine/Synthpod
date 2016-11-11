@@ -109,6 +109,8 @@ struct _bin_t {
 	sandbox_master_driver_t sb_driver;
 	sandbox_master_t *sb;
 	Ecore_Fd_Handler *hndl;
+	Ecore_Event_Handler *del;
+	Ecore_Exe *exe;
 };
 
 void
