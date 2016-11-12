@@ -18,6 +18,13 @@
 #ifndef _SYNTHPOD_COMMON_H
 #define _SYNTHPOD_COMMON_H
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <err.h>
+#include <errno.h>
+#include <string.h>
+#include <ftw.h>
+
 #define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
 
 #ifdef _WIN32
@@ -34,5 +41,65 @@
 
 #define __realtime __attribute__((annotate("realtime")))
 #define __non_realtime __attribute__((annotate("non-realtime")))
+
+static inline int
+mkpath(char *path)
+{
+	struct stat sb;
+	char *slash;
+	bool done = false;
+
+	slash = path;
+
+	while(!done)
+	{
+		slash += strspn(slash, "/");
+		slash += strcspn(slash, "/");
+
+		done = *slash == '\0';
+		*slash = '\0';
+
+		if(stat(path, &sb))
+		{
+			if(  (errno != ENOENT)
+				|| (mkdir(path, 0777) && (errno != EEXIST)) )
+			{
+				return -1;
+			}
+		}
+		else if(!S_ISDIR(sb.st_mode))
+		{
+			return -1;
+		}
+
+		*slash = '/';
+	}
+
+	return 0;
+}
+
+static inline int
+mkpath_const(const char *path)
+{
+	char *dup = strdup(path);
+	if(!dup)
+		return -1;
+
+	const int ret = mkpath(dup);
+	free(dup);
+	return ret;
+}
+
+static inline int
+_unlink_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
+{
+	return remove(fpath);
+}
+
+static inline int
+rmrf_const(const char *path)
+{
+	return nftw(path, _unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
+}
 
 #endif // _SYNTHPOD_COMMON_H

@@ -24,7 +24,7 @@
 #include <osc.lv2/writer.h>
 #include <osc.lv2/reader.h>
 
-#include <synthpod_app.h>
+#include <synthpod_common.h>
 #include <synthpod_nsm.h>
 
 typedef void (*osc_cb_t)(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm);
@@ -102,11 +102,9 @@ _client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	lv2_osc_reader_get_string(reader, &id);
 
 	// open/create app
+	mkpath_const(dir);
+
 	uv_fs_t req;
-
-	uv_fs_mkdir(nsm->loop, &req, dir, 0, NULL);
-	uv_fs_req_cleanup(&req);
-
 	uv_fs_realpath(nsm->loop, &req, dir, NULL);
 	const char *realpath = req.path && *(char *)req.path ? req.path : dir;
 
@@ -354,11 +352,9 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 
 		if(path)
 		{
+			mkpath_const(path);
+
 			uv_fs_t req;
-
-			uv_fs_mkdir(nsm->loop, &req, path, 0, NULL);
-			uv_fs_req_cleanup(&req);
-
 			uv_fs_realpath(nsm->loop, &req, path, NULL);
 			const char *realpath = req.ptr && *(char *)req.ptr ? req.ptr : path;
 
@@ -379,10 +375,7 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 			asprintf(&synthpod_dir, "%s/.lv2/Synthpod_default.preset.lv2", home_dir);
 			if(synthpod_dir)
 			{
-				uv_fs_t req;
-
-				uv_fs_mkdir(nsm->loop, &req, synthpod_dir, 0, NULL);
-				uv_fs_req_cleanup(&req);
+				mkpath(synthpod_dir);
 
 				if(nsm->driver->open && nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
 					fprintf(stderr, "NSM load failed: '%s'\n", synthpod_dir);

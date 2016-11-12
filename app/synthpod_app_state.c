@@ -60,10 +60,7 @@ _make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 			char *path = strndup(absolute_path, end - absolute_path);
 			if(path)
 			{
-				uv_loop_t *loop = uv_default_loop();
-				uv_fs_t req;
-				uv_fs_mkdir(loop, &req, path, 0, NULL);
-				uv_fs_req_cleanup(&req);
+				mkpath(path);
 
 				free(path);
 			}
@@ -255,10 +252,7 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 		if(isspace(*c))
 			*c = '_';
 
-	uv_loop_t *loop = uv_default_loop();
-	uv_fs_t req;
-	uv_fs_mkdir(loop, &req, dir, 0, NULL);
-	uv_fs_req_cleanup(&req);
+	mkpath(dir);
 
 	// create plugin state file name
 	asprintf(&filename, "%s.ttl", target);
@@ -716,11 +710,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			if(root_path)
 			{
 				// remove whole bundle tree
-
-				uv_loop_t *loop = uv_default_loop();
-				uv_fs_t req;
-				uv_fs_rmdir(loop, &req, root_path, NULL);
-				uv_fs_req_cleanup(&req);
+				rmrf_const(root_path);
 
 				free(root_path);
 			}
@@ -733,10 +723,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			char *manifest_path = map_path->absolute_path(map_path->handle, uid_str);
 			if(manifest_path)
 			{
-				uv_loop_t *loop = uv_default_loop();
-				uv_fs_t req;
-				uv_fs_unlink(loop, &req, manifest_path, NULL);
-				uv_fs_req_cleanup(&req);
+				remove(manifest_path);
 
 				free(manifest_path);
 			}

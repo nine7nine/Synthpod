@@ -483,7 +483,6 @@ _process(jack_nframes_t nsamples, void *data)
 __non_realtime static void
 _session_async(uv_async_t* async)
 {
-	uv_fs_t req;
 	prog_t *handle = async->data;
 	bin_t *bin = &handle->bin;
 
@@ -494,9 +493,9 @@ _session_async(uv_async_t* async)
 		ev->session_dir, ev->client_uuid, ev->command_line);
 	*/
 
-	uv_fs_mkdir(&bin->loop, &req, ev->session_dir, 0, NULL);
-	uv_fs_req_cleanup(&req);
+	mkpath_const(ev->session_dir);
 
+	uv_fs_t req;
 	uv_fs_realpath(&bin->loop, &req, ev->session_dir, NULL);
 	const char *realpath = req.ptr && *(char *)req.ptr
 		? req.ptr: ev->session_dir;
