@@ -60,7 +60,11 @@ _make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 			char *path = strndup(absolute_path, end - absolute_path);
 			if(path)
 			{
-				ecore_file_mkpath(path);
+				uv_loop_t *loop = uv_default_loop();
+				uv_fs_t req;
+				uv_fs_mkdir(loop, &req, path, 0, NULL);
+				uv_fs_req_cleanup(&req);
+
 				free(path);
 			}
 		}
@@ -250,7 +254,11 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 	for(char *c = strstr(dir, ".lv2"); *c; c++)
 		if(isspace(*c))
 			*c = '_';
-	ecore_file_mkpath(dir); // create path if not existent already
+
+	uv_loop_t *loop = uv_default_loop();
+	uv_fs_t req;
+	uv_fs_mkdir(loop, &req, dir, 0, NULL);
+	uv_fs_req_cleanup(&req);
 
 	// create plugin state file name
 	asprintf(&filename, "%s.ttl", target);
@@ -511,11 +519,18 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 
 		free(obj); // allocated by _deserialize_from_turtle
 	}
-	else if(!ecore_file_exists(state_dst)) // new project?
+	else
 	{
-		while(atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed))
+		FILE *f = fopen(state_dst, "rb");
+
+		if(f) // path does not yet exist, aka new project
 		{
-			// spin
+			fclose(f);
+
+			while(atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed))
+			{
+				// spin
+			}
 		}
 	}
 
@@ -700,7 +715,13 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			char *root_path = map_path->absolute_path(map_path->handle, uid_str);
 			if(root_path)
 			{
-				ecore_file_recursive_rm(root_path); // remove whole bundle tree
+				// remove whole bundle tree
+
+				uv_loop_t *loop = uv_default_loop();
+				uv_fs_t req;
+				uv_fs_rmdir(loop, &req, root_path, NULL);
+				uv_fs_req_cleanup(&req);
+
 				free(root_path);
 			}
 		}
@@ -712,7 +733,11 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			char *manifest_path = map_path->absolute_path(map_path->handle, uid_str);
 			if(manifest_path)
 			{
-				ecore_file_remove(manifest_path); // remove manifest.ttl
+				uv_loop_t *loop = uv_default_loop();
+				uv_fs_t req;
+				uv_fs_unlink(loop, &req, manifest_path, NULL);
+				uv_fs_req_cleanup(&req);
+
 				free(manifest_path);
 			}
 		}

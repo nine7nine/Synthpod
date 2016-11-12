@@ -327,9 +327,6 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 sp_app_t *
 sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 {
-	efreet_init();
-	ecore_file_init();
-
 	if(!driver || !data)
 		return NULL;
 
@@ -340,13 +337,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	atomic_flag_clear_explicit(&app->dirty, memory_order_relaxed);
 
-#if !defined(_WIN32)
 	app->dir.home = getenv("HOME");
-#else
-	app->dir.home = evil_homedir_get();
-#endif
-	app->dir.config = efreet_config_home_get();
-	app->dir.data = efreet_data_home_get();
 
 	//printf("%s %s %s\n", app->dir.home, app->dir.config, app->dir.data);
 
@@ -716,9 +707,6 @@ sp_app_free(sp_app_t *app)
 
 	munlock(app, sizeof(sp_app_t));
 	free(app);
-
-	ecore_file_shutdown();
-	efreet_shutdown();
 }
 
 bool

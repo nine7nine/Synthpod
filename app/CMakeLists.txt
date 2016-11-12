@@ -20,9 +20,7 @@ add_library(synthpod.lib SHARED
 target_link_libraries(synthpod.lib
 	m
 	pthread
-	${ECORE_LDFLAGS}
-	${ECORE_FILE_LDFLAGS}
-	${EFREET_LDFLAGS}
+	${UV_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS}
 	${SRATOM_LDFLAGS})

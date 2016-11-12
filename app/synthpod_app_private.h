@@ -18,15 +18,14 @@
 #ifndef _SYNTHPOD_APP_PRIVATE_H
 #define _SYNTHPOD_APP_PRIVATE_H
 
+#include <uv.h>
+
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdatomic.h>
 #include <ctype.h> // isspace
 #include <math.h>
-
-#include <Eina.h>
-#include <Efreet.h>
-#include <Ecore_File.h>
 
 #include <synthpod_app.h>
 #include <synthpod_private.h>
@@ -350,8 +349,6 @@ struct _sp_app_t {
 
 	struct {
 		const char *home;
-		const char *data;
-		const char *config;
 	} dir;
 
 	int embedded;

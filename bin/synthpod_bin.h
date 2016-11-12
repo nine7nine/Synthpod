@@ -20,10 +20,7 @@
 
 #include <synthpod_app.h>
 
-#include <Eina.h>
-#include <Ecore.h>
-#include <Ecore_File.h>
-#include <Efreet.h>
+#include <uv.h>
 
 #include <stdatomic.h>
 
@@ -36,6 +33,10 @@
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/time/time.h>
+
+#ifndef MAX
+#	define MAX(A, B) ((A) > (B) ? (A) : (B))
+#endif
 
 #define SEQ_SIZE 0x2000
 #define JAN_1970 (uint64_t)0x83aa7e80
@@ -51,7 +52,7 @@ enum _save_state_t {
 };
 
 struct _light_sem_t {
-	Eina_Semaphore sem;
+	uv_sem_t sem;
 	_Atomic int count;
 	int spin;
 };
@@ -83,10 +84,10 @@ struct _bin_t {
 	varchunk_t *app_to_ui;
 	varchunk_t *app_from_ui;
 	
-	Ecore_Animator *ui_anim;
+	uv_timer_t ui_anim;
 	
 	_Atomic int worker_dead;
-	Eina_Thread worker_thread;
+	uv_thread_t worker_thread;
 	light_sem_t worker_sem;
 
 	LV2_URID log_error;
@@ -97,7 +98,7 @@ struct _bin_t {
 
 	LV2_Log_Log log;
 
-	Eina_Thread self;
+	uv_thread_t self;
 	atomic_flag trace_lock;
 
 	int audio_prio;
@@ -108,11 +109,11 @@ struct _bin_t {
 
 	sandbox_master_driver_t sb_driver;
 	sandbox_master_t *sb;
-	Ecore_Fd_Handler *hndl;
-	Ecore_Event_Handler *del;
-	Ecore_Exe *exe;
+	uv_poll_t hndl;
+	uv_process_t exe;
 
 	_Atomic bool ui_is_done;
+	uv_loop_t loop;
 };
 
 void
@@ -141,5 +142,8 @@ bin_bundle_load(bin_t *bin, const char *bundle_path);
 
 void
 bin_bundle_save(bin_t *bin, const char *bundle_path);
+
+void
+bin_quit(bin_t *bin);
 
 #endif // _SYNTHPOD_BIN_H

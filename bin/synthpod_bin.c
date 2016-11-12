@@ -15,6 +15,8 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <getopt.h>
+
 #include <synthpod_bin.h>
 
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -42,14 +44,14 @@ _light_sem_init(light_sem_t *lsem, int count)
 {
 	assert(count >= 0);
 	atomic_init(&lsem->count, 0);
-	eina_semaphore_new(&lsem->sem, count);
+	uv_sem_init(&lsem->sem, count);
 	lsem->spin = 10000; //TODO make this configurable or self-adapting
 }
 
 static inline void
 _light_sem_deinit(light_sem_t *lsem)
 {
-	eina_semaphore_free(&lsem->sem);
+	uv_sem_destroy(&lsem->sem);
 }
 
 static inline void
@@ -74,7 +76,7 @@ _light_sem_wait_partial_spinning(light_sem_t *lsem)
 	old_count = atomic_fetch_sub_explicit(&lsem->count, 1, memory_order_acquire);
 
 	if(old_count <= 0)
-		eina_semaphore_lock(&lsem->sem);
+		uv_sem_wait(&lsem->sem);
 }
 
 static inline bool
@@ -100,22 +102,7 @@ _light_sem_signal(light_sem_t *lsem, int count)
 	int to_release = -old_count < count ? -old_count : count;
 
 	if(to_release > 0) // old_count changed from (-1) to (0)
-		eina_semaphore_release(&lsem->sem, to_release);
-}
-
-static Eina_Bool
-_sb_quit(void *data, int type, void *event)
-{
-	bin_t *bin = data;
-	Ecore_Exe_Event_Del *ev = event;
-
-	if(bin->exe == ev->exe) // UI has quit, quit too
-	{
-		ecore_main_loop_quit();
-		return ECORE_CALLBACK_CANCEL;
-	}
-
-	return ECORE_CALLBACK_PASS_ON;
+		uv_sem_post(&lsem->sem);
 }
 
 __realtime static void
@@ -137,13 +124,13 @@ _ui_opened(void *data, int status)
 	synthpod_nsm_opened(bin->nsm, status);
 }
 
-__non_realtime static Eina_Bool
-_ui_animator(void *data)
+__non_realtime static void
+_ui_animator(uv_timer_t* handle)
 {
-	bin_t *bin = data;
+	bin_t *bin = handle->data;
 
 	if(atomic_load_explicit(&bin->ui_is_done, memory_order_relaxed))
-		ecore_main_loop_quit();
+		uv_stop(&bin->loop);
 
 	size_t size;
 	const LV2_Atom *atom;
@@ -157,12 +144,10 @@ _ui_animator(void *data)
 
 		varchunk_read_advance(bin->app_to_ui);
 	}
-
-	return EINA_TRUE; // continue animator
 }
 
-__non_realtime static void *
-_worker_thread(void *data, Eina_Thread thread)
+__non_realtime static void
+_worker_thread(void *data)
 {
 	bin_t *bin = data;
 	
@@ -201,8 +186,6 @@ _worker_thread(void *data, Eina_Thread thread)
 			varchunk_read_advance(bin->app_to_log);
 		}
 	}
-
-	return NULL;
 }
 
 __realtime static void *
@@ -313,12 +296,12 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
 	bin_t *bin = data;
 
-	Eina_Thread this = eina_thread_self();
+	uv_thread_t this = uv_thread_self();
 
 	// check for trace mode AND DSP thread ID
 	if( (type == bin->log_trace)
-		&& !eina_thread_equal(this, bin->self) // not UI thread ID
-		&& !eina_thread_equal(this, bin->worker_thread) ) // not worker thread ID
+		&& !uv_thread_equal(&this, &bin->self) // not UI thread ID
+		&& !uv_thread_equal(&this, &bin->worker_thread) ) // not worker thread ID
 	{
 		_atomic_spin_lock(&bin->trace_lock);
 		char *trace;
@@ -419,22 +402,26 @@ _sb_subscribe_cb(void *data, uint32_t index, uint32_t protocol, bool state)
 	// nothing
 }
 
-__non_realtime static Eina_Bool
-_sb_recv(void *data, Ecore_Fd_Handler *fd_handler)
+__non_realtime static void
+_sb_recv(uv_poll_t* handle, int status, int events)
 {
-	sandbox_master_t *sb = data;
+	bin_t *bin = handle->data;
 
-	sandbox_master_recv(sb);
+	sandbox_master_recv(bin->sb);
+}
 
-	return ECORE_CALLBACK_RENEW;
+__non_realtime static void
+_exit_cb(uv_process_t *process, int64_t exit_status, int term_signal)
+{
+	bin_t *bin = process->data;
+
+	uv_stop(&bin->loop);
 }
 
 void
 bin_init(bin_t *bin)
 {
-	ecore_init();
-	ecore_file_init();
-	eina_init();
+	uv_loop_init(&bin->loop);
 
 	// varchunk init
 	bin->app_to_ui = varchunk_new(CHUNK_SIZE, true);
@@ -485,7 +472,7 @@ bin_init(bin_t *bin)
 	bin->app_driver.bad_plugins = bin->bad_plugins;
 	bin->app_driver.close_request = _close_request;
 
-	bin->self = eina_thread_self(); // thread ID of UI thread
+	bin->self = uv_thread_self(); // thread ID of UI thread
 
 	bin->sb_driver.socket_path = bin->socket_path;
 	bin->sb_driver.map = &bin->map;
@@ -504,24 +491,37 @@ bin_init(bin_t *bin)
 			// automatically start gui in separate process
 			if(bin->has_gui && !strncmp(bin->socket_path, "ipc://", 6))
 			{
-				char *cmd = NULL;
-				if(asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w 'Synthpod - %s'",
-					"synthpod_sandbox_efl",
-					SYNTHPOD_PREFIX"stereo",
-					SYNTHPOD_PLUGIN_DIR, //FIXME look up dynamically
-					SYNTHPOD_PREFIX"root_3_eo",
-					bin->socket_path,
-					bin->socket_path) != -1)
-				{
-					bin->exe = ecore_exe_run(cmd, bin);
-
-					free(cmd);
-				}
+				char *args [] = {
+					"-p", SYNTHPOD_PREFIX"stereo",
+					"-b", SYNTHPOD_PLUGIN_DIR, //FIXME look up dynamically
+					"-u", SYNTHPOD_PREFIX"root_3_eo",
+					"-s", (char *)bin->socket_path,
+					"-w", "Synthpod", // FIXME + socket_path
+					NULL
+				};
+				char *env [] = {
+					NULL
+				};
+				const uv_process_options_t opts = {
+					.exit_cb = _exit_cb,
+					.file = "synthpod_sandbox_efl",
+					.args = args,
+					.env = env,
+					.cwd = NULL,
+					.flags = UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS
+						| UV_PROCESS_WINDOWS_HIDE,
+					.stdio_count = 0,
+					.stdio = NULL,
+					.uid = 0,
+					.gid = 0
+				};
+				bin->exe.data = bin;
+				uv_spawn(&bin->loop, &bin->exe, &opts);
 			}
 
-			bin->hndl = ecore_main_fd_handler_add(fd, ECORE_FD_READ,
-				_sb_recv, bin->sb, NULL, NULL);
-			bin->del = ecore_event_handler_add(ECORE_EXE_EVENT_DEL, _sb_quit, bin);
+			bin->hndl.data = bin;
+			uv_poll_init(&bin->loop, &bin->hndl, fd);
+			uv_poll_start(&bin->hndl, UV_READABLE, _sb_recv);
 		}
 	}
 }
@@ -529,31 +529,31 @@ bin_init(bin_t *bin)
 void
 bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 {
-	// create main window
-	bin->ui_anim = ecore_animator_add(_ui_animator, bin);
+	uv_timer_init(&bin->loop, &bin->ui_anim);
+	bin->ui_anim.data = bin;
+	uv_timer_start(&bin->ui_anim, _ui_animator, 40, 40); // 25FPS
 
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
-	bin->nsm = synthpod_nsm_new(exe, argv[optind], nsm_driver, bin); //TODO check
+	bin->nsm = synthpod_nsm_new(exe, argv[optind], &bin->loop, nsm_driver, bin); //TODO check
 
 	// init semaphores
 	atomic_init(&bin->worker_dead, 0);
 	_light_sem_init(&bin->worker_sem, 0);
 
 	// threads init
-	Eina_Bool status = eina_thread_create(&bin->worker_thread,
-		EINA_THREAD_URGENT, -1, _worker_thread, bin);
+	int status = uv_thread_create(&bin->worker_thread, _worker_thread, bin);
 	if(!status)
 		fprintf(stderr, "creation of worker thread failed\n");
 
 	atomic_init(&bin->ui_is_done , false);
 
 	// main loop
-	ecore_main_loop_begin();
+	uv_run(&bin->loop, UV_RUN_DEFAULT);
 
-	if(bin->ui_anim)
-		ecore_animator_del(bin->ui_anim);
+	if(uv_is_active((uv_handle_t *)&bin->ui_anim))
+		uv_timer_stop(&bin->ui_anim);
 }
 
 void
@@ -562,7 +562,7 @@ bin_stop(bin_t *bin)
 	// threads deinit
 	atomic_store_explicit(&bin->worker_dead, 1, memory_order_relaxed);
 	_light_sem_signal(&bin->worker_sem, 1);
-	eina_thread_join(bin->worker_thread);
+	uv_thread_join(&bin->worker_thread);
 
 	// NSM deinit
 	synthpod_nsm_free(bin->nsm);
@@ -577,12 +577,10 @@ bin_stop(bin_t *bin)
 void
 bin_deinit(bin_t *bin)
 {
-	if(bin->del)
-		ecore_event_handler_del(bin->del);
-	if(bin->hndl)
-		ecore_main_fd_handler_del(bin->hndl);
-	if(bin->exe)
-		ecore_exe_interrupt(bin->exe);
+	if(uv_is_active((uv_handle_t *)&bin->hndl))
+		uv_poll_stop(&bin->hndl);
+	if(uv_is_active((uv_handle_t *)&bin->exe))
+		uv_process_kill(&bin->exe, SIGINT);
 	if(bin->sb)
 		sandbox_master_free(bin->sb);
 
@@ -601,9 +599,7 @@ bin_deinit(bin_t *bin)
 	varchunk_free(bin->app_from_com);
 	varchunk_free(bin->app_from_app);
 
-	eina_shutdown();
-	ecore_file_shutdown();
-	ecore_shutdown();
+	uv_loop_close(&bin->loop);
 }
 
 void
@@ -697,4 +693,10 @@ bin_bundle_save(bin_t *bin, const char *bundle_path)
 {
 	sp_app_bundle_save(bin->app, bundle_path,
 		_ui_to_app_request, _ui_to_app_advance, bin);
+}
+
+void
+bin_quit(bin_t *bin)
+{
+	uv_stop(&bin->loop);
 }

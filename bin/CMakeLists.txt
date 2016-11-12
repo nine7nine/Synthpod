@@ -1,6 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/libosc_stream)
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
@@ -34,8 +35,7 @@ if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 
 	set(LIBS_BIN
 		synthpod.lib
-		${EINA_LDFLAGS}
-		${ECORE_CON_LDFLAGS}
+		${UV_LDFLAGS}
 		${NANOMSG_LDFLAGS}
 		m)
 endif()

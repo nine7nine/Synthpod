@@ -96,26 +96,10 @@ if(NOT ${HAS_ATOMIC})
 	message(FATAL_ERROR "compiler has no support for C11 atomic operations")
 endif()
 
-# eina
-pkg_search_module(EINA REQUIRED eina>=1.8)
-include_directories(${EINA_INCLUDE_DIRS})
+# uv
+pkg_search_module(UV REQUIRED libuv>=1.0)
+include_directories(${UV_INCLUDE_DIRS})
 
-# efreet
-pkg_search_module(EFREET REQUIRED efreet>=1.8)
-include_directories(${EFREET_INCLUDE_DIRS})
-
-# ecore
-pkg_search_module(ECORE REQUIRED ecore>=1.8)
-include_directories(${ECORE_INCLUDE_DIRS})
-
-# ecore-con
-pkg_search_module(ECORE_CON REQUIRED ecore-con>=1.8)
-include_directories(${ECORE_CON_INCLUDE_DIRS})
-
-# ecore-file
-pkg_search_module(ECORE_FILE REQUIRED ecore-file>=1.8)
-include_directories(${ECORE_FILE_INCLUDE_DIRS})
-	
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
 include_directories(${LILV_INCLUDE_DIRS})

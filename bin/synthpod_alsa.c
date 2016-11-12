@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <math.h>
 
 #include <asoundlib.h>
 #include <pcmi.h>
@@ -70,7 +71,7 @@ struct _prog_t {
 
 	save_state_t save_state;
 	_Atomic int kill;
-	Eina_Thread thread;
+	uv_thread_t thread;
 
 	uint32_t srate;
 	uint32_t frsize;
@@ -516,8 +517,8 @@ _process(prog_t *handle)
 	snd_seq_queue_status_free(stat);
 }
 
-__non_realtime static void *
-_rt_thread(void *data, Eina_Thread thread)
+__non_realtime static void
+_rt_thread(void *data)
 {
 	prog_t *handle = data;
 
@@ -537,8 +538,6 @@ _rt_thread(void *data, Eina_Thread thread)
 	}
 
 	_process(handle);
-
-	return NULL;
 }
 
 __non_realtime static void *
@@ -687,7 +686,7 @@ _ui_saved(void *data, int status)
 
 	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
-		ecore_main_loop_quit();
+		bin_quit(bin);
 	}
 }
 
@@ -720,7 +719,7 @@ _alsa_deinit(prog_t *handle)
 	if(handle->thread)
 	{
 		atomic_store_explicit(&handle->kill, 1, memory_order_relaxed);
-		eina_thread_join(handle->thread);
+		uv_thread_join(&handle->thread);
 	}
 
 	if(handle->pcmi)
@@ -773,10 +772,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	// alsa activate
 	atomic_init(&handle->kill, 0);
-	Eina_Bool status = eina_thread_create(&handle->thread,
-		EINA_THREAD_URGENT, -1, _rt_thread, handle); //TODO
-	if(!status)
-		fprintf(stderr, "creation of rt thread failed\n");
+	uv_thread_create(&handle->thread, _rt_thread, handle);
 
 	bin_bundle_load(bin, bin->path);
 
@@ -849,6 +845,7 @@ _osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 	return timestamp;
 }
 
+/*FIXME
 static Efreet_Ini * 
 _read_config(prog_t *handle)
 {
@@ -910,6 +907,7 @@ _read_config(prog_t *handle)
 
 	return ini;
 }
+*/
 
 int
 main(int argc, char **argv)
@@ -947,7 +945,9 @@ main(int argc, char **argv)
 		"Released under GNU General Public License 3 by Open Music Kontrollers\n");
 
 	// read local configuration if present
+	/*FIXME
 	Efreet_Ini *ini = _read_config(&handle);
+	*/
 	
 	int c;
 	while((c = getopt(argc, argv, "vhgGbBIOtTxXy:Yw:Wl:d:i:o:r:p:n:s:c:")) != -1)
@@ -1129,8 +1129,10 @@ main(int argc, char **argv)
 	// deinit
 	bin_deinit(bin);
 
+	/*FIXME
 	if(ini)
 		efreet_ini_free(ini);
+	*/
 
 	munlock(&handle, sizeof(prog_t));
 	munlockall();

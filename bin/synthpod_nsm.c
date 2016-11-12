@@ -19,10 +19,7 @@
 #include <stdlib.h>
 #include <unistd.h> // getpid
 
-#include <Ecore.h>
-#include <Ecore_Con.h>
-#include <Ecore_File.h>
-#include <Efreet.h>
+#include <osc_stream.h>
 
 #include <osc.lv2/writer.h>
 #include <osc.lv2/reader.h>
@@ -48,12 +45,13 @@ struct _synthpod_nsm_t {
 	const synthpod_nsm_driver_t *driver;
 	void *data;
 
-	Ecore_Con_Server *serv;
-	Ecore_Event_Handler *add;
-	Ecore_Event_Handler *del;
-	Ecore_Event_Handler *dat;
+	osc_stream_t *stream;
 
+	uv_loop_t *loop;
+
+	uint8_t *recv;
 	uint8_t send [0x10000];
+	size_t sz;
 };
 
 static void
@@ -104,15 +102,18 @@ _client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	lv2_osc_reader_get_string(reader, &id);
 
 	// open/create app
-	ecore_file_mkpath(dir); // path may not exist yet
-	char *synthpod_dir = ecore_file_realpath(dir);
-	const char *realpath = synthpod_dir && synthpod_dir[0] ? synthpod_dir : dir;
+	uv_fs_t req;
+
+	uv_fs_mkdir(nsm->loop, &req, dir, 0, NULL);
+	uv_fs_req_cleanup(&req);
+
+	uv_fs_realpath(nsm->loop, &req, dir, NULL);
+	const char *realpath = req.path && *(char *)req.path ? req.path : dir;
 
 	if(nsm->driver->open && nsm->driver->open(realpath, name, id, nsm->data))
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
 
-	if(synthpod_dir)
-		free(synthpod_dir);
+	uv_fs_req_cleanup(&req);
 }
 
 static void
@@ -140,7 +141,7 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 
 	size_t written;
 	if(lv2_osc_writer_finalize(&writer, &written))
-		ecore_con_server_send(nsm->serv, nsm->send, written);
+		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
 }
@@ -162,7 +163,7 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 
 	size_t written;
 	if(lv2_osc_writer_finalize(&writer, &written))
-		ecore_con_server_send(nsm->serv, nsm->send, written);
+		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
 }
@@ -199,9 +200,21 @@ _announce(synthpod_nsm_t *nsm)
 
 	size_t written;
 	if(lv2_osc_writer_finalize(&writer, &written))
-		ecore_con_server_send(nsm->serv, nsm->send, written);
+		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
+}
+
+static void
+_client_connect(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+{
+	_announce(nsm);
+}
+
+static void
+_client_disconnect(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+{
+	// nothing
 }
 
 static const osc_msg_t messages [] = {
@@ -213,34 +226,11 @@ static const osc_msg_t messages [] = {
 	{"/nsm/client/show_optional_gui", _client_show_optional_gui},
 	{"/nsm/client/hide_optional_gui", _client_hide_optional_gui},
 
+	{"/stream/connect", _client_connect},
+	{"/stream/dicsonnect", _client_disconnect},
+
 	{NULL, NULL}
 };
-
-static Eina_Bool
-_con_add(void *data, int type, void *info)
-{
-	synthpod_nsm_t *nsm = data;
-
-	assert(type == ECORE_CON_EVENT_SERVER_ADD);
-
-	//printf("_client_add\n");
-	//TODO
-			
-	_announce(nsm);
-
-	return EINA_TRUE;
-}
-
-static Eina_Bool
-_con_del(void *data, int type, void *info)
-{
-	assert(type == ECORE_CON_EVENT_SERVER_DEL);
-	
-	//printf("_client_del\n");
-	//TODO
-
-	return EINA_TRUE;
-}
 
 static void
 _unpack_messages(LV2_OSC_Reader *reader, size_t len, synthpod_nsm_t *nsm)
@@ -271,25 +261,64 @@ _unpack_messages(LV2_OSC_Reader *reader, size_t len, synthpod_nsm_t *nsm)
 	}
 }
 
-static Eina_Bool
-_con_dat(void *data, int type, void *info)
+static void *
+_recv_req(size_t size, void *data)
 {
 	synthpod_nsm_t *nsm = data;
-	Ecore_Con_Event_Client_Data *ev = info;
 
-	assert(type == ECORE_CON_EVENT_SERVER_DATA);
-	
-	printf("_client_data\n");
+	nsm->recv = malloc(size);
 
-	LV2_OSC_Reader reader;
-	lv2_osc_reader_initialize(&reader, ev->data, ev->size);
-	_unpack_messages(&reader, ev->size, nsm);
-
-	return EINA_TRUE;
+	return nsm->recv;
 }
 
+static void
+_recv_adv(size_t written, void *data)
+{
+	synthpod_nsm_t *nsm = data;
+
+	LV2_OSC_Reader reader;
+	lv2_osc_reader_initialize(&reader, nsm->recv, written);
+	_unpack_messages(&reader, written, nsm);
+
+	free(nsm->recv);
+}
+
+static const void *
+_send_req(size_t *len, void *data)
+{
+	synthpod_nsm_t *nsm = data;
+
+	*len = nsm->sz;
+
+	return nsm->sz ? nsm->send : NULL;
+}
+
+static void
+_send_adv(void *data)
+{
+	synthpod_nsm_t *nsm = data;
+
+	nsm->sz = 0;
+}
+
+static void
+_free(void *data)
+{
+	synthpod_nsm_t *nsm = data;
+
+	// do nothing
+}
+
+static const osc_stream_driver_t driver = {
+	.recv_req = _recv_req,
+	.recv_adv = _recv_adv,
+	.send_req = _send_req,
+	.send_adv = _send_adv,
+	.free = _free
+};
+
 synthpod_nsm_t *
-synthpod_nsm_new(const char *exe, const char *path,
+synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 	const synthpod_nsm_driver_t *nsm_driver, void *data)
 {
 	if(!nsm_driver)
@@ -299,6 +328,7 @@ synthpod_nsm_new(const char *exe, const char *path,
 	if(!nsm)
 		return NULL;
 
+	nsm->loop = loop;
 	nsm->driver = nsm_driver;
 	nsm->data = data;
 
@@ -315,45 +345,8 @@ synthpod_nsm_new(const char *exe, const char *path,
 			return NULL;
 		
 		//printf("url: %s\n", nsm->url);
-
-		Ecore_Con_Type type;
-		if(!strncmp(nsm->url, "osc.udp", 7))
-			type = ECORE_CON_REMOTE_UDP;
-		else if(!strncmp(nsm->url, "osc.tcp", 7))
-			type = ECORE_CON_REMOTE_TCP;
-		else
-			goto fail;
-
-		char *addr = strstr(nsm->url, "://");
-		if(!addr)
-			goto fail;
-		addr += 3; // skip "://"
-
-		char *dst = strchr(addr, ':');
-		if(!dst)
-			goto fail;
-		*dst++ = '\0';
-
-		uint16_t port;
-		if(sscanf(dst, "%hu", &port) != 1)
-			goto fail;
 		
-		printf("NSM URL: %s, dst: %hu\n", addr, port);
-
-		if(strstr(addr, "localhost"))
-			addr = "127.0.0.1"; // forces ecore_con to use IPv4
-
-		nsm->serv = ecore_con_server_connect(type,
-			addr, port, nsm);
-		if(!nsm->serv)
-			goto fail;
-
-		nsm->add = ecore_event_handler_add(ECORE_CON_EVENT_SERVER_ADD, _con_add, nsm);
-		nsm->del = ecore_event_handler_add(ECORE_CON_EVENT_SERVER_DEL, _con_del, nsm);
-		nsm->dat = ecore_event_handler_add(ECORE_CON_EVENT_SERVER_DATA, _con_dat, nsm);
-
-		if(type == ECORE_CON_REMOTE_UDP)
-			_announce(nsm);
+		nsm->stream = osc_stream_new(nsm->loop, nsm->url, &driver, nsm);
 	}
 	else
 	{
@@ -361,15 +354,18 @@ synthpod_nsm_new(const char *exe, const char *path,
 
 		if(path)
 		{
-			ecore_file_mkpath(path); // path may not exist yet
-			char *synthpod_dir = ecore_file_realpath(path);
-			const char *realpath = synthpod_dir && synthpod_dir[0] ? synthpod_dir : path;
+			uv_fs_t req;
+
+			uv_fs_mkdir(nsm->loop, &req, path, 0, NULL);
+			uv_fs_req_cleanup(&req);
+
+			uv_fs_realpath(nsm->loop, &req, path, NULL);
+			const char *realpath = req.ptr && *(char *)req.ptr ? req.ptr : path;
 
 			if(nsm->driver->open && nsm->driver->open(realpath, nsm->call, nsm->exe, nsm->data))
 				fprintf(stderr, "NSM load failed: '%s'\n", path);
 
-			if(synthpod_dir)
-				free(synthpod_dir);
+			uv_fs_req_cleanup(&req);
 		}
 		else
 		{
@@ -383,7 +379,10 @@ synthpod_nsm_new(const char *exe, const char *path,
 			asprintf(&synthpod_dir, "%s/.lv2/Synthpod_default.preset.lv2", home_dir);
 			if(synthpod_dir)
 			{
-				ecore_file_mkpath(synthpod_dir); // path may not exist yet
+				uv_fs_t req;
+
+				uv_fs_mkdir(nsm->loop, &req, synthpod_dir, 0, NULL);
+				uv_fs_req_cleanup(&req);
 
 				if(nsm->driver->open && nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
 					fprintf(stderr, "NSM load failed: '%s'\n", synthpod_dir);
@@ -414,14 +413,8 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 
 		if(nsm->url)
 		{
-			if(nsm->add)
-				ecore_event_handler_del(nsm->add);
-			if(nsm->del)
-				ecore_event_handler_del(nsm->del);
-			if(nsm->dat)
-				ecore_event_handler_del(nsm->dat);
-			if(nsm->serv)
-				ecore_con_server_del(nsm->serv);
+			if(nsm->stream)
+				osc_stream_free(nsm->stream);
 
 			free(nsm->url);
 		}
@@ -453,7 +446,7 @@ synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
 
 	size_t written;
 	if(lv2_osc_writer_finalize(&writer, &written))
-		ecore_con_server_send(nsm->serv, nsm->send, written);
+		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
 }
@@ -481,7 +474,7 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 
 	size_t written;
 	if(lv2_osc_writer_finalize(&writer, &written))
-		ecore_con_server_send(nsm->serv, nsm->send, written);
+		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
 }

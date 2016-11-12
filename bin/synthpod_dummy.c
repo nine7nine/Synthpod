@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <math.h>
 
 #include <synthpod_bin.h>
 
@@ -33,7 +34,7 @@ struct _prog_t {
 	
 	save_state_t save_state;
 	_Atomic int kill;
-	Eina_Thread thread;
+	uv_thread_t thread;
 
 	uint32_t srate;
 	uint32_t frsize;
@@ -254,8 +255,8 @@ _process(prog_t *handle)
 	}
 }
 
-__non_realtime static void *
-_rt_thread(void *data, Eina_Thread thread)
+__non_realtime static void
+_rt_thread(void *data)
 {
 	prog_t *handle = data;
 
@@ -275,8 +276,6 @@ _rt_thread(void *data, Eina_Thread thread)
 	}
 
 	_process(handle);
-
-	return NULL;
 }
 
 __non_realtime static void *
@@ -328,7 +327,7 @@ _ui_saved(void *data, int status)
 
 	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
-		ecore_main_loop_quit();
+		bin_quit(bin);
 	}
 }
 
@@ -354,10 +353,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	// alsa activate
 	atomic_init(&handle->kill, 0);
-	Eina_Bool status = eina_thread_create(&handle->thread,
-		EINA_THREAD_URGENT, -1, _rt_thread, handle); //TODO
-	if(!status)
-		fprintf(stderr, "creation of rt thread failed\n");
+	uv_thread_create(&handle->thread, _rt_thread, handle);
 
 	bin_bundle_load(bin, bin->path);
 
@@ -581,7 +577,7 @@ main(int argc, char **argv)
 	if(handle.thread)
 	{
 		atomic_store_explicit(&handle.kill, 1, memory_order_relaxed);
-		eina_thread_join(handle.thread);
+		uv_thread_join(&handle.thread);
 	}
 
 	// deinit

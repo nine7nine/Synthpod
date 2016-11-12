@@ -168,7 +168,11 @@ _mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 			char *path = strndup(absolute_path, end - absolute_path);
 			if(path)
 			{
-				ecore_file_mkpath(path);
+				uv_loop_t *loop = uv_default_loop();
+				uv_fs_t req;
+				uv_fs_mkdir(loop, &req, path, 0, NULL);
+				uv_fs_req_cleanup(&req);
+
 				free(path);
 			}
 		}

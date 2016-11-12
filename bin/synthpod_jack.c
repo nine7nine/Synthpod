@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
+#include <math.h>
 
 #include <synthpod_bin.h>
 
@@ -34,10 +35,6 @@
 
 #include <osc.lv2/forge.h>
 #include <osc.lv2/writer.h>
-
-#ifndef MAX
-#	define MAX(A, B) ((A) > (B) ? (A) : (B))
-#endif
 
 #define OSC_SIZE 0x800
 
@@ -66,6 +63,8 @@ struct _prog_t {
 
 	_Atomic int kill;
 	save_state_t save_state;
+
+	uv_async_t async;
 
 	char *server_name;
 	char *session_id;
@@ -482,9 +481,10 @@ _process(jack_nframes_t nsamples, void *data)
 }
 
 __non_realtime static void
-_session_async(void *data)
+_session_async(uv_async_t* async)
 {
-	prog_t *handle = data;
+	uv_fs_t req;
+	prog_t *handle = async->data;
 	bin_t *bin = &handle->bin;
 
 	jack_session_event_t *ev = handle->session_event;
@@ -494,9 +494,12 @@ _session_async(void *data)
 		ev->session_dir, ev->client_uuid, ev->command_line);
 	*/
 
-	ecore_file_mkpath(ev->session_dir); // path may not exist yet
-	char *synthpod_dir = ecore_file_realpath(ev->session_dir);
-	const char *realpath = synthpod_dir && synthpod_dir[0] ? synthpod_dir : ev->session_dir;
+	uv_fs_mkdir(&bin->loop, &req, ev->session_dir, 0, NULL);
+	uv_fs_req_cleanup(&req);
+
+	uv_fs_realpath(&bin->loop, &req, ev->session_dir, NULL);
+	const char *realpath = req.ptr && *(char *)req.ptr
+		? req.ptr: ev->session_dir;
 
 	asprintf(&ev->command_line, "synthpod_jack -u %s ${SESSION_DIR}",
 		ev->client_uuid);
@@ -517,8 +520,7 @@ _session_async(void *data)
 			break;
 	}
 
-	if(synthpod_dir)
-		free(synthpod_dir);
+	uv_fs_req_cleanup(&req);
 }
 
 __non_realtime static void
@@ -527,7 +529,7 @@ _session(jack_session_event_t *ev, void *data)
 	prog_t *handle = data;
 
 	handle->session_event = ev;
-	ecore_main_loop_thread_safe_call_async(_session_async, data);
+	uv_async_send(&handle->async);
 }
 
 // rt, but can do non-rt stuff, as process won't be called
@@ -585,7 +587,7 @@ _ui_saved(void *data, int status)
 
 	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
-		ecore_main_loop_quit();
+		bin_quit(bin);
 	}
 }
 
@@ -723,24 +725,13 @@ _system_port_del(void *data, void *sys_port)
 }
 
 __non_realtime static void
-_shutdown_async(void *data)
-{
-	ecore_main_loop_quit();
-}
-
-__non_realtime static void
 _shutdown(void *data)
 {
 	prog_t *handle = data;
 
+	//TODO do this asynchronously?
 	handle->client = NULL; // client has died, didn't it?
-	ecore_main_loop_thread_safe_call_async(_shutdown_async, handle);
-}
-
-__non_realtime static void
-_xrun_async(void *data)
-{
-	fprintf(stderr, "JACK XRun\n");
+	bin_quit(&handle->bin);
 }
 
 __non_realtime static int
@@ -748,7 +739,8 @@ _xrun(void *data)
 {
 	prog_t *handle = data;
 
-	ecore_main_loop_thread_safe_call_async(_xrun_async, handle);
+	//TODO do this asynchronously?
+	fprintf(stderr, "JACK XRun\n");
 
 	return 0;
 }
@@ -1050,6 +1042,9 @@ main(int argc, char **argv)
 	}
 
 	bin_init(bin);
+
+	handle.async.data = &handle;
+	uv_async_init(&bin->loop, &handle.async, _session_async);
 
 	LV2_URID_Map *map = &bin->map;
 
