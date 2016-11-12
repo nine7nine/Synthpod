@@ -958,15 +958,15 @@ struct _transmit_port_selected_t {
 
 struct _transmit_bundle_load_t {
 	transmit_t transmit _ATOM_ALIGNED;
-	LV2_Atom_String path _ATOM_ALIGNED;
 	LV2_Atom_Int status _ATOM_ALIGNED;
+	LV2_Atom_String path _ATOM_ALIGNED;
 		char path_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 
 struct _transmit_bundle_save_t {
 	transmit_t transmit _ATOM_ALIGNED;
-	LV2_Atom_String path _ATOM_ALIGNED;
 	LV2_Atom_Int status _ATOM_ALIGNED;
+	LV2_Atom_String path _ATOM_ALIGNED;
 		char path_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
 

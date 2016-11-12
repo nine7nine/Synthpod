@@ -131,4 +131,5 @@ sp_ui_del(sp_ui_t *ui, bool delete_self);
 SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_quit(sp_ui_t *ui);
 
+
 #endif // _SYNTHPOD_UI_H
