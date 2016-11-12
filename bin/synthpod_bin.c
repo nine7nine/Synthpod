@@ -491,23 +491,31 @@ bin_init(bin_t *bin)
 			// automatically start gui in separate process
 			if(bin->has_gui && !strncmp(bin->socket_path, "ipc://", 6))
 			{
+				const char *cmd = SYNTHPOD_BIN_DIR"synthpod_sandbox_efl";
+
+				size_t sz = 128;
+				char cwd [128];
+				uv_cwd(cwd, &sz);
+
+				char window_title [128];
+				snprintf(window_title, 128, "Synthpod - %s", bin->socket_path);
+
 				char *args [] = {
+					(char *)cmd,
 					"-p", SYNTHPOD_PREFIX"stereo",
 					"-b", SYNTHPOD_PLUGIN_DIR, //FIXME look up dynamically
 					"-u", SYNTHPOD_PREFIX"root_3_eo",
 					"-s", (char *)bin->socket_path,
-					"-w", "Synthpod", // FIXME + socket_path
+					"-w", window_title,
 					NULL
 				};
-				char *env [] = {
-					NULL
-				};
+
 				const uv_process_options_t opts = {
 					.exit_cb = _exit_cb,
-					.file = "synthpod_sandbox_efl",
+					.file = cmd,
 					.args = args,
-					.env = env,
-					.cwd = NULL,
+					.env = NULL,
+					.cwd = cwd,
 					.flags = UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS
 						| UV_PROCESS_WINDOWS_HIDE,
 					.stdio_count = 0,
@@ -516,7 +524,8 @@ bin_init(bin_t *bin)
 					.gid = 0
 				};
 				bin->exe.data = bin;
-				uv_spawn(&bin->loop, &bin->exe, &opts);
+				if(uv_spawn(&bin->loop, &bin->exe, &opts))
+					fprintf(stderr, "uv_spawn failed\n");
 			}
 
 			bin->hndl.data = bin;
@@ -543,8 +552,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	_light_sem_init(&bin->worker_sem, 0);
 
 	// threads init
-	int status = uv_thread_create(&bin->worker_thread, _worker_thread, bin);
-	if(!status)
+	if(uv_thread_create(&bin->worker_thread, _worker_thread, bin))
 		fprintf(stderr, "creation of worker thread failed\n");
 
 	atomic_init(&bin->ui_is_done , false);
@@ -554,6 +562,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 
 	if(uv_is_active((uv_handle_t *)&bin->ui_anim))
 		uv_timer_stop(&bin->ui_anim);
+	uv_close((uv_handle_t *)&bin->ui_anim, NULL);
 }
 
 void
@@ -579,8 +588,10 @@ bin_deinit(bin_t *bin)
 {
 	if(uv_is_active((uv_handle_t *)&bin->hndl))
 		uv_poll_stop(&bin->hndl);
+	uv_close((uv_handle_t *)&bin->hndl, NULL);
 	if(uv_is_active((uv_handle_t *)&bin->exe))
 		uv_process_kill(&bin->exe, SIGINT);
+	uv_close((uv_handle_t *)&bin->exe, NULL);
 	if(bin->sb)
 		sandbox_master_free(bin->sb);
 

@@ -128,8 +128,6 @@ _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 __realtime static bool
 _sp_app_from_ui_module_list(sp_app_t *app, const LV2_Atom *atom)
 {
-	printf("_sp_app_rom_ui_module_list\n");
-
 	// iterate over existing modules and send module_add_t
 	for(unsigned m=0; m<app->num_mods; m++)
 	{

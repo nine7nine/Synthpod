@@ -12,6 +12,9 @@ include(FindUnixCommands)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
 
+set(SYNTHPOD_BIN_DIR "bin")
+add_definitions("-DSYNTHPOD_BIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BIN_DIR}/\"")
+
 set(SYNTHPOD_DATA_DIR "share/synthpod")
 add_definitions("-DSYNTHPOD_DATA_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_DATA_DIR}/\"")
 

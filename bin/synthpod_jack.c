@@ -1044,7 +1044,7 @@ main(int argc, char **argv)
 	bin_init(bin);
 
 	handle.async.data = &handle;
-	uv_async_init(&bin->loop, &handle.async, _session_async);
+	uv_async_init(&bin->loop, &handle.async, _session_async); //FIXME check
 
 	LV2_URID_Map *map = &bin->map;
 
@@ -1085,6 +1085,8 @@ main(int argc, char **argv)
 
 	// deinit JACK
 	_jack_deinit(&handle);
+
+	uv_close((uv_handle_t *)&handle.async, NULL);
 
 	// deinit
 	bin_deinit(bin);

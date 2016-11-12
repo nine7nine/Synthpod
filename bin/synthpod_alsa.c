@@ -772,7 +772,8 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	// alsa activate
 	atomic_init(&handle->kill, 0);
-	uv_thread_create(&handle->thread, _rt_thread, handle);
+	if(uv_thread_create(&handle->thread, _rt_thread, handle))
+		fprintf(stderr, "creation of realtime thread failed\n");
 
 	bin_bundle_load(bin, bin->path);
 
