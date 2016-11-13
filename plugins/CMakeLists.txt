@@ -134,6 +134,7 @@ endif()
 # synthpod_nk
 add_library(synthpod_nk.lv2 MODULE
 	synthpod_lv2_nk.c
+	synthpod_common_nk.c
 	synthpod_keyboard_nk.c
 	${TAR_NK})
 target_link_libraries(synthpod_nk.lv2 ${LIBS_NK})
@@ -143,3 +144,6 @@ install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 # manifest
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/plugins/manifest.ttl)
 install(FILES ${PROJECT_BINARY_DIR}/plugins/manifest.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+
+# font
+install(FILES ${PROJECT_SOURCE_DIR}/nuklear/extra_font/Cousine-Regular.ttf DESTINATION ${SYNTHPOD_PLUGIN_DIR})

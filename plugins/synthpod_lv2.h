@@ -84,14 +84,18 @@ extern const LV2_Descriptor synthpod_anonymizer;
 #define SYNTHPOD_COMMON_UI_URI	SYNTHPOD_URI"#common_1_ui"
 #define SYNTHPOD_COMMON_KX_URI	SYNTHPOD_URI"#common_2_kx"
 #define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_3_eo"
+#define SYNTHPOD_COMMON_NK_URI	SYNTHPOD_URI"#common_4_nk"
 
 #define SYNTHPOD_ROOT_EO_URI	  SYNTHPOD_URI"#root_3_eo"
+#define SYNTHPOD_ROOT_NK_URI	  SYNTHPOD_URI"#root_4_nk"
 
 extern const LV2UI_Descriptor synthpod_common_1_ui;
 extern const LV2UI_Descriptor synthpod_common_2_kx;
 extern const LV2UI_Descriptor synthpod_common_3_eo;
+extern const LV2UI_Descriptor synthpod_common_4_nk;
 
 extern const LV2UI_Descriptor synthpod_root_3_eo;
+extern const LV2UI_Descriptor synthpod_root_4_nk;
 
 // keyboard UI uris
 #define SYNTHPOD_KEYBOARD_NK_URI	SYNTHPOD_URI"#keyboard_4_nk"

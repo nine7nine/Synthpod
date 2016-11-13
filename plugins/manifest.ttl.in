@@ -40,7 +40,9 @@ synthpod:stereo
 	ui:ui synthpod:common_1_ui ;
 	ui:ui synthpod:common_2_kx ;
 	ui:ui synthpod:common_3_eo ;
+	ui:ui synthpod:common_4_nk ;
 	ui:ui synthpod:root_3_eo ; #FIXME
+	ui:ui synthpod:root_4_nk ; #FIXME
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_1_ui
@@ -55,10 +57,18 @@ synthpod:common_3_eo
 	a ui:EoUI ;
 	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
+synthpod:common_4_nk
+	a ui:@NK_UI_TYPE@ ;
+	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod_ui.ttl> .
 
 synthpod:root_3_eo
 	a ui:EoUI ;
 	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod_ui.ttl> .
+synthpod:root_4_nk
+	a ui:@NK_UI_TYPE@ ;
+	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # Synthpod Keyboard

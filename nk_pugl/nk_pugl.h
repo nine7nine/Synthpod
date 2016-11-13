@@ -53,6 +53,10 @@ extern C {
 #include "nuklear/nuklear.h"
 #include "nuklear/example/stb_image.h"
 
+#ifndef NK_PUGL_API
+#	define NK_PUGL_API
+#endif
+
 typedef struct _nk_pugl_config_t nk_pugl_config_t;
 typedef struct _nk_pugl_window_t nk_pugl_window_t;
 typedef void (*nkglGenerateMipmap)(GLenum target);
@@ -102,37 +106,37 @@ struct _nk_pugl_window_t {
 #endif
 };
 
-static inline intptr_t
+NK_PUGL_API intptr_t
 nk_pugl_init(nk_pugl_window_t *win);
 
-static inline void
+NK_PUGL_API void
 nk_pugl_show(nk_pugl_window_t *win);
 
-static inline void
+NK_PUGL_API void
 nk_pugl_hide(nk_pugl_window_t *win);
 
-static inline void
+NK_PUGL_API void
 nk_pugl_shutdown(nk_pugl_window_t *win);
 
-static inline void
+NK_PUGL_API void
 nk_pugl_wait_for_event(nk_pugl_window_t *win);
 
-static inline int
+NK_PUGL_API int
 nk_pugl_process_events(nk_pugl_window_t *win);
 
-static inline void
+NK_PUGL_API void
 nk_pugl_post_redisplay(nk_pugl_window_t *win);
 
-static inline void
+NK_PUGL_API void
 nk_pugl_async_redisplay(nk_pugl_window_t *win);
 
-static inline void
+NK_PUGL_API void
 nk_pugl_quit(nk_pugl_window_t *win);
 
-static struct nk_image
+NK_PUGL_API struct nk_image
 nk_pugl_icon_load(nk_pugl_window_t *win, const char *filename);
 
-static void
+NK_PUGL_API void
 nk_pugl_icon_unload(nk_pugl_window_t *win, struct nk_image img);
 
 #ifdef __cplusplus
@@ -163,6 +167,10 @@ extern C {
 
 #	define STB_IMAGE_IMPLEMENTATION
 #	include "nuklear/example/stb_image.h"
+
+#ifndef NK_PUGL_API
+#	define NK_PUGL_API
+#endif
 
 typedef struct _nk_pugl_vertex_t nk_pugl_vertex_t;
 
@@ -670,7 +678,7 @@ _nk_pugl_event_func(PuglView *view, const PuglEvent *e)
 	}
 }
 
-static inline intptr_t
+NK_PUGL_API intptr_t
 nk_pugl_init(nk_pugl_window_t *win)
 {
 	nk_pugl_config_t *cfg = &win->cfg;
@@ -736,7 +744,7 @@ nk_pugl_init(nk_pugl_window_t *win)
 	return win->widget;
 }
 
-static inline void
+NK_PUGL_API void
 nk_pugl_show(nk_pugl_window_t *win)
 {
 	if(!win->view)
@@ -745,7 +753,7 @@ nk_pugl_show(nk_pugl_window_t *win)
 	puglShowWindow(win->view);
 }
 
-static inline void
+NK_PUGL_API void
 nk_pugl_hide(nk_pugl_window_t *win)
 {
 	if(!win->view)
@@ -754,7 +762,7 @@ nk_pugl_hide(nk_pugl_window_t *win)
 	puglHideWindow(win->view);
 }
 
-static inline void
+NK_PUGL_API void
 nk_pugl_shutdown(nk_pugl_window_t *win)
 {
 	if(!win->view)
@@ -782,7 +790,7 @@ nk_pugl_shutdown(nk_pugl_window_t *win)
 #endif
 }
 
-static inline void
+NK_PUGL_API void
 nk_pugl_wait_for_event(nk_pugl_window_t *win)
 {
 	if(!win->view)
@@ -791,7 +799,7 @@ nk_pugl_wait_for_event(nk_pugl_window_t *win)
 	puglWaitForEvent(win->view);
 }
 
-static inline int
+NK_PUGL_API int
 nk_pugl_process_events(nk_pugl_window_t *win)
 {
 	if(!win->view)
@@ -811,7 +819,7 @@ nk_pugl_process_events(nk_pugl_window_t *win)
 	return win->quit;
 }
 
-static inline void
+NK_PUGL_API void
 nk_pugl_post_redisplay(nk_pugl_window_t *win)
 {
 	if(!win->view)
@@ -820,7 +828,7 @@ nk_pugl_post_redisplay(nk_pugl_window_t *win)
 	puglPostRedisplay(win->view);
 }
 
-static inline void
+NK_PUGL_API void
 nk_pugl_async_redisplay(nk_pugl_window_t *win)
 {
 	if(!win->view)
@@ -858,13 +866,13 @@ nk_pugl_async_redisplay(nk_pugl_window_t *win)
 #endif
 }
 
-static inline void
+NK_PUGL_API void
 nk_pugl_quit(nk_pugl_window_t *win)
 {
 	win->quit = 1;
 }
 
-static struct nk_image
+NK_PUGL_API struct nk_image
 nk_pugl_icon_load(nk_pugl_window_t *win, const char *filename)
 {
 	GLuint tex = 0;
@@ -895,7 +903,7 @@ nk_pugl_icon_load(nk_pugl_window_t *win, const char *filename)
 	return nk_image_id(tex);
 }
 
-static void
+NK_PUGL_API void
 nk_pugl_icon_unload(nk_pugl_window_t *win, struct nk_image img)
 {
 	if(!win->view)

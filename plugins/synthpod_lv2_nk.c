@@ -15,7 +15,12 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <math.h>
+
 #include <synthpod_lv2.h>
+
+#define NK_PUGL_IMPLEMENTATION
+#include "nk_pugl/nk_pugl.h"
 
 #ifdef _WIN32
 __declspec(dllexport)
@@ -29,6 +34,10 @@ lv2ui_descriptor(uint32_t index)
 	{
 		case 0:
 			return &synthpod_keyboard_4_nk;
+		case 1:
+			return &synthpod_common_4_nk;
+		case 2:
+			return &synthpod_root_4_nk;
 
 		default:
 			return NULL;

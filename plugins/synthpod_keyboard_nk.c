@@ -23,7 +23,6 @@
 
 #include <math.h>
 
-#define NK_PUGL_IMPLEMENTATION
 #include "nk_pugl/nk_pugl.h"
 
 typedef struct _midi_atom_t midi_atom_t;
@@ -189,6 +188,12 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 				for(unsigned b=0; b<5; b++)
 				{
 					struct nk_rect *bb = &bbounds[b];
+					const struct nk_rect bbb = {
+						.x = bb->x - sx,
+						.y = bb->y - sx,
+						.w = bb->w + 2*sx,
+						.h = bb->h + 2*sx
+					};
 
 					const bool hovering = bhover[b];
 					if(hovering && down)
@@ -213,7 +218,7 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 
 					// draw key
 					const struct nk_color col = hovering ? (down ? active_col : hover_col) : black_col;
-					nk_fill_rect(canvas, nk_shrink_rect(*bb, -sx), rounding, grey_col);
+					nk_fill_rect(canvas, bbb, rounding, grey_col);
 					nk_fill_rect(canvas, *bb, rounding, col);
 				}
 			}
@@ -278,8 +283,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	cfg->height = 128;
 	cfg->resizable = true;
 	cfg->ignore = false;
-	cfg->class = "nuklear";
-	cfg->title = "Nuklear";
+	cfg->class = "keyboard";
+	cfg->title = "Keyboard";
 	cfg->parent = (intptr_t)parent;
 	cfg->data = handle;
 	cfg->expose = _expose;

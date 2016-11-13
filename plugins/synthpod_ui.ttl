@@ -54,6 +54,15 @@ synthpod:common_3_eo
 	lv2:extensionData ui:resize ;
 	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
 	lv2:requiredFeature ui:portMap, urid:map .
+synthpod:common_4_nk
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
+	lv2:requiredFeature ui:portMap, urid:map, ui:idleInterface ;
+	lv2:extensionData ui:idleInterface .
 
 synthpod:root_3_eo
 	a ui:EoUI ;
@@ -65,8 +74,18 @@ synthpod:root_3_eo
 	lv2:extensionData ui:resize ;
 	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
 	lv2:requiredFeature ui:portMap, urid:map .
+synthpod:root_4_nk
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
+	lv2:requiredFeature ui:portMap, urid:map, ui:idleInterface ;
+	lv2:extensionData ui:idleInterface .
 
 # Keybaord UIs
 synthpod:keyboard_4_nk
+	lv2:optionalFeature ui:resize ;
 	lv2:requiredFeature ui:idleInterface, urid:map ;
   lv2:extensionData ui:idleInterface .
