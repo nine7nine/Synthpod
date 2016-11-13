@@ -94,12 +94,8 @@ extern const LV2UI_Descriptor synthpod_common_3_eo;
 extern const LV2UI_Descriptor synthpod_root_3_eo;
 
 // keyboard UI uris
-#define SYNTHPOD_KEYBOARD_UI_URI	SYNTHPOD_URI"#keyboard_1_ui"
-#define SYNTHPOD_KEYBOARD_KX_URI	SYNTHPOD_URI"#keyboard_2_kx"
-#define SYNTHPOD_KEYBOARD_EO_URI	SYNTHPOD_URI"#keyboard_3_eo"
+#define SYNTHPOD_KEYBOARD_NK_URI	SYNTHPOD_URI"#keyboard_4_nk"
 
-extern const LV2UI_Descriptor synthpod_keyboard_1_ui;
-extern const LV2UI_Descriptor synthpod_keyboard_2_kx;
-extern const LV2UI_Descriptor synthpod_keyboard_3_eo;
+extern const LV2UI_Descriptor synthpod_keyboard_4_nk;
 
 #endif // _SYNTHPOD_LV2_H

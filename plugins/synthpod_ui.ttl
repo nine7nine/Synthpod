@@ -67,17 +67,6 @@ synthpod:root_3_eo
 	lv2:requiredFeature ui:portMap, urid:map .
 
 # Keybaord UIs
-synthpod:keyboard_1_ui
-	a ui:UI ;
-	lv2:optionalFeature opts:options ;
-	lv2:requiredFeature ui:idleInterface, urid:map, urid:unmap ;
-  lv2:extensionData ui:idleInterface, ui:showInterface .
-synthpod:keyboard_2_kx
-	a kx:Widget ;
-	lv2:optionalFeature opts:options ;
-	lv2:requiredFeature kx:Host, urid:map, urid:unmap .
-synthpod:keyboard_3_eo
-	a ui:EoUI ;
-	lv2:extensionData ui:resize ;
-	lv2:optionalFeature ui:resize ;
-	lv2:requiredFeature urid:map .
+synthpod:keyboard_4_nk
+	lv2:requiredFeature ui:idleInterface, urid:map ;
+  lv2:extensionData ui:idleInterface .

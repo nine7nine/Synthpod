@@ -34,22 +34,6 @@ const LV2UI_Descriptor synthpod_common_2_kx = {
 	.extension_data	= NULL
 };
 
-const LV2UI_Descriptor synthpod_keyboard_1_ui = {
-	.URI						= SYNTHPOD_KEYBOARD_UI_URI,
-	.instantiate		= sandbox_ui_instantiate,
-	.cleanup				= sandbox_ui_cleanup,
-	.port_event			= sandbox_ui_port_event,
-	.extension_data	= sandbox_ui_extension_data
-};
-
-const LV2UI_Descriptor synthpod_keyboard_2_kx = {
-	.URI						= SYNTHPOD_KEYBOARD_KX_URI,
-	.instantiate		= sandbox_ui_instantiate,
-	.cleanup				= sandbox_ui_cleanup,
-	.port_event			= sandbox_ui_port_event,
-	.extension_data	= NULL
-};
-
 #ifdef _WIN32
 __declspec(dllexport)
 #else
@@ -64,11 +48,6 @@ lv2ui_descriptor(uint32_t index)
 			return &synthpod_common_1_ui;
 		case 1:
 			return &synthpod_common_2_kx;
-
-		case 2:
-			return &synthpod_keyboard_1_ui;
-		case 3:
-			return &synthpod_keyboard_2_kx;
 
 		default:
 			return NULL;

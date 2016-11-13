@@ -9,6 +9,7 @@ include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/props.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
+include_directories(${PROJECT_SOURCE_DIR}/pugl)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
 add_definitions("-D_GNU_SOURCE=1") # asprintf
@@ -63,11 +64,81 @@ install(TARGETS sandbox_efl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 # synthpod_eo
 add_library(synthpod_eo.lv2 MODULE
 	synthpod_lv2_eo.c
-	synthpod_common_eo.c
-	synthpod_keyboard_eo.c)
+	synthpod_common_eo.c)
 target_link_libraries(synthpod_eo.lv2 synthpod_ui.lib)
 set_target_properties(synthpod_eo.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_eo")
 install(TARGETS synthpod_eo.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+
+# nk_pugl
+if(WIN32)
+	set(NK_UI_TYPE "WindowsUI")
+elseif(APPLE)
+	set(NK_UI_TYPE "CocoaUI")
+else()
+	set(NK_UI_TYPE "X11UI")
+endif()
+set(LIBS_NK m)
+
+find_package(OpenGL)
+if(${OPENGL_FOUND})
+	set(LIBS_NK ${LIBS_NK} ${OPENGL_LIBRARIES})
+else() # try pkg-config
+	pkg_search_module(GL REQUIRED gl)
+	if(${GL_FOUND})
+		set(LIBS_NK ${LIBS_NK} ${GL_LDFLAGS})
+	else()
+		message(FATAL_ERROR "OpenGL not found")
+	endif()
+endif()
+add_definitions("-DPUGL_HAVE_GL")
+
+if(WIN32)
+	find_library(GDI32_LIBRARY NAMES gdi32)
+	if(GDI32_LIBRARY)
+		set(LIBS_NK ${LIBS_NK} ${GDI32_LIBRARY})
+	else()
+		message(FATAL_ERROR "gdi32 library not found")
+	endif()
+
+	find_library(USER32_LIBRARY NAMES user32)
+	if(USER32_LIBRARY)
+		set(LIBS_NK ${LIBS_NK} ${USER32_LIBRARY})
+	else()
+		message(FATAL_ERROR "user32 library not found")
+	endif()
+
+	set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}/pugl/pugl/pugl_win.cpp)
+
+elseif(APPLE)
+	find_library(COCOA_LIBRARY NAMES Cocoa)
+	if(COCOA_LIBRARY)
+		set(LIBS_NK ${LIBS_NK} ${COCOA_LIBRARY})
+	else()
+		message(FATAL_ERROR "Cocoa framework not found")
+	endif()
+
+	set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}pugl/pugl/pugl_osx.m)
+
+else() # GNU/Linux
+	pkg_search_module(X11 REQUIRED x11>=1.6)
+	include_directories(${X11_INCLUDE_DIRS})
+	set(LIBS_NK ${LIBS_NK} ${X11_LDFLAGS})
+
+	pkg_search_module(XEXT REQUIRED xext>=1.3)
+	include_directories(${XEXT_INCLUDE_DIRS})
+	set(LIBS_NK ${LIBS_NK} ${XEXT_LDFLAGS})
+
+	set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}/pugl/pugl/pugl_x11.c)
+endif()
+
+# synthpod_nk
+add_library(synthpod_nk.lv2 MODULE
+	synthpod_lv2_nk.c
+	synthpod_keyboard_nk.c
+	${TAR_NK})
+target_link_libraries(synthpod_nk.lv2 ${LIBS_NK})
+set_target_properties(synthpod_nk.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_nk")
+install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
 # manifest
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/plugins/manifest.ttl)

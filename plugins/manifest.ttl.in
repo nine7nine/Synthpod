@@ -67,22 +67,12 @@ synthpod:keyboard
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	ui:ui synthpod:keyboard_1_ui ;
-	ui:ui synthpod:keyboard_2_kx ;
-	ui:ui synthpod:keyboard_3_eo ;
+	ui:ui synthpod:keyboard_4_nk ;
 	rdfs:seeAlso <synthpod.ttl> .
 
-synthpod:keyboard_1_ui
-	a ui:UI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:keyboard_2_kx
-	a kx:Widget ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:keyboard_3_eo
-	a ui:EoUI ;
-	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
+synthpod:keyboard_4_nk
+	a ui:@NK_UI_TYPE@ ;
+	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # CV2Control
