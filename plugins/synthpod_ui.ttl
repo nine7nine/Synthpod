@@ -61,7 +61,7 @@ synthpod:common_4_nk
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
-	lv2:requiredFeature ui:portMap, urid:map, ui:idleInterface ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface .
 
 synthpod:root_3_eo
@@ -81,7 +81,7 @@ synthpod:root_4_nk
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
-	lv2:requiredFeature ui:portMap, urid:map, ui:idleInterface ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface .
 
 # Keybaord UIs

@@ -20,11 +20,17 @@
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
 #include "lv2/lv2plug.in/ns/ext/midi/midi.h"
+#include "lv2/lv2plug.in/ns/ext/port-groups/port-groups.h"
+#include "lv2/lv2plug.in/ns/ext/presets/presets.h"
 
 #include <math.h>
 
 #include "nk_pugl/nk_pugl.h"
 
+#include <lilv/lilv.h>
+
+typedef struct _port_t port_t;
+typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
 
 enum {
@@ -43,20 +49,43 @@ enum {
 
 enum {
 	SELECTOR_SEARCH_NAME = 0,
+	SELECTOR_SEARCH_COMMENT,
 	SELECTOR_SEARCH_AUTHOR,
 	SELECTOR_SEARCH_CLASS,
-	SELECTOR_SEARCH_BUNDLE,
-	SELECTOR_SEARCH_LICENSE,
+	SELECTOR_SEARCH_PROJECT,
 
 	SELECTOR_SEARCH_MAX
 };
 
+struct _port_t {
+	const LilvPort *port;
+	LilvNode *group;
+	LilvScalePoints *points;
+	float min;
+	float max;
+	float val;
+	bool is_int;
+	bool is_bool;
+};
+
+struct _mod_t {
+	const LilvPlugin *plug;
+	LilvNodes *groups;
+	unsigned num_ports;
+	port_t *ports;
+	LilvNodes *presets;
+	LilvNodes *banks;
+};
+
 struct _plughandle_t {
+	LilvWorld *world;
+
 	LV2_Atom_Forge forge;
 
 	LV2_URID atom_eventTransfer;
 
 	LV2_URID_Map *map;
+	LV2_URID_Unmap *unmap;
 	LV2UI_Write_Function writer;
 	LV2UI_Controller controller;
 
@@ -65,9 +94,29 @@ struct _plughandle_t {
 	unsigned main_selector;
 	unsigned grid_selector;
 	int search_selector;
+	const LilvPlugin *plugin_selector;
+	unsigned module_selector;
+	const LilvNode *preset_selector;
 
-	char search_buf [32];
-	int search_len;
+	unsigned num_mods;
+	mod_t *mods;
+
+	char search_buf [128];
+
+	struct {
+		LilvNode *pg_group;
+		LilvNode *lv2_integer;
+		LilvNode *lv2_toggled;
+		LilvNode *pset_Preset;
+		LilvNode *pset_bank;
+		LilvNode *rdfs_comment;
+		LilvNode *doap_name;
+		LilvNode *lv2_minorVersion;
+		LilvNode *lv2_microVersion;
+		LilvNode *doap_license;
+		LilvNode *rdfs_label;
+		LilvNode *lv2_name;
+	} node;
 };
 
 static const char *main_labels [SELECTOR_MAIN_MAX] = {
@@ -82,11 +131,164 @@ static const char *grid_labels [SELECTOR_GRID_MAX] = {
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
 	[SELECTOR_SEARCH_NAME] = "Name",
+	[SELECTOR_SEARCH_COMMENT] = "Comment",
 	[SELECTOR_SEARCH_AUTHOR] = "Author",
 	[SELECTOR_SEARCH_CLASS] = "Class",
-	[SELECTOR_SEARCH_BUNDLE] = "Bundle",
-	[SELECTOR_SEARCH_LICENSE] = "License"
+	[SELECTOR_SEARCH_PROJECT] = "Project"
 };
+
+static void
+_mod_add(plughandle_t *handle, const LilvPlugin *plug)
+{
+	handle->num_mods+= 1;
+	handle->mods = realloc(handle->mods, handle->num_mods * sizeof(mod_t));
+
+	mod_t *mod = &handle->mods[handle->num_mods - 1];
+	memset(mod, 0x0, sizeof(mod_t));
+
+	mod->plug = plug;
+	mod->num_ports = lilv_plugin_get_num_ports(plug);
+	mod->ports = calloc(mod->num_ports, sizeof(port_t));
+
+	for(unsigned p=0; p<mod->num_ports; p++)
+	{
+		port_t *port = &mod->ports[p];
+
+		port->port = lilv_plugin_get_port_by_index(plug, p);
+
+		LilvNodes *port_groups = lilv_port_get_value(plug, port->port, handle->node.pg_group);
+		if(port_groups)
+		{
+			const LilvNode *port_group = lilv_nodes_size(port_groups)
+				? lilv_nodes_get_first(port_groups) : NULL;
+			if(port_group)
+			{
+				port->group = lilv_node_duplicate(port_group);
+				if(!lilv_nodes_contains(mod->groups, port_group))
+				{
+					LilvNodes *mod_groups = lilv_nodes_merge(mod->groups, port_groups);
+					lilv_nodes_free(mod->groups);
+					mod->groups = mod_groups;
+				}
+			}
+			lilv_nodes_free(port_groups);
+		}
+
+		port->is_int = lilv_port_has_property(plug, port->port, handle->node.lv2_integer);
+		port->is_bool = lilv_port_has_property(plug, port->port, handle->node.lv2_toggled);
+		port->points = lilv_port_get_scale_points(plug, port->port);
+
+		port->val = 0.f;
+		port->min = 0.f;
+		port->max = 1.f;
+		LilvNode *val = NULL;
+		LilvNode *min = NULL;
+		LilvNode *max = NULL;
+		lilv_port_get_range(plug, port->port, &val, &min, &max);
+
+		if(val)
+		{
+			if(port->is_int)
+				port->val = lilv_node_as_int(val);
+			else if(port->is_bool)
+				port->val = lilv_node_as_bool(val);
+			else
+				port->val = lilv_node_as_float(val);
+			lilv_node_free(val);
+		}
+		if(min)
+		{
+			if(port->is_int)
+				port->min = lilv_node_as_int(min);
+			else if(port->is_bool)
+				port->min = 0.f;
+			else
+				port->min = lilv_node_as_float(min);
+			lilv_node_free(min);
+		}
+		if(max)
+		{
+			if(port->is_int)
+				port->max = lilv_node_as_int(max);
+			else if(port->is_bool)
+				port->max = 1.f;
+			else
+				port->max = lilv_node_as_float(max);
+			lilv_node_free(max);
+		}
+
+		if(port->is_int && (port->min == 0.f) && (port->max == 1.f) )
+		{
+			port->is_int = false;
+			port->is_bool = true;
+		}
+	}
+
+	mod->presets = lilv_plugin_get_related(plug, handle->node.pset_Preset);
+	if(mod->presets)
+	{
+		LILV_FOREACH(nodes, i, mod->presets)
+		{
+			const LilvNode *preset = lilv_nodes_get(mod->presets, i);
+			lilv_world_load_resource(handle->world, preset);
+		}
+
+		LILV_FOREACH(nodes, i, mod->presets)
+		{
+			const LilvNode *preset = lilv_nodes_get(mod->presets, i);
+
+			LilvNodes *banks = lilv_world_find_nodes(handle->world, preset, handle->node.pset_bank, NULL);
+			if(banks)
+			{
+				const LilvNode *bank = lilv_nodes_size(banks)
+					? lilv_nodes_get_first(banks) : NULL;
+
+				if(bank)
+				{
+					if(!lilv_nodes_contains(mod->banks, bank))
+					{
+						LilvNodes *mod_banks = lilv_nodes_merge(mod->banks, banks);
+						lilv_nodes_free(mod->banks);
+						mod->banks = mod_banks;
+					}
+				}
+				lilv_nodes_free(banks);
+			}
+		}
+	}
+}
+
+static void
+_mod_free(plughandle_t *handle, mod_t *mod)
+{
+	for(unsigned p=0; p<mod->num_ports; p++)
+	{
+		port_t *port = &mod->ports[p];
+
+		if(port->group)
+			lilv_node_free(port->group);
+		if(port->points)
+			lilv_scale_points_free(port->points);
+	}
+	free(mod->ports);
+
+	if(mod->presets)
+	{
+		LILV_FOREACH(nodes, i, mod->presets)
+		{
+			const LilvNode *preset = lilv_nodes_get(mod->presets, i);
+			lilv_world_unload_resource(handle->world, preset);
+		}
+
+		lilv_nodes_free(mod->presets);
+	}
+
+	if(mod->banks)
+		lilv_nodes_free(mod->banks);
+
+	if(mod->groups)
+		lilv_nodes_free(mod->groups);
+}
 
 static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
@@ -110,6 +312,345 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 }
 
 static void
+_expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
+{
+	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
+
+	LilvNode *p = NULL;
+	if(handle->search_selector == SELECTOR_SEARCH_COMMENT)
+		p = handle->node.rdfs_comment;
+	else if(handle->search_selector == SELECTOR_SEARCH_PROJECT)
+		p = handle->node.doap_name;
+
+	bool selector_visible = false;
+	LILV_FOREACH(plugins, i, plugs)
+	{
+		const LilvPlugin *plug = lilv_plugins_get(plugs, i);
+
+		LilvNode *name_node = lilv_plugin_get_name(plug);
+		if(name_node)
+		{
+			const char *name_str = lilv_node_as_string(name_node);
+			bool visible = strlen(handle->search_buf) == 0;
+
+			if(!visible)
+			{
+				switch(handle->search_selector)
+				{
+					case SELECTOR_SEARCH_NAME:
+					{
+						if(strcasestr(name_str, handle->search_buf))
+							visible = true;
+					} break;
+					case SELECTOR_SEARCH_COMMENT:
+					{
+						LilvNodes *label_nodes = p ? lilv_plugin_get_value(plug, p) : NULL;
+						if(label_nodes)
+						{
+							const LilvNode *label_node = lilv_nodes_size(label_nodes)
+								? lilv_nodes_get_first(label_nodes) : NULL;
+							if(label_node)
+							{
+								if(strcasestr(lilv_node_as_string(label_node), handle->search_buf))
+									visible = true;
+							}
+							lilv_nodes_free(label_nodes);
+						}
+					} break;
+					case SELECTOR_SEARCH_AUTHOR:
+					{
+						LilvNode *author_node = lilv_plugin_get_author_name(plug);
+						if(author_node)
+						{
+							if(strcasestr(lilv_node_as_string(author_node), handle->search_buf))
+								visible = true;
+							lilv_node_free(author_node);
+						}
+					} break;
+					case SELECTOR_SEARCH_CLASS:
+					{
+						const LilvPluginClass *class = lilv_plugin_get_class(plug);
+						if(class)
+						{
+							const LilvNode *label_node = lilv_plugin_class_get_label(class);
+							if(label_node)
+							{
+								if(strcasestr(lilv_node_as_string(label_node), handle->search_buf))
+									visible = true;
+							}
+						}
+					} break;
+					case SELECTOR_SEARCH_PROJECT:
+					{
+						LilvNode *project = lilv_plugin_get_project(plug);
+						if(project)
+						{
+							LilvNode *label_node = p ? lilv_world_get(handle->world, lilv_plugin_get_uri(plug), p, NULL) : NULL;
+							if(label_node)
+							{
+								if(strcasestr(lilv_node_as_string(label_node), handle->search_buf))
+									visible = true;
+								lilv_node_free(label_node);
+							}
+							lilv_node_free(project);
+						}
+					} break;
+				}
+			}
+
+			if(visible)
+			{
+				int selected = plug == handle->plugin_selector;
+				if(nk_selectable_label(ctx, name_str, NK_TEXT_LEFT, &selected))
+				{
+					handle->plugin_selector = plug;
+				}
+
+				if(plug == handle->plugin_selector)
+					selector_visible = true;
+			}
+
+			lilv_node_free(name_node);
+		}
+	}
+
+	if(!selector_visible)
+		handle->plugin_selector = NULL;
+
+	if(p)
+		lilv_node_free(p);
+}
+
+static void
+_expose_main_plugin_info(plughandle_t *handle, struct nk_context *ctx)
+{
+	const LilvPlugin *plug = handle->plugin_selector;
+
+	if(!plug)
+		return;
+
+	LilvNode *name_node = lilv_plugin_get_name(plug);
+	const LilvNode *uri_node = lilv_plugin_get_uri(plug);
+	const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(plug);
+	LilvNode *author_name_node = lilv_plugin_get_author_name(plug);
+	LilvNode *author_email_node = lilv_plugin_get_author_email(plug);
+	LilvNode *author_homepage_node = lilv_plugin_get_author_homepage(plug);
+	LilvNodes *minor_nodes = lilv_plugin_get_value(plug, handle->node.lv2_minorVersion);
+	LilvNodes *micro_nodes = lilv_plugin_get_value(plug, handle->node.lv2_microVersion);
+	LilvNodes *license_nodes = lilv_plugin_get_value(plug, handle->node.doap_license);
+
+	if(name_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Name:    %s", lilv_node_as_string(name_node));
+	if(uri_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "URI:     %s", lilv_node_as_uri(uri_node));
+	if(bundle_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Bundle:  %s", lilv_node_as_uri(bundle_node));
+	if(author_name_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Author:  %s", lilv_node_as_string(author_name_node));
+	if(author_email_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Email:   %s", lilv_node_as_string(author_email_node));
+	if(author_homepage_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Web:     %s", lilv_node_as_string(author_homepage_node));
+	if(lilv_nodes_size(minor_nodes) && lilv_nodes_size(micro_nodes))
+		nk_labelf(ctx, NK_TEXT_LEFT, "Version: %i.%i",
+			lilv_node_as_int(lilv_nodes_get_first(minor_nodes)),
+			lilv_node_as_int(lilv_nodes_get_first(micro_nodes)) );
+	if(lilv_nodes_size(license_nodes))
+		nk_labelf(ctx, NK_TEXT_LEFT, "License: %s",
+			lilv_node_as_uri(lilv_nodes_get_first(license_nodes)) );
+	//TODO project
+
+	if(name_node)
+		lilv_node_free(name_node);
+	if(author_name_node)
+		lilv_node_free(author_name_node);
+	if(author_email_node)
+		lilv_node_free(author_email_node);
+	if(author_homepage_node)
+		lilv_node_free(author_homepage_node);
+	if(minor_nodes)
+		lilv_nodes_free(minor_nodes);
+	if(micro_nodes)
+		lilv_nodes_free(micro_nodes);
+	if(license_nodes)
+		lilv_nodes_free(license_nodes);
+}
+
+static void
+_expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
+	LilvNodes *presets, const LilvNode *preset_bank)
+{
+	bool search = strlen(handle->search_buf) != 0;
+
+	LILV_FOREACH(nodes, i, presets)
+	{
+		const LilvNode *preset = lilv_nodes_get(presets, i);
+
+		bool visible = false;
+
+		LilvNode *bank = lilv_world_get(handle->world, preset, handle->node.pset_bank, NULL);
+		if(bank)
+		{
+			if(lilv_node_equals(preset_bank, bank))
+				visible = true;
+
+			lilv_node_free(bank);
+		}
+		else if(!preset_bank)
+			visible = true;
+
+		if(visible)
+		{
+			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
+			if(label_node)
+			{
+				const char *label_str = lilv_node_as_string(label_node);
+
+				if(!search || strcasestr(label_str, handle->search_buf))
+				{
+					int selected = preset == handle->preset_selector;
+					if(nk_selectable_label(ctx, label_str, NK_TEXT_LEFT, &selected))
+					{
+						handle->preset_selector = preset;
+					}
+				}
+
+				lilv_node_free(label_node);
+			}
+		}
+	}
+}
+
+static void
+_expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx)
+{
+	mod_t *mod = handle->module_selector < handle->num_mods
+		? &handle->mods[handle->module_selector] : NULL;
+
+	if(mod && mod->presets)
+	{
+		LILV_FOREACH(nodes, i, mod->banks)
+		{
+			const LilvNode *bank = lilv_nodes_get(mod->banks, i);
+
+			LilvNode *label_node = lilv_world_get(handle->world, bank, handle->node.rdfs_label, NULL);
+			if(label_node)
+			{
+				nk_label(ctx, lilv_node_as_string(label_node), NK_TEXT_CENTERED);
+				_expose_main_preset_list_for_bank(handle, ctx, mod->presets, bank);
+				lilv_node_free(label_node);
+			}
+		}
+
+		nk_label(ctx, "Unbanked", NK_TEXT_CENTERED);
+		_expose_main_preset_list_for_bank(handle, ctx, mod->presets, NULL);
+	}
+}
+
+static void
+_expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
+{
+	const LilvNode *preset = handle->preset_selector;
+
+	if(!preset)
+		return;
+
+	//FIXME
+	LilvNode *name_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
+	LilvNode *comment_node = lilv_world_get(handle->world, preset, handle->node.rdfs_comment, NULL);
+	LilvNode *bank_node = lilv_world_get(handle->world, preset, handle->node.pset_bank, NULL);
+	LilvNode *minor_node = lilv_world_get(handle->world, preset, handle->node.lv2_minorVersion, NULL);
+	LilvNode *micro_node = lilv_world_get(handle->world, preset, handle->node.lv2_microVersion, NULL);
+	LilvNode *license_node = lilv_world_get(handle->world, preset, handle->node.doap_license, NULL);
+
+	if(name_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Name:    %s", lilv_node_as_string(name_node));
+	if(preset)
+		nk_labelf(ctx, NK_TEXT_LEFT, "URI:     %s", lilv_node_as_uri(preset));
+	if(comment_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Comment: %s", lilv_node_as_string(comment_node));
+	if(bank_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Bank:    %s", lilv_node_as_uri(bank_node));
+	if(minor_node && micro_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "Version: %i.%i",
+			lilv_node_as_int(minor_node), lilv_node_as_int(micro_node) );
+	if(license_node)
+		nk_labelf(ctx, NK_TEXT_LEFT, "License: %s", lilv_node_as_uri(license_node));
+	//TODO author, project
+
+	if(name_node)
+		lilv_node_free(name_node);
+	if(comment_node)
+		lilv_node_free(comment_node);
+	if(bank_node)
+		lilv_node_free(bank_node);
+	if(minor_node)
+		lilv_node_free(minor_node);
+	if(micro_node)
+		lilv_node_free(micro_node);
+	if(license_node)
+		lilv_node_free(license_node);
+}
+
+static void
+_expose_port(struct nk_context *ctx, mod_t *mod, port_t *port)
+{
+	LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
+	if(name_node)
+	{
+		const char *name_str = lilv_node_as_string(name_node);
+
+		if(port->is_int)
+		{
+			int val = port->val;
+			nk_property_int(ctx, name_str, port->min, &val, port->max, 1.f, 1.f);
+			port->val = val;
+		}
+		else if(port->is_bool)
+		{
+			int val = port->val;
+			nk_checkbox_label(ctx, name_str, &val);
+			port->val = val;
+		}
+		else if(port->points)
+		{
+			int val = 0;
+
+			const int count = lilv_scale_points_size(port->points);
+			const char *items [count];
+			float values [count];
+
+			const char **item_ptr = items;
+			float *value_ptr = values;
+			LILV_FOREACH(scale_points, i, port->points)
+			{
+				const LilvScalePoint *point = lilv_scale_points_get(port->points, i);
+				const LilvNode *label_node = lilv_scale_point_get_label(point);
+				const LilvNode *value_node = lilv_scale_point_get_value(point);
+				*item_ptr = lilv_node_as_string(label_node);
+				*value_ptr = lilv_node_as_float(value_node); //FIXME
+
+				if(*value_ptr == port->val)
+					val = value_ptr - values;
+			
+				item_ptr++;
+				value_ptr++;
+			}
+
+			nk_combobox(ctx, items, count, &val, 20.f, nk_vec2(120.f, 120.f));
+			port->val = values[val];
+		}
+		else // is_float
+		{
+			const float step = (port->max - port->min) / 100;
+			nk_property_float(ctx, name_str, port->min, &port->val, port->max, step, 1.f);
+		}
+
+		lilv_node_free(name_node);
+	}
+}
+
+static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
 	switch(handle->main_selector)
@@ -121,22 +662,25 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 			nk_layout_row_push(ctx, 0.25);
 			if(nk_group_begin(ctx, "Rack", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				for(unsigned i=0; i<4; i++)
+				for(unsigned m=0; m<handle->num_mods; m++)
 				{
-					nk_layout_row_dynamic(ctx, 60.f, 1);
-					if(nk_group_begin(ctx, "Moony A1 x A1",
-						NK_WINDOW_TITLE | NK_WINDOW_CLOSABLE | NK_WINDOW_NO_SCROLLBAR))
-					{
-						nk_layout_row_dynamic(ctx, 20.f, 6);
-						nk_button_label(ctx, "Enable");
-						nk_button_label(ctx, "Selected");
-						nk_button_label(ctx, "Controls");
-						nk_button_label(ctx, "GUI");
-						nk_button_symbol(ctx, NK_SYMBOL_TRIANGLE_UP);
-						nk_button_symbol(ctx, NK_SYMBOL_TRIANGLE_DOWN);
-						//TODO
+					mod_t *mod = &handle->mods[m];
+					const LilvPlugin *plug = mod->plug;
 
-						nk_group_end(ctx);
+					LilvNode *name_node = lilv_plugin_get_name(plug);
+					if(name_node)
+					{
+						nk_layout_row_dynamic(ctx, 20.f, 2);
+						int selected = m == handle->module_selector;
+						if(nk_selectable_label(ctx, lilv_node_as_string(name_node), NK_TEXT_LEFT,
+							&selected))
+						{
+							handle->module_selector = m;
+							handle->preset_selector = NULL;
+						}
+						nk_labelf(ctx, NK_TEXT_RIGHT, "%4.1f|%4.1f|%4.1f%%", 1.1f, 2.2f, 5.5f);
+
+						lilv_node_free(name_node);
 					}
 				}
 
@@ -146,7 +690,47 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 			nk_layout_row_push(ctx, 0.50);
 			if(nk_group_begin(ctx, "Controls", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				//TODO
+				mod_t *mod = handle->module_selector < handle->num_mods
+					? &handle->mods[handle->module_selector] : NULL;
+
+				if(mod)
+				{
+					LILV_FOREACH(nodes, i, mod->groups)
+					{
+						const LilvNode *group = lilv_nodes_get(mod->groups, i);
+
+						LilvNode *label_node = lilv_world_get(handle->world, group, handle->node.lv2_name, NULL);
+						if(label_node)
+						{
+							nk_layout_row_dynamic(ctx, 20.f, 1);
+							nk_label(ctx, lilv_node_as_string(label_node), NK_TEXT_CENTERED);
+							lilv_node_free(label_node);
+
+							nk_layout_row_dynamic(ctx, 20.f, 3);
+							for(unsigned p=0; p<mod->num_ports; p++)
+							{
+								port_t *port = &mod->ports[p];
+								if(!port->group || !lilv_node_equals(port->group, group))
+									continue;
+
+								_expose_port(ctx, mod, port);
+							}
+						}
+					}
+
+					nk_layout_row_dynamic(ctx, 20.f, 1);
+					nk_label(ctx, "Ungrouped", NK_TEXT_CENTERED);
+
+					nk_layout_row_dynamic(ctx, 20.f, 3);
+					for(unsigned p=0; p<mod->num_ports; p++)
+					{
+						port_t *port = &mod->ports[p];
+						if(port->group)
+							continue;
+
+						_expose_port(ctx, mod, port);
+					}
+				}
 
 				nk_group_end(ctx);
 			}
@@ -160,29 +744,58 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 					const enum nk_symbol_type symbol = (handle->grid_selector == i)
 						? NK_SYMBOL_CIRCLE_SOLID : NK_SYMBOL_CIRCLE_OUTLINE;
 					if(nk_button_symbol_label(ctx, symbol, grid_labels[i], NK_TEXT_RIGHT))
+					{
 						handle->grid_selector = i;
+						handle->search_buf[0] = '\0';
+					}
 				}
 
 				nk_layout_row_dynamic(ctx, 20.f, 2);
 				nk_combobox(ctx, search_labels, SELECTOR_SEARCH_MAX, &handle->search_selector, 20.f, nk_vec2(120.f, 140.f));
-				nk_edit_string(ctx, NK_EDIT_FIELD, handle->search_buf, &handle->search_len, 32, nk_filter_default);
+				nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, handle->search_buf, 128, nk_filter_default);
 
-				switch(handle->grid_selector)
+				nk_layout_row_dynamic(ctx, 300.f, 1); //FIXME
+				if(nk_group_begin(ctx, "List", NK_WINDOW_BORDER))
 				{
-					case SELECTOR_GRID_PLUGINS:
+					switch(handle->grid_selector)
 					{
-						nk_layout_row_dynamic(ctx, 20.f, 1);
-						for(unsigned j=0; j<20; j++)
-							nk_labelf(ctx, NK_TEXT_LEFT, "Plugin #%u", j);
-						//TODO
-					} break;
-					case SELECTOR_GRID_PRESETS:
+						case SELECTOR_GRID_PLUGINS:
+						{
+							nk_layout_row_dynamic(ctx, 20.f, 1);
+							_expose_main_plugin_list(handle, ctx);
+						} break;
+						case SELECTOR_GRID_PRESETS:
+						{
+							nk_layout_row_dynamic(ctx, 20.f, 1);
+							_expose_main_preset_list(handle, ctx);
+						} break;
+					}
+					nk_group_end(ctx);
+				}
+
+				nk_layout_row_dynamic(ctx, 200.f, 1); //FIXME
+				if(nk_group_begin(ctx, "Info", NK_WINDOW_BORDER))
+				{
+					switch(handle->grid_selector)
 					{
-						nk_layout_row_dynamic(ctx, 20.f, 1);
-						for(unsigned j=0; j<20; j++)
-							nk_labelf(ctx, NK_TEXT_LEFT, "Preset #%u", j);
-						//TODO
-					} break;
+						case SELECTOR_GRID_PLUGINS:
+						{
+							nk_layout_row_dynamic(ctx, 20.f, 1);
+							_expose_main_plugin_info(handle, ctx);
+						} break;
+						case SELECTOR_GRID_PRESETS:
+						{
+							nk_layout_row_dynamic(ctx, 20.f, 1);
+							_expose_main_preset_info(handle, ctx);
+						} break;
+					}
+					nk_group_end(ctx);
+				}
+
+				nk_layout_row_dynamic(ctx, 20.f, 1);
+				if(nk_button_label(ctx, "Load") && handle->plugin_selector)
+				{
+					_mod_add(handle, handle->plugin_selector);
 				}
 
 				nk_group_end(ctx);
@@ -277,6 +890,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			host_resize = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
+			handle->unmap = features[i]->data;
 	}
 
 	if(!parent)
@@ -293,6 +908,13 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		free(handle);
 		return NULL;
 	}
+	if(!handle->unmap)
+	{
+		fprintf(stderr,
+			"%s: Host does not support urid:unmap\n", descriptor->URI);
+		free(handle);
+		return NULL;
+	}
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
@@ -300,6 +922,37 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->controller = controller;
 	handle->writer = write_function;
+
+	handle->world = lilv_world_new();
+	if(handle->world)
+	{
+		LilvNode *node_false = lilv_new_bool(handle->world, false);
+		if(node_false)
+		{
+			lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
+			lilv_node_free(node_false);
+		}
+		lilv_world_load_all(handle->world);
+		LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
+		if(synthpod_bundle)
+		{
+			lilv_world_load_bundle(handle->world, synthpod_bundle);
+			lilv_node_free(synthpod_bundle);
+		}
+
+		handle->node.pg_group = lilv_new_uri(handle->world, LV2_PORT_GROUPS__group);
+		handle->node.lv2_integer = lilv_new_uri(handle->world, LV2_CORE__integer);
+		handle->node.lv2_toggled = lilv_new_uri(handle->world, LV2_CORE__toggled);
+		handle->node.pset_Preset = lilv_new_uri(handle->world, LV2_PRESETS__Preset);
+		handle->node.pset_bank = lilv_new_uri(handle->world, LV2_PRESETS__bank);
+		handle->node.rdfs_comment = lilv_new_uri(handle->world, LILV_NS_RDFS"comment");
+		handle->node.doap_name = lilv_new_uri(handle->world, LILV_NS_DOAP"name");
+		handle->node.lv2_minorVersion = lilv_new_uri(handle->world, LV2_CORE__minorVersion);
+		handle->node.lv2_microVersion = lilv_new_uri(handle->world, LV2_CORE__microVersion);
+		handle->node.doap_license = lilv_new_uri(handle->world, LILV_NS_DOAP"license");
+		handle->node.rdfs_label = lilv_new_uri(handle->world, LILV_NS_RDFS"label");
+		handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
+	}
 
 	nk_pugl_config_t *cfg = &handle->win.cfg;
 	cfg->width = 1280;
@@ -338,6 +991,32 @@ cleanup(LV2UI_Handle instance)
 
 	nk_pugl_hide(&handle->win);
 	nk_pugl_shutdown(&handle->win);
+
+	for(unsigned m=0; m<handle->num_mods; m++)
+	{
+		mod_t *mod = &handle->mods[m];
+
+		_mod_free(handle, mod);
+	}
+	free(handle->mods);
+
+	if(handle->world)
+	{
+		lilv_node_free(handle->node.pg_group);
+		lilv_node_free(handle->node.lv2_integer);
+		lilv_node_free(handle->node.lv2_toggled);
+		lilv_node_free(handle->node.pset_Preset);
+		lilv_node_free(handle->node.pset_bank);
+		lilv_node_free(handle->node.rdfs_comment);
+		lilv_node_free(handle->node.doap_name);
+		lilv_node_free(handle->node.lv2_minorVersion);
+		lilv_node_free(handle->node.lv2_microVersion);
+		lilv_node_free(handle->node.doap_license);
+		lilv_node_free(handle->node.rdfs_label);
+		lilv_node_free(handle->node.lv2_name);
+
+		lilv_world_free(handle->world);
+	}
 
 	free(handle);
 }

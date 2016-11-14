@@ -137,7 +137,9 @@ add_library(synthpod_nk.lv2 MODULE
 	synthpod_common_nk.c
 	synthpod_keyboard_nk.c
 	${TAR_NK})
-target_link_libraries(synthpod_nk.lv2 ${LIBS_NK})
+target_link_libraries(synthpod_nk.lv2
+	${LIBS_NK}
+	${LILV_LDFLAGS})
 set_target_properties(synthpod_nk.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_nk")
 install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
