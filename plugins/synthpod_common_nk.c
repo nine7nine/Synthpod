@@ -295,6 +295,22 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 }
 
 static void
+_load(plughandle_t *handle)
+{
+	switch(handle->grid_selector)
+	{
+		case SELECTOR_GRID_PLUGINS:
+		{
+			_mod_add(handle, handle->plugin_selector);
+		} break;
+		case SELECTOR_GRID_PRESETS:
+		{
+			//TODO
+		} break;
+	}
+}
+
+static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
 	nk_layout_row_dynamic(ctx, dy, 7);
@@ -404,6 +420,12 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 
 			if(visible)
 			{
+				if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, 1))
+				{
+					handle->plugin_selector = plug;
+					_load(handle);
+				}
+
 				int selected = plug == handle->plugin_selector;
 				if(nk_selectable_label(ctx, name_str, NK_TEXT_LEFT, &selected))
 				{
@@ -509,6 +531,12 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 
 				if(!search || strcasestr(label_str, handle->search_buf))
 				{
+					if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, 1))
+					{
+						handle->preset_selector = preset;
+					_load(handle);
+					}
+
 					int selected = preset == handle->preset_selector;
 					if(nk_selectable_label(ctx, label_str, NK_TEXT_LEFT, &selected))
 					{
@@ -654,6 +682,8 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
+	const struct nk_vec2 group_padding = ctx->style.window.group_padding;
+
 	switch(handle->main_selector)
 	{
 		case SELECTOR_MAIN_GRID:
@@ -739,6 +769,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_layout_row_push(ctx, 0.25);
 			if(nk_group_begin(ctx, "Plugins/Presets", NK_WINDOW_BORDER))
 			{
+				const struct nk_panel *panel = nk_window_get_panel(ctx);
+
 				nk_layout_row_dynamic(ctx, dy, SELECTOR_MAIN_MAX);
 				for(unsigned i=0; i<SELECTOR_MAIN_MAX; i++)
 				{
@@ -755,7 +787,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				nk_combobox(ctx, search_labels, SELECTOR_SEARCH_MAX, &handle->search_selector, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
 				nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, handle->search_buf, SEARCH_BUF_MAX, nk_filter_default);
 
-				nk_layout_row_dynamic(ctx, 300.f, 1); //FIXME
+				const float content_h2 = panel->bounds.h - 6*group_padding.y - 3*dy;
+				nk_layout_row_dynamic(ctx, content_h2*0.75, 1);
 				if(nk_group_begin(ctx, "List", NK_WINDOW_BORDER))
 				{
 					switch(handle->grid_selector)
@@ -774,7 +807,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					nk_group_end(ctx);
 				}
 
-				nk_layout_row_dynamic(ctx, 200.f, 1); //FIXME
+				nk_layout_row_dynamic(ctx, content_h2*0.25, 1);
 				if(nk_group_begin(ctx, "Info", NK_WINDOW_BORDER))
 				{
 					switch(handle->grid_selector)
@@ -796,7 +829,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				nk_layout_row_dynamic(ctx, dy, 1);
 				if(nk_button_label(ctx, "Load") && handle->plugin_selector)
 				{
-					_mod_add(handle, handle->plugin_selector);
+					_load(handle);
 				}
 
 				nk_group_end(ctx);
