@@ -22,6 +22,7 @@
 #include "lv2/lv2plug.in/ns/ext/midi/midi.h"
 #include "lv2/lv2plug.in/ns/ext/port-groups/port-groups.h"
 #include "lv2/lv2plug.in/ns/ext/presets/presets.h"
+#include "lv2/lv2plug.in/ns/ext/patch/patch.h"
 
 #include <math.h>
 
@@ -31,25 +32,43 @@
 
 #define SEARCH_BUF_MAX 128
 
+typedef enum _property_type_t property_type_t;
+typedef enum _selector_main_t selector_main_t;
+typedef enum _selector_grid_t selector_grid_t;
+typedef enum _selector_search_t selector_search_t;
+
+typedef union _param_union_t param_union_t;
+
 typedef struct _port_t port_t;
+typedef struct _param_t param_t;
+typedef struct _prop_t prop_t;
 typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
 
-enum {
+enum _property_type_t {
+	PROPERTY_TYPE_CONTROL = 0,
+	PROPERTY_TYPE_AUDIO,
+	PROPERTY_TYPE_CV,
+	PROPERTY_TYPE_PARAM,
+
+	PROPERTY_TYPE_MAX
+};
+
+enum _selector_main_t {
 	SELECTOR_MAIN_GRID = 0,
 	SELECTOR_MAIN_MATRIX,
 
 	SELECTOR_MAIN_MAX
 };
 
-enum {
+enum _selector_grid_t {
 	SELECTOR_GRID_PLUGINS = 0,
 	SELECTOR_GRID_PRESETS,
 
 	SELECTOR_GRID_MAX
 };
 
-enum {
+enum _selector_search_t {
 	SELECTOR_SEARCH_NAME = 0,
 	SELECTOR_SEARCH_COMMENT,
 	SELECTOR_SEARCH_AUTHOR,
@@ -65,18 +84,54 @@ struct _port_t {
 	LilvScalePoints *points;
 	float min;
 	float max;
+	float span;
 	float val;
 	bool is_int;
 	bool is_bool;
+	bool is_readonly;
+};
+
+union _param_union_t {
+ int32_t b;
+ int32_t i;
+ int64_t h;
+ float f;
+ double d;
+};
+
+struct _param_t {
+	const LilvNode *param;
+	bool is_readonly;
+	LV2_URID range;
+	param_union_t min;
+	param_union_t max;
+	param_union_t span;
+	param_union_t val;
+};
+
+struct _prop_t {
+	property_type_t type;
+
+	union {
+		port_t port;
+		param_t param;
+	};
 };
 
 struct _mod_t {
 	const LilvPlugin *plug;
-	LilvNodes *groups;
+
 	unsigned num_ports;
 	port_t *ports;
-	LilvNodes *presets;
+	LilvNodes *groups;
 	LilvNodes *banks;
+
+	unsigned num_params;
+	param_t *params;
+	LilvNodes *readables;
+	LilvNodes *writables;
+
+	LilvNodes *presets;
 };
 
 struct _plughandle_t {
@@ -93,9 +148,9 @@ struct _plughandle_t {
 
 	nk_pugl_window_t win;
 
-	unsigned main_selector;
-	unsigned grid_selector;
-	int search_selector;
+	selector_main_t main_selector;
+	selector_grid_t grid_selector;
+	selector_search_t  search_selector;
 	const LilvPlugin *plugin_selector;
 	unsigned module_selector;
 	const LilvNode *preset_selector;
@@ -109,15 +164,22 @@ struct _plughandle_t {
 		LilvNode *pg_group;
 		LilvNode *lv2_integer;
 		LilvNode *lv2_toggled;
+		LilvNode *lv2_minimum;
+		LilvNode *lv2_maximum;
+		LilvNode *lv2_default;
 		LilvNode *pset_Preset;
 		LilvNode *pset_bank;
 		LilvNode *rdfs_comment;
+		LilvNode *rdfs_range;
 		LilvNode *doap_name;
 		LilvNode *lv2_minorVersion;
 		LilvNode *lv2_microVersion;
 		LilvNode *doap_license;
 		LilvNode *rdfs_label;
 		LilvNode *lv2_name;
+		LilvNode *lv2_OutputPort;
+		LilvNode *patch_readable;
+		LilvNode *patch_writable;
 	} node;
 
 	float dy;
@@ -140,6 +202,43 @@ static const char *search_labels [SELECTOR_SEARCH_MAX] = {
 	[SELECTOR_SEARCH_CLASS] = "Class",
 	[SELECTOR_SEARCH_PROJECT] = "Project"
 };
+
+static void
+_register_parameter(plughandle_t *handle, param_t *param, const LilvNode *parameter, bool is_readonly)
+{
+	param->param = parameter;
+	param->is_readonly = is_readonly;
+
+	LilvNode *range = lilv_world_get(handle->world, parameter, handle->node.rdfs_range, NULL);
+	if(range)
+	{
+		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
+		lilv_node_free(range);
+	}
+
+	LilvNode *min = lilv_world_get(handle->world, parameter, handle->node.lv2_minimum, NULL);
+	if(min)
+	{
+		param->min.i = lilv_node_as_int(min); //FIXME
+		lilv_node_free(min);
+	}
+
+	LilvNode *max = lilv_world_get(handle->world, parameter, handle->node.lv2_maximum, NULL);
+	if(max)
+	{
+		param->max.i = lilv_node_as_int(max); //FIXME
+		lilv_node_free(max);
+	}
+
+	LilvNode *val = lilv_world_get(handle->world, parameter, handle->node.lv2_default, NULL);
+	if(val)
+	{
+		param->val.i = lilv_node_as_int(val); //FIXME
+		lilv_node_free(val);
+	}
+
+	param->span.i = param->max.i - param->min.i;
+}
 
 static void
 _mod_add(plughandle_t *handle, const LilvPlugin *plug)
@@ -178,6 +277,7 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			lilv_nodes_free(port_groups);
 		}
 
+		port->is_readonly = lilv_port_is_a(plug, port->port, handle->node.lv2_OutputPort);
 		port->is_int = lilv_port_has_property(plug, port->port, handle->node.lv2_integer);
 		port->is_bool = lilv_port_has_property(plug, port->port, handle->node.lv2_toggled);
 		port->points = lilv_port_get_scale_points(plug, port->port);
@@ -221,6 +321,8 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			lilv_node_free(max);
 		}
 
+		port->span = port->max - port->min;
+
 		if(port->is_int && (port->min == 0.f) && (port->max == 1.f) )
 		{
 			port->is_int = false;
@@ -260,6 +362,30 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			}
 		}
 	}
+
+	mod->readables = lilv_plugin_get_value(plug, handle->node.patch_readable);
+	mod->writables = lilv_plugin_get_value(plug, handle->node.patch_writable);
+
+	mod->num_params = lilv_nodes_size(mod->readables) + lilv_nodes_size(mod->writables);
+	mod->params = calloc(mod->num_params, sizeof(param_t));
+
+	param_t *param = mod->params;
+	LILV_FOREACH(nodes, i, mod->readables)
+	{
+		const LilvNode *parameter = lilv_nodes_get(mod->readables, i);
+
+		_register_parameter(handle, param, parameter, true);
+		param++;
+	}
+	LILV_FOREACH(nodes, i, mod->writables)
+	{
+		const LilvNode *parameter = lilv_nodes_get(mod->readables, i);
+
+		_register_parameter(handle, param, parameter, false);
+		param++;
+	}
+
+	nk_pugl_post_redisplay(&handle->win); //FIXME
 }
 
 static void
@@ -292,6 +418,14 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 
 	if(mod->groups)
 		lilv_nodes_free(mod->groups);
+
+	free(mod->params);
+
+	if(mod->readables)
+		lilv_nodes_free(mod->readables);
+
+	if(mod->writables)
+		lilv_nodes_free(mod->writables);
 }
 
 static void
@@ -307,6 +441,8 @@ _load(plughandle_t *handle)
 		{
 			//TODO
 		} break;
+
+		default: break;
 	}
 }
 
@@ -415,12 +551,14 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 							lilv_node_free(project);
 						}
 					} break;
+
+					default: break;
 				}
 			}
 
 			if(visible)
 			{
-				if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, 1))
+				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
 				{
 					handle->plugin_selector = plug;
 					_load(handle);
@@ -531,10 +669,10 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 
 				if(!search || strcasestr(label_str, handle->search_buf))
 				{
-					if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, 1))
+					if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
 					{
 						handle->preset_selector = preset;
-					_load(handle);
+						_load(handle);
 					}
 
 					int selected = preset == handle->preset_selector;
@@ -631,15 +769,30 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 
 		if(port->is_int)
 		{
-			int val = port->val;
-			nk_property_int(ctx, name_str, port->min, &val, port->max, 1.f, 1.f);
-			port->val = val;
+			if(port->is_readonly)
+			{
+				nk_value_int(ctx, name_str, port->val);
+			}
+			else // !readonly
+			{
+				const float inc = port->span / nk_widget_width(ctx);
+				int val = port->val;
+				nk_property_int(ctx, name_str, port->min, &val, port->max, 1.f, inc);
+				port->val = val;
+			}
 		}
 		else if(port->is_bool)
 		{
-			int val = port->val;
-			nk_checkbox_label(ctx, name_str, &val);
-			port->val = val;
+			if(port->is_readonly)
+			{
+				nk_value_bool(ctx, name_str, port->val);
+			}
+			else // !readonly
+			{
+				int val = port->val;
+				nk_checkbox_label(ctx, name_str, &val);
+				port->val = val;
+			}
 		}
 		else if(port->points)
 		{
@@ -671,12 +824,44 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 		}
 		else // is_float
 		{
-			const float step = (port->max - port->min) / 100;
-			nk_property_float(ctx, name_str, port->min, &port->val, port->max, step, 1.f);
+			if(port->is_readonly)
+			{
+				nk_value_float(ctx, name_str, port->val);
+			}
+			else // !readonly
+			{
+				const float step = port->span / 100.f;
+				const float inc = port->span / nk_widget_width(ctx);
+				nk_property_float(ctx, name_str, port->min, &port->val, port->max, step, inc);
+			}
 		}
 
 		lilv_node_free(name_node);
 	}
+}
+
+static void
+_expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, float dy)
+{
+	LilvNode *name_node = lilv_world_get(handle->world, param->param, handle->node.rdfs_label, NULL);
+	if(name_node)
+	{
+		const char *name_str = lilv_node_as_string(name_node);
+
+		if(param->is_readonly)
+		{
+			nk_value_int(ctx, name_str, param->val.i);
+		}
+		else
+		{
+			const float step = param->span.i / 100.f;
+			const float inc = param->span.i / nk_widget_width(ctx);
+			nk_property_int(ctx, name_str, param->min.i, &param->val.i, param->max.i, step, inc);
+		}
+
+		lilv_node_free(name_node);
+	}
+
 }
 
 static void
@@ -761,6 +946,17 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 						_expose_port(ctx, mod, port, dy);
 					}
+
+					nk_layout_row_dynamic(ctx, dy, 1);
+					nk_label(ctx, "Parameter", NK_TEXT_CENTERED);
+
+					nk_layout_row_dynamic(ctx, dy, 3);
+					for(unsigned p=0; p<mod->num_params; p++)
+					{
+						param_t *param = &mod->params[p];
+
+						_expose_param(handle, ctx, param, dy);
+					}
 				}
 
 				nk_group_end(ctx);
@@ -784,7 +980,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				}
 
 				nk_layout_row_dynamic(ctx, dy, 2);
-				nk_combobox(ctx, search_labels, SELECTOR_SEARCH_MAX, &handle->search_selector, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
+				handle->search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 				nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, handle->search_buf, SEARCH_BUF_MAX, nk_filter_default);
 
 				const float content_h2 = panel->bounds.h - 6*group_padding.y - 3*dy;
@@ -803,6 +1000,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							nk_layout_row_dynamic(ctx, dy, 1);
 							_expose_main_preset_list(handle, ctx);
 						} break;
+
+						default: break;
 					}
 					nk_group_end(ctx);
 				}
@@ -822,6 +1021,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							nk_layout_row_dynamic(ctx, dy, 1);
 							_expose_main_preset_info(handle, ctx);
 						} break;
+
+						default: break;
 					}
 					nk_group_end(ctx);
 				}
@@ -868,6 +1069,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 			nk_layout_row_end(ctx);
 		} break;
+
+		default: break;
 	}
 }
 
@@ -977,15 +1180,22 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		handle->node.pg_group = lilv_new_uri(handle->world, LV2_PORT_GROUPS__group);
 		handle->node.lv2_integer = lilv_new_uri(handle->world, LV2_CORE__integer);
 		handle->node.lv2_toggled = lilv_new_uri(handle->world, LV2_CORE__toggled);
+		handle->node.lv2_minimum = lilv_new_uri(handle->world, LV2_CORE__minimum);
+		handle->node.lv2_maximum = lilv_new_uri(handle->world, LV2_CORE__maximum);
+		handle->node.lv2_default = lilv_new_uri(handle->world, LV2_CORE__default);
 		handle->node.pset_Preset = lilv_new_uri(handle->world, LV2_PRESETS__Preset);
 		handle->node.pset_bank = lilv_new_uri(handle->world, LV2_PRESETS__bank);
 		handle->node.rdfs_comment = lilv_new_uri(handle->world, LILV_NS_RDFS"comment");
+		handle->node.rdfs_range = lilv_new_uri(handle->world, LILV_NS_RDFS"range");
 		handle->node.doap_name = lilv_new_uri(handle->world, LILV_NS_DOAP"name");
 		handle->node.lv2_minorVersion = lilv_new_uri(handle->world, LV2_CORE__minorVersion);
 		handle->node.lv2_microVersion = lilv_new_uri(handle->world, LV2_CORE__microVersion);
 		handle->node.doap_license = lilv_new_uri(handle->world, LILV_NS_DOAP"license");
 		handle->node.rdfs_label = lilv_new_uri(handle->world, LILV_NS_RDFS"label");
 		handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
+		handle->node.lv2_OutputPort = lilv_new_uri(handle->world, LV2_CORE__OutputPort);
+		handle->node.patch_readable = lilv_new_uri(handle->world, LV2_PATCH__readable);
+		handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
 	}
 
 	const char *NK_SCALE = getenv("NK_SCALE");
@@ -1043,15 +1253,22 @@ cleanup(LV2UI_Handle instance)
 		lilv_node_free(handle->node.pg_group);
 		lilv_node_free(handle->node.lv2_integer);
 		lilv_node_free(handle->node.lv2_toggled);
+		lilv_node_free(handle->node.lv2_minimum);
+		lilv_node_free(handle->node.lv2_maximum);
+		lilv_node_free(handle->node.lv2_default);
 		lilv_node_free(handle->node.pset_Preset);
 		lilv_node_free(handle->node.pset_bank);
 		lilv_node_free(handle->node.rdfs_comment);
+		lilv_node_free(handle->node.rdfs_range);
 		lilv_node_free(handle->node.doap_name);
 		lilv_node_free(handle->node.lv2_minorVersion);
 		lilv_node_free(handle->node.lv2_microVersion);
 		lilv_node_free(handle->node.doap_license);
 		lilv_node_free(handle->node.rdfs_label);
 		lilv_node_free(handle->node.lv2_name);
+		lilv_node_free(handle->node.lv2_OutputPort);
+		lilv_node_free(handle->node.patch_readable);
+		lilv_node_free(handle->node.patch_writable);
 
 		lilv_world_free(handle->world);
 	}
