@@ -278,9 +278,12 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->controller = controller;
 	handle->writer = write_function;
 
+	const char *NK_SCALE = getenv("NK_SCALE");
+	const float scale = NK_SCALE ? atof(NK_SCALE) : 1.f;
+
 	nk_pugl_config_t *cfg = &handle->win.cfg;
-	cfg->width = 1304;
-	cfg->height = 128;
+	cfg->width = 1304 * scale;
+	cfg->height = 128 * scale;
 	cfg->resizable = true;
 	cfg->ignore = false;
 	cfg->class = "keyboard";
@@ -289,7 +292,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	cfg->data = handle;
 	cfg->expose = _expose;
 	cfg->font.face = NULL;
-	cfg->font.size = 16;
+	cfg->font.size = 16 * scale;
 	
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);

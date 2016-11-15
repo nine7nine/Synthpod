@@ -29,6 +29,8 @@
 
 #include <lilv/lilv.h>
 
+#define SEARCH_BUF_MAX 128
+
 typedef struct _port_t port_t;
 typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
@@ -101,7 +103,7 @@ struct _plughandle_t {
 	unsigned num_mods;
 	mod_t *mods;
 
-	char search_buf [128];
+	char search_buf [SEARCH_BUF_MAX];
 
 	struct {
 		LilvNode *pg_group;
@@ -117,6 +119,8 @@ struct _plughandle_t {
 		LilvNode *rdfs_label;
 		LilvNode *lv2_name;
 	} node;
+
+	float dy;
 };
 
 static const char *main_labels [SELECTOR_MAIN_MAX] = {
@@ -416,9 +420,6 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 
 	if(!selector_visible)
 		handle->plugin_selector = NULL;
-
-	if(p)
-		lilv_node_free(p);
 }
 
 static void
@@ -593,7 +594,7 @@ _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 }
 
 static void
-_expose_port(struct nk_context *ctx, mod_t *mod, port_t *port)
+_expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 {
 	LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
 	if(name_node)
@@ -637,7 +638,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port)
 				value_ptr++;
 			}
 
-			nk_combobox(ctx, items, count, &val, 20.f, nk_vec2(120.f, 120.f));
+			nk_combobox(ctx, items, count, &val, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
 			port->val = values[val];
 		}
 		else // is_float
@@ -651,13 +652,13 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port)
 }
 
 static void
-_expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
+_expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
 	switch(handle->main_selector)
 	{
 		case SELECTOR_MAIN_GRID:
 		{
-			nk_layout_row_begin(ctx, NK_DYNAMIC, dy, 3);
+			nk_layout_row_begin(ctx, NK_DYNAMIC, dh, 3);
 
 			nk_layout_row_push(ctx, 0.25);
 			if(nk_group_begin(ctx, "Rack", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
@@ -670,7 +671,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 					LilvNode *name_node = lilv_plugin_get_name(plug);
 					if(name_node)
 					{
-						nk_layout_row_dynamic(ctx, 20.f, 2);
+						nk_layout_row_dynamic(ctx, dy, 2);
 						int selected = m == handle->module_selector;
 						if(nk_selectable_label(ctx, lilv_node_as_string(name_node), NK_TEXT_LEFT,
 							&selected))
@@ -702,33 +703,33 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 						LilvNode *label_node = lilv_world_get(handle->world, group, handle->node.lv2_name, NULL);
 						if(label_node)
 						{
-							nk_layout_row_dynamic(ctx, 20.f, 1);
+							nk_layout_row_dynamic(ctx, dy, 1);
 							nk_label(ctx, lilv_node_as_string(label_node), NK_TEXT_CENTERED);
 							lilv_node_free(label_node);
 
-							nk_layout_row_dynamic(ctx, 20.f, 3);
+							nk_layout_row_dynamic(ctx, dy, 3);
 							for(unsigned p=0; p<mod->num_ports; p++)
 							{
 								port_t *port = &mod->ports[p];
 								if(!port->group || !lilv_node_equals(port->group, group))
 									continue;
 
-								_expose_port(ctx, mod, port);
+								_expose_port(ctx, mod, port, dy);
 							}
 						}
 					}
 
-					nk_layout_row_dynamic(ctx, 20.f, 1);
+					nk_layout_row_dynamic(ctx, dy, 1);
 					nk_label(ctx, "Ungrouped", NK_TEXT_CENTERED);
 
-					nk_layout_row_dynamic(ctx, 20.f, 3);
+					nk_layout_row_dynamic(ctx, dy, 3);
 					for(unsigned p=0; p<mod->num_ports; p++)
 					{
 						port_t *port = &mod->ports[p];
 						if(port->group)
 							continue;
 
-						_expose_port(ctx, mod, port);
+						_expose_port(ctx, mod, port, dy);
 					}
 				}
 
@@ -738,7 +739,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 			nk_layout_row_push(ctx, 0.25);
 			if(nk_group_begin(ctx, "Plugins/Presets", NK_WINDOW_BORDER))
 			{
-				nk_layout_row_dynamic(ctx, 20.f, SELECTOR_MAIN_MAX);
+				nk_layout_row_dynamic(ctx, dy, SELECTOR_MAIN_MAX);
 				for(unsigned i=0; i<SELECTOR_MAIN_MAX; i++)
 				{
 					const enum nk_symbol_type symbol = (handle->grid_selector == i)
@@ -750,9 +751,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 					}
 				}
 
-				nk_layout_row_dynamic(ctx, 20.f, 2);
-				nk_combobox(ctx, search_labels, SELECTOR_SEARCH_MAX, &handle->search_selector, 20.f, nk_vec2(120.f, 140.f));
-				nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, handle->search_buf, 128, nk_filter_default);
+				nk_layout_row_dynamic(ctx, dy, 2);
+				nk_combobox(ctx, search_labels, SELECTOR_SEARCH_MAX, &handle->search_selector, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
+				nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, handle->search_buf, SEARCH_BUF_MAX, nk_filter_default);
 
 				nk_layout_row_dynamic(ctx, 300.f, 1); //FIXME
 				if(nk_group_begin(ctx, "List", NK_WINDOW_BORDER))
@@ -761,12 +762,12 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 					{
 						case SELECTOR_GRID_PLUGINS:
 						{
-							nk_layout_row_dynamic(ctx, 20.f, 1);
+							nk_layout_row_dynamic(ctx, dy, 1);
 							_expose_main_plugin_list(handle, ctx);
 						} break;
 						case SELECTOR_GRID_PRESETS:
 						{
-							nk_layout_row_dynamic(ctx, 20.f, 1);
+							nk_layout_row_dynamic(ctx, dy, 1);
 							_expose_main_preset_list(handle, ctx);
 						} break;
 					}
@@ -780,19 +781,19 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dy)
 					{
 						case SELECTOR_GRID_PLUGINS:
 						{
-							nk_layout_row_dynamic(ctx, 20.f, 1);
+							nk_layout_row_dynamic(ctx, dy, 1);
 							_expose_main_plugin_info(handle, ctx);
 						} break;
 						case SELECTOR_GRID_PRESETS:
 						{
-							nk_layout_row_dynamic(ctx, 20.f, 1);
+							nk_layout_row_dynamic(ctx, dy, 1);
 							_expose_main_preset_info(handle, ctx);
 						} break;
 					}
 					nk_group_end(ctx);
 				}
 
-				nk_layout_row_dynamic(ctx, 20.f, 1);
+				nk_layout_row_dynamic(ctx, dy, 1);
 				if(nk_button_label(ctx, "Load") && handle->plugin_selector)
 				{
 					_mod_add(handle, handle->plugin_selector);
@@ -858,14 +859,14 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 		nk_window_set_bounds(ctx, wbounds);
 
     const float w_padding = ctx->style.window.padding.y;
-		const float dy_line = 20.f;
+		const float dy = handle->dy;
 		const unsigned n_paddings = 4;
-		const float dy_body= nk_window_get_height(ctx)
-			- n_paddings*w_padding - (n_paddings - 2)*dy_line;
+		const float dh = nk_window_get_height(ctx)
+			- n_paddings*w_padding - (n_paddings - 2)*dy;
 
-		_expose_main_header(handle, ctx, dy_line);
-		_expose_main_body(handle, ctx, dy_body);
-		_expose_main_footer(handle, ctx, dy_line);
+		_expose_main_header(handle, ctx, dy);
+		_expose_main_body(handle, ctx, dh, dy);
+		_expose_main_footer(handle, ctx, dy);
 	}
 	nk_end(ctx);
 }
@@ -954,9 +955,13 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
 	}
 
+	const char *NK_SCALE = getenv("NK_SCALE");
+	const float scale = NK_SCALE ? atof(NK_SCALE) : 1.f;
+	handle->dy = 20.f * scale;
+
 	nk_pugl_config_t *cfg = &handle->win.cfg;
-	cfg->width = 1280;
-	cfg->height = 720;
+	cfg->width = 1280 * scale;
+	cfg->height = 720 * scale;
 	cfg->resizable = true;
 	cfg->ignore = false;
 	cfg->class = "synthpod";
@@ -970,7 +975,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		path = NULL;
 
 	cfg->font.face = path;
-	cfg->font.size = 13;
+	cfg->font.size = 13 * scale;
 	
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
