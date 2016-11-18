@@ -491,7 +491,12 @@ bin_init(bin_t *bin)
 			// automatically start gui in separate process
 			if(bin->has_gui && !strncmp(bin->socket_path, "ipc://", 6))
 			{
+//#define USE_NK
+#ifdef USE_NK
+				const char *cmd = SYNTHPOD_BIN_DIR"synthpod_sandbox_x11";
+#else
 				const char *cmd = SYNTHPOD_BIN_DIR"synthpod_sandbox_efl";
+#endif
 
 				size_t sz = 128;
 				char cwd [128];
@@ -504,10 +509,32 @@ bin_init(bin_t *bin)
 					(char *)cmd,
 					"-p", SYNTHPOD_PREFIX"stereo",
 					"-b", SYNTHPOD_PLUGIN_DIR, //FIXME look up dynamically
+#ifdef USE_NK
+					"-u", SYNTHPOD_PREFIX"root_4_nk",
+#else
 					"-u", SYNTHPOD_PREFIX"root_3_eo",
+#endif
 					"-s", (char *)bin->socket_path,
 					"-w", window_title,
 					NULL
+				};
+#ifdef USE_NK
+#	undef USE_NK
+#endif
+
+				uv_stdio_container_t stdio [3] = {
+					[0] = {
+						.flags = UV_INHERIT_FD | UV_READABLE_PIPE,
+						.data.fd = fileno(stdin)
+					},
+					[1] = {
+						.flags = UV_INHERIT_FD | UV_WRITABLE_PIPE,
+						.data.fd = fileno(stdout)
+					},
+					[2] = {
+						.flags = UV_INHERIT_FD | UV_WRITABLE_PIPE,
+						.data.fd = fileno(stderr)
+					},
 				};
 
 				const uv_process_options_t opts = {
@@ -518,8 +545,8 @@ bin_init(bin_t *bin)
 					.cwd = cwd,
 					.flags = UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS
 						| UV_PROCESS_WINDOWS_HIDE,
-					.stdio_count = 0,
-					.stdio = NULL,
+					.stdio_count = 3,
+					.stdio = stdio,
 					.uid = 0,
 					.gid = 0
 				};
