@@ -1,4 +1,20 @@
 # Changelog
+- 2016/11/10 (1.183)- Fixed memory leak caused by popup repeated closing
+- 2016/11/10 (1.182)- Fixed memory leak caused by popup panel allocation
+- 2016/11/10 (1.181)- Fixed some warnings and C++ error
+- 2016/11/10 (1.180)- Added additional `nk_button` versions which allows to directly
+                        pass in a style struct to change buttons visual.
+- 2016/11/10 (1.180)- Added additional 'nk_tree' versions to support external state
+                        storage. Just like last the `nk_group` commit the main
+                        advantage is that you optionally can minimize nuklears runtime
+                        memory consumption or handle hash collisions.
+- 2016/11/09 (1.180)- Added additional `nk_group` version to support external scrollbar
+                        offset storage. Main advantage is that you can externalize
+                        the memory management for the offset. It could also be helpful
+                        if you have a hash collision in `nk_group_begin` but really
+                        want the name. In addition I added `nk_list_view` which allows
+                        to draw big lists inside a group without actually having to
+                        commit the whole list to nuklear (issue #269).
 - 2016/10/30 (1.171)- Fixed clipping rectangle bug inside `nk_draw_list`
 - 2016/10/29 (1.170)- Pulled `nk_panel` memory management into nuklear and out of
                         the hands of the user. From now on users don't have to care
