@@ -38,7 +38,7 @@ extern C {
 #	include "GL/glext.h"
 #endif
 
-//#define NK_PRIVATE
+#define NK_ZERO_COMMAND_MEMORY
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_STANDARD_IO
@@ -95,6 +95,10 @@ struct _nk_pugl_window_t {
 	struct nk_context ctx;
 	struct nk_font_atlas atlas;
 	struct nk_convert_config conv;
+	struct {
+		void *buffer;
+		size_t size;
+	} last;
 
 	GLuint font_tex;
 	nkglGenerateMipmap glGenerateMipmap;
@@ -151,6 +155,7 @@ nk_pugl_icon_unload(nk_pugl_window_t *win, struct nk_image img);
 extern C {
 #endif
 
+#define NK_ZERO_COMMAND_MEMORY
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_STANDARD_IO
@@ -295,47 +300,74 @@ _nk_pugl_render_gl2(nk_pugl_window_t *win)
 {
 	nk_pugl_config_t *cfg = &win->cfg;
 
-	_nk_pugl_render_gl2_push(cfg->width, cfg->height);
+	// compare current command buffer with last one to defer any changes
+	bool has_changes = false;
+	const size_t size = win->ctx.memory.allocated;
+	const void *commands = nk_buffer_memory_const(&win->ctx.memory);
 
-	// convert shapes into vertexes
-	struct nk_buffer vbuf, ebuf;
-	nk_buffer_init_default(&vbuf);
-	nk_buffer_init_default(&ebuf);
-	nk_convert(&win->ctx, &win->cmds, &vbuf, &ebuf, &win->conv);
-
-	// setup vertex buffer pointers
-	const GLsizei vs = sizeof(nk_pugl_vertex_t);
-	const size_t vp = offsetof(nk_pugl_vertex_t, position);
-	const size_t vt = offsetof(nk_pugl_vertex_t, uv);
-	const size_t vc = offsetof(nk_pugl_vertex_t, col);
-	const nk_byte *vertices = nk_buffer_memory_const(&vbuf);
-	glVertexPointer(2, GL_FLOAT, vs, &vertices[vp]);
-	glTexCoordPointer(2, GL_FLOAT, vs, &vertices[vt]);
-	glColorPointer(4, GL_UNSIGNED_BYTE, vs, &vertices[vc]);
-
-	// iterate over and execute each draw command
-	const nk_draw_index *offset = nk_buffer_memory_const(&ebuf);
-	const struct nk_draw_command *cmd;
-	nk_draw_foreach(cmd, &win->ctx, &win->cmds)
+	if( (size != win->last.size) || memcmp(commands, win->last.buffer, size))
 	{
-		if (!cmd->elem_count)
-			continue;
-
-		glBindTexture(GL_TEXTURE_2D, cmd->texture.id);
-		glScissor(
-			cmd->clip_rect.x,
-			cfg->height - (cmd->clip_rect.y + cmd->clip_rect.h),
-			cmd->clip_rect.w,
-			cmd->clip_rect.h);
-		glDrawElements(GL_TRIANGLES, cmd->elem_count, GL_UNSIGNED_SHORT, offset);
-
-		offset += cmd->elem_count;
+		// swap last buffer with current one for next comparison
+		win->last.buffer = realloc(win->last.buffer, size);
+		if(win->last.buffer)
+		{
+			win->last.size = size;
+			memcpy(win->last.buffer, commands, size);
+		}
+		else
+		{
+			win->last.size = 0;
+		}
+		has_changes = true;
 	}
-	nk_clear(&win->ctx);
-	nk_buffer_free(&vbuf);
-	nk_buffer_free(&ebuf);
 
-	_nk_pugl_render_gl2_pop();
+	// only render if there were actually any changes
+	if(has_changes)
+	{
+		// convert shapes into vertexes
+		struct nk_buffer vbuf, ebuf;
+		nk_buffer_init_default(&vbuf);
+		nk_buffer_init_default(&ebuf);
+		nk_convert(&win->ctx, &win->cmds, &vbuf, &ebuf, &win->conv);
+
+		_nk_pugl_render_gl2_push(cfg->width, cfg->height);
+
+		// setup vertex buffer pointers
+		const GLsizei vs = sizeof(nk_pugl_vertex_t);
+		const size_t vp = offsetof(nk_pugl_vertex_t, position);
+		const size_t vt = offsetof(nk_pugl_vertex_t, uv);
+		const size_t vc = offsetof(nk_pugl_vertex_t, col);
+		const nk_byte *vertices = nk_buffer_memory_const(&vbuf);
+		glVertexPointer(2, GL_FLOAT, vs, &vertices[vp]);
+		glTexCoordPointer(2, GL_FLOAT, vs, &vertices[vt]);
+		glColorPointer(4, GL_UNSIGNED_BYTE, vs, &vertices[vc]);
+
+		// iterate over and execute each draw command
+		const nk_draw_index *offset = nk_buffer_memory_const(&ebuf);
+		const struct nk_draw_command *cmd;
+		nk_draw_foreach(cmd, &win->ctx, &win->cmds)
+		{
+			if(!cmd->elem_count)
+				continue;
+
+			glBindTexture(GL_TEXTURE_2D, cmd->texture.id);
+			glScissor(
+				cmd->clip_rect.x,
+				cfg->height - (cmd->clip_rect.y + cmd->clip_rect.h),
+				cmd->clip_rect.w,
+				cmd->clip_rect.h);
+			glDrawElements(GL_TRIANGLES, cmd->elem_count, GL_UNSIGNED_SHORT, offset);
+
+			offset += cmd->elem_count;
+		}
+
+		_nk_pugl_render_gl2_pop();
+
+		nk_buffer_free(&vbuf);
+		nk_buffer_free(&ebuf);
+	}
+
+	nk_clear(&win->ctx);
 }
 
 static inline void
@@ -767,6 +799,9 @@ nk_pugl_shutdown(nk_pugl_window_t *win)
 {
 	if(!win->view)
 		return;
+
+	if(win->last.buffer)
+		free(win->last.buffer);
 
 	puglEnterContext(win->view);
 	{
