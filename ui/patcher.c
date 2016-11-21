@@ -415,6 +415,7 @@ _init_shaders(patcher_t *priv)
 		"}\n";
 	
 	GLbyte fShaderStr[] =
+		"precision mediump float;\n"
 		"varying vec4 fragColor;\n"
 		"void main()\n"
 		"{\n"
