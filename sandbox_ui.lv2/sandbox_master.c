@@ -64,30 +64,32 @@ sandbox_master_free(sandbox_master_t *sb)
 	}
 }
 
-void
+int
 sandbox_master_recv(sandbox_master_t *sb)
 {
 	if(sb)
-		_sandbox_io_recv(&sb->io, sb->driver->recv_cb, sb->driver->subscribe_cb, sb->data);
+		return _sandbox_io_recv(&sb->io, sb->driver->recv_cb, sb->driver->subscribe_cb, sb->data);
+
+	return -1;
 }
 
-bool
+int
 sandbox_master_send(sandbox_master_t *sb, uint32_t index, uint32_t size,
 	uint32_t format, const void *buf)
 {
 	if(sb)
 		return _sandbox_io_send(&sb->io, index, size, format, buf);
 
-	return false;
+	return -1;
 }
 
-bool
+int
 sandbox_master_flush(sandbox_master_t *sb)
 {
 	if(sb)
 		return _sandbox_io_flush(&sb->io);
 
-	return false;
+	return -1;
 }
 
 void

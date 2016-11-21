@@ -35,11 +35,51 @@
 #else
 #	error "SYNTHPOD_QT is invalid"
 #endif
+#include <QtCore/QSocketNotifier>
 
 typedef struct _app_t app_t;
 
+struct _app_t {
+	sandbox_slave_t *sb;
+
+	QSocketNotifier *socknot;
+	QMainWindow *win;
+	QWidget *widget;
+};
+
 static QApplication *a;
 static std::atomic<bool> done = ATOMIC_VAR_INIT(false);
+
+class MySocketNotifier : public QSocketNotifier
+{
+	Q_OBJECT
+
+public:
+	MySocketNotifier(int socket, sandbox_slave_t *sb);
+	~MySocketNotifier();
+
+protected:
+	bool event(QEvent *event);
+
+protected:
+	sandbox_slave_t *sb;
+};
+
+MySocketNotifier::MySocketNotifier(int socket, sandbox_slave_t *sb)
+	: QSocketNotifier(socket, QSocketNotifier::Read), sb(sb)
+{}
+
+MySocketNotifier::~MySocketNotifier()
+{}
+
+bool
+MySocketNotifier::event(QEvent *event)
+{
+	(void)event;
+	sandbox_slave_recv(sb);
+	sandbox_slave_flush(sb);
+	return true;
+}
 
 class MyWindow : public QMainWindow
 {
@@ -59,7 +99,7 @@ protected:
 MyWindow::MyWindow()
 	: QMainWindow()
 {
-	timer_id = startTimer(100); //0.1s
+	timer_id = startTimer(100); // 0.1s
 }
 
 MyWindow::~MyWindow()
@@ -74,13 +114,6 @@ MyWindow::timerEvent(QTimerEvent *event)
 	if(done.load(std::memory_order_relaxed))
 		a->quit();
 }
-
-struct _app_t {
-	sandbox_slave_t *sb;
-
-	QMainWindow *win;
-	QWidget *widget;
-};
 
 static inline void
 _sig(int signum)
@@ -116,6 +149,18 @@ _init(sandbox_slave_t *sb, void *data)
 	if(!app->widget)
 		return -1;
 
+	int fd;
+	sandbox_slave_fd_get(sb, &fd);
+	if(fd == -1)
+	{
+		fprintf(stderr, "sandbox_slave_fd_get failed\n");
+		return -1;
+	}
+
+	app->socknot = new MySocketNotifier(fd, sb);
+	if(!app->socknot)
+		return -1;
+
 	app->widget->show();
 	app->win->setCentralWidget(app->widget);
 
@@ -139,6 +184,7 @@ _deinit(void *data)
 {
 	app_t *app = (app_t *)data;
 
+	delete app->socknot;
 	app->win->hide();
 	delete app->win;
 

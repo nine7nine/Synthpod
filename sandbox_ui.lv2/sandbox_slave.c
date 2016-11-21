@@ -136,8 +136,8 @@ _write_function(LV2UI_Controller controller, uint32_t index,
 {
 	sandbox_slave_t *sb = controller;
 
-	const bool more = _sandbox_io_send(&sb->io, index, size, protocol, buf);
-	(void)more; //TODO
+	const int status = _sandbox_io_send(&sb->io, index, size, protocol, buf);
+	(void)status; //TODO
 }
 
 static inline uint32_t
@@ -524,20 +524,22 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 	return NULL;
 }
 
-void
+int
 sandbox_slave_recv(sandbox_slave_t *sb)
 {
 	if(sb)
-		_sandbox_io_recv(&sb->io, _sandbox_recv_cb, NULL, sb);
+		return _sandbox_io_recv(&sb->io, _sandbox_recv_cb, NULL, sb);
+
+	return -1;
 }
 
-bool
+int
 sandbox_slave_flush(sandbox_slave_t *sb)
 {
 	if(sb)
 		return _sandbox_io_flush(&sb->io);
 
-	return false;
+	return -1;
 }
 
 const void *

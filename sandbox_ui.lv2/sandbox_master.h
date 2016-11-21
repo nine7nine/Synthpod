@@ -45,14 +45,14 @@ sandbox_master_new(sandbox_master_driver_t *driver, void *data);
 void
 sandbox_master_free(sandbox_master_t *sb);
 
-void
+int
 sandbox_master_recv(sandbox_master_t *sb);
 
-bool
+int
 sandbox_master_send(sandbox_master_t *sb, uint32_t index, uint32_t size,
 	uint32_t format, const void *buf);
 
-bool
+int
 sandbox_master_flush(sandbox_master_t *sb);
 
 void

@@ -48,10 +48,10 @@ sandbox_slave_free(sandbox_slave_t *sb);
 void *
 sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature, void *widget);
 
-void
+int
 sandbox_slave_recv(sandbox_slave_t *sb);
 
-bool
+int
 sandbox_slave_flush(sandbox_slave_t *sb);
 
 const void *

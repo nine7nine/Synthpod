@@ -139,7 +139,7 @@ _sandbox_io_reset(sandbox_io_t *io)
 	lv2_atom_forge_tuple(&io->forge, &io->frame);
 }
 
-static inline void
+static inline int
 _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 	_sandbox_io_subscribe_cb_t subscribe_cb, void *data)
 {
@@ -278,62 +278,45 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 		nn_freemsg(ttl);
 	}
 
-	switch(nn_errno())
-	{
-		case EAGAIN:
-			// do nothing
-			break;
-		case ETERM:
-			//FIXME done
-			// fall-through
-		default:
-			fprintf(stderr, "nn_recv: %s\n", nn_strerror(nn_errno()));
-			break;
-	}
+	// error has occured, so check it
+	const int status = nn_errno();
+
+	if(status == EAGAIN)
+		return 0; // success
+
+	fprintf(stderr, "nn_recv: %s\n", nn_strerror(errno));
+	return status;
 }
 
-static inline bool
+static inline int
 _sandbox_io_flush(sandbox_io_t *io)
 {
 	const LV2_Atom *atom = (const LV2_Atom *)io->ser.buf;
 
-	bool more = false;
 	if( (io->ser.offset == 0) || (atom->size == 0) )
-		return more; // empty tuple
+		return 0; // empty tuple, aka success
 
 	char *ttl = sratom_to_turtle(io->sratom, io->unmap,
 		io->base_uri, &io->subject, &io->predicate,
 		atom->type, atom->size, LV2_ATOM_BODY_CONST(atom));
+	if(!ttl)
+		return -1; // serialization failed
 
-	if(ttl)
+	const size_t len = strlen(ttl) + 1;
+	//printf("sending: %zu\n\n%s\n\n", len, ttl);
+
+	const int written = nn_send(io->sock, ttl, len, NN_DONTWAIT);
+	free(ttl);
+	
+	if(written == -1) // error has occured, so check it
 	{
-		const size_t len = strlen(ttl) + 1;
-		//printf("sending: %zu\n\n%s\n\n", len, ttl);
-
-		if(nn_send(io->sock, ttl, len, NN_DONTWAIT) == -1)
-		{
-			switch(nn_errno())
-			{
-				case EAGAIN:
-					more = true;
-					break;
-				case ETERM:
-					//FIXME done
-					// fall-through
-				default:
-					fprintf(stderr, "nn_send: %s\n", nn_strerror(nn_errno()));
-					break;
-			}
-		}
-		else
-		{
-			_sandbox_io_reset(io);
-		}
-
-		free(ttl);
+		const int status = nn_errno();
+		fprintf(stderr, "nn_send: %s\n", nn_strerror(errno));
+		return status;
 	}
 
-	return more;
+	_sandbox_io_reset(io);
+	return 0; // success
 }
 
 static inline void

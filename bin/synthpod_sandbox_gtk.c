@@ -42,6 +42,7 @@ _recv(void *data)
 {
 	sandbox_slave_t *sb = data;
 	sandbox_slave_recv(sb);
+	sandbox_slave_flush(sb);
 	return true;
 }
 
