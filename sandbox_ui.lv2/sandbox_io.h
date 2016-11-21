@@ -22,6 +22,7 @@
 
 #include <nanomsg/nn.h>
 #include <nanomsg/pair.h>
+#include <nanomsg/tcp.h>
 
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
@@ -488,9 +489,31 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	if((io->sock = nn_socket(AF_SP, NN_PAIR)) == -1)
 		return -1;
 
-	const int ms = 10000;
-	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_LINGER, &ms, sizeof(ms)) == -1)
+	//TODO make this configurable
+	const int linger = 10000; // ms
+	const int sndbuf = 0x20000; // bytes
+	const int rcvbuf = 0x20000; // bytes
+	const int rcvmaxsize = -1; // indefinite
+	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_LINGER, &linger, sizeof(linger)) == -1)
 		return -1;
+	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_SNDBUF, &sndbuf, sizeof(sndbuf)) == -1)
+		return -1;
+	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_RCVBUF, &rcvbuf, sizeof(rcvbuf)) == -1)
+		return -1;
+	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_RCVMAXSIZE, &rcvmaxsize, sizeof(rcvmaxsize)) == -1)
+		return -1;
+	if(strncmp(socket_path, "tcp://", 6) == 0)
+	{
+		// disable nagle's algorithm
+		const int nodelay = 1;
+		if(nn_setsockopt(io->sock, NN_TCP, NN_TCP_NODELAY, &nodelay, sizeof(nodelay)) == -1)
+			return -1;
+
+		// enable IPv6 addressing
+		const int ipv4only = 0;
+		if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_IPV4ONLY, &ipv4only, sizeof(ipv4only)) == -1)
+			return -1;
+	}
 
 	if(is_master)
 	{
