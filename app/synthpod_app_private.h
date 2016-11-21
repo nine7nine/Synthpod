@@ -43,7 +43,7 @@
 #define NUM_FEATURES 18
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
-#define FROM_UI_NUM 25
+#define FROM_UI_NUM 26
 #define MAX_SLAVES 7 // e.g. 8-core machines
 
 typedef enum _job_type_request_t job_type_request_t;

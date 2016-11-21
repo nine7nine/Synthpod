@@ -961,6 +961,25 @@ _sp_app_from_ui_quit(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
+__realtime static bool
+_sp_app_from_ui_path_get(sp_app_t *app, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_path_get_t *path_get= (const transmit_path_get_t *)atom;
+
+	//FIXME not rt-safe
+	const size_t size = sizeof(transmit_path_get_t) + strlen(app->bundle_path) + 1;
+	transmit_path_get_t *trans = _sp_app_to_ui_request(app, size);
+	if(trans)
+	{
+		_sp_transmit_path_get_fill(&app->regs, &app->forge, trans, size, app->bundle_path);
+		_sp_app_to_ui_advance(app, size);
+	}
+
+	return advance_ui[app->block_state];
+}
+
 void
 sp_app_from_ui_fill(sp_app_t *app)
 {
@@ -1041,6 +1060,9 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.synthpod.quit.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_quit;
+
+	from_uis[ptr].protocol = app->regs.synthpod.path_get.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_path_get;
 
 	assert(ptr == FROM_UI_NUM);
 	// sort according to URID

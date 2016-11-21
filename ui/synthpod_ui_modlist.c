@@ -63,6 +63,17 @@ _modlist_refresh(sp_ui_t *ui)
 			_sp_ui_to_app_advance(ui, size);
 		}
 	}
+
+	// request path
+	{
+		const size_t size = sizeof(transmit_path_get_t);
+		transmit_path_get_t *trans = _sp_ui_to_app_request(ui, size);
+		if(trans)
+		{
+			_sp_transmit_path_get_fill(&ui->regs, &ui->forge, trans, size, NULL);
+			_sp_ui_to_app_advance(ui, size);
+		}
+	}
 }
 
 static void

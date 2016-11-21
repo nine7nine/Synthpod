@@ -347,6 +347,7 @@ struct _reg_t {
 		reg_item_t port_selected;
 		reg_item_t bundle_load;
 		reg_item_t bundle_save;
+		reg_item_t path_get;
 		reg_item_t dsp_profiling;
 		reg_item_t grid_cols;
 		reg_item_t grid_rows;
@@ -584,6 +585,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.port_selected, world, map, SYNTHPOD_PREFIX"portSelect");
 	_register(&regs->synthpod.bundle_load, world, map, SYNTHPOD_PREFIX"bundleLoad");
 	_register(&regs->synthpod.bundle_save, world, map, SYNTHPOD_PREFIX"bundleSave");
+	_register(&regs->synthpod.path_get, world, map, SYNTHPOD_PREFIX"pathGet");
 	_register(&regs->synthpod.dsp_profiling, world, map, SYNTHPOD_PREFIX"DSPProfiling");
 	_register(&regs->synthpod.grid_cols, world, map, SYNTHPOD_PREFIX"gridCols");
 	_register(&regs->synthpod.grid_rows, world, map, SYNTHPOD_PREFIX"gridRows");
@@ -831,6 +833,7 @@ typedef struct _transmit_port_refresh_t transmit_port_refresh_t;
 typedef struct _transmit_port_selected_t transmit_port_selected_t;
 typedef struct _transmit_bundle_load_t transmit_bundle_load_t;
 typedef struct _transmit_bundle_save_t transmit_bundle_save_t;
+typedef struct _transmit_path_get_t transmit_path_get_t;
 typedef struct _transmit_dsp_profiling_t transmit_dsp_profiling_t;
 typedef struct _transmit_grid_cols_t transmit_grid_cols_t;
 typedef struct _transmit_grid_rows_t transmit_grid_rows_t;
@@ -966,6 +969,12 @@ struct _transmit_bundle_load_t {
 struct _transmit_bundle_save_t {
 	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_Int status _ATOM_ALIGNED;
+	LV2_Atom_String path _ATOM_ALIGNED;
+		char path_str [0] _ATOM_ALIGNED;
+} _ATOM_ALIGNED;
+
+struct _transmit_path_get_t {
+	transmit_t transmit _ATOM_ALIGNED;
 	LV2_Atom_String path _ATOM_ALIGNED;
 		char path_str [0] _ATOM_ALIGNED;
 } _ATOM_ALIGNED;
@@ -1483,6 +1492,25 @@ _sp_transmit_bundle_save_fill(reg_t *regs, LV2_Atom_Forge *forge,
 	trans->status.atom.size = sizeof(int32_t);
 	trans->status.atom.type = forge->Int;
 	trans->status.body = status;
+
+	trans->path.atom.size = bundle_path
+		? strlen(bundle_path) + 1
+		: 0;
+	trans->path.atom.type = forge->String;
+
+	if(bundle_path)
+		strcpy(trans->path_str, bundle_path);
+}
+
+static inline void
+_sp_transmit_path_get_fill(reg_t *regs, LV2_Atom_Forge *forge,
+	transmit_path_get_t *trans, uint32_t size,
+	const char *bundle_path)
+{
+	trans = ASSUME_ALIGNED(trans);
+
+	_sp_transmit_fill(regs, forge, &trans->transmit, size,
+		regs->synthpod.path_get.urid);
 
 	trans->path.atom.size = bundle_path
 		? strlen(bundle_path) + 1
