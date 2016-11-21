@@ -101,9 +101,6 @@ _client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	lv2_osc_reader_get_string(reader, &name);
 	lv2_osc_reader_get_string(reader, &id);
 
-	// open/create app
-	mkpath_const(dir);
-
 	uv_fs_t req;
 	uv_fs_realpath(nsm->loop, &req, dir, NULL);
 	const char *realpath = req.path && *(char *)req.path ? req.path : dir;
@@ -352,8 +349,6 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 
 		if(path)
 		{
-			mkpath_const(path);
-
 			uv_fs_t req;
 			uv_fs_realpath(nsm->loop, &req, path, NULL);
 			const char *realpath = req.ptr && *(char *)req.ptr ? req.ptr : path;
@@ -365,18 +360,12 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 		}
 		else
 		{
-#if !defined(_WIN32)
 			const char *home_dir = getenv("HOME");
-#else
-			const char *home_dir = evil_homedir_get();
-#endif
 
 			char *synthpod_dir = NULL;
 			asprintf(&synthpod_dir, "%s/.lv2/Synthpod_default.preset.lv2", home_dir);
 			if(synthpod_dir)
 			{
-				mkpath(synthpod_dir);
-
 				if(nsm->driver->open && nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
 					fprintf(stderr, "NSM load failed: '%s'\n", synthpod_dir);
 

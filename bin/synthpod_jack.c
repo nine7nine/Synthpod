@@ -493,8 +493,6 @@ _session_async(uv_async_t* async)
 		ev->session_dir, ev->client_uuid, ev->command_line);
 	*/
 
-	mkpath_const(ev->session_dir);
-
 	uv_fs_t req;
 	uv_fs_realpath(&bin->loop, &req, ev->session_dir, NULL);
 	const char *realpath = req.ptr && *(char *)req.ptr
