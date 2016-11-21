@@ -119,24 +119,6 @@ _content_get(plughandle_t *handle, Evas_Object *parent)
 }
 
 static void
-_opened(void *data, int status)
-{
-	plughandle_t *handle = data;
-
-	fprintf(stderr, "_opened: %i\n", status);
-	//FIXME
-}
-
-static void
-_saved(void *data, int status)
-{
-	plughandle_t *handle = data;
-
-	fprintf(stderr, "_saved: %i\n", status);
-	//FIXME
-}
-
-static void
 _close(void *data)
 {
 	plughandle_t *handle = data;
@@ -257,8 +239,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->driver.to_app_request = _to_app_request;
 	handle->driver.to_app_advance = _to_app_advance;
-	handle->driver.opened = _opened;
-	handle->driver.saved = _saved;
 	handle->driver.close = _close;
 
 	handle->widget = _content_get(handle, parent);

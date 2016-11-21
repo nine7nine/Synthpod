@@ -496,8 +496,12 @@ _sp_ui_from_app_bundle_load(sp_ui_t *ui, const LV2_Atom *atom)
 
 	const transmit_bundle_load_t *trans = (const transmit_bundle_load_t *)atom;
 
-	if(ui->driver->opened)
-		ui->driver->opened(ui->data, trans->status.body);
+	if(trans->status.body == 0) // success
+	{
+		if(ui->bundle_path)
+			free(ui->bundle_path);
+		ui->bundle_path = strdup(trans->path_str);
+	}
 
 	if(ui->popup && evas_object_visible_get(ui->popup))
 	{
@@ -513,8 +517,12 @@ _sp_ui_from_app_bundle_save(sp_ui_t *ui, const LV2_Atom *atom)
 
 	const transmit_bundle_save_t *trans = (const transmit_bundle_save_t *)atom;
 
-	if(ui->driver->saved)
-		ui->driver->saved(ui->data, trans->status.body);
+	if(trans->status.body == 0) // success
+	{
+		if(ui->bundle_path)
+			free(ui->bundle_path);
+		ui->bundle_path = strdup(trans->path_str);
+	}
 }
 
 static void

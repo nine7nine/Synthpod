@@ -157,12 +157,13 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			app->load_bundle = false; // for sp_app_bypassed
 
 			// signal to UI
-			size_t size = sizeof(transmit_bundle_load_t);
+			size_t size = sizeof(transmit_bundle_load_t)
+				+ lv2_atom_pad_size(strlen(job->uri) + 1);
 			transmit_bundle_load_t *trans = _sp_app_to_ui_request(app, size);
 			if(trans)
 			{
 				_sp_transmit_bundle_load_fill(&app->regs, &app->forge, trans, size,
-					job->status, NULL);
+					job->status, job->uri);
 				_sp_app_to_ui_advance(app, size);
 			}
 
@@ -177,12 +178,13 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			assert(app->load_bundle == false);
 
 			// signal to UI
-			size_t size = sizeof(transmit_bundle_save_t);
+			size_t size = sizeof(transmit_bundle_save_t)
+				+ lv2_atom_pad_size(strlen(job->uri) + 1);
 			transmit_bundle_save_t *trans = _sp_app_to_ui_request(app, size);
 			if(trans)
 			{
 				_sp_transmit_bundle_save_fill(&app->regs, &app->forge, trans, size,
-					job->status, NULL);
+					job->status, job->uri);
 				_sp_app_to_ui_advance(app, size);
 			}
 
@@ -296,12 +298,13 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			int status = _sp_app_state_bundle_load(app, job->uri);
 
 			// signal to app
-			size_t job_size = sizeof(job_t);
+			size_t job_size = sizeof(job_t) + strlen(job->uri) + 1;
 			job_t *job1 = _sp_worker_to_app_request(app, job_size);
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_BUNDLE_LOAD;
 				job1->status = status;
+				strcpy(job1->uri, job->uri);
 				_sp_worker_to_app_advance(app, job_size);
 			}
 
@@ -312,12 +315,13 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			int status = _sp_app_state_bundle_save(app, job->uri);
 
 			// signal to app
-			size_t job_size = sizeof(job_t);
+			size_t job_size = sizeof(job_t) + strlen(job->uri) + 1;
 			job_t *job1 = _sp_worker_to_app_request(app, job_size);
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_BUNDLE_SAVE;
 				job1->status = status;
+				strcpy(job1->uri, job->uri);
 				_sp_worker_to_app_advance(app, job_size);
 			}
 

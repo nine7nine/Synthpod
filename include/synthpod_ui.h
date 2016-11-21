@@ -57,8 +57,6 @@ typedef struct _sp_ui_driver_t sp_ui_driver_t;
 typedef void *(*sp_to_request_t)(size_t size, void *data);
 typedef void (*sp_to_advance_t)(size_t size, void *data);
 
-typedef void (*sp_opened_t)(void *data, int status);
-typedef void (*sp_saved_t)(void *data, int status);
 typedef void (*sp_close_t)(void *data);
 
 enum _sp_ui_features_t {
@@ -84,8 +82,6 @@ struct _sp_ui_driver_t {
 	sp_to_request_t to_app_request;
 	sp_to_advance_t to_app_advance;
 	
-	sp_opened_t opened;
-	sp_saved_t saved;
 	sp_close_t close;
 
 	sp_ui_features_t features;
