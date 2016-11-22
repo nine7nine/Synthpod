@@ -112,6 +112,8 @@ _close_request(void *data)
 
 	if(bin->has_gui) // UI has actually been started by app
 		atomic_store_explicit(&bin->ui_is_done, true, memory_order_relaxed);
+	else
+		bin_quit(bin);
 }
 
 //FIXME handle this somewhere
@@ -616,9 +618,13 @@ bin_deinit(bin_t *bin)
 	if(uv_is_active((uv_handle_t *)&bin->hndl))
 		uv_poll_stop(&bin->hndl);
 	uv_close((uv_handle_t *)&bin->hndl, NULL);
-	if(uv_is_active((uv_handle_t *)&bin->exe))
-		uv_process_kill(&bin->exe, SIGINT);
-	uv_close((uv_handle_t *)&bin->exe, NULL);
+
+	if(bin->has_gui)
+	{
+		if(uv_is_active((uv_handle_t *)&bin->exe))
+			uv_process_kill(&bin->exe, SIGINT);
+		uv_close((uv_handle_t *)&bin->exe, NULL);
+	}
 	if(bin->sb)
 		sandbox_master_free(bin->sb);
 
