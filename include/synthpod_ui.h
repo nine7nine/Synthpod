@@ -104,10 +104,10 @@ SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_bundle_new(sp_ui_t *ui);
 
 SYNTHPOD_SYMBOL_EXTERN void
-sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path);
+sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path);
 
 SYNTHPOD_SYMBOL_EXTERN void
-sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path, int update_path);
+sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path);
 
 SYNTHPOD_SYMBOL_EXTERN void
 sp_ui_resize(sp_ui_t *ui, int w, int h);

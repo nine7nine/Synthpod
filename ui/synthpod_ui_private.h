@@ -546,7 +546,7 @@ void
 _modlist_set_callbacks(sp_ui_t *ui);
 
 void
-_modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate);
+_modlist_clear(sp_ui_t *ui);
 
 void
 _modlist_itc_add(sp_ui_t *ui);

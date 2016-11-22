@@ -482,10 +482,8 @@ _sp_ui_from_app_module_list(sp_ui_t *ui, const LV2_Atom *atom)
 	if(ui->modlist)
 	{
 		ui->dirty = 1; // disable ui -> app communication
-		elm_genlist_clear(ui->modlist);
+		_modlist_clear(ui);
 		ui->dirty = 0; // enable ui -> app communication
-
-		_modlist_refresh(ui);
 	}
 }
 

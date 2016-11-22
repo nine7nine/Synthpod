@@ -99,9 +99,7 @@ _menu_open(void *data, Evas_Object *obj, void *event_info)
 	const char *bundle_path = event_info;
 	if(bundle_path)
 	{
-		int update_path = ui->driver->features & SP_UI_FEATURE_OPEN ? 1 : 0;
-		_modlist_clear(ui, true, false); // clear system ports
-		sp_ui_bundle_load(ui, bundle_path, update_path);
+		sp_ui_bundle_load(ui, bundle_path);
 
 		_feedback(ui, "Open project");
 	}
@@ -130,8 +128,7 @@ _menu_save_as(void *data, Evas_Object *obj, void *event_info)
 	const char *bundle_path = event_info;
 	if(bundle_path)
 	{
-		int update_path = ui->driver->features & SP_UI_FEATURE_SAVE_AS ? 1 : 0;
-		sp_ui_bundle_save(ui, bundle_path, update_path);
+		sp_ui_bundle_save(ui, bundle_path);
 
 		_feedback(ui, "Save project");
 	}
@@ -159,7 +156,7 @@ _menu_save(void *data, Evas_Object *obj, void *event_info)
 
 	if(ui && ui->bundle_path)
 	{
-		sp_ui_bundle_save(ui, ui->bundle_path, 0);
+		sp_ui_bundle_save(ui, ui->bundle_path);
 
 		_feedback(ui, "Save project");
 	}

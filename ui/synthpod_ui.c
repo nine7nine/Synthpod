@@ -651,12 +651,6 @@ sp_ui_refresh(sp_ui_t *ui)
 	if(!ui)
 		return;
 
-	/*
-	ui->dirty = 1; // disable ui -> app communication
-	elm_genlist_clear(ui->modlist);
-	ui->dirty = 0; // enable ui -> app communication
-	*/
-
 	_modlist_refresh(ui);
 }
 
@@ -745,18 +739,10 @@ sp_ui_del(sp_ui_t *ui, bool delete_self)
 }
 
 void
-sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path, int update_path)
+sp_ui_bundle_load(sp_ui_t *ui, const char *bundle_path)
 {
 	if(!ui || !bundle_path)
 		return;
-
-	// update internal bundle_path for one-click-save
-	if(update_path)
-	{
-		if(ui->bundle_path)
-			free(ui->bundle_path);
-		ui->bundle_path = strdup(bundle_path);
-	}
 
 	// signal to app
 	size_t size = sizeof(transmit_bundle_load_t)
@@ -777,26 +763,14 @@ sp_ui_bundle_new(sp_ui_t *ui)
 		return;
 
 	// simply load the default state
-	/*TODO
-	sp_ui_bundle_load(ui, SYNTHPOD_PREFIX"stereo", 0);
-	*/
-
-	_modlist_clear(ui, false, true); // do not clear system ports
+	sp_ui_bundle_load(ui, SYNTHPOD_PREFIX"stereo");
 }
 
 void
-sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path, int update_path)
+sp_ui_bundle_save(sp_ui_t *ui, const char *bundle_path)
 {
 	if(!ui || !bundle_path)
 		return;
-
-	// update internal bundle_path for one-click-save
-	if(update_path)
-	{
-		if(ui->bundle_path)
-			free(ui->bundle_path);
-		ui->bundle_path = strdup(bundle_path);
-	}
 
 	// signal to app
 	size_t size = sizeof(transmit_bundle_save_t)

@@ -416,7 +416,7 @@ _modlist_content_get(void *data, Evas_Object *obj, const char *part)
 }
 
 void
-_modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate)
+_modlist_clear(sp_ui_t *ui)
 {
 	if(!ui || !ui->modlist)
 		return;
@@ -431,14 +431,10 @@ _modlist_clear(sp_ui_t *ui, bool clear_system_ports, bool propagate)
 			continue; // skip 
 
 		mod_t *mod = elm_object_item_data_get(itm);
-
-		if(!clear_system_ports && (mod->system.source || mod->system.sink) )
-			continue; // skip
-
 		_mod_del_widgets(mod);
-		if(propagate)
-			_mod_del_propagate(mod);
 	}
+
+	elm_genlist_clear(ui->modlist);
 }
 
 static void
