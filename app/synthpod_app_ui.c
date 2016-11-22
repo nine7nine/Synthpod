@@ -17,6 +17,8 @@
 
 #include <synthpod_app_private.h>
 
+#define PORT_SIZE(PORT) ((PORT)->size)
+
 __non_realtime static int
 _from_ui_cmp(const void *itm1, const void *itm2)
 {
@@ -98,29 +100,17 @@ _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 
 	// messages from UI are ALWAYS appended to default port buffer, no matter
 	// how many sources the port may have
-	void *buf = PORT_BUF_ALIGNED(port);
+	const uint32_t capacity = PORT_SIZE(port);
+	LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 
-	// find last event in sequence
-	LV2_Atom_Sequence *seq = buf;
+	// find last event
 	LV2_Atom_Event *last = NULL;
 	LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		last = ev;
 
-	// create forge to append to sequence
-	LV2_Atom_Forge *forge = &app->forge;
-	LV2_Atom_Forge_Frame frame;
-	LV2_Atom_Forge_Ref ref;
-	ref = _lv2_atom_forge_sequence_append(forge, &frame, buf, port->size);
-
-	//inject atom at end of (existing) sequence
-	if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
-		+ sizeof(LV2_Atom) + lv2_atom_pad_size(trans->atom->size) < forge->size) )
-	{
-		lv2_atom_forge_frame_time(forge, last ? last->time.frames : 0);
-		lv2_atom_forge_raw(forge, trans->atom, sizeof(LV2_Atom) + trans->atom->size);
-		lv2_atom_forge_pad(forge, trans->atom->size);
-		lv2_atom_forge_pop(forge, &frame);
-	}
+	LV2_Atom_Event *ev = _lv2_atom_sequence_append_atom(seq, capacity,
+		last ? last->time.frames : 0, trans->atom);
+	(void)ev; //TODO check
 
 	return advance_ui[app->block_state];
 }

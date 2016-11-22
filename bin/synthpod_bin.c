@@ -29,7 +29,7 @@
 #define CHUNK_SIZE 0x10000
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
-static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
+static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(1);
 
 __realtime static xpress_uuid_t
 _voice_map_new_uuid(void *handle)

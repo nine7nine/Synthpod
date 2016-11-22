@@ -559,10 +559,8 @@ __realtime static inline void
 _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	// create forge to append to sequence (may contain events from UI)
-	LV2_Atom_Forge *forge = &app->forge;
-	LV2_Atom_Forge_Frame frame;
-	LV2_Atom_Forge_Ref ref;
-	ref = _lv2_atom_forge_sequence_append(forge, &frame, PORT_BASE_ALIGNED(port), port->size);
+	const uint32_t capacity = PORT_SIZE(port);
+	LV2_Atom_Sequence *dst = PORT_BASE_ALIGNED(port);
 
 	const LV2_Atom_Sequence *seq [port->num_sources];
 	const LV2_Atom_Event *itr [port->num_sources];
@@ -592,17 +590,8 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 		if(nxt >= 0) // next event found
 		{
-			// add event to forge
-			size_t len = sizeof(LV2_Atom) + itr[nxt]->body.size;
-			if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
-				+ lv2_atom_pad_size(len) < forge->size) )
-			{
-				ref = lv2_atom_forge_frame_time(forge, frames);
-				if(ref)
-					ref = lv2_atom_forge_raw(forge, &itr[nxt]->body, len);
-				if(ref)
-					lv2_atom_forge_pad(forge, len);
-			}
+			LV2_Atom_Event *ev = lv2_atom_sequence_append_event(dst, capacity, itr[nxt]);
+			(void)ev; //TODO check
 
 			// advance iterator
 			itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
@@ -610,9 +599,6 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		else
 			break; // no more events to process
 	};
-
-	if(ref)
-		lv2_atom_forge_pop(forge, &frame);
 }
 
 __realtime static inline void
@@ -627,37 +613,22 @@ __realtime static inline void
 _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
-	// move messages from UI on default buffer
+	// move messages from UI to default buffer
 
 	if(seq->atom.size > sizeof(LV2_Atom_Sequence_Body)) // has messages from UI
 	{
 		//printf("adding UI event\n");
 
-		// create forge to append to sequence (may contain events from UI)
-		LV2_Atom_Forge *forge = &app->forge;
-		LV2_Atom_Forge_Frame frame;
-		LV2_Atom_Forge_Ref ref;
-		ref = _lv2_atom_forge_sequence_append(forge, &frame,
-			PORT_BUF_ALIGNED(port->sources[0].port),
-			PORT_SIZE(port->sources[0].port));
+		port_t *src_port = port->sources[0].port;
+		const uint32_t capacity = PORT_SIZE(src_port);
+		LV2_Atom_Sequence *dst = PORT_BUF_ALIGNED(src_port);
 
 		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		{
-			const LV2_Atom *atom = &ev->body;
-
-			if(ref && (forge->offset + sizeof(LV2_Atom_Sequence_Body)
-				+ sizeof(LV2_Atom) + lv2_atom_pad_size(atom->size) < forge->size) )
-			{
-				ref = lv2_atom_forge_frame_time(forge, nsamples-1);
-				if(ref)
-					ref = lv2_atom_forge_raw(forge, atom, sizeof(LV2_Atom) + atom->size);
-				if(ref)
-					lv2_atom_forge_pad(forge, atom->size);
-			}
+			LV2_Atom_Event *ev2 = lv2_atom_sequence_append_event(dst, capacity, ev);
+			if(ev2)
+				ev2->time.frames = nsamples - 1;
 		}
-
-		if(ref)
-			lv2_atom_forge_pop(forge, &frame);
 	}
 }
 
