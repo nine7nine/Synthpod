@@ -147,27 +147,6 @@ Default bundle state directory
 .TP
 .I $HOME/.lv2
 Default LV2 preset directory
-.TP
-.I $XDG_CONFIG_HOME/synthpod_alsa.ini $HOME/.config/synthpod_alsa.ini
-Default config file
-
-.SH CONFIGURATION
-.nf
-[synthpod_alsa]
-disable-gui=false
-disable-playback=false
-disable-capture=false
-force-two-channel=false
-notify-xruns=true
-audio-priority=70
-worker-priority=60
-device=hw:0
-sample-rate=48000
-sample-period=1024
-period-number=3
-sequence-size=8192
-bad-plugins=false
-.fi
 
 .SH LICENSE
 GNU General Public License 3
