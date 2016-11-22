@@ -39,7 +39,7 @@
 #define NUM_UI_FEATURES 17
 #define MODLIST_UI "/synthpod/modlist/ui"
 #define MODGRID_UI "/synthpod/modgrid/ui"
-#define FROM_APP_NUM 24
+#define FROM_APP_NUM 25
 
 typedef struct _mod_t mod_t;
 typedef struct _mod_ui_t mod_ui_t;

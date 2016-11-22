@@ -560,6 +560,18 @@ _sp_ui_from_app_pane_left(sp_ui_t *ui, const LV2_Atom *atom)
 	elm_panes_content_left_size_set(ui->mainpane, ui->nleft);
 }
 
+static void
+_sp_ui_from_app_path_get(sp_ui_t *ui, const LV2_Atom *atom)
+{
+	atom = ASSUME_ALIGNED(atom);
+
+	const transmit_path_get_t *trans = (const transmit_path_get_t *)atom;
+
+	if(ui->bundle_path)
+		free(ui->bundle_path);
+	ui->bundle_path = strdup(trans->path_str);
+}
+
 void
 sp_ui_from_app_fill(sp_ui_t *ui)
 {
@@ -637,6 +649,9 @@ sp_ui_from_app_fill(sp_ui_t *ui)
 
 	from_apps[ptr].protocol = ui->regs.synthpod.pane_left.urid;
 	from_apps[ptr++].cb = _sp_ui_from_app_pane_left;
+
+	from_apps[ptr].protocol = ui->regs.synthpod.path_get.urid;
+	from_apps[ptr++].cb = _sp_ui_from_app_path_get;
 
 	assert(ptr == FROM_APP_NUM);
 	// sort according to URID
