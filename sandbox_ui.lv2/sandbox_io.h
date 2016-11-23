@@ -311,6 +311,9 @@ _sandbox_io_flush(sandbox_io_t *io)
 	if(written == -1) // error has occured, so check it
 	{
 		const int status = nn_errno();
+		if(status == EAGAIN)
+			return 0;
+
 		fprintf(stderr, "nn_send: %s\n", nn_strerror(errno));
 		return status;
 	}
