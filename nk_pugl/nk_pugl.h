@@ -101,7 +101,8 @@ struct _nk_pugl_window_t {
 		void *buffer;
 		size_t size;
 	} last;
-	bool was_left;
+	bool has_left;
+	bool has_entered;
 
 	GLuint font_tex;
 	nkglGenerateMipmap glGenerateMipmap;
@@ -326,7 +327,7 @@ _nk_pugl_render_gl2(nk_pugl_window_t *win)
 	}
 
 	// only render if there were actually any changes
-	if(has_changes || win->was_left)
+	if(has_changes || win->has_left || win->has_entered)
 #endif
 	{
 		// convert shapes into vertexes if there were changes
@@ -367,6 +368,8 @@ _nk_pugl_render_gl2(nk_pugl_window_t *win)
 
 		nk_buffer_clear(&win->vbuf);
 		nk_buffer_clear(&win->ebuf);
+
+		win->has_entered = false;
 	}
 
 	nk_clear(&win->ctx);
@@ -720,7 +723,7 @@ _nk_pugl_event_func(PuglView *view, const PuglEvent *e)
 			// fall-through
 		case PUGL_FOCUS_OUT:
 		{
-			win->was_left = true;
+			win->has_left = true;
 			puglPostRedisplay(win->view);
 			break;
 		}
@@ -728,7 +731,8 @@ _nk_pugl_event_func(PuglView *view, const PuglEvent *e)
 			// fall-through
 		case PUGL_FOCUS_IN:
 		{
-			win->was_left = false;
+			win->has_left = false;
+			win->has_entered = true;
 			puglPostRedisplay(win->view);
 			break;
 		}
@@ -745,6 +749,7 @@ nk_pugl_init(nk_pugl_window_t *win)
 	win->async = (atomic_flag)ATOMIC_FLAG_INIT;
 	win->disp = XOpenDisplay(0);
 #endif
+	win->has_left = true;
 
 	// init pugl
 	win->view = puglInit(NULL, NULL);
