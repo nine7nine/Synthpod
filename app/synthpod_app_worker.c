@@ -261,7 +261,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		}
 		case JOB_TYPE_REQUEST_PRESET_LOAD:
 		{
-			int status = _sp_app_state_preset_load(app, job->mod, job->uri);
+			int status = _sp_app_state_preset_load(app, job->mod, job->uri, true);
 			(void)status; //FIXME check this
 
 			// signal to app

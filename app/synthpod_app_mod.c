@@ -363,6 +363,9 @@ _sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 	mod->feature_list[nfeatures].URI = LV2_INLINEDISPLAY__queue_draw;
 	mod->feature_list[nfeatures++].data = &mod->idisp.queue_draw;
 
+	mod->feature_list[nfeatures].URI = LV2_STATE__threadSafeRestore;
+	mod->feature_list[nfeatures++].data = NULL;
+
 	assert(nfeatures <= NUM_FEATURES);
 
 	for(int i=0; i<nfeatures; i++)
@@ -467,7 +470,7 @@ _sp_app_mod_is_supported(sp_app_t *app, const void *uri)
 }
 
 __non_realtime static LV2_Worker_Status
-_sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *data)
+_sp_worker_respond_async(LV2_Worker_Respond_Handle handle, uint32_t size, const void *data)
 {
 	mod_t *mod = handle;
 	mod_worker_t *mod_worker = &mod->mod_worker;
@@ -479,6 +482,17 @@ _sp_worker_respond(LV2_Worker_Respond_Handle handle, uint32_t size, const void *
 		varchunk_write_advance(mod_worker->app_from_worker, size);
 		return LV2_WORKER_SUCCESS;
 	}
+
+	return LV2_WORKER_ERR_NO_SPACE;
+}
+
+__non_realtime static LV2_Worker_Status
+_sp_worker_respond_sync(LV2_Worker_Respond_Handle handle, uint32_t size, const void *data)
+{
+	mod_t *mod = handle;
+
+	if(mod->worker.iface && mod->worker.iface->work_response)
+		return mod->worker.iface->work_response(mod->handle, size, data);
 
 	return LV2_WORKER_ERR_NO_SPACE;
 }
@@ -503,6 +517,40 @@ _sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
 	return ZERO_WORKER_SUCCESS;
 }
 
+__non_realtime LV2_Worker_Status
+_sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload)
+{
+	//TODO implement zero worker
+	if(mod->worker.iface && mod->worker.iface->work)
+	{
+		return mod->worker.iface->work(mod->handle, _sp_worker_respond_sync, mod,
+			size, payload);
+		//TODO check return status
+	}
+
+	return LV2_WORKER_ERR_NO_SPACE;
+}
+
+__non_realtime static void
+_sp_app_mod_worker_work_async(mod_t *mod, size_t size, const void *payload)
+{
+	//printf("_mod_worker_work: %u, %zu\n", mod->uid, size);
+
+	// zero worker takes precedence over standard worker
+	if(mod->zero.iface && mod->zero.iface->work)
+	{
+		mod->zero.iface->work(mod->handle, _sp_zero_request, _sp_zero_advance,
+			mod, size, payload);
+		//TODO check return status
+	}
+	else if(mod->worker.iface && mod->worker.iface->work)
+	{
+		mod->worker.iface->work(mod->handle, _sp_worker_respond_async, mod,
+			size, payload);
+		//TODO check return status
+	}
+}
+
 __non_realtime static void *
 _mod_worker_thread(void *data)
 {
@@ -519,23 +567,16 @@ _mod_worker_thread(void *data)
 		size_t size;
 		while((payload = varchunk_read_request(mod_worker->app_to_worker, &size)))
 		{
-			//printf("_mod_worker_thread: %u, %zu\n", mod->uid, size);
-
-			// zero worker takes precedence over standard worker
-			if(mod->zero.iface && mod->zero.iface->work)
-			{
-				mod->zero.iface->work(mod->handle, _sp_zero_request, _sp_zero_advance,
-					mod, size, payload);
-				//TODO check return status
-			}
-			else if(mod->worker.iface && mod->worker.iface->work)
-			{
-				mod->worker.iface->work(mod->handle, _sp_worker_respond, mod,
-					size, payload);
-				//TODO check return status
-			}
+			_sp_app_mod_worker_work_async(mod, size, payload);
 
 			varchunk_read_advance(mod_worker->app_to_worker);
+		}
+
+		while((payload = varchunk_read_request(mod_worker->state_to_worker, &size)))
+		{
+			_sp_app_mod_worker_work_async(mod, size, payload);
+
+			varchunk_read_advance(mod_worker->state_to_worker);
 		}
 	}
 
@@ -865,18 +906,19 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 		sem_init(&mod_worker->sem, 0, 0);
 		atomic_init(&mod_worker->kill, false);
 		mod_worker->app_to_worker = varchunk_new(2048, true); //FIXME how big
+		mod_worker->state_to_worker = varchunk_new(2048, true); //FIXME how big
 		mod_worker->app_from_worker = varchunk_new(2048, true); //FIXME how big
 		pthread_attr_t attr;
 		pthread_attr_init(&attr);
 		pthread_create(&mod_worker->thread, &attr, _mod_worker_thread, mod);
 	}
 
+	// load default state
+	if(load_default_state && _sp_app_state_preset_load(app, mod, uri, false))
+		fprintf(stderr, "default state loading failed\n");
+
 	// activate
 	lilv_instance_activate(mod->inst);
-
-	// load default state
-	if(load_default_state && _sp_app_state_preset_load(app, mod, uri))
-		fprintf(stderr, "default state loading failed\n");
 
 	// initialize profiling reference time
 	mod->prof.sum = 0;
@@ -897,6 +939,7 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 		void *ret;
 		pthread_join(mod_worker->thread, &ret);
 		varchunk_free(mod_worker->app_to_worker);
+		varchunk_free(mod_worker->state_to_worker);
 		varchunk_free(mod_worker->app_from_worker);
 		sem_destroy(&mod_worker->sem);
 	}

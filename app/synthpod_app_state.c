@@ -70,14 +70,59 @@ _make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 	return absolute_path;
 }
 
+static LV2_Worker_Status
+_preset_schedule_work_async(LV2_Worker_Schedule_Handle instance, uint32_t size, const void *data)
+{
+	mod_t *mod = instance;
+	mod_worker_t *mod_worker = &mod->mod_worker;
+
+	void *target;
+	if((target = varchunk_write_request(mod_worker->state_to_worker, size)))
+	{
+		memcpy(target, data, size);
+		varchunk_write_advance(mod_worker->state_to_worker, size);
+		sem_post(&mod_worker->sem);
+
+		return LV2_WORKER_SUCCESS;
+	}
+
+	return LV2_WORKER_ERR_NO_SPACE;
+}
+
+static LV2_Worker_Status
+_preset_schedule_work_sync(LV2_Worker_Schedule_Handle instance, uint32_t size, const void *data)
+{
+	mod_t *mod = instance;
+
+	// call work:work synchronously
+	return _sp_app_mod_worker_work_sync(mod, size, data);
+}
+
 static const LV2_Feature *const *
-_state_features(sp_app_t *app, void *data)
+_preset_features(mod_t *mod, bool async)
+{
+	mod->state_worker.handle = mod;
+	mod->state_worker.schedule_work = async
+		? _preset_schedule_work_async
+		: _preset_schedule_work_sync; // for state:loadDefaultState
+
+	mod->state_feature_list[0].URI = LV2_WORKER__schedule;
+	mod->state_feature_list[0].data = &mod->state_worker;
+
+	mod->state_features[0] = &mod->state_feature_list[0];
+	mod->state_features[1] = NULL;
+
+	return (const LV2_Feature *const *)mod->state_features;
+}
+
+static const LV2_Feature *const *
+_state_features(sp_app_t *app, void *prefix_path)
 {
 	// construct LV2 state features
-	app->make_path.handle = data;
+	app->make_path.handle = prefix_path;
 	app->make_path.path = _make_path;
 
-	app->map_path.handle = data;
+	app->map_path.handle = prefix_path;
 	app->map_path.abstract_path = _abstract_path;
 	app->map_path.absolute_path = _absolute_path;
 
@@ -199,7 +244,7 @@ fail:
 }
 
 int
-_sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri)
+_sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async)
 {
 	LilvNode *preset = lilv_new_uri(app->world, uri);
 
@@ -222,8 +267,9 @@ _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri)
 	if(!state)
 		return -1;
 
+	fprintf(stderr, "%s\n", uri);
 	lilv_state_restore(state, mod->inst, _state_set_value, mod,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, async));
 
 	lilv_state_free(state);
 
@@ -925,8 +971,10 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	const LV2_State_Map_Path *map_path = NULL;
 
 	for(int i=0; features[i]; i++)
+	{
 		if(!strcmp(features[i]->URI, LV2_STATE__mapPath))
 			map_path = features[i]->data;
+	}
 
 	if(!map_path)
 	{
@@ -1059,7 +1107,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		if(state)
 		{
 			lilv_state_restore(state, mod->inst, _state_set_value, mod,
-				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, false));
 		}
 		else
 			fprintf(stderr, "failed to load state from file\n");

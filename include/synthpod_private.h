@@ -318,6 +318,7 @@ struct _reg_t {
 	struct {
 		reg_item_t state;
 		reg_item_t load_default_state;
+		reg_item_t thread_safe_restore;
 	} state;
 
 	struct {
@@ -559,6 +560,10 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->state.state, world, map, LV2_STATE__state);
 	_register(&regs->state.load_default_state, world, map, LV2_STATE__loadDefaultState);
+#ifndef LV2_STATE__threadSafeRestore
+#	define LV2_STATE__threadSafeRestore LV2_STATE_PREFIX "threadSafeRestore"
+#endif
+	_register(&regs->state.thread_safe_restore, world, map, LV2_STATE__threadSafeRestore);
 
 	_register(&regs->synthpod.payload, world, map, SYNTHPOD_PREFIX"payload");
 	_register_string(&regs->synthpod.state, world, map, "state.ttl");
@@ -769,6 +774,7 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->state.state);
 	_unregister(&regs->state.load_default_state);
+	_unregister(&regs->state.thread_safe_restore);
 
 	_unregister(&regs->synthpod.payload);
 	_unregister(&regs->synthpod.state);

@@ -40,7 +40,7 @@
 #define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
 #define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
 
-#define NUM_FEATURES 18
+#define NUM_FEATURES 19
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 #define FROM_UI_NUM 26
@@ -194,6 +194,7 @@ struct _mod_worker_t {
 	pthread_t thread;
 	atomic_bool kill;
 	varchunk_t *app_to_worker;
+	varchunk_t *state_to_worker;
 	varchunk_t *app_from_worker;
 };
 
@@ -221,6 +222,10 @@ struct _mod_t {
 	} zero;
 
 	mod_worker_t mod_worker;
+
+	LV2_Worker_Schedule state_worker;
+	LV2_Feature state_feature_list [1];
+	LV2_Feature *state_features [2];
 
 	// system_port
 	bool system_ports;	
@@ -460,7 +465,7 @@ _sp_app_to_worker_advance(sp_app_t *app, size_t size)
  * State
  */
 int
-_sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri);
+_sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async);
 
 int
 _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target);
@@ -494,6 +499,9 @@ _sp_app_mod_reinitialize(mod_t *mod);
 
 void
 _sp_app_mod_qsort(mod_t **a, unsigned n);
+
+LV2_Worker_Status
+_sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload);
 
 /*
  * Port
