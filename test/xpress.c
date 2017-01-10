@@ -19,7 +19,7 @@
 #include <inttypes.h>
 #include <stdatomic.h>
 
-#include <xpress.h>
+#include <xpress.lv2/xpress.h>
 
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/log/logger.h>
@@ -42,11 +42,11 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
 
-	XPRESS_T(xpress, MAX_NVOICES);
-	target_t target [MAX_NVOICES];
-
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
+
+	XPRESS_T(xpress, MAX_NVOICES);
+	target_t target [MAX_NVOICES];
 };
 
 static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(0);
@@ -87,7 +87,7 @@ _add(void *data, int64_t frames, const xpress_state_t *state,
 
 	xpress_state_t new_state;
 	memcpy(&new_state, state, sizeof(xpress_state_t));
-	new_state.position[0] *= 2;
+	new_state.pitch *= 2;
 
 	if(handle->ref)
 		handle->ref = xpress_put(&handle->xpress, forge, frames, src->uuid, &new_state);
@@ -107,7 +107,7 @@ _put(void *data, int64_t frames, const xpress_state_t *state,
 
 	xpress_state_t new_state;
 	memcpy(&new_state, state, sizeof(xpress_state_t));
-	new_state.position[0] *= 2;
+	new_state.pitch *= 2;
 
 	if(handle->ref)
 		handle->ref = xpress_put(&handle->xpress, forge, frames, src->uuid, &new_state);
