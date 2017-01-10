@@ -447,7 +447,7 @@ xpress_advance(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
 		if(!voice)
 			return 0;
 
-		const LV2_URID voice_uuid = voice->uuid;
+		const xpress_uuid_t voice_uuid = voice->uuid;
 		void *voice_target = voice->target;
 	
 		_xpress_voice_free(xpress, voice);
@@ -461,7 +461,7 @@ xpress_advance(xpress_t *xpress, LV2_Atom_Forge *forge, uint32_t frames,
 	{
 		XPRESS_VOICE_FREE(xpress, voice)
 		{
-			const LV2_URID voice_uuid = voice->uuid;
+			const xpress_uuid_t voice_uuid = voice->uuid;
 			void *voice_target = voice->target;
 
 			if( (xpress->event_mask & XPRESS_EVENT_DEL) && xpress->iface->del)
