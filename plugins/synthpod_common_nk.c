@@ -186,13 +186,23 @@ struct _plughandle_t {
 };
 
 static const char *main_labels [SELECTOR_MAIN_MAX] = {
-	[SELECTOR_MAIN_GRID] = "Grid (C-g)",
-	[SELECTOR_MAIN_MATRIX] = "Matrix (C-m)"
+	[SELECTOR_MAIN_GRID] = "Grid",
+	[SELECTOR_MAIN_MATRIX] = "Matrix"
+};
+
+static const char *main_tooltips [SELECTOR_MAIN_MAX] = {
+	[SELECTOR_MAIN_GRID] = "Ctrl-G",
+	[SELECTOR_MAIN_MATRIX] = "Ctrl-M"
 };
 
 static const char *grid_labels [SELECTOR_GRID_MAX] = {
-	[SELECTOR_GRID_PLUGINS] = "Plugins (C-p)",
-	[SELECTOR_GRID_PRESETS] = "Presets (C-r)"
+	[SELECTOR_GRID_PLUGINS] = "Plugins",
+	[SELECTOR_GRID_PRESETS] = "Presets"
+};
+
+static const char *grid_tooltips [SELECTOR_GRID_MAX] = {
+	[SELECTOR_GRID_PLUGINS] = "Ctrl-P",
+	[SELECTOR_GRID_PRESETS] = "Ctrl-R"
 };
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
@@ -446,21 +456,44 @@ _load(plughandle_t *handle)
 	}
 }
 
+static bool
+_tooltip_visible(struct nk_context *ctx)
+{
+	return nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, nk_true)
+		|| (nk_widget_is_hovered(ctx) && nk_input_is_key_down(&ctx->input, NK_KEY_CTRL));
+}
+
 static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
 	nk_layout_row_dynamic(ctx, dy, 7);
 	{
-		nk_button_label(ctx, "New (C-n)");
-		nk_button_label(ctx, "Open (C-o)");
-		nk_button_label(ctx, "Save (C-s)");
-		nk_button_label(ctx, "Save As (C-S)");
-		nk_button_label(ctx, "Quit (C-q)");
+		if(_tooltip_visible(ctx))
+			nk_tooltip(ctx, "Ctrl-N");
+		nk_button_label(ctx, "New");
+
+		if(_tooltip_visible(ctx))
+			nk_tooltip(ctx, "Ctrl-O");
+		nk_button_label(ctx, "Open");
+
+		if(_tooltip_visible(ctx))
+			nk_tooltip(ctx, "Ctrl-S");
+		nk_button_label(ctx, "Save");
+
+		if(_tooltip_visible(ctx))
+			nk_tooltip(ctx, "Ctrl-Shift-S");
+		nk_button_label(ctx, "Save As");
+
+		if(_tooltip_visible(ctx))
+			nk_tooltip(ctx, "Ctrl-Q");
+		nk_button_label(ctx, "Quit");
 
 		for(unsigned i=0; i<SELECTOR_MAIN_MAX; i++)
 		{
 			const enum nk_symbol_type symbol = (handle->main_selector == i)
 				? NK_SYMBOL_CIRCLE_SOLID : NK_SYMBOL_CIRCLE_OUTLINE;
+			if(_tooltip_visible(ctx))
+				nk_tooltip(ctx, main_tooltips[i]);
 			if(nk_button_symbol_label(ctx, symbol, main_labels[i], NK_TEXT_RIGHT))
 				handle->main_selector = i;
 		}
@@ -972,6 +1005,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				{
 					const enum nk_symbol_type symbol = (handle->grid_selector == i)
 						? NK_SYMBOL_CIRCLE_SOLID : NK_SYMBOL_CIRCLE_OUTLINE;
+					if(_tooltip_visible(ctx))
+						nk_tooltip(ctx, grid_tooltips[i]);
 					if(nk_button_symbol_label(ctx, symbol, grid_labels[i], NK_TEXT_RIGHT))
 					{
 						handle->grid_selector = i;
