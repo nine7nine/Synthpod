@@ -440,6 +440,8 @@ struct _sp_ui_t {
 	int nrows;
 	float nleft;
 
+	float update_rate;
+
 	from_app_t from_apps [FROM_APP_NUM];
 };
 

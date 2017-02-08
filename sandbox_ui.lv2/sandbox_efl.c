@@ -138,7 +138,7 @@ fail:
 }
 
 static inline void
-_run(sandbox_slave_t *sb, void *data)
+_run(sandbox_slave_t *sb, float update_rate, void *data)
 {
 	app_t *app = data;
 
@@ -188,11 +188,9 @@ elm_main(int argc, char **argv)
 	{
 		sandbox_slave_run(app.sb);
 		sandbox_slave_free(app.sb);
-		printf("bye from %s\n", argv[0]);
 		return 0;
 	}
 
-	printf("fail from %s\n", argv[0]);
 	return -1;
 }
 

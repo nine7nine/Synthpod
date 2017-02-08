@@ -267,7 +267,6 @@ _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async
 	if(!state)
 		return -1;
 
-	fprintf(stderr, "%s\n", uri);
 	lilv_state_restore(state, mod->inst, _state_set_value, mod,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, async));
 

@@ -28,7 +28,7 @@ typedef struct _sandbox_slave_t sandbox_slave_t;
 typedef struct _sandbox_slave_driver_t sandbox_slave_driver_t;
 	
 typedef int (*sandbox_slave_driver_init_t)(sandbox_slave_t *sb, void *data);
-typedef void (*sandbox_slave_driver_run_t)(sandbox_slave_t *sb, void *data);
+typedef void (*sandbox_slave_driver_run_t)(sandbox_slave_t *sb, float update_rate, void *data);
 typedef void (*sandbox_slave_driver_deinit_t)(void *data);
 typedef int (*sandbox_slave_driver_resize_t)(void *data, int width, int height);
 

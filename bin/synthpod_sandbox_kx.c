@@ -78,13 +78,14 @@ _init(sandbox_slave_t *sb, void *data)
 }
 
 static inline void
-_run(sandbox_slave_t *sb, void *data)
+_run(sandbox_slave_t *sb, float update_rate, void *data)
 {
 	app_t *app = data;
+	const unsigned us = 1000000 / update_rate;
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
-		usleep(40000); // 25 fps
+		usleep(us);
 
 		sandbox_slave_recv(sb);
 		LV2_EXTERNAL_UI_RUN(app->widget);
@@ -111,10 +112,8 @@ main(int argc, char **argv)
 	{
 		sandbox_slave_run(app.sb);
 		sandbox_slave_free(app.sb);
-		printf("bye from %s\n", argv[0]);
 		return 0;
 	}
 
-	printf("fail from %s\n", argv[0]);
 	return -1;
 }

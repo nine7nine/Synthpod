@@ -327,6 +327,8 @@ sp_ui_new(Evas_Object *win, const LilvWorld *world, sp_ui_driver_t *driver,
 	ui->nrows = 2;
 	ui->nleft = 0.2;
 
+	ui->update_rate = 30; //FIXME make this configurable
+
 	ui->win = win;
 	ui->driver = driver;
 	ui->data = data;

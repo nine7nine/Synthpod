@@ -70,6 +70,7 @@ struct _sandbox_slave_t {
 	const char *socket_path;
 	const char *window_title;
 	float sample_rate;
+	float update_rate;
 };
 	
 static inline LV2_URID
@@ -190,10 +191,11 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
-	sb->sample_rate = 44100; // fall-back
+	sb->sample_rate = 44100.f; // fall-back
+	sb->update_rate = 30.f; // fall-back
 
 	int c;
-	while((c = getopt(argc, argv, "p:b:u:s:w:r:")) != -1)
+	while((c = getopt(argc, argv, "p:b:u:s:w:r:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -215,8 +217,11 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 			case 'r':
 				sb->sample_rate = atof(optarg);
 				break;
+			case 'f':
+				sb->update_rate = atof(optarg);
+				break;
 			case '?':
-				if( (optopt == 'p') || (optopt == 'b') || (optopt == 'u') || (optopt == 's') || (optopt == 'w') || (optopt == 'r') )
+				if( (optopt == 'p') || (optopt == 'b') || (optopt == 'u') || (optopt == 's') || (optopt == 'w') || (optopt == 'r') || (optopt == 'f') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -455,6 +460,14 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 			.value = &sb->sample_rate
 		},
 		[2] = {
+			.context = LV2_OPTIONS_INSTANCE,
+			.subject = 0,
+			.key = sb->io.ui_update_rate,
+			.size = sizeof(float),
+			.type = sb->io.forge.Float,
+			.value = &sb->update_rate
+		},
+		[3] = {
 			.key = 0,
 			.value = NULL
 		}
@@ -555,7 +568,7 @@ void
 sandbox_slave_run(sandbox_slave_t *sb)
 {
 	if(sb && sb->driver && sb->driver->run_cb)
-		sb->driver->run_cb(sb, sb->data);
+		sb->driver->run_cb(sb, sb->update_rate, sb->data);
 }
 
 void
