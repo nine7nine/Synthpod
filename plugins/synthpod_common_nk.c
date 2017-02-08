@@ -511,6 +511,7 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 	else if(handle->search_selector == SELECTOR_SEARCH_PROJECT)
 		p = handle->node.doap_name;
 
+	int count = 0;
 	bool selector_visible = false;
 	LILV_FOREACH(plugins, i, plugs)
 	{
@@ -597,11 +598,29 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 					_load(handle);
 				}
 
+				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
+					? nk_style_item_color(nk_rgb(40, 40, 40))
+					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
+				nk_style_push_style_item(ctx, &ctx->style.selectable.hover,
+					nk_style_item_color(nk_rgb(35, 35, 35)));
+				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed,
+					nk_style_item_color(nk_rgb(30, 30, 30)));
+				nk_style_push_style_item(ctx, &ctx->style.selectable.hover_active,
+					nk_style_item_color(nk_rgb(35, 35, 35)));
+				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed_active,
+					nk_style_item_color(nk_rgb(30, 30, 30)));
+
 				int selected = plug == handle->plugin_selector;
 				if(nk_selectable_label(ctx, name_str, NK_TEXT_LEFT, &selected))
 				{
 					handle->plugin_selector = plug;
 				}
+
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
 
 				if(plug == handle->plugin_selector)
 					selector_visible = true;
