@@ -1272,7 +1272,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		path = NULL;
 
 	cfg->font.face = path;
-	cfg->font.size = 13 * scale;
+	cfg->font.size = 12 * scale;
 	
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);

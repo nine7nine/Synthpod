@@ -175,6 +175,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 {
 	app_t *app = (app_t *)data;
 	(void)sb;
+	(void)update_rate;
 
 	a->exec();
 }

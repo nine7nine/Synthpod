@@ -11,4 +11,5 @@ exec synthpod_sandbox_efl \
 	-u http://open-music-kontrollers.ch/lv2/synthpod#root_3_eo \
 	-s ${SOCKET_PATH} \
 	-w "Synthpod - ${SOCKET_PATH}" \
-	-r 48000
+	-r 48000 \
+	-f 30
