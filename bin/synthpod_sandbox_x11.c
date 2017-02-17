@@ -141,10 +141,19 @@ static inline void
 _run(sandbox_slave_t *sb, float update_rate, void *data)
 {
 	app_t *app = data;
-	const unsigned us = 1000000 / update_rate;
+	const unsigned ns = 1000000000 / update_rate;
+	struct timespec to;
+	clock_gettime(CLOCK_REALTIME, &to);
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
+		to.tv_nsec += ns;
+		while(to.tv_nsec >= 1000000000)
+		{
+			to.tv_nsec -= 1000000000;
+			to.tv_sec += 1;
+		}
+
 		xcb_generic_event_t *e;
 		while((e = xcb_poll_for_event(app->conn)))
 		{
@@ -182,7 +191,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 			free(e);
 		}
 
-		usleep(us);
+		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL);
 
 		sandbox_slave_recv(sb);
 		if(app->idle_iface)

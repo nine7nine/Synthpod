@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 
 #include <sandbox_slave.h>
 #include <lv2_external_ui.h>
@@ -81,11 +82,20 @@ static inline void
 _run(sandbox_slave_t *sb, float update_rate, void *data)
 {
 	app_t *app = data;
-	const unsigned us = 1000000 / update_rate;
+	const unsigned ns = 1000000000 / update_rate;
+	struct timespec to;
+	clock_gettime(CLOCK_REALTIME, &to);
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
-		usleep(us);
+		to.tv_nsec += ns;
+		while(to.tv_nsec >= 1000000000)
+		{
+			to.tv_nsec -= 1000000000;
+			to.tv_sec += 1;
+		}
+
+		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL);
 
 		sandbox_slave_recv(sb);
 		LV2_EXTERNAL_UI_RUN(app->widget);
