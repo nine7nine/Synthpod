@@ -113,7 +113,7 @@ _content_get(plughandle_t *handle, Evas_Object *parent)
 	Evas_Object *widg = sp_ui_widget_get(handle->ui);
 	evas_object_event_callback_add(widg, EVAS_CALLBACK_FREE, _content_free, handle);
 	evas_object_event_callback_add(widg, EVAS_CALLBACK_DEL, _content_del, handle);
-	evas_object_size_hint_min_set(widg, 1280, 720);
+	//evas_object_size_hint_min_set(widg, 1280, 720);
 
 	return widg;
 }
