@@ -829,8 +829,13 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 					? app->regs.port.input.node
 					: app->regs.port.output.node
 					, app->regs.core.control.node);
+			(void)control_port; //TODO use this?
 
-			tar->selected = control_port == port; // only select control ports by default
+			// only select supported event ports by default
+			tar->selected = lilv_port_supports_event(plug, port, app->regs.port.midi.node)
+				|| lilv_port_supports_event(plug, port, app->regs.port.time_position.node)
+				|| lilv_port_supports_event(plug, port, app->regs.port.osc_event.node)
+				|| lilv_port_supports_event(plug, port, app->regs.xpress.message.node);
 		}
 		else
 		{
