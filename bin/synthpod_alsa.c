@@ -588,6 +588,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			{
 				mlock(chan, sizeof(chan_t));
 				chan->type = CHAN_TYPE_MIDI;
+				memcpy(&chan->midi.forge, &handle->forge, sizeof(LV2_Atom_Forge)); // initialize forge
 
 				snd_seq_port_info_t *pinfo;
 				snd_seq_port_info_malloc(&pinfo);
