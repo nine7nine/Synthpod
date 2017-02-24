@@ -150,6 +150,9 @@ nk_pugl_icon_load(nk_pugl_window_t *win, const char *filename);
 NK_PUGL_API void
 nk_pugl_icon_unload(nk_pugl_window_t *win, struct nk_image img);
 
+static bool
+nk_pugl_is_shortcut_pressed(struct nk_input *in, char letter, bool clear);
+
 #ifdef __cplusplus
 }
 #endif
@@ -488,7 +491,7 @@ _nk_pugl_special_key_down(nk_pugl_window_t *win, const PuglEventKey *ev)
 		}	break;
 		case PUGL_KEY_INSERT:
 		{
-			//TODO
+			_nk_pugl_key_press(ctx, NK_KEY_TEXT_INSERT_MODE);
 		}	break;
 		case PUGL_KEY_SHIFT:
 		{
@@ -573,8 +576,12 @@ _nk_pugl_other_key_down(nk_pugl_window_t *win, const PuglEventKey *ev)
 	struct nk_context *ctx = &win->ctx;
 	const bool control = ev->state & PUGL_MOD_CTRL;
 
+	// automatically enter insert mode upon non-special key press
+	_nk_pugl_key_press(ctx, NK_KEY_TEXT_INSERT_MODE);
+
 	switch(ev->character)
 	{
+		case '\n':
 		case '\r':
 		{
 			_nk_pugl_key_press(ctx, NK_KEY_ENTER);
@@ -585,11 +592,19 @@ _nk_pugl_other_key_down(nk_pugl_window_t *win, const PuglEventKey *ev)
 		}	break;
 		case PUGL_CHAR_DELETE:
 		{
+#if defined(__APPLE__) // quirk around Apple's Delete key strangeness
+			_nk_pugl_key_press(ctx, NK_KEY_BACKSPACE);
+#else
 			_nk_pugl_key_press(ctx, NK_KEY_DEL);
+#endif
 		}	break;
 		case PUGL_CHAR_BACKSPACE:
 		{
+#if defined(__APPLE__) // quirk around Apple's Delete key strangeness
+			_nk_pugl_key_press(ctx, NK_KEY_DEL);
+#else
 			_nk_pugl_key_press(ctx, NK_KEY_BACKSPACE);
+#endif
 		}	break;
 		case PUGL_CHAR_ESCAPE:
 		{
@@ -600,7 +615,9 @@ _nk_pugl_other_key_down(nk_pugl_window_t *win, const PuglEventKey *ev)
 		{
 			if(control)
 			{
-				const uint32_t character = ev->character + 96; //FIXME why +96?
+				// unescape ASCII control chars + Control
+				const uint32_t character = ev->character | 0x60;
+
 				switch(character)
 				{
 					case 'c':
@@ -626,25 +643,12 @@ _nk_pugl_other_key_down(nk_pugl_window_t *win, const PuglEventKey *ev)
 
 					default:
 					{
-						if(isprint(character))
-							nk_input_char(ctx, character);
+						nk_input_glyph(ctx, (const char *)ev->utf8);
 					} break;
 				}
 			}
-			else // !control
+			else
 			{
-				switch(ev->character)
-				{
-					case 'i':
-					{
-						_nk_pugl_key_press(ctx, NK_KEY_TEXT_INSERT_MODE);
-					} break;
-					case 'r':
-					{
-						_nk_pugl_key_press(ctx, NK_KEY_TEXT_REPLACE_MODE);
-					} break;
-				}
-
 				nk_input_glyph(ctx, (const char *)ev->utf8);
 			}
 		} break;
@@ -667,10 +671,14 @@ _nk_pugl_modifiers(nk_pugl_window_t *win, PuglMod state)
 			nk_input_key(ctx, NK_KEY_CTRL, (state & PUGL_MOD_CTRL) == PUGL_MOD_CTRL);
 
 		if( (win->state & PUGL_MOD_ALT) != (state & PUGL_MOD_ALT))
-			; // not yet supported in nuklear
+		{
+			// not yet supported in nuklear
+		}
 
 		if( (win->state & PUGL_MOD_SUPER) != (state & PUGL_MOD_SUPER))
-			; // not yet supported in nuklear
+		{
+			// not yet supported in nuklear
+		}
 
 		win->state = state; // switch old and new modifier states
 	}
@@ -978,10 +986,10 @@ nk_pugl_shutdown(nk_pugl_window_t *win)
 			glDeleteTextures(1, &win->font_tex);
 
 		// shutdown nuklear
-		nk_free(&win->ctx);
 		nk_buffer_free(&win->cmds);
 		nk_buffer_free(&win->vbuf);
 		nk_buffer_free(&win->ebuf);
+		nk_free(&win->ctx);
 	}
 	puglLeaveContext(win->view, false);
 
@@ -1118,6 +1126,28 @@ nk_pugl_icon_unload(nk_pugl_window_t *win, struct nk_image img)
 		}
 		puglLeaveContext(win->view, false);
 	}
+}
+
+static bool
+nk_pugl_is_shortcut_pressed(struct nk_input *in, char letter, bool clear)
+{
+	const bool control = nk_input_is_key_down(in, NK_KEY_CTRL);
+
+	if(control && (in->keyboard.text_len == 1) )
+	{
+		// unescape ASCII control chars + Control
+		const char ch = in->keyboard.text[0] | 0x60;
+
+		if(isalpha(ch) && (ch == letter) ) // pass non-alpha characters through
+		{
+			if(clear)
+				in->keyboard.text_len = 0;
+
+			return true; // matching shortcut
+		}
+	}
+
+	return false;
 }
 
 #ifdef __cplusplus
