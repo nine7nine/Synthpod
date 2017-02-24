@@ -894,6 +894,15 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 		// set port buffer
 		lilv_instance_connect_port(mod->inst, i, tar->base);
+
+		// initialize atom sequence ports
+		if(  (tar->type == PORT_TYPE_ATOM)
+			&& (tar->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+		{
+			LV2_Atom *atom = tar->base;
+			atom->size = sizeof(LV2_Atom_Sequence_Body);
+			atom->type = app->forge.Sequence;
+		}
 	}
 
 	// load presets
