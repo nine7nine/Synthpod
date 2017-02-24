@@ -202,8 +202,8 @@ _sbox_ui_show(mod_t *mod)
 	sandbox_master_fd_get(mod_ui->sbox.sb, &fd); //FIXME check
 
 	char *cmd = NULL;
-	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s' -f %f", //FIXME makes update rate configurable
-		executable, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_path, mod->name, ui->update_rate); //FIXME check
+	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s' -f %f",
+		executable, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_path, mod->name, ui->driver->update_rate); //FIXME check
 	//printf("cmd: %s\n", cmd);
 #if defined(LILV_0_22)
 	lilv_free(bundle_path);

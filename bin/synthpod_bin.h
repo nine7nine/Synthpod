@@ -106,6 +106,7 @@ struct _bin_t {
 	int num_slaves;
 	bool bad_plugins;
 	const char *socket_path;
+	int update_rate;
 
 	sandbox_master_driver_t sb_driver;
 	sandbox_master_t *sb;

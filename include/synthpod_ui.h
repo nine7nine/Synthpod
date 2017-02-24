@@ -71,6 +71,7 @@ enum _sp_ui_features_t {
 
 struct _sp_ui_driver_t {
 	float sample_rate;
+	float update_rate;
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 	xpress_map_t *xmap;

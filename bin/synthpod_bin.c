@@ -507,6 +507,9 @@ bin_init(bin_t *bin)
 				char window_title [128];
 				snprintf(window_title, 128, "Synthpod - %s", bin->socket_path);
 
+				char update_rate [128];
+				snprintf(update_rate, 128, "%i", bin->update_rate);
+
 				char *args [] = {
 					(char *)cmd,
 					"-p", SYNTHPOD_PREFIX"stereo",
@@ -518,6 +521,7 @@ bin_init(bin_t *bin)
 #endif
 					"-s", (char *)bin->socket_path,
 					"-w", window_title,
+					"-f", update_rate,
 					NULL
 				};
 #ifdef USE_NK
@@ -569,7 +573,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 {
 	uv_timer_init(&bin->loop, &bin->ui_anim);
 	bin->ui_anim.data = bin;
-	uv_timer_start(&bin->ui_anim, _ui_animator, 40, 40); // 25FPS
+	const unsigned ms = 1000 / bin->update_rate;
+	uv_timer_start(&bin->ui_anim, _ui_animator, ms, ms);
 
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');

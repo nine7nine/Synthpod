@@ -876,6 +876,7 @@ main(int argc, char **argv)
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 	bin->bad_plugins = false;
 	bin->socket_path = "ipc:///tmp/synthpod";
+	bin->update_rate = 25;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -888,7 +889,7 @@ main(int argc, char **argv)
 	*/
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGbBIOtTxXy:Yw:Wl:d:i:o:r:p:n:s:c:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbBIOtTxXy:Yw:Wl:d:i:o:r:p:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -939,7 +940,8 @@ main(int argc, char **argv)
 					"   [-p] sample-period   frames per period (1024)\n"
 					"   [-n] period-number   number of periods of playback latency (3)\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n"
-					"   [-c] slave-cores     number of slave cores (auto)\n\n"
+					"   [-c] slave-cores     number of slave cores (auto)\n"
+					"   [-f] update-rate     GUI update rate (25)\n\n"
 					, argv[0]);
 				return 0;
 			case 'g':
@@ -1016,10 +1018,13 @@ main(int argc, char **argv)
 				if(atoi(optarg) < bin->num_slaves)
 					bin->num_slaves = atoi(optarg);
 				break;
+			case 'f':
+				bin->update_rate = atoi(optarg);
+				break;
 			case '?':
 				if( (optopt == 'd') || (optopt == 'i') || (optopt == 'o') || (optopt == 'r')
 					|| (optopt == 'p') || (optopt == 'n') || (optopt == 's') || (optopt == 'c')
-					|| (optopt == 'l') )
+					|| (optopt == 'l') || (optopt == 'f') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);

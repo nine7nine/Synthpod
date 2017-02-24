@@ -192,7 +192,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	}
 
 	sb->sample_rate = 44100.f; // fall-back
-	sb->update_rate = 30.f; // fall-back
+	sb->update_rate = 25.f; // fall-back
 
 	int c;
 	while((c = getopt(argc, argv, "p:b:u:s:w:r:f:")) != -1)
