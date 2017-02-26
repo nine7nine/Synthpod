@@ -150,15 +150,12 @@ struct _plughandle_t {
 
 	selector_main_t main_selector;
 	selector_grid_t grid_selector;
-	selector_search_t  search_selector;
 	const LilvPlugin *plugin_selector;
 	unsigned module_selector;
 	const LilvNode *preset_selector;
 
 	unsigned num_mods;
 	mod_t *mods;
-
-	char search_buf [SEARCH_BUF_MAX];
 
 	struct {
 		LilvNode *pg_group;
@@ -184,10 +181,21 @@ struct _plughandle_t {
 		LilvNode *lv2_Plugin;
 	} node;
 
+	float dy;
+
+	enum nk_collapse_states plugin_collapse_states;
+	enum nk_collapse_states preset_collapse_states;
+	enum nk_collapse_states plugin_info_collapse_states;
+	enum nk_collapse_states preset_info_collapse_states;
+
+	selector_search_t plugin_search_selector;
+	selector_search_t preset_search_selector;
+
 	LilvNodes *plugin_matches;
 	LilvNodes *preset_matches;
 
-	float dy;
+	char plugin_search_buf [SEARCH_BUF_MAX];
+	char preset_search_buf [SEARCH_BUF_MAX];
 };
 
 static const char *main_labels [SELECTOR_MAIN_MAX] = {
@@ -515,9 +523,9 @@ _refresh_main_plugin_list(plughandle_t *handle)
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 
 	LilvNode *p = NULL;
-	if(handle->search_selector == SELECTOR_SEARCH_COMMENT)
+	if(handle->plugin_search_selector == SELECTOR_SEARCH_COMMENT)
 		p = handle->node.rdfs_comment;
-	else if(handle->search_selector == SELECTOR_SEARCH_PROJECT)
+	else if(handle->plugin_search_selector == SELECTOR_SEARCH_PROJECT)
 		p = handle->node.doap_name;
 
 	int count = 0;
@@ -530,15 +538,15 @@ _refresh_main_plugin_list(plughandle_t *handle)
 		if(name_node)
 		{
 			const char *name_str = lilv_node_as_string(name_node);
-			bool visible = strlen(handle->search_buf) == 0;
+			bool visible = strlen(handle->plugin_search_buf) == 0;
 
 			if(!visible)
 			{
-				switch(handle->search_selector)
+				switch(handle->plugin_search_selector)
 				{
 					case SELECTOR_SEARCH_NAME:
 					{
-						if(strcasestr(name_str, handle->search_buf))
+						if(strcasestr(name_str, handle->plugin_search_buf))
 							visible = true;
 					} break;
 					case SELECTOR_SEARCH_COMMENT:
@@ -550,7 +558,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 								? lilv_nodes_get_first(label_nodes) : NULL;
 							if(label_node)
 							{
-								if(strcasestr(lilv_node_as_string(label_node), handle->search_buf))
+								if(strcasestr(lilv_node_as_string(label_node), handle->plugin_search_buf))
 									visible = true;
 							}
 							lilv_nodes_free(label_nodes);
@@ -561,7 +569,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 						LilvNode *author_node = lilv_plugin_get_author_name(plug);
 						if(author_node)
 						{
-							if(strcasestr(lilv_node_as_string(author_node), handle->search_buf))
+							if(strcasestr(lilv_node_as_string(author_node), handle->plugin_search_buf))
 								visible = true;
 							lilv_node_free(author_node);
 						}
@@ -574,7 +582,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 							const LilvNode *label_node = lilv_plugin_class_get_label(class);
 							if(label_node)
 							{
-								if(strcasestr(lilv_node_as_string(label_node), handle->search_buf))
+								if(strcasestr(lilv_node_as_string(label_node), handle->plugin_search_buf))
 									visible = true;
 							}
 						}
@@ -587,7 +595,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 							LilvNode *label_node = p ? lilv_world_get(handle->world, lilv_plugin_get_uri(plug), p, NULL) : NULL;
 							if(label_node)
 							{
-								if(strcasestr(lilv_node_as_string(label_node), handle->search_buf))
+								if(strcasestr(lilv_node_as_string(label_node), handle->plugin_search_buf))
 									visible = true;
 								lilv_node_free(label_node);
 							}
@@ -742,7 +750,7 @@ static void
 _refresh_main_preset_list_for_bank(plughandle_t *handle,
 	LilvNodes *presets, const LilvNode *preset_bank)
 {
-	bool search = strlen(handle->search_buf) != 0;
+	bool search = strlen(handle->preset_search_buf) != 0;
 
 	LILV_FOREACH(nodes, i, presets)
 	{
@@ -769,7 +777,7 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 			{
 				const char *label_str = lilv_node_as_string(label_node);
 
-				if(!search || strcasestr(label_str, handle->search_buf))
+				if(!search || strcasestr(label_str, handle->preset_search_buf))
 				{
 					LilvNodes *matches = lilv_world_find_nodes(handle->world,
 						preset, handle->node.rdf_type, handle->node.pset_Preset);
@@ -1073,7 +1081,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	{
 		case SELECTOR_MAIN_GRID:
 		{
-			bool find_matches = false;
+			bool plugin_find_matches = false;
+			bool preset_find_matches = false;
 			nk_layout_row_begin(ctx, NK_DYNAMIC, dh, 3);
 
 			nk_layout_row_push(ctx, 0.25);
@@ -1094,7 +1103,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						{
 							handle->module_selector = m;
 							handle->preset_selector = NULL;
-							find_matches = true;
+							preset_find_matches = true;
 						}
 						nk_labelf(ctx, NK_TEXT_RIGHT, "%4.1f|%4.1f|%4.1f%%", 1.1f, 2.2f, 5.5f);
 
@@ -1165,85 +1174,78 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			}
 
 			nk_layout_row_push(ctx, 0.25);
-			if(nk_group_begin(ctx, "Plugins/Presets", NK_WINDOW_BORDER))
+			if(nk_group_begin(ctx, "Selectables", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				const struct nk_panel *panel = nk_window_get_panel(ctx);
-
-				nk_layout_row_dynamic(ctx, dy, SELECTOR_MAIN_MAX);
-				for(unsigned i=0; i<SELECTOR_MAIN_MAX; i++)
+				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Plugins", &handle->plugin_collapse_states))
 				{
-					const enum nk_symbol_type symbol = (handle->grid_selector == i)
-						? NK_SYMBOL_CIRCLE_SOLID : NK_SYMBOL_CIRCLE_OUTLINE;
-					if(_tooltip_visible(ctx))
-						nk_tooltip(ctx, grid_tooltips[i]);
-					if(nk_button_symbol_label(ctx, symbol, grid_labels[i], NK_TEXT_RIGHT))
+					const float dim [2] = {0.4, 0.6};
+					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+					const selector_search_t old_sel = handle->plugin_search_selector;
+					handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+						handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+					if(old_sel != handle->plugin_search_selector)
+						plugin_find_matches = true;
+					const size_t old_len = strlen(handle->plugin_search_buf);
+					const nk_flags flags = nk_edit_string_zero_terminated(ctx,
+						NK_EDIT_FIELD | NK_EDIT_SIG_ENTER,
+						handle->plugin_search_buf, SEARCH_BUF_MAX, nk_filter_default);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->plugin_search_buf)) )
+						plugin_find_matches = true;
+
+					nk_layout_row_dynamic(ctx, dy*20, 1);
+					if(nk_group_begin(ctx, "Plugins_List", NK_WINDOW_BORDER))
 					{
-						handle->grid_selector = i;
-						handle->search_buf[0] = '\0';
-						find_matches = true;
+						nk_layout_row_dynamic(ctx, dy, 1);
+						_expose_main_plugin_list(handle, ctx, plugin_find_matches);
+
+						nk_group_end(ctx);
 					}
+
+					if(nk_tree_state_push(ctx, NK_TREE_NODE, "Info", &handle->plugin_info_collapse_states))
+					{
+						_expose_main_plugin_info(handle, ctx);
+
+						nk_tree_state_pop(ctx);
+					}
+					
+					nk_tree_state_pop(ctx);
 				}
 
-				nk_layout_row_dynamic(ctx, dy, 2);
-				const selector_search_t old_sel = handle->search_selector;
-				handle->search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->search_selector)
-					find_matches = true;
-				const size_t old_len = strlen(handle->search_buf);
-				const nk_flags flags = nk_edit_string_zero_terminated(ctx,
-					NK_EDIT_FIELD | NK_EDIT_SIG_ENTER,
-					handle->search_buf, SEARCH_BUF_MAX, nk_filter_default);
-				if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->search_buf)) )
-					find_matches = true;
+				nk_spacing(ctx, 1);
 
-				const float content_h2 = panel->bounds.h - 6*group_padding.y - 3*dy;
-				nk_layout_row_dynamic(ctx, content_h2*0.75, 1);
-				if(nk_group_begin(ctx, "List", NK_WINDOW_BORDER))
+				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Presets", &handle->preset_collapse_states))
 				{
-					switch(handle->grid_selector)
+					const float dim [2] = {0.4, 0.6};
+					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+					const selector_search_t old_sel = handle->preset_search_selector;
+					handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+						handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+					if(old_sel != handle->preset_search_selector)
+						preset_find_matches = true;
+					const size_t old_len = strlen(handle->preset_search_buf);
+					const nk_flags flags = nk_edit_string_zero_terminated(ctx,
+						NK_EDIT_FIELD | NK_EDIT_SIG_ENTER,
+						handle->preset_search_buf, SEARCH_BUF_MAX, nk_filter_default);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->preset_search_buf)) )
+						preset_find_matches = true;
+
+					nk_layout_row_dynamic(ctx, dy*20, 1);
+					if(nk_group_begin(ctx, "Presets_List", NK_WINDOW_BORDER))
 					{
-						case SELECTOR_GRID_PLUGINS:
-						{
-							nk_layout_row_dynamic(ctx, dy, 1);
-							_expose_main_plugin_list(handle, ctx, find_matches);
-						} break;
-						case SELECTOR_GRID_PRESETS:
-						{
-							nk_layout_row_dynamic(ctx, dy, 1);
-							_expose_main_preset_list(handle, ctx, find_matches);
-						} break;
+						nk_layout_row_dynamic(ctx, dy, 1);
+						_expose_main_preset_list(handle, ctx, preset_find_matches);
 
-						default: break;
+						nk_group_end(ctx);
 					}
-					nk_group_end(ctx);
-				}
 
-				nk_layout_row_dynamic(ctx, content_h2*0.25, 1);
-				if(nk_group_begin(ctx, "Info", NK_WINDOW_BORDER))
-				{
-					switch(handle->grid_selector)
+					if(nk_tree_state_push(ctx, NK_TREE_NODE, "Info", &handle->preset_info_collapse_states))
 					{
-						case SELECTOR_GRID_PLUGINS:
-						{
-							nk_layout_row_dynamic(ctx, dy, 1);
-							_expose_main_plugin_info(handle, ctx);
-						} break;
-						case SELECTOR_GRID_PRESETS:
-						{
-							nk_layout_row_dynamic(ctx, dy, 1);
-							_expose_main_preset_info(handle, ctx);
-						} break;
+						_expose_main_preset_info(handle, ctx);
 
-						default: break;
+						nk_tree_state_pop(ctx);
 					}
-					nk_group_end(ctx);
-				}
 
-				nk_layout_row_dynamic(ctx, dy, 1);
-				if(nk_button_label(ctx, "Load") && handle->plugin_selector)
-				{
-					_load(handle);
+					nk_tree_state_pop(ctx);
 				}
 
 				nk_group_end(ctx);
@@ -1443,6 +1445,11 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	if(host_resize)
 		host_resize->ui_resize(host_resize->handle, cfg->width, cfg->height);
+
+	handle->plugin_collapse_states = NK_MAXIMIZED;
+	handle->preset_collapse_states = NK_MAXIMIZED;
+	handle->plugin_info_collapse_states = NK_MINIMIZED;
+	handle->preset_info_collapse_states = NK_MINIMIZED;
 
 	return handle;
 }
