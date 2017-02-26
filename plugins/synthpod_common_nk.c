@@ -180,7 +180,12 @@ struct _plughandle_t {
 		LilvNode *lv2_OutputPort;
 		LilvNode *patch_readable;
 		LilvNode *patch_writable;
+		LilvNode *rdf_type;
+		LilvNode *lv2_Plugin;
 	} node;
+
+	LilvNodes *plugin_matches;
+	LilvNodes *preset_matches;
 
 	float dy;
 };
@@ -501,8 +506,12 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 }
 
 static void
-_expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
+_refresh_main_plugin_list(plughandle_t *handle)
 {
+	if(handle->plugin_matches)
+		lilv_nodes_free(handle->plugin_matches);
+	handle->plugin_matches = NULL;
+
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 
 	LilvNode *p = NULL;
@@ -592,6 +601,46 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 
 			if(visible)
 			{
+				const LilvNode *uri = lilv_plugin_get_uri(plug);
+				LilvNodes *matches = lilv_world_find_nodes(handle->world,
+					uri, handle->node.rdf_type, handle->node.lv2_Plugin);
+				if(matches)
+				{
+					LilvNodes *merge = lilv_nodes_merge(handle->plugin_matches, matches);
+					lilv_nodes_free(handle->plugin_matches);
+					handle->plugin_matches = merge;
+					lilv_nodes_free(matches);
+				}
+			}
+
+			lilv_node_free(name_node);
+		}
+	}
+}
+
+static void
+_expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx,
+	bool find_matches)
+{
+	if(!handle->plugin_matches || find_matches)
+		_refresh_main_plugin_list(handle);
+
+	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
+
+	int count = 0;
+	bool selector_visible = false;
+	LILV_FOREACH(nodes, i, handle->plugin_matches)
+	{
+		const LilvNode *uri = lilv_nodes_get(handle->plugin_matches, i);
+
+		const LilvPlugin *plug = lilv_plugins_get_by_uri(plugs, uri);
+		if(plug)
+		{
+			LilvNode *name_node = lilv_plugin_get_name(plug);
+			if(name_node)
+			{
+				const char *name_str = lilv_node_as_string(name_node);
+
 				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
 				{
 					handle->plugin_selector = plug;
@@ -610,8 +659,8 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed_active,
 					nk_style_item_color(nk_rgb(30, 30, 30)));
 
-				int selected = plug == handle->plugin_selector;
-				if(nk_selectable_label(ctx, name_str, NK_TEXT_LEFT, &selected))
+				const int selected = plug == handle->plugin_selector;
+				if(nk_select_label(ctx, name_str, NK_TEXT_LEFT, selected))
 				{
 					handle->plugin_selector = plug;
 				}
@@ -624,9 +673,9 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx)
 
 				if(plug == handle->plugin_selector)
 					selector_visible = true;
-			}
 
-			lilv_node_free(name_node);
+				lilv_node_free(name_node);
+			}
 		}
 	}
 
@@ -690,7 +739,7 @@ _expose_main_plugin_info(plughandle_t *handle, struct nk_context *ctx)
 }
 
 static void
-_expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
+_refresh_main_preset_list_for_bank(plughandle_t *handle,
 	LilvNodes *presets, const LilvNode *preset_bank)
 {
 	bool search = strlen(handle->search_buf) != 0;
@@ -714,6 +763,7 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 
 		if(visible)
 		{
+			//FIXME support other search criteria
 			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
 			if(label_node)
 			{
@@ -721,16 +771,14 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 
 				if(!search || strcasestr(label_str, handle->search_buf))
 				{
-					if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
+					LilvNodes *matches = lilv_world_find_nodes(handle->world,
+						preset, handle->node.rdf_type, handle->node.pset_Preset);
+					if(matches)
 					{
-						handle->preset_selector = preset;
-						_load(handle);
-					}
-
-					int selected = preset == handle->preset_selector;
-					if(nk_selectable_label(ctx, label_str, NK_TEXT_LEFT, &selected))
-					{
-						handle->preset_selector = preset;
+						LilvNodes *merge = lilv_nodes_merge(handle->preset_matches, matches);
+						lilv_nodes_free(handle->preset_matches);
+						handle->preset_matches = merge;
+						lilv_nodes_free(matches);
 					}
 				}
 
@@ -741,13 +789,85 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 }
 
 static void
-_expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx)
+_refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
+{
+	if(handle->preset_matches)
+		lilv_nodes_free(handle->preset_matches);
+	handle->preset_matches = NULL;
+
+	LILV_FOREACH(nodes, i, mod->banks)
+	{
+		const LilvNode *bank = lilv_nodes_get(mod->banks, i);
+
+		LilvNode *label_node = lilv_world_get(handle->world, bank, handle->node.rdfs_label, NULL);
+		if(label_node)
+		{
+			_refresh_main_preset_list_for_bank(handle, mod->presets, bank);
+			lilv_node_free(label_node);
+		}
+	}
+
+	_refresh_main_preset_list_for_bank(handle, mod->presets, NULL);
+}
+
+static void
+_expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
+	const LilvNode *preset_bank)
+{
+	LILV_FOREACH(nodes, i, handle->preset_matches)
+	{
+		const LilvNode *preset = lilv_nodes_get(handle->preset_matches, i);
+
+		bool visible = false;
+
+		LilvNode *bank = lilv_world_get(handle->world, preset, handle->node.pset_bank, NULL);
+		if(bank)
+		{
+			if(lilv_node_equals(preset_bank, bank))
+				visible = true;
+
+			lilv_node_free(bank);
+		}
+		else if(!preset_bank)
+			visible = true;
+
+		if(visible)
+		{
+			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
+			if(label_node)
+			{
+				const char *label_str = lilv_node_as_string(label_node);
+
+				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
+				{
+					handle->preset_selector = preset;
+					_load(handle);
+				}
+
+				int selected = preset == handle->preset_selector;
+				if(nk_selectable_label(ctx, label_str, NK_TEXT_LEFT, &selected))
+				{
+					handle->preset_selector = preset;
+				}
+
+				lilv_node_free(label_node);
+			}
+		}
+	}
+}
+
+static void
+_expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
+	bool find_matches)
 {
 	mod_t *mod = handle->module_selector < handle->num_mods
 		? &handle->mods[handle->module_selector] : NULL;
 
 	if(mod && mod->presets)
 	{
+		if(!handle->preset_matches || find_matches)
+			_refresh_main_preset_list(handle, mod);
+
 		LILV_FOREACH(nodes, i, mod->banks)
 		{
 			const LilvNode *bank = lilv_nodes_get(mod->banks, i);
@@ -756,13 +876,13 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx)
 			if(label_node)
 			{
 				nk_label(ctx, lilv_node_as_string(label_node), NK_TEXT_CENTERED);
-				_expose_main_preset_list_for_bank(handle, ctx, mod->presets, bank);
+				_expose_main_preset_list_for_bank(handle, ctx, bank);
 				lilv_node_free(label_node);
 			}
 		}
 
 		nk_label(ctx, "Unbanked", NK_TEXT_CENTERED);
-		_expose_main_preset_list_for_bank(handle, ctx, mod->presets, NULL);
+		_expose_main_preset_list_for_bank(handle, ctx, NULL);
 	}
 }
 
@@ -925,6 +1045,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	{
 		case SELECTOR_MAIN_GRID:
 		{
+			bool find_matches = false;
 			nk_layout_row_begin(ctx, NK_DYNAMIC, dh, 3);
 
 			nk_layout_row_push(ctx, 0.25);
@@ -945,6 +1066,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						{
 							handle->module_selector = m;
 							handle->preset_selector = NULL;
+							find_matches = true;
 						}
 						nk_labelf(ctx, NK_TEXT_RIGHT, "%4.1f|%4.1f|%4.1f%%", 1.1f, 2.2f, 5.5f);
 
@@ -1030,13 +1152,22 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					{
 						handle->grid_selector = i;
 						handle->search_buf[0] = '\0';
+						find_matches = true;
 					}
 				}
 
 				nk_layout_row_dynamic(ctx, dy, 2);
+				const selector_search_t old_sel = handle->search_selector;
 				handle->search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
 					handle->search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, handle->search_buf, SEARCH_BUF_MAX, nk_filter_default);
+				if(old_sel != handle->search_selector)
+					find_matches = true;
+				const size_t old_len = strlen(handle->search_buf);
+				const nk_flags flags = nk_edit_string_zero_terminated(ctx,
+					NK_EDIT_FIELD | NK_EDIT_SIG_ENTER,
+					handle->search_buf, SEARCH_BUF_MAX, nk_filter_default);
+				if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->search_buf)) )
+					find_matches = true;
 
 				const float content_h2 = panel->bounds.h - 6*group_padding.y - 3*dy;
 				nk_layout_row_dynamic(ctx, content_h2*0.75, 1);
@@ -1047,12 +1178,12 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						case SELECTOR_GRID_PLUGINS:
 						{
 							nk_layout_row_dynamic(ctx, dy, 1);
-							_expose_main_plugin_list(handle, ctx);
+							_expose_main_plugin_list(handle, ctx, find_matches);
 						} break;
 						case SELECTOR_GRID_PRESETS:
 						{
 							nk_layout_row_dynamic(ctx, dy, 1);
-							_expose_main_preset_list(handle, ctx);
+							_expose_main_preset_list(handle, ctx, find_matches);
 						} break;
 
 						default: break;
@@ -1250,6 +1381,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		handle->node.lv2_OutputPort = lilv_new_uri(handle->world, LV2_CORE__OutputPort);
 		handle->node.patch_readable = lilv_new_uri(handle->world, LV2_PATCH__readable);
 		handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
+		handle->node.rdf_type = lilv_new_uri(handle->world, LILV_NS_RDF"type");
+		handle->node.lv2_Plugin = lilv_new_uri(handle->world, LV2_CORE__Plugin);
 	}
 
 	const char *NK_SCALE = getenv("NK_SCALE");
@@ -1323,6 +1456,13 @@ cleanup(LV2UI_Handle instance)
 		lilv_node_free(handle->node.lv2_OutputPort);
 		lilv_node_free(handle->node.patch_readable);
 		lilv_node_free(handle->node.patch_writable);
+		lilv_node_free(handle->node.rdf_type);
+		lilv_node_free(handle->node.lv2_Plugin);
+
+		if(handle->plugin_matches)
+			lilv_nodes_free(handle->plugin_matches);
+		if(handle->preset_matches)
+			lilv_nodes_free(handle->preset_matches);
 
 		lilv_world_free(handle->world);
 	}
