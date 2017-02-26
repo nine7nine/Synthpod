@@ -799,12 +799,7 @@ _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 	{
 		const LilvNode *bank = lilv_nodes_get(mod->banks, i);
 
-		LilvNode *label_node = lilv_world_get(handle->world, bank, handle->node.rdfs_label, NULL);
-		if(label_node)
-		{
-			_refresh_main_preset_list_for_bank(handle, mod->presets, bank);
-			lilv_node_free(label_node);
-		}
+		_refresh_main_preset_list_for_bank(handle, mod->presets, bank);
 	}
 
 	_refresh_main_preset_list_for_bank(handle, mod->presets, NULL);
@@ -814,6 +809,8 @@ static void
 _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 	const LilvNode *preset_bank)
 {
+	bool first = true;
+	int count = 0;
 	LILV_FOREACH(nodes, i, handle->preset_matches)
 	{
 		const LilvNode *preset = lilv_nodes_get(handle->preset_matches, i);
@@ -836,6 +833,26 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
 			if(label_node)
 			{
+				if(first)
+				{
+					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+					LilvNode *bank_label_node = preset_bank
+						? lilv_world_get(handle->world, preset_bank, handle->node.rdfs_label, NULL)
+						: NULL;
+					const char *bank_label = bank_label_node
+						? lilv_node_as_string(bank_label_node)
+						: "Unbanked";
+
+					const struct nk_rect bounds = nk_widget_bounds(ctx);
+					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
+					nk_label(ctx, bank_label, NK_TEXT_CENTERED);
+
+					if(bank_label_node)
+						lilv_node_free(bank_label_node);
+
+					first = false;
+				}
+
 				const char *label_str = lilv_node_as_string(label_node);
 
 				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
@@ -844,11 +861,29 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 					_load(handle);
 				}
 
+				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
+					? nk_style_item_color(nk_rgb(40, 40, 40))
+					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
+				nk_style_push_style_item(ctx, &ctx->style.selectable.hover,
+					nk_style_item_color(nk_rgb(35, 35, 35)));
+				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed,
+					nk_style_item_color(nk_rgb(30, 30, 30)));
+				nk_style_push_style_item(ctx, &ctx->style.selectable.hover_active,
+					nk_style_item_color(nk_rgb(35, 35, 35)));
+				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed_active,
+					nk_style_item_color(nk_rgb(30, 30, 30)));
+
 				int selected = preset == handle->preset_selector;
 				if(nk_selectable_label(ctx, label_str, NK_TEXT_LEFT, &selected))
 				{
 					handle->preset_selector = preset;
 				}
+
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
+				nk_style_pop_style_item(ctx);
 
 				lilv_node_free(label_node);
 			}
@@ -872,16 +907,9 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 		{
 			const LilvNode *bank = lilv_nodes_get(mod->banks, i);
 
-			LilvNode *label_node = lilv_world_get(handle->world, bank, handle->node.rdfs_label, NULL);
-			if(label_node)
-			{
-				nk_label(ctx, lilv_node_as_string(label_node), NK_TEXT_CENTERED);
-				_expose_main_preset_list_for_bank(handle, ctx, bank);
-				lilv_node_free(label_node);
-			}
+			_expose_main_preset_list_for_bank(handle, ctx, bank);
 		}
 
-		nk_label(ctx, "Unbanked", NK_TEXT_CENTERED);
 		_expose_main_preset_list_for_bank(handle, ctx, NULL);
 	}
 }
