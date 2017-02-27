@@ -18,6 +18,8 @@
 #ifndef _SANDBOX_IO_H
 #define _SANDBOX_IO_H
 
+#include <inttypes.h>
+
 #include <sratom/sratom.h>
 
 #include <nanomsg/nn.h>
@@ -68,6 +70,7 @@ struct _sandbox_io_t {
 
 	int sock;
 	int id;
+	bool drop;
 
 	Sratom *sratom;
 	atom_ser_t ser;
@@ -88,6 +91,7 @@ struct _sandbox_io_t {
 	LV2_URID ui_period_start;
 	LV2_URID ui_period_size;
 	LV2_URID ui_peak;
+	LV2_URID ui_close_request;
 	LV2_URID ui_window_title;
 	LV2_URID ui_port_subscribe;
 	LV2_URID ui_update_rate;
@@ -146,10 +150,11 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 {
 	char *ttl = NULL;
 	int res;
+	bool close_request = false;
 
 	while((res = nn_recv(io->sock, &ttl, NN_MSG, NN_DONTWAIT)) != -1)
 	{
-		//printf("%s\n\n", ttl);
+		//printf("(%i) %s\n\n", res, ttl);
 		LV2_Atom *atom = sratom_from_turtle(io->sratom, io->base_uri,
 			&io->subject, &io->predicate, ttl);
 		if(atom)
@@ -165,6 +170,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 				{
 					const LV2_Atom_Int *index = NULL;
 					const LV2_Atom_Float *value = NULL;
+
 					LV2_Atom_Object_Query q [] = {
 						{io->core_index, (const LV2_Atom **)&index},
 						{io->rdf_value, (const LV2_Atom **)&value},
@@ -173,6 +179,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					lv2_atom_object_query(obj, q);
 
 					if(  index && (index->atom.type == io->forge.Int)
+							&& (index->atom.size == sizeof(int32_t))
 						&& value && (value->atom.type == io->forge.Float)
 							&& (value->atom.size == sizeof(float)) )
 					{
@@ -188,6 +195,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					const LV2_Atom_Int *period_start = NULL;
 					const LV2_Atom_Int *period_size = NULL;
 					const LV2_Atom_Float *peak= NULL;
+
 					LV2_Atom_Object_Query q [] = {
 						{io->core_index, (const LV2_Atom **)&index},
 						{io->ui_period_start, (const LV2_Atom **)&period_start},
@@ -198,6 +206,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					lv2_atom_object_query(obj, q);
 
 					if(  index && (index->atom.type == io->forge.Int)
+							&& (index->atom.size == sizeof(int32_t))
 						&& period_start && (period_start->atom.type == io->forge.Int)
 							&& (period_start->atom.size == sizeof(int32_t))
 						&& period_size && (period_size->atom.type == io->forge.Int)
@@ -214,10 +223,12 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 								sizeof(LV2UI_Peak_Data), io->peak_protocol, &peak_data);
 						}
 				}
-				else if(obj->body.otype == io->event_transfer)
+				else if( (obj->body.otype == io->event_transfer)
+					|| (obj->body.otype == io->atom_transfer) )
 				{
 					const LV2_Atom_Int *index = NULL;
 					const LV2_Atom *value = NULL;
+
 					LV2_Atom_Object_Query q [] = {
 						{io->core_index, (const LV2_Atom **)&index},
 						{io->rdf_value, (const LV2_Atom **)&value},
@@ -226,28 +237,11 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					lv2_atom_object_query(obj, q);
 
 					if(  index && (index->atom.type == io->forge.Int)
+							&& (index->atom.size == sizeof(int32_t))
 						&& value)
 					{
 						recv_cb(data, index->body,
-							lv2_atom_total_size(value), io->event_transfer, value);
-					}
-				}
-				else if(obj->body.otype == io->atom_transfer)
-				{
-					const LV2_Atom_Int *index = NULL;
-					const LV2_Atom *value = NULL;
-					LV2_Atom_Object_Query q [] = {
-						{io->core_index, (const LV2_Atom **)&index},
-						{io->rdf_value, (const LV2_Atom **)&value},
-						{0, NULL}
-					};
-					lv2_atom_object_query(obj, q);
-
-					if(  index && (index->atom.type == io->forge.Int)
-						&& value)
-					{
-						recv_cb(data, index->body,
-							lv2_atom_total_size(value), io->atom_transfer, value);
+							lv2_atom_total_size(value), obj->body.otype, value);
 					}
 				}
 				else if(obj->body.otype == io->ui_port_subscribe)
@@ -255,6 +249,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					const LV2_Atom_Int *index = NULL;
 					const LV2_Atom_URID *protocol = NULL;
 					const LV2_Atom_Bool *value = NULL;
+
 					LV2_Atom_Object_Query q [] = {
 						{io->core_index, (const LV2_Atom **)&index},
 						{io->ui_protocol, (const LV2_Atom **)&protocol},
@@ -264,12 +259,17 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					lv2_atom_object_query(obj, q);
 
 					if(  index && (index->atom.type == io->forge.Int)
+							&& (index->atom.size == sizeof(int32_t))
 						&& value && (value->atom.type == io->forge.Bool)
 						&& protocol && (protocol->atom.type == io->forge.URID))
 					{
 						if(subscribe_cb)
 							subscribe_cb(data, index->body, protocol->body, value->body);
 					}
+				}
+				else if(obj->body.otype == io->ui_close_request)
+				{
+					close_request = true;
 				}
 			}
 
@@ -279,14 +279,21 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 		nn_freemsg(ttl);
 	}
 
-	// error has occured, so check it
+	if(close_request)
+	{
+		return -1; // received ui:closeRequest
+	}
+
 	const int status = nn_errno();
+	switch(status)
+	{
+		case EAGAIN:
+			return 0; // success
 
-	if(status == EAGAIN)
-		return 0; // success
-
-	fprintf(stderr, "nn_recv: %s\n", nn_strerror(errno));
-	return status;
+		default:
+			fprintf(stderr, "nn_recv: %s\n", nn_strerror(errno));
+			return status;
+	}
 }
 
 static inline int
@@ -311,12 +318,25 @@ _sandbox_io_flush(sandbox_io_t *io)
 	
 	if(written == -1) // error has occured, so check it
 	{
-		const int status = nn_errno();
-		if(status == EAGAIN)
-			return 0;
+		if(io->drop) // drop messages if not connected yet
+		{
+			const uint64_t n = nn_get_statistic(io->sock, NN_STAT_CURRENT_CONNECTIONS);
+			if(n == (uint64_t)-1)
+				fprintf(stderr, "nn_get_statistic failed\n");
+			else if(n == 0) // no connections, yet
+				_sandbox_io_reset(io);
+		}
 
-		fprintf(stderr, "nn_send: %s\n", nn_strerror(errno));
-		return status;
+		const int status = nn_errno();
+		switch(status)
+		{
+			case EAGAIN:
+				return 0;
+
+			default:
+				fprintf(stderr, "nn_send: %s\n", nn_strerror(errno));
+				return status;
+		}
 	}
 
 	_sandbox_io_reset(io);
@@ -392,19 +412,8 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 		lv2_atom_forge_key(&io->forge, io->ui_peak);
 		lv2_atom_forge_float(&io->forge, peak_data->peak);
 	}
-	else if(protocol == io->event_transfer)
-	{
-		const LV2_Atom *atom = buf;
-		LV2_Atom_Forge_Ref ref;
-
-		lv2_atom_forge_key(&io->forge, io->rdf_value);
-		ref = lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
-		lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
-
-		LV2_Atom *src= lv2_atom_forge_deref(&io->forge, ref);
-		_sandbox_io_clean(&io->forge, src);
-	}
-	else if(protocol == io->atom_transfer)
+	else if( (protocol == io->event_transfer)
+		|| (protocol == io->atom_transfer) )
 	{
 		const LV2_Atom *atom = buf;
 		LV2_Atom_Forge_Ref ref;
@@ -425,6 +434,10 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 
 		lv2_atom_forge_key(&io->forge, io->ui_protocol);
 		lv2_atom_forge_urid(&io->forge, protocol);
+	}
+	else if(protocol == io->ui_close_request)
+	{
+		// nothing to add
 	}
 
 	lv2_atom_forge_pop(&io->forge, &frame);
@@ -453,7 +466,7 @@ _sandbox_io_fd_get(sandbox_io_t *io)
 
 static inline int
 _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
-	const char *socket_path, bool is_master)
+	const char *socket_path, bool is_master, bool drop_messages)
 {
 	io->base_uri = "file:///tmp/base";
 	io->subject = serd_node_from_string(SERD_URI, (const uint8_t *)(""));
@@ -461,6 +474,8 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 
 	io->map = map;
 	io->unmap = unmap;
+
+	io->drop = drop_messages;
 
 	io->ser.offset = 0;
 	io->ser.size = 1024;
@@ -525,6 +540,7 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	io->ui_period_start = map->map(map->handle, LV2_UI_PREFIX"periodStart");
 	io->ui_period_size = map->map(map->handle, LV2_UI_PREFIX"periodSize");
 	io->ui_peak = map->map(map->handle, LV2_UI_PREFIX"peak");
+	io->ui_close_request = map->map(map->handle, LV2_UI_PREFIX"closeRequest");
 	io->ui_window_title = map->map(map->handle, LV2_UI__windowTitle);
 	io->ui_port_subscribe = map->map(map->handle, LV2_UI__portSubscribe);
 	io->ui_update_rate = map->map(map->handle, LV2_UI__updateRate);
@@ -536,18 +552,24 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 }
 
 static inline void
-_sandbox_io_deinit(sandbox_io_t *io)
+_sandbox_io_deinit(sandbox_io_t *io, bool terminate)
 {
+	if(terminate)
+	{
+		_sandbox_io_send(io, 0, 0, io->ui_close_request, NULL);
+		usleep(100000); // wait 100ms, for timer-based UIs to receive message
+	}
+
 	if(io->id != -1)
 	{
-		int res = nn_shutdown(io->sock, io->id);
+		const int res = nn_shutdown(io->sock, io->id);
 		if(res < 0)
 			fprintf(stderr, "nn_shutdown failed: %s\n", nn_strerror(nn_errno()));
 	}
 
 	if(io->sock != -1)
 	{
-		int res = nn_close(io->sock);
+		const int res = nn_close(io->sock);
 		if(res < 0)
 			fprintf(stderr, "nn_close failed: %s\n", nn_strerror(nn_errno()));
 	}

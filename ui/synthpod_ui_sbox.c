@@ -32,7 +32,10 @@ _sbox_ui_recv(void *data, Ecore_Fd_Handler *fd_handler)
 {
 	sandbox_master_t *sb = data;
 
-	sandbox_master_recv(sb);
+	if(sandbox_master_recv(sb))
+	{
+		//TODO connection closed by peer
+	}
 
 	return ECORE_CALLBACK_RENEW;
 }

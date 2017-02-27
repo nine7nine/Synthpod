@@ -44,7 +44,7 @@ sandbox_master_new(sandbox_master_driver_t *driver, void *data)
 	sb->driver = driver;
 	sb->data = data;
 
-	if(_sandbox_io_init(&sb->io, driver->map, driver->unmap, driver->socket_path, true))
+	if(_sandbox_io_init(&sb->io, driver->map, driver->unmap, driver->socket_path, true, true))
 		goto fail;
 
 	return sb;
@@ -59,7 +59,7 @@ sandbox_master_free(sandbox_master_t *sb)
 {
 	if(sb)
 	{
-		_sandbox_io_deinit(&sb->io);
+		_sandbox_io_deinit(&sb->io, true);
 		free(sb);
 	}
 }

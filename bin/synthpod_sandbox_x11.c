@@ -193,13 +193,15 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL);
 
-		sandbox_slave_recv(sb);
+		if(sandbox_slave_recv(sb))
+			atomic_store_explicit(&done, true, memory_order_relaxed);
 		if(app->idle_iface)
 		{
 			if(app->idle_iface->idle(app->handle))
 				atomic_store_explicit(&done, true, memory_order_relaxed);
 		}
-		sandbox_slave_flush(sb);
+		if(sandbox_slave_flush(sb))
+			atomic_store_explicit(&done, true, memory_order_relaxed);
 	}
 }
 

@@ -97,9 +97,11 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 
 		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL);
 
-		sandbox_slave_recv(sb);
+		if(sandbox_slave_recv(sb))
+			atomic_store_explicit(&done, true, memory_order_relaxed);
 		LV2_EXTERNAL_UI_RUN(app->widget);
-		sandbox_slave_flush(sb);
+		if(sandbox_slave_flush(sb))
+			atomic_store_explicit(&done, true, memory_order_relaxed);
 	}
 
 	LV2_EXTERNAL_UI_HIDE(app->widget);

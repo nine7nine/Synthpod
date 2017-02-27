@@ -76,8 +76,13 @@ bool
 MySocketNotifier::event(QEvent *event)
 {
 	(void)event;
-	sandbox_slave_recv(sb);
-	sandbox_slave_flush(sb);
+
+	if(sandbox_slave_recv(sb))
+		done.store(true, std::memory_order_relaxed);
+
+	if(sandbox_slave_flush(sb))
+		done.store(true, std::memory_order_relaxed);
+
 	return true;
 }
 

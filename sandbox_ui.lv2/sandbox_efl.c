@@ -42,7 +42,8 @@ _recv(void *data, Ecore_Fd_Handler *fd_handler)
 {
 	sandbox_slave_t *sb = data;
 
-	sandbox_slave_recv(sb);
+	if(sandbox_slave_recv(sb))
+		ecore_main_loop_quit();
 
 	return ECORE_CALLBACK_RENEW;
 }

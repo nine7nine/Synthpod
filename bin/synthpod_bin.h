@@ -85,6 +85,9 @@ struct _bin_t {
 	varchunk_t *app_from_ui;
 	
 	uv_timer_t ui_anim;
+	uv_signal_t sig_term;
+	uv_signal_t sig_quit;
+	uv_signal_t sig_int;
 	
 	_Atomic int worker_dead;
 	uv_thread_t worker_thread;

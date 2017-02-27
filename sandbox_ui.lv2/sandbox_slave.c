@@ -191,6 +191,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
+	sb->window_title = "Untitled"; // fall-back
 	sb->sample_rate = 44100.f; // fall-back
 	sb->update_rate = 25.f; // fall-back
 
@@ -236,10 +237,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	if(  !sb->plugin_uri
 		|| !sb->bundle_path
 		|| !sb->ui_uri
-		|| !sb->socket_path
-		|| !sb->window_title)
+		|| !sb->socket_path)
 	{
-		fprintf(stderr, "invalid arguments\n");
+		fprintf(stderr, "not enough arguments\n");
 		goto fail;
 	}
 
@@ -284,7 +284,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 
 	if(!sb->bundle_node || !sb->plugin_node || !sb->ui_node)
 	{
-		fprintf(stderr, "lilv_new_uri failes\n");
+		fprintf(stderr, "lilv_new_uri failed\n");
 		goto fail;
 	}
 
@@ -372,7 +372,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
-	if(_sandbox_io_init(&sb->io, &sb->map, &sb->unmap, sb->socket_path, false))
+	if(_sandbox_io_init(&sb->io, &sb->map, &sb->unmap, sb->socket_path, false, false))
 	{
 		fprintf(stderr, "_sandbox_io_init failed\n");
 		goto fail;
@@ -403,7 +403,7 @@ sandbox_slave_free(sandbox_slave_t *sb)
 	if(sb->driver && sb->driver->deinit_cb)
 		sb->driver->deinit_cb(sb->data);
 
-	_sandbox_io_deinit(&sb->io);
+	_sandbox_io_deinit(&sb->io, false);
 
 	if(sb->lib)
 		dlclose(sb->lib);

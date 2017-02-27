@@ -26,7 +26,13 @@
 #include <gtk/gtk.h>
 #include <glib-unix.h>
 
+typedef struct _wrap_t wrap_t;
 typedef struct _app_t app_t;
+
+struct _wrap_t {
+	sandbox_slave_t *sb;
+	app_t *app;
+};
 
 struct _app_t {
 	sandbox_slave_t *sb;
@@ -40,9 +46,20 @@ struct _app_t {
 static gboolean
 _recv(void *data)
 {
-	sandbox_slave_t *sb = data;
-	sandbox_slave_recv(sb);
-	sandbox_slave_flush(sb);
+	wrap_t *wrap = data;
+
+	if(sandbox_slave_recv(wrap->sb))
+	{
+		gtk_main_quit();
+		wrap->app->win = NULL;
+	}
+
+	if(sandbox_slave_flush(wrap->sb))
+	{
+		gtk_main_quit();
+		wrap->app->win = NULL;
+	}
+
 	return true;
 }
 
@@ -135,7 +152,10 @@ _init(sandbox_slave_t *sb, void *data)
 		goto fail;
 	}
 
-	g_source_set_callback(app->source, _recv, sb, NULL);
+	static wrap_t wrap;
+	wrap.sb = sb;
+	wrap.app = app;
+	g_source_set_callback(app->source, _recv, &wrap, NULL);
 	g_source_add_unix_fd(app->source, fd, G_IO_IN);
 	g_source_attach(app->source, NULL);
 

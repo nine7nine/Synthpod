@@ -140,8 +140,10 @@ _ui_animator(uv_timer_t* handle)
 	{
 		if(bin->sb)
 		{
-			sandbox_master_send(bin->sb, 15, size, bin->atom_eventTransfer, atom); //TODO check
-			sandbox_master_flush(bin->sb); //TODO check
+			if(sandbox_master_send(bin->sb, 15, size, bin->atom_eventTransfer, atom))
+				uv_stop(&bin->loop);
+			if(sandbox_master_flush(bin->sb))
+				uv_stop(&bin->loop);
 		}
 
 		varchunk_read_advance(bin->app_to_ui);
@@ -409,13 +411,22 @@ _sb_recv(uv_poll_t* handle, int status, int events)
 {
 	bin_t *bin = handle->data;
 
-	sandbox_master_recv(bin->sb);
+	if(sandbox_master_recv(bin->sb))
+		uv_stop(&bin->loop);
 }
 
 __non_realtime static void
 _exit_cb(uv_process_t *process, int64_t exit_status, int term_signal)
 {
 	bin_t *bin = process->data;
+
+	uv_stop(&bin->loop);
+}
+
+__non_realtime static void
+_sig(uv_signal_t *hndl, int sig)
+{
+	bin_t *bin = hndl->data;
 
 	uv_stop(&bin->loop);
 }
@@ -564,6 +575,18 @@ bin_init(bin_t *bin)
 			bin->hndl.data = bin;
 			uv_poll_init(&bin->loop, &bin->hndl, fd);
 			uv_poll_start(&bin->hndl, UV_READABLE, _sb_recv);
+
+			bin->sig_term.data = bin;
+			uv_signal_init(&bin->loop, &bin->sig_term);
+			uv_signal_start(&bin->sig_term, _sig, SIGTERM);
+
+			bin->sig_quit.data = bin;
+			uv_signal_init(&bin->loop, &bin->sig_quit);
+			uv_signal_start(&bin->sig_quit, _sig, SIGQUIT);
+
+			bin->sig_int.data = bin;
+			uv_signal_init(&bin->loop, &bin->sig_int);
+			uv_signal_start(&bin->sig_int, _sig, SIGINT);
 		}
 	}
 }
@@ -620,6 +643,18 @@ bin_stop(bin_t *bin)
 void
 bin_deinit(bin_t *bin)
 {
+	if(uv_is_active((uv_handle_t *)&bin->sig_int))
+		uv_signal_stop(&bin->sig_int);
+	//uv_close((uv_handle_t *)&bin->sig_int, NULL);
+
+	if(uv_is_active((uv_handle_t *)&bin->sig_quit))
+		uv_signal_stop(&bin->sig_quit);
+	//uv_close((uv_handle_t *)&bin->sig_quit, NULL);
+
+	if(uv_is_active((uv_handle_t *)&bin->sig_term))
+		uv_signal_stop(&bin->sig_term);
+	//uv_close((uv_handle_t *)&bin->sig_term, NULL);
+
 	if(uv_is_active((uv_handle_t *)&bin->hndl))
 		uv_poll_stop(&bin->hndl);
 	uv_close((uv_handle_t *)&bin->hndl, NULL);
@@ -649,6 +684,8 @@ bin_deinit(bin_t *bin)
 	varchunk_free(bin->app_from_app);
 
 	uv_loop_close(&bin->loop);
+
+	fprintf(stderr, "bye\n");
 }
 
 void
