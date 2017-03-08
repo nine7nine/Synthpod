@@ -332,12 +332,12 @@ _process(prog_t *handle)
 							else if(frames >= nsamples)
 								frames = nsamples - 1; //TODO report this
 
-							// fix up noteOn(vel=0) -> noteOff(vel=64)
-							if(  ( (handle->m[0] & 0xf0) == 0x90)
-								&& (handle->m[2] == 0x00) )
+							// fix up noteOn(vel=0) -> noteOff(vel=0)
+							if(  (len == 3) && ( (handle->m[0] & 0xf0) == 0x90)
+								&& (handle->m[2] == 0x0) )
 							{
 								handle->m[0] = 0x80 | (handle->m[0] & 0x0f);
-								handle->m[2] = 0x40;
+								handle->m[2] = 0x0;
 							}
 
 							if(chan->midi.ref)

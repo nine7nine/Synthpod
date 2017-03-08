@@ -277,8 +277,23 @@ _process(jack_nframes_t nsamples, void *data)
 						ref = lv2_atom_forge_frame_time(forge, mev.time);
 					if(ref)
 						ref = lv2_atom_forge_atom(forge, mev.size, handle->midi_MidiEvent);
-					if(ref)
-						ref = lv2_atom_forge_raw(forge, mev.buffer, mev.size);
+					// fix up noteOn(vel=0) -> noteOff(vel=0)
+					if(  (mev.size == 3) && ( (mev.buffer[0] & 0xf0) == 0x90)
+						&& (mev.buffer[2] == 0x00) )
+					{
+						const uint8_t note_off [3] = {
+							0x80 | (mev.buffer[0] & 0xf),
+							mev.buffer[1],
+							0x0
+						};
+						if(ref)
+							ref = lv2_atom_forge_raw(forge, note_off, 3);
+					}
+					else
+					{
+						if(ref)
+							ref = lv2_atom_forge_raw(forge, mev.buffer, mev.size);
+					}
 					if(ref)
 						lv2_atom_forge_pad(forge, mev.size);
 				}
