@@ -1120,21 +1120,21 @@ _mod_subscription_set(mod_t *mod, const LilvUI *ui_ui, int state)
 		}
 
 		LilvNode *ind = lilv_world_get(ui->world, notif,
-			ui->regs.core.index.node, NULL);
+			ui->regs.ui.port_index.node, NULL);
 		LilvNode *sym = lilv_world_get(ui->world, notif,
 			ui->regs.core.symbol.node, NULL);
 		LilvNode *prot = lilv_world_get(ui->world, notif,
 			ui->regs.ui.protocol.node, NULL);
 
 		uint32_t index = LV2UI_INVALID_PORT_INDEX;
-		if(ind)
-		{
-			index = lilv_node_as_int(ind);
-		}
-		else if(sym)
+		if(sym)
 		{
 			const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, sym);
 			index = lilv_port_get_index(mod->plug, port);
+		}
+		else if(ind)
+		{
+			index = lilv_node_as_int(ind);
 		}
 
 		if(index != LV2UI_INVALID_PORT_INDEX)
