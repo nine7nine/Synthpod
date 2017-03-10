@@ -12,6 +12,8 @@ include(FindUnixCommands)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
 
+include_directories(${PROJECT_SOURCE_DIR}/netatom.lv2)
+
 set(SYNTHPOD_BIN_DIR "bin")
 add_definitions("-DSYNTHPOD_BIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BIN_DIR}/\"")
 

@@ -20,7 +20,7 @@
 
 #include <inttypes.h>
 
-#include <sratom/sratom.h>
+#include <netatom.lv2/netatom.h>
 
 #include <nanomsg/nn.h>
 #include <nanomsg/pair.h>
@@ -72,14 +72,13 @@ struct _sandbox_io_t {
 	int id;
 	bool drop;
 
-	Sratom *sratom;
+	struct {
+		netatom_t *tx;
+		netatom_t *rx;
+	} netatom;
 	atom_ser_t ser;
 	LV2_Atom_Forge_Frame frame;
 	LV2_Atom_Forge forge;
-
-	const char *base_uri;
-	SerdNode subject;
-	SerdNode predicate;
 
 	LV2_URID float_protocol;
 	LV2_URID peak_protocol;
@@ -148,15 +147,13 @@ static inline int
 _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 	_sandbox_io_subscribe_cb_t subscribe_cb, void *data)
 {
-	char *ttl = NULL;
-	int res;
+	uint8_t *buf = NULL;
+	int sz;
 	bool close_request = false;
 
-	while((res = nn_recv(io->sock, &ttl, NN_MSG, NN_DONTWAIT)) != -1)
+	while((sz = nn_recv(io->sock, &buf, NN_MSG, NN_DONTWAIT)) != -1)
 	{
-		//printf("(%i) %s\n\n", res, ttl);
-		LV2_Atom *atom = sratom_from_turtle(io->sratom, io->base_uri,
-			&io->subject, &io->predicate, ttl);
+		const LV2_Atom *atom = netatom_deserialize(io->netatom.rx, buf, sz);
 		if(atom)
 		{
 			LV2_ATOM_TUPLE_FOREACH((LV2_Atom_Tuple *)atom, itm)
@@ -272,11 +269,9 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					close_request = true;
 				}
 			}
-
-			free(atom);
 		}
 
-		nn_freemsg(ttl);
+		nn_freemsg(buf);
 	}
 
 	if(close_request)
@@ -304,17 +299,12 @@ _sandbox_io_flush(sandbox_io_t *io)
 	if( (io->ser.offset == 0) || (atom->size == 0) )
 		return 0; // empty tuple, aka success
 
-	char *ttl = sratom_to_turtle(io->sratom, io->unmap,
-		io->base_uri, &io->subject, &io->predicate,
-		atom->type, atom->size, LV2_ATOM_BODY_CONST(atom));
-	if(!ttl)
+	uint32_t sz;
+	const uint8_t *buf = netatom_serialize(io->netatom.tx, atom, &sz);
+	if(!buf)
 		return -1; // serialization failed
 
-	const size_t len = strlen(ttl) + 1;
-	//printf("sending: %zu\n\n%s\n\n", len, ttl);
-
-	const int written = nn_send(io->sock, ttl, len, NN_DONTWAIT);
-	free(ttl);
+	const int written = nn_send(io->sock, buf, sz, NN_DONTWAIT);
 	
 	if(written == -1) // error has occured, so check it
 	{
@@ -341,41 +331,6 @@ _sandbox_io_flush(sandbox_io_t *io)
 
 	_sandbox_io_reset(io);
 	return 0; // success
-}
-
-static inline void
-_sandbox_io_clean(LV2_Atom_Forge *forge, LV2_Atom *atom)
-{
-	if(atom->type == forge->Object)
-	{
-		LV2_Atom_Object *obj = (LV2_Atom_Object *)atom;
-
-		if(obj->body.id != 0)
-			obj->body.id = 0; // if not, sratom will fail
-
-		LV2_ATOM_OBJECT_FOREACH(obj, prop)
-		{
-			_sandbox_io_clean(forge, &prop->value);
-		}
-	}
-	else if(atom->type == forge->Tuple)
-	{
-		LV2_Atom_Tuple *tup = (LV2_Atom_Tuple *)atom;
-
-		LV2_ATOM_TUPLE_FOREACH(tup, itm)
-		{
-			_sandbox_io_clean(forge, itm);
-		}
-	}
-	else if(atom->type == forge->Sequence)
-	{
-		LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)atom;
-
-		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-		{
-			_sandbox_io_clean(forge, &ev->body);
-		}
-	}
 }
 
 static inline bool
@@ -423,7 +378,6 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 		lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
 
 		LV2_Atom *src= lv2_atom_forge_deref(&io->forge, ref);
-		_sandbox_io_clean(&io->forge, src);
 	}
 	else if(protocol == io->ui_port_subscribe)
 	{
@@ -468,10 +422,6 @@ static inline int
 _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	const char *socket_path, bool is_master, bool drop_messages)
 {
-	io->base_uri = "file:///tmp/base";
-	io->subject = serd_node_from_string(SERD_URI, (const uint8_t *)(""));
-	io->predicate = serd_node_from_string(SERD_URI, (const uint8_t *)(LV2_ATOM__atomTransfer));
-
 	io->map = map;
 	io->unmap = unmap;
 
@@ -483,10 +433,10 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	if(!io->ser.buf)
 		return -1;
 
-	if(!(io->sratom = sratom_new(map)))
+	if(!(io->netatom.tx = netatom_new(io->map, io->unmap, true)))
 		return -1;
-	sratom_set_pretty_numbers(io->sratom, false);
-	sratom_set_object_mode(io->sratom, SRATOM_OBJECT_MODE_BLANK);
+	if(!(io->netatom.rx = netatom_new(io->map, io->unmap, true)))
+		return -1;
 
 	if((io->sock = nn_socket(AF_SP, NN_PAIR)) == -1)
 		return -1;
@@ -574,8 +524,10 @@ _sandbox_io_deinit(sandbox_io_t *io, bool terminate)
 			fprintf(stderr, "nn_close failed: %s\n", nn_strerror(nn_errno()));
 	}
 
-	if(io->sratom)
-		sratom_free(io->sratom);
+	if(io->netatom.tx)
+		netatom_free(io->netatom.tx);
+	if(io->netatom.rx)
+		netatom_free(io->netatom.rx);
 
 	if(io->ser.buf)
 		free(io->ser.buf);
