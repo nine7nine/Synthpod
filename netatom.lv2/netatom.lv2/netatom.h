@@ -452,7 +452,9 @@ netatom_serialize(netatom_t *netatom, const LV2_Atom *atom,
 		return NULL;
 
 	netatom->body.offset = 0;
+	netatom->body.end= 0;
 	netatom->dict.offset = 0;
+	netatom->dict.end = 0;
 
 	lv2_atom_forge_set_sink(&netatom->body.forge, _netatom_sink, _netatom_deref, &netatom->body);
 	lv2_atom_forge_set_sink(&netatom->dict.forge, _netatom_sink, _netatom_deref, &netatom->dict);
@@ -481,7 +483,9 @@ netatom_deserialize(netatom_t *netatom, const uint8_t *buf_tx, uint32_t size_tx)
 		return NULL;
 
 	netatom->body.offset = 0;
+	netatom->body.end = 0;
 	netatom->dict.offset = 0;
+	netatom->dict.end = 0;
 
 	lv2_atom_forge_set_sink(&netatom->body.forge, _netatom_sink, _netatom_deref, &netatom->body);
 	lv2_atom_forge_set_sink(&netatom->dict.forge, _netatom_sink, _netatom_deref, &netatom->dict);
@@ -521,11 +525,15 @@ netatom_new(LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	netatom->body.buf = malloc(size);
 	netatom->body.size = netatom->body.buf ? size : 0;
 	netatom->body.offset = 0;
+	netatom->body.end = 0;
 
 	lv2_atom_forge_init(&netatom->dict.forge, map);
 	netatom->dict.buf = malloc(size);
 	netatom->dict.size = netatom->dict.buf ? size : 0;
 	netatom->dict.offset = 0;
+	netatom->dict.end = 0;
+
+	netatom->MIDI_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 
 	netatom->MIDI_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 
