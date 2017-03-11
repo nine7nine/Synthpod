@@ -19,7 +19,7 @@
 #include <netatom.h>
 #include <sratom/sratom.h>
 
-#define MAX_URIDS 512
+#define MAX_URIDS 2048
 
 typedef struct _urid_t urid_t;
 typedef struct _handle_t handle_t;
@@ -191,6 +191,9 @@ main(int argc, char **argv)
 		lv2_atom_forge_key(&forge, forge.String);
 		lv2_atom_forge_string(&forge, "hello", 5);
 
+		lv2_atom_forge_key(&forge, forge.Path);
+		lv2_atom_forge_path(&forge, "/tmp", 4);
+
 		lv2_atom_forge_key(&forge, forge.Literal);
 		lv2_atom_forge_literal(&forge, "hello", 5, MAP("dtype"), MAP("lang"));
 
@@ -201,6 +204,16 @@ main(int argc, char **argv)
 
 		lv2_atom_forge_key(&forge, forge.URID);
 		lv2_atom_forge_urid(&forge, MAP("key"));
+
+		const uint8_t m [3] = {0x90, 0x2f, 0x7f};
+		lv2_atom_forge_key(&forge, map.map(map.handle, LV2_MIDI__MidiEvent));
+		lv2_atom_forge_atom(&forge, 3, map.map(map.handle, LV2_MIDI__MidiEvent));
+		lv2_atom_forge_write(&forge, m, 3);
+
+		const uint8_t b [8] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7};
+		lv2_atom_forge_key(&forge, forge.Chunk);
+		lv2_atom_forge_atom(&forge, 8, forge.Chunk);
+		lv2_atom_forge_write(&forge, b, 8);
 
 		LV2_Atom_Forge_Frame tup_frame;
 		lv2_atom_forge_key(&forge, forge.Tuple);
@@ -233,6 +246,14 @@ main(int argc, char **argv)
 		lv2_atom_forge_pop(&forge, &seq_frame);
 	}
 	lv2_atom_forge_pop(&forge, &obj_frame);
+
+	// add some dummy URI to hash map
+	char tmp [32];
+	for(int i=0; i<1024; i++)
+	{
+		snprintf(tmp, 32, "urn:dummy:%i", i);
+		map.map(map.handle, tmp);
+	}
 
 	struct timespec t0, t1, t2;
 	clock_gettime(CLOCK_MONOTONIC, &t0);
