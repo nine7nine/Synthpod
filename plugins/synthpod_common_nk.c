@@ -40,6 +40,8 @@ typedef enum _selector_search_t selector_search_t;
 typedef union _param_union_t param_union_t;
 
 typedef struct _hash_t hash_t;
+typedef struct _control_port_t control_port_t;
+typedef struct _audio_port_t audio_port_t;
 typedef struct _port_t port_t;
 typedef struct _param_t param_t;
 typedef struct _prop_t prop_t;
@@ -50,6 +52,7 @@ enum _property_type_t {
 	PROPERTY_TYPE_CONTROL = 0,
 	PROPERTY_TYPE_AUDIO,
 	PROPERTY_TYPE_CV,
+	PROPERTY_TYPE_ATOM,
 	PROPERTY_TYPE_PARAM,
 
 	PROPERTY_TYPE_MAX
@@ -84,9 +87,7 @@ struct _hash_t {
 	unsigned size;
 };
 
-struct _port_t {
-	const LilvPort *port;
-	LilvNode *group;
+struct _control_port_t {
 	LilvScalePoints *points;
 	float min;
 	float max;
@@ -95,6 +96,22 @@ struct _port_t {
 	bool is_int;
 	bool is_bool;
 	bool is_readonly;
+};
+
+struct _audio_port_t {
+	float lo;
+	float hi;
+};
+
+struct _port_t {
+	property_type_t type;
+	const LilvPort *port;
+	LilvNodes *groups;
+
+	union {
+		control_port_t control;
+		audio_port_t audio;
+	};
 };
 
 union _param_union_t {
@@ -116,8 +133,6 @@ struct _param_t {
 };
 
 struct _prop_t {
-	property_type_t type;
-
 	union {
 		port_t port;
 		param_t param;
@@ -129,7 +144,7 @@ struct _mod_t {
 
 	unsigned num_ports;
 	port_t *ports;
-	LilvNodes *groups;
+	hash_t groups;
 	LilvNodes *banks;
 
 	unsigned num_params;
@@ -181,6 +196,10 @@ struct _plughandle_t {
 		LilvNode *rdfs_label;
 		LilvNode *lv2_name;
 		LilvNode *lv2_OutputPort;
+		LilvNode *lv2_AudioPort;
+		LilvNode *lv2_CVPort;
+		LilvNode *lv2_ControlPort;
+		LilvNode *atom_AtomPort;
 		LilvNode *patch_readable;
 		LilvNode *patch_writable;
 		LilvNode *rdf_type;
@@ -315,6 +334,24 @@ _register_parameter(plughandle_t *handle, param_t *param, const LilvNode *parame
 	param->span.i = param->max.i - param->min.i;
 }
 
+static inline float
+dBFSp6(float peak)
+{
+	const float d = 6.f + 20.f * log10f(fabsf(peak) / 2.f);
+	const float e = (d + 64.f) / 70.f;
+	return NK_CLAMP(0.f, e, 1.f);
+}
+
+#if 0
+static inline float
+dBFS(float peak)
+{
+	const float d = 20.f * log10f(fabsf(peak));
+	const float e = (d + 70.f) / 70.f;
+	return NK_CLAMP(0.f, e, 1.f);
+}
+#endif
+
 static void
 _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
@@ -333,77 +370,117 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 		port_t *port = &mod->ports[p];
 
 		port->port = lilv_plugin_get_port_by_index(plug, p);
+		port->groups = lilv_port_get_value(plug, port->port, handle->node.pg_group);
 
-		LilvNodes *port_groups = lilv_port_get_value(plug, port->port, handle->node.pg_group);
-		if(port_groups)
+		LILV_FOREACH(nodes, i, port->groups)
 		{
-			const LilvNode *port_group = lilv_nodes_size(port_groups)
-				? lilv_nodes_get_first(port_groups) : NULL;
-			if(port_group)
+			const LilvNode *port_group = lilv_nodes_get(port->groups, i);
+
+			bool match = false;
+			HASH_FOREACH(&mod->groups, itr)
 			{
-				port->group = lilv_node_duplicate(port_group);
-				if(!lilv_nodes_contains(mod->groups, port_group))
+				const LilvNode *mod_group = *itr;
+
+				if(lilv_node_equals(mod_group, port_group))
 				{
-					LilvNodes *mod_groups = lilv_nodes_merge(mod->groups, port_groups);
-					lilv_nodes_free(mod->groups);
-					mod->groups = mod_groups;
+					match = true;
+					break;
 				}
 			}
-			lilv_nodes_free(port_groups);
+
+			if(!match)
+				_hash_add(&mod->groups, (void *)port_group);
 		}
 
-		port->is_readonly = lilv_port_is_a(plug, port->port, handle->node.lv2_OutputPort);
-		port->is_int = lilv_port_has_property(plug, port->port, handle->node.lv2_integer);
-		port->is_bool = lilv_port_has_property(plug, port->port, handle->node.lv2_toggled);
-		port->points = lilv_port_get_scale_points(plug, port->port);
+		const bool is_audio = lilv_port_is_a(plug, port->port, handle->node.lv2_AudioPort);
+		const bool is_cv = lilv_port_is_a(plug, port->port, handle->node.lv2_CVPort);
+		const bool is_control = lilv_port_is_a(plug, port->port, handle->node.lv2_ControlPort);
+		const bool is_atom = lilv_port_is_a(plug, port->port, handle->node.atom_AtomPort);
+		const bool is_output = lilv_port_is_a(plug, port->port, handle->node.lv2_OutputPort);
 
-		port->val = 0.f;
-		port->min = 0.f;
-		port->max = 1.f;
-		LilvNode *val = NULL;
-		LilvNode *min = NULL;
-		LilvNode *max = NULL;
-		lilv_port_get_range(plug, port->port, &val, &min, &max);
-
-		if(val)
+		if(is_audio)
 		{
-			if(port->is_int)
-				port->val = lilv_node_as_int(val);
-			else if(port->is_bool)
-				port->val = lilv_node_as_bool(val);
-			else
-				port->val = lilv_node_as_float(val);
-			lilv_node_free(val);
+			port->type = PROPERTY_TYPE_AUDIO;
+			audio_port_t *audio = &port->audio;
+
+			audio->lo = dBFSp6(0.f);
+			audio->hi = dBFSp6(2.f * rand() / RAND_MAX);
+			//TODO
 		}
-		if(min)
+		else if(is_cv)
 		{
-			if(port->is_int)
-				port->min = lilv_node_as_int(min);
-			else if(port->is_bool)
-				port->min = 0.f;
-			else
-				port->min = lilv_node_as_float(min);
-			lilv_node_free(min);
-		}
-		if(max)
-		{
-			if(port->is_int)
-				port->max = lilv_node_as_int(max);
-			else if(port->is_bool)
-				port->max = 1.f;
-			else
-				port->max = lilv_node_as_float(max);
-			lilv_node_free(max);
-		}
+			port->type = PROPERTY_TYPE_CV;
 
-		port->span = port->max - port->min;
-
-		if(port->is_int && (port->min == 0.f) && (port->max == 1.f) )
+			//TODO
+		}
+		else if(is_control)
 		{
-			port->is_int = false;
-			port->is_bool = true;
+			port->type = PROPERTY_TYPE_CONTROL;
+			control_port_t *control = &port->control;
+
+			control->is_readonly = is_output;
+			control->is_int = lilv_port_has_property(plug, port->port, handle->node.lv2_integer);
+			control->is_bool = lilv_port_has_property(plug, port->port, handle->node.lv2_toggled);
+			control->points = lilv_port_get_scale_points(plug, port->port);
+
+			control->val = 0.f;
+			control->min = 0.f;
+			control->max = 1.f;
+			LilvNode *val = NULL;
+			LilvNode *min = NULL;
+			LilvNode *max = NULL;
+			lilv_port_get_range(plug, port->port, &val, &min, &max);
+
+			if(val)
+			{
+				if(control->is_int)
+					control->val = lilv_node_as_int(val);
+				else if(control->is_bool)
+					control->val = lilv_node_as_bool(val);
+				else
+					control->val = lilv_node_as_float(val);
+				lilv_node_free(val);
+			}
+			if(min)
+			{
+				if(control->is_int)
+					control->min = lilv_node_as_int(min);
+				else if(control->is_bool)
+					control->min = 0.f;
+				else
+					control->min = lilv_node_as_float(min);
+				lilv_node_free(min);
+			}
+			if(max)
+			{
+				if(control->is_int)
+					control->max = lilv_node_as_int(max);
+				else if(control->is_bool)
+					control->max = 1.f;
+				else
+					control->max = lilv_node_as_float(max);
+				lilv_node_free(max);
+			}
+
+			control->span = control->max - control->min;
+
+			if(control->is_int && (control->min == 0.f) && (control->max == 1.f) )
+			{
+				control->is_int = false;
+				control->is_bool = true;
+			}
+		}
+		else if(is_atom)
+		{
+			port->type = PROPERTY_TYPE_ATOM
+				;
+			//TODO
 		}
 	}
+
+	/*FIXME
+	_hash_sort(&mod->groups, _sort_group_name);
+	*/
 
 	mod->presets = lilv_plugin_get_related(plug, handle->node.pset_Preset);
 	if(mod->presets)
@@ -470,10 +547,10 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	{
 		port_t *port = &mod->ports[p];
 
-		if(port->group)
-			lilv_node_free(port->group);
-		if(port->points)
-			lilv_scale_points_free(port->points);
+		if(port->groups)
+			lilv_nodes_free(port->groups);
+		if( (port->type == PROPERTY_TYPE_CONTROL) && port->control.points)
+			lilv_scale_points_free(port->control.points);
 	}
 	free(mod->ports);
 
@@ -491,8 +568,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	if(mod->banks)
 		lilv_nodes_free(mod->banks);
 
-	if(mod->groups)
-		lilv_nodes_free(mod->groups);
+	_hash_clear(&mod->groups, false);
 
 	free(mod->params);
 
@@ -1061,6 +1137,158 @@ _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 }
 
 static void
+_expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio, float dy, const char *name_str)
+{
+	(void)name_str;
+
+	struct nk_rect bounds;
+	const enum nk_widget_layout_states states = nk_widget(&bounds, ctx);
+	if(states != NK_WIDGET_INVALID)
+	{
+		struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+
+		const struct nk_color bg = ctx->style.property.normal.data.color;
+		nk_fill_rect(canvas, bounds, ctx->style.property.rounding, bg);
+		nk_stroke_rect(canvas, bounds, ctx->style.property.rounding, ctx->style.property.border, bg);
+
+		const struct nk_rect orig = bounds;
+		struct nk_rect outline;
+		const float mx1 = 58.f / 70.f;
+		const float mx2 = 12.f / 70.f;
+		const uint8_t alph = 0x7f;
+
+		// <= -6dBFS
+		{
+			const float dbfs = NK_MIN(audio->hi, mx1);
+			const uint8_t dcol = 0xff * dbfs / mx1;
+			const struct nk_color left = nk_rgba(0x00, 0xff, 0x00, alph);
+			const struct nk_color bottom = left;
+			const struct nk_color right = nk_rgba(dcol, 0xff, 0x00, alph);
+			const struct nk_color top = right;
+
+			const float ox = ctx->style.font->height/2 + ctx->style.property.border + ctx->style.property.padding.x;
+			const float oy = ctx->style.property.border + ctx->style.property.padding.y;
+			bounds.x += ox;
+			bounds.y += oy;
+			bounds.w -= 2*ox;
+			bounds.h -= 2*oy;
+			outline = bounds;
+			bounds.w *= dbfs;
+
+			nk_fill_rect_multi_color(canvas, bounds, left, top, right, bottom);
+		}
+
+		// > 6dBFS
+		if(audio->hi > mx1)
+		{
+			const float dbfs = audio->hi - mx1;
+			const uint8_t dcol = 0xff * dbfs / mx2;
+			const struct nk_color left = nk_rgba(0xff, 0xff, 0x00, alph);
+			const struct nk_color bottom = left;
+			const struct nk_color right = nk_rgba(0xff, 0xff - dcol, 0x00, alph);
+			const struct nk_color top = right;
+
+			bounds = outline;
+			bounds.x += bounds.w * mx1;
+			bounds.w *= dbfs;
+			nk_fill_rect_multi_color(canvas, bounds, left, top, right, bottom);
+		}
+
+		// draw 6dBFS lines from -60 to +6
+		for(unsigned i = 4; i <= 70; i += 6)
+		{
+			const bool is_zero = (i == 64);
+			const float dx = outline.w * i / 70.f;
+
+			const float x0 = outline.x + dx;
+			const float y0 = is_zero ? orig.y + 2.f : outline.y;
+
+			const float border = (is_zero ? 2.f : 1.f) * ctx->style.window.group_border;
+
+			const float x1 = x0;
+			const float y1 = is_zero ? orig.y + orig.h - 2.f : outline.y + outline.h;
+
+			nk_stroke_line(canvas, x0, y0, x1, y1, border, ctx->style.window.group_border_color);
+		}
+
+		nk_stroke_rect(canvas, outline, 0.f, ctx->style.window.group_border, ctx->style.window.group_border_color);
+	}
+}
+
+static void
+_expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control, float dy, const char *name_str)
+{
+	if(control->is_int)
+	{
+		if(control->is_readonly)
+		{
+			nk_value_int(ctx, name_str, control->val);
+		}
+		else // !readonly
+		{
+			const float inc = control->span / nk_widget_width(ctx);
+			int val = control->val;
+			nk_property_int(ctx, name_str, control->min, &val, control->max, 1.f, inc);
+			control->val = val;
+		}
+	}
+	else if(control->is_bool)
+	{
+		if(control->is_readonly)
+		{
+			nk_value_bool(ctx, name_str, control->val);
+		}
+		else // !readonly
+		{
+			int val = control->val;
+			nk_checkbox_label(ctx, name_str, &val);
+			control->val = val;
+		}
+	}
+	else if(control->points)
+	{
+		int val = 0;
+
+		const int count = lilv_scale_points_size(control->points);
+		const char *items [count];
+		float values [count];
+
+		const char **item_ptr = items;
+		float *value_ptr = values;
+		LILV_FOREACH(scale_points, i, control->points)
+		{
+			const LilvScalePoint *point = lilv_scale_points_get(control->points, i);
+			const LilvNode *label_node = lilv_scale_point_get_label(point);
+			const LilvNode *value_node = lilv_scale_point_get_value(point);
+			*item_ptr = lilv_node_as_string(label_node);
+			*value_ptr = lilv_node_as_float(value_node); //FIXME
+
+			if(*value_ptr == control->val)
+				val = value_ptr - values;
+		
+			item_ptr++;
+			value_ptr++;
+		}
+
+		nk_combobox(ctx, items, count, &val, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
+		control->val = values[val];
+	}
+	else // is_float
+	{
+		if(control->is_readonly)
+		{
+			nk_value_float(ctx, name_str, control->val);
+		}
+		else // !readonly
+		{
+			const float step = control->span / 100.f;
+			const float inc = control->span / nk_widget_width(ctx);
+			nk_property_float(ctx, name_str, control->min, &control->val, control->max, step, inc);
+		}
+	}
+}
+
+static void
 _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 {
 	LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
@@ -1068,73 +1296,25 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 	{
 		const char *name_str = lilv_node_as_string(name_node);
 
-		if(port->is_int)
+		switch(port->type)
 		{
-			if(port->is_readonly)
+			case PROPERTY_TYPE_AUDIO:
 			{
-				nk_value_int(ctx, name_str, port->val);
-			}
-			else // !readonly
+				_expose_audio_port(ctx, mod, &port->audio, dy, name_str);
+				//TODO
+			} break;
+			case PROPERTY_TYPE_CV:
 			{
-				const float inc = port->span / nk_widget_width(ctx);
-				int val = port->val;
-				nk_property_int(ctx, name_str, port->min, &val, port->max, 1.f, inc);
-				port->val = val;
-			}
-		}
-		else if(port->is_bool)
-		{
-			if(port->is_readonly)
+				//TODO
+			} break;
+			case PROPERTY_TYPE_CONTROL:
 			{
-				nk_value_bool(ctx, name_str, port->val);
-			}
-			else // !readonly
+				_expose_control_port(ctx, mod, &port->control, dy, name_str);
+			} break;
+			case PROPERTY_TYPE_ATOM:
 			{
-				int val = port->val;
-				nk_checkbox_label(ctx, name_str, &val);
-				port->val = val;
-			}
-		}
-		else if(port->points)
-		{
-			int val = 0;
-
-			const int count = lilv_scale_points_size(port->points);
-			const char *items [count];
-			float values [count];
-
-			const char **item_ptr = items;
-			float *value_ptr = values;
-			LILV_FOREACH(scale_points, i, port->points)
-			{
-				const LilvScalePoint *point = lilv_scale_points_get(port->points, i);
-				const LilvNode *label_node = lilv_scale_point_get_label(point);
-				const LilvNode *value_node = lilv_scale_point_get_value(point);
-				*item_ptr = lilv_node_as_string(label_node);
-				*value_ptr = lilv_node_as_float(value_node); //FIXME
-
-				if(*value_ptr == port->val)
-					val = value_ptr - values;
-			
-				item_ptr++;
-				value_ptr++;
-			}
-
-			nk_combobox(ctx, items, count, &val, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
-			port->val = values[val];
-		}
-		else // is_float
-		{
-			if(port->is_readonly)
-			{
-				nk_value_float(ctx, name_str, port->val);
-			}
-			else // !readonly
-			{
-				const float step = port->span / 100.f;
-				const float inc = port->span / nk_widget_width(ctx);
-				nk_property_float(ctx, name_str, port->min, &port->val, port->max, step, inc);
-			}
+				//TODO
+			} break;
 		}
 
 		lilv_node_free(name_node);
@@ -1215,11 +1395,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 				if(mod)
 				{
-					LILV_FOREACH(nodes, i, mod->groups)
+					HASH_FOREACH(&mod->groups, itr)
 					{
-						const LilvNode *group = lilv_nodes_get(mod->groups, i);
+						const LilvNode *mod_group = *itr;
 
-						LilvNode *label_node = lilv_world_get(handle->world, group, handle->node.lv2_name, NULL);
+						LilvNode *label_node = lilv_world_get(handle->world, mod_group, handle->node.lv2_name, NULL);
+						if(!label_node)
+							label_node = lilv_world_get(handle->world, mod_group, handle->node.rdfs_label, NULL);
 						if(label_node)
 						{
 							nk_layout_row_dynamic(ctx, dy, 1);
@@ -1230,7 +1412,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							for(unsigned p=0; p<mod->num_ports; p++)
 							{
 								port_t *port = &mod->ports[p];
-								if(!port->group || !lilv_node_equals(port->group, group))
+								if(!lilv_nodes_contains(port->groups, mod_group))
 									continue;
 
 								_expose_port(ctx, mod, port, dy);
@@ -1245,7 +1427,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					for(unsigned p=0; p<mod->num_ports; p++)
 					{
 						port_t *port = &mod->ports[p];
-						if(port->group)
+						if(lilv_nodes_size(port->groups))
 							continue;
 
 						_expose_port(ctx, mod, port, dy);
@@ -1430,6 +1612,10 @@ _init(plughandle_t *handle)
 		handle->node.rdfs_label = lilv_new_uri(handle->world, LILV_NS_RDFS"label");
 		handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
 		handle->node.lv2_OutputPort = lilv_new_uri(handle->world, LV2_CORE__OutputPort);
+		handle->node.lv2_AudioPort = lilv_new_uri(handle->world, LV2_CORE__AudioPort);
+		handle->node.lv2_CVPort = lilv_new_uri(handle->world, LV2_CORE__CVPort);
+		handle->node.lv2_ControlPort = lilv_new_uri(handle->world, LV2_CORE__ControlPort);
+		handle->node.atom_AtomPort = lilv_new_uri(handle->world, LV2_ATOM__AtomPort);
 		handle->node.patch_readable = lilv_new_uri(handle->world, LV2_PATCH__readable);
 		handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
 		handle->node.rdf_type = lilv_new_uri(handle->world, LILV_NS_RDF"type");
@@ -1459,6 +1645,10 @@ _deinit(plughandle_t *handle)
 		lilv_node_free(handle->node.rdfs_label);
 		lilv_node_free(handle->node.lv2_name);
 		lilv_node_free(handle->node.lv2_OutputPort);
+		lilv_node_free(handle->node.lv2_AudioPort);
+		lilv_node_free(handle->node.lv2_CVPort);
+		lilv_node_free(handle->node.lv2_ControlPort);
+		lilv_node_free(handle->node.atom_AtomPort);
 		lilv_node_free(handle->node.patch_readable);
 		lilv_node_free(handle->node.patch_writable);
 		lilv_node_free(handle->node.rdf_type);
