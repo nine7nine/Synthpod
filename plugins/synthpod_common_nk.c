@@ -39,6 +39,7 @@ typedef enum _selector_search_t selector_search_t;
 
 typedef union _param_union_t param_union_t;
 
+typedef struct _hash_t hash_t;
 typedef struct _port_t port_t;
 typedef struct _param_t param_t;
 typedef struct _prop_t prop_t;
@@ -76,6 +77,11 @@ enum _selector_search_t {
 	SELECTOR_SEARCH_PROJECT,
 
 	SELECTOR_SEARCH_MAX
+};
+
+struct _hash_t {
+	void **nodes;
+	unsigned size;
 };
 
 struct _port_t {
@@ -191,8 +197,8 @@ struct _plughandle_t {
 	selector_search_t plugin_search_selector;
 	selector_search_t preset_search_selector;
 
-	LilvNodes *plugin_matches;
-	LilvNodes *preset_matches;
+	hash_t plugin_matches;
+	hash_t preset_matches;
 
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
@@ -225,6 +231,50 @@ static const char *search_labels [SELECTOR_SEARCH_MAX] = {
 	[SELECTOR_SEARCH_CLASS] = "Class",
 	[SELECTOR_SEARCH_PROJECT] = "Project"
 };
+
+static void
+_hash_clear(hash_t *hash, void (*free_cb)(void *node))
+{
+	if(free_cb)
+	{
+		for(unsigned i = 0; i < hash->size; i++)
+			free_cb(hash->nodes[i]);
+	}
+
+	free(hash->nodes);
+	hash->nodes = NULL;
+
+	hash->size = 0;
+}
+
+static bool
+_hash_empty(hash_t *hash)
+{
+	return hash->size == 0;
+}
+
+static void
+_hash_add(hash_t *hash, void *node)
+{
+	hash->nodes = realloc(hash->nodes, (hash->size + 1)*sizeof(void *));
+	hash->nodes[hash->size] = node;	
+	hash->size++;
+}
+
+static void
+_hash_sort(hash_t *hash, int (*cmp)(const void *a, const void *b))
+{
+	qsort(hash->nodes, hash->size, sizeof(void *), cmp);
+}
+
+static void
+_hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data), void *data)
+{
+	qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
+}
+
+#define HASH_FOREACH(hash, itr) \
+	for(void **(itr) = (hash)->nodes; (itr) - (hash)->nodes < (hash)->size; (itr)++)
 
 static void
 _register_parameter(plughandle_t *handle, param_t *param, const LilvNode *parameter, bool is_readonly)
@@ -513,12 +563,39 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 	}
 }
 
+static int
+_sort_plugin_name(const void *a, const void *b)
+{
+	const LilvPlugin **plug_a = (const LilvPlugin **)a;
+	const LilvPlugin **plug_b = (const LilvPlugin **)b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_plugin_get_name(*plug_a);
+	LilvNode *node_b = lilv_plugin_get_name(*plug_b);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
+
 static void
 _refresh_main_plugin_list(plughandle_t *handle)
 {
-	if(handle->plugin_matches)
-		lilv_nodes_free(handle->plugin_matches);
-	handle->plugin_matches = NULL;
+	_hash_clear(&handle->plugin_matches, NULL);
 
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 
@@ -609,39 +686,30 @@ _refresh_main_plugin_list(plughandle_t *handle)
 
 			if(visible)
 			{
-				const LilvNode *uri = lilv_plugin_get_uri(plug);
-				LilvNodes *matches = lilv_world_find_nodes(handle->world,
-					uri, handle->node.rdf_type, handle->node.lv2_Plugin);
-				if(matches)
-				{
-					LilvNodes *merge = lilv_nodes_merge(handle->plugin_matches, matches);
-					lilv_nodes_free(handle->plugin_matches);
-					handle->plugin_matches = merge;
-					lilv_nodes_free(matches);
-				}
+				_hash_add(&handle->plugin_matches, (void *)plug);
 			}
 
 			lilv_node_free(name_node);
 		}
 	}
+
+	_hash_sort(&handle->plugin_matches, _sort_plugin_name);
 }
 
 static void
 _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx,
 	bool find_matches)
 {
-	if(!handle->plugin_matches || find_matches)
+	if(_hash_empty(&handle->plugin_matches) || find_matches)
 		_refresh_main_plugin_list(handle);
 
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 
 	int count = 0;
 	bool selector_visible = false;
-	LILV_FOREACH(nodes, i, handle->plugin_matches)
+	HASH_FOREACH(&handle->plugin_matches, itr)
 	{
-		const LilvNode *uri = lilv_nodes_get(handle->plugin_matches, i);
-
-		const LilvPlugin *plug = lilv_plugins_get_by_uri(plugs, uri);
+		const LilvPlugin *plug = *itr;
 		if(plug)
 		{
 			LilvNode *name_node = lilv_plugin_get_name(plug);
@@ -779,15 +847,7 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 
 				if(!search || strcasestr(label_str, handle->preset_search_buf))
 				{
-					LilvNodes *matches = lilv_world_find_nodes(handle->world,
-						preset, handle->node.rdf_type, handle->node.pset_Preset);
-					if(matches)
-					{
-						LilvNodes *merge = lilv_nodes_merge(handle->preset_matches, matches);
-						lilv_nodes_free(handle->preset_matches);
-						handle->preset_matches = merge;
-						lilv_nodes_free(matches);
-					}
+					_hash_add(&handle->preset_matches, (void *)preset);
 				}
 
 				lilv_node_free(label_node);
@@ -796,12 +856,41 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 	}
 }
 
+static int
+_sort_preset_name(const void *a, const void *b, void *data)
+{
+	plughandle_t *handle = data;
+
+	const LilvNode **preset_a = (const LilvNode **)a;
+	const LilvNode **preset_b = (const LilvNode **)b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_world_get(handle->world, *preset_a, handle->node.rdfs_label, NULL);
+	LilvNode *node_b = lilv_world_get(handle->world, *preset_b, handle->node.rdfs_label, NULL);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
+
 static void
 _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 {
-	if(handle->preset_matches)
-		lilv_nodes_free(handle->preset_matches);
-	handle->preset_matches = NULL;
+	_hash_clear(&handle->preset_matches, false);
 
 	LILV_FOREACH(nodes, i, mod->banks)
 	{
@@ -811,6 +900,8 @@ _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 	}
 
 	_refresh_main_preset_list_for_bank(handle, mod->presets, NULL);
+
+	_hash_sort_r(&handle->preset_matches, _sort_preset_name, handle);
 }
 
 static void
@@ -819,9 +910,9 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 {
 	bool first = true;
 	int count = 0;
-	LILV_FOREACH(nodes, i, handle->preset_matches)
+	HASH_FOREACH(&handle->preset_matches, itr)
 	{
-		const LilvNode *preset = lilv_nodes_get(handle->preset_matches, i);
+		const LilvNode *preset = *itr;
 
 		bool visible = false;
 
@@ -908,7 +999,7 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 
 	if(mod && mod->presets)
 	{
-		if(!handle->preset_matches || find_matches)
+		if(_hash_empty(&handle->preset_matches) || find_matches)
 			_refresh_main_preset_list(handle, mod);
 
 		LILV_FOREACH(nodes, i, mod->banks)
@@ -1494,10 +1585,8 @@ cleanup(LV2UI_Handle instance)
 		lilv_node_free(handle->node.rdf_type);
 		lilv_node_free(handle->node.lv2_Plugin);
 
-		if(handle->plugin_matches)
-			lilv_nodes_free(handle->plugin_matches);
-		if(handle->preset_matches)
-			lilv_nodes_free(handle->preset_matches);
+		_hash_clear(&handle->plugin_matches, NULL);
+		_hash_clear(&handle->preset_matches, NULL);
 
 		lilv_world_free(handle->world);
 	}
