@@ -663,8 +663,15 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->opts.options[4].type = app->forge.Float;
 	mod->opts.options[4].value = &app->driver->sample_rate;
 
-	mod->opts.options[5].key = 0; // sentinel
-	mod->opts.options[5].value = NULL; // sentinel
+	mod->opts.options[5].context = LV2_OPTIONS_INSTANCE;
+	mod->opts.options[5].subject = 0;
+	mod->opts.options[5].key = app->regs.ui.update_rate.urid;
+	mod->opts.options[5].size = sizeof(float);
+	mod->opts.options[5].type = app->forge.Float;
+	mod->opts.options[5].value = &app->driver->update_rate;
+
+	mod->opts.options[6].key = 0; // sentinel
+	mod->opts.options[6].value = NULL; // sentinel
 
 	_sp_app_mod_features_populate(app, mod);
 

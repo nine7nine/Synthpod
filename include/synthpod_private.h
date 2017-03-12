@@ -183,6 +183,7 @@ struct _reg_t {
 		reg_item_t peak;
 		reg_item_t port_subscribe;
 		reg_item_t port_index;
+		reg_item_t update_rate;
 	} ui;
 
 	struct {
@@ -447,6 +448,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.peak, world, map, LV2_UI_PREFIX"peak");
 	_register(&regs->ui.port_subscribe, world, map, LV2_UI__portSubscribe);
 	_register(&regs->ui.port_index, world, map, LV2_UI__portIndex);
+	_register(&regs->ui.update_rate, world, map, LV2_UI__updateRate);
 
 #ifndef LV2_PRESETS__bank
 #	define LV2_PRESETS__bank LV2_PRESETS_PREFIX "bank"
@@ -668,6 +670,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->ui.peak);
 	_unregister(&regs->ui.port_subscribe);
 	_unregister(&regs->ui.port_index);
+	_unregister(&regs->ui.update_rate);
 
 	_unregister(&regs->pset.preset);
 	_unregister(&regs->pset.preset_bank);

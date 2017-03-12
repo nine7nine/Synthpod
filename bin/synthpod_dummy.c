@@ -344,6 +344,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	// synthpod init
 	bin->app_driver.sample_rate = handle->srate;
+	bin->app_driver.update_rate = handle->bin.update_rate;
 	bin->app_driver.max_block_size = handle->frsize;
 	bin->app_driver.min_block_size = 1;
 	bin->app_driver.seq_size = handle->seq_size;

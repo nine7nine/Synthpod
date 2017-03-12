@@ -80,6 +80,7 @@ struct _sp_app_system_sink_t {
 
 struct _sp_app_driver_t {
 	float sample_rate;
+	float update_rate;
 	uint32_t min_block_size;
 	uint32_t max_block_size;
 	uint32_t seq_size;
