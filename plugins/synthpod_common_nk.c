@@ -202,6 +202,8 @@ struct _plughandle_t {
 
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
+
+	bool first;
 };
 
 static const char *main_labels [SELECTOR_MAIN_MAX] = {
@@ -1287,7 +1289,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					if(nk_group_begin(ctx, "Plugins_List", NK_WINDOW_BORDER))
 					{
 						nk_layout_row_dynamic(ctx, dy, 1);
-						_expose_main_plugin_list(handle, ctx, plugin_find_matches);
+						if(!handle->first)
+							_expose_main_plugin_list(handle, ctx, plugin_find_matches);
 
 						nk_group_end(ctx);
 					}
@@ -1411,6 +1414,12 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 		_expose_main_footer(handle, ctx, dy);
 	}
 	nk_end(ctx);
+
+	if(handle->first)
+	{
+		handle->first = false;
+		nk_pugl_post_redisplay(&handle->win);
+	}
 }
 
 static LV2UI_Handle
@@ -1541,6 +1550,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->preset_collapse_states = NK_MAXIMIZED;
 	handle->plugin_info_collapse_states = NK_MINIMIZED;
 	handle->preset_info_collapse_states = NK_MINIMIZED;
+
+	handle->first = true;
 
 	return handle;
 }
