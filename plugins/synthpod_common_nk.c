@@ -1289,8 +1289,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					if(nk_group_begin(ctx, "Plugins_List", NK_WINDOW_BORDER))
 					{
 						nk_layout_row_dynamic(ctx, dy, 1);
-						if(!handle->first)
-							_expose_main_plugin_list(handle, ctx, plugin_find_matches);
+						_expose_main_plugin_list(handle, ctx, plugin_find_matches);
 
 						nk_group_end(ctx);
 					}
@@ -1395,6 +1394,81 @@ _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 }
 
 static void
+_init(plughandle_t *handle)
+{
+	handle->world = lilv_world_new();
+	if(handle->world)
+	{
+		LilvNode *node_false = lilv_new_bool(handle->world, false);
+		if(node_false)
+		{
+			lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
+			lilv_node_free(node_false);
+		}
+		lilv_world_load_all(handle->world);
+		LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
+		if(synthpod_bundle)
+		{
+			lilv_world_load_bundle(handle->world, synthpod_bundle);
+			lilv_node_free(synthpod_bundle);
+		}
+
+		handle->node.pg_group = lilv_new_uri(handle->world, LV2_PORT_GROUPS__group);
+		handle->node.lv2_integer = lilv_new_uri(handle->world, LV2_CORE__integer);
+		handle->node.lv2_toggled = lilv_new_uri(handle->world, LV2_CORE__toggled);
+		handle->node.lv2_minimum = lilv_new_uri(handle->world, LV2_CORE__minimum);
+		handle->node.lv2_maximum = lilv_new_uri(handle->world, LV2_CORE__maximum);
+		handle->node.lv2_default = lilv_new_uri(handle->world, LV2_CORE__default);
+		handle->node.pset_Preset = lilv_new_uri(handle->world, LV2_PRESETS__Preset);
+		handle->node.pset_bank = lilv_new_uri(handle->world, LV2_PRESETS__bank);
+		handle->node.rdfs_comment = lilv_new_uri(handle->world, LILV_NS_RDFS"comment");
+		handle->node.rdfs_range = lilv_new_uri(handle->world, LILV_NS_RDFS"range");
+		handle->node.doap_name = lilv_new_uri(handle->world, LILV_NS_DOAP"name");
+		handle->node.lv2_minorVersion = lilv_new_uri(handle->world, LV2_CORE__minorVersion);
+		handle->node.lv2_microVersion = lilv_new_uri(handle->world, LV2_CORE__microVersion);
+		handle->node.doap_license = lilv_new_uri(handle->world, LILV_NS_DOAP"license");
+		handle->node.rdfs_label = lilv_new_uri(handle->world, LILV_NS_RDFS"label");
+		handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
+		handle->node.lv2_OutputPort = lilv_new_uri(handle->world, LV2_CORE__OutputPort);
+		handle->node.patch_readable = lilv_new_uri(handle->world, LV2_PATCH__readable);
+		handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
+		handle->node.rdf_type = lilv_new_uri(handle->world, LILV_NS_RDF"type");
+		handle->node.lv2_Plugin = lilv_new_uri(handle->world, LV2_CORE__Plugin);
+	}
+}
+
+static void
+_deinit(plughandle_t *handle)
+{
+	if(handle->world)
+	{
+		lilv_node_free(handle->node.pg_group);
+		lilv_node_free(handle->node.lv2_integer);
+		lilv_node_free(handle->node.lv2_toggled);
+		lilv_node_free(handle->node.lv2_minimum);
+		lilv_node_free(handle->node.lv2_maximum);
+		lilv_node_free(handle->node.lv2_default);
+		lilv_node_free(handle->node.pset_Preset);
+		lilv_node_free(handle->node.pset_bank);
+		lilv_node_free(handle->node.rdfs_comment);
+		lilv_node_free(handle->node.rdfs_range);
+		lilv_node_free(handle->node.doap_name);
+		lilv_node_free(handle->node.lv2_minorVersion);
+		lilv_node_free(handle->node.lv2_microVersion);
+		lilv_node_free(handle->node.doap_license);
+		lilv_node_free(handle->node.rdfs_label);
+		lilv_node_free(handle->node.lv2_name);
+		lilv_node_free(handle->node.lv2_OutputPort);
+		lilv_node_free(handle->node.patch_readable);
+		lilv_node_free(handle->node.patch_writable);
+		lilv_node_free(handle->node.rdf_type);
+		lilv_node_free(handle->node.lv2_Plugin);
+
+		lilv_world_free(handle->world);
+	}
+}
+
+static void
 _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 {
 	plughandle_t *handle = data;
@@ -1403,23 +1477,30 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 	{
 		nk_window_set_bounds(ctx, wbounds);
 
-    const float w_padding = ctx->style.window.padding.y;
-		const float dy = handle->dy;
-		const unsigned n_paddings = 4;
-		const float dh = nk_window_get_height(ctx)
-			- n_paddings*w_padding - (n_paddings - 2)*dy;
+		if(handle->first)
+		{
+			nk_layout_row_dynamic(ctx, wbounds.h, 1);
+			nk_label(ctx, "loading ...", NK_TEXT_CENTERED);
 
-		_expose_main_header(handle, ctx, dy);
-		_expose_main_body(handle, ctx, dh, dy);
-		_expose_main_footer(handle, ctx, dy);
+			_init(handle);
+
+			nk_pugl_post_redisplay(&handle->win);
+			handle->first = false;
+		}
+		else
+		{
+			const float w_padding = ctx->style.window.padding.y;
+			const float dy = handle->dy;
+			const unsigned n_paddings = 4;
+			const float dh = nk_window_get_height(ctx)
+				- n_paddings*w_padding - (n_paddings - 2)*dy;
+
+			_expose_main_header(handle, ctx, dy);
+			_expose_main_body(handle, ctx, dh, dy);
+			_expose_main_footer(handle, ctx, dy);
+		}
 	}
 	nk_end(ctx);
-
-	if(handle->first)
-	{
-		handle->first = false;
-		nk_pugl_post_redisplay(&handle->win);
-	}
 }
 
 static LV2UI_Handle
@@ -1474,46 +1555,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->controller = controller;
 	handle->writer = write_function;
-
-	handle->world = lilv_world_new();
-	if(handle->world)
-	{
-		LilvNode *node_false = lilv_new_bool(handle->world, false);
-		if(node_false)
-		{
-			lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
-			lilv_node_free(node_false);
-		}
-		lilv_world_load_all(handle->world);
-		LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
-		if(synthpod_bundle)
-		{
-			lilv_world_load_bundle(handle->world, synthpod_bundle);
-			lilv_node_free(synthpod_bundle);
-		}
-
-		handle->node.pg_group = lilv_new_uri(handle->world, LV2_PORT_GROUPS__group);
-		handle->node.lv2_integer = lilv_new_uri(handle->world, LV2_CORE__integer);
-		handle->node.lv2_toggled = lilv_new_uri(handle->world, LV2_CORE__toggled);
-		handle->node.lv2_minimum = lilv_new_uri(handle->world, LV2_CORE__minimum);
-		handle->node.lv2_maximum = lilv_new_uri(handle->world, LV2_CORE__maximum);
-		handle->node.lv2_default = lilv_new_uri(handle->world, LV2_CORE__default);
-		handle->node.pset_Preset = lilv_new_uri(handle->world, LV2_PRESETS__Preset);
-		handle->node.pset_bank = lilv_new_uri(handle->world, LV2_PRESETS__bank);
-		handle->node.rdfs_comment = lilv_new_uri(handle->world, LILV_NS_RDFS"comment");
-		handle->node.rdfs_range = lilv_new_uri(handle->world, LILV_NS_RDFS"range");
-		handle->node.doap_name = lilv_new_uri(handle->world, LILV_NS_DOAP"name");
-		handle->node.lv2_minorVersion = lilv_new_uri(handle->world, LV2_CORE__minorVersion);
-		handle->node.lv2_microVersion = lilv_new_uri(handle->world, LV2_CORE__microVersion);
-		handle->node.doap_license = lilv_new_uri(handle->world, LILV_NS_DOAP"license");
-		handle->node.rdfs_label = lilv_new_uri(handle->world, LILV_NS_RDFS"label");
-		handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
-		handle->node.lv2_OutputPort = lilv_new_uri(handle->world, LV2_CORE__OutputPort);
-		handle->node.patch_readable = lilv_new_uri(handle->world, LV2_PATCH__readable);
-		handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
-		handle->node.rdf_type = lilv_new_uri(handle->world, LILV_NS_RDF"type");
-		handle->node.lv2_Plugin = lilv_new_uri(handle->world, LV2_CORE__Plugin);
-	}
 
 	const char *NK_SCALE = getenv("NK_SCALE");
 	const float scale = NK_SCALE ? atof(NK_SCALE) : 1.f;
@@ -1572,35 +1613,10 @@ cleanup(LV2UI_Handle instance)
 	}
 	free(handle->mods);
 
-	if(handle->world)
-	{
-		lilv_node_free(handle->node.pg_group);
-		lilv_node_free(handle->node.lv2_integer);
-		lilv_node_free(handle->node.lv2_toggled);
-		lilv_node_free(handle->node.lv2_minimum);
-		lilv_node_free(handle->node.lv2_maximum);
-		lilv_node_free(handle->node.lv2_default);
-		lilv_node_free(handle->node.pset_Preset);
-		lilv_node_free(handle->node.pset_bank);
-		lilv_node_free(handle->node.rdfs_comment);
-		lilv_node_free(handle->node.rdfs_range);
-		lilv_node_free(handle->node.doap_name);
-		lilv_node_free(handle->node.lv2_minorVersion);
-		lilv_node_free(handle->node.lv2_microVersion);
-		lilv_node_free(handle->node.doap_license);
-		lilv_node_free(handle->node.rdfs_label);
-		lilv_node_free(handle->node.lv2_name);
-		lilv_node_free(handle->node.lv2_OutputPort);
-		lilv_node_free(handle->node.patch_readable);
-		lilv_node_free(handle->node.patch_writable);
-		lilv_node_free(handle->node.rdf_type);
-		lilv_node_free(handle->node.lv2_Plugin);
+	_hash_clear(&handle->plugin_matches, NULL);
+	_hash_clear(&handle->preset_matches, NULL);
 
-		_hash_clear(&handle->plugin_matches, NULL);
-		_hash_clear(&handle->preset_matches, NULL);
-
-		lilv_world_free(handle->world);
-	}
+	_deinit(handle);
 
 	free(handle);
 }
