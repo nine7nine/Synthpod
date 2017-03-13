@@ -145,7 +145,7 @@ struct _mod_t {
 	unsigned num_ports;
 	port_t *ports;
 	hash_t groups;
-	LilvNodes *banks;
+	hash_t banks;
 
 	unsigned num_params;
 	param_t *params;
@@ -352,6 +352,42 @@ dBFS(float peak)
 }
 #endif
 
+static int
+_sort_rdfs_label(const void *a, const void *b, void *data)
+{
+	plughandle_t *handle = data;
+
+	const LilvNode **group_a = (const LilvNode **)a;
+	const LilvNode **group_b = (const LilvNode **)b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_world_get(handle->world, *group_a, handle->node.rdfs_label, NULL);
+	if(!node_a)
+		node_a = lilv_world_get(handle->world, *group_a, handle->node.lv2_name, NULL);
+
+	LilvNode *node_b = lilv_world_get(handle->world, *group_b, handle->node.rdfs_label, NULL);
+	if(!node_b)
+		node_b = lilv_world_get(handle->world, *group_b, handle->node.lv2_name, NULL);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
+
 static void
 _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
@@ -478,9 +514,7 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 		}
 	}
 
-	/*FIXME
-	_hash_sort(&mod->groups, _sort_group_name);
-	*/
+	_hash_sort_r(&mod->groups, _sort_rdfs_label, handle);
 
 	mod->presets = lilv_plugin_get_related(plug, handle->node.pset_Preset);
 	if(mod->presets)
@@ -503,16 +537,28 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 
 				if(bank)
 				{
-					if(!lilv_nodes_contains(mod->banks, bank))
+					bool match = false;
+					HASH_FOREACH(&mod->banks, itr)
 					{
-						LilvNodes *mod_banks = lilv_nodes_merge(mod->banks, banks);
-						lilv_nodes_free(mod->banks);
-						mod->banks = mod_banks;
+						const LilvNode *mod_bank = *itr;
+
+						if(lilv_node_equals(mod_bank, bank))
+						{
+							match = true;
+							break;
+						}
+					}
+
+					if(!match)
+					{
+						_hash_add(&mod->banks, lilv_node_duplicate(bank));
 					}
 				}
 				lilv_nodes_free(banks);
 			}
 		}
+
+		_hash_sort_r(&mod->banks, _sort_rdfs_label, handle);
 	}
 
 	mod->readables = lilv_plugin_get_value(plug, handle->node.patch_readable);
@@ -541,8 +587,18 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 }
 
 static void
+_hash_node_free(void *data)
+{
+	LilvNode *node = data;
+	lilv_node_free(node);
+}
+
+static void
 _mod_free(plughandle_t *handle, mod_t *mod)
 {
+	_hash_clear(&mod->banks, _hash_node_free);
+	_hash_clear(&mod->groups, NULL);
+
 	for(unsigned p=0; p<mod->num_ports; p++)
 	{
 		port_t *port = &mod->ports[p];
@@ -564,11 +620,6 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 
 		lilv_nodes_free(mod->presets);
 	}
-
-	if(mod->banks)
-		lilv_nodes_free(mod->banks);
-
-	_hash_clear(&mod->groups, false);
 
 	free(mod->params);
 
@@ -919,6 +970,8 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 		{
 			//FIXME support other search criteria
 			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
+			if(!label_node)
+				label_node = lilv_world_get(handle->world, preset, handle->node.lv2_name, NULL);
 			if(label_node)
 			{
 				const char *label_str = lilv_node_as_string(label_node);
@@ -934,52 +987,21 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 	}
 }
 
-static int
-_sort_preset_name(const void *a, const void *b, void *data)
-{
-	plughandle_t *handle = data;
-
-	const LilvNode **preset_a = (const LilvNode **)a;
-	const LilvNode **preset_b = (const LilvNode **)b;
-
-	const char *name_a = NULL;
-	const char *name_b = NULL;
-
-	LilvNode *node_a = lilv_world_get(handle->world, *preset_a, handle->node.rdfs_label, NULL);
-	LilvNode *node_b = lilv_world_get(handle->world, *preset_b, handle->node.rdfs_label, NULL);
-
-	if(node_a)
-		name_a = lilv_node_as_string(node_a);
-	if(node_b)
-		name_b = lilv_node_as_string(node_b);
-
-	const int ret = name_a && name_b
-		? strcmp(name_a, name_b)
-		: 0;
-
-	if(node_a)
-		lilv_node_free(node_a);
-	if(node_b)
-		lilv_node_free(node_b);
-
-	return ret;
-}
-
 static void
 _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 {
-	_hash_clear(&handle->preset_matches, false);
+	_hash_clear(&handle->preset_matches, NULL);
 
-	LILV_FOREACH(nodes, i, mod->banks)
+	HASH_FOREACH(&mod->banks, itr)
 	{
-		const LilvNode *bank = lilv_nodes_get(mod->banks, i);
+		const LilvNode *bank = *itr;
 
 		_refresh_main_preset_list_for_bank(handle, mod->presets, bank);
 	}
 
 	_refresh_main_preset_list_for_bank(handle, mod->presets, NULL);
 
-	_hash_sort_r(&handle->preset_matches, _sort_preset_name, handle);
+	_hash_sort_r(&handle->preset_matches, _sort_rdfs_label, handle);
 }
 
 static void
@@ -1008,14 +1030,20 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 		if(visible)
 		{
 			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
+			if(!label_node)
+				label_node = lilv_world_get(handle->world, preset, handle->node.lv2_name, NULL);
 			if(label_node)
 			{
 				if(first)
 				{
 					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
-					LilvNode *bank_label_node = preset_bank
-						? lilv_world_get(handle->world, preset_bank, handle->node.rdfs_label, NULL)
-						: NULL;
+					LilvNode *bank_label_node = NULL;
+					if(preset_bank)
+					{
+						bank_label_node = lilv_world_get(handle->world, preset_bank, handle->node.rdfs_label, NULL);
+						if(!bank_label_node)
+							bank_label_node = lilv_world_get(handle->world, preset_bank, handle->node.lv2_name, NULL);
+					}
 					const char *bank_label = bank_label_node
 						? lilv_node_as_string(bank_label_node)
 						: "Unbanked";
@@ -1080,9 +1108,9 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 		if(_hash_empty(&handle->preset_matches) || find_matches)
 			_refresh_main_preset_list(handle, mod);
 
-		LILV_FOREACH(nodes, i, mod->banks)
+		HASH_FOREACH(&mod->banks, itr)
 		{
-			const LilvNode *bank = lilv_nodes_get(mod->banks, i);
+			const LilvNode *bank = *itr;
 
 			_expose_main_preset_list_for_bank(handle, ctx, bank);
 		}
@@ -1101,6 +1129,8 @@ _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 
 	//FIXME
 	LilvNode *name_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
+	if(!name_node)
+		name_node = lilv_world_get(handle->world, preset, handle->node.lv2_name, NULL);
 	LilvNode *comment_node = lilv_world_get(handle->world, preset, handle->node.rdfs_comment, NULL);
 	LilvNode *bank_node = lilv_world_get(handle->world, preset, handle->node.pset_bank, NULL);
 	LilvNode *minor_node = lilv_world_get(handle->world, preset, handle->node.lv2_minorVersion, NULL);
@@ -1325,6 +1355,8 @@ static void
 _expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, float dy)
 {
 	LilvNode *name_node = lilv_world_get(handle->world, param->param, handle->node.rdfs_label, NULL);
+	if(!name_node)
+		name_node = lilv_world_get(handle->world, param->param, handle->node.lv2_name, NULL);
 	if(name_node)
 	{
 		const char *name_str = lilv_node_as_string(name_node);
@@ -1395,18 +1427,22 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 				if(mod)
 				{
+					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 					HASH_FOREACH(&mod->groups, itr)
 					{
 						const LilvNode *mod_group = *itr;
 
-						LilvNode *label_node = lilv_world_get(handle->world, mod_group, handle->node.lv2_name, NULL);
-						if(!label_node)
-							label_node = lilv_world_get(handle->world, mod_group, handle->node.rdfs_label, NULL);
-						if(label_node)
+						LilvNode *group_label_node = lilv_world_get(handle->world, mod_group, handle->node.rdfs_label, NULL);
+						if(!group_label_node)
+							group_label_node = lilv_world_get(handle->world, mod_group, handle->node.lv2_name, NULL);
+						if(group_label_node)
 						{
 							nk_layout_row_dynamic(ctx, dy, 1);
-							nk_label(ctx, lilv_node_as_string(label_node), NK_TEXT_CENTERED);
-							lilv_node_free(label_node);
+
+							const struct nk_rect bounds = nk_widget_bounds(ctx);
+							nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
+							nk_label(ctx, lilv_node_as_string(group_label_node), NK_TEXT_CENTERED);
+							lilv_node_free(group_label_node);
 
 							nk_layout_row_dynamic(ctx, dy, 3);
 							for(unsigned p=0; p<mod->num_ports; p++)
