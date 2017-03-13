@@ -278,7 +278,7 @@ static void
 _hash_add(hash_t *hash, void *node)
 {
 	hash->nodes = realloc(hash->nodes, (hash->size + 1)*sizeof(void *));
-	hash->nodes[hash->size] = node;	
+	hash->nodes[hash->size] = node;
 	hash->size++;
 }
 
@@ -498,7 +498,10 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 		else if(is_cv)
 		{
 			port->type = PROPERTY_TYPE_CV;
+			audio_port_t *audio = &port->audio;
 
+			audio->lo = dBFSp6(0.f);
+			audio->hi = dBFSp6(2.f * rand() / RAND_MAX);
 			//TODO
 		}
 		else if(is_control)
@@ -1210,175 +1213,210 @@ _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 }
 
 static void
-_expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio, float dy, const char *name_str)
+_expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
+	float dy, const char *name_str, bool is_cv)
 {
-	(void)name_str;
+	const float DY = nk_window_get_content_region(ctx).h
+		- 2*ctx->style.window.group_padding.y;
+	const float ratio [] = {0.7, 0.3};
 
-	struct nk_rect bounds;
-	const enum nk_widget_layout_states states = nk_widget(&bounds, ctx);
-	if(states != NK_WIDGET_INVALID)
+	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
+	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
-		struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+		nk_layout_row_dynamic(ctx, dy, 1);
+		nk_label(ctx, name_str, NK_TEXT_LEFT);
 
-		const struct nk_color bg = ctx->style.property.normal.data.color;
-		nk_fill_rect(canvas, bounds, ctx->style.property.rounding, bg);
-		nk_stroke_rect(canvas, bounds, ctx->style.property.rounding, ctx->style.property.border, bg);
-
-		const struct nk_rect orig = bounds;
-		struct nk_rect outline;
-		const float mx1 = 58.f / 70.f;
-		const float mx2 = 12.f / 70.f;
-		const uint8_t alph = 0x7f;
-
-		// <= -6dBFS
+		struct nk_rect bounds;
+		const enum nk_widget_layout_states states = nk_widget(&bounds, ctx);
+		if(states != NK_WIDGET_INVALID)
 		{
-			const float dbfs = NK_MIN(audio->hi, mx1);
-			const uint8_t dcol = 0xff * dbfs / mx1;
-			const struct nk_color left = nk_rgba(0x00, 0xff, 0x00, alph);
-			const struct nk_color bottom = left;
-			const struct nk_color right = nk_rgba(dcol, 0xff, 0x00, alph);
-			const struct nk_color top = right;
+			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 
-			const float ox = ctx->style.font->height/2 + ctx->style.property.border + ctx->style.property.padding.x;
-			const float oy = ctx->style.property.border + ctx->style.property.padding.y;
-			bounds.x += ox;
-			bounds.y += oy;
-			bounds.w -= 2*ox;
-			bounds.h -= 2*oy;
-			outline = bounds;
-			bounds.w *= dbfs;
+			const struct nk_color bg = ctx->style.property.normal.data.color;
+			nk_fill_rect(canvas, bounds, ctx->style.property.rounding, bg);
+			nk_stroke_rect(canvas, bounds, ctx->style.property.rounding, ctx->style.property.border, bg);
 
-			nk_fill_rect_multi_color(canvas, bounds, left, top, right, bottom);
+			const struct nk_rect orig = bounds;
+			struct nk_rect outline;
+			const float mx1 = 58.f / 70.f;
+			const float mx2 = 12.f / 70.f;
+			const uint8_t alph = 0x7f;
+
+			// <= -6dBFS
+			{
+				const float dbfs = NK_MIN(audio->hi, mx1);
+				const uint8_t dcol = 0xff * dbfs / mx1;
+				const struct nk_color left = is_cv
+					? nk_rgba(0xff, 0x00, 0xff, alph)
+					: nk_rgba(0x00, 0xff, 0xff, alph);
+				const struct nk_color bottom = left;
+				const struct nk_color right = is_cv
+					? nk_rgba(0xff, dcol, 0xff-dcol, alph)
+					: nk_rgba(dcol, 0xff, 0xff-dcol, alph);
+				const struct nk_color top = right;
+
+				const float ox = ctx->style.font->height/2 + ctx->style.property.border + ctx->style.property.padding.x;
+				const float oy = ctx->style.property.border + ctx->style.property.padding.y;
+				bounds.x += ox;
+				bounds.y += oy;
+				bounds.w -= 2*ox;
+				bounds.h -= 2*oy;
+				outline = bounds;
+				bounds.w *= dbfs;
+
+				nk_fill_rect_multi_color(canvas, bounds, left, top, right, bottom);
+			}
+
+			// > 6dBFS
+			if(audio->hi > mx1)
+			{
+				const float dbfs = audio->hi - mx1;
+				const uint8_t dcol = 0xff * dbfs / mx2;
+				const struct nk_color left = nk_rgba(0xff, 0xff, 0x00, alph);
+				const struct nk_color bottom = left;
+				const struct nk_color right = nk_rgba(0xff, 0xff - dcol, 0x00, alph);
+				const struct nk_color top = right;
+
+				bounds = outline;
+				bounds.x += bounds.w * mx1;
+				bounds.w *= dbfs;
+				nk_fill_rect_multi_color(canvas, bounds, left, top, right, bottom);
+			}
+
+			// draw 6dBFS lines from -60 to +6
+			for(unsigned i = 4; i <= 70; i += 6)
+			{
+				const bool is_zero = (i == 64);
+				const float dx = outline.w * i / 70.f;
+
+				const float x0 = outline.x + dx;
+				const float y0 = is_zero ? orig.y + 2.f : outline.y;
+
+				const float border = (is_zero ? 2.f : 1.f) * ctx->style.window.group_border;
+
+				const float x1 = x0;
+				const float y1 = is_zero ? orig.y + orig.h - 2.f : outline.y + outline.h;
+
+				nk_stroke_line(canvas, x0, y0, x1, y1, border, ctx->style.window.group_border_color);
+			}
+
+			nk_stroke_rect(canvas, outline, 0.f, ctx->style.window.group_border, ctx->style.window.group_border_color);
 		}
 
-		// > 6dBFS
-		if(audio->hi > mx1)
-		{
-			const float dbfs = audio->hi - mx1;
-			const uint8_t dcol = 0xff * dbfs / mx2;
-			const struct nk_color left = nk_rgba(0xff, 0xff, 0x00, alph);
-			const struct nk_color bottom = left;
-			const struct nk_color right = nk_rgba(0xff, 0xff - dcol, 0x00, alph);
-			const struct nk_color top = right;
-
-			bounds = outline;
-			bounds.x += bounds.w * mx1;
-			bounds.w *= dbfs;
-			nk_fill_rect_multi_color(canvas, bounds, left, top, right, bottom);
-		}
-
-		// draw 6dBFS lines from -60 to +6
-		for(unsigned i = 4; i <= 70; i += 6)
-		{
-			const bool is_zero = (i == 64);
-			const float dx = outline.w * i / 70.f;
-
-			const float x0 = outline.x + dx;
-			const float y0 = is_zero ? orig.y + 2.f : outline.y;
-
-			const float border = (is_zero ? 2.f : 1.f) * ctx->style.window.group_border;
-
-			const float x1 = x0;
-			const float y1 = is_zero ? orig.y + orig.h - 2.f : outline.y + outline.h;
-
-			nk_stroke_line(canvas, x0, y0, x1, y1, border, ctx->style.window.group_border_color);
-		}
-
-		nk_stroke_rect(canvas, outline, 0.f, ctx->style.window.group_border, ctx->style.window.group_border_color);
+		nk_group_end(ctx);
 	}
+
+	nk_button_label(ctx, "?"); //FIXME draw wheel
 }
 
+const char *lab = "#"; //FIXME
+
 static void
-_expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control, float dy, const char *name_str)
+_expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control,
+	float dy, const char *name_str)
 {
-	if(control->is_int)
-	{
-		if(control->is_readonly)
-		{
-			nk_value_int(ctx, name_str, control->val);
-		}
-		else // !readonly
-		{
-			const float inc = control->span / nk_widget_width(ctx);
-			int val = control->val;
-			nk_property_int(ctx, name_str, control->min, &val, control->max, 1.f, inc);
-			control->val = val;
-		}
-	}
-	else if(control->is_bool)
-	{
-		if(control->is_readonly)
-		{
-			nk_value_bool(ctx, name_str, control->val);
-		}
-		else // !readonly
-		{
-			int val = control->val;
-			nk_checkbox_label(ctx, name_str, &val);
-			control->val = val;
-		}
-	}
-	else if(control->points)
-	{
-		int val = 0;
+	const float DY = nk_window_get_content_region(ctx).h
+		- 2*ctx->style.window.group_padding.y;
+	const float ratio [] = {0.7, 0.3};
 
-		const int count = lilv_scale_points_size(control->points);
-		const char *items [count];
-		float values [count];
-
-		const char **item_ptr = items;
-		float *value_ptr = values;
-		LILV_FOREACH(scale_points, i, control->points)
-		{
-			const LilvScalePoint *point = lilv_scale_points_get(control->points, i);
-			const LilvNode *label_node = lilv_scale_point_get_label(point);
-			const LilvNode *value_node = lilv_scale_point_get_value(point);
-			*item_ptr = lilv_node_as_string(label_node);
-			*value_ptr = lilv_node_as_float(value_node); //FIXME
-
-			if(*value_ptr == control->val)
-				val = value_ptr - values;
-		
-			item_ptr++;
-			value_ptr++;
-		}
-
-		nk_combobox(ctx, items, count, &val, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
-		control->val = values[val];
-	}
-	else // is_float
+	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
+	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
-		if(control->is_readonly)
+		nk_layout_row_dynamic(ctx, dy, 1);
+		nk_label(ctx, name_str, NK_TEXT_LEFT);
+
+		if(control->is_int)
 		{
-			nk_value_float(ctx, name_str, control->val);
+			if(control->is_readonly)
+			{
+				nk_value_int(ctx, name_str, control->val);
+			}
+			else // !readonly
+			{
+				const float inc = control->span / nk_widget_width(ctx);
+				int val = control->val;
+				nk_property_int(ctx, lab, control->min, &val, control->max, 1.f, inc);
+				control->val = val;
+			}
 		}
-		else // !readonly
+		else if(control->is_bool)
 		{
-			const float step = control->span / 100.f;
-			const float inc = control->span / nk_widget_width(ctx);
-			nk_property_float(ctx, name_str, control->min, &control->val, control->max, step, inc);
+			if(control->is_readonly)
+			{
+				nk_value_bool(ctx, name_str, control->val);
+			}
+			else // !readonly
+			{
+				int val = control->val;
+				nk_checkbox_label(ctx, name_str, &val);
+				control->val = val;
+			}
 		}
+		else if(control->points)
+		{
+			int val = 0;
+
+			const int count = lilv_scale_points_size(control->points);
+			const char *items [count];
+			float values [count];
+
+			const char **item_ptr = items;
+			float *value_ptr = values;
+			LILV_FOREACH(scale_points, i, control->points)
+			{
+				const LilvScalePoint *point = lilv_scale_points_get(control->points, i);
+				const LilvNode *label_node = lilv_scale_point_get_label(point);
+				const LilvNode *value_node = lilv_scale_point_get_value(point);
+				*item_ptr = lilv_node_as_string(label_node);
+				*value_ptr = lilv_node_as_float(value_node); //FIXME
+
+				if(*value_ptr == control->val)
+					val = value_ptr - values;
+
+				item_ptr++;
+				value_ptr++;
+			}
+
+			nk_combobox(ctx, items, count, &val, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
+			control->val = values[val];
+		}
+		else // is_float
+		{
+			if(control->is_readonly)
+			{
+				nk_value_float(ctx, name_str, control->val);
+			}
+			else // !readonly
+			{
+				const float step = control->span / 100.f;
+				const float inc = control->span / nk_widget_width(ctx);
+				nk_property_float(ctx, lab, control->min, &control->val, control->max, step, inc);
+			}
+		}
+
+		nk_group_end(ctx);
 	}
+
+	nk_button_label(ctx, "?"); //FIXME draw wheel
 }
 
 static void
 _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 {
 	LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
-	if(name_node)
-	{
-		const char *name_str = lilv_node_as_string(name_node);
+	const char *name_str = name_node ? lilv_node_as_string(name_node) : "Unknown";
 
+	if(nk_group_begin(ctx, name_str, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
+	{
 		switch(port->type)
 		{
 			case PROPERTY_TYPE_AUDIO:
 			{
-				_expose_audio_port(ctx, mod, &port->audio, dy, name_str);
-				//TODO
+				_expose_audio_port(ctx, mod, &port->audio, dy, name_str, false);
 			} break;
 			case PROPERTY_TYPE_CV:
 			{
-				//TODO
+				_expose_audio_port(ctx, mod, &port->audio, dy, name_str, true);
 			} break;
 			case PROPERTY_TYPE_CONTROL:
 			{
@@ -1390,8 +1428,11 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			} break;
 		}
 
-		lilv_node_free(name_node);
+		nk_group_end(ctx);
 	}
+
+	if(name_node)
+		lilv_node_free(name_node);
 }
 
 static void
@@ -1412,7 +1453,7 @@ _expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, floa
 		{
 			const float step = param->span.i / 100.f;
 			const float inc = param->span.i / nk_widget_width(ctx);
-			nk_property_int(ctx, name_str, param->min.i, &param->val.i, param->max.i, step, inc);
+			nk_property_int(ctx, lab, param->min.i, &param->val.i, param->max.i, step, inc);
 		}
 
 		lilv_node_free(name_node);
@@ -1470,6 +1511,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 				if(mod)
 				{
+					const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
+
 					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 					HASH_FOREACH(&mod->groups, itr)
 					{
@@ -1486,7 +1529,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							nk_label(ctx, lilv_node_as_string(group_label_node), NK_TEXT_CENTERED);
 							lilv_node_free(group_label_node);
 
-							nk_layout_row_dynamic(ctx, dy, 3);
+							nk_layout_row_dynamic(ctx, DY, 3);
 							HASH_FOREACH(&mod->ports, port_itr)
 							{
 								port_t *port = *port_itr;
@@ -1503,7 +1546,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
 					nk_label(ctx, "Ungrouped", NK_TEXT_CENTERED);
 
-					nk_layout_row_dynamic(ctx, dy, 3);
+					nk_layout_row_dynamic(ctx, DY, 3);
 					HASH_FOREACH(&mod->ports, itr)
 					{
 						port_t *port = *itr;
@@ -1564,7 +1607,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 						nk_tree_state_pop(ctx);
 					}
-					
+
 					nk_tree_state_pop(ctx);
 				}
 
@@ -1754,6 +1797,9 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 	{
 		nk_window_set_bounds(ctx, wbounds);
 
+		// reduce group padding
+		nk_style_push_vec2(ctx, &ctx->style.window.group_padding, nk_vec2(2.f, 2.f));
+
 		if(handle->first)
 		{
 			nk_layout_row_dynamic(ctx, wbounds.h, 1);
@@ -1776,6 +1822,8 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 			_expose_main_body(handle, ctx, dh, dy);
 			_expose_main_footer(handle, ctx, dy);
 		}
+
+		nk_style_pop_vec2(ctx);
 	}
 	nk_end(ctx);
 }
@@ -1854,7 +1902,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	cfg->font.face = path;
 	cfg->font.size = 12 * scale;
-	
+
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
 
@@ -1925,7 +1973,7 @@ extension_data(const char *uri)
 {
 	if(!strcmp(uri, LV2_UI__idleInterface))
 		return &idle_ext;
-		
+
 	return NULL;
 }
 
