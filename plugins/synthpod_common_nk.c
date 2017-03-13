@@ -208,7 +208,8 @@ struct _plughandle_t {
 	float dy;
 
 	enum nk_collapse_states plugin_collapse_states;
-	enum nk_collapse_states preset_collapse_states;
+	enum nk_collapse_states preset_import_collapse_states;
+	enum nk_collapse_states preset_export_collapse_states;
 	enum nk_collapse_states plugin_info_collapse_states;
 	enum nk_collapse_states preset_info_collapse_states;
 
@@ -1532,7 +1533,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_layout_row_push(ctx, 0.25);
 			if(nk_group_begin(ctx, "Selectables", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Plugins", &handle->plugin_collapse_states))
+				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Plugin Import", &handle->plugin_collapse_states))
 				{
 					const float dim [2] = {0.4, 0.6};
 					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
@@ -1567,9 +1568,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					nk_tree_state_pop(ctx);
 				}
 
-				nk_spacing(ctx, 1);
-
-				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Presets", &handle->preset_collapse_states))
+				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Preset Import", &handle->preset_import_collapse_states))
 				{
 					const float dim [2] = {0.4, 0.6};
 					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
@@ -1600,6 +1599,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 						nk_tree_state_pop(ctx);
 					}
+
+					nk_tree_state_pop(ctx);
+				}
+
+				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Preset Export", &handle->preset_export_collapse_states))
+				{
+					//TODO
 
 					nk_tree_state_pop(ctx);
 				}
@@ -1859,7 +1865,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		host_resize->ui_resize(host_resize->handle, cfg->width, cfg->height);
 
 	handle->plugin_collapse_states = NK_MAXIMIZED;
-	handle->preset_collapse_states = NK_MAXIMIZED;
+	handle->preset_import_collapse_states = NK_MAXIMIZED;
+	handle->preset_export_collapse_states = NK_MINIMIZED;
 	handle->plugin_info_collapse_states = NK_MINIMIZED;
 	handle->preset_info_collapse_states = NK_MINIMIZED;
 
