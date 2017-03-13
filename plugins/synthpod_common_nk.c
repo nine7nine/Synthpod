@@ -32,6 +32,10 @@
 
 #define SEARCH_BUF_MAX 128
 
+#ifdef Bool
+#	undef Bool // interferes with atom forge
+#endif
+
 typedef enum _property_type_t property_type_t;
 typedef enum _selector_main_t selector_main_t;
 typedef enum _selector_grid_t selector_grid_t;
@@ -364,6 +368,14 @@ _register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter,
 	{
 		if(param->range == handle->forge.Int)
 			param->min.i = _node_as_int(min, 0);
+		else if(param->range == handle->forge.Long)
+			param->min.i = _node_as_int(min, 0);
+		else if(param->range == handle->forge.Bool)
+			param->min.i = _node_as_bool(min, false);
+		else if(param->range == handle->forge.Float)
+			param->min.i = _node_as_float(min, 0.f);
+		else if(param->range == handle->forge.Double)
+			param->min.i = _node_as_float(min, 0.f);
 		//FIXME
 		lilv_node_free(min);
 	}
@@ -373,6 +385,14 @@ _register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter,
 	{
 		if(param->range == handle->forge.Int)
 			param->max.i = _node_as_int(max, 1);
+		else if(param->range == handle->forge.Long)
+			param->min.i = _node_as_int(min, 1);
+		else if(param->range == handle->forge.Bool)
+			param->min.i = _node_as_bool(min, true);
+		else if(param->range == handle->forge.Float)
+			param->min.i = _node_as_float(min, 1.f);
+		else if(param->range == handle->forge.Double)
+			param->min.i = _node_as_float(min, 1.f);
 		//FIXME
 		lilv_node_free(max);
 	}
@@ -382,12 +402,28 @@ _register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter,
 	{
 		if(param->range == handle->forge.Int)
 			param->val.i = _node_as_int(val, 0);
+		else if(param->range == handle->forge.Long)
+			param->min.i = _node_as_int(min, 0);
+		else if(param->range == handle->forge.Bool)
+			param->min.i = _node_as_bool(min, false);
+		else if(param->range == handle->forge.Float)
+			param->min.i = _node_as_float(min, 0.f);
+		else if(param->range == handle->forge.Double)
+			param->min.i = _node_as_float(min, 0.f);
 		//FIXME
 		lilv_node_free(val);
 	}
 
 	if(param->range == handle->forge.Int)
 		param->span.i = param->max.i - param->min.i;
+	else if(param->range == handle->forge.Long)
+		param->span.h = param->max.h - param->min.h;
+	else if(param->range == handle->forge.Bool)
+		param->span.i = param->max.i - param->min.i;
+	else if(param->range == handle->forge.Float)
+		param->span.f = param->max.f - param->min.f;
+	else if(param->range == handle->forge.Double)
+		param->span.d = param->max.d - param->min.d;
 	//FIXME
 }
 
@@ -1863,31 +1899,145 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 }
 
 static void
+_expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle,
+	float dy, const char *name_str)
+{
+	const float DY = nk_window_get_content_region(ctx).h
+		- 2*ctx->style.window.group_padding.y;
+	const float ratio [] = {0.7, 0.3};
+
+	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
+	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
+	{
+		nk_layout_row_dynamic(ctx, dy, 1);
+		nk_label(ctx, name_str, NK_TEXT_LEFT);
+
+		if(param->range == handle->forge.Int)
+		{
+			if(param->is_readonly)
+			{
+				nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIi32, param->val.i);
+			}
+			else // !readonly
+			{
+				const float inc = param->span.i / nk_widget_width(ctx);
+				int val = param->val.i;
+				nk_property_int(ctx, lab, param->min.i, &val, param->max.i, 1.f, inc);
+				param->val.i = val;
+			}
+		}
+		else if(param->range == handle->forge.Long)
+		{
+			if(param->is_readonly)
+			{
+				nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIi64, param->val.h);
+			}
+			else // !readonly
+			{
+				const float inc = param->span.h / nk_widget_width(ctx);
+				int val = param->val.h;
+				nk_property_int(ctx, lab, param->min.h, &val, param->max.h, 1.f, inc);
+				param->val.h = val;
+			}
+		}
+		else if(param->range == handle->forge.Bool)
+		{
+			nk_spacing(ctx, 1);
+		}
+		else if(param->range == handle->forge.Float)
+		{
+			if(param->is_readonly)
+			{
+				nk_labelf(ctx, NK_TEXT_RIGHT, "%f", param->val.f);
+			}
+			else // !readonly
+			{
+				const float step = param->span.f / 100.f;
+				const float inc = param->span.f / nk_widget_width(ctx);
+				nk_property_float(ctx, lab, param->min.f, &param->val.f, param->max.f, step, inc);
+			}
+		}
+		else if(param->range == handle->forge.Double)
+		{
+			if(param->is_readonly)
+			{
+				nk_labelf(ctx, NK_TEXT_RIGHT, "%lf", param->val.d);
+			}
+			else // !readonly
+			{
+				const double step = param->span.d / 100.0;
+				const float inc = param->span.d / nk_widget_width(ctx);
+				nk_property_double(ctx, lab, param->min.d, &param->val.d, param->max.d, step, inc);
+			}
+		}
+		else
+		{
+			nk_spacing(ctx, 1);
+		}
+		//FIXME
+
+		nk_group_end(ctx);
+	}
+
+	if(param->range == handle->forge.Int)
+	{
+		if(_dial_int(ctx, param->min.i, &param->val.i, param->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		{
+			//FIXME
+		}
+	}
+	else if(param->range == handle->forge.Long)
+	{
+		if(_dial_long(ctx, param->min.h, &param->val.h, param->max.h, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		{
+			//FIXME
+		}
+	}
+	else if(param->range == handle->forge.Bool)
+	{
+		if(_dial_bool(ctx, &param->val.i, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		{
+			//FIXME
+		}
+	}
+	else if(param->range == handle->forge.Float)
+	{
+		if(_dial_float(ctx, param->min.f, &param->val.f, param->max.f, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		{
+			//FIXME
+		}
+	}
+	else if(param->range == handle->forge.Double)
+	{
+		if(_dial_double(ctx, param->min.d, &param->val.d, param->max.d, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		{
+			//FIXME
+		}
+	}
+	else
+	{
+		nk_spacing(ctx, 1);
+	}
+	//FIXME
+}
+
+static void
 _expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, float dy)
 {
 	LilvNode *name_node = lilv_world_get(handle->world, param->param, handle->node.rdfs_label, NULL);
 	if(!name_node)
 		name_node = lilv_world_get(handle->world, param->param, handle->node.lv2_name, NULL);
-	if(name_node)
+	const char *name_str = name_node ? lilv_node_as_string(name_node) : "Unknown";
+
+	if(nk_group_begin(ctx, name_str, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
 	{
-		const char *name_str = lilv_node_as_string(name_node);
+		_expose_param_inner(ctx, param, handle, dy, name_str);
 
-		if(param->is_readonly)
-		{
-			nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIi32, param->val.i);
-		}
-		else
-		{
-			const float step = param->span.i / 100.f;
-			const float inc = param->span.i / nk_widget_width(ctx);
-			nk_property_int(ctx, lab, param->min.i, &param->val.i, param->max.i, step, inc);
-		}
-
-		//FIXME support more types
-
-		lilv_node_free(name_node);
+		nk_group_end(ctx);
 	}
 
+	if(name_node)
+		lilv_node_free(name_node);
 }
 
 static void
@@ -1990,7 +2140,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
 					nk_label(ctx, "Parameter", NK_TEXT_CENTERED);
 
-					nk_layout_row_dynamic(ctx, dy, 3);
+					nk_layout_row_dynamic(ctx, DY, 3);
 					HASH_FOREACH(&mod->params, itr)
 					{
 						param_t *param = *itr;
