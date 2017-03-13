@@ -87,20 +87,28 @@ struct _hash_t {
 	unsigned size;
 };
 
+union _param_union_t {
+ int32_t b;
+ int32_t i;
+ int64_t h;
+ float f;
+ double d;
+};
+
 struct _control_port_t {
 	LilvScalePoints *points;
-	float min;
-	float max;
-	float span;
-	float val;
+	param_union_t min;
+	param_union_t max;
+	param_union_t span;
+	param_union_t val;
 	bool is_int;
 	bool is_bool;
 	bool is_readonly;
 };
 
 struct _audio_port_t {
-	float lo;
-	float hi;
+	float peak;
+	float gain;
 };
 
 struct _port_t {
@@ -112,14 +120,6 @@ struct _port_t {
 		control_port_t control;
 		audio_port_t audio;
 	};
-};
-
-union _param_union_t {
- int32_t b;
- int32_t i;
- int64_t h;
- float f;
- double d;
 };
 
 struct _param_t {
@@ -491,8 +491,8 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			port->type = PROPERTY_TYPE_AUDIO;
 			audio_port_t *audio = &port->audio;
 
-			audio->lo = dBFSp6(0.f);
-			audio->hi = dBFSp6(2.f * rand() / RAND_MAX);
+			audio->peak = dBFSp6(2.f * rand() / RAND_MAX);
+			audio->gain = (float)rand() / RAND_MAX;
 			//TODO
 		}
 		else if(is_cv)
@@ -500,8 +500,8 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			port->type = PROPERTY_TYPE_CV;
 			audio_port_t *audio = &port->audio;
 
-			audio->lo = dBFSp6(0.f);
-			audio->hi = dBFSp6(2.f * rand() / RAND_MAX);
+			audio->peak = dBFSp6(2.f * rand() / RAND_MAX);
+			audio->gain = (float)rand() / RAND_MAX;
 			//TODO
 		}
 		else if(is_control)
@@ -514,9 +514,6 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			control->is_bool = lilv_port_has_property(plug, port->port, handle->node.lv2_toggled);
 			control->points = lilv_port_get_scale_points(plug, port->port);
 
-			control->val = 0.f;
-			control->min = 0.f;
-			control->max = 1.f;
 			LilvNode *val = NULL;
 			LilvNode *min = NULL;
 			LilvNode *max = NULL;
@@ -524,38 +521,73 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 
 			if(val)
 			{
+				double d = 0.0;
+
+				if(lilv_node_is_int(val))
+					d = lilv_node_as_int(val);
+				else if(lilv_node_is_bool(val))
+					d = lilv_node_as_bool(val);
+				else if(lilv_node_is_float(val))
+					d = lilv_node_as_float(val);
+
 				if(control->is_int)
-					control->val = lilv_node_as_int(val);
+					control->val.i = d;
 				else if(control->is_bool)
-					control->val = lilv_node_as_bool(val);
+					control->val.i = d;
 				else
-					control->val = lilv_node_as_float(val);
+					control->val.f = d;
+
 				lilv_node_free(val);
 			}
 			if(min)
 			{
+				double d = 0.0;
+
+				if(lilv_node_is_int(min))
+					d = lilv_node_as_int(min);
+				else if(lilv_node_is_bool(min))
+					d = lilv_node_as_bool(min);
+				else if(lilv_node_is_float(min))
+					d = lilv_node_as_float(min);
+
 				if(control->is_int)
-					control->min = lilv_node_as_int(min);
+					control->min.i = d;
 				else if(control->is_bool)
-					control->min = 0.f;
+					control->min.i = 0.f;
 				else
-					control->min = lilv_node_as_float(min);
+					control->min.f = d;
+
 				lilv_node_free(min);
 			}
 			if(max)
 			{
+				double d = 1.0;
+
+				if(lilv_node_is_int(max))
+					d = lilv_node_as_int(max);
+				else if(lilv_node_is_bool(max))
+					d = lilv_node_as_bool(max);
+				else if(lilv_node_is_float(max))
+					d = lilv_node_as_float(max);
+
 				if(control->is_int)
-					control->max = lilv_node_as_int(max);
+					control->max.i = d;
 				else if(control->is_bool)
-					control->max = 1.f;
+					control->max.i = 1.f;
 				else
-					control->max = lilv_node_as_float(max);
+					control->max.f = d;
+
 				lilv_node_free(max);
 			}
 
-			control->span = control->max - control->min;
+			if(control->is_int)
+				control->span.i = control->max.i - control->min.i;
+			else if(control->is_bool)
+				control->span.i = control->max.i - control->min.i;
+			else
+				control->span.f = control->max.f - control->min.f;
 
-			if(control->is_int && (control->min == 0.f) && (control->max == 1.f) )
+			if(control->is_int && (control->min.i == 0.f) && (control->max.i == 1.f) )
 			{
 				control->is_int = false;
 				control->is_bool = true;
@@ -563,8 +595,7 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 		}
 		else if(is_atom)
 		{
-			port->type = PROPERTY_TYPE_ATOM
-				;
+			port->type = PROPERTY_TYPE_ATOM;
 			//TODO
 		}
 	}
@@ -1212,6 +1243,297 @@ _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 		lilv_node_free(license_node);
 }
 
+static int
+_dial_bool(struct nk_context *ctx, int32_t *val, struct nk_color color, bool editable)
+{
+	const int32_t tmp = *val;
+	struct nk_rect bounds = nk_layout_space_bounds(ctx);
+	const bool left_mouse_click_in_cursor = nk_widget_is_mouse_clicked(ctx, NK_BUTTON_LEFT);
+	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
+
+	if(layout_states != NK_WIDGET_INVALID)
+	{
+		enum nk_widget_states states = NK_WIDGET_STATE_INACTIVE;
+		struct nk_input *in = ( (layout_states == NK_WIDGET_ROM)
+			|| (ctx->current->layout->flags & NK_WINDOW_ROM) ) ? 0 : &ctx->input;
+
+		if(in && editable && (layout_states == NK_WIDGET_VALID) )
+		{
+			bool mouse_has_scrolled = false;
+
+			if(left_mouse_click_in_cursor)
+			{
+				states = NK_WIDGET_STATE_ACTIVED;
+			}
+			else if(nk_input_is_mouse_hovering_rect(in, bounds))
+			{
+				if(in->mouse.scroll_delta != 0.f) // has scrolling
+				{
+					mouse_has_scrolled = true;
+					in->mouse.scroll_delta = 0.f;
+				}
+
+				states = NK_WIDGET_STATE_HOVER;
+			}
+
+			if(left_mouse_click_in_cursor || mouse_has_scrolled)
+			{
+				*val = !*val;
+			}
+		}
+
+		const struct nk_style_item *fg = NULL;
+		const struct nk_style_item *bg = NULL;
+
+		switch(states)
+		{
+			case NK_WIDGET_STATE_HOVER:
+			{
+				bg = &ctx->style.progress.hover;
+				fg = &ctx->style.progress.cursor_hover;
+			}	break;
+			case NK_WIDGET_STATE_ACTIVED:
+			{
+				bg = &ctx->style.progress.active;
+				fg = &ctx->style.progress.cursor_active;
+			}	break;
+			default:
+			{
+				bg = &ctx->style.progress.normal;
+				fg = &ctx->style.progress.cursor_normal;
+			}	break;
+		}
+
+		const struct nk_color bg_color = bg->data.color;
+		struct nk_color fg_color = fg->data.color;
+
+		fg_color.r = (int)fg_color.r * color.r / 0xff;
+		fg_color.g = (int)fg_color.g * color.g / 0xff;
+		fg_color.b = (int)fg_color.b * color.b / 0xff;
+		fg_color.a = (int)fg_color.a * color.a / 0xff;
+
+		struct nk_command_buffer *canv= nk_window_get_canvas(ctx);
+		const float w2 = bounds.w/2;
+		const float h2 = bounds.h/2;
+		const float r1 = NK_MIN(w2, h2);
+		const float r2 = r1 / 2;
+		const float cx = bounds.x + w2;
+		const float cy = bounds.y + h2;
+
+		nk_fill_arc(canv, cx, cy, r2, 0.f, 2*M_PI, fg_color);
+		nk_fill_arc(canv, cx, cy, r2 - 2, 0.f, 2*M_PI, ctx->style.window.background);
+		nk_fill_arc(canv, cx, cy, r2 - 4, 0.f, 2*M_PI,
+			*val ? fg_color : bg_color);
+	}
+
+	return tmp != *val;
+}
+
+static float
+_dial_numeric_behavior(struct nk_context *ctx, struct nk_rect bounds,
+	enum nk_widget_states *states, int *divider, struct nk_input *in)
+{
+	const struct nk_mouse_button *btn = &in->mouse.buttons[NK_BUTTON_LEFT];;
+	const bool left_mouse_down = btn->down;
+	const bool left_mouse_click_in_cursor = nk_input_has_mouse_click_down_in_rect(in,
+		NK_BUTTON_LEFT, bounds, nk_true);
+
+	float dd = 0.f;
+	if(left_mouse_down && left_mouse_click_in_cursor)
+	{
+		const float dx = in->mouse.delta.x;
+		const float dy = in->mouse.delta.y;
+		dd = fabs(dx) > fabs(dy) ? dx : -dy;
+
+		*states = NK_WIDGET_STATE_ACTIVED;
+	}
+	else if(nk_input_is_mouse_hovering_rect(in, bounds))
+	{
+		if(in->mouse.scroll_delta != 0.f) // has scrolling
+		{
+			dd = in->mouse.scroll_delta;
+			in->mouse.scroll_delta = 0.f;
+		}
+
+		*states = NK_WIDGET_STATE_HOVER;
+	}
+
+	if(nk_input_is_key_down(in, NK_KEY_CTRL))
+		*divider *= 4;
+	if(nk_input_is_key_down(in, NK_KEY_SHIFT))
+		*divider *= 4;
+
+	return dd;
+}
+
+static void
+_dial_numeric_draw(struct nk_context *ctx, struct nk_rect bounds,
+	enum nk_widget_states states, float perc, struct nk_color color)
+{
+	struct nk_command_buffer *canv= nk_window_get_canvas(ctx);
+	const struct nk_style_item *bg = NULL;
+	const struct nk_style_item *fg = NULL;
+
+	switch(states)
+	{
+		case NK_WIDGET_STATE_HOVER:
+		{
+			bg = &ctx->style.progress.hover;
+			fg = &ctx->style.progress.cursor_hover;
+		}	break;
+		case NK_WIDGET_STATE_ACTIVED:
+		{
+			bg = &ctx->style.progress.active;
+			fg = &ctx->style.progress.cursor_active;
+		}	break;
+		default:
+		{
+			bg = &ctx->style.progress.normal;
+			fg = &ctx->style.progress.cursor_normal;
+		}	break;
+	}
+
+	const struct nk_color bg_color = bg->data.color;
+	struct nk_color fg_color = fg->data.color;
+
+	fg_color.r = (int)fg_color.r * color.r / 0xff;
+	fg_color.g = (int)fg_color.g * color.g / 0xff;
+	fg_color.b = (int)fg_color.b * color.b / 0xff;
+	fg_color.a = (int)fg_color.a * color.a / 0xff;
+
+	const float w2 = bounds.w/2;
+	const float h2 = bounds.h/2;
+	const float r1 = NK_MIN(w2, h2);
+	const float r2 = r1 / 2;
+	const float cx = bounds.x + w2;
+	const float cy = bounds.y + h2;
+	const float aa = M_PI/6;
+	const float a1 = M_PI/2 + aa;
+	const float a2 = 2*M_PI + M_PI/2 - aa;
+	const float a3 = a1 + (a2 - a1)*perc;
+
+	nk_fill_arc(canv, cx, cy, r1, a1, a2, bg_color);
+	nk_fill_arc(canv, cx, cy, r1, a1, a3, fg_color);
+	nk_fill_arc(canv, cx, cy, r2, 0.f, 2*M_PI, ctx->style.window.background);
+}
+
+static int
+_dial_double(struct nk_context *ctx, double min, double *val, double max, float mul,
+	struct nk_color color, bool editable)
+{
+	const double tmp = *val;
+	struct nk_rect bounds = nk_layout_space_bounds(ctx);
+	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
+
+	if(layout_states != NK_WIDGET_INVALID)
+	{
+		enum nk_widget_states states = NK_WIDGET_STATE_INACTIVE;
+		const double range = max - min;
+		struct nk_input *in = ( (layout_states == NK_WIDGET_ROM)
+			|| (ctx->current->layout->flags & NK_WINDOW_ROM) ) ? 0 : &ctx->input;
+
+		if(in && editable && (layout_states == NK_WIDGET_VALID) )
+		{
+			int divider = 1;
+			const float dd = _dial_numeric_behavior(ctx, bounds, &states, &divider, in);
+
+			if(dd != 0.f) // update value
+			{
+				const double per_pixel_inc = mul * range / bounds.w / divider;
+
+				*val += dd * per_pixel_inc;
+				*val = NK_CLAMP(min, *val, max);
+			}
+		}
+
+		const float perc = (*val - min) / range;
+		_dial_numeric_draw(ctx, bounds, states, perc, color);
+	}
+
+	return tmp != *val;
+}
+
+static int
+_dial_long(struct nk_context *ctx, int64_t min, int64_t *val, int64_t max, float mul,
+	struct nk_color color, bool editable)
+{
+	const int64_t tmp = *val;
+	struct nk_rect bounds = nk_layout_space_bounds(ctx);
+	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
+
+	if(layout_states != NK_WIDGET_INVALID)
+	{
+		enum nk_widget_states states = NK_WIDGET_STATE_INACTIVE;
+		const int64_t range = max - min;
+		struct nk_input *in = ( (layout_states == NK_WIDGET_ROM)
+			|| (ctx->current->layout->flags & NK_WINDOW_ROM) ) ? 0 : &ctx->input;
+
+		if(in && editable && (layout_states == NK_WIDGET_VALID) )
+		{
+			int divider = 1;
+			const float dd = _dial_numeric_behavior(ctx, bounds, &states, &divider, in);
+
+			if(dd != 0.f) // update value
+			{
+				const double per_pixel_inc = mul * range / bounds.w / divider;
+
+				const double diff = dd * per_pixel_inc;
+				*val += diff < 0.0 ? floor(diff) : ceil(diff);
+				*val = NK_CLAMP(min, *val, max);
+			}
+		}
+
+		const float perc = (float)(*val - min) / range;
+		_dial_numeric_draw(ctx, bounds, states, perc, color);
+	}
+
+	return tmp != *val;
+}
+
+static int
+_dial_float(struct nk_context *ctx, float min, float *val, float max, float mul,
+	struct nk_color color, bool editable)
+{
+	double tmp = *val;
+	const int res = _dial_double(ctx, min, &tmp, max, mul, color, editable);
+	*val = tmp;
+
+	return res;
+}
+
+static int
+_dial_int(struct nk_context *ctx, int32_t min, int32_t *val, int32_t max, float mul,
+	struct nk_color color, bool editable)
+{
+	int64_t tmp = *val;
+	const int res = _dial_long(ctx, min, &tmp, max, mul, color, editable);
+	*val = tmp;
+
+	return res;
+}
+
+static void
+_expose_atom_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
+	float dy, const char *name_str, bool is_cv)
+{
+	const float DY = nk_window_get_content_region(ctx).h
+		- 2*ctx->style.window.group_padding.y;
+	const float ratio [] = {0.7, 0.3};
+
+	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
+	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
+	{
+		nk_layout_row_dynamic(ctx, dy, 1);
+		nk_label(ctx, name_str, NK_TEXT_LEFT);
+
+		//FIXME
+
+		nk_group_end(ctx);
+	}
+
+	//FIXME
+}
+
 static void
 _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 	float dy, const char *name_str, bool is_cv)
@@ -1244,7 +1566,7 @@ _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 
 			// <= -6dBFS
 			{
-				const float dbfs = NK_MIN(audio->hi, mx1);
+				const float dbfs = NK_MIN(audio->peak, mx1);
 				const uint8_t dcol = 0xff * dbfs / mx1;
 				const struct nk_color left = is_cv
 					? nk_rgba(0xff, 0x00, 0xff, alph)
@@ -1268,9 +1590,9 @@ _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 			}
 
 			// > 6dBFS
-			if(audio->hi > mx1)
+			if(audio->peak > mx1)
 			{
-				const float dbfs = audio->hi - mx1;
+				const float dbfs = audio->peak - mx1;
 				const uint8_t dcol = 0xff * dbfs / mx2;
 				const struct nk_color left = nk_rgba(0xff, 0xff, 0x00, alph);
 				const struct nk_color bottom = left;
@@ -1306,7 +1628,10 @@ _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 		nk_group_end(ctx);
 	}
 
-	nk_button_label(ctx, "?"); //FIXME draw wheel
+	if(_dial_float(ctx, 0.f, &audio->gain, 1.f, 1.f, nk_rgb(0xff, 0xff, 0xff), true))
+	{
+		//FIXME
+	}
 }
 
 const char *lab = "#"; //FIXME
@@ -1329,28 +1654,19 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 		{
 			if(control->is_readonly)
 			{
-				nk_value_int(ctx, name_str, control->val);
+				nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIi32, control->val.i);
 			}
 			else // !readonly
 			{
-				const float inc = control->span / nk_widget_width(ctx);
-				int val = control->val;
-				nk_property_int(ctx, lab, control->min, &val, control->max, 1.f, inc);
-				control->val = val;
+				const float inc = control->span.i / nk_widget_width(ctx);
+				int val = control->val.i;
+				nk_property_int(ctx, lab, control->min.i, &val, control->max.i, 1.f, inc);
+				control->val.i = val;
 			}
 		}
 		else if(control->is_bool)
 		{
-			if(control->is_readonly)
-			{
-				nk_value_bool(ctx, name_str, control->val);
-			}
-			else // !readonly
-			{
-				int val = control->val;
-				nk_checkbox_label(ctx, name_str, &val);
-				control->val = val;
-			}
+			nk_spacing(ctx, 1);
 		}
 		else if(control->points)
 		{
@@ -1358,46 +1674,86 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 
 			const int count = lilv_scale_points_size(control->points);
 			const char *items [count];
-			float values [count];
+			param_union_t values [count];
 
+			//FIXME build a hash for this
 			const char **item_ptr = items;
-			float *value_ptr = values;
+			param_union_t *value_ptr = values;
 			LILV_FOREACH(scale_points, i, control->points)
 			{
 				const LilvScalePoint *point = lilv_scale_points_get(control->points, i);
 				const LilvNode *label_node = lilv_scale_point_get_label(point);
 				const LilvNode *value_node = lilv_scale_point_get_value(point);
 				*item_ptr = lilv_node_as_string(label_node);
-				*value_ptr = lilv_node_as_float(value_node); //FIXME
 
-				if(*value_ptr == control->val)
-					val = value_ptr - values;
+				if(control->is_int)
+				{
+					value_ptr->i = lilv_node_as_int(value_node);
+
+					if(value_ptr->i == control->val.i)
+						val = value_ptr - values;
+				}
+				else // is_float
+				{
+					value_ptr->f = lilv_node_as_float(value_node);
+
+					if(value_ptr->f == control->val.f)
+						val = value_ptr - values;
+				}
 
 				item_ptr++;
 				value_ptr++;
 			}
 
 			nk_combobox(ctx, items, count, &val, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
-			control->val = values[val];
+
+			if(control->is_int)
+				control->val.i = values[val].i;
+			else // is_float
+				control->val.f = values[val].f;
 		}
 		else // is_float
 		{
 			if(control->is_readonly)
 			{
-				nk_value_float(ctx, name_str, control->val);
+				nk_labelf(ctx, NK_TEXT_RIGHT, "%f", control->val.f);
 			}
 			else // !readonly
 			{
-				const float step = control->span / 100.f;
-				const float inc = control->span / nk_widget_width(ctx);
-				nk_property_float(ctx, lab, control->min, &control->val, control->max, step, inc);
+				const float step = control->span.f / 100.f;
+				const float inc = control->span.f / nk_widget_width(ctx);
+				nk_property_float(ctx, lab, control->min.f, &control->val.f, control->max.f, step, inc);
 			}
 		}
 
 		nk_group_end(ctx);
 	}
 
-	nk_button_label(ctx, "?"); //FIXME draw wheel
+	if(control->is_int)
+	{
+		if(_dial_int(ctx, control->min.i, &control->val.i, control->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
+		{
+			//FIXME
+		}
+	}
+	else if(control->is_bool)
+	{
+		if(_dial_bool(ctx, &control->val.i, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
+		{
+			//FIXME
+		}
+	}
+	else if(control->points)
+	{
+		nk_spacing(ctx, 1);
+	}
+	else // is_float
+	{
+		if(_dial_float(ctx, control->min.f, &control->val.f, control->max.f, 1.f, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
+		{
+			//FIXME
+		}
+	}
 }
 
 static void
@@ -1424,7 +1780,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			} break;
 			case PROPERTY_TYPE_ATOM:
 			{
-				//TODO
+				_expose_atom_port(ctx, mod, &port->audio, dy, name_str, false);
 			} break;
 		}
 
@@ -1447,7 +1803,7 @@ _expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, floa
 
 		if(param->is_readonly)
 		{
-			nk_value_int(ctx, name_str, param->val.i);
+			nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIi32, param->val.i);
 		}
 		else
 		{
@@ -1455,6 +1811,8 @@ _expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, floa
 			const float inc = param->span.i / nk_widget_width(ctx);
 			nk_property_int(ctx, lab, param->min.i, &param->val.i, param->max.i, step, inc);
 		}
+
+		//FIXME support more types
 
 		lilv_node_free(name_node);
 	}
