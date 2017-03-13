@@ -142,8 +142,7 @@ struct _prop_t {
 struct _mod_t {
 	const LilvPlugin *plug;
 
-	unsigned num_ports;
-	port_t *ports;
+	hash_t ports;
 	hash_t groups;
 	hash_t banks;
 
@@ -377,7 +376,7 @@ _sort_rdfs_label(const void *a, const void *b, void *data)
 		name_b = lilv_node_as_string(node_b);
 
 	const int ret = name_a && name_b
-		? strcmp(name_a, name_b)
+		? strcasecmp(name_a, name_b)
 		: 0;
 
 	if(node_a)
@@ -386,6 +385,55 @@ _sort_rdfs_label(const void *a, const void *b, void *data)
 		lilv_node_free(node_b);
 
 	return ret;
+}
+
+static int
+_sort_port_name(const void *a, const void *b, void *data)
+{
+	mod_t *mod = data;
+
+	const port_t **port_a = (const port_t **)a;
+	const port_t **port_b = (const port_t **)b;
+
+	const port_t *port_A = *port_a;
+	const port_t *port_B = *port_b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_port_get_name(mod->plug, port_A->port);
+	LilvNode *node_b = lilv_port_get_name(mod->plug, port_B->port);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
+
+
+static void
+_port_free(void *data)
+{
+	port_t *port = data;
+
+	if(port->groups)
+		lilv_nodes_free(port->groups);
+
+	if( (port->type == PROPERTY_TYPE_CONTROL) && port->control.points)
+		lilv_scale_points_free(port->control.points);
+
+	free(port);
 }
 
 static void
@@ -398,12 +446,15 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 	memset(mod, 0x0, sizeof(mod_t));
 
 	mod->plug = plug;
-	mod->num_ports = lilv_plugin_get_num_ports(plug);
-	mod->ports = calloc(mod->num_ports, sizeof(port_t));
+	const unsigned num_ports = lilv_plugin_get_num_ports(plug);
 
-	for(unsigned p=0; p<mod->num_ports; p++)
+	for(unsigned p=0; p<num_ports; p++)
 	{
-		port_t *port = &mod->ports[p];
+		port_t *port = calloc(1, sizeof(port_t));
+		if(!port)
+			continue;
+
+		_hash_add(&mod->ports, port);
 
 		port->port = lilv_plugin_get_port_by_index(plug, p);
 		port->groups = lilv_port_get_value(plug, port->port, handle->node.pg_group);
@@ -514,6 +565,7 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 		}
 	}
 
+	_hash_sort_r(&mod->ports, _sort_port_name, mod);
 	_hash_sort_r(&mod->groups, _sort_rdfs_label, handle);
 
 	mod->presets = lilv_plugin_get_related(plug, handle->node.pset_Preset);
@@ -587,7 +639,7 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 }
 
 static void
-_hash_node_free(void *data)
+_node_free(void *data)
 {
 	LilvNode *node = data;
 	lilv_node_free(node);
@@ -596,19 +648,9 @@ _hash_node_free(void *data)
 static void
 _mod_free(plughandle_t *handle, mod_t *mod)
 {
-	_hash_clear(&mod->banks, _hash_node_free);
+	_hash_clear(&mod->ports, _port_free);
+	_hash_clear(&mod->banks, _node_free);
 	_hash_clear(&mod->groups, NULL);
-
-	for(unsigned p=0; p<mod->num_ports; p++)
-	{
-		port_t *port = &mod->ports[p];
-
-		if(port->groups)
-			lilv_nodes_free(port->groups);
-		if( (port->type == PROPERTY_TYPE_CONTROL) && port->control.points)
-			lilv_scale_points_free(port->control.points);
-	}
-	free(mod->ports);
 
 	if(mod->presets)
 	{
@@ -710,7 +752,7 @@ _sort_plugin_name(const void *a, const void *b)
 		name_b = lilv_node_as_string(node_b);
 
 	const int ret = name_a && name_b
-		? strcmp(name_a, name_b)
+		? strcasecmp(name_a, name_b)
 		: 0;
 
 	if(node_a)
@@ -1438,16 +1480,15 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						if(group_label_node)
 						{
 							nk_layout_row_dynamic(ctx, dy, 1);
-
 							const struct nk_rect bounds = nk_widget_bounds(ctx);
 							nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
 							nk_label(ctx, lilv_node_as_string(group_label_node), NK_TEXT_CENTERED);
 							lilv_node_free(group_label_node);
 
 							nk_layout_row_dynamic(ctx, dy, 3);
-							for(unsigned p=0; p<mod->num_ports; p++)
+							HASH_FOREACH(&mod->ports, port_itr)
 							{
-								port_t *port = &mod->ports[p];
+								port_t *port = *port_itr;
 								if(!lilv_nodes_contains(port->groups, mod_group))
 									continue;
 
@@ -1457,12 +1498,14 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					}
 
 					nk_layout_row_dynamic(ctx, dy, 1);
+					struct nk_rect bounds = nk_widget_bounds(ctx);
+					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
 					nk_label(ctx, "Ungrouped", NK_TEXT_CENTERED);
 
 					nk_layout_row_dynamic(ctx, dy, 3);
-					for(unsigned p=0; p<mod->num_ports; p++)
+					HASH_FOREACH(&mod->ports, itr)
 					{
-						port_t *port = &mod->ports[p];
+						port_t *port = *itr;
 						if(lilv_nodes_size(port->groups))
 							continue;
 
@@ -1470,6 +1513,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					}
 
 					nk_layout_row_dynamic(ctx, dy, 1);
+					bounds = nk_widget_bounds(ctx);
+					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
 					nk_label(ctx, "Parameter", NK_TEXT_CENTERED);
 
 					nk_layout_row_dynamic(ctx, dy, 3);
