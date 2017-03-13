@@ -145,12 +145,10 @@ struct _mod_t {
 	hash_t ports;
 	hash_t groups;
 	hash_t banks;
+	hash_t params;
 
-	unsigned num_params;
-	param_t *params;
 	LilvNodes *readables;
 	LilvNodes *writables;
-
 	LilvNodes *presets;
 };
 
@@ -285,24 +283,72 @@ _hash_add(hash_t *hash, void *node)
 static void
 _hash_sort(hash_t *hash, int (*cmp)(const void *a, const void *b))
 {
-	qsort(hash->nodes, hash->size, sizeof(void *), cmp);
+	if(hash->size)
+		qsort(hash->nodes, hash->size, sizeof(void *), cmp);
 }
 
 static void
 _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data), void *data)
 {
-	qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
+	if(hash->size)
+		qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
 }
 
 #define HASH_FOREACH(hash, itr) \
 	for(void **(itr) = (hash)->nodes; (itr) - (hash)->nodes < (hash)->size; (itr)++)
 
-static void
-_register_parameter(plughandle_t *handle, param_t *param, const LilvNode *parameter, bool is_readonly)
+static int
+_node_as_int(const LilvNode *node, int dflt)
 {
+	if(lilv_node_is_int(node))
+		return lilv_node_as_int(node);
+	else if(lilv_node_is_float(node))
+		return floorf(lilv_node_as_float(node));
+	else if(lilv_node_is_bool(node))
+		return lilv_node_as_bool(node) ? 1 : 0;
+	else
+		return dflt;
+}
+
+static float
+_node_as_float(const LilvNode *node, float dflt)
+{
+	if(lilv_node_is_int(node))
+		return lilv_node_as_int(node);
+	else if(lilv_node_is_float(node))
+		return lilv_node_as_float(node);
+	else if(lilv_node_is_bool(node))
+		return lilv_node_as_bool(node) ? 1.f : 0.f;
+	else
+		return dflt;
+}
+
+static int32_t
+_node_as_bool(const LilvNode *node, int32_t dflt)
+{
+	if(lilv_node_is_int(node))
+		return lilv_node_as_int(node) != 0;
+	else if(lilv_node_is_float(node))
+		return lilv_node_as_float(node) != 0.f;
+	else if(lilv_node_is_bool(node))
+		return lilv_node_as_bool(node) ? 1 : 0;
+	else
+		return dflt;
+}
+
+static void
+_register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter, bool is_readonly)
+{
+	param_t *param = calloc(1, sizeof(param_t));
+	if(!param)
+		return;
+
+	_hash_add(&mod->params, param);
+
 	param->param = parameter;
 	param->is_readonly = is_readonly;
 
+	param->range = 0;
 	LilvNode *range = lilv_world_get(handle->world, parameter, handle->node.rdfs_range, NULL);
 	if(range)
 	{
@@ -310,28 +356,39 @@ _register_parameter(plughandle_t *handle, param_t *param, const LilvNode *parame
 		lilv_node_free(range);
 	}
 
+	if(!param->range)
+		return;
+
 	LilvNode *min = lilv_world_get(handle->world, parameter, handle->node.lv2_minimum, NULL);
 	if(min)
 	{
-		param->min.i = lilv_node_as_int(min); //FIXME
+		if(param->range == handle->forge.Int)
+			param->min.i = _node_as_int(min, 0);
+		//FIXME
 		lilv_node_free(min);
 	}
 
 	LilvNode *max = lilv_world_get(handle->world, parameter, handle->node.lv2_maximum, NULL);
 	if(max)
 	{
-		param->max.i = lilv_node_as_int(max); //FIXME
+		if(param->range == handle->forge.Int)
+			param->max.i = _node_as_int(max, 1);
+		//FIXME
 		lilv_node_free(max);
 	}
 
 	LilvNode *val = lilv_world_get(handle->world, parameter, handle->node.lv2_default, NULL);
 	if(val)
 	{
-		param->val.i = lilv_node_as_int(val); //FIXME
+		if(param->range == handle->forge.Int)
+			param->val.i = _node_as_int(val, 0);
+		//FIXME
 		lilv_node_free(val);
 	}
 
-	param->span.i = param->max.i - param->min.i;
+	if(param->range == handle->forge.Int)
+		param->span.i = param->max.i - param->min.i;
+	//FIXME
 }
 
 static inline float
@@ -422,6 +479,44 @@ _sort_port_name(const void *a, const void *b, void *data)
 	return ret;
 }
 
+static int
+_sort_param_name(const void *a, const void *b, void *data)
+{
+	plughandle_t *handle = data;
+
+	const param_t **param_a = (const param_t **)a;
+	const param_t **param_b = (const param_t **)b;
+
+	const param_t *param_A = *param_a;
+	const param_t *param_B = *param_b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_world_get(handle->world, param_A->param, handle->node.rdfs_label, NULL);
+	if(!node_a)
+		node_a = lilv_world_get(handle->world, param_A->param, handle->node.lv2_name, NULL);
+
+	LilvNode *node_b = lilv_world_get(handle->world, param_B->param, handle->node.rdfs_label, NULL);
+	if(!node_b)
+		node_b = lilv_world_get(handle->world, param_B->param, handle->node.lv2_name, NULL);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
 
 static void
 _port_free(void *data)
@@ -435,6 +530,14 @@ _port_free(void *data)
 		lilv_scale_points_free(port->control.points);
 
 	free(port);
+}
+
+static void
+_param_free(void *data)
+{
+	param_t *param = data;
+
+	free(param);
 }
 
 static void
@@ -521,61 +624,34 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 
 			if(val)
 			{
-				double d = 0.0;
-
-				if(lilv_node_is_int(val))
-					d = lilv_node_as_int(val);
-				else if(lilv_node_is_bool(val))
-					d = lilv_node_as_bool(val);
-				else if(lilv_node_is_float(val))
-					d = lilv_node_as_float(val);
-
 				if(control->is_int)
-					control->val.i = d;
+					control->val.i = _node_as_int(val, 0);
 				else if(control->is_bool)
-					control->val.i = d;
+					control->val.i = _node_as_bool(val, false);
 				else
-					control->val.f = d;
+					control->val.f = _node_as_float(val, 0.f);
 
 				lilv_node_free(val);
 			}
 			if(min)
 			{
-				double d = 0.0;
-
-				if(lilv_node_is_int(min))
-					d = lilv_node_as_int(min);
-				else if(lilv_node_is_bool(min))
-					d = lilv_node_as_bool(min);
-				else if(lilv_node_is_float(min))
-					d = lilv_node_as_float(min);
-
 				if(control->is_int)
-					control->min.i = d;
+					control->min.i = _node_as_int(min, 0);
 				else if(control->is_bool)
-					control->min.i = 0.f;
+					control->min.i = _node_as_bool(min, false);
 				else
-					control->min.f = d;
+					control->min.f = _node_as_float(min, 0.f);
 
 				lilv_node_free(min);
 			}
 			if(max)
 			{
-				double d = 1.0;
-
-				if(lilv_node_is_int(max))
-					d = lilv_node_as_int(max);
-				else if(lilv_node_is_bool(max))
-					d = lilv_node_as_bool(max);
-				else if(lilv_node_is_float(max))
-					d = lilv_node_as_float(max);
-
 				if(control->is_int)
-					control->max.i = d;
+					control->max.i = _node_as_int(max, 1);
 				else if(control->is_bool)
-					control->max.i = 1.f;
+					control->max.i = _node_as_bool(max, true);
 				else
-					control->max.f = d;
+					control->max.f = _node_as_float(max, 1.f);
 
 				lilv_node_free(max);
 			}
@@ -587,7 +663,7 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			else
 				control->span.f = control->max.f - control->min.f;
 
-			if(control->is_int && (control->min.i == 0.f) && (control->max.i == 1.f) )
+			if(control->is_int && (control->min.i == 0) && (control->max.i == 1) )
 			{
 				control->is_int = false;
 				control->is_bool = true;
@@ -651,24 +727,20 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 	mod->readables = lilv_plugin_get_value(plug, handle->node.patch_readable);
 	mod->writables = lilv_plugin_get_value(plug, handle->node.patch_writable);
 
-	mod->num_params = lilv_nodes_size(mod->readables) + lilv_nodes_size(mod->writables);
-	mod->params = calloc(mod->num_params, sizeof(param_t));
-
-	param_t *param = mod->params;
 	LILV_FOREACH(nodes, i, mod->readables)
 	{
 		const LilvNode *parameter = lilv_nodes_get(mod->readables, i);
 
-		_register_parameter(handle, param, parameter, true);
-		param++;
+		_register_parameter(handle, mod, parameter, true);
 	}
 	LILV_FOREACH(nodes, i, mod->writables)
 	{
 		const LilvNode *parameter = lilv_nodes_get(mod->readables, i);
 
-		_register_parameter(handle, param, parameter, false);
-		param++;
+		_register_parameter(handle, mod, parameter, false);
 	}
+
+	_hash_sort_r(&mod->params, _sort_param_name, handle);
 
 	nk_pugl_post_redisplay(&handle->win); //FIXME
 }
@@ -686,6 +758,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	_hash_clear(&mod->ports, _port_free);
 	_hash_clear(&mod->banks, _node_free);
 	_hash_clear(&mod->groups, NULL);
+	_hash_clear(&mod->params, _param_free);
 
 	if(mod->presets)
 	{
@@ -697,8 +770,6 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 
 		lilv_nodes_free(mod->presets);
 	}
-
-	free(mod->params);
 
 	if(mod->readables)
 		lilv_nodes_free(mod->readables);
@@ -1688,14 +1759,14 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 
 				if(control->is_int)
 				{
-					value_ptr->i = lilv_node_as_int(value_node);
+					value_ptr->i = _node_as_int(value_node, 0);
 
 					if(value_ptr->i == control->val.i)
 						val = value_ptr - values;
 				}
 				else // is_float
 				{
-					value_ptr->f = lilv_node_as_float(value_node);
+					value_ptr->f = _node_as_float(value_node, 0.f);
 
 					if(value_ptr->f == control->val.f)
 						val = value_ptr - values;
@@ -1920,9 +1991,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					nk_label(ctx, "Parameter", NK_TEXT_CENTERED);
 
 					nk_layout_row_dynamic(ctx, dy, 3);
-					for(unsigned p=0; p<mod->num_params; p++)
+					HASH_FOREACH(&mod->params, itr)
 					{
-						param_t *param = &mod->params[p];
+						param_t *param = *itr;
 
 						_expose_param(handle, ctx, param, dy);
 					}
