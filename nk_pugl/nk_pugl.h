@@ -55,7 +55,7 @@ extern C {
 #include "nuklear/example/stb_image.h"
 
 #ifndef NK_PUGL_API
-#	define NK_PUGL_API
+#	define NK_PUGL_API static
 #endif
 
 typedef struct _nk_pugl_config_t nk_pugl_config_t;
@@ -150,13 +150,13 @@ nk_pugl_icon_load(nk_pugl_window_t *win, const char *filename);
 NK_PUGL_API void
 nk_pugl_icon_unload(nk_pugl_window_t *win, struct nk_image img);
 
-static bool
+NK_PUGL_API bool
 nk_pugl_is_shortcut_pressed(struct nk_input *in, char letter, bool clear);
 
-static void
+NK_PUGL_API void
 nk_pugl_copy_to_clipboard(nk_pugl_window_t *win, const char *selection, size_t len);
 
-static const char *
+NK_PUGL_API const char *
 nk_pugl_paste_from_clipboard(nk_pugl_window_t *win, size_t *len);
 
 #ifdef __cplusplus
@@ -1138,7 +1138,7 @@ nk_pugl_icon_unload(nk_pugl_window_t *win, struct nk_image img)
 	}
 }
 
-static bool
+NK_PUGL_API bool
 nk_pugl_is_shortcut_pressed(struct nk_input *in, char letter, bool clear)
 {
 	const bool control = nk_input_is_key_down(in, NK_KEY_CTRL);
@@ -1160,13 +1160,13 @@ nk_pugl_is_shortcut_pressed(struct nk_input *in, char letter, bool clear)
 	return false;
 }
 
-static void
+NK_PUGL_API void
 nk_pugl_copy_to_clipboard(nk_pugl_window_t *win, const char *selection, size_t len)
 {
 	puglCopyToClipboard(win->view, selection, len);
 }
 
-static const char *
+NK_PUGL_API const char *
 nk_pugl_paste_from_clipboard(nk_pugl_window_t *win, size_t *len)
 {
 	return puglPasteFromClipboard(win->view, len);
