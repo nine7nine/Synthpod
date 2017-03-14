@@ -1273,6 +1273,24 @@ _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 }
 
 static void
+_tab_label(struct nk_context *ctx, const char *label)
+{
+	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+	struct nk_rect bounds = nk_widget_bounds(ctx);
+	const struct nk_color bg = nk_rgb(24, 24, 24); //FIXME use color from style
+	//const struct nk_color bg = ctx->style.window.header.normal.data.color;
+
+	nk_fill_rect(canvas, bounds, 10, bg);
+
+	const float h = bounds.h;
+	bounds.h /= 2;
+	bounds.y += bounds.h;
+	nk_fill_rect(canvas, bounds, 0, bg);
+
+	nk_label(ctx, label, NK_TEXT_CENTERED);
+}
+
+static void
 _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 	const LilvNode *preset_bank)
 {
@@ -1304,7 +1322,6 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 			{
 				if(first)
 				{
-					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 					LilvNode *bank_label_node = NULL;
 					if(preset_bank)
 					{
@@ -1316,9 +1333,7 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 						? lilv_node_as_string(bank_label_node)
 						: "Unbanked";
 
-					const struct nk_rect bounds = nk_widget_bounds(ctx);
-					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
-					nk_label(ctx, bank_label, NK_TEXT_CENTERED);
+					_tab_label(ctx, bank_label);
 
 					if(bank_label_node)
 						lilv_node_free(bank_label_node);
@@ -2153,7 +2168,6 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				{
 					const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
 
-					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 					HASH_FOREACH(&mod->groups, itr)
 					{
 						const LilvNode *mod_group = *itr;
@@ -2164,10 +2178,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						if(group_label_node)
 						{
 							nk_layout_row_dynamic(ctx, dy, 1);
-							const struct nk_rect bounds = nk_widget_bounds(ctx);
-							nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
-							nk_label(ctx, lilv_node_as_string(group_label_node), NK_TEXT_CENTERED);
-							lilv_node_free(group_label_node);
+							_tab_label(ctx, lilv_node_as_string(group_label_node));
 
 							nk_layout_row_dynamic(ctx, DY, 3);
 							HASH_FOREACH(&mod->ports, port_itr)
@@ -2178,13 +2189,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 								_expose_port(ctx, mod, port, dy);
 							}
+
+							lilv_node_free(group_label_node);
 						}
 					}
 
 					nk_layout_row_dynamic(ctx, dy, 1);
-					struct nk_rect bounds = nk_widget_bounds(ctx);
-					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
-					nk_label(ctx, "Ungrouped", NK_TEXT_CENTERED);
+					_tab_label(ctx, "Ungrouped");
 
 					nk_layout_row_dynamic(ctx, DY, 3);
 					HASH_FOREACH(&mod->ports, itr)
@@ -2197,9 +2208,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					}
 
 					nk_layout_row_dynamic(ctx, dy, 1);
-					bounds = nk_widget_bounds(ctx);
-					nk_fill_rect(canvas, bounds, 0, nk_rgb(16, 16, 16));
-					nk_label(ctx, "Parameter", NK_TEXT_CENTERED);
+					_tab_label(ctx, "Parameters");
 
 					nk_layout_row_dynamic(ctx, DY, 3);
 					HASH_FOREACH(&mod->params, itr)
