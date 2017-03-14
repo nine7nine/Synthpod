@@ -44,6 +44,7 @@ typedef enum _selector_search_t selector_search_t;
 typedef union _param_union_t param_union_t;
 
 typedef struct _hash_t hash_t;
+typedef struct _scale_point_t scale_point_t;
 typedef struct _control_port_t control_port_t;
 typedef struct _audio_port_t audio_port_t;
 typedef struct _port_t port_t;
@@ -99,8 +100,14 @@ union _param_union_t {
  double d;
 };
 
+struct _scale_point_t {
+	char *label;
+	param_union_t val;
+};
+
 struct _control_port_t {
-	LilvScalePoints *points;
+	hash_t points;
+	int points_ref;
 	param_union_t min;
 	param_union_t max;
 	param_union_t span;
@@ -298,6 +305,12 @@ _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
 		qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
 }
 
+static size_t
+_hash_offset(hash_t *hash, void **itr)
+{
+	return itr - hash->nodes;
+}
+
 #define HASH_FOREACH(hash, itr) \
 	for(void **(itr) = (hash)->nodes; (itr) - (hash)->nodes < (hash)->size; (itr)++)
 
@@ -450,19 +463,19 @@ _sort_rdfs_label(const void *a, const void *b, void *data)
 {
 	plughandle_t *handle = data;
 
-	const LilvNode **group_a = (const LilvNode **)a;
-	const LilvNode **group_b = (const LilvNode **)b;
+	const LilvNode *group_a = *(const LilvNode **)a;
+	const LilvNode *group_b = *(const LilvNode **)b;
 
 	const char *name_a = NULL;
 	const char *name_b = NULL;
 
-	LilvNode *node_a = lilv_world_get(handle->world, *group_a, handle->node.rdfs_label, NULL);
+	LilvNode *node_a = lilv_world_get(handle->world, group_a, handle->node.rdfs_label, NULL);
 	if(!node_a)
-		node_a = lilv_world_get(handle->world, *group_a, handle->node.lv2_name, NULL);
+		node_a = lilv_world_get(handle->world, group_a, handle->node.lv2_name, NULL);
 
-	LilvNode *node_b = lilv_world_get(handle->world, *group_b, handle->node.rdfs_label, NULL);
+	LilvNode *node_b = lilv_world_get(handle->world, group_b, handle->node.rdfs_label, NULL);
 	if(!node_b)
-		node_b = lilv_world_get(handle->world, *group_b, handle->node.lv2_name, NULL);
+		node_b = lilv_world_get(handle->world, group_b, handle->node.lv2_name, NULL);
 
 	if(node_a)
 		name_a = lilv_node_as_string(node_a);
@@ -486,17 +499,14 @@ _sort_port_name(const void *a, const void *b, void *data)
 {
 	mod_t *mod = data;
 
-	const port_t **port_a = (const port_t **)a;
-	const port_t **port_b = (const port_t **)b;
-
-	const port_t *port_A = *port_a;
-	const port_t *port_B = *port_b;
+	const port_t *port_a = *(const port_t **)a;
+	const port_t *port_b = *(const port_t **)b;
 
 	const char *name_a = NULL;
 	const char *name_b = NULL;
 
-	LilvNode *node_a = lilv_port_get_name(mod->plug, port_A->port);
-	LilvNode *node_b = lilv_port_get_name(mod->plug, port_B->port);
+	LilvNode *node_a = lilv_port_get_name(mod->plug, port_a->port);
+	LilvNode *node_b = lilv_port_get_name(mod->plug, port_b->port);
 
 	if(node_a)
 		name_a = lilv_node_as_string(node_a);
@@ -516,26 +526,39 @@ _sort_port_name(const void *a, const void *b, void *data)
 }
 
 static int
+_sort_scale_point_name(const void *a, const void *b)
+{
+	const scale_point_t *scale_point_a = *(const scale_point_t **)a;
+	const scale_point_t *scale_point_b = *(const scale_point_t **)b;
+
+	const char *name_a = scale_point_a->label;
+	const char *name_b = scale_point_b->label;
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	return ret;
+}
+
+static int
 _sort_param_name(const void *a, const void *b, void *data)
 {
 	plughandle_t *handle = data;
 
-	const param_t **param_a = (const param_t **)a;
-	const param_t **param_b = (const param_t **)b;
-
-	const param_t *param_A = *param_a;
-	const param_t *param_B = *param_b;
+	const param_t *param_a = *(const param_t **)a;
+	const param_t *param_b = *(const param_t **)b;
 
 	const char *name_a = NULL;
 	const char *name_b = NULL;
 
-	LilvNode *node_a = lilv_world_get(handle->world, param_A->param, handle->node.rdfs_label, NULL);
+	LilvNode *node_a = lilv_world_get(handle->world, param_a->param, handle->node.rdfs_label, NULL);
 	if(!node_a)
-		node_a = lilv_world_get(handle->world, param_A->param, handle->node.lv2_name, NULL);
+		node_a = lilv_world_get(handle->world, param_a->param, handle->node.lv2_name, NULL);
 
-	LilvNode *node_b = lilv_world_get(handle->world, param_B->param, handle->node.rdfs_label, NULL);
+	LilvNode *node_b = lilv_world_get(handle->world, param_b->param, handle->node.rdfs_label, NULL);
 	if(!node_b)
-		node_b = lilv_world_get(handle->world, param_B->param, handle->node.lv2_name, NULL);
+		node_b = lilv_world_get(handle->world, param_b->param, handle->node.lv2_name, NULL);
 
 	if(node_a)
 		name_a = lilv_node_as_string(node_a);
@@ -555,6 +578,17 @@ _sort_param_name(const void *a, const void *b, void *data)
 }
 
 static void
+_scale_point_free(void *data)
+{
+	scale_point_t *point = data;
+
+	if(point->label)
+		free(point->label);
+
+	free(data);
+}
+
+static void
 _port_free(void *data)
 {
 	port_t *port = data;
@@ -562,8 +596,8 @@ _port_free(void *data)
 	if(port->groups)
 		lilv_nodes_free(port->groups);
 
-	if( (port->type == PROPERTY_TYPE_CONTROL) && port->control.points)
-		lilv_scale_points_free(port->control.points);
+	if(port->type == PROPERTY_TYPE_CONTROL)
+		_hash_clear(&port->control.points, _scale_point_free);
 
 	free(port);
 }
@@ -651,7 +685,6 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			control->is_readonly = is_output;
 			control->is_int = lilv_port_has_property(plug, port->port, handle->node.lv2_integer);
 			control->is_bool = lilv_port_has_property(plug, port->port, handle->node.lv2_toggled);
-			control->points = lilv_port_get_scale_points(plug, port->port);
 
 			LilvNode *val = NULL;
 			LilvNode *min = NULL;
@@ -703,6 +736,57 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 			{
 				control->is_int = false;
 				control->is_bool = true;
+			}
+
+			LilvScalePoints *port_points = lilv_port_get_scale_points(plug, port->port);
+			if(port_points)
+			{
+				LILV_FOREACH(scale_points, i, port_points)
+				{
+					const LilvScalePoint *port_point = lilv_scale_points_get(port_points, i);
+					const LilvNode *label_node = lilv_scale_point_get_label(port_point);
+					const LilvNode *value_node = lilv_scale_point_get_value(port_point);
+
+					if(label_node && value_node)
+					{
+						scale_point_t *point = calloc(1, sizeof(scale_point_t));
+						if(!point)
+							continue;
+
+						_hash_add(&port->control.points, point);
+
+						point->label = strdup(lilv_node_as_string(label_node));
+
+						if(control->is_int)
+						{
+							point->val.i = _node_as_int(value_node, 0);
+						}
+						else if(control->is_bool)
+						{
+							point->val.i = _node_as_bool(value_node, false);
+						}
+						else // is_float
+						{
+							point->val.f = _node_as_float(value_node, 0.f);
+						}
+					}
+				}
+
+				control->points_ref = 0;
+				HASH_FOREACH(&port->control.points, itr)
+				{
+					scale_point_t *point = *itr;
+
+					if(point->val.i == control->val.i) //FIXME
+					{
+						control->points_ref = _hash_offset(&port->control.points, itr);
+						break;
+					}
+				}
+
+				_hash_sort(&port->control.points, _sort_scale_point_name);
+
+				lilv_scale_points_free(port_points);
 			}
 		}
 		else if(is_atom)
@@ -879,14 +963,14 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 static int
 _sort_plugin_name(const void *a, const void *b)
 {
-	const LilvPlugin **plug_a = (const LilvPlugin **)a;
-	const LilvPlugin **plug_b = (const LilvPlugin **)b;
+	const LilvPlugin *plug_a = *(const LilvPlugin **)a;
+	const LilvPlugin *plug_b = *(const LilvPlugin **)b;
 
 	const char *name_a = NULL;
 	const char *name_b = NULL;
 
-	LilvNode *node_a = lilv_plugin_get_name(*plug_a);
-	LilvNode *node_b = lilv_plugin_get_name(*plug_b);
+	LilvNode *node_a = lilv_plugin_get_name(plug_a);
+	LilvNode *node_b = lilv_plugin_get_name(plug_b);
 
 	if(node_a)
 		name_a = lilv_node_as_string(node_a);
@@ -1775,49 +1859,26 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 		{
 			nk_spacing(ctx, 1);
 		}
-		else if(control->points)
+		else if(!_hash_empty(&control->points))
 		{
-			int val = 0;
-
-			const int count = lilv_scale_points_size(control->points);
-			const char *items [count];
-			param_union_t values [count];
-
-			//FIXME build a hash for this
-			const char **item_ptr = items;
-			param_union_t *value_ptr = values;
-			LILV_FOREACH(scale_points, i, control->points)
+			scale_point_t *ref = control->points.nodes[control->points_ref];
+			if(nk_combo_begin_label(ctx, ref->label, nk_vec2(nk_widget_width(ctx), 7*dy)))
 			{
-				const LilvScalePoint *point = lilv_scale_points_get(control->points, i);
-				const LilvNode *label_node = lilv_scale_point_get_label(point);
-				const LilvNode *value_node = lilv_scale_point_get_value(point);
-				*item_ptr = lilv_node_as_string(label_node);
-
-				if(control->is_int)
+				nk_layout_row_dynamic(ctx, dy, 1);
+				HASH_FOREACH(&control->points, itr)
 				{
-					value_ptr->i = _node_as_int(value_node, 0);
+					scale_point_t *point = *itr;
 
-					if(value_ptr->i == control->val.i)
-						val = value_ptr - values;
-				}
-				else // is_float
-				{
-					value_ptr->f = _node_as_float(value_node, 0.f);
-
-					if(value_ptr->f == control->val.f)
-						val = value_ptr - values;
+					if(nk_combo_item_label(ctx, point->label, NK_TEXT_LEFT) && !control->is_readonly)
+					{
+						control->points_ref = _hash_offset(&control->points, itr);
+						control->val = point->val;
+						//FIXME
+					}
 				}
 
-				item_ptr++;
-				value_ptr++;
+				nk_combo_end(ctx);
 			}
-
-			nk_combobox(ctx, items, count, &val, dy, nk_vec2(nk_widget_width(ctx), 5*dy));
-
-			if(control->is_int)
-				control->val.i = values[val].i;
-			else // is_float
-				control->val.f = values[val].f;
 		}
 		else // is_float
 		{
@@ -1850,7 +1911,7 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 			//FIXME
 		}
 	}
-	else if(control->points)
+	else if(!_hash_empty(&control->points))
 	{
 		nk_spacing(ctx, 1);
 	}
