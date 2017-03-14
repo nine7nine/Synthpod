@@ -16,6 +16,7 @@
  */
 
 #include <getopt.h>
+#include <inttypes.h>
 
 #include <synthpod_bin.h>
 
@@ -502,7 +503,8 @@ bin_init(bin_t *bin)
 		if(fd)
 		{
 			// automatically start gui in separate process
-			if(bin->has_gui && !strncmp(bin->socket_path, "ipc://", 6))
+			if(bin->has_gui
+				&& (!strncmp(bin->socket_path, "ipc://", 6) || !strncmp(bin->socket_path, "tcp://", 6)) )
 			{
 //#define USE_NK
 #ifdef USE_NK
@@ -521,6 +523,22 @@ bin_init(bin_t *bin)
 				char update_rate [128];
 				snprintf(update_rate, 128, "%i", bin->update_rate);
 
+				char socket_path [128];
+				snprintf(socket_path, 128, "%s", bin->socket_path);
+
+				// tcp socket path needs to be changed for local slave
+				const bool is_tcp = strncmp(bin->socket_path, "tcp://", 6) == 0;
+				if(is_tcp)
+				{
+					const char *port_ptr = strrchr(bin->socket_path, ':');
+					if(port_ptr)
+					{
+						uint16_t port;
+						if(sscanf(port_ptr + 1, "%"SCNu16, &port) == 1)
+							snprintf(socket_path, 128, "tcp://localhost:%"PRIu16, port);
+					}
+				}
+
 				char *args [] = {
 					(char *)cmd,
 					"-p", SYNTHPOD_PREFIX"stereo",
@@ -530,7 +548,7 @@ bin_init(bin_t *bin)
 #else
 					"-u", SYNTHPOD_PREFIX"root_3_eo",
 #endif
-					"-s", (char *)bin->socket_path,
+					"-s", socket_path,
 					"-w", window_title,
 					"-f", update_rate,
 					NULL

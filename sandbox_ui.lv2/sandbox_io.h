@@ -433,9 +433,12 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	if(!io->ser.buf)
 		return -1;
 
-	if(!(io->netatom.tx = netatom_new(io->map, io->unmap, true)))
+	const bool is_tcp = strncmp(socket_path, "tcp://", 6) == 0;
+	const bool swap = is_tcp ? true : false;
+
+	if(!(io->netatom.tx = netatom_new(io->map, io->unmap, swap)))
 		return -1;
-	if(!(io->netatom.rx = netatom_new(io->map, io->unmap, true)))
+	if(!(io->netatom.rx = netatom_new(io->map, io->unmap, swap)))
 		return -1;
 
 	if((io->sock = nn_socket(AF_SP, NN_PAIR)) == -1)
@@ -454,7 +457,7 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 		return -1;
 	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_RCVMAXSIZE, &rcvmaxsize, sizeof(rcvmaxsize)) == -1)
 		return -1;
-	if(strncmp(socket_path, "tcp://", 6) == 0)
+	if(is_tcp)
 	{
 		// disable nagle's algorithm
 		const int nodelay = 1;
