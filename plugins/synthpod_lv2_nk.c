@@ -20,6 +20,7 @@
 #include <synthpod_lv2.h>
 
 #define NK_PUGL_IMPLEMENTATION
+#define NK_PUGL_API
 #include "nk_pugl/nk_pugl.h"
 
 #ifdef _WIN32

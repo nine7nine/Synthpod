@@ -26,7 +26,8 @@
 
 #include <math.h>
 
-#include "nk_pugl/nk_pugl.h"
+#define NK_PUGL_API
+#include <nk_pugl/nk_pugl.h>
 
 #include <lilv/lilv.h>
 
@@ -2235,8 +2236,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					if(old_sel != handle->plugin_search_selector)
 						plugin_find_matches = true;
 					const size_t old_len = strlen(handle->plugin_search_buf);
-					const nk_flags flags = nk_edit_string_zero_terminated(ctx,
-						NK_EDIT_FIELD | NK_EDIT_SIG_ENTER,
+					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+					const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
 						handle->plugin_search_buf, SEARCH_BUF_MAX, nk_filter_default);
 					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->plugin_search_buf)) )
 						plugin_find_matches = true;
@@ -2270,8 +2271,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					if(old_sel != handle->preset_search_selector)
 						preset_find_matches = true;
 					const size_t old_len = strlen(handle->preset_search_buf);
-					const nk_flags flags = nk_edit_string_zero_terminated(ctx,
-						NK_EDIT_FIELD | NK_EDIT_SIG_ENTER,
+					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+					const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
 						handle->preset_search_buf, SEARCH_BUF_MAX, nk_filter_default);
 					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->preset_search_buf)) )
 						preset_find_matches = true;

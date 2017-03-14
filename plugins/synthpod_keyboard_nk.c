@@ -23,6 +23,7 @@
 
 #include <math.h>
 
+#define NK_PUGL_API
 #include "nk_pugl/nk_pugl.h"
 
 typedef struct _midi_atom_t midi_atom_t;
