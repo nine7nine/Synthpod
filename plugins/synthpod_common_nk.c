@@ -263,21 +263,6 @@ static const char *search_labels [SELECTOR_SEARCH_MAX] = {
 	[SELECTOR_SEARCH_PROJECT] = "Project"
 };
 
-static void
-_hash_clear(hash_t *hash, void (*free_cb)(void *node))
-{
-	if(free_cb)
-	{
-		for(unsigned i = 0; i < hash->size; i++)
-			free_cb(hash->nodes[i]);
-	}
-
-	free(hash->nodes);
-	hash->nodes = NULL;
-
-	hash->size = 0;
-}
-
 static bool
 _hash_empty(hash_t *hash)
 {
@@ -293,6 +278,30 @@ _hash_add(hash_t *hash, void *node)
 }
 
 static void
+_hash_free(hash_t *hash)
+{
+	free(hash->nodes);
+	hash->nodes = NULL;
+	hash->size = 0;
+}
+
+static void *
+_hash_pop(hash_t *hash)
+{
+	if(hash->size)
+	{
+		void *node = hash->nodes[--hash->size];
+
+		if(!hash->size)
+			_hash_free(hash);
+
+		return node;
+	}
+
+	return NULL;
+}
+
+static void
 _hash_sort(hash_t *hash, int (*cmp)(const void *a, const void *b))
 {
 	if(hash->size)
@@ -300,7 +309,8 @@ _hash_sort(hash_t *hash, int (*cmp)(const void *a, const void *b))
 }
 
 static void
-_hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data), void *data)
+_hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
+	void *data)
 {
 	if(hash->size)
 		qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
@@ -314,6 +324,9 @@ _hash_offset(hash_t *hash, void **itr)
 
 #define HASH_FOREACH(hash, itr) \
 	for(void **(itr) = (hash)->nodes; (itr) - (hash)->nodes < (hash)->size; (itr)++)
+
+#define HASH_FREE(hash, ptr) \
+	for(void *(ptr) = _hash_pop((hash)); (ptr); (ptr) = _hash_pop((hash)))
 
 static int
 _node_as_int(const LilvNode *node, int dflt)
@@ -579,39 +592,6 @@ _sort_param_name(const void *a, const void *b, void *data)
 }
 
 static void
-_scale_point_free(void *data)
-{
-	scale_point_t *point = data;
-
-	if(point->label)
-		free(point->label);
-
-	free(data);
-}
-
-static void
-_port_free(void *data)
-{
-	port_t *port = data;
-
-	if(port->groups)
-		lilv_nodes_free(port->groups);
-
-	if(port->type == PROPERTY_TYPE_CONTROL)
-		_hash_clear(&port->control.points, _scale_point_free);
-
-	free(port);
-}
-
-static void
-_param_free(void *data)
-{
-	param_t *param = data;
-
-	free(param);
-}
-
-static void
 _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
 	handle->num_mods+= 1;
@@ -867,19 +847,44 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 }
 
 static void
-_node_free(void *data)
-{
-	LilvNode *node = data;
-	lilv_node_free(node);
-}
-
-static void
 _mod_free(plughandle_t *handle, mod_t *mod)
 {
-	_hash_clear(&mod->ports, _port_free);
-	_hash_clear(&mod->banks, _node_free);
-	_hash_clear(&mod->groups, NULL);
-	_hash_clear(&mod->params, _param_free);
+	HASH_FREE(&mod->ports, ptr)
+	{
+		port_t *port = ptr;
+
+		if(port->groups)
+			lilv_nodes_free(port->groups);
+
+		if(port->type == PROPERTY_TYPE_CONTROL)
+		{
+			HASH_FREE(&port->control.points, ptr2)
+			{
+				scale_point_t *point = ptr2;
+
+				if(point->label)
+					free(point->label);
+
+				free(point);
+			}
+		}
+
+		free(port);
+	}
+
+	HASH_FREE(&mod->banks, ptr)
+	{
+		LilvNode *node = ptr;
+		lilv_node_free(node);
+	}
+
+	_hash_free(&mod->groups);
+
+	HASH_FREE(&mod->params, ptr)
+	{
+		param_t *param = ptr;
+		free(param);
+	}
 
 	if(mod->presets)
 	{
@@ -993,7 +998,7 @@ _sort_plugin_name(const void *a, const void *b)
 static void
 _refresh_main_plugin_list(plughandle_t *handle)
 {
-	_hash_clear(&handle->plugin_matches, NULL);
+	_hash_free(&handle->plugin_matches);
 
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 
@@ -1259,7 +1264,7 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 static void
 _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 {
-	_hash_clear(&handle->preset_matches, NULL);
+	_hash_free(&handle->preset_matches);
 
 	HASH_FOREACH(&mod->banks, itr)
 	{
@@ -2589,8 +2594,8 @@ cleanup(LV2UI_Handle instance)
 	}
 	free(handle->mods);
 
-	_hash_clear(&handle->plugin_matches, NULL);
-	_hash_clear(&handle->preset_matches, NULL);
+	_hash_free(&handle->plugin_matches);
+	_hash_free(&handle->preset_matches);
 
 	_deinit(handle);
 
