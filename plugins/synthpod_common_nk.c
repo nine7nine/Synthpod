@@ -108,7 +108,7 @@ struct _scale_point_t {
 
 struct _control_port_t {
 	hash_t points;
-	int points_ref;
+	scale_point_t *points_ref;
 	param_union_t min;
 	param_union_t max;
 	param_union_t span;
@@ -181,11 +181,10 @@ struct _plughandle_t {
 	selector_main_t main_selector;
 	selector_grid_t grid_selector;
 	const LilvPlugin *plugin_selector;
-	unsigned module_selector;
+	mod_t *module_selector;
 	const LilvNode *preset_selector;
 
-	unsigned num_mods;
-	mod_t *mods;
+	hash_t mods;
 
 	struct {
 		LilvNode *pg_group;
@@ -314,12 +313,6 @@ _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
 {
 	if(hash->size)
 		qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
-}
-
-static size_t
-_hash_offset(hash_t *hash, void **itr)
-{
-	return itr - hash->nodes;
 }
 
 #define HASH_FOREACH(hash, itr) \
@@ -594,12 +587,11 @@ _sort_param_name(const void *a, const void *b, void *data)
 static void
 _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
-	handle->num_mods+= 1;
-	handle->mods = realloc(handle->mods, handle->num_mods * sizeof(mod_t));
+	mod_t *mod = calloc(1, sizeof(mod_t));
+	if(!mod)
+		return;
 
-	mod_t *mod = &handle->mods[handle->num_mods - 1];
-	memset(mod, 0x0, sizeof(mod_t));
-
+	_hash_add(&handle->mods, mod);
 	mod->plug = plug;
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug);
 
@@ -753,15 +745,17 @@ _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 					}
 				}
 
-				control->points_ref = 0;
+				int32_t diff1 = INT32_MAX;
 				HASH_FOREACH(&port->control.points, itr)
 				{
 					scale_point_t *point = *itr;
 
-					if(point->val.i == control->val.i) //FIXME
+					const int32_t diff2 = abs(point->val.i - control->val.i); //FIXME
+
+					if(diff2 < diff1)
 					{
-						control->points_ref = _hash_offset(&port->control.points, itr);
-						break;
+						control->points_ref = point;
+						diff1 = diff2;
 					}
 				}
 
@@ -1389,8 +1383,7 @@ static void
 _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 	bool find_matches)
 {
-	mod_t *mod = handle->module_selector < handle->num_mods
-		? &handle->mods[handle->module_selector] : NULL;
+	mod_t *mod = handle->module_selector;
 
 	if(mod && mod->presets)
 	{
@@ -1882,7 +1875,7 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 		}
 		else if(!_hash_empty(&control->points))
 		{
-			scale_point_t *ref = control->points.nodes[control->points_ref];
+			scale_point_t *ref = control->points_ref;
 			if(nk_combo_begin_label(ctx, ref->label, nk_vec2(nk_widget_width(ctx), 7*dy)))
 			{
 				nk_layout_row_dynamic(ctx, dy, 1);
@@ -1892,7 +1885,7 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 
 					if(nk_combo_item_label(ctx, point->label, NK_TEXT_LEFT) && !control->is_readonly)
 					{
-						control->points_ref = _hash_offset(&control->points, itr);
+						control->points_ref = point;
 						control->val = point->val;
 						//FIXME
 					}
@@ -2138,20 +2131,20 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_layout_row_push(ctx, 0.25);
 			if(nk_group_begin(ctx, "Rack", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				for(unsigned m=0; m<handle->num_mods; m++)
+				HASH_FOREACH(&handle->mods, itr)
 				{
-					mod_t *mod = &handle->mods[m];
+					mod_t *mod = *itr;
 					const LilvPlugin *plug = mod->plug;
 
 					LilvNode *name_node = lilv_plugin_get_name(plug);
 					if(name_node)
 					{
 						nk_layout_row_dynamic(ctx, dy, 2);
-						int selected = m == handle->module_selector;
+						int selected = mod == handle->module_selector;
 						if(nk_selectable_label(ctx, lilv_node_as_string(name_node), NK_TEXT_LEFT,
 							&selected))
 						{
-							handle->module_selector = m;
+							handle->module_selector = mod;
 							handle->preset_selector = NULL;
 							preset_find_matches = true;
 						}
@@ -2167,8 +2160,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_layout_row_push(ctx, 0.50);
 			if(nk_group_begin(ctx, "Controls", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				mod_t *mod = handle->module_selector < handle->num_mods
-					? &handle->mods[handle->module_selector] : NULL;
+				mod_t *mod = handle->module_selector;
 
 				if(mod)
 				{
@@ -2586,13 +2578,11 @@ cleanup(LV2UI_Handle instance)
 	nk_pugl_hide(&handle->win);
 	nk_pugl_shutdown(&handle->win);
 
-	for(unsigned m=0; m<handle->num_mods; m++)
+	HASH_FREE(&handle->mods, ptr)
 	{
-		mod_t *mod = &handle->mods[m];
-
+		mod_t *mod = ptr;
 		_mod_free(handle, mod);
 	}
-	free(handle->mods);
 
 	_hash_free(&handle->plugin_matches);
 	_hash_free(&handle->preset_matches);
