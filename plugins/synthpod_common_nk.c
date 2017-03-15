@@ -224,12 +224,15 @@ struct _plughandle_t {
 
 	selector_search_t plugin_search_selector;
 	selector_search_t preset_search_selector;
+	selector_search_t port_search_selector;
 
 	hash_t plugin_matches;
 	hash_t preset_matches;
+	hash_t port_matches;
 
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
+	char port_search_buf [SEARCH_BUF_MAX];
 
 	bool first;
 };
@@ -1002,7 +1005,6 @@ _refresh_main_plugin_list(plughandle_t *handle)
 	else if(handle->plugin_search_selector == SELECTOR_SEARCH_PROJECT)
 		p = handle->node.doap_name;
 
-	int count = 0;
 	bool selector_visible = false;
 	LILV_FOREACH(plugins, i, plugs)
 	{
@@ -2116,6 +2118,93 @@ _expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, floa
 }
 
 static void
+_refresh_main_port_list(plughandle_t *handle, mod_t *mod)
+{
+	_hash_free(&handle->port_matches);
+
+	bool search = strlen(handle->port_search_buf) != 0;
+
+	HASH_FOREACH(&mod->ports, itr)
+	{
+		port_t *port = *itr;
+
+		bool visible = true;
+		if(search)
+		{
+			LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
+			if(name_node)
+			{
+				if(!strcasestr(lilv_node_as_string(name_node), handle->port_search_buf))
+					visible = false;
+
+				lilv_node_free(name_node);
+			}
+		}
+
+		if(visible)
+			_hash_add(&handle->port_matches, port);
+	}
+}
+
+static void
+_expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
+	float DY, float dy, bool find_matches)
+{
+	if(_hash_empty(&handle->port_matches) || find_matches)
+		_refresh_main_port_list(handle, mod);
+
+	HASH_FOREACH(&mod->groups, itr)
+	{
+		const LilvNode *mod_group = *itr;
+
+		LilvNode *group_label_node = lilv_world_get(handle->world, mod_group, handle->node.rdfs_label, NULL);
+		if(!group_label_node)
+			group_label_node = lilv_world_get(handle->world, mod_group, handle->node.lv2_name, NULL);
+		if(group_label_node)
+		{
+			nk_layout_row_dynamic(ctx, dy, 1);
+			_tab_label(ctx, lilv_node_as_string(group_label_node));
+
+			nk_layout_row_dynamic(ctx, DY, 3);
+			HASH_FOREACH(&handle->port_matches, port_itr)
+			{
+				port_t *port = *port_itr;
+				if(!lilv_nodes_contains(port->groups, mod_group))
+					continue;
+
+				_expose_port(ctx, mod, port, dy);
+			}
+
+			lilv_node_free(group_label_node);
+		}
+	}
+
+	nk_layout_row_dynamic(ctx, dy, 1);
+	_tab_label(ctx, "Ungrouped");
+
+	nk_layout_row_dynamic(ctx, DY, 3);
+	HASH_FOREACH(&handle->port_matches, itr)
+	{
+		port_t *port = *itr;
+		if(lilv_nodes_size(port->groups))
+			continue;
+
+		_expose_port(ctx, mod, port, dy);
+	}
+
+	nk_layout_row_dynamic(ctx, dy, 1);
+	_tab_label(ctx, "Parameters");
+
+	nk_layout_row_dynamic(ctx, DY, 3);
+	HASH_FOREACH(&mod->params, itr)
+	{
+		param_t *param = *itr;
+
+		_expose_param(handle, ctx, param, dy);
+	}
+}
+
+static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
 	const struct nk_vec2 group_padding = ctx->style.window.group_padding;
@@ -2126,6 +2215,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		{
 			bool plugin_find_matches = false;
 			bool preset_find_matches = false;
+			bool port_find_matches = false;
 			nk_layout_row_begin(ctx, NK_DYNAMIC, dh, 3);
 
 			nk_layout_row_push(ctx, 0.25);
@@ -2147,6 +2237,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							handle->module_selector = mod;
 							handle->preset_selector = NULL;
 							preset_find_matches = true;
+							port_find_matches = true;
 						}
 						nk_labelf(ctx, NK_TEXT_RIGHT, "%4.1f|%4.1f|%4.1f%%", 1.1f, 2.2f, 5.5f);
 
@@ -2160,61 +2251,26 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_layout_row_push(ctx, 0.50);
 			if(nk_group_begin(ctx, "Controls", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				mod_t *mod = handle->module_selector;
+				const float dim [2] = {0.4, 0.6};
+				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+				const selector_search_t old_sel = handle->port_search_selector;
+				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->port_search_selector)
+					port_find_matches = true;
+				const size_t old_len = strlen(handle->port_search_buf);
+				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+				const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
+					handle->port_search_buf, SEARCH_BUF_MAX, nk_filter_default);
+				if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->port_search_buf)) )
+					port_find_matches = true;
 
+				mod_t *mod = handle->module_selector;
 				if(mod)
 				{
 					const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
 
-					HASH_FOREACH(&mod->groups, itr)
-					{
-						const LilvNode *mod_group = *itr;
-
-						LilvNode *group_label_node = lilv_world_get(handle->world, mod_group, handle->node.rdfs_label, NULL);
-						if(!group_label_node)
-							group_label_node = lilv_world_get(handle->world, mod_group, handle->node.lv2_name, NULL);
-						if(group_label_node)
-						{
-							nk_layout_row_dynamic(ctx, dy, 1);
-							_tab_label(ctx, lilv_node_as_string(group_label_node));
-
-							nk_layout_row_dynamic(ctx, DY, 3);
-							HASH_FOREACH(&mod->ports, port_itr)
-							{
-								port_t *port = *port_itr;
-								if(!lilv_nodes_contains(port->groups, mod_group))
-									continue;
-
-								_expose_port(ctx, mod, port, dy);
-							}
-
-							lilv_node_free(group_label_node);
-						}
-					}
-
-					nk_layout_row_dynamic(ctx, dy, 1);
-					_tab_label(ctx, "Ungrouped");
-
-					nk_layout_row_dynamic(ctx, DY, 3);
-					HASH_FOREACH(&mod->ports, itr)
-					{
-						port_t *port = *itr;
-						if(lilv_nodes_size(port->groups))
-							continue;
-
-						_expose_port(ctx, mod, port, dy);
-					}
-
-					nk_layout_row_dynamic(ctx, dy, 1);
-					_tab_label(ctx, "Parameters");
-
-					nk_layout_row_dynamic(ctx, DY, 3);
-					HASH_FOREACH(&mod->params, itr)
-					{
-						param_t *param = *itr;
-
-						_expose_param(handle, ctx, param, dy);
-					}
+					_expose_control_list(handle, mod, ctx, DY, dy, port_find_matches);
 				}
 
 				nk_group_end(ctx);
@@ -2586,6 +2642,7 @@ cleanup(LV2UI_Handle instance)
 
 	_hash_free(&handle->plugin_matches);
 	_hash_free(&handle->preset_matches);
+	_hash_free(&handle->port_matches);
 
 	_deinit(handle);
 
