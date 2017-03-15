@@ -571,13 +571,13 @@ sandbox_slave_run(sandbox_slave_t *sb)
 		sb->driver->run_cb(sb, sb->update_rate, sb->data);
 }
 
-void
-sandbox_slave_fd_get(sandbox_slave_t *sb, int *fd)
+int
+sandbox_slave_fd_get(sandbox_slave_t *sb)
 {
-	if(sb && fd)
-		*fd = _sandbox_io_fd_get(&sb->io);
-	else if(fd)
-		*fd = -1;
+	if(sb)
+		return _sandbox_io_fd_get(&sb->io);
+
+	return -1;
 }
 
 const char *

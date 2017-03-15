@@ -201,8 +201,7 @@ _sbox_ui_show(mod_t *mod)
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod);
 	if(!mod_ui->sbox.sb)
 		fprintf(stderr, "failed to initialize sandbox master\n");
-	int fd;
-	sandbox_master_fd_get(mod_ui->sbox.sb, &fd); //FIXME check
+	const int fd = sandbox_master_fd_get(mod_ui->sbox.sb); //FIXME check
 
 	char *cmd = NULL;
 	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s' -f %f",

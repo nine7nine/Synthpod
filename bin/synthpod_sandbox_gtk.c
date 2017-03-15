@@ -137,8 +137,7 @@ _init(sandbox_slave_t *sb, void *data)
 	gtk_container_add(GTK_CONTAINER(app->win), app->widget);
 	gtk_widget_show_all(app->win);
 
-	int fd;
-	sandbox_slave_fd_get(sb, &fd);
+	const int fd = sandbox_slave_fd_get(sb);
 	if(fd == -1)
 	{
 		fprintf(stderr, "sandbox_slave_fd_get failed\n");

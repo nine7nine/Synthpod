@@ -116,8 +116,7 @@ _init(sandbox_slave_t *sb, void *data)
 	evas_object_resize(app->win, w, h);
 	evas_object_show(app->win);
 
-	int fd;
-	sandbox_slave_fd_get(sb, &fd);
+	const int fd = sandbox_slave_fd_get(sb);
 	if(fd == -1)
 	{
 		fprintf(stderr, "sandbox_slave_instantiate failed\n");

@@ -55,8 +55,8 @@ sandbox_master_send(sandbox_master_t *sb, uint32_t index, uint32_t size,
 int
 sandbox_master_flush(sandbox_master_t *sb);
 
-void
-sandbox_master_fd_get(sandbox_master_t *sb, int *fd);
+int
+sandbox_master_fd_get(sandbox_master_t *sb);
 
 #ifdef __cplusplus
 }

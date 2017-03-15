@@ -92,11 +92,11 @@ sandbox_master_flush(sandbox_master_t *sb)
 	return -1;
 }
 
-void
-sandbox_master_fd_get(sandbox_master_t *sb, int *fd)
+int
+sandbox_master_fd_get(sandbox_master_t *sb)
 {
-	if(sb && fd)
-		*fd = _sandbox_io_fd_get(&sb->io);
-	else if(fd)
-		*fd = -1;
+	if(sb)
+		return _sandbox_io_fd_get(&sb->io);
+
+	return -1;
 }

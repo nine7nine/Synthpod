@@ -497,9 +497,7 @@ bin_init(bin_t *bin)
 	bin->sb = sandbox_master_new(&bin->sb_driver, bin);
 	if(bin->sb)
 	{
-		int fd;
-		sandbox_master_fd_get(bin->sb, &fd);
-
+		const int fd = sandbox_master_fd_get(bin->sb);
 		if(fd)
 		{
 			// automatically start gui in separate process

@@ -154,8 +154,7 @@ _init(sandbox_slave_t *sb, void *data)
 	if(!app->widget)
 		return -1;
 
-	int fd;
-	sandbox_slave_fd_get(sb, &fd);
+	const int fd = sandbox_slave_fd_get(sb);
 	if(fd == -1)
 	{
 		fprintf(stderr, "sandbox_slave_fd_get failed\n");

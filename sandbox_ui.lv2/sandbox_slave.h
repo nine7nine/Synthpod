@@ -60,8 +60,8 @@ sandbox_slave_extension_data(sandbox_slave_t *sb, const char *URI);
 void
 sandbox_slave_run(sandbox_slave_t *sb);
 
-void
-sandbox_slave_fd_get(sandbox_slave_t *sb, int *fd);
+int
+sandbox_slave_fd_get(sandbox_slave_t *sb);
 
 const char *
 sandbox_slave_title_get(sandbox_slave_t *sb);
