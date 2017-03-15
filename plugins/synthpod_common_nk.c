@@ -2162,15 +2162,21 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			group_label_node = lilv_world_get(handle->world, mod_group, handle->node.lv2_name, NULL);
 		if(group_label_node)
 		{
-			nk_layout_row_dynamic(ctx, dy, 1);
-			_tab_label(ctx, lilv_node_as_string(group_label_node));
-
-			nk_layout_row_dynamic(ctx, DY, 3);
+			bool first = true;
 			HASH_FOREACH(&handle->port_matches, port_itr)
 			{
 				port_t *port = *port_itr;
 				if(!lilv_nodes_contains(port->groups, mod_group))
 					continue;
+
+				if(first)
+				{
+					nk_layout_row_dynamic(ctx, dy, 1);
+					_tab_label(ctx, lilv_node_as_string(group_label_node));
+
+					nk_layout_row_dynamic(ctx, DY, 3);
+					first = false;
+				}
 
 				_expose_port(ctx, mod, port, dy);
 			}
@@ -2179,28 +2185,44 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 		}
 	}
 
-	nk_layout_row_dynamic(ctx, dy, 1);
-	_tab_label(ctx, "Ungrouped");
-
-	nk_layout_row_dynamic(ctx, DY, 3);
-	HASH_FOREACH(&handle->port_matches, itr)
 	{
-		port_t *port = *itr;
-		if(lilv_nodes_size(port->groups))
-			continue;
+		bool first = true;
+		HASH_FOREACH(&handle->port_matches, itr)
+		{
+			port_t *port = *itr;
+			if(lilv_nodes_size(port->groups))
+				continue;
 
-		_expose_port(ctx, mod, port, dy);
+			if(first)
+			{
+				nk_layout_row_dynamic(ctx, dy, 1);
+				_tab_label(ctx, "Ungrouped");
+
+				nk_layout_row_dynamic(ctx, DY, 3);
+				first = false;
+			}
+
+			_expose_port(ctx, mod, port, dy);
+		}
 	}
 
-	nk_layout_row_dynamic(ctx, dy, 1);
-	_tab_label(ctx, "Parameters");
-
-	nk_layout_row_dynamic(ctx, DY, 3);
-	HASH_FOREACH(&mod->params, itr)
 	{
-		param_t *param = *itr;
+		bool first = true;
+		HASH_FOREACH(&mod->params, itr)
+		{
+			param_t *param = *itr;
 
-		_expose_param(handle, ctx, param, dy);
+			if(first)
+			{
+				nk_layout_row_dynamic(ctx, dy, 1);
+				_tab_label(ctx, "Parameters");
+
+				nk_layout_row_dynamic(ctx, DY, 3);
+				first = false;
+			}
+
+			_expose_param(handle, ctx, param, dy);
+		}
 	}
 }
 
@@ -2221,6 +2243,20 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_layout_row_push(ctx, 0.25);
 			if(nk_group_begin(ctx, "Rack", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
+				nk_menubar_begin(ctx);
+				{
+					nk_layout_row_dynamic(ctx, dy, 1);
+
+					const struct nk_rect b = nk_widget_bounds(ctx);
+					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+					nk_stroke_line(canvas, b.x, b.y + b.h, b.x + b.w, b.y + b.h,
+						ctx->style.window.group_border, ctx->style.window.group_border_color);
+
+					nk_label(ctx, "TODO", NK_TEXT_LEFT);
+				}
+				nk_menubar_end(ctx);
+
+
 				HASH_FOREACH(&handle->mods, itr)
 				{
 					mod_t *mod = *itr;
@@ -2251,19 +2287,29 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_layout_row_push(ctx, 0.50);
 			if(nk_group_begin(ctx, "Controls", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 			{
-				const float dim [2] = {0.4, 0.6};
-				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-				const selector_search_t old_sel = handle->port_search_selector;
-				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->port_search_selector)
-					port_find_matches = true;
-				const size_t old_len = strlen(handle->port_search_buf);
-				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-				const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
-					handle->port_search_buf, SEARCH_BUF_MAX, nk_filter_default);
-				if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->port_search_buf)) )
-					port_find_matches = true;
+				nk_menubar_begin(ctx);
+				{
+					const float dim [7] = {0.2, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1};
+					nk_layout_row(ctx, NK_DYNAMIC, dy, 7, dim);
+					const selector_search_t old_sel = handle->port_search_selector;
+					handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+						handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+					if(old_sel != handle->port_search_selector)
+						port_find_matches = true;
+					const size_t old_len = strlen(handle->port_search_buf);
+					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+					const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
+						handle->port_search_buf, SEARCH_BUF_MAX, nk_filter_default);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->port_search_buf)) )
+						port_find_matches = true;
+
+					nk_check_label(ctx, "In", nk_true); //FIXME
+					nk_check_label(ctx, "Out", nk_true); //FIXME
+					nk_check_label(ctx, "Audio", nk_true); //FIXME
+					nk_check_label(ctx, "Ctrl.", nk_true); //FIXME
+					nk_check_label(ctx, "Event", nk_true); //FIXME
+				}
+				nk_menubar_end(ctx);
 
 				mod_t *mod = handle->module_selector;
 				if(mod)
