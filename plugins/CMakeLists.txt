@@ -1,7 +1,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/symap)
+include_directories(${PROJECT_SOURCE_DIR}/mapper.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/ext_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
@@ -53,8 +53,7 @@ install(TARGETS synthpod_ui.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
 add_executable(sandbox_efl
 	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_efl.c
-	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-	${PROJECT_SOURCE_DIR}/symap/symap.c)
+	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 target_link_libraries(sandbox_efl
 	${ELM_LDFLAGS}
 	${NANOMSG_LDFLAGS}

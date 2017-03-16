@@ -23,7 +23,9 @@
 #include <synthpod_app.h>
 
 #include <sratom/sratom.h>
-#include <symap.h>
+
+#define MAPPER_IMPLEMENTATION
+#include <mapper.lv2/mapper.h>
 
 #define CUINT8(str) ((const uint8_t *)(str))
 
@@ -36,47 +38,33 @@
 typedef struct _prog_t prog_t;
 
 struct _prog_t {
-	Symap *symap;
+	mapper_t *mapper;
+	mapper_pool_t mapper_pool;
+
 	Sratom *sratom;
-	LV2_URID_Map map;
-	LV2_URID_Unmap unmap;
+
+	LV2_URID_Map *map;
+	LV2_URID_Unmap *unmap;
 };
-
-static uint32_t
-_map(void *data, const char *uri)
-{
-	prog_t *prog = data;
-
-	return symap_map(prog->symap, uri);
-}
-
-static const char *
-_unmap(void *data, uint32_t urid)
-{
-	prog_t *prog = data;
-
-	return symap_unmap(prog->symap, urid);
-}
 
 static inline void
 _prog_init(prog_t *prog)
 {
-	prog->symap = symap_new();
+	prog->mapper = mapper_new(0x10000); // 64K
+	mapper_pool_init(&prog->mapper_pool, prog->mapper, NULL, NULL, NULL);
 
-	prog->map.handle = prog;
-	prog->map.map = _map;
+	prog->map = mapper_pool_get_map(&prog->mapper_pool);
+	prog->unmap = mapper_pool_get_unmap(&prog->mapper_pool);
 
-	prog->unmap.handle = prog;
-	prog->unmap.unmap = _unmap;
-
-	prog->sratom = sratom_new(&prog->map);
+	prog->sratom = sratom_new(prog->map);
 }
 
 static inline void
 _prog_deinit(prog_t *prog)
 {
 	sratom_free(prog->sratom);
-	symap_free(prog->symap);
+	mapper_pool_deinit(&prog->mapper_pool);
+	mapper_free(prog->mapper);
 }
 
 //FIXME is duplicate code from <synthpod_app_state.c>
@@ -116,11 +104,11 @@ _deserialize_from_turtle(Sratom *sratom, LV2_URID_Unmap *unmap, const char *path
 static inline void
 _prog_run(prog_t *prog, const char *path)
 {
-	const LV2_URID synthpod__graph = prog->map.map(prog->map.handle, SYNTHPOD_PREFIX"graph");
-	const LV2_URID lv2__index = prog->map.map(prog->map.handle, LV2_CORE__index);
-	const LV2_URID lv2__symbol = prog->map.map(prog->map.handle, LV2_CORE__symbol);
-	const LV2_URID lv2__port = prog->map.map(prog->map.handle, LV2_CORE__port);
-	const LV2_URID lv2__Port = prog->map.map(prog->map.handle, LV2_CORE__Port);
+	const LV2_URID synthpod__graph = prog->map->map(prog->map->handle, SYNTHPOD_PREFIX"graph");
+	const LV2_URID lv2__index = prog->map->map(prog->map->handle, LV2_CORE__index);
+	const LV2_URID lv2__symbol = prog->map->map(prog->map->handle, LV2_CORE__symbol);
+	const LV2_URID lv2__port = prog->map->map(prog->map->handle, LV2_CORE__port);
+	const LV2_URID lv2__Port = prog->map->map(prog->map->handle, LV2_CORE__Port);
 
 	printf(
 		"digraph G {\n"
@@ -131,7 +119,7 @@ _prog_run(prog_t *prog, const char *path)
 		"    remincross=true\n"
 		"  ];");
 
-	LV2_Atom_Object *obj = _deserialize_from_turtle(prog->sratom, &prog->unmap, path);
+	LV2_Atom_Object *obj = _deserialize_from_turtle(prog->sratom, prog->unmap, path);
 	if(obj)
 	{
 		const LV2_Atom_Tuple *graph = NULL;
@@ -148,7 +136,7 @@ _prog_run(prog_t *prog, const char *path)
 				const LV2_Atom_Int *index = NULL;
 				lv2_atom_object_get(mod_obj, lv2__index, &index, NULL);
 
-				const char *mod_uri_str = prog->unmap.unmap(prog->unmap.handle, mod_obj->body.otype);
+				const char *mod_uri_str = prog->unmap->unmap(prog->unmap->handle, mod_obj->body.otype);
 
 				if(!index || !mod_uri_str)
 					continue;
@@ -170,7 +158,7 @@ _prog_run(prog_t *prog, const char *path)
 				const LV2_Atom_Int *index = NULL;
 				lv2_atom_object_get(mod_obj, lv2__index, &index, NULL);
 
-				const char *mod_uri_str = prog->unmap.unmap(prog->unmap.handle, mod_obj->body.otype);
+				const char *mod_uri_str = prog->unmap->unmap(prog->unmap->handle, mod_obj->body.otype);
 
 				if(!index || !mod_uri_str)
 					continue;

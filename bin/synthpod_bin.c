@@ -357,30 +357,6 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
-__non_realtime static uint32_t
-_map(void *data, const char *uri)
-{
-	bin_t *bin = data;
-
-	_atomic_spin_lock(&bin->map_lock);
-	const uint32_t urid = symap_map(bin->symap, uri);
-	_atomic_unlock(&bin->map_lock);
-	
-	return urid;
-}
-
-__non_realtime static const char *
-_unmap(void *data, uint32_t urid)
-{
-	bin_t *bin = data;
-
-	_atomic_spin_lock(&bin->map_lock);
-	const char *uri = symap_unmap(bin->symap, urid);
-	_atomic_unlock(&bin->map_lock);
-	
-	return uri;
-}
-
 __non_realtime static void
 _sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
 	const void *buf)
@@ -446,32 +422,28 @@ bin_init(bin_t *bin)
 	bin->app_from_com = varchunk_new(CHUNK_SIZE, false);
 	bin->app_from_app = varchunk_new(CHUNK_SIZE, false);
 
-	bin->symap = symap_new();
-	atomic_flag_clear_explicit(&bin->map_lock, memory_order_relaxed);
+	bin->mapper = mapper_new(0x10000); // 64K
+	mapper_pool_init(&bin->mapper_pool, bin->mapper, NULL, NULL, NULL);
 
-	bin->map.map = _map;
-	bin->map.handle = bin;
-	LV2_URID_Map *map = &bin->map;
-
-	bin->unmap.unmap = _unmap;
-	bin->unmap.handle = bin;
+	bin->map = mapper_pool_get_map(&bin->mapper_pool);
+	bin->unmap = mapper_pool_get_unmap(&bin->mapper_pool);
 
 	bin->xmap.new_uuid = _voice_map_new_uuid;
 	bin->xmap.handle = &voice_uuid;
 
-	bin->log_error = map->map(map->handle, LV2_LOG__Error);
-	bin->log_note = map->map(map->handle, LV2_LOG__Note);
-	bin->log_trace = map->map(map->handle, LV2_LOG__Trace);
-	bin->log_warning = map->map(map->handle, LV2_LOG__Warning);
-	bin->atom_eventTransfer = map->map(map->handle, LV2_ATOM__eventTransfer);
+	bin->log_error = bin->map->map(bin->map->handle, LV2_LOG__Error);
+	bin->log_note = bin->map->map(bin->map->handle, LV2_LOG__Note);
+	bin->log_trace = bin->map->map(bin->map->handle, LV2_LOG__Trace);
+	bin->log_warning = bin->map->map(bin->map->handle, LV2_LOG__Warning);
+	bin->atom_eventTransfer = bin->map->map(bin->map->handle, LV2_ATOM__eventTransfer);
 
 	bin->log.handle = bin;
 	bin->log.printf = _log_printf;
 	bin->log.vprintf = _log_vprintf;
 	bin->trace_lock = (atomic_flag)ATOMIC_FLAG_INIT;
 	
-	bin->app_driver.map = &bin->map;
-	bin->app_driver.unmap = &bin->unmap;
+	bin->app_driver.map = bin->map;
+	bin->app_driver.unmap = bin->unmap;
 	bin->app_driver.xmap = &bin->xmap;
 	bin->app_driver.log = &bin->log;
 	bin->app_driver.to_ui_request = _app_to_ui_request;
@@ -489,8 +461,8 @@ bin_init(bin_t *bin)
 	bin->self = uv_thread_self(); // thread ID of UI thread
 
 	bin->sb_driver.socket_path = bin->socket_path;
-	bin->sb_driver.map = &bin->map;
-	bin->sb_driver.unmap = &bin->unmap;
+	bin->sb_driver.map = bin->map;
+	bin->sb_driver.unmap = bin->unmap;
 	bin->sb_driver.recv_cb = _sb_recv_cb;
 	bin->sb_driver.subscribe_cb = _sb_subscribe_cb;
 
@@ -687,8 +659,9 @@ bin_deinit(bin_t *bin)
 	// synthpod deinit
 	sp_app_free(bin->app);
 
-	// symap deinit
-	symap_free(bin->symap);
+	// mapper deinit
+	mapper_pool_deinit(&bin->mapper_pool);
+	mapper_free(bin->mapper);
 
 	// varchunk deinit
 	varchunk_free(bin->app_to_ui);

@@ -327,7 +327,7 @@ _process(jack_nframes_t nsamples, void *data)
 					if(ref)
 						ref = lv2_atom_forge_frame_time(forge, mev.time);
 					if(ref)
-						ref = lv2_osc_forge_packet(forge, &handle->osc_urid, &handle->bin.map,
+						ref = lv2_osc_forge_packet(forge, &handle->osc_urid, handle->bin.map,
 							mev.buffer, mev.size); // Note: an invalid packet will return 0
 				}
 				if(ref)
@@ -441,7 +441,7 @@ _process(jack_nframes_t nsamples, void *data)
 
 						LV2_OSC_Writer writer;
 						lv2_osc_writer_initialize(&writer, handle->osc_buf, OSC_SIZE);
-						lv2_osc_writer_packet(&writer, &handle->osc_urid, &handle->bin.unmap,
+						lv2_osc_writer_packet(&writer, &handle->osc_urid, handle->bin.unmap,
 							obj->atom.size, &obj->body);
 						size_t size;
 						uint8_t *osc_buf = lv2_osc_writer_finalize(&writer, &size);
@@ -1064,7 +1064,7 @@ main(int argc, char **argv)
 	handle.async.data = &handle;
 	uv_async_init(&bin->loop, &handle.async, _session_async); //FIXME check
 
-	LV2_URID_Map *map = &bin->map;
+	LV2_URID_Map *map = bin->map;
 
 	lv2_atom_forge_init(&handle.forge, map);
 	lv2_osc_urid_init(&handle.osc_urid, map);

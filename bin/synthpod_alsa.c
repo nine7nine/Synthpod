@@ -1044,7 +1044,7 @@ main(int argc, char **argv)
 	
 	bin_init(bin);
 	
-	LV2_URID_Map *map = &bin->map;
+	LV2_URID_Map *map = bin->map;
 	
 	lv2_atom_forge_init(&handle.forge, map);
 	

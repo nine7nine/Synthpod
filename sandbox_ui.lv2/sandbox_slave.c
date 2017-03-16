@@ -31,12 +31,16 @@
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <lilv/lilv.h>
-#include <symap.h>
+
+#define MAPPER_IMPLEMENTATION
+#include <mapper.lv2/mapper.h>
 
 struct _sandbox_slave_t {
-	Symap *symap;
-	LV2_URID_Map map;
-	LV2_URID_Unmap unmap;
+	mapper_t *mapper;
+	mapper_pool_t mapper_pool;
+
+	LV2_URID_Map *map;
+	LV2_URID_Unmap *unmap;
 
 	LV2_Log_Log log;
 
@@ -73,22 +77,6 @@ struct _sandbox_slave_t {
 	float update_rate;
 };
 	
-static inline LV2_URID
-_map(void *data, const char *uri)
-{
-	sandbox_slave_t *sb= data;
-
-	return symap_map(sb->symap, uri);
-}
-
-static inline const char *
-_unmap(void *data, LV2_URID urid)
-{
-	sandbox_slave_t *sb= data;
-
-	return symap_unmap(sb->symap, urid);
-}
-
 static inline int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
 {
@@ -246,12 +234,6 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	sb->driver = driver;
 	sb->data = data;
 
-	sb->map.handle = sb;
-	sb->map.map = _map;
-
-	sb->unmap.handle = sb;
-	sb->unmap.unmap = _unmap;
-
 	sb->log.handle = sb;
 	sb->log.printf = _log_printf;
 	sb->log.vprintf = _log_vprintf;
@@ -266,11 +248,15 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	sb->host_resize.handle = data;
 	sb->host_resize.ui_resize = driver->resize_cb;
 
-	if(!(sb->symap = symap_new()))
+	if(!(sb->mapper = mapper_new(0x10000))) // 64K
 	{
-		fprintf(stderr, "symap_new failed\n");
+		fprintf(stderr, "mapper_new failed\n");
 		goto fail;
 	}
+	mapper_pool_init(&sb->mapper_pool, sb->mapper, NULL, NULL, NULL);
+
+	sb->map = mapper_pool_get_map(&sb->mapper_pool);
+	sb->unmap = mapper_pool_get_unmap(&sb->mapper_pool);
 
 	if(!(sb->world = lilv_world_new()))
 	{
@@ -372,7 +358,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
-	if(_sandbox_io_init(&sb->io, &sb->map, &sb->unmap, sb->socket_path, false, false))
+	if(_sandbox_io_init(&sb->io, sb->map, sb->unmap, sb->socket_path, false, false))
 	{
 		fprintf(stderr, "_sandbox_io_init failed\n");
 		goto fail;
@@ -433,8 +419,11 @@ sandbox_slave_free(sandbox_slave_t *sb)
 		lilv_world_free(sb->world);
 	}
 
-	if(sb->symap)
-		symap_free(sb->symap);
+	if(sb->mapper)
+	{
+		mapper_pool_deinit(&sb->mapper_pool);
+		mapper_free(sb->mapper);
+	}
 
 	free(sb);
 }
@@ -475,11 +464,11 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 
 	const LV2_Feature map_feature = {
 		.URI = LV2_URID__map,
-		.data = &sb->map
+		.data = sb->map
 	};
 	const LV2_Feature unmap_feature = {
 		.URI = LV2_URID__unmap,
-		.data = &sb->unmap
+		.data = sb->unmap
 	};
 	const LV2_Feature log_feature = {
 		.URI = LV2_LOG__log,

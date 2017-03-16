@@ -6,7 +6,7 @@ include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/jackey)
-include_directories(${PROJECT_SOURCE_DIR}/symap)
+include_directories(${PROJECT_SOURCE_DIR}/mapper.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
 
 add_definitions("-D_GNU_SOURCE=1") # asprintf
@@ -32,7 +32,6 @@ if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 	add_library(synthpod.bin OBJECT
 		synthpod_bin.c
 		synthpod_nsm.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c
 		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
 	set_target_properties(synthpod.bin PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
 	set_target_properties(synthpod.bin PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
@@ -177,8 +176,7 @@ endif()
 if(BUILD_DOT)
 # synthpod
 	add_executable(synthpod.dot
-		synthpod_dot.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		synthpod_dot.c)
 	target_link_libraries(synthpod.dot
 		${SRATOM_LDFLAGS})
 	set_target_properties(synthpod.dot PROPERTIES OUTPUT_NAME "synthpod_dot")
@@ -213,8 +211,7 @@ if(BUILD_SANDBOX_X11)
 
 	add_executable(synthpod.sandbox.x11
 		synthpod_sandbox_x11.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.x11
 		${XCB_LDFLAGS}
 		${XCB_ICCCM_LDFLAGS}
@@ -232,8 +229,7 @@ if(BUILD_SANDBOX_GTK2)
 
 	add_executable(synthpod.sandbox.gtk2
 		synthpod_sandbox_gtk.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.gtk2
 		${GTK2_LDFLAGS}
 		${SANDBOX_LIBS})
@@ -249,8 +245,7 @@ if(BUILD_SANDBOX_GTK3)
 
 	add_executable(synthpod.sandbox.gtk3
 		synthpod_sandbox_gtk.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.gtk3
 		${GTK3_LDFLAGS}
 		${SANDBOX_LIBS})
@@ -267,8 +262,7 @@ if(BUILD_SANDBOX_QT4)
 
 	add_executable(synthpod.sandbox.qt4
 		synthpod_sandbox_qt.cpp
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.qt4
 		${QT4CORE_LDFLAGS}
 		${QT4GUI_LDFLAGS}
@@ -289,8 +283,7 @@ if(BUILD_SANDBOX_QT5)
 
 	add_executable(synthpod.sandbox.qt5
 		synthpod_sandbox_qt.cpp
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.qt5
 		${QT5CORE_LDFLAGS}
 		${QT5WIDGETS_LDFLAGS}
@@ -309,8 +302,7 @@ endif()
 if(BUILD_SANDBOX_EFL)
 	add_executable(synthpod.sandbox.efl
 		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_efl.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.efl
 		${ELM_LDFLAGS}
 		${SANDBOX_LIBS})
@@ -323,8 +315,7 @@ endif()
 if(BUILD_SANDBOX_SHOW)
 	add_executable(synthpod.sandbox.show
 		synthpod_sandbox_show.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.show
 		${SANDBOX_LIBS})
 	set_target_properties(synthpod.sandbox.show PROPERTIES OUTPUT_NAME "synthpod_sandbox_show")
@@ -336,8 +327,7 @@ endif()
 if(BUILD_SANDBOX_KX)
 	add_executable(synthpod.sandbox.kx
 		synthpod_sandbox_kx.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c
-		${PROJECT_SOURCE_DIR}/symap/symap.c)
+		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 	target_link_libraries(synthpod.sandbox.kx
 		${SANDBOX_LIBS})
 	set_target_properties(synthpod.sandbox.kx PROPERTIES OUTPUT_NAME "synthpod_sandbox_kx")

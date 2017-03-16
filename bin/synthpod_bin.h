@@ -24,7 +24,9 @@
 
 #include <stdatomic.h>
 
-#include <symap.h>
+#define MAPPER_IMPLEMENTATION
+#include <mapper.lv2/mapper.h>
+
 #include <varchunk.h>
 #include <sandbox_master.h>
 
@@ -58,11 +60,11 @@ struct _light_sem_t {
 };
 
 struct _bin_t {
-	Symap *symap;
-	LV2_URID_Map map;
-	LV2_URID_Unmap unmap;
+	mapper_t *mapper;	
+	mapper_pool_t mapper_pool;
+	LV2_URID_Map *map;
+	LV2_URID_Unmap *unmap;
 	xpress_map_t xmap;
-	atomic_flag map_lock;
 	
 	sp_app_t *app;
 	sp_app_driver_t app_driver;
