@@ -40,6 +40,9 @@ typedef struct _mapper_t mapper_t;
 typedef char *(*mapper_pool_alloc_t)(void *data, size_t size);
 typedef void (*mapper_pool_free_t)(void *data, char *uri);
 
+MAPPER_API bool
+mapper_is_lock_free(void);
+
 MAPPER_API mapper_t *
 mapper_new(uint32_t npools, uint32_t nitems);
 
@@ -251,6 +254,14 @@ _mapper_pool_free(void *data, char *uri)
 {
 	(void)data;
 	free(uri);
+}
+
+MAPPER_API bool
+mapper_is_lock_free(void)
+{
+	atomic_uintptr_t val;
+
+	return atomic_is_lock_free(&val);
 }
 
 MAPPER_API mapper_t *

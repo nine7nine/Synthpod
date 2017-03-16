@@ -119,6 +119,8 @@ main(int argc, char **argv)
 {
 	static char zeros [MAX_URI_LEN];
 
+	assert(mapper_is_lock_free());
+
 	assert(argc > 2);
 	const uint32_t n = atoi(argv[1]); // number of concurrent threads
 	const uint32_t r = atoi(argv[2]); // number of threads using rt memory
