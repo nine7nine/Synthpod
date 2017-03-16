@@ -65,6 +65,10 @@ mapper_pool_get_unmap(mapper_pool_t *mapper_pool);
 
 #ifdef MAPPER_IMPLEMENTATION
 
+#if !defined(_WIN32)
+#	include <sys/mman.h> // mlock
+#endif
+
 typedef struct _mapper_item_t mapper_item_t;
 
 struct _mapper_item_t {
@@ -82,8 +86,8 @@ struct _mapper_pool_t {
 };
 
 struct _mapper_t {
-	uint32_t size;
-	uint32_t mask;
+	uint32_t nitems;
+	uint32_t nitems_mask;
 	mapper_item_t *items;
 	uint32_t npools;
 	mapper_pool_t *pools;
@@ -182,9 +186,9 @@ _mapper_pool_map(void *data, const char *uri)
 	mapper_t *mapper = mapper_pool->mapper;
 	const uint32_t hash = _mapper_murmur3_32(uri, strlen(uri));
 
-	for(uint32_t i = 0, idx = (hash + i) & mapper->mask;
-		i < mapper->size;
-		i++, idx = (hash + i) & mapper->mask)
+	for(uint32_t i = 0, idx = (hash + i) & mapper->nitems_mask;
+		i < mapper->nitems;
+		i++, idx = (hash + i) & mapper->nitems_mask)
 	{
 		mapper_item_t *item = &mapper->items[idx];
 
@@ -267,26 +271,39 @@ mapper_is_lock_free(void)
 MAPPER_API mapper_t *
 mapper_new(uint32_t npools, uint32_t nitems) 
 {
+	// allocate mapper structure
 	mapper_t *mapper = calloc(1, sizeof(mapper_t));
 	if(!mapper) // allocation failed
 		return NULL;
 
-	uint32_t size = 1;
-	while(size < nitems)
-		size <<= 1; // assure size to be a power of 2
+	// item number needs to be a power of two
+	uint32_t power_of_two = 1;
+	while(power_of_two < nitems)
+		power_of_two <<= 1; // assure size to be a power of 2
 
-	mapper->size = size;
-	mapper->mask = size - 1;
+	// set mapper properties
+	mapper->nitems = power_of_two;
+	mapper->nitems_mask = power_of_two - 1;
 	mapper->npools = npools;
 
-	mapper->items = calloc(1, size * sizeof(mapper_item_t));
+	// allocate item array
+	mapper->items = calloc(1, mapper->nitems * sizeof(mapper_item_t));
 	if(!mapper->items) // allocation failed
 	{
 		free(mapper);
 		return NULL;
 	}
 
-	mapper->pools = calloc(1, npools * sizeof(mapper_pool_t));
+	// initialize atomic variables of items
+	for(uint32_t idx = 0; idx < mapper->nitems; idx++)
+	{
+		mapper_item_t *item = &mapper->items[idx];
+
+		atomic_init(&item->val, 0);
+	}
+
+	// allocate mapper pool array
+	mapper->pools = calloc(1, mapper->npools * sizeof(mapper_pool_t));
 	if(!mapper->pools) // allocation failed
 	{
 		free(mapper->items);
@@ -294,9 +311,12 @@ mapper_new(uint32_t npools, uint32_t nitems)
 		return NULL;
 	}
 
-	for(uint32_t pos = 0; pos < npools; pos++)
+	// initialize mapper pool
+	for(uint32_t pos = 0; pos < mapper->npools; pos++)
 	{
 		mapper_pool_t *mapper_pool = &mapper->pools[pos];
+
+		mapper_pool->mapper = mapper;
 
 		mapper_pool->map.map = _mapper_pool_map;
 		mapper_pool->map.handle = mapper_pool;
@@ -304,11 +324,18 @@ mapper_new(uint32_t npools, uint32_t nitems)
 		mapper_pool->unmap.unmap = _mapper_pool_unmap;
 		mapper_pool->unmap.handle = mapper_pool;
 
-		mapper_pool->mapper = mapper;
+		// set fall-back allocation/free functions by default
 		mapper_pool->alloc = _mapper_pool_alloc;
 		mapper_pool->free = _mapper_pool_free;
 		mapper_pool->data = NULL;
 	}
+
+#if !defined(_WIN32)
+	// lock memory
+	mlock(mapper, sizeof(mapper_t));
+	mlock(mapper->items, mapper->nitems * sizeof(mapper_item_t));
+	mlock(mapper->pools, mapper->npools * sizeof(mapper_pool_t));
+#endif
 
 	return mapper;
 }
@@ -316,11 +343,12 @@ mapper_new(uint32_t npools, uint32_t nitems)
 MAPPER_API void
 mapper_free(mapper_t *mapper)
 {
+	// free URIs in item array with owning pool's free function
 	for(uint32_t pos = 0; pos < mapper->npools; pos++)
 	{
 		mapper_pool_t *mapper_pool = &mapper->pools[pos];
 
-		for(uint32_t idx = 0; idx < mapper->size; idx++)
+		for(uint32_t idx = 0; idx < mapper->nitems; idx++)
 		{
 			mapper_item_t *item = &mapper->items[idx];
 			if(item->mapper_pool != mapper_pool) // item not owned by this pool
@@ -333,6 +361,14 @@ mapper_free(mapper_t *mapper)
 		}
 	}
 
+#if !defined(_WIN32)
+	// unlock memory
+	munlock(mapper, sizeof(mapper_t));
+	munlock(mapper->items, mapper->nitems * sizeof(mapper_item_t));
+	munlock(mapper->pools, mapper->npools * sizeof(mapper_pool_t));
+#endif
+
+	// free arrays and parent structure
 	free(mapper->pools);
 	free(mapper->items);
 	free(mapper);
