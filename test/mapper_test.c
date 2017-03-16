@@ -29,6 +29,7 @@
 
 typedef struct _rtmem_slot_t rtmem_slot_t;
 typedef struct _rtmem_t rtmem_t;
+typedef struct _pool_t pool_t;
 
 // test URIs are of fixed length
 struct _rtmem_slot_t {
@@ -40,6 +41,12 @@ struct _rtmem_t {
 	atomic_uint nalloc; // counts number allocations
 	atomic_uint nfree; // counts number of frees
 	rtmem_slot_t slots [0]; // contains slots as multiple of MAX_ITEMS
+};
+
+// per-thread properties
+struct _pool_t {
+	pthread_t thread;
+	mapper_pool_t mapper_pool;
 };
 
 static rtmem_t *
@@ -124,45 +131,60 @@ main(int argc, char **argv)
 	assert(argc > 2);
 	const uint32_t n = atoi(argv[1]); // number of concurrent threads
 	const uint32_t r = atoi(argv[2]); // number of threads using rt memory
-	assert(r <= n);
+	assert(r < n);
 
 	// create rt memory
 	rtmem_t *rtmem = rtmem_new(r);
 	assert(rtmem);
 
 	// create mapper
-	mapper_t *mapper = mapper_new(n, MAX_ITEMS);
+	mapper_t *mapper = mapper_new(MAX_ITEMS);
 	assert(mapper);
 
 	// create array of threads
-	pthread_t *pools = calloc(n, sizeof(pthread_t));
+	pool_t *pools = calloc(n, sizeof(pool_t));
 	assert(pools);
 
 	// init/start threads
-	for(uint32_t pos = 0; pos < n; pos++)
+	for(uint32_t p = 0; p < n; p++)
 	{
-		mapper_pool_t *mapper_pool = mapper_get_pool(mapper, pos);
-		assert(mapper_pool);
+		pool_t *pool = &pools[p];
+		mapper_pool_t *mapper_pool = &pool->mapper_pool;
 
-		if(pos < r) // let thread use real-time memory
-			mapper_pool_set_alloc(mapper_pool, _rtmem_alloc, _rtmem_free, rtmem);
+		if(p < r) // let thread use real-time memory
+			mapper_pool_init(mapper_pool, mapper, _rtmem_alloc, _rtmem_free, rtmem);
+		else
+			mapper_pool_init(mapper_pool, mapper, NULL, NULL, NULL); // fall-back
 
-		pthread_create(&pools[pos], NULL, _thread, mapper_pool);
+		pthread_create(&pool->thread, NULL, _thread, mapper_pool);
 	}
 
 	// signal rolling
 	atomic_store_explicit(&rolling, true, memory_order_relaxed);
 
 	// stop threads
-	for(uint32_t pos = 0; pos < n; pos++)
-		pthread_join(pools[pos], NULL);
+	for(uint32_t p = 0; p < n; p++)
+	{
+		pool_t *pool = &pools[p];
 
-	// free threads
-	free(pools);
+		pthread_join(pool->thread, NULL);
+	}
 
 	// query rt memory allocations and frees
 	const uint32_t nalloc = atomic_load_explicit(&rtmem->nalloc, memory_order_relaxed);
 	const uint32_t nfree = atomic_load_explicit(&rtmem->nfree, memory_order_relaxed);
+
+	// deinit threads
+	for(uint32_t p = 0; p < n; p++)
+	{
+		pool_t *pool = &pools[p];
+		mapper_pool_t *mapper_pool = &pool->mapper_pool;
+
+		mapper_pool_deinit(mapper_pool);
+	}
+
+	// free threads
+	free(pools);
 
 	// free mapper
 	mapper_free(mapper);
@@ -179,7 +201,7 @@ main(int argc, char **argv)
 	rtmem_free(rtmem);
 
 	// report rt memory allocations and collisions
-	printf("\rt-allocs: %.1f%%, rt-collisions: %.1f%%\n",
+	printf("\trt-allocs: %.1f%%, rt-collisions: %.1f%%\n",
 		200.f * (nalloc - nfree) / MAX_ITEMS,
 		200.f * nfree / MAX_ITEMS);
 

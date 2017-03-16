@@ -40,22 +40,32 @@ typedef struct _mapper_t mapper_t;
 typedef char *(*mapper_pool_alloc_t)(void *data, size_t size);
 typedef void (*mapper_pool_free_t)(void *data, char *uri);
 
+struct _mapper_pool_t {
+	mapper_t *mapper;
+	mapper_pool_alloc_t alloc;
+	mapper_pool_free_t free;
+	void *data;
+
+	LV2_URID_Map map;
+	LV2_URID_Unmap unmap;
+};
+
 MAPPER_API bool
 mapper_is_lock_free(void);
 
 MAPPER_API mapper_t *
-mapper_new(uint32_t npools, uint32_t nitems);
+mapper_new(uint32_t nitems);
 
 MAPPER_API void
 mapper_free(mapper_t *mapper);
 
-MAPPER_API mapper_pool_t *
-mapper_get_pool(mapper_t *mapper, uint32_t pos);
-
 MAPPER_API void
-mapper_pool_set_alloc(mapper_pool_t *mapper_pool,
+mapper_pool_init(mapper_pool_t *mapper_pool, mapper_t *mapper,
 	mapper_pool_alloc_t mapper_pool_alloc, mapper_pool_free_t mapper_pool_free,
 	void *data);
+
+MAPPER_API void
+mapper_pool_deinit(mapper_pool_t *mapper_pool);
 
 MAPPER_API LV2_URID_Map *
 mapper_pool_get_map(mapper_pool_t *mapper_pool);
@@ -76,21 +86,10 @@ struct _mapper_item_t {
 	mapper_pool_t *mapper_pool;
 };
 
-struct _mapper_pool_t {
-	LV2_URID_Map map;
-	LV2_URID_Unmap unmap;
-	mapper_t *mapper;
-	mapper_pool_alloc_t alloc;
-	mapper_pool_free_t free;
-	void *data;
-};
-
 struct _mapper_t {
 	uint32_t nitems;
 	uint32_t nitems_mask;
-	mapper_item_t *items;
-	uint32_t npools;
-	mapper_pool_t *pools;
+	mapper_item_t items [0];
 };
 
 /*
@@ -247,14 +246,14 @@ _mapper_pool_unmap(void *data, uint32_t idx)
 }
 
 static char *
-_mapper_pool_alloc(void *data, size_t size)
+_mapper_pool_alloc_fallback(void *data, size_t size)
 {
 	(void)data;
 	return malloc(size);
 }
 
 static void
-_mapper_pool_free(void *data, char *uri)
+_mapper_pool_free_fallback(void *data, char *uri)
 {
 	(void)data;
 	free(uri);
@@ -269,30 +268,21 @@ mapper_is_lock_free(void)
 }
 
 MAPPER_API mapper_t *
-mapper_new(uint32_t npools, uint32_t nitems) 
+mapper_new(uint32_t nitems)
 {
-	// allocate mapper structure
-	mapper_t *mapper = calloc(1, sizeof(mapper_t));
-	if(!mapper) // allocation failed
-		return NULL;
-
 	// item number needs to be a power of two
 	uint32_t power_of_two = 1;
 	while(power_of_two < nitems)
 		power_of_two <<= 1; // assure size to be a power of 2
 
+	// allocate mapper structure
+	mapper_t *mapper = calloc(1, sizeof(mapper_t) + power_of_two*sizeof(mapper_item_t));
+	if(!mapper) // allocation failed
+		return NULL;
+
 	// set mapper properties
 	mapper->nitems = power_of_two;
 	mapper->nitems_mask = power_of_two - 1;
-	mapper->npools = npools;
-
-	// allocate item array
-	mapper->items = calloc(1, mapper->nitems * sizeof(mapper_item_t));
-	if(!mapper->items) // allocation failed
-	{
-		free(mapper);
-		return NULL;
-	}
 
 	// initialize atomic variables of items
 	for(uint32_t idx = 0; idx < mapper->nitems; idx++)
@@ -302,39 +292,9 @@ mapper_new(uint32_t npools, uint32_t nitems)
 		atomic_init(&item->val, 0);
 	}
 
-	// allocate mapper pool array
-	mapper->pools = calloc(1, mapper->npools * sizeof(mapper_pool_t));
-	if(!mapper->pools) // allocation failed
-	{
-		free(mapper->items);
-		free(mapper);
-		return NULL;
-	}
-
-	// initialize mapper pool
-	for(uint32_t pos = 0; pos < mapper->npools; pos++)
-	{
-		mapper_pool_t *mapper_pool = &mapper->pools[pos];
-
-		mapper_pool->mapper = mapper;
-
-		mapper_pool->map.map = _mapper_pool_map;
-		mapper_pool->map.handle = mapper_pool;
-
-		mapper_pool->unmap.unmap = _mapper_pool_unmap;
-		mapper_pool->unmap.handle = mapper_pool;
-
-		// set fall-back allocation/free functions by default
-		mapper_pool->alloc = _mapper_pool_alloc;
-		mapper_pool->free = _mapper_pool_free;
-		mapper_pool->data = NULL;
-	}
-
 #if !defined(_WIN32)
 	// lock memory
-	mlock(mapper, sizeof(mapper_t));
-	mlock(mapper->items, mapper->nitems * sizeof(mapper_item_t));
-	mlock(mapper->pools, mapper->npools * sizeof(mapper_pool_t));
+	mlock(mapper, sizeof(mapper_t) + mapper->nitems*sizeof(mapper_item_t));
 #endif
 
 	return mapper;
@@ -343,54 +303,52 @@ mapper_new(uint32_t npools, uint32_t nitems)
 MAPPER_API void
 mapper_free(mapper_t *mapper)
 {
-	// free URIs in item array with owning pool's free function
-	for(uint32_t pos = 0; pos < mapper->npools; pos++)
-	{
-		mapper_pool_t *mapper_pool = &mapper->pools[pos];
-
-		for(uint32_t idx = 0; idx < mapper->nitems; idx++)
-		{
-			mapper_item_t *item = &mapper->items[idx];
-			if(item->mapper_pool != mapper_pool) // item not owned by this pool
-				continue;
-
-			const uintptr_t val = atomic_load_explicit(&item->val,
-				memory_order_relaxed);
-			if(val != 0) // slot is populated by a URI
-				mapper_pool->free(mapper_pool->data, (char *)val);
-		}
-	}
-
 #if !defined(_WIN32)
 	// unlock memory
-	munlock(mapper, sizeof(mapper_t));
-	munlock(mapper->items, mapper->nitems * sizeof(mapper_item_t));
-	munlock(mapper->pools, mapper->npools * sizeof(mapper_pool_t));
+	munlock(mapper, sizeof(mapper_t) + mapper->nitems*sizeof(mapper_item_t));
 #endif
 
-	// free arrays and parent structure
-	free(mapper->pools);
-	free(mapper->items);
 	free(mapper);
 }
 
-MAPPER_API mapper_pool_t *
-mapper_get_pool(mapper_t *mapper, uint32_t pos)
-{
-	if(pos < mapper->npools)
-		return &mapper->pools[pos];
-
-	return NULL;
-}
-
 MAPPER_API void
-mapper_pool_set_alloc(mapper_pool_t *mapper_pool,
+mapper_pool_init(mapper_pool_t *mapper_pool, mapper_t *mapper,
 	mapper_pool_alloc_t mapper_pool_alloc, mapper_pool_free_t mapper_pool_free,
 	void *data)
 {
-	mapper_pool->alloc = mapper_pool_alloc;
-	mapper_pool->free = mapper_pool_free;
+	mapper_pool->mapper = mapper;
+	mapper_pool->alloc = mapper_pool_alloc
+		? mapper_pool_alloc
+		: _mapper_pool_alloc_fallback;
+	mapper_pool->free = mapper_pool_free
+		? mapper_pool_free
+		: _mapper_pool_free_fallback;
 	mapper_pool->data = data;
+
+	mapper_pool->map.map = _mapper_pool_map;
+	mapper_pool->map.handle = mapper_pool;
+
+	mapper_pool->unmap.unmap = _mapper_pool_unmap;
+	mapper_pool->unmap.handle = mapper_pool;
+}
+
+MAPPER_API void
+mapper_pool_deinit(mapper_pool_t *mapper_pool)
+{
+	mapper_t *mapper = mapper_pool->mapper;
+
+	// free URIs in item array with owning pool's free function
+	for(uint32_t idx = 0; idx < mapper->nitems; idx++)
+	{
+		mapper_item_t *item = &mapper->items[idx];
+		if(item->mapper_pool != mapper_pool) // item not owned by this pool
+			continue;
+
+		const uintptr_t val = atomic_load_explicit(&item->val,
+			memory_order_relaxed);
+		if(val != 0) // slot is populated by a URI
+			mapper_pool->free(mapper_pool->data, (char *)val);
+	}
 }
 
 MAPPER_API LV2_URID_Map *
