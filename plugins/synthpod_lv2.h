@@ -28,7 +28,7 @@
 #include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 #include "lv2/lv2plug.in/ns/extensions/ui/ui.h"
 
-#include <xpress.h>
+#include <xpress.lv2/xpress.h>
 
 #define __realtime __attribute__((annotate("realtime")))
 #define __non_realtime __attribute__((annotate("non-realtime")))

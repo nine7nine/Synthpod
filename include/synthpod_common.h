@@ -37,7 +37,7 @@
 #	include <sys/mman.h> // mlock
 #endif
 
-#include <xpress.h>
+#include <xpress.lv2/xpress.h>
 
 #define __realtime __attribute__((annotate("realtime")))
 #define __non_realtime __attribute__((annotate("non-realtime")))
