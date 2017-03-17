@@ -236,40 +236,44 @@ xpress_map(xpress_t *xpress);
  *****************************************************************************/
 
 static inline void
-_xpress_qsort(xpress_voice_t *a, unsigned n)
+_xpress_qsort(xpress_voice_t *A, int n)
 {
 	if(n < 2)
 		return;
-	
-	const xpress_voice_t *p = &a[n/2];
 
-	unsigned i, j;
-	for(i=0, j=n-1; ; i++, j--)
+	const xpress_voice_t *p = A;
+
+	int i = -1;
+	int j = n;
+
+	while(true)
 	{
-		while(a[i].uuid > p->uuid)
-			i++;
+		do {
+			i += 1;
+		} while(A[i].uuid > p->uuid);
 
-		while(p->uuid > a[j].uuid)
-			j--;
+		do {
+			j -= 1;
+		} while(A[j].uuid < p->uuid);
 
 		if(i >= j)
 			break;
 
-		const xpress_voice_t t = a[i];
-		a[i] = a[j];
-		a[j] = t;
+		const xpress_voice_t tmp = A[i];
+		A[i] = A[j];
+		A[j] = tmp;
 	}
 
-	_xpress_qsort(a, i);
-	_xpress_qsort(&a[i], n - i);
+	_xpress_qsort(A, j + 1);
+	_xpress_qsort(A + j + 1, n - j - 1);
 }
 
 static inline xpress_voice_t *
-_xpress_bsearch(xpress_uuid_t p, xpress_voice_t *a, unsigned n)
+_xpress_bsearch(xpress_uuid_t p, xpress_voice_t *a, int n)
 {
 	xpress_voice_t *base = a;
 
-	for(unsigned N = n, half; N > 1; N -= half)
+	for(int N = n, half; N > 1; N -= half)
 	{
 		half = N/2;
 		xpress_voice_t *dst = &base[half];
