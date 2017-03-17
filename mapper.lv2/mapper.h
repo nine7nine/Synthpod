@@ -59,6 +59,9 @@ mapper_new(uint32_t nitems);
 MAPPER_API void
 mapper_free(mapper_t *mapper);
 
+MAPPER_API uint32_t
+mapper_get_usage(mapper_t *mapper);
+
 MAPPER_API void
 mapper_pool_init(mapper_pool_t *mapper_pool, mapper_t *mapper,
 	mapper_pool_alloc_t mapper_pool_alloc, mapper_pool_free_t mapper_pool_free,
@@ -89,6 +92,7 @@ struct _mapper_item_t {
 struct _mapper_t {
 	uint32_t nitems;
 	uint32_t nitems_mask;
+	atomic_uint usage;
 	mapper_item_t items [0];
 };
 
@@ -216,6 +220,7 @@ _mapper_pool_map(void *data, const char *uri)
 			&expected, desired, memory_order_release, memory_order_relaxed);
 		if(match) // we have successfully taken this slot first
 		{
+			atomic_fetch_add_explicit(&mapper->usage, 1, memory_order_relaxed);
 			item->mapper_pool = mapper_pool; // set owning pool
 			return idx + 1;
 		}
@@ -285,6 +290,9 @@ mapper_new(uint32_t nitems)
 	mapper->nitems = power_of_two;
 	mapper->nitems_mask = power_of_two - 1;
 
+	// initialize atomic usage counter
+	atomic_init(&mapper->usage, 0);
+
 	// initialize atomic variables of items
 	for(uint32_t idx = 0; idx < mapper->nitems; idx++)
 	{
@@ -310,6 +318,12 @@ mapper_free(mapper_t *mapper)
 #endif
 
 	free(mapper);
+}
+
+MAPPER_API uint32_t
+mapper_get_usage(mapper_t *mapper)
+{
+	return atomic_load_explicit(&mapper->usage, memory_order_relaxed);
 }
 
 MAPPER_API void
@@ -348,7 +362,10 @@ mapper_pool_deinit(mapper_pool_t *mapper_pool)
 		const uintptr_t val = atomic_load_explicit(&item->val,
 			memory_order_relaxed);
 		if(val != 0) // slot is populated by a URI
+		{
+			atomic_fetch_sub_explicit(&mapper->usage, 1, memory_order_relaxed);
 			mapper_pool->free(mapper_pool->data, (char *)val);
+		}
 	}
 }
 

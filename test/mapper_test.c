@@ -170,6 +170,10 @@ main(int argc, char **argv)
 		pthread_join(pool->thread, NULL);
 	}
 
+	// query usage
+	const uint32_t usage = mapper_get_usage(mapper);
+	assert(usage == MAX_ITEMS/2);
+
 	// query rt memory allocations and frees
 	const uint32_t nalloc = atomic_load_explicit(&rtmem->nalloc, memory_order_relaxed);
 	const uint32_t nfree = atomic_load_explicit(&rtmem->nfree, memory_order_relaxed);
@@ -182,6 +186,9 @@ main(int argc, char **argv)
 
 		mapper_pool_deinit(mapper_pool);
 	}
+
+	// query usage after freeing elements
+	assert(mapper_get_usage(mapper) == 0);
 
 	// free threads
 	free(pools);
@@ -202,8 +209,8 @@ main(int argc, char **argv)
 
 	// report rt memory allocations and collisions
 	printf("\trt-allocs: %.1f%%, rt-collisions: %.1f%%\n",
-		200.f * (nalloc - nfree) / MAX_ITEMS,
-		200.f * nfree / MAX_ITEMS);
+		100.f * (nalloc - nfree) / usage,
+		100.f * nfree / usage);
 
 	return 0;
 }
