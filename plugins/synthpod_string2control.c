@@ -31,7 +31,7 @@
 
 #define MAX_STRLEN 512
 #define MAX_SLOTS 8
-#define MAX_NPROPS (2 * MAX_SLOTS)
+#define MAX_NPROPS MAX_SLOTS
 
 typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
@@ -70,10 +70,10 @@ _intercept_in(void *data, LV2_Atom_Forge *forge, int64_t frames,
 {
 	plughandle_t *handle = data;
 
-	const int i = ((char *)impl->value  - handle->state.in[0]) / MAX_STRLEN;
+	const int i = ((char *)impl->value.body - handle->state.in[0]) / MAX_STRLEN;
 
 	errno = 0;
-	float f = strtof(impl->value, NULL);
+	float f = strtof(impl->value.body, NULL);
 	if(errno == 0) // no error
 		handle->raw[i] = f;
 }
@@ -81,23 +81,22 @@ _intercept_in(void *data, LV2_Atom_Forge *forge, int64_t frames,
 #define STAT_IN(NUM) \
 { \
 	.property = SYNTHPOD_STRING2CONTROL_URI"_in_"#NUM, \
-	.access = LV2_PATCH__writable, \
+	.offset = offsetof(plugstate_t, in) + (NUM-1)*MAX_STRLEN, \
 	.type = LV2_ATOM__String, \
-	.mode = PROP_MODE_STATIC, \
 	.event_mask = PROP_EVENT_WRITE, \
 	.event_cb = _intercept_in, \
 	.max_size = MAX_STRLEN \
 }
 
-static const props_def_t stat_in [MAX_SLOTS] = {
-	[0] = STAT_IN(1),
-	[1] = STAT_IN(2),
-	[2] = STAT_IN(3),
-	[3] = STAT_IN(4),
-	[4] = STAT_IN(5),
-	[5] = STAT_IN(6),
-	[6] = STAT_IN(7),
-	[7] = STAT_IN(8)
+static const props_def_t defs [MAX_NPROPS] = {
+	STAT_IN(1),
+	STAT_IN(2),
+	STAT_IN(3),
+	STAT_IN(4),
+	STAT_IN(5),
+	STAT_IN(6),
+	STAT_IN(7),
+	STAT_IN(8)
 };
 
 static LV2_Handle
@@ -132,20 +131,16 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	bool success = true;
-	for(unsigned i=0; i<MAX_SLOTS; i++)
+	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
 	{
-		handle->urid.in[i] = props_register(&handle->props, &stat_in[i],
-			handle->state.in[i], handle->stash.in[i]);
-
-		if(!handle->urid.in[i])
-			success = false;
-	}
-
-	if(!success)
-	{
+		fprintf(stderr, "failed to init property structure\n");
 		free(handle);
 		return NULL;
+	}
+
+	for(unsigned i=0; i<MAX_SLOTS; i++)
+	{
+		handle->urid.in[i] = props_map(&handle->props, defs[i].property);
 	}
 
 	return handle;
@@ -209,7 +204,7 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 {
 	plughandle_t *handle = instance;
 
-	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+	return props_save(&handle->props, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -219,7 +214,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 {
 	plughandle_t *handle = instance;
 
-	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+	return props_restore(&handle->props, retrieve, state, flags, features);
 }
 
 static const LV2_State_Interface state_iface = {
@@ -227,11 +222,36 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
+static inline LV2_Worker_Status
+_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
+LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work(&handle->props, respond, worker, size, body);
+}
+
+static inline LV2_Worker_Status
+_work_response(LV2_Handle instance, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work_response(&handle->props, size, body);
+}
+
+static const LV2_Worker_Interface work_iface = {
+	.work = _work,
+	.work_response = _work_response,
+	.end_run = NULL
+};
+
 static const void *
 extension_data(const char *uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
+	else if(!strcmp(uri, LV2_WORKER__interface))
+		return &work_iface;
 	return NULL;
 }
 

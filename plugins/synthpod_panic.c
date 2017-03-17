@@ -108,13 +108,14 @@ _intercept_alarm(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	}
 }
 
-static const props_def_t stat_alarm = {
-	.property = SYNTHPOD_PANIC_URI"_alarm",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept_alarm
+static const props_def_t defs [MAX_NPROPS] = {
+	{
+		.property = SYNTHPOD_PANIC_URI"_alarm",
+		.offset = offsetof(plugstate_t, alarm),
+		.type = LV2_ATOM__Bool,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept_alarm
+	}
 };
 
 static LV2_Handle
@@ -151,12 +152,14 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(!(handle->urid.alarm = props_register(&handle->props, &stat_alarm,
-			&handle->state.alarm, &handle->stash.alarm)) )
+	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
 	{
+		fprintf(stderr, "failed to init property structure\n");
 		free(handle);
 		return NULL;
 	}
+
+	handle->urid.alarm = props_map(&handle->props, defs[0].property);
 
 	handle->rolling = true;
 
@@ -230,7 +233,7 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 {
 	plughandle_t *handle = instance;
 
-	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+	return props_save(&handle->props, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -240,7 +243,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 {
 	plughandle_t *handle = instance;
 
-	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+	return props_restore(&handle->props, retrieve, state, flags, features);
 }
 
 static const LV2_State_Interface state_iface = {
@@ -248,11 +251,36 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
+static inline LV2_Worker_Status
+_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
+LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work(&handle->props, respond, worker, size, body);
+}
+
+static inline LV2_Worker_Status
+_work_response(LV2_Handle instance, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work_response(&handle->props, size, body);
+}
+
+static const LV2_Worker_Interface work_iface = {
+	.work = _work,
+	.work_response = _work_response,
+	.end_run = NULL
+};
+
 static const void *
 extension_data(const char *uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
+	else if(!strcmp(uri, LV2_WORKER__interface))
+		return &work_iface;
 	return NULL;
 }
 
