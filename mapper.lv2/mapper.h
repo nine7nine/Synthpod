@@ -181,9 +181,10 @@ _mapper_pool_map(void *data, const char *uri)
 	if(!uri) // invalid URI
 		return 0;
 
+	const size_t uri_len = strlen(uri) + 1;
 	mapper_pool_t *mapper_pool = data;
 	mapper_t *mapper = mapper_pool->mapper;
-	const uint32_t hash = _mapper_murmur3_32(uri, strlen(uri));
+	const uint32_t hash = _mapper_murmur3_32(uri, uri_len - 1); // ignore zero terminator
 
 	for(uint32_t i = 0, idx = (hash + i) & mapper->nitems_mask;
 		i < mapper->nitems;
@@ -195,18 +196,18 @@ _mapper_pool_map(void *data, const char *uri)
 		const uintptr_t val = atomic_load_explicit(&item->val, memory_order_acquire);
 		if(val != 0) // slot is already taken
 		{
-			if(strcmp((const char *)val, uri) == 0) // URI is already mapped, use that
+			if(memcmp((const char *)val, uri, uri_len) == 0) // URI is already mapped, use that
 				return idx + 1;
-			else // slot is already taken by another URI, try next slot
-				continue;
+
+			// slot is already taken by another URI, try next slot
+			continue;
 		}
 
 		// clone URI for possible injection
-		const size_t uri_len = strlen(uri) + 1;
 		char *uri_clone = mapper_pool->alloc(mapper_pool->data, uri_len);
 		if(!uri_clone) // allocation failed
 			return 0;
-		strncpy(uri_clone, uri, uri_len);
+		memcpy(uri_clone, uri, uri_len);
 		const uintptr_t desired = (uintptr_t)uri_clone;
 
 		// try to populate slot with newly mapped URI
@@ -218,11 +219,11 @@ _mapper_pool_map(void *data, const char *uri)
 			item->mapper_pool = mapper_pool; // set owning pool
 			return idx + 1;
 		}
-		else if(strcmp((const char *)expected, uri) == 0) // other thread stole it
-		{
-			mapper_pool->free(mapper_pool->data, uri_clone); // free superfluous URI
+
+		mapper_pool->free(mapper_pool->data, uri_clone); // free superfluous URI
+
+		if(memcmp((const char *)expected, uri, uri_len) == 0) // other thread stole it
 			return idx + 1;
-		}
 
 		// slot is already taken by another URI, try next slot
 	}
