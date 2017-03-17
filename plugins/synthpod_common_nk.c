@@ -16,6 +16,7 @@
  */
 
 #include <synthpod_lv2.h>
+#include <synthpod_patcher.h>
 
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
@@ -32,6 +33,8 @@
 #include <lilv/lilv.h>
 
 #define SEARCH_BUF_MAX 128
+#define ATOM_BUF_MAX 1024
+#define CONTROL 14 //FIXME
 
 #ifdef Bool
 #	undef Bool // interferes with atom forge
@@ -235,6 +238,12 @@ struct _plughandle_t {
 	char port_search_buf [SEARCH_BUF_MAX];
 
 	bool first;
+
+	reg_t regs;
+	union {
+		LV2_Atom atom;
+		uint8_t buf [ATOM_BUF_MAX];
+	};
 };
 
 static const char *main_labels [SELECTOR_MAIN_MAX] = {
@@ -1966,6 +1975,12 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			{
 				_expose_atom_port(ctx, mod, &port->audio, dy, name_str, false);
 			} break;
+			case PROPERTY_TYPE_PARAM:
+			{
+				//FIXME
+			} break;
+			case PROPERTY_TYPE_MAX:
+				break;
 		}
 
 		nk_group_end(ctx);
@@ -2458,47 +2473,59 @@ static void
 _init(plughandle_t *handle)
 {
 	handle->world = lilv_world_new();
-	if(handle->world)
-	{
-		LilvNode *node_false = lilv_new_bool(handle->world, false);
-		if(node_false)
-		{
-			lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
-			lilv_node_free(node_false);
-		}
-		lilv_world_load_all(handle->world);
-		LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
-		if(synthpod_bundle)
-		{
-			lilv_world_load_bundle(handle->world, synthpod_bundle);
-			lilv_node_free(synthpod_bundle);
-		}
+	if(!handle->world)
+		return;
 
-		handle->node.pg_group = lilv_new_uri(handle->world, LV2_PORT_GROUPS__group);
-		handle->node.lv2_integer = lilv_new_uri(handle->world, LV2_CORE__integer);
-		handle->node.lv2_toggled = lilv_new_uri(handle->world, LV2_CORE__toggled);
-		handle->node.lv2_minimum = lilv_new_uri(handle->world, LV2_CORE__minimum);
-		handle->node.lv2_maximum = lilv_new_uri(handle->world, LV2_CORE__maximum);
-		handle->node.lv2_default = lilv_new_uri(handle->world, LV2_CORE__default);
-		handle->node.pset_Preset = lilv_new_uri(handle->world, LV2_PRESETS__Preset);
-		handle->node.pset_bank = lilv_new_uri(handle->world, LV2_PRESETS__bank);
-		handle->node.rdfs_comment = lilv_new_uri(handle->world, LILV_NS_RDFS"comment");
-		handle->node.rdfs_range = lilv_new_uri(handle->world, LILV_NS_RDFS"range");
-		handle->node.doap_name = lilv_new_uri(handle->world, LILV_NS_DOAP"name");
-		handle->node.lv2_minorVersion = lilv_new_uri(handle->world, LV2_CORE__minorVersion);
-		handle->node.lv2_microVersion = lilv_new_uri(handle->world, LV2_CORE__microVersion);
-		handle->node.doap_license = lilv_new_uri(handle->world, LILV_NS_DOAP"license");
-		handle->node.rdfs_label = lilv_new_uri(handle->world, LILV_NS_RDFS"label");
-		handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
-		handle->node.lv2_OutputPort = lilv_new_uri(handle->world, LV2_CORE__OutputPort);
-		handle->node.lv2_AudioPort = lilv_new_uri(handle->world, LV2_CORE__AudioPort);
-		handle->node.lv2_CVPort = lilv_new_uri(handle->world, LV2_CORE__CVPort);
-		handle->node.lv2_ControlPort = lilv_new_uri(handle->world, LV2_CORE__ControlPort);
-		handle->node.atom_AtomPort = lilv_new_uri(handle->world, LV2_ATOM__AtomPort);
-		handle->node.patch_readable = lilv_new_uri(handle->world, LV2_PATCH__readable);
-		handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
-		handle->node.rdf_type = lilv_new_uri(handle->world, LILV_NS_RDF"type");
-		handle->node.lv2_Plugin = lilv_new_uri(handle->world, LV2_CORE__Plugin);
+	LilvNode *node_false = lilv_new_bool(handle->world, false);
+	if(node_false)
+	{
+		lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
+		lilv_node_free(node_false);
+	}
+	lilv_world_load_all(handle->world);
+	LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
+	if(synthpod_bundle)
+	{
+		lilv_world_load_bundle(handle->world, synthpod_bundle);
+		lilv_node_free(synthpod_bundle);
+	}
+
+	handle->node.pg_group = lilv_new_uri(handle->world, LV2_PORT_GROUPS__group);
+	handle->node.lv2_integer = lilv_new_uri(handle->world, LV2_CORE__integer);
+	handle->node.lv2_toggled = lilv_new_uri(handle->world, LV2_CORE__toggled);
+	handle->node.lv2_minimum = lilv_new_uri(handle->world, LV2_CORE__minimum);
+	handle->node.lv2_maximum = lilv_new_uri(handle->world, LV2_CORE__maximum);
+	handle->node.lv2_default = lilv_new_uri(handle->world, LV2_CORE__default);
+	handle->node.pset_Preset = lilv_new_uri(handle->world, LV2_PRESETS__Preset);
+	handle->node.pset_bank = lilv_new_uri(handle->world, LV2_PRESETS__bank);
+	handle->node.rdfs_comment = lilv_new_uri(handle->world, LILV_NS_RDFS"comment");
+	handle->node.rdfs_range = lilv_new_uri(handle->world, LILV_NS_RDFS"range");
+	handle->node.doap_name = lilv_new_uri(handle->world, LILV_NS_DOAP"name");
+	handle->node.lv2_minorVersion = lilv_new_uri(handle->world, LV2_CORE__minorVersion);
+	handle->node.lv2_microVersion = lilv_new_uri(handle->world, LV2_CORE__microVersion);
+	handle->node.doap_license = lilv_new_uri(handle->world, LILV_NS_DOAP"license");
+	handle->node.rdfs_label = lilv_new_uri(handle->world, LILV_NS_RDFS"label");
+	handle->node.lv2_name = lilv_new_uri(handle->world, LV2_CORE__name);
+	handle->node.lv2_OutputPort = lilv_new_uri(handle->world, LV2_CORE__OutputPort);
+	handle->node.lv2_AudioPort = lilv_new_uri(handle->world, LV2_CORE__AudioPort);
+	handle->node.lv2_CVPort = lilv_new_uri(handle->world, LV2_CORE__CVPort);
+	handle->node.lv2_ControlPort = lilv_new_uri(handle->world, LV2_CORE__ControlPort);
+	handle->node.atom_AtomPort = lilv_new_uri(handle->world, LV2_ATOM__AtomPort);
+	handle->node.patch_readable = lilv_new_uri(handle->world, LV2_PATCH__readable);
+	handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
+	handle->node.rdf_type = lilv_new_uri(handle->world, LILV_NS_RDF"type");
+	handle->node.lv2_Plugin = lilv_new_uri(handle->world, LV2_CORE__Plugin);
+
+	sp_regs_init(&handle->regs, handle->world, handle->map);
+
+	{
+		lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
+		if(synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.module_list.urid))
+		{
+			handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
+			handle->regs.port.event_transfer.urid, &handle->atom);
+		}
 	}
 }
 
@@ -2507,6 +2534,8 @@ _deinit(plughandle_t *handle)
 {
 	if(handle->world)
 	{
+		sp_regs_deinit(&handle->regs);
+
 		lilv_node_free(handle->node.pg_group);
 		lilv_node_free(handle->node.lv2_integer);
 		lilv_node_free(handle->node.lv2_toggled);
@@ -2699,9 +2728,74 @@ static void
 port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 	uint32_t format, const void *buffer)
 {
-	//plughandle_t *handle = instance;
+	plughandle_t *handle = instance;
 
-	// nothing
+	if(port_index == 15) // notify
+	{
+		if(format == handle->regs.port.event_transfer.urid)
+		{
+			const LV2_Atom_Object *obj = buffer;
+
+			if(lv2_atom_forge_is_object_type(&handle->forge, obj->atom.type))
+			{
+				if(obj->body.otype == handle->regs.patch.set.urid)
+				{
+					const LV2_Atom_URID *property = NULL;
+					const LV2_Atom *value = NULL;
+
+					lv2_atom_object_get(obj,
+						handle->regs.patch.property.urid, &property,
+						handle->regs.patch.value.urid, &value,
+						0);
+
+					const LV2_URID prop = property && (property->atom.type == handle->forge.URID)
+						? property->body
+						: 0;
+
+					if(prop && value)
+					{
+						printf("got patch:Set: %s\n", handle->unmap->unmap(handle->unmap->handle, prop));
+
+						if(prop == handle->regs.synthpod.module_list.urid)
+						{
+							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
+
+							HASH_FREE(&handle->mods, ptr)
+							{
+								mod_t *mod = ptr;
+								_mod_free(handle, mod);
+							}
+
+							LV2_ATOM_TUPLE_FOREACH(tup, itm)
+							{
+								const LV2_Atom_URID *plug_urid = (const LV2_Atom_URID *)itm;
+								const char *uri = handle->unmap->unmap(handle->unmap->handle, plug_urid->body);
+								printf("uri: %s\n", uri);
+
+								LilvNode *uri_node = lilv_new_uri(handle->world, uri);
+								const LilvPlugin *plug = NULL;
+
+								if(uri_node)
+								{
+									const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
+									plug = lilv_plugins_get_by_uri(plugs, uri_node);
+									lilv_node_free(uri_node);
+								}
+
+								if(plug)
+									_mod_add(handle, plug);
+							}
+							//TODO
+						}
+					}
+				}
+				else if(obj->body.otype == handle->regs.patch.put.urid)
+				{
+					//TODO
+				}
+			}
+		}
+	}
 }
 
 static int

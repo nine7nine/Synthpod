@@ -16,6 +16,7 @@
  */
 
 #include <synthpod_app_private.h>
+#include <synthpod_patcher.h>
 
 #define PORT_SIZE(PORT) ((PORT)->size)
 
@@ -970,6 +971,96 @@ _sp_app_from_ui_path_get(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
+__realtime static bool
+_sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
+{
+	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+
+	const LV2_Atom_URID *subject = NULL;
+	const LV2_Atom_Int *seqn = NULL;
+	const LV2_Atom_URID *property = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.patch.subject.urid, &subject,
+		app->regs.patch.sequence_number.urid, &seqn,
+		app->regs.patch.property.urid, &property,
+		0);
+
+	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
+		? subject->body : 0;
+	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
+		? seqn->body : 0;
+	const LV2_URID prop = property && (property->atom.type == app->forge.URID)
+		? property->body : 0;
+
+	if(prop)
+	{
+		printf("got patch:Get: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
+
+		if(property->body == app->regs.synthpod.module_list.urid)
+		{
+			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+			if(answer)
+			{
+				LV2_Atom_Forge_Frame frame [2];
+				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
+					&app->regs, &app->forge, &frame[0], subj, sn, prop);
+				if(ref)
+					ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
+				for(unsigned m = 0; m < app->num_mods; m++)
+				{
+					mod_t *mod = app->mods[m];
+
+					if(ref)
+						ref = lv2_atom_forge_urid(&app->forge, mod->plug_urid);
+				}
+				if(ref)
+				{
+					synthpod_patcher_pop(&app->forge, frame, 2);
+					_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+				}
+			}
+		}
+		//TODO handle more properties
+	}
+
+	return advance_ui[app->block_state];
+}
+
+__realtime static bool
+_sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
+{
+	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+
+	const LV2_Atom_URID *subject = NULL;
+	const LV2_Atom_Int *seqn = NULL;
+	const LV2_Atom_URID *property = NULL;
+	const LV2_Atom *value = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.patch.subject.urid, &subject,
+		app->regs.patch.sequence_number.urid, &seqn,
+		app->regs.patch.property.urid, &property,
+		app->regs.patch.value.urid, &value,
+		0);
+
+	const int32_t subj = subject && (subject->atom.type == app->forge.URID)
+		? subject->body : 0;
+	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
+		? seqn->body : 0;
+
+	if(property && (property->atom.type == app->forge.URID)
+		&& value)
+	{
+		printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, property->body));
+
+		//TODO handle more properties
+	}
+
+	return advance_ui[app->block_state];
+}
+
 void
 sp_app_from_ui_fill(sp_app_t *app)
 {
@@ -1053,6 +1144,12 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.synthpod.path_get.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_path_get;
+
+	from_uis[ptr].protocol = app->regs.patch.get.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_patch_get;
+
+	from_uis[ptr].protocol = app->regs.patch.set.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_patch_set;
 
 	assert(ptr == FROM_UI_NUM);
 	// sort according to URID

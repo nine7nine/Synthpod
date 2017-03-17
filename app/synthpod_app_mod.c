@@ -678,6 +678,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->app = app;
 	mod->uid = uid != 0 ? uid : app->uid++;
 	mod->plug = plug;
+	mod->plug_urid = app->driver->map->map(app->driver->map->handle, uri);
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
 	if(!mod->inst)
