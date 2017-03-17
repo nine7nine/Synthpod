@@ -499,7 +499,7 @@ void
 _sp_app_mod_reinitialize(mod_t *mod);
 
 void
-_sp_app_mod_qsort(mod_t **a, unsigned n);
+_sp_app_mod_qsort(mod_t **a, int n);
 
 LV2_Worker_Status
 _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload);

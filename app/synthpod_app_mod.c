@@ -122,32 +122,36 @@ _mod_bsearch(u_id_t p, mod_t **a, unsigned n)
 }
 
 void
-_sp_app_mod_qsort(mod_t **a, unsigned n)
+_sp_app_mod_qsort(mod_t **A, int n)
 {
 	if(n < 2)
 		return;
 
-	const mod_t *p = a[n/2];
+	const mod_t *p = *A;
 
-	unsigned i, j;
-	for(i=0, j=n-1; ; i++, j--)
+	int i = -1;
+	int j = n;
+
+	while(true)
 	{
-		while(a[i]->uid < p->uid)
-			i++;
+		do {
+			i += 1;
+		} while(A[i]->uid < p->uid);
 
-		while(p->uid < a[j]->uid)
-			j--;
+		do {
+			j -= 1;
+		} while(A[j]->uid > p->uid);
 
 		if(i >= j)
 			break;
 
-		mod_t *t = a[i];
-		a[i] = a[j];
-		a[j] = t;
+		mod_t *tmp = A[i];
+		A[i] = A[j];
+		A[j] = tmp;
 	}
 
-	_sp_app_mod_qsort(a, i);
-	_sp_app_mod_qsort(&a[i], n - i);
+	_sp_app_mod_qsort(A, j + 1);
+	_sp_app_mod_qsort(A + j + 1, n - j - 1);
 }
 
 __non_realtime static char *
