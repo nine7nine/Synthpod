@@ -1,12 +1,24 @@
 # mapper.lv2
 
-## Lock-free implementation of the LV2 URID extension
+## Concurrent lock-free implementation of the LV2 URID extension
 
 ### Properties
 
 * Is lock-free
-* Is realtime-safe if combined with an rt-safe memory allocator
 * Uses a simplistic API
+* Can map a fixed size of elements only
+* Has fast URI mapping with constant expected time
+* Has immediate URID unmaping with O(1)
+* When combined with an rt-safe memory allocator
+	* Is wait-free
+	* Is rt-safe
+
+### Reference
+
+* <http://lv2plug.in/ns/ext/urid>
+* <http://preshing.com/20130605/the-worlds-simplest-lock-free-hash-table/>
+* <https://en.wikipedia.org/wiki/Linear_probing>
+* <https://en.wikipedia.org/wiki/MurmurHash#MurmurHash3>
 
 ### License
 

@@ -59,6 +59,9 @@ mapper_new(uint32_t nitems);
 MAPPER_API void
 mapper_free(mapper_t *mapper);
 
+MAPPER_API uint32_t
+mapper_get_usage(mapper_t *mapper);
+
 MAPPER_API void
 mapper_pool_init(mapper_pool_t *mapper_pool, mapper_t *mapper,
 	mapper_pool_alloc_t mapper_pool_alloc, mapper_pool_free_t mapper_pool_free,
@@ -89,6 +92,7 @@ struct _mapper_item_t {
 struct _mapper_t {
 	uint32_t nitems;
 	uint32_t nitems_mask;
+	atomic_uint usage;
 	mapper_item_t items [0];
 };
 
@@ -181,9 +185,10 @@ _mapper_pool_map(void *data, const char *uri)
 	if(!uri) // invalid URI
 		return 0;
 
+	const size_t uri_len = strlen(uri) + 1;
 	mapper_pool_t *mapper_pool = data;
 	mapper_t *mapper = mapper_pool->mapper;
-	const uint32_t hash = _mapper_murmur3_32(uri, strlen(uri));
+	const uint32_t hash = _mapper_murmur3_32(uri, uri_len - 1); // ignore zero terminator
 
 	for(uint32_t i = 0, idx = (hash + i) & mapper->nitems_mask;
 		i < mapper->nitems;
@@ -195,18 +200,18 @@ _mapper_pool_map(void *data, const char *uri)
 		const uintptr_t val = atomic_load_explicit(&item->val, memory_order_acquire);
 		if(val != 0) // slot is already taken
 		{
-			if(strcmp((const char *)val, uri) == 0) // URI is already mapped, use that
+			if(memcmp((const char *)val, uri, uri_len) == 0) // URI is already mapped, use that
 				return idx + 1;
-			else // slot is already taken by another URI, try next slot
-				continue;
+
+			// slot is already taken by another URI, try next slot
+			continue;
 		}
 
 		// clone URI for possible injection
-		const size_t uri_len = strlen(uri) + 1;
 		char *uri_clone = mapper_pool->alloc(mapper_pool->data, uri_len);
 		if(!uri_clone) // allocation failed
 			return 0;
-		strncpy(uri_clone, uri, uri_len);
+		memcpy(uri_clone, uri, uri_len);
 		const uintptr_t desired = (uintptr_t)uri_clone;
 
 		// try to populate slot with newly mapped URI
@@ -215,14 +220,15 @@ _mapper_pool_map(void *data, const char *uri)
 			&expected, desired, memory_order_release, memory_order_relaxed);
 		if(match) // we have successfully taken this slot first
 		{
+			atomic_fetch_add_explicit(&mapper->usage, 1, memory_order_relaxed);
 			item->mapper_pool = mapper_pool; // set owning pool
 			return idx + 1;
 		}
-		else if(strcmp((const char *)expected, uri) == 0) // other thread stole it
-		{
-			mapper_pool->free(mapper_pool->data, uri_clone); // free superfluous URI
+
+		mapper_pool->free(mapper_pool->data, uri_clone); // free superfluous URI
+
+		if(memcmp((const char *)expected, uri, uri_len) == 0) // other thread stole it
 			return idx + 1;
-		}
 
 		// slot is already taken by another URI, try next slot
 	}
@@ -284,6 +290,9 @@ mapper_new(uint32_t nitems)
 	mapper->nitems = power_of_two;
 	mapper->nitems_mask = power_of_two - 1;
 
+	// initialize atomic usage counter
+	atomic_init(&mapper->usage, 0);
+
 	// initialize atomic variables of items
 	for(uint32_t idx = 0; idx < mapper->nitems; idx++)
 	{
@@ -309,6 +318,12 @@ mapper_free(mapper_t *mapper)
 #endif
 
 	free(mapper);
+}
+
+MAPPER_API uint32_t
+mapper_get_usage(mapper_t *mapper)
+{
+	return atomic_load_explicit(&mapper->usage, memory_order_relaxed);
 }
 
 MAPPER_API void
@@ -347,7 +362,10 @@ mapper_pool_deinit(mapper_pool_t *mapper_pool)
 		const uintptr_t val = atomic_load_explicit(&item->val,
 			memory_order_relaxed);
 		if(val != 0) // slot is populated by a URI
+		{
+			atomic_fetch_sub_explicit(&mapper->usage, 1, memory_order_relaxed);
 			mapper_pool->free(mapper_pool->data, (char *)val);
+		}
 	}
 }
 
