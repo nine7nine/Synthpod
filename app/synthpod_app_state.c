@@ -106,11 +106,15 @@ _preset_features(mod_t *mod, bool async)
 		? _preset_schedule_work_async
 		: _preset_schedule_work_sync; // for state:loadDefaultState
 
+#if 1
 	mod->state_feature_list[0].URI = LV2_WORKER__schedule;
 	mod->state_feature_list[0].data = &mod->state_worker;
 
 	mod->state_features[0] = &mod->state_feature_list[0];
 	mod->state_features[1] = NULL;
+#else
+	mod->state_features[0] = NULL;
+#endif
 
 	return (const LV2_Feature *const *)mod->state_features;
 }
