@@ -239,11 +239,12 @@ _mapper_pool_map(void *data, const char *uri)
 static const char *
 _mapper_pool_unmap(void *data, uint32_t idx)
 {
-	if(!idx) // invalid URID
-		return NULL;
-
 	mapper_pool_t *mapper_pool = data;
 	mapper_t *mapper = mapper_pool->mapper;
+
+	if( (idx == 0) || (idx > mapper->nitems)) // invalid URID
+		return NULL;
+
 	mapper_item_t *item = &mapper->items[idx - 1];
 
 	const uintptr_t val = atomic_load_explicit(&item->val, memory_order_relaxed);
