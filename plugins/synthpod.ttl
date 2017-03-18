@@ -114,7 +114,6 @@ synthpod:stereo
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_in ;
 	] , [
 		# event out
@@ -129,7 +128,6 @@ synthpod:stereo
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_out ;
 	] , [
 		# audio in 1
@@ -248,6 +246,7 @@ synthpod:stereo
 		lv2:symbol "control" ;
 		lv2:name "Control" ;
 		rsz:minimumSize 65536;
+		lv2:designation lv2:control ;
 	] , [
 		# notify event port
 	  a lv2:OutputPort ,
@@ -259,6 +258,7 @@ synthpod:stereo
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		rsz:minimumSize 65536;
+		lv2:designation lv2:control ;
 	] ;
 
 	state:state [
@@ -309,7 +309,6 @@ synthpod:monoatom
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_in ;
 	] , [
 		# event out
@@ -324,7 +323,6 @@ synthpod:monoatom
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_out ;
 	] , [
 		# control event port
@@ -337,6 +335,7 @@ synthpod:monoatom
 		lv2:symbol "control" ;
 		lv2:name "Control" ;
 		rsz:minimumSize 65536;
+		lv2:designation lv2:control ;
 	] , [
 		# notify event port
 	  a lv2:OutputPort ,
@@ -348,6 +347,7 @@ synthpod:monoatom
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		rsz:minimumSize 65536;
+		lv2:designation lv2:control ;
 	] ;
 
 	state:state [
@@ -1900,6 +1900,7 @@ synthpod:string2control
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
 		pg:group synthpod:group_in ;
+		lv2:designation lv2:control ;
 	] , [
 		# atom_in
 	  a lv2:OutputPort ,
@@ -1910,6 +1911,7 @@ synthpod:string2control
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		pg:group synthpod:group_out ;
+		lv2:designation lv2:control ;
 	] , [
 		# output
 	  a lv2:OutputPort ,
@@ -2046,6 +2048,7 @@ synthpod:midi2control
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
 		pg:group synthpod:group_out ;
+		lv2:designation lv2:control ;
 	] , [
 		# output
 	  a lv2:OutputPort ,
@@ -2234,8 +2237,8 @@ synthpod:panic
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_in ;
+		lv2:designation lv2:control ;
 	] , [
 		# atom_in
 	  a lv2:OutputPort ,
@@ -2245,8 +2248,8 @@ synthpod:panic
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_out ;
+		lv2:designation lv2:control ;
 	] ;
 
 	patch:writable
@@ -2601,8 +2604,8 @@ synthpod:anonymizer
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event In" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_in ;
+		lv2:designation lv2:control ;
 	] , [
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
@@ -2611,6 +2614,6 @@ synthpod:anonymizer
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Out" ;
-		lv2:designation lv2:control ;
 		pg:group synthpod:group_in ;
+		lv2:designation lv2:control ;
 	] .
