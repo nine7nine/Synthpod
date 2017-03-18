@@ -272,11 +272,11 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	for(unsigned i=0; i<MAX_SLOTS; i++)
 	{
-		handle->urid.learn[0*MAX_SLOTS + i] = props_map(&handle->props, defs[0*MAX_SLOTS + i].property);
-		handle->urid.cntrl[1*MAX_SLOTS + i] = props_map(&handle->props, defs[1*MAX_SLOTS + i].property);
-		handle->urid.min[2*MAX_SLOTS + i] = props_map(&handle->props, defs[2*MAX_SLOTS + i].property);
-		handle->urid.max[3*MAX_SLOTS + i] = props_map(&handle->props, defs[3*MAX_SLOTS + i].property);
-		handle->urid.raw[4*MAX_SLOTS + i] = props_map(&handle->props, defs[4*MAX_SLOTS + i].property);
+		handle->urid.learn[i] = props_map(&handle->props, defs[0*MAX_SLOTS + i].property);
+		handle->urid.cntrl[i] = props_map(&handle->props, defs[1*MAX_SLOTS + i].property);
+		handle->urid.min[i] = props_map(&handle->props, defs[2*MAX_SLOTS + i].property);
+		handle->urid.max[i] = props_map(&handle->props, defs[3*MAX_SLOTS + i].property);
+		handle->urid.raw[i] = props_map(&handle->props, defs[4*MAX_SLOTS + i].property);
 	}
 
 	return handle;
