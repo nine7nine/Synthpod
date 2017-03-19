@@ -1045,15 +1045,86 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 		app->regs.patch.value.urid, &value,
 		0);
 
-	const int32_t subj = subject && (subject->atom.type == app->forge.URID)
+	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
+		? subject->body : 0;
+	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
+		? seqn->body : 0;
+	const LV2_URID prop = property && (property->atom.type == app->forge.URID)
+		? property->body : 0;
+
+	if(prop && value)
+	{
+		printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
+
+		//TODO handle more properties
+	}
+
+	return advance_ui[app->block_state];
+}
+
+__realtime static bool
+_sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
+{
+	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+
+	const LV2_Atom_URID *subject = NULL;
+	const LV2_Atom_Int *seqn = NULL;
+	const LV2_Atom_URID *body = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.patch.subject.urid, &subject,
+		app->regs.patch.sequence_number.urid, &seqn,
+		app->regs.patch.body.urid, &body,
+		0);
+
+	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
+		? subject->body : 0;
+	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
+		? seqn->body : 0;
+	const LV2_URID bd = body && (body->atom.type == app->forge.URID)
+		? body->body : 0;
+
+	if( (subj == app->regs.synthpod.module_list.urid) && bd)
+	{
+		const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, bd);
+		printf("got patch:Insert: %s\n", uri);
+
+		// send request to worker thread
+		const size_t uri_sz = strlen(uri) + 1;
+		const size_t size = sizeof(job_t) + uri_sz;
+		job_t *job = _sp_app_to_worker_request(app, size);
+		if(job)
+		{
+			job->request = JOB_TYPE_REQUEST_MODULE_ADD;
+			memcpy(job->uri, uri, uri_sz);
+			_sp_app_to_worker_advance(app, size);
+		}
+	}
+
+	return advance_ui[app->block_state];
+}
+
+__realtime static bool
+_sp_app_from_ui_patch_delete(sp_app_t *app, const LV2_Atom *atom)
+{
+	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+
+	const LV2_Atom_URID *subject = NULL;
+	const LV2_Atom_Int *seqn = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.patch.subject.urid, &subject,
+		app->regs.patch.sequence_number.urid, &seqn,
+		0);
+
+	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
 		? subject->body : 0;
 	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
 		? seqn->body : 0;
 
-	if(property && (property->atom.type == app->forge.URID)
-		&& value)
+	if(subj)
 	{
-		printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, property->body));
+		printf("got patch:Delete: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
 
 		//TODO handle more properties
 	}
@@ -1150,6 +1221,12 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.patch.set.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_patch_set;
+
+	from_uis[ptr].protocol = app->regs.patch.insert.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_patch_insert;
+
+	from_uis[ptr].protocol = app->regs.patch.delete.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_patch_delete;
 
 	assert(ptr == FROM_UI_NUM);
 	// sort according to URID

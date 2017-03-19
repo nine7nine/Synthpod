@@ -597,6 +597,23 @@ _sort_param_name(const void *a, const void *b, void *data)
 }
 
 static void
+_mod_insert(plughandle_t *handle, const LilvPlugin *plug)
+{
+	const LilvNode *node= lilv_plugin_get_uri(plug);
+	const char *uri = lilv_node_as_string(node);
+	const LV2_URID urid = handle->map->map(handle->map->handle, uri);
+
+	lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
+	if(synthpod_patcher_insert(&handle->regs, &handle->forge,
+		handle->regs.synthpod.module_list.urid, 0,
+		sizeof(uint32_t), handle->forge.URID, &urid))
+	{
+		handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
+		handle->regs.port.event_transfer.urid, &handle->atom);
+	}
+}
+
+static void
 _mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
 	mod_t *mod = calloc(1, sizeof(mod_t));
@@ -917,7 +934,7 @@ _load(plughandle_t *handle)
 	{
 		case SELECTOR_GRID_PLUGINS:
 		{
-			_mod_add(handle, handle->plugin_selector);
+			_mod_insert(handle, handle->plugin_selector);
 		} break;
 		case SELECTOR_GRID_PRESETS:
 		{
