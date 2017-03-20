@@ -123,13 +123,13 @@ _init(sandbox_slave_t *sb, void *data)
 	if(!app->widget)
 		return -1;
 
-	if(sandbox_slave_no_user_resize_get(sb))
-	{
-		xcb_size_hints_t hints;
-		xcb_icccm_size_hints_set_min_size(&hints, app->w, app->h);
-		xcb_icccm_size_hints_set_max_size(&hints, app->w, app->h);
-		xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &hints);
-	}
+	// clone size hints from widget to parent window
+	xcb_get_property_cookie_t reply = xcb_icccm_get_wm_size_hints(app->conn,
+		app->widget, XCB_ATOM_WM_NORMAL_HINTS);
+	xcb_size_hints_t size_hints;
+	xcb_icccm_get_wm_size_hints_reply(app->conn, reply, &size_hints, NULL);
+	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &size_hints);
+  xcb_flush(app->conn);
 
 	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
 	app->resize_iface = sandbox_slave_extension_data(sb, LV2_UI__resize);
