@@ -289,15 +289,13 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	cfg->title = "Keyboard";
 	cfg->parent = (intptr_t)parent;
 	cfg->data = handle;
+	cfg->host_resize = host_resize;
 	cfg->expose = _expose;
 	cfg->font.face = NULL;
 	cfg->font.size = 16;
 	
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
-
-	if(host_resize)
-		host_resize->ui_resize(host_resize->handle, cfg->width, cfg->height);
 
 	return handle;
 }

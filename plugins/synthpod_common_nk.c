@@ -2686,6 +2686,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	cfg->class = "synthpod";
 	cfg->title = "Synthpod";
 	cfg->parent = (intptr_t)parent;
+	cfg->host_resize = host_resize;
 	cfg->data = handle;
 	cfg->expose = _expose;
 
@@ -2695,9 +2696,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
-
-	if(host_resize)
-		host_resize->ui_resize(host_resize->handle, cfg->width, cfg->height);
 
 	handle->plugin_collapse_states = NK_MAXIMIZED;
 	handle->preset_import_collapse_states = NK_MAXIMIZED;
