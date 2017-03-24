@@ -62,11 +62,19 @@ _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 		return advance_ui[app->block_state];
 
 	// set port value
-	void *buf = PORT_BASE_ALIGNED(port);
-	*(float *)buf = trans->value.body;
-	port->last = trans->value.body;
-
-	_sp_app_port_control_stash(port);
+	float *buf = PORT_BASE_ALIGNED(port);
+	if(port->type == PORT_TYPE_CONTROL)
+	{
+		*buf = trans->value.body;
+		port->last = trans->value.body;
+		_sp_app_port_control_stash(port);
+	}
+	else if(port->type == PORT_TYPE_CV)
+	{
+		for(unsigned i = 0; i < app->driver->max_block_size; i++)
+			buf[i] = trans->value.body;
+		port->last = fabs(trans->value.body);
+	}
 
 	return advance_ui[app->block_state];
 }
