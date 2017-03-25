@@ -102,10 +102,10 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
 				for(unsigned m = 0; m < app->num_mods; m++)
 				{
-					mod_t *mod = app->mods[m];
+					mod_t *mod2 = app->mods[m];
 
 					if(ref)
-					ref = lv2_atom_forge_urid(&app->forge, mod->plug_urid);
+					ref = lv2_atom_forge_urid(&app->forge, mod2->plug_urid);
 				}
 				if(ref)
 				{

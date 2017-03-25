@@ -21,6 +21,7 @@ target_link_libraries(synthpod.lib
 	m
 	pthread
 	${UV_LDFLAGS}
+	${UUID_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS}
 	${SRATOM_LDFLAGS})

@@ -201,6 +201,7 @@ struct _mod_worker_t {
 struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
+	LV2_URID urn;
 	bool selected;
 	LV2_URID visible;
 	bool disabled;

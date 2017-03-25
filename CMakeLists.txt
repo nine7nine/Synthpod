@@ -105,6 +105,10 @@ endif()
 pkg_search_module(UV REQUIRED libuv>=1.0)
 include_directories(${UV_INCLUDE_DIRS})
 
+# uuid
+pkg_search_module(UUID REQUIRED uuid>=2.0)
+include_directories(${UUID_INCLUDE_DIRS})
+
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
 include_directories(${LILV_INCLUDE_DIRS})

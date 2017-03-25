@@ -15,11 +15,30 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <inttypes.h>
+
+#include <uuid.h>
+
 #include <synthpod_app_private.h>
 
 #define ANSI_COLOR_BOLD    "\x1b[1m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
+
+#define URN_UUID_PREFIX "urn:uuid:"
+#define URN_UUID_LENGTH 46
+
+typedef char urn_uuid_t [URN_UUID_LENGTH];
+
+static void
+urn_uuid_unparse_random(char *buf)
+{
+	uuid_t uuid;
+	uuid_generate_random(uuid);
+
+	strncpy(buf, URN_UUID_PREFIX, strlen(URN_UUID_PREFIX));
+	uuid_unparse(uuid, buf + strlen(URN_UUID_PREFIX));
+}
 
 //FIXME is actually __realtime
 __non_realtime static int
@@ -681,6 +700,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 
 	mod->app = app;
 	mod->uid = uid != 0 ? uid : app->uid++;
+	urn_uuid_t urn;
+	urn_uuid_unparse_random(urn);
+	mod->urn = app->driver->map->map(app->driver->map->handle, urn);
 	mod->plug = plug;
 	mod->plug_urid = app->driver->map->map(app->driver->map->handle, uri);
 	mod->num_ports = lilv_plugin_get_num_ports(plug);
