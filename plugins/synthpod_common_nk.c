@@ -155,6 +155,7 @@ struct _prop_t {
 };
 
 struct _mod_t {
+	LV2_URID urn;
 	const LilvPlugin *plug;
 
 	hash_t ports;
@@ -613,14 +614,34 @@ _mod_insert(plughandle_t *handle, const LilvPlugin *plug)
 	}
 }
 
+static mod_t *
+_mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
+{
+	HASH_FOREACH(&handle->mods, itr)
+	{
+		mod_t *mod = *itr;
+
+		if(mod->urn == subj)
+			return mod;
+	}
+
+	return NULL;
+}
+
 static void
-_mod_add(plughandle_t *handle, const LilvPlugin *plug)
+_mod_add(plughandle_t *handle, LV2_URID urn)
 {
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 		return;
 
+	mod->urn = urn;
 	_hash_add(&handle->mods, mod);
+}
+
+static void
+_mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
+{
 	mod->plug = plug;
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug);
 
@@ -2294,6 +2315,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					mod_t *mod = *itr;
 					const LilvPlugin *plug = mod->plug;
 
+					if(!plug) // not yet initialized
+						continue;
+
 					LilvNode *name_node = lilv_plugin_get_name(plug);
 					if(name_node)
 					{
@@ -2749,14 +2773,19 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 			{
 				if(obj->body.otype == handle->regs.patch.set.urid)
 				{
+					const LV2_Atom_URID *subject = NULL;
 					const LV2_Atom_URID *property = NULL;
 					const LV2_Atom *value = NULL;
 
 					lv2_atom_object_get(obj,
+						handle->regs.patch.subject.urid, &subject,
 						handle->regs.patch.property.urid, &property,
 						handle->regs.patch.value.urid, &value,
 						0);
 
+					const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+						? subject->body
+						: 0;
 					const LV2_URID prop = property && (property->atom.type == handle->forge.URID)
 						? property->body
 						: 0;
@@ -2777,22 +2806,22 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 							LV2_ATOM_TUPLE_FOREACH(tup, itm)
 							{
-								const LV2_Atom_URID *plug_urid = (const LV2_Atom_URID *)itm;
-								const char *uri = handle->unmap->unmap(handle->unmap->handle, plug_urid->body);
-								printf("uri: %s\n", uri);
+								const LV2_Atom_URID *urid = (const LV2_Atom_URID *)itm;
+								const char *urn = handle->unmap->unmap(handle->unmap->handle, urid->body);
+								printf("<- %s\n", urn);
 
-								LilvNode *uri_node = lilv_new_uri(handle->world, uri);
-								const LilvPlugin *plug = NULL;
-
-								if(uri_node)
+								// get information for each of those, FIXME only if not already available
 								{
-									const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
-									plug = lilv_plugins_get_by_uri(plugs, uri_node);
-									lilv_node_free(uri_node);
+									lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
+									if(synthpod_patcher_get(&handle->regs, &handle->forge,
+										urid->body, 0, 0))
+									{
+										handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
+										handle->regs.port.event_transfer.urid, &handle->atom);
+									}
 								}
 
-								if(plug)
-									_mod_add(handle, plug);
+								_mod_add(handle, urid->body);
 							}
 							//TODO
 						}
@@ -2800,6 +2829,53 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 				}
 				else if(obj->body.otype == handle->regs.patch.put.urid)
 				{
+					const LV2_Atom_URID *subject = NULL;
+					const LV2_Atom_Object *body = NULL;
+
+					lv2_atom_object_get(obj,
+						handle->regs.patch.subject.urid, &subject,
+						handle->regs.patch.body.urid, &body,
+						0);
+
+					const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+						? subject->body
+						: 0;
+
+					if(subj && body)
+					{
+						printf("got patch:Put for %u\n", subj);
+
+						const LV2_Atom_URID *plugin = NULL;
+
+						lv2_atom_object_get(body,
+							handle->regs.core.plugin.urid, &plugin,
+							0); //FIXME query more
+
+						const LV2_URID urid = plugin
+							? plugin->body
+							: 0;
+
+						const char *uri = urid
+							? handle->unmap->unmap(handle->unmap->handle, urid)
+							: NULL;
+
+						mod_t *mod = _mod_find_by_subject(handle, subj);
+						if(mod && uri)
+						{
+							LilvNode *uri_node = lilv_new_uri(handle->world, uri);
+							const LilvPlugin *plug = NULL;
+
+							if(uri_node)
+							{
+								const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
+								plug = lilv_plugins_get_by_uri(plugs, uri_node);
+								lilv_node_free(uri_node);
+							}
+
+							if(plug)
+								_mod_init(handle, mod, plug);
+						}
+					}
 					//TODO
 				}
 			}

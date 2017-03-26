@@ -148,7 +148,7 @@ synthpod_patcher_get(reg_t *regs, LV2_Atom_Forge *forge,
 
 	LV2_Atom_Forge_Ref ref = _synthpod_patcher_internal_object(regs, forge, frame,
 		regs->patch.get.urid, subject, seqn);
-	if(ref)
+	if(property && ref)
 		ref = _synthpod_patcher_internal_property(regs, forge, property);
 	if(ref)
 		synthpod_patcher_pop(forge, frame, 1);

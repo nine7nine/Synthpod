@@ -105,7 +105,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					mod_t *mod2 = app->mods[m];
 
 					if(ref)
-					ref = lv2_atom_forge_urid(&app->forge, mod2->plug_urid);
+						ref = lv2_atom_forge_urid(&app->forge, mod2->urn);
 				}
 				if(ref)
 				{

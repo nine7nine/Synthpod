@@ -702,7 +702,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid)
 	mod->uid = uid != 0 ? uid : app->uid++;
 	urn_uuid_t urn;
 	urn_uuid_unparse_random(urn);
-	mod->urn = app->driver->map->map(app->driver->map->handle, urn);
+	mod->urn = app->driver->map->map(app->driver->map->handle, urn); //FIXME read from state
 	mod->plug = plug;
 	mod->plug_urid = app->driver->map->map(app->driver->map->handle, uri);
 	mod->num_ports = lilv_plugin_get_num_ports(plug);

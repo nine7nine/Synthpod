@@ -1001,9 +1001,11 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 	const LV2_URID prop = property && (property->atom.type == app->forge.URID)
 		? property->body : 0;
 
-	if(prop)
+	printf("got patch:Get for <%s>\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
+
+	if(!subj && prop) //FIXME
 	{
-		printf("got patch:Get: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
+		printf("\tpatch:property <%s>\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
 
 		if(property->body == app->regs.synthpod.module_list.urid)
 		{
@@ -1021,7 +1023,7 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					mod_t *mod = app->mods[m];
 
 					if(ref)
-						ref = lv2_atom_forge_urid(&app->forge, mod->plug_urid);
+						ref = lv2_atom_forge_urid(&app->forge, mod->urn);
 				}
 				if(ref)
 				{
@@ -1031,6 +1033,40 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 			}
 		}
 		//TODO handle more properties
+	}
+	else if(subj)
+	{
+		for(unsigned m = 0; m < app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+
+			if(mod->urn == subj)
+			{
+				LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+				if(answer)
+				{
+					LV2_Atom_Forge_Frame frame [2];
+					lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
+					LV2_Atom_Forge_Ref ref = synthpod_patcher_put_object(
+						&app->regs, &app->forge, &frame[0], subj, sn);
+					if(ref)
+						ref = lv2_atom_forge_object(&app->forge, &frame[1], 0, 0);
+					{
+						if(ref)
+							ref = lv2_atom_forge_key(&app->forge, app->regs.core.plugin.urid);
+						if(ref)
+							ref = lv2_atom_forge_urid(&app->forge, mod->plug_urid);
+					}
+					if(ref)
+					{
+						synthpod_patcher_pop(&app->forge, frame, 2);
+						_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+					}
+				}
+
+				break; // match
+			}
+		}
 	}
 
 	return advance_ui[app->block_state];
