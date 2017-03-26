@@ -238,6 +238,10 @@ struct _plughandle_t {
 	char preset_search_buf [SEARCH_BUF_MAX];
 	char port_search_buf [SEARCH_BUF_MAX];
 
+	struct nk_text_edit plugin_search_edit;
+	struct nk_text_edit preset_search_edit;
+	struct nk_text_edit port_search_edit;
+
 	bool first;
 
 	reg_t regs;
@@ -245,6 +249,8 @@ struct _plughandle_t {
 		LV2_Atom atom;
 		uint8_t buf [ATOM_BUF_MAX];
 	};
+
+	bool has_control_a;
 };
 
 static const char *main_labels [SELECTOR_MAIN_MAX] = {
@@ -2354,10 +2360,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						port_find_matches = true;
 					const size_t old_len = strlen(handle->port_search_buf);
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-					const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
-						handle->port_search_buf, SEARCH_BUF_MAX, nk_filter_default);
+					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
 					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->port_search_buf)) )
 						port_find_matches = true;
+					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+						nk_textedit_select_all(&handle->port_search_edit);
 
 					nk_check_label(ctx, "In", nk_true); //FIXME
 					nk_check_label(ctx, "Out", nk_true); //FIXME
@@ -2392,10 +2399,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						plugin_find_matches = true;
 					const size_t old_len = strlen(handle->plugin_search_buf);
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-					const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
-						handle->plugin_search_buf, SEARCH_BUF_MAX, nk_filter_default);
+					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
 					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->plugin_search_buf)) )
 						plugin_find_matches = true;
+					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+						nk_textedit_select_all(&handle->plugin_search_edit);
 
 					nk_layout_row_dynamic(ctx, dy*20, 1);
 					if(nk_group_begin(ctx, "Plugins_List", NK_WINDOW_BORDER))
@@ -2427,10 +2435,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						preset_find_matches = true;
 					const size_t old_len = strlen(handle->preset_search_buf);
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-					const nk_flags flags = nk_edit_string_zero_terminated(ctx, args,
-						handle->preset_search_buf, SEARCH_BUF_MAX, nk_filter_default);
+					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
 					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->preset_search_buf)) )
 						preset_find_matches = true;
+					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+						nk_textedit_select_all(&handle->preset_search_edit);
 
 					nk_layout_row_dynamic(ctx, dy*20, 1);
 					if(nk_group_begin(ctx, "Presets_List", NK_WINDOW_BORDER))
@@ -2614,6 +2623,8 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 
 	handle->dy = 20.f * nk_pugl_get_scale(&handle->win);
 
+	handle->has_control_a = nk_pugl_is_shortcut_pressed(&ctx->input, 'a', true);
+
 	if(nk_begin(ctx, "synthpod", wbounds, NK_WINDOW_NO_SCROLLBAR))
 	{
 		nk_window_set_bounds(ctx, wbounds);
@@ -2726,6 +2737,10 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->preset_export_collapse_states = NK_MINIMIZED;
 	handle->plugin_info_collapse_states = NK_MINIMIZED;
 	handle->preset_info_collapse_states = NK_MINIMIZED;
+
+	nk_textedit_init_fixed(&handle->plugin_search_edit, handle->plugin_search_buf, SEARCH_BUF_MAX);
+	nk_textedit_init_fixed(&handle->preset_search_edit, handle->preset_search_buf, SEARCH_BUF_MAX);
+	nk_textedit_init_fixed(&handle->port_search_edit, handle->port_search_buf, SEARCH_BUF_MAX);
 
 	handle->first = true;
 
