@@ -281,6 +281,26 @@ static const char *search_labels [SELECTOR_SEARCH_MAX] = {
 	[SELECTOR_SEARCH_PROJECT] = "Project"
 };
 
+static size_t
+_textedit_len(struct nk_text_edit *edit)
+{
+	return nk_str_len(&edit->string);
+}
+
+static const char *
+_textedit_const(struct nk_text_edit *edit)
+{
+	return nk_str_get_const(&edit->string);
+}
+
+static void
+_textedit_zero_terminate(struct nk_text_edit *edit)
+{
+	char *str = nk_str_get(&edit->string);
+	if(str)
+		str[nk_str_len(&edit->string)] = '\0';
+}
+
 static bool
 _hash_empty(hash_t *hash)
 {
@@ -1067,7 +1087,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 		if(name_node)
 		{
 			const char *name_str = lilv_node_as_string(name_node);
-			bool visible = strlen(handle->plugin_search_buf) == 0;
+			bool visible = _textedit_len(&handle->plugin_search_edit) == 0;
 
 			if(!visible)
 			{
@@ -1075,7 +1095,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 				{
 					case SELECTOR_SEARCH_NAME:
 					{
-						if(strcasestr(name_str, handle->plugin_search_buf))
+						if(strcasestr(name_str, _textedit_const(&handle->plugin_search_edit)))
 							visible = true;
 					} break;
 					case SELECTOR_SEARCH_COMMENT:
@@ -1087,7 +1107,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 								? lilv_nodes_get_first(label_nodes) : NULL;
 							if(label_node)
 							{
-								if(strcasestr(lilv_node_as_string(label_node), handle->plugin_search_buf))
+								if(strcasestr(lilv_node_as_string(label_node), _textedit_const(&handle->plugin_search_edit)))
 									visible = true;
 							}
 							lilv_nodes_free(label_nodes);
@@ -1098,7 +1118,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 						LilvNode *author_node = lilv_plugin_get_author_name(plug);
 						if(author_node)
 						{
-							if(strcasestr(lilv_node_as_string(author_node), handle->plugin_search_buf))
+							if(strcasestr(lilv_node_as_string(author_node), _textedit_const(&handle->plugin_search_edit)))
 								visible = true;
 							lilv_node_free(author_node);
 						}
@@ -1111,7 +1131,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 							const LilvNode *label_node = lilv_plugin_class_get_label(class);
 							if(label_node)
 							{
-								if(strcasestr(lilv_node_as_string(label_node), handle->plugin_search_buf))
+								if(strcasestr(lilv_node_as_string(label_node), _textedit_const(&handle->plugin_search_edit)))
 									visible = true;
 							}
 						}
@@ -1124,7 +1144,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 							LilvNode *label_node = p ? lilv_world_get(handle->world, lilv_plugin_get_uri(plug), p, NULL) : NULL;
 							if(label_node)
 							{
-								if(strcasestr(lilv_node_as_string(label_node), handle->plugin_search_buf))
+								if(strcasestr(lilv_node_as_string(label_node), _textedit_const(&handle->plugin_search_edit)))
 									visible = true;
 								lilv_node_free(label_node);
 							}
@@ -1270,7 +1290,7 @@ static void
 _refresh_main_preset_list_for_bank(plughandle_t *handle,
 	LilvNodes *presets, const LilvNode *preset_bank)
 {
-	bool search = strlen(handle->preset_search_buf) != 0;
+	bool search = _textedit_len(&handle->preset_search_edit) != 0;
 
 	LILV_FOREACH(nodes, i, presets)
 	{
@@ -1299,7 +1319,7 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 			{
 				const char *label_str = lilv_node_as_string(label_node);
 
-				if(!search || strcasestr(label_str, handle->preset_search_buf))
+				if(!search || strcasestr(label_str, _textedit_const(&handle->preset_search_edit)))
 				{
 					_hash_add(&handle->preset_matches, (void *)preset);
 				}
@@ -2181,7 +2201,7 @@ _refresh_main_port_list(plughandle_t *handle, mod_t *mod)
 {
 	_hash_free(&handle->port_matches);
 
-	bool search = strlen(handle->port_search_buf) != 0;
+	bool search = _textedit_len(&handle->port_search_edit) != 0;
 
 	HASH_FOREACH(&mod->ports, itr)
 	{
@@ -2193,7 +2213,7 @@ _refresh_main_port_list(plughandle_t *handle, mod_t *mod)
 			LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
 			if(name_node)
 			{
-				if(!strcasestr(lilv_node_as_string(name_node), handle->port_search_buf))
+				if(!strcasestr(lilv_node_as_string(name_node), _textedit_const(&handle->port_search_edit)))
 					visible = false;
 
 				lilv_node_free(name_node);
@@ -2358,10 +2378,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 					if(old_sel != handle->port_search_selector)
 						port_find_matches = true;
-					const size_t old_len = strlen(handle->port_search_buf);
+					const size_t old_len = _textedit_len(&handle->port_search_edit);
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->port_search_buf)) )
+					_textedit_zero_terminate(&handle->port_search_edit);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
 						port_find_matches = true;
 					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 						nk_textedit_select_all(&handle->port_search_edit);
@@ -2397,10 +2418,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 					if(old_sel != handle->plugin_search_selector)
 						plugin_find_matches = true;
-					const size_t old_len = strlen(handle->plugin_search_buf);
+					const size_t old_len = _textedit_len(&handle->plugin_search_edit);
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->plugin_search_buf)) )
+					_textedit_zero_terminate(&handle->plugin_search_edit);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->plugin_search_edit)) )
 						plugin_find_matches = true;
 					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 						nk_textedit_select_all(&handle->plugin_search_edit);
@@ -2433,10 +2455,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 					if(old_sel != handle->preset_search_selector)
 						preset_find_matches = true;
-					const size_t old_len = strlen(handle->preset_search_buf);
+					const size_t old_len = _textedit_len(&handle->preset_search_edit);
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(handle->preset_search_buf)) )
+					_textedit_zero_terminate(&handle->preset_search_edit);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->preset_search_edit)) )
 						preset_find_matches = true;
 					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 						nk_textedit_select_all(&handle->preset_search_edit);
