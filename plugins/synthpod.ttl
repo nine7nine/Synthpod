@@ -1886,9 +1886,9 @@ synthpod:string2control
 	doap:name "Synthpod String2Control" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature urid:map, work:schedule, state:loadDefaultState ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData state:interface, work:interface ;
+	lv2:extensionData state:interface ;
 
 	lv2:port [
 		# atom_in
@@ -2023,9 +2023,9 @@ synthpod:midi2control
 	doap:name "Synthpod MIDI2Control" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature urid:map, work:schedule, state:loadDefaultState ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData state:interface, work:interface ;
+	lv2:extensionData state:interface ;
 
 	lv2:port [
 		# atom_in
@@ -2223,9 +2223,9 @@ synthpod:panic
 	doap:name "Synthpod Panic" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature urid:map, work:schedule, state:loadDefaultState ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData state:interface, work:interface ;
+	lv2:extensionData state:interface ;
 
 	lv2:port [
 		# atom_in
