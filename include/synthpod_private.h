@@ -195,6 +195,7 @@ struct _reg_t {
 	struct {
 		reg_item_t value;
 		reg_item_t type;
+		reg_item_t subject;
 	} rdf;
 
 	struct {
@@ -466,6 +467,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	
 	_register(&regs->rdf.value, world, map, LILV_NS_RDF"value");
 	_register(&regs->rdf.type, world, map, LILV_NS_RDF"type");
+	_register(&regs->rdf.subject, world, map, LILV_NS_RDF"subject");
 
 	_register(&regs->rdfs.label, world, map, LILV_NS_RDFS"label");
 	_register(&regs->rdfs.range, world, map, LILV_NS_RDFS"range");
@@ -686,6 +688,7 @@ sp_regs_deinit(reg_t *regs)
 	
 	_unregister(&regs->rdf.value);
 	_unregister(&regs->rdf.type);
+	_unregister(&regs->rdf.subject);
 
 	_unregister(&regs->rdfs.label);
 	_unregister(&regs->rdfs.range);

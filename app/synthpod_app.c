@@ -385,7 +385,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	// inject source mod
 	uri_str = SYNTHPOD_PREFIX"source";
-	mod = _sp_app_mod_add(app, uri_str, 0);
+	mod = _sp_app_mod_add(app, uri_str, 0, 0);
 	if(mod)
 	{
 		app->ords[app->num_mods] = mod;
@@ -397,7 +397,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	// inject sink mod
 	uri_str = SYNTHPOD_PREFIX"sink";
-	mod = _sp_app_mod_add(app, uri_str, 0);
+	mod = _sp_app_mod_add(app, uri_str, 0, 0);
 	if(mod)
 	{
 		app->ords[app->num_mods] = mod;

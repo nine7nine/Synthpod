@@ -488,7 +488,7 @@ const LilvPlugin *
 _sp_app_mod_is_supported(sp_app_t *app, const void *uri);
 
 mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid);
+_sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn);
 
 void
 _sp_app_mod_eject(sp_app_t *app, mod_t *mod);
