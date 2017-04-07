@@ -98,7 +98,7 @@ synthpod:stereo
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:extensionData work:interface , state:interface, zwork:interface, opts:interface ;
-	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap ;
+	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
 
 	lv2:port [
@@ -293,7 +293,7 @@ synthpod:monoatom
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
 	lv2:extensionData work:interface , state:interface, zwork:interface, opts:interface ;
-	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap ;
+	lv2:requiredFeature work:schedule , bufsz:boundedBlockLength, urid:map, urid:unmap, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive , lv2:hardRTCapable , log:log, zwork:schedule ;
 
 	lv2:port [
