@@ -630,6 +630,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 		return NULL;
 	mlock(mod, sizeof(mod_t));
 
+	atomic_init(&mod->dsp_client.ref_count, 0);
+
 	// populate worker schedule
 	mod->worker.schedule.handle = mod;
 	mod->worker.schedule.schedule_work = _schedule_work;

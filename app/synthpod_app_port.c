@@ -19,7 +19,7 @@
 
 #define PORT_SIZE(PORT) ((PORT)->size)
 
-__realtime static inline void 
+__realtime static inline void
 _dsp_master_concurrent(sp_app_t *app)
 {
 	dsp_master_t *dsp_master = &app->dsp_master;
@@ -93,7 +93,7 @@ _dsp_master_concurrent(sp_app_t *app)
 	//printf("concurrent: %u\n", dsp_master->concurrent);
 }
 
-__realtime static inline void
+__realtime void
 _dsp_master_reorder(sp_app_t *app)
 {
 	for(unsigned m=0; m<app->num_mods; m++)

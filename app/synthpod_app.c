@@ -218,29 +218,27 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 
 	bool done = true;
 
-	for(unsigned m=0; m<app->num_mods; m++)
+	for(unsigned m=0; m<app->num_mods; m++) // TODO remember starting position
 	{
 		mod_t *mod = app->mods[m];
 		dsp_client_t *dsp_client = &mod->dsp_client;
 
-		if(!atomic_load_explicit(&dsp_client->done, memory_order_acquire))
+		int expected = 0;
+		const int desired = -1; // mark as done
+		const bool match = atomic_compare_exchange_weak(&dsp_client->ref_count,
+			&expected, desired); //TODO can we make this explicit?
+		if(match) // needs to run now
 		{
-			if(atomic_load_explicit(&dsp_client->ref_count, memory_order_acquire) == 0) // no more dependencies
+			_sp_app_process_single_run(mod, dsp_master->nsamples);
+
+			for(unsigned j=0; j<dsp_client->num_sinks; j++)
 			{
-				if(atomic_flag_test_and_set(&dsp_client->flag) == false) // not run by another thread
-				{
-					_sp_app_process_single_run(mod, dsp_master->nsamples);
-
-					for(unsigned j=0; j<dsp_client->num_sinks; j++)
-					{
-						dsp_client_t *sink = dsp_client->sinks[j];
-						atomic_fetch_sub_explicit(&sink->ref_count, 1, memory_order_release);
-					}
-
-					atomic_store_explicit(&dsp_client->done, true, memory_order_release);
-				}
+				dsp_client_t *sink = dsp_client->sinks[j];
+				atomic_fetch_sub_explicit(&sink->ref_count, 1, memory_order_release);
 			}
-
+		}
+		else if(expected >= 0) // needs to run later
+		{
 			done = false;
 		}
 	}
@@ -251,15 +249,13 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 __realtime static inline void
 _dsp_slave_spin(dsp_master_t *dsp_master, bool is_master)
 {
-	while(atomic_load_explicit(&dsp_master->roll, memory_order_acquire))
+	while(atomic_load_explicit(&dsp_master->ref_count, memory_order_acquire))
 	{
 		const bool done = _dsp_slave_fetch(dsp_master);
 		if(done)
 		{
-			if(is_master)
-				atomic_store_explicit(&dsp_master->roll, false, memory_order_release);
-			else // is_slave
-				break;
+			atomic_fetch_sub_explicit(&dsp_master->ref_count, 1, memory_order_release);
+			break;
 		}
 	}
 }
@@ -310,8 +306,6 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 		mod_t *mod = app->mods[m];
 		dsp_client_t *dsp_client = &mod->dsp_client;
 
-		atomic_flag_clear(&dsp_client->flag);
-		atomic_store_explicit(&dsp_client->done, false, memory_order_release);
 		atomic_store_explicit(&dsp_client->ref_count, dsp_client->num_sources, memory_order_release);
 	}
 
@@ -319,9 +313,15 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 	if(num_slaves > dsp_master->num_slaves)
 		num_slaves = dsp_master->num_slaves;
 	dsp_master->nsamples = nsamples;
-	atomic_store_explicit(&dsp_master->roll, true, memory_order_release);
+	const unsigned ref_count = num_slaves + 1; // plus master
+	atomic_store_explicit(&dsp_master->ref_count, ref_count, memory_order_release);
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
 	_dsp_slave_spin(dsp_master, true); // runs jobs itself 
+
+	while(atomic_load_explicit(&dsp_master->ref_count, memory_order_acquire))
+	{
+		// spin
+	}
 }
 
 sp_app_t *
@@ -335,7 +335,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		return NULL;
 	mlock(app, sizeof(sp_app_t));
 
-	atomic_flag_clear_explicit(&app->dirty, memory_order_relaxed);
+	atomic_init(&app->dirty, false);
 
 	app->dir.home = getenv("HOME");
 
@@ -435,7 +435,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	// initialize parallel processing
 	dsp_master_t *dsp_master = &app->dsp_master;
 	atomic_init(&dsp_master->kill, false);
-	atomic_init(&dsp_master->roll, false);
+	atomic_init(&dsp_master->ref_count, 0);
 	dsp_master->num_slaves = driver->num_slaves;
 	dsp_master->concurrent = 1; // this is a safe fallback
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
@@ -648,9 +648,9 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	}
 		
 	// handle app ui post
-	const bool signaled = atomic_flag_test_and_set_explicit(&app->dirty, memory_order_acquire);
-	atomic_flag_clear_explicit(&app->dirty, memory_order_release);
-	if(signaled)
+	bool expected = true;
+	const bool desired = false;
+	if(atomic_compare_exchange_weak(&app->dirty, &expected, desired))
 	{
 		size_t size = sizeof(transmit_module_list_t);
 		transmit_module_list_t *trans = _sp_app_to_ui_request(app, size);
@@ -659,6 +659,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			_sp_transmit_module_list_fill(&app->regs, &app->forge, trans, size);
 			_sp_app_to_ui_advance(app, size);
 		}
+
+		// recalculate concurrency
+		_dsp_master_reorder(app);
+		//printf("concurrency: %i\n", app->dsp_master.concurrent);
 	}
 }
 

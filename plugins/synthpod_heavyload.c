@@ -73,13 +73,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	const unsigned thresh = *handle->load * 10000;
 
-	volatile unsigned count = 0; // don't optimize away loop
+	for(unsigned j=0; j<nsamples; j++)
+		handle->audio_out[j] = handle->audio_in[j];
+
 	for(unsigned i=0; i<thresh; i++)
 	{
-		count++;
+		for(unsigned j=0; j<nsamples; j++)
+			handle->audio_out[j] *= 0.9f;
 	}
-
-	memmove(handle->audio_out, handle->audio_in, nsamples * sizeof(float));
 }
 
 static void

@@ -138,9 +138,7 @@ struct _dsp_slave_t {
 };
 
 struct _dsp_client_t {
-	atomic_flag flag;
-	atomic_bool done;
-	atomic_uint ref_count;
+	atomic_int ref_count;
 	unsigned num_sinks;
 	unsigned num_sources;
 	dsp_client_t *sinks [64]; //FIXME
@@ -151,7 +149,7 @@ struct _dsp_client_t {
 struct _dsp_master_t {
 	dsp_slave_t dsp_slaves [MAX_SLAVES];
 	atomic_bool kill;
-	atomic_bool roll;
+	atomic_uint ref_count;
 	unsigned concurrent;
 	unsigned num_slaves;
 	uint32_t nsamples;
@@ -348,7 +346,7 @@ struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
 
-	atomic_flag dirty;
+	atomic_bool dirty;
 
 	blocking_state_t block_state;
 	silencing_state_t silence_state;
@@ -508,6 +506,9 @@ _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload);
 /*
  * Port
  */
+void 
+_dsp_master_reorder(sp_app_t *app);
+
 port_t *
 _sp_app_port_get(sp_app_t *app, u_id_t uid, uint32_t index);
 

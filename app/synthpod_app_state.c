@@ -570,9 +570,12 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 		{
 			fclose(f);
 
-			while(atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed))
+			while(true)
 			{
-				// spin
+				bool expected = false;
+				const bool desired = true;
+				if(atomic_compare_exchange_weak(&app->dirty, &expected, desired))
+					break;
 			}
 		}
 	}
@@ -1243,9 +1246,12 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		}
 	}
 
-	while(atomic_flag_test_and_set_explicit(&app->dirty, memory_order_relaxed))
+	while(true)
 	{
-		// spin
+		bool expected = false;
+		const bool desired = true;
+		if(atomic_compare_exchange_weak(&app->dirty, &expected, desired))
+			break;
 	}
 
 	return LV2_STATE_SUCCESS;
