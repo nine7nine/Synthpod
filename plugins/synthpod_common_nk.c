@@ -25,6 +25,9 @@
 #include "lv2/lv2plug.in/ns/ext/presets/presets.h"
 #include "lv2/lv2plug.in/ns/ext/patch/patch.h"
 
+#include <osc.lv2/osc.h>
+#include <xpress.lv2/xpress.h>
+
 #include <math.h>
 
 #define NK_PUGL_API
@@ -53,15 +56,27 @@ typedef struct _audio_port_t audio_port_t;
 typedef struct _port_t port_t;
 typedef struct _param_t param_t;
 typedef struct _prop_t prop_t;
+typedef struct _mod_conn_t mod_conn_t;
+typedef struct _port_conn_t port_conn_t;
 typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
 
 enum _property_type_t {
-	PROPERTY_TYPE_CONTROL = 0,
-	PROPERTY_TYPE_AUDIO,
-	PROPERTY_TYPE_CV,
-	PROPERTY_TYPE_ATOM,
-	PROPERTY_TYPE_PARAM,
+	PROPERTY_TYPE_NONE				= 0,
+
+	PROPERTY_TYPE_CONTROL			= (1 << 0),
+	PROPERTY_TYPE_PARAM				= (1 << 1),
+
+	PROPERTY_TYPE_AUDIO				= (1 << 2),
+	PROPERTY_TYPE_CV					= (1 << 3),
+	PROPERTY_TYPE_ATOM				= (1 << 4),
+
+	PROPERTY_TYPE_MIDI				= (1 << 8),
+	PROPERTY_TYPE_OSC					= (1 << 9),
+	PROPERTY_TYPE_TIME				= (1 << 10),
+	PROPERTY_TYPE_PATCH				= (1 << 11),
+	PROPERTY_TYPE_XPRESS			= (1 << 12),
+	PROPERTY_TYPE_AUTOMATION	= (1 << 13),
 
 	PROPERTY_TYPE_MAX
 };
@@ -161,6 +176,30 @@ struct _mod_t {
 
 	struct nk_vec2 pos;
 	struct nk_vec2 dim;
+	bool moving;
+	bool hovered;
+	bool hilighted;
+
+	hash_t sources;
+	hash_t sinks;
+
+	property_type_t source_type;
+	property_type_t sink_type;
+};
+
+struct _port_conn_t {
+	port_t *source_port;
+	port_t *sink_port;
+};
+
+struct _mod_conn_t {
+	mod_t *source_mod;
+	mod_t *sink_mod;
+	property_type_t type;
+	hash_t conns;
+
+	struct nk_vec2 pos;
+	bool moving;
 };
 
 struct _plughandle_t {
@@ -183,6 +222,7 @@ struct _plughandle_t {
 	const LilvNode *preset_selector;
 
 	hash_t mods;
+	hash_t conns;
 
 	struct {
 		LilvNode *pg_group;
@@ -210,6 +250,11 @@ struct _plughandle_t {
 		LilvNode *patch_writable;
 		LilvNode *rdf_type;
 		LilvNode *lv2_Plugin;
+		LilvNode *midi_MidiEvent;
+		LilvNode *osc_Message;
+		LilvNode *time_Position;
+		LilvNode *patch_Message;
+		LilvNode *xpress_Message;
 	} node;
 
 	float dy;
@@ -249,6 +294,17 @@ struct _plughandle_t {
 	struct nk_vec2 scrolling;
 	struct nk_vec2 nxt;
 	float scale;
+
+	bool plugin_find_matches;
+	bool preset_find_matches;
+	bool port_find_matches;
+
+	struct {
+		bool active;
+		mod_t *source_mod;
+	} linking;
+
+	property_type_t type;
 };
 
 static const char *grid_labels [SELECTOR_GRID_MAX] = {
@@ -446,6 +502,57 @@ _node_as_bool(const LilvNode *node, int32_t dflt)
 		return lilv_node_as_bool(node) ? 1 : 0;
 	else
 		return dflt;
+}
+
+static void
+_port_conn_free(plughandle_t *handle, port_conn_t *port_conn)
+{
+	free(port_conn);
+}
+
+static mod_conn_t *
+_mod_conn_find(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
+{
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		if( (mod_conn->source_mod == source_mod) && (mod_conn->sink_mod == sink_mod) )
+			return mod_conn;
+	}
+
+	return NULL;
+}
+
+static mod_conn_t *
+_mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
+{
+	mod_conn_t *mod_conn = calloc(1, sizeof(mod_conn_t));
+	if(mod_conn)
+	{
+		mod_conn->source_mod = source_mod;
+		mod_conn->sink_mod = sink_mod;
+		mod_conn->pos = nk_vec2(
+			(source_mod->pos.x + sink_mod->pos.x)/2,
+			(source_mod->pos.y + sink_mod->pos.y)/2);
+		mod_conn->type = PROPERTY_TYPE_NONE;
+		_hash_add(&handle->conns, mod_conn);
+	}
+
+	return mod_conn;
+}
+
+static void
+_mod_conn_free(plughandle_t *handle, mod_conn_t *mod_conn)
+{
+	HASH_FREE(&mod_conn->conns, port_conn_ptr)
+	{
+		port_conn_t *port_conn = port_conn_ptr;
+
+		_port_conn_free(handle, port_conn);
+	}
+
+	free(mod_conn);
 }
 
 static void
@@ -896,8 +1003,33 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		else if(is_atom)
 		{
 			port->type = PROPERTY_TYPE_ATOM;
+
+			if(lilv_port_supports_event(plug, port->port, handle->node.midi_MidiEvent))
+				port->type |= PROPERTY_TYPE_MIDI;
+			if(lilv_port_supports_event(plug, port->port, handle->node.osc_Message))
+				port->type |= PROPERTY_TYPE_OSC;
+			if(lilv_port_supports_event(plug, port->port, handle->node.time_Position))
+				port->type |= PROPERTY_TYPE_TIME;
+			if(lilv_port_supports_event(plug, port->port, handle->node.patch_Message))
+				port->type |= PROPERTY_TYPE_PATCH;
+			if(lilv_port_supports_event(plug, port->port, handle->node.xpress_Message))
+				port->type |= PROPERTY_TYPE_XPRESS;
+
 			//TODO
 		}
+
+		if(is_audio || is_cv || is_atom)
+		{
+			if(is_output)
+				_hash_add(&mod->sources, port);
+			else
+				_hash_add(&mod->sinks, port);
+		}
+
+		if(is_output)
+			mod->source_type |= port->type;
+		else
+			mod->sink_type |= port->type;
 	}
 
 	_hash_sort_r(&mod->ports, _sort_port_name, mod);
@@ -994,6 +1126,8 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 
 		free(port);
 	}
+	_hash_free(&mod->sources);
+	_hash_free(&mod->sinks);
 
 	HASH_FREE(&mod->banks, ptr)
 	{
@@ -2090,7 +2224,8 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			{
 				//FIXME
 			} break;
-			case PROPERTY_TYPE_MAX:
+
+			default:
 				break;
 		}
 
@@ -2356,6 +2491,442 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 const struct nk_color grid_line_color = {40, 40, 40, 255};
 const struct nk_color grid_background_color = {30, 30, 30, 255};
 const struct nk_color hilight_color = {200, 100, 0, 255};
+const struct nk_color button_border_color = {100, 100, 100, 255};
+const struct nk_color grab_handle_color = {100, 100, 100, 255};
+
+static bool
+_mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
+	struct nk_rect *bounds)
+{
+	const struct nk_input *in = &ctx->input;
+
+	const bool is_hovering = nk_input_is_mouse_hovering_rect(in, *bounds);
+
+	if(mod->moving)
+	{
+		if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
+		{
+			mod->moving = false;
+		}
+		else
+		{
+			mod->pos.x += in->mouse.delta.x;
+			mod->pos.y += in->mouse.delta.y;
+			bounds->x += in->mouse.delta.x;
+			bounds->y += in->mouse.delta.y;
+
+			// move connections together with mod
+			HASH_FOREACH(&handle->conns, mod_conn_itr)
+			{
+				mod_conn_t *mod_conn = *mod_conn_itr;
+
+				if(mod_conn->source_mod == mod)
+				{
+					mod_conn->pos.x += in->mouse.delta.x/2;
+					mod_conn->pos.y += in->mouse.delta.y/2;
+				}
+
+				if(mod_conn->sink_mod == mod)
+				{
+					mod_conn->pos.x += in->mouse.delta.x/2;
+					mod_conn->pos.y += in->mouse.delta.y/2;
+				}
+			}
+		}
+	}
+	else if(is_hovering
+		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT)
+		&& nk_input_is_key_down(in, NK_KEY_CTRL) )
+	{
+		mod->moving = true;
+	}
+
+	return is_hovering
+		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT);
+}
+
+static void
+_mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
+	struct nk_vec2 dim, bool is_hilighted)
+{
+	const struct nk_input *in = &ctx->input;
+	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+	const struct nk_vec2 scrolling = handle->scrolling;
+
+	const float cw = 4.f * handle->scale;
+
+	// output connector
+	if(mod->source_type & handle->type)
+	{
+		const float cx = mod->pos.x - scrolling.x + dim.x/2 + 2*cw;
+		const float cy = mod->pos.y - scrolling.y;
+		const struct nk_rect outer = nk_rect(
+			cx - cw, cy - cw,
+			4*cw, 4*cw
+		);
+
+		nk_fill_arc(canvas, cx, cy, cw, 0.f, 2*NK_PI,
+			is_hilighted ? hilight_color : grab_handle_color);
+		if(  (nk_input_is_mouse_hovering_rect(in, outer) && !handle->linking.active)
+			|| (handle->linking.active && (handle->linking.source_mod == mod)) )
+		{
+			nk_stroke_arc(canvas, cx, cy, 2*cw, 0.f, 2*NK_PI, 1.f, hilight_color);
+		}
+
+		// start linking process
+		if(nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, outer, nk_true)) {
+			handle->linking.active = nk_true;
+			handle->linking.source_mod = mod;
+		}
+
+		// draw ilne from linked node slot to mouse position
+		if(  handle->linking.active
+			&& (handle->linking.source_mod == mod) )
+		{
+			struct nk_vec2 m = in->mouse.pos;
+
+			nk_stroke_line(canvas, cx, cy, m.x, m.y, 1.f, hilight_color);
+		}
+	}
+
+	// input connector
+	if(mod->sink_type & handle->type)
+	{
+		const float cx = mod->pos.x - scrolling.x - dim.x/2 - 2*cw;
+		const float cy = mod->pos.y - scrolling.y;
+		const struct nk_rect outer = nk_rect(
+			cx - cw, cy - cw,
+			4*cw, 4*cw
+		);
+
+		nk_fill_arc(canvas, cx, cy, cw, 0.f, 2*NK_PI,
+			is_hilighted ? hilight_color : grab_handle_color);
+		if(  nk_input_is_mouse_hovering_rect(in, outer)
+			&& handle->linking.active)
+		{
+			nk_stroke_arc(canvas, cx, cy, 2*cw, 0.f, 2*NK_PI, 1.f, hilight_color);
+		}
+
+		if(  nk_input_is_mouse_released(in, NK_BUTTON_LEFT)
+			&& nk_input_is_mouse_hovering_rect(in, outer)
+			&& handle->linking.active)
+		{
+			handle->linking.active = nk_false;
+
+			mod_t *src = handle->linking.source_mod;
+			if(src)
+			{
+				mod_conn_t *mod_conn = _mod_conn_find(handle, src, mod);
+				if(!mod_conn) // does not yet exist
+					mod_conn = _mod_conn_add(handle, src, mod);
+				if(mod_conn)
+				{
+					mod_conn->type |= handle->type;
+
+					if(nk_input_is_key_down(in, NK_KEY_CTRL)) // automatic connection
+					{
+						unsigned i = 0;
+						HASH_FOREACH(&src->sources, source_port_itr)
+						{
+							port_t *source_port = *source_port_itr;
+							if(source_port->type != handle->type)
+								continue;
+
+							unsigned j = 0;
+							HASH_FOREACH(&mod->sinks, sink_port_itr)
+							{
+								port_t *sink_port = *sink_port_itr;
+								if(sink_port->type != handle->type)
+									continue;
+
+#if 0
+								if(i == j)
+									jack_connect(handle->mod, source_port->name, sink_port->name);
+#endif
+
+								j++;
+							}
+
+							i++;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+static void
+_expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
+{
+	if(!(mod->source_type & handle->type) && !(mod->sink_type & handle->type) )
+		return;
+
+	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+	const struct nk_input *in = &ctx->input;
+
+	const LilvPlugin *plug = mod->plug;
+	if(!plug)
+		return;
+
+	LilvNode *name_node = lilv_plugin_get_name(plug);
+	if(!name_node)
+		return;
+
+	mod->dim.x = 200.f * handle->scale;
+	mod->dim.y = handle->dy;
+
+	const struct nk_vec2 scrolling = handle->scrolling;
+
+	struct nk_rect bounds = nk_rect(
+		mod->pos.x - mod->dim.x/2 - scrolling.x,
+		mod->pos.y - mod->dim.y/2 - scrolling.y,
+		mod->dim.x, mod->dim.y);
+
+	if(_mod_moveable(handle, ctx, mod, &bounds))
+	{
+		//FIXME right click
+	}
+
+	const bool is_hovering = nk_input_is_mouse_hovering_rect(in, bounds);
+	if(  is_hovering
+		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
+	{
+		handle->module_selector = mod;
+		handle->preset_selector = NULL;
+		handle->preset_find_matches = true;
+		handle->port_find_matches = true;
+	}
+
+	mod->hovered = is_hovering;
+	const bool is_hilighted = mod->hilighted || is_hovering || mod->moving
+		|| (handle->module_selector == mod);
+
+	nk_layout_space_push(ctx, nk_layout_space_rect_to_local(ctx, bounds));
+
+	struct nk_rect body;
+	const enum nk_widget_layout_states states = nk_widget(&body, ctx);
+	if(states != NK_WIDGET_INVALID)
+	{
+		struct nk_style_button *style = &ctx->style.button;
+		const struct nk_user_font *font = ctx->style.font;
+
+		nk_fill_rect(canvas, body, style->rounding, style->hover.data.color);
+		nk_stroke_rect(canvas, body, style->rounding, style->border,
+			is_hilighted ? hilight_color : style->border_color);
+
+		const char *mod_name = lilv_node_as_string(name_node);
+		const size_t mod_name_len = strlen(mod_name);
+		const float fw = font->width(font->userdata, font->height, mod_name, mod_name_len);
+		const float fh = font->height;
+		body.x += (body.w - fw)/2;
+		body.y += (body.h - fh)/2;
+		nk_draw_text(canvas, body, mod_name, mod_name_len, font,
+			style->normal.data.color, style->text_normal);
+	}
+
+	_mod_connectors(handle, ctx, mod, nk_vec2(bounds.w, bounds.h), is_hilighted);
+}
+
+static void
+_expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_conn, float dy)
+{
+	if(!(mod_conn->type & handle->type))
+		return;
+
+	const struct nk_input *in = &ctx->input;
+	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+	const struct nk_vec2 scrolling = handle->scrolling;
+
+	mod_t *src = mod_conn->source_mod;
+	mod_t *snk = mod_conn->sink_mod;
+
+	if(!src || !snk)
+		return;
+
+	int nx = 0;
+	HASH_FOREACH(&mod_conn->source_mod->sources, source_port_itr)
+	{
+		port_t *source_port = *source_port_itr;
+
+		if(!(source_port->type & handle->type))
+			continue;
+
+		nx += 1;
+	}
+
+	int ny = 0;
+	HASH_FOREACH(&mod_conn->sink_mod->sinks, sink_port_itr)
+	{
+		port_t *sink_port = *sink_port_itr;
+
+		if(!(sink_port->type & handle->type))
+			continue;
+
+		ny += 1;
+	}
+
+	const float ps = 16.f * handle->scale;
+	const float pw = nx * ps;
+	const float ph = ny * ps;
+	struct nk_rect bounds = nk_rect(
+		mod_conn->pos.x - scrolling.x - pw/2,
+		mod_conn->pos.y - scrolling.y - ph/2,
+		pw, ph
+	);
+
+	const int is_hovering = nk_input_is_mouse_hovering_rect(in, bounds);
+
+	if(mod_conn->moving)
+	{
+		if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
+		{
+			mod_conn->moving = false;
+		}
+		else
+		{
+			mod_conn->pos.x += in->mouse.delta.x;
+			mod_conn->pos.y += in->mouse.delta.y;
+			bounds.x += in->mouse.delta.x;
+			bounds.y += in->mouse.delta.y;
+		}
+	}
+	else if(is_hovering
+		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT)
+		&& nk_input_is_key_down(in, NK_KEY_CTRL) )
+	{
+		mod_conn->moving = true;
+	}
+
+	const bool is_hilighted = mod_conn->source_mod->hovered
+		|| mod_conn->sink_mod->hovered
+		|| is_hovering || mod_conn->moving;
+
+	if(is_hilighted)
+	{
+		mod_conn->source_mod->hilighted = true;
+		mod_conn->sink_mod->hilighted = true;
+	}
+
+	const float cs = 4.f * handle->scale;
+
+	{
+		const float cx = mod_conn->pos.x - scrolling.x;
+		const float cxr = cx + pw/2;
+		const float cy = mod_conn->pos.y - scrolling.y;
+		const float cyl = cy - ph/2;
+		const struct nk_color col = is_hilighted ? hilight_color : grab_handle_color;
+
+		const float l0x = src->pos.x - scrolling.x + src->dim.x/2 + cs*2;
+		const float l0y = src->pos.y - scrolling.y;
+		const float l1x = snk->pos.x - scrolling.x - snk->dim.x/2 - cs*2;
+		const float l1y = snk->pos.y - scrolling.y;
+
+		const float bend = 50.f * handle->scale;
+		nk_stroke_curve(canvas,
+			l0x, l0y,
+			l0x + bend, l0y,
+			cx, cyl - bend,
+			cx, cyl,
+			1.f, col);
+		nk_stroke_curve(canvas,
+			cxr, cy,
+			cxr + bend, cy,
+			l1x - bend, l1y,
+			l1x, l1y,
+			1.f, col);
+
+		nk_fill_arc(canvas, cx, cyl, cs, 2*M_PI/2, 4*M_PI/2, col);
+		nk_fill_arc(canvas, cxr, cy, cs, 3*M_PI/2, 5*M_PI/2, col);
+	}
+
+	nk_layout_space_push(ctx, nk_layout_space_rect_to_local(ctx, bounds));
+
+	struct nk_rect body;
+	const enum nk_widget_layout_states states = nk_widget(&body, ctx);
+	if(states != NK_WIDGET_INVALID)
+	{
+		struct nk_style_button *style = &ctx->style.button;
+
+		nk_fill_rect(canvas, body, style->rounding, style->normal.data.color);
+
+		for(float x = ps; x < body.w; x += ps)
+		{
+			nk_stroke_line(canvas,
+				body.x + x, body.y,
+				body.x + x, body.y + body.h,
+				style->border, style->border_color);
+		}
+
+		for(float y = ps; y < body.h; y += ps)
+		{
+			nk_stroke_line(canvas,
+				body.x, body.y + y,
+				body.x + body.w, body.y + y,
+				style->border, style->border_color);
+		}
+
+		nk_stroke_rect(canvas, body, style->rounding, style->border,
+			is_hilighted ? hilight_color : style->border_color);
+
+		float x = body.x + ps/2;
+		HASH_FOREACH(&mod_conn->source_mod->sources, source_port_itr)
+		{
+			port_t *source_port = *source_port_itr;
+
+			if(!(source_port->type & handle->type))
+				continue;
+
+			float y = body.y + ps/2;
+			HASH_FOREACH(&mod_conn->sink_mod->sinks, sink_port_itr)
+			{
+				port_t *sink_port = *sink_port_itr;
+
+				if(!(sink_port->type & handle->type))
+					continue;
+
+#if 0
+				port_conn_t *port_conn = _port_conn_find(mod_conn, source_port, sink_port);
+
+				if(port_conn)
+					nk_fill_arc(canvas, x, y, cs, 0.f, 2*NK_PI, toggle_color);
+#endif
+
+				const struct nk_rect tile = nk_rect(x - ps/2, y - ps/2, ps, ps);
+
+				if(  nk_input_is_mouse_hovering_rect(in, tile)
+					&& !mod_conn->moving)
+				{
+#if 0
+					const char *source_name = source_port->pretty_name
+						? source_port->pretty_name
+						: source_port->short_name;
+
+					const char *sink_name = sink_port->pretty_name
+						? sink_port->pretty_name
+						: sink_port->short_name;
+
+					char tmp [128];
+					snprintf(tmp, 128, "%s || %s", source_name, sink_name);
+					nk_tooltip(ctx, tmp);
+
+					if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
+					{
+						if(port_conn)
+							jack_disconnect(handle->mod, source_port->name, sink_port->name);
+						else
+							jack_connect(handle->mod, source_port->name, sink_port->name);
+					}
+#endif
+				}
+
+				y += ps;
+			}
+
+			x += ps;
+		}
+	}
+}
 
 static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
@@ -2363,18 +2934,21 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	const struct nk_input *in = &ctx->input;
 
-	bool plugin_find_matches = false;
-	bool preset_find_matches = false;
-	bool port_find_matches = false;
+	handle->plugin_find_matches = false;
+	handle->preset_find_matches = false;
+	handle->port_find_matches = false;
 
 	const struct nk_rect total_space = nk_window_get_content_region(ctx);
 	const float vertical = total_space.h
 		- handle->dy
 		- 3*ctx->style.window.group_padding.y;
 	const float upper_h = vertical * 0.6f;
-	const float lower_h = vertical * 0.4f;
+	const float lower_h = vertical * 0.4f
+		- handle->dy
+		- 2*ctx->style.window.group_padding.y;
 
-	nk_layout_space_begin(ctx, NK_STATIC, upper_h, _hash_size(&handle->mods));
+	nk_layout_space_begin(ctx, NK_STATIC, upper_h,
+		_hash_size(&handle->mods) + _hash_size(&handle->conns));
 	{
     const struct nk_rect old_clip = canvas->clip;
 		const struct nk_rect space_bounds= nk_layout_space_bounds(ctx);
@@ -2418,40 +2992,112 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		HASH_FOREACH(&handle->mods, mod_itr)
 		{
 			mod_t *mod = *mod_itr;
-			const LilvPlugin *plug = mod->plug;
-			LilvNode *name_node = lilv_plugin_get_name(plug);
-			if(!name_node)
-				continue;
 
-			mod->dim.x = 200.f * handle->scale;
-			mod->dim.y = handle->dy;
+			_expose_mod(handle, ctx, mod, dy);
 
-			struct nk_rect bounds = nk_rect(
-				mod->pos.x - mod->dim.x/2 - scrolling.x,
-				mod->pos.y - mod->dim.y/2 - scrolling.y,
-				mod->dim.x, mod->dim.y);
+			mod->hilighted = false;
+		}
 
-			nk_layout_space_push(ctx, nk_layout_space_rect_to_local(ctx, bounds));
+		HASH_FOREACH(&handle->conns, mod_conn_itr)
+		{
+			mod_conn_t *mod_conn = *mod_conn_itr;
 
-			const bool is_hilighted = handle->module_selector == mod;
-			if(is_hilighted)
-				nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			_expose_mod_conn(handle, ctx, mod_conn, dy);
+		}
 
-			if(nk_button_label(ctx, lilv_node_as_string(name_node)))
-			{
-				handle->module_selector = mod;
-				handle->preset_selector = NULL;
-				preset_find_matches = true;
-				port_find_matches = true;
-			}
-
-			if(is_hilighted)
-				nk_style_pop_color(ctx);
+		// reset linking connection
+		if(  handle->linking.active
+			&& nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
+		{
+			handle->linking.active = false;
 		}
 
     nk_push_scissor(canvas, old_clip);
 	}
 	nk_layout_space_end(ctx);
+
+	{
+		nk_layout_row_dynamic(ctx, dy, 11);
+
+		const bool is_audio = handle->type == PROPERTY_TYPE_AUDIO;
+		const bool is_cv = handle->type == PROPERTY_TYPE_CV;
+		const bool is_atom = handle->type == PROPERTY_TYPE_ATOM;
+
+		const bool is_midi = handle->type == PROPERTY_TYPE_MIDI;
+		const bool is_osc = handle->type == PROPERTY_TYPE_OSC;
+		const bool is_time = handle->type == PROPERTY_TYPE_TIME;
+		const bool is_patch = handle->type == PROPERTY_TYPE_PATCH;
+		const bool is_xpress = handle->type == PROPERTY_TYPE_XPRESS;
+
+		const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
+
+		if(is_audio)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "Audio"))
+			handle->type = PROPERTY_TYPE_AUDIO;
+		if(is_audio)
+			nk_style_pop_color(ctx);
+
+		if(is_cv)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "CV"))
+			handle->type = PROPERTY_TYPE_CV;
+		if(is_cv)
+			nk_style_pop_color(ctx);
+
+		if(is_atom)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "Atom"))
+			handle->type = PROPERTY_TYPE_ATOM;
+		if(is_atom)
+			nk_style_pop_color(ctx);
+
+		nk_spacing(ctx, 1);
+
+		if(is_midi)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "MIDI"))
+			handle->type = PROPERTY_TYPE_MIDI;
+		if(is_midi)
+			nk_style_pop_color(ctx);
+
+		if(is_osc)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "OSC"))
+			handle->type = PROPERTY_TYPE_OSC;
+		if(is_osc)
+			nk_style_pop_color(ctx);
+
+		if(is_time)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "Time"))
+			handle->type = PROPERTY_TYPE_TIME;
+		if(is_time)
+			nk_style_pop_color(ctx);
+
+		if(is_patch)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "Patch"))
+			handle->type = PROPERTY_TYPE_PATCH;
+		if(is_patch)
+			nk_style_pop_color(ctx);
+
+		if(is_xpress)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "XPression"))
+			handle->type = PROPERTY_TYPE_XPRESS;
+		if(is_xpress)
+			nk_style_pop_color(ctx);
+
+		nk_spacing(ctx, 1);
+
+		if(is_automation)
+			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+		if(nk_button_label(ctx, "Automation"))
+			handle->type = PROPERTY_TYPE_AUTOMATION;
+		if(is_automation)
+			nk_style_pop_color(ctx);
+	}
 
 	{
 		const float lower_ratio [3] = {0.2, 0.2, 0.6};
@@ -2467,20 +3113,20 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
 					handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 				if(old_sel != handle->plugin_search_selector)
-					plugin_find_matches = true;
+					handle->plugin_find_matches = true;
 				const size_t old_len = _textedit_len(&handle->plugin_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
 				_textedit_zero_terminate(&handle->plugin_search_edit);
 				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->plugin_search_edit)) )
-					plugin_find_matches = true;
+					handle->plugin_find_matches = true;
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->plugin_search_edit);
 			}
 			nk_menubar_end(ctx);
 
 			nk_layout_row_dynamic(ctx, dy, 1);
-			_expose_main_plugin_list(handle, ctx, plugin_find_matches);
+			_expose_main_plugin_list(handle, ctx, handle->plugin_find_matches);
 
 #if 0
 			_expose_main_plugin_info(handle, ctx);
@@ -2499,20 +3145,20 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
 					handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 				if(old_sel != handle->preset_search_selector)
-					preset_find_matches = true;
+					handle->preset_find_matches = true;
 				const size_t old_len = _textedit_len(&handle->preset_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
 				_textedit_zero_terminate(&handle->preset_search_edit);
 				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->preset_search_edit)) )
-					preset_find_matches = true;
+					handle->preset_find_matches = true;
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->preset_search_edit);
 			}
 			nk_menubar_end(ctx);
 
 			nk_layout_row_dynamic(ctx, dy, 1);
-			_expose_main_preset_list(handle, ctx, preset_find_matches);
+			_expose_main_preset_list(handle, ctx, handle->preset_find_matches);
 
 #if 0
 			_expose_main_preset_info(handle, ctx);
@@ -2530,13 +3176,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
 					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 				if(old_sel != handle->port_search_selector)
-					port_find_matches = true;
+					handle->port_find_matches = true;
 				const size_t old_len = _textedit_len(&handle->port_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
 				_textedit_zero_terminate(&handle->port_search_edit);
 				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
-					port_find_matches = true;
+					handle->port_find_matches = true;
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->port_search_edit);
 
@@ -2553,7 +3199,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			{
 				const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
 
-				_expose_control_list(handle, mod, ctx, DY, dy, port_find_matches);
+				_expose_control_list(handle, mod, ctx, DY, dy, handle->port_find_matches);
 			}
 
 			nk_group_end(ctx);
@@ -2618,6 +3264,12 @@ _init(plughandle_t *handle)
 	handle->node.patch_writable = lilv_new_uri(handle->world, LV2_PATCH__writable);
 	handle->node.rdf_type = lilv_new_uri(handle->world, LILV_NS_RDF"type");
 	handle->node.lv2_Plugin = lilv_new_uri(handle->world, LV2_CORE__Plugin);
+
+	handle->node.midi_MidiEvent = lilv_new_uri(handle->world, LV2_MIDI__MidiEvent);
+	handle->node.osc_Message = lilv_new_uri(handle->world, LV2_OSC__Message);
+	handle->node.time_Position = lilv_new_uri(handle->world, LV2_TIME__Position);
+	handle->node.patch_Message = lilv_new_uri(handle->world, LV2_PATCH__Message);
+	handle->node.xpress_Message = lilv_new_uri(handle->world, XPRESS_PREFIX"Message");
 
 	sp_regs_init(&handle->regs, handle->world, handle->map);
 
@@ -2786,6 +3438,11 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
 
+	// adjust styling
+	struct nk_style *style = &handle->win.ctx.style;
+	style->button.border_color = button_border_color;
+	//TODO more styling changes to come here
+
 	handle->scale = nk_pugl_get_scale(&handle->win);
 
 	handle->scrolling = nk_vec2(0.f, 0.f);
@@ -2801,6 +3458,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	nk_textedit_init_fixed(&handle->port_search_edit, handle->port_search_buf, SEARCH_BUF_MAX);
 
 	handle->first = true;
+
+	handle->type = PROPERTY_TYPE_AUDIO; //FIXME make configurable
 
 	return handle;
 }
@@ -2819,6 +3478,12 @@ cleanup(LV2UI_Handle instance)
 	{
 		mod_t *mod = ptr;
 		_mod_free(handle, mod);
+	}
+
+	HASH_FREE(&handle->conns, ptr)
+	{
+		mod_conn_t *mod_conn = ptr;
+		_mod_conn_free(handle, mod_conn);
 	}
 
 	_hash_free(&handle->plugin_matches);
