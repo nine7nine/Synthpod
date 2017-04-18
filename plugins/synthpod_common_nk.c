@@ -301,18 +301,85 @@ _textedit_zero_terminate(struct nk_text_edit *edit)
 		str[nk_str_len(&edit->string)] = '\0';
 }
 
+#define HASH_FOREACH(hash, itr) \
+	for(void **(itr) = (hash)->nodes; (itr) - (hash)->nodes < (hash)->size; (itr)++)
+
+#define HASH_FREE(hash, ptr) \
+	for(void *(ptr) = _hash_pop((hash)); (ptr); (ptr) = _hash_pop((hash)))
+
 static bool
 _hash_empty(hash_t *hash)
 {
 	return hash->size == 0;
 }
 
+static size_t
+_hash_size(hash_t *hash)
+{
+	return hash->size;
+}
+
 static void
 _hash_add(hash_t *hash, void *node)
 {
 	hash->nodes = realloc(hash->nodes, (hash->size + 1)*sizeof(void *));
-	hash->nodes[hash->size] = node;
-	hash->size++;
+	if(hash->nodes)
+	{
+		hash->nodes[hash->size] = node;
+		hash->size++;
+	}
+}
+
+static void
+_hash_remove(hash_t *hash, void *node)
+{
+	void **nodes = NULL;
+	size_t size = 0;
+
+	HASH_FOREACH(hash, node_itr)
+	{
+		void *node_ptr = *node_itr;
+
+		if(node_ptr != node)
+		{
+			nodes = realloc(nodes, (size + 1)*sizeof(void *));
+			if(nodes)
+			{
+				nodes[size] = node_ptr;
+				size++;
+			}
+		}
+	}
+
+	free(hash->nodes);
+	hash->nodes = nodes;
+	hash->size = size;
+}
+
+static void
+_hash_remove_cb(hash_t *hash, bool (*cb)(void *node, void *data), void *data)
+{
+	void **nodes = NULL;
+	size_t size = 0;
+
+	HASH_FOREACH(hash, node_itr)
+	{
+		void *node_ptr = *node_itr;
+
+		if(cb(node_ptr, data))
+		{
+			nodes = realloc(nodes, (size + 1)*sizeof(void *));
+			if(nodes)
+			{
+				nodes[size] = node_ptr;
+				size++;
+			}
+		}
+	}
+
+	free(hash->nodes);
+	hash->nodes = nodes;
+	hash->size = size;
 }
 
 static void
@@ -353,12 +420,6 @@ _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
 	if(hash->size)
 		qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
 }
-
-#define HASH_FOREACH(hash, itr) \
-	for(void **(itr) = (hash)->nodes; (itr) - (hash)->nodes < (hash)->size; (itr)++)
-
-#define HASH_FREE(hash, ptr) \
-	for(void *(ptr) = _hash_pop((hash)); (ptr); (ptr) = _hash_pop((hash)))
 
 static int
 _node_as_int(const LilvNode *node, int dflt)
