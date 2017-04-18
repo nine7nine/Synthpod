@@ -2897,27 +2897,33 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 				if(  nk_input_is_mouse_hovering_rect(in, tile)
 					&& !mod_conn->moving)
 				{
-#if 0
-					const char *source_name = source_port->pretty_name
-						? source_port->pretty_name
-						: source_port->short_name;
+					LilvNode *source_node = lilv_port_get_name(mod_conn->source_mod->plug, source_port->port);
+					LilvNode *sink_node = lilv_port_get_name(mod_conn->sink_mod->plug, sink_port->port);
 
-					const char *sink_name = sink_port->pretty_name
-						? sink_port->pretty_name
-						: sink_port->short_name;
+					const char *source_name = source_node ? lilv_node_as_string(source_node) : NULL;
+					const char *sink_name = sink_node ? lilv_node_as_string(sink_node) : NULL;
 
-					char tmp [128];
-					snprintf(tmp, 128, "%s || %s", source_name, sink_name);
-					nk_tooltip(ctx, tmp);
-
-					if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
+					if(source_name && sink_name)
 					{
-						if(port_conn)
-							jack_disconnect(handle->mod, source_port->name, sink_port->name);
-						else
-							jack_connect(handle->mod, source_port->name, sink_port->name);
-					}
+						char tmp [128];
+						snprintf(tmp, 128, "%s || %s", source_name, sink_name);
+						nk_tooltip(ctx, tmp);
+
+						if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
+						{
+#if 0
+							if(port_conn)
+								jack_disconnect(handle->mod, source_port->name, sink_port->name);
+							else
+								jack_connect(handle->mod, source_port->name, sink_port->name);
 #endif
+						}
+					}
+
+					if(source_node)
+						lilv_node_free(source_node);
+					if(sink_node)
+						lilv_node_free(sink_node);
 				}
 
 				y += ps;
