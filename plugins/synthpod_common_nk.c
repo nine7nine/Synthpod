@@ -41,7 +41,6 @@
 #endif
 
 typedef enum _property_type_t property_type_t;
-typedef enum _selector_main_t selector_main_t;
 typedef enum _selector_grid_t selector_grid_t;
 typedef enum _selector_search_t selector_search_t;
 
@@ -65,13 +64,6 @@ enum _property_type_t {
 	PROPERTY_TYPE_PARAM,
 
 	PROPERTY_TYPE_MAX
-};
-
-enum _selector_main_t {
-	SELECTOR_MAIN_GRID = 0,
-	SELECTOR_MAIN_MATRIX,
-
-	SELECTOR_MAIN_MAX
 };
 
 enum _selector_grid_t {
@@ -166,6 +158,9 @@ struct _mod_t {
 	LilvNodes *readables;
 	LilvNodes *writables;
 	LilvNodes *presets;
+
+	struct nk_vec2 pos;
+	struct nk_vec2 dim;
 };
 
 struct _plughandle_t {
@@ -182,7 +177,6 @@ struct _plughandle_t {
 
 	nk_pugl_window_t win;
 
-	selector_main_t main_selector;
 	selector_grid_t grid_selector;
 	const LilvPlugin *plugin_selector;
 	mod_t *module_selector;
@@ -251,16 +245,10 @@ struct _plughandle_t {
 	};
 
 	bool has_control_a;
-};
 
-static const char *main_labels [SELECTOR_MAIN_MAX] = {
-	[SELECTOR_MAIN_GRID] = "Grid",
-	[SELECTOR_MAIN_MATRIX] = "Matrix"
-};
-
-static const char *main_tooltips [SELECTOR_MAIN_MAX] = {
-	[SELECTOR_MAIN_GRID] = "Ctrl-G",
-	[SELECTOR_MAIN_MATRIX] = "Ctrl-M"
+	struct nk_vec2 scrolling;
+	struct nk_vec2 nxt;
+	float scale;
 };
 
 static const char *grid_labels [SELECTOR_GRID_MAX] = {
@@ -723,7 +711,11 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 		return;
 
 	mod->urn = urn;
+	mod->pos = nk_vec2(handle->nxt.x, handle->nxt.y);
 	_hash_add(&handle->mods, mod);
+
+	handle->nxt.x += 50.f * handle->scale;
+	handle->nxt.y += 50.f * handle->scale;
 }
 
 static void
@@ -1063,37 +1055,31 @@ _tooltip_visible(struct nk_context *ctx)
 static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
-	nk_layout_row_dynamic(ctx, dy, 7);
+	nk_menubar_begin(ctx);
 	{
-		if(_tooltip_visible(ctx))
-			nk_tooltip(ctx, "Ctrl-N");
-		nk_button_label(ctx, "New");
-
-		if(_tooltip_visible(ctx))
-			nk_tooltip(ctx, "Ctrl-O");
-		nk_button_label(ctx, "Open");
-
-		if(_tooltip_visible(ctx))
-			nk_tooltip(ctx, "Ctrl-S");
-		nk_button_label(ctx, "Save");
-
-		if(_tooltip_visible(ctx))
-			nk_tooltip(ctx, "Ctrl-Shift-S");
-		nk_button_label(ctx, "Save As");
-
-		if(_tooltip_visible(ctx))
-			nk_tooltip(ctx, "Ctrl-Q");
-		nk_button_label(ctx, "Quit");
-
-		for(unsigned i=0; i<SELECTOR_MAIN_MAX; i++)
+		nk_layout_row_dynamic(ctx, dy, 5);
 		{
-			const enum nk_symbol_type symbol = (handle->main_selector == i)
-				? NK_SYMBOL_CIRCLE_SOLID : NK_SYMBOL_CIRCLE_OUTLINE;
 			if(_tooltip_visible(ctx))
-				nk_tooltip(ctx, main_tooltips[i]);
-			if(nk_button_symbol_label(ctx, symbol, main_labels[i], NK_TEXT_RIGHT))
-				handle->main_selector = i;
+				nk_tooltip(ctx, "Ctrl-N");
+			nk_button_label(ctx, "New");
+
+			if(_tooltip_visible(ctx))
+				nk_tooltip(ctx, "Ctrl-O");
+			nk_button_label(ctx, "Open");
+
+			if(_tooltip_visible(ctx))
+				nk_tooltip(ctx, "Ctrl-S");
+			nk_button_label(ctx, "Save");
+
+			if(_tooltip_visible(ctx))
+				nk_tooltip(ctx, "Ctrl-Shift-S");
+			nk_button_label(ctx, "Save As");
+
+			if(_tooltip_visible(ctx))
+				nk_tooltip(ctx, "Ctrl-Q");
+			nk_button_label(ctx, "Quit");
 		}
+		nk_menubar_end(ctx);
 	}
 }
 
@@ -2314,7 +2300,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 					nk_layout_row_dynamic(ctx, dy, 1);
 					_tab_label(ctx, lilv_node_as_string(group_label_node));
 
-					nk_layout_row_dynamic(ctx, DY, 3);
+					nk_layout_row_dynamic(ctx, DY, 4);
 					first = false;
 				}
 
@@ -2338,7 +2324,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, dy, 1);
 				_tab_label(ctx, "Ungrouped");
 
-				nk_layout_row_dynamic(ctx, DY, 3);
+				nk_layout_row_dynamic(ctx, DY, 4);
 				first = false;
 			}
 
@@ -2357,7 +2343,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, dy, 1);
 				_tab_label(ctx, "Parameters");
 
-				nk_layout_row_dynamic(ctx, DY, 3);
+				nk_layout_row_dynamic(ctx, DY, 4);
 				first = false;
 			}
 
@@ -2366,229 +2352,212 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	}
 }
 
+//FIXME move up
+const struct nk_color grid_line_color = {40, 40, 40, 255};
+const struct nk_color grid_background_color = {30, 30, 30, 255};
+const struct nk_color hilight_color = {200, 100, 0, 255};
+
 static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
-	const struct nk_vec2 group_padding = ctx->style.window.group_padding;
+	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+	const struct nk_input *in = &ctx->input;
 
-	switch(handle->main_selector)
+	bool plugin_find_matches = false;
+	bool preset_find_matches = false;
+	bool port_find_matches = false;
+
+	const struct nk_rect total_space = nk_window_get_content_region(ctx);
+	const float vertical = total_space.h
+		- handle->dy
+		- 3*ctx->style.window.group_padding.y;
+	const float upper_h = vertical * 0.6f;
+	const float lower_h = vertical * 0.4f;
+
+	nk_layout_space_begin(ctx, NK_STATIC, upper_h, _hash_size(&handle->mods));
 	{
-		case SELECTOR_MAIN_GRID:
+    const struct nk_rect old_clip = canvas->clip;
+		const struct nk_rect space_bounds= nk_layout_space_bounds(ctx);
+		nk_push_scissor(canvas, space_bounds);
+
+		// graph content scrolling
+		if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
+			&& nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE))
 		{
-			bool plugin_find_matches = false;
-			bool preset_find_matches = false;
-			bool port_find_matches = false;
-			nk_layout_row_begin(ctx, NK_DYNAMIC, dh, 3);
+			handle->scrolling.x -= in->mouse.delta.x;
+			handle->scrolling.y -= in->mouse.delta.y;
+		}
 
-			nk_layout_row_push(ctx, 0.25);
-			if(nk_group_begin(ctx, "Rack", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
-			{
-				nk_menubar_begin(ctx);
-				{
-					nk_layout_row_dynamic(ctx, dy, 1);
+		const struct nk_vec2 scrolling = handle->scrolling;
 
-					const struct nk_rect b = nk_widget_bounds(ctx);
-					struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
-					nk_stroke_line(canvas, b.x, b.y + b.h, b.x + b.w, b.y + b.h,
-						ctx->style.window.group_border, ctx->style.window.group_border_color);
-
-					nk_label(ctx, "TODO", NK_TEXT_LEFT);
-				}
-				nk_menubar_end(ctx);
-
-
-				HASH_FOREACH(&handle->mods, itr)
-				{
-					mod_t *mod = *itr;
-					const LilvPlugin *plug = mod->plug;
-
-					if(!plug) // not yet initialized
-						continue;
-
-					LilvNode *name_node = lilv_plugin_get_name(plug);
-					if(name_node)
-					{
-						nk_layout_row_dynamic(ctx, dy, 2);
-						int selected = mod == handle->module_selector;
-						if(nk_selectable_label(ctx, lilv_node_as_string(name_node), NK_TEXT_LEFT,
-							&selected))
-						{
-							handle->module_selector = mod;
-							handle->preset_selector = NULL;
-							preset_find_matches = true;
-							port_find_matches = true;
-						}
-						nk_labelf(ctx, NK_TEXT_RIGHT, "%4.1f|%4.1f|%4.1f%%", 1.1f, 2.2f, 5.5f);
-
-						lilv_node_free(name_node);
-					}
-				}
-
-				nk_group_end(ctx);
-			}
-
-			nk_layout_row_push(ctx, 0.50);
-			if(nk_group_begin(ctx, "Controls", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
-			{
-				nk_menubar_begin(ctx);
-				{
-					const float dim [7] = {0.2, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1};
-					nk_layout_row(ctx, NK_DYNAMIC, dy, 7, dim);
-					const selector_search_t old_sel = handle->port_search_selector;
-					handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-						handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-					if(old_sel != handle->port_search_selector)
-						port_find_matches = true;
-					const size_t old_len = _textedit_len(&handle->port_search_edit);
-					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
-					_textedit_zero_terminate(&handle->port_search_edit);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
-						port_find_matches = true;
-					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-						nk_textedit_select_all(&handle->port_search_edit);
-
-					nk_check_label(ctx, "In", nk_true); //FIXME
-					nk_check_label(ctx, "Out", nk_true); //FIXME
-					nk_check_label(ctx, "Audio", nk_true); //FIXME
-					nk_check_label(ctx, "Ctrl.", nk_true); //FIXME
-					nk_check_label(ctx, "Event", nk_true); //FIXME
-				}
-				nk_menubar_end(ctx);
-
-				mod_t *mod = handle->module_selector;
-				if(mod)
-				{
-					const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
-
-					_expose_control_list(handle, mod, ctx, DY, dy, port_find_matches);
-				}
-
-				nk_group_end(ctx);
-			}
-
-			nk_layout_row_push(ctx, 0.25);
-			if(nk_group_begin(ctx, "Selectables", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
-			{
-				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Plugin Import", &handle->plugin_collapse_states))
-				{
-					const float dim [2] = {0.4, 0.6};
-					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-					const selector_search_t old_sel = handle->plugin_search_selector;
-					handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-						handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-					if(old_sel != handle->plugin_search_selector)
-						plugin_find_matches = true;
-					const size_t old_len = _textedit_len(&handle->plugin_search_edit);
-					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
-					_textedit_zero_terminate(&handle->plugin_search_edit);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->plugin_search_edit)) )
-						plugin_find_matches = true;
-					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-						nk_textedit_select_all(&handle->plugin_search_edit);
-
-					nk_layout_row_dynamic(ctx, dy*20, 1);
-					if(nk_group_begin(ctx, "Plugins_List", NK_WINDOW_BORDER))
-					{
-						nk_layout_row_dynamic(ctx, dy, 1);
-						_expose_main_plugin_list(handle, ctx, plugin_find_matches);
-
-						nk_group_end(ctx);
-					}
-
-					if(nk_tree_state_push(ctx, NK_TREE_NODE, "Info", &handle->plugin_info_collapse_states))
-					{
-						_expose_main_plugin_info(handle, ctx);
-
-						nk_tree_state_pop(ctx);
-					}
-
-					nk_tree_state_pop(ctx);
-				}
-
-				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Preset Import", &handle->preset_import_collapse_states))
-				{
-					const float dim [2] = {0.4, 0.6};
-					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-					const selector_search_t old_sel = handle->preset_search_selector;
-					handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-						handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-					if(old_sel != handle->preset_search_selector)
-						preset_find_matches = true;
-					const size_t old_len = _textedit_len(&handle->preset_search_edit);
-					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
-					_textedit_zero_terminate(&handle->preset_search_edit);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->preset_search_edit)) )
-						preset_find_matches = true;
-					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-						nk_textedit_select_all(&handle->preset_search_edit);
-
-					nk_layout_row_dynamic(ctx, dy*20, 1);
-					if(nk_group_begin(ctx, "Presets_List", NK_WINDOW_BORDER))
-					{
-						nk_layout_row_dynamic(ctx, dy, 1);
-						_expose_main_preset_list(handle, ctx, preset_find_matches);
-
-						nk_group_end(ctx);
-					}
-
-					if(nk_tree_state_push(ctx, NK_TREE_NODE, "Info", &handle->preset_info_collapse_states))
-					{
-						_expose_main_preset_info(handle, ctx);
-
-						nk_tree_state_pop(ctx);
-					}
-
-					nk_tree_state_pop(ctx);
-				}
-
-				if(nk_tree_state_push(ctx, NK_TREE_TAB, "Preset Export", &handle->preset_export_collapse_states))
-				{
-					//TODO
-
-					nk_tree_state_pop(ctx);
-				}
-
-				nk_group_end(ctx);
-			}
-
-			nk_layout_row_end(ctx);
-		} break;
-		case SELECTOR_MAIN_MATRIX:
+		// display grid
 		{
-			nk_layout_row_begin(ctx, NK_DYNAMIC, dy, 3);
+			struct nk_rect ssize = nk_layout_space_bounds(ctx);
+			ssize.h -= ctx->style.window.group_padding.y;
+			const float grid_size = 28.0f * handle->scale;
 
-			nk_layout_row_push(ctx, 0.25);
-			if(nk_group_begin(ctx, "Sources", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+			nk_fill_rect(canvas, ssize, 0.f, grid_background_color);
+
+			for(float x = fmod(ssize.x - scrolling.x, grid_size);
+				x < ssize.w;
+				x += grid_size)
 			{
-				//TODO
-
-				nk_group_end(ctx);
+				nk_stroke_line(canvas, x + ssize.x, ssize.y, x + ssize.x, ssize.y + ssize.h,
+					1.0f, grid_line_color);
 			}
 
-			nk_layout_row_push(ctx, 0.50);
-			if(nk_group_begin(ctx, "Connections",
-				NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
+			for(float y = fmod(ssize.y - scrolling.y, grid_size);
+				y < ssize.h;
+				y += grid_size)
 			{
-				//TODO
+				nk_stroke_line(canvas, ssize.x, y + ssize.y, ssize.x + ssize.w, y + ssize.y,
+					1.0f, grid_line_color);
+			}
+		}
 
-				nk_group_end(ctx);
+		HASH_FOREACH(&handle->mods, mod_itr)
+		{
+			mod_t *mod = *mod_itr;
+			const LilvPlugin *plug = mod->plug;
+			LilvNode *name_node = lilv_plugin_get_name(plug);
+			if(!name_node)
+				continue;
+
+			mod->dim.x = 200.f * handle->scale;
+			mod->dim.y = handle->dy;
+
+			struct nk_rect bounds = nk_rect(
+				mod->pos.x - mod->dim.x/2 - scrolling.x,
+				mod->pos.y - mod->dim.y/2 - scrolling.y,
+				mod->dim.x, mod->dim.y);
+
+			nk_layout_space_push(ctx, nk_layout_space_rect_to_local(ctx, bounds));
+
+			const bool is_hilighted = handle->module_selector == mod;
+			if(is_hilighted)
+				nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+
+			if(nk_button_label(ctx, lilv_node_as_string(name_node)))
+			{
+				handle->module_selector = mod;
+				handle->preset_selector = NULL;
+				preset_find_matches = true;
+				port_find_matches = true;
 			}
 
-			nk_layout_row_push(ctx, 0.25);
-			if(nk_group_begin(ctx, "Sinks", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
-			{
-				//TODO
+			if(is_hilighted)
+				nk_style_pop_color(ctx);
+		}
 
-				nk_group_end(ctx);
+    nk_push_scissor(canvas, old_clip);
+	}
+	nk_layout_space_end(ctx);
+
+	{
+		const float lower_ratio [3] = {0.2, 0.2, 0.6};
+		nk_layout_row(ctx, NK_DYNAMIC, lower_h, 3, lower_ratio);
+
+		if(nk_group_begin(ctx, "Plugins", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		{
+			nk_menubar_begin(ctx);
+			{
+				const float dim [2] = {0.4, 0.6};
+				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+				const selector_search_t old_sel = handle->plugin_search_selector;
+				handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->plugin_search_selector)
+					plugin_find_matches = true;
+				const size_t old_len = _textedit_len(&handle->plugin_search_edit);
+				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
+				_textedit_zero_terminate(&handle->plugin_search_edit);
+				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->plugin_search_edit)) )
+					plugin_find_matches = true;
+				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+					nk_textedit_select_all(&handle->plugin_search_edit);
+			}
+			nk_menubar_end(ctx);
+
+			nk_layout_row_dynamic(ctx, dy, 1);
+			_expose_main_plugin_list(handle, ctx, plugin_find_matches);
+
+#if 0
+			_expose_main_plugin_info(handle, ctx);
+#endif
+
+			nk_group_end(ctx);
+		}
+
+		if(nk_group_begin(ctx, "Presets", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		{
+			nk_menubar_begin(ctx);
+			{
+				const float dim [2] = {0.4, 0.6};
+				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+				const selector_search_t old_sel = handle->preset_search_selector;
+				handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->preset_search_selector)
+					preset_find_matches = true;
+				const size_t old_len = _textedit_len(&handle->preset_search_edit);
+				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
+				_textedit_zero_terminate(&handle->preset_search_edit);
+				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->preset_search_edit)) )
+					preset_find_matches = true;
+				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+					nk_textedit_select_all(&handle->preset_search_edit);
+			}
+			nk_menubar_end(ctx);
+
+			nk_layout_row_dynamic(ctx, dy, 1);
+			_expose_main_preset_list(handle, ctx, preset_find_matches);
+
+#if 0
+			_expose_main_preset_info(handle, ctx);
+#endif
+			nk_group_end(ctx);
+		}
+
+		if(nk_group_begin(ctx, "Controls", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		{
+			nk_menubar_begin(ctx);
+			{
+				const float dim [7] = {0.2, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1};
+				nk_layout_row(ctx, NK_DYNAMIC, dy, 7, dim);
+				const selector_search_t old_sel = handle->port_search_selector;
+				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->port_search_selector)
+					port_find_matches = true;
+				const size_t old_len = _textedit_len(&handle->port_search_edit);
+				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
+				_textedit_zero_terminate(&handle->port_search_edit);
+				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
+					port_find_matches = true;
+				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+					nk_textedit_select_all(&handle->port_search_edit);
+
+				nk_check_label(ctx, "In", nk_true); //FIXME
+				nk_check_label(ctx, "Out", nk_true); //FIXME
+				nk_check_label(ctx, "Audio", nk_true); //FIXME
+				nk_check_label(ctx, "Ctrl.", nk_true); //FIXME
+				nk_check_label(ctx, "Event", nk_true); //FIXME
+			}
+			nk_menubar_end(ctx);
+
+			mod_t *mod = handle->module_selector;
+			if(mod)
+			{
+				const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
+
+				_expose_control_list(handle, mod, ctx, DY, dy, port_find_matches);
 			}
 
-			nk_layout_row_end(ctx);
-		} break;
-
-		default: break;
+			nk_group_end(ctx);
+		}
 	}
 }
 
@@ -2705,7 +2674,8 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 {
 	plughandle_t *handle = data;
 
-	handle->dy = 20.f * nk_pugl_get_scale(&handle->win);
+	handle->scale = nk_pugl_get_scale(&handle->win);
+	handle->dy = 20.f * handle->scale;
 
 	handle->has_control_a = nk_pugl_is_shortcut_pressed(&ctx->input, 'a', true);
 
@@ -2811,10 +2781,14 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	if(asprintf(&cfg->font.face, "%sCousine-Regular.ttf", bundle_path) == -1)
 		cfg->font.face = NULL;
-	cfg->font.size = 12;
+	cfg->font.size = 13;
 
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
+
+	handle->scale = nk_pugl_get_scale(&handle->win);
+
+	handle->scrolling = nk_vec2(0.f, 0.f);
 
 	handle->plugin_collapse_states = NK_MAXIMIZED;
 	handle->preset_import_collapse_states = NK_MAXIMIZED;
@@ -2896,6 +2870,8 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						if(prop == handle->regs.synthpod.module_list.urid)
 						{
 							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
+
+							handle->nxt = nk_vec2(115.f * handle->scale, 50.f * handle->scale);
 
 							HASH_FREE(&handle->mods, ptr)
 							{
