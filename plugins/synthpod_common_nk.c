@@ -325,6 +325,13 @@ static const char *search_labels [SELECTOR_SEARCH_MAX] = {
 	[SELECTOR_SEARCH_PROJECT] = "Project"
 };
 
+static const struct nk_color grid_line_color = {40, 40, 40, 255};
+static const struct nk_color grid_background_color = {30, 30, 30, 255};
+static const struct nk_color hilight_color = {200, 100, 0, 255};
+static const struct nk_color button_border_color = {100, 100, 100, 255};
+static const struct nk_color grab_handle_color = {100, 100, 100, 255};
+static const struct nk_color toggle_color = {150, 150, 150, 255};
+
 static size_t
 _textedit_len(struct nk_text_edit *edit)
 {
@@ -505,10 +512,7 @@ _node_as_bool(const LilvNode *node, int32_t dflt)
 }
 
 static void
-_port_conn_free(plughandle_t *handle, port_conn_t *port_conn)
-{
-	free(port_conn);
-}
+_port_conn_free(port_conn_t *port_conn);
 
 static mod_conn_t *
 _mod_conn_find(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
@@ -549,10 +553,78 @@ _mod_conn_free(plughandle_t *handle, mod_conn_t *mod_conn)
 	{
 		port_conn_t *port_conn = port_conn_ptr;
 
-		_port_conn_free(handle, port_conn);
+		_port_conn_free(port_conn);
 	}
 
 	free(mod_conn);
+}
+
+static void
+_mod_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn)
+{
+	_hash_remove(&handle->conns, mod_conn);
+	_mod_conn_free(handle, mod_conn);
+}
+
+static void
+_mod_conn_refresh_type(mod_conn_t *mod_conn)
+{
+	mod_conn->type = PROPERTY_TYPE_NONE;
+
+	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+	{
+		port_conn_t *port_conn = *port_conn_itr;
+
+		mod_conn->type |= port_conn->source_port->type;
+		mod_conn->type |= port_conn->sink_port->type;
+	}
+}
+
+static port_conn_t *
+_port_conn_find(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
+{
+	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+	{
+		port_conn_t *port_conn = *port_conn_itr;
+
+		if( (port_conn->source_port == source_port) && (port_conn->sink_port == sink_port) )
+			return port_conn;
+	}
+
+	return NULL;
+}
+
+static port_conn_t *
+_port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
+{
+	port_conn_t *port_conn = calloc(1, sizeof(port_conn_t));
+	if(port_conn)
+	{
+		port_conn->source_port = source_port;
+		port_conn->sink_port = sink_port;
+
+		_hash_add(&mod_conn->conns, port_conn);
+	}
+
+	return port_conn;
+}
+
+static void
+_port_conn_free(port_conn_t *port_conn)
+{
+	free(port_conn);
+}
+
+static void
+_port_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn, port_conn_t *port_conn)
+{
+	_hash_remove(&mod_conn->conns, port_conn);
+	_port_conn_free(port_conn);
+
+	if(_hash_size(&mod_conn->conns) == 0)
+		_mod_conn_remove(handle, mod_conn);
+	else
+		_mod_conn_refresh_type(mod_conn);
 }
 
 static void
@@ -2487,13 +2559,6 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	}
 }
 
-//FIXME move up
-const struct nk_color grid_line_color = {40, 40, 40, 255};
-const struct nk_color grid_background_color = {30, 30, 30, 255};
-const struct nk_color hilight_color = {200, 100, 0, 255};
-const struct nk_color button_border_color = {100, 100, 100, 255};
-const struct nk_color grab_handle_color = {100, 100, 100, 255};
-
 static bool
 _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_rect *bounds)
@@ -2629,20 +2694,23 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 						HASH_FOREACH(&src->sources, source_port_itr)
 						{
 							port_t *source_port = *source_port_itr;
-							if(source_port->type != handle->type)
+
+							if(!(source_port->type & handle->type))
 								continue;
 
 							unsigned j = 0;
 							HASH_FOREACH(&mod->sinks, sink_port_itr)
 							{
 								port_t *sink_port = *sink_port_itr;
-								if(sink_port->type != handle->type)
+
+								if(!(sink_port->type & handle->type))
 									continue;
 
-#if 0
 								if(i == j)
-									jack_connect(handle->mod, source_port->name, sink_port->name);
-#endif
+								{
+									_port_conn_add(mod_conn, source_port, sink_port);
+									//FIXME
+								}
 
 								j++;
 							}
@@ -2885,12 +2953,10 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 				if(!(sink_port->type & handle->type))
 					continue;
 
-#if 0
 				port_conn_t *port_conn = _port_conn_find(mod_conn, source_port, sink_port);
 
 				if(port_conn)
 					nk_fill_arc(canvas, x, y, cs, 0.f, 2*NK_PI, toggle_color);
-#endif
 
 				const struct nk_rect tile = nk_rect(x - ps/2, y - ps/2, ps, ps);
 
@@ -2911,12 +2977,16 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 
 						if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
 						{
-#if 0
 							if(port_conn)
-								jack_disconnect(handle->mod, source_port->name, sink_port->name);
+							{
+								//_port_conn_remove(handle, mod_conn, port_conn);
+								//FIXME
+							}
 							else
-								jack_connect(handle->mod, source_port->name, sink_port->name);
-#endif
+							{
+								_port_conn_add(mod_conn, source_port, sink_port);
+								//FIXME
+							}
 						}
 					}
 
