@@ -1007,7 +1007,7 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 	{
 		printf("\tpatch:property <%s>\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
 
-		if(property->body == app->regs.synthpod.module_list.urid)
+		if(prop == app->regs.synthpod.module_list.urid)
 		{
 			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
 			if(answer)
@@ -1056,6 +1056,16 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 							ref = lv2_atom_forge_key(&app->forge, app->regs.core.plugin.urid);
 						if(ref)
 							ref = lv2_atom_forge_urid(&app->forge, mod->plug_urid);
+
+						if(ref)
+							ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.module_position_x.urid);
+						if(ref)
+							ref = lv2_atom_forge_float(&app->forge, mod->pos.x);
+
+						if(ref)
+							ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.module_position_y.urid);
+						if(ref)
+							ref = lv2_atom_forge_float(&app->forge, mod->pos.y);
 					}
 					if(ref)
 					{
@@ -1096,9 +1106,33 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 	const LV2_URID prop = property && (property->atom.type == app->forge.URID)
 		? property->body : 0;
 
-	if(prop && value)
+	if(subj && prop && value)
 	{
 		printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
+
+		mod_t *mod = NULL;
+		for(unsigned m = 0; m < app->num_mods; m++)
+		{
+			if(app->mods[m]->urn == subj)
+			{
+				mod = app->mods[m];
+				break;
+			}
+		}
+
+		if(mod)
+		{
+			if(  (prop == app->regs.synthpod.module_position_x.urid)
+				&& (value->type == app->forge.Float) )
+			{
+				mod->pos.x = ((const LV2_Atom_Float *)value)->body;
+			}
+			else if( (prop == app->regs.synthpod.module_position_y.urid)
+				&& (value->type == app->forge.Float) )
+			{
+				mod->pos.y = ((const LV2_Atom_Float *)value)->body;
+			}
+		}
 
 		//TODO handle more properties
 	}

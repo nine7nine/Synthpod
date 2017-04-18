@@ -267,6 +267,11 @@ struct _mod_t {
 	mod_prof_t prof;
 
 	dsp_client_t dsp_client;
+
+	struct {
+		float x;
+		float y;
+	} pos;
 };
 
 struct _port_driver_t {

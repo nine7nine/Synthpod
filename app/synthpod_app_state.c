@@ -864,6 +864,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
 						&& lv2_atom_forge_int(forge, mod->uid);
 
+					ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_x.urid)
+						&& lv2_atom_forge_float(forge, mod->pos.x);
+
+					ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_y.urid)
+						&& lv2_atom_forge_float(forge, mod->pos.y);
+
 					if(ref && mod->selected)
 					{
 						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_selected.urid)
@@ -1060,6 +1066,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 		const LV2_Atom_Int *mod_index = NULL;
 		const LV2_Atom_URID *mod_subject = NULL;
+		const LV2_Atom_Float *mod_pos_x = NULL;
+		const LV2_Atom_Float *mod_pos_y = NULL;
 		const LV2_Atom_Bool *mod_selected = NULL;
 		const LV2_Atom_Bool *mod_visible = NULL;
 		const LV2_Atom_Bool *mod_disabled = NULL;
@@ -1067,6 +1075,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		LV2_Atom_Object_Query mod_q[] = {
 			{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
 			{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
+			{ app->regs.synthpod.module_position_x.urid, (const LV2_Atom **)&mod_pos_x },
+			{ app->regs.synthpod.module_position_y.urid, (const LV2_Atom **)&mod_pos_y },
 			{ app->regs.synthpod.module_selected.urid, (const LV2_Atom **)&mod_selected },
 			{ app->regs.synthpod.module_visible.urid, (const LV2_Atom **)&mod_visible },
 			{ app->regs.synthpod.module_disabled.urid, (const LV2_Atom **)&mod_disabled },
@@ -1095,6 +1105,10 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 
+		mod->pos.x = mod_pos_x && (mod_pos_x->atom.type == app->forge.Float)
+			? mod_pos_x->body : 0.f;
+		mod->pos.y = mod_pos_y && (mod_pos_y->atom.type == app->forge.Float)
+			? mod_pos_y->body : 0.f;
 		mod->selected = mod_selected && (mod_selected->atom.type == app->forge.Bool)
 			? mod_selected->body : false;
 		mod->visible = mod_visible && (mod_visible->atom.type == app->forge.URID)

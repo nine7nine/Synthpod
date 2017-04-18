@@ -2572,6 +2572,24 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 		if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
 		{
 			mod->moving = false;
+
+			lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
+			if(synthpod_patcher_set(&handle->regs, &handle->forge,
+				mod->urn, 0, handle->regs.synthpod.module_position_x.urid,
+				sizeof(float), handle->forge.Float, &mod->pos.x))
+			{
+				handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
+				handle->regs.port.event_transfer.urid, &handle->atom);
+			}
+
+			lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
+			if(synthpod_patcher_set(&handle->regs, &handle->forge,
+				mod->urn, 0, handle->regs.synthpod.module_position_y.urid,
+				sizeof(float), handle->forge.Float, &mod->pos.y))
+			{
+				handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
+				handle->regs.port.event_transfer.urid, &handle->atom);
+			}
 		}
 		else
 		{
@@ -3662,9 +3680,13 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						printf("got patch:Put for %u\n", subj);
 
 						const LV2_Atom_URID *plugin = NULL;
+						const LV2_Atom_Float *mod_pos_x = NULL;
+						const LV2_Atom_Float *mod_pos_y = NULL;
 
 						lv2_atom_object_get(body,
 							handle->regs.core.plugin.urid, &plugin,
+							handle->regs.synthpod.module_position_x.urid, &mod_pos_x,
+							handle->regs.synthpod.module_position_y.urid, &mod_pos_y,
 							0); //FIXME query more
 
 						const LV2_URID urid = plugin
@@ -3678,18 +3700,26 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						mod_t *mod = _mod_find_by_subject(handle, subj);
 						if(mod && uri)
 						{
-							LilvNode *uri_node = lilv_new_uri(handle->world, uri);
-							const LilvPlugin *plug = NULL;
-
-							if(uri_node)
+							if(uri)
 							{
-								const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
-								plug = lilv_plugins_get_by_uri(plugs, uri_node);
-								lilv_node_free(uri_node);
+								LilvNode *uri_node = lilv_new_uri(handle->world, uri);
+								const LilvPlugin *plug = NULL;
+
+								if(uri_node)
+								{
+									const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
+									plug = lilv_plugins_get_by_uri(plugs, uri_node);
+									lilv_node_free(uri_node);
+								}
+
+								if(plug)
+									_mod_init(handle, mod, plug);
 							}
 
-							if(plug)
-								_mod_init(handle, mod, plug);
+							if(mod_pos_x && (mod_pos_x->atom.type == handle->forge.Float) && (mod_pos_x->body != 0.f) )
+								mod->pos.x = mod_pos_x->body;
+							if(mod_pos_y && (mod_pos_y->atom.type == handle->forge.Float) && (mod_pos_y->body != 0.f) )
+								mod->pos.y = mod_pos_y->body;
 						}
 					}
 					//TODO
