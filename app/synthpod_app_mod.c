@@ -754,6 +754,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 		tar->mod = mod;
 		tar->tar = port;
 		tar->index = i;
+		tar->symbol = lilv_node_as_string(lilv_port_get_symbol(plug, port));
 		tar->integer = lilv_port_has_property(plug, port, app->regs.port.integer.node);
 		tar->toggled = lilv_port_has_property(plug, port, app->regs.port.toggled.node);
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)

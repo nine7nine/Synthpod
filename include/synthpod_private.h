@@ -371,6 +371,12 @@ struct _reg_t {
 		reg_item_t midi_port;
 		reg_item_t osc_port;
 		reg_item_t com_port;
+
+		reg_item_t connection_list;
+		reg_item_t connection_source_module;
+		reg_item_t connection_source_symbol;
+		reg_item_t connection_sink_module;
+		reg_item_t connection_sink_symbol;
 	} synthpod;
 };
 
@@ -622,6 +628,12 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.midi_port, world, map, SYNTHPOD_PREFIX"MIDIPort");
 	_register(&regs->synthpod.osc_port, world, map, SYNTHPOD_PREFIX"OSCPort");
 	_register(&regs->synthpod.com_port, world, map, SYNTHPOD_PREFIX"ComPort");
+
+	_register(&regs->synthpod.connection_list, world, map, SYNTHPOD_PREFIX"connectionList");
+	_register(&regs->synthpod.connection_source_module, world, map, SYNTHPOD_PREFIX"connectionSourceModule");
+	_register(&regs->synthpod.connection_source_symbol, world, map, SYNTHPOD_PREFIX"connectionSourceSymbol");
+	_register(&regs->synthpod.connection_sink_module, world, map, SYNTHPOD_PREFIX"connectionSinkModule");
+	_register(&regs->synthpod.connection_sink_symbol, world, map, SYNTHPOD_PREFIX"connectionSinkSymbol");
 }
 
 static inline void
@@ -841,6 +853,12 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.midi_port);
 	_unregister(&regs->synthpod.osc_port);
 	_unregister(&regs->synthpod.com_port);
+
+	_unregister(&regs->synthpod.connection_list);
+	_unregister(&regs->synthpod.connection_source_module);
+	_unregister(&regs->synthpod.connection_source_symbol);
+	_unregister(&regs->synthpod.connection_sink_module);
+	_unregister(&regs->synthpod.connection_sink_symbol);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))

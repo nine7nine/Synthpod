@@ -1032,6 +1032,64 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				}
 			}
 		}
+		else if(prop == app->regs.synthpod.connection_list.urid)
+		{
+			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+			if(answer)
+			{
+				LV2_Atom_Forge_Frame frame [3];
+				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
+					&app->regs, &app->forge, &frame[0], subj, sn, prop);
+				if(ref)
+					ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
+				for(unsigned m = 0; m < app->num_mods; m++)
+				{
+					mod_t *mod = app->mods[m];
+
+					for(unsigned p = 0; p < mod->num_ports; p++)
+					{
+						port_t *port = &mod->ports[p];
+
+						for(int s = 0; s < port->num_sources; s++)
+						{
+							source_t *source = &port->sources[s];
+
+							if(ref)
+								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, 0);
+							{
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_module.urid);
+								if(ref)
+									ref = lv2_atom_forge_urid(&app->forge, source->port->mod->urn);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_symbol.urid);
+								if(ref)
+									ref = lv2_atom_forge_string(&app->forge, source->port->symbol, strlen(source->port->symbol));
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_module.urid);
+								if(ref)
+									ref = lv2_atom_forge_urid(&app->forge, port->mod->urn);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_symbol.urid);
+								if(ref)
+									ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+							}
+							if(ref)
+								lv2_atom_forge_pop(&app->forge, &frame[2]);
+						}
+					}
+				}
+				if(ref)
+				{
+					synthpod_patcher_pop(&app->forge, frame, 2);
+					_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+				}
+			}
+		}
 		//TODO handle more properties
 	}
 	else if(subj)
@@ -1140,6 +1198,40 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
+//FIXME move into another file
+__realtime static mod_t *
+_mod_find_by_urn(sp_app_t *app, LV2_URID urn)
+{
+	for(unsigned m = 0; m < app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		if(mod->urn == urn)
+			return mod;
+	}
+
+	return NULL;
+}
+
+//FIXME move into another file
+__realtime static port_t *
+_port_find_by_symbol(sp_app_t *app, LV2_URID urn, const char *symbol)
+{
+	mod_t *mod = _mod_find_by_urn(app, urn);
+	if(mod)
+	{
+		for(unsigned p = 0; p < mod->num_ports; p++)
+		{
+			port_t *port = &mod->ports[p];
+
+			if(!strcmp(port->symbol, symbol))
+				return port;
+		}
+	}
+
+	return NULL;
+}
+
 __realtime static bool
 _sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
 {
@@ -1147,7 +1239,7 @@ _sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
 
 	const LV2_Atom_URID *subject = NULL;
 	const LV2_Atom_Int *seqn = NULL;
-	const LV2_Atom_URID *body = NULL;
+	const LV2_Atom *body = NULL;
 
 	lv2_atom_object_get(obj,
 		app->regs.patch.subject.urid, &subject,
@@ -1159,13 +1251,16 @@ _sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
 		? subject->body : 0;
 	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
 		? seqn->body : 0;
-	const LV2_URID bd = body && (body->atom.type == app->forge.URID)
-		? body->body : 0;
 
-	if( (subj == app->regs.synthpod.module_list.urid) && bd)
+	printf("got patch:Insert: %s\n",
+		app->driver->unmap->unmap(app->driver->unmap->handle, subj));
+
+	if(  (subj == app->regs.synthpod.module_list.urid)
+		&& (body->type == app->forge.URID) )
 	{
-		const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, bd);
-		printf("got patch:Insert: %s\n", uri);
+		const LV2_Atom_URID *bd = (const LV2_Atom_URID *)body;
+		const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, bd->body);
+		printf("got patch:Insert for moduleList: %s\n", uri);
 
 		// send request to worker thread
 		const size_t uri_sz = strlen(uri) + 1;
@@ -1176,6 +1271,59 @@ _sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
 			job->request = JOB_TYPE_REQUEST_MODULE_ADD;
 			memcpy(job->uri, uri, uri_sz);
 			_sp_app_to_worker_advance(app, size);
+		}
+	}
+	else if( (subj == app->regs.synthpod.connection_list.urid)
+		&& (body->type == app->forge.Object) )
+	{
+		const LV2_Atom_Object *bd = (const LV2_Atom_Object *)body;
+		printf("got patch:Insert for connectionList:\n");
+
+		const LV2_Atom_URID *src_module = NULL;
+		const LV2_Atom *src_symbol = NULL;
+		const LV2_Atom_URID *snk_module = NULL;
+		const LV2_Atom *snk_symbol = NULL;
+
+		lv2_atom_object_get(bd,
+			app->regs.synthpod.connection_source_module.urid, &src_module,
+			app->regs.synthpod.connection_source_symbol.urid, &src_symbol,
+			app->regs.synthpod.connection_sink_module.urid, &snk_module,
+			app->regs.synthpod.connection_sink_symbol.urid, &snk_symbol,
+			0);
+
+		const LV2_URID src_urn = src_module
+			? src_module->body : 0;
+		const char *src_sym = src_symbol
+			? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+		const LV2_URID snk_urn = snk_module
+			? snk_module->body : 0;
+		const char *snk_sym = snk_symbol
+			? LV2_ATOM_BODY_CONST(snk_symbol) : NULL;
+
+		if(src_urn && src_sym && snk_urn && snk_sym)
+		{
+			port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+			port_t *snk_port = _port_find_by_symbol(app, snk_urn, snk_sym);
+
+			if(src_port && snk_port)
+			{
+				const int32_t state = _sp_app_port_connect(app, src_port, snk_port);
+				if(state == 1) // success
+				{
+					// signal to UI
+					LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+					if(answer)
+					{
+						LV2_Atom_Forge_Frame frame [1];
+						lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
+						synthpod_patcher_insert_atom(&app->regs, &app->forge,
+							app->regs.synthpod.connection_list.urid, 0, &bd->atom);
+							
+						_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+					}
+				}
+				// else FIXME
+			}
 		}
 	}
 

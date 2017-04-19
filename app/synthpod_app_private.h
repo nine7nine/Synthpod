@@ -300,6 +300,7 @@ struct _port_t {
 	
 	const LilvPort *tar;
 	uint32_t index;
+	const char *symbol;
 
 	int num_sources;
 	int num_feedbacks;
