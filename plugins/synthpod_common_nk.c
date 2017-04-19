@@ -332,6 +332,20 @@ static const struct nk_color button_border_color = {100, 100, 100, 255};
 static const struct nk_color grab_handle_color = {100, 100, 100, 255};
 static const struct nk_color toggle_color = {150, 150, 150, 255};
 
+static inline bool
+_message_request(plughandle_t *handle)
+{
+	lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
+	return true;
+}
+
+static inline void
+_message_write(plughandle_t *handle)
+{
+	handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
+	handle->regs.port.event_transfer.urid, &handle->atom);
+}
+
 static size_t
 _textedit_len(struct nk_text_edit *edit)
 {
@@ -858,14 +872,11 @@ _mod_insert(plughandle_t *handle, const LilvPlugin *plug)
 	const char *uri = lilv_node_as_string(node);
 	const LV2_URID urid = handle->map->map(handle->map->handle, uri);
 
-	lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
-	if(synthpod_patcher_insert(&handle->regs, &handle->forge,
-		handle->regs.synthpod.module_list.urid, 0,
-		sizeof(uint32_t), handle->forge.URID, &urid))
-	{
-		handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
-		handle->regs.port.event_transfer.urid, &handle->atom);
-	}
+	if(  _message_request(handle)
+		&& synthpod_patcher_insert(&handle->regs, &handle->forge,
+			handle->regs.synthpod.module_list.urid, 0,
+			sizeof(uint32_t), handle->forge.URID, &urid) )
+		_message_write(handle);
 }
 
 static mod_t *
@@ -2573,23 +2584,17 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 		{
 			mod->moving = false;
 
-			lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
-			if(synthpod_patcher_set(&handle->regs, &handle->forge,
-				mod->urn, 0, handle->regs.synthpod.module_position_x.urid,
-				sizeof(float), handle->forge.Float, &mod->pos.x))
-			{
-				handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
-				handle->regs.port.event_transfer.urid, &handle->atom);
-			}
+			if(  _message_request(handle)
+				&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+					mod->urn, 0, handle->regs.synthpod.module_position_x.urid,
+					sizeof(float), handle->forge.Float, &mod->pos.x) )
+				_message_write(handle);
 
-			lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
-			if(synthpod_patcher_set(&handle->regs, &handle->forge,
-				mod->urn, 0, handle->regs.synthpod.module_position_y.urid,
-				sizeof(float), handle->forge.Float, &mod->pos.y))
-			{
-				handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
-				handle->regs.port.event_transfer.urid, &handle->atom);
-			}
+			if(  _message_request(handle)
+				&& synthpod_patcher_set(&handle->regs, &handle->forge,
+					mod->urn, 0, handle->regs.synthpod.module_position_y.urid,
+					sizeof(float), handle->forge.Float, &mod->pos.y) )
+				_message_write(handle);
 		}
 		else
 		{
@@ -3368,13 +3373,10 @@ _init(plughandle_t *handle)
 	sp_regs_init(&handle->regs, handle->world, handle->map);
 
 	{
-		lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
-		if(synthpod_patcher_get(&handle->regs, &handle->forge,
-			0, 0, handle->regs.synthpod.module_list.urid))
-		{
-			handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
-			handle->regs.port.event_transfer.urid, &handle->atom);
-		}
+		if(  _message_request(handle)
+			&& synthpod_patcher_get(&handle->regs, &handle->forge,
+				0, 0, handle->regs.synthpod.module_list.urid) )
+			_message_write(handle);
 	}
 }
 
@@ -3646,13 +3648,10 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 								// get information for each of those, FIXME only if not already available
 								{
-									lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
-									if(synthpod_patcher_get(&handle->regs, &handle->forge,
-										urid->body, 0, 0))
-									{
-										handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
-										handle->regs.port.event_transfer.urid, &handle->atom);
-									}
+									if(  _message_request(handle)
+										&& synthpod_patcher_get(&handle->regs, &handle->forge,
+											urid->body, 0, 0) )
+										_message_write(handle);
 								}
 
 								_mod_add(handle, urid->body);
