@@ -165,6 +165,8 @@ struct _prop_t {
 };
 
 struct _mod_t {
+	plughandle_t *handle;
+
 	LV2_URID urn;
 	const LilvPlugin *plug;
 
@@ -899,7 +901,7 @@ _sort_param_name(const void *a, const void *b, void *data)
 }
 
 static LV2_Atom_Forge_Ref
-_connection_internal(plughandle_t *handle, port_t *source_port, port_t *sink_port)
+_patch_connection_internal(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 {
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.connection_source_module.urid);
 	if(ref)
@@ -924,7 +926,7 @@ _connection_internal(plughandle_t *handle, port_t *source_port, port_t *sink_por
 }
 
 static void
-_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_port)
+_patch_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 {
 	LV2_Atom_Forge_Frame frame [3];
 
@@ -932,7 +934,7 @@ _connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
 			0, 0, handle->regs.synthpod.connection_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
-		&& _connection_internal(handle, source_port, sink_port) )
+		&& _patch_connection_internal(handle, source_port, sink_port) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -940,7 +942,7 @@ _connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 }
 
 static void
-_connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink_port)
+_patch_connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 {
 	LV2_Atom_Forge_Frame frame [3];
 
@@ -948,7 +950,7 @@ _connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 		&& synthpod_patcher_remove_object(&handle->regs, &handle->forge, &frame[0],
 			0, 0, handle->regs.synthpod.connection_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
-		&& _connection_internal(handle, source_port, sink_port) )
+		&& _patch_connection_internal(handle, source_port, sink_port) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -956,16 +958,28 @@ _connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 }
 
 static void
-_mod_insert(plughandle_t *handle, const LilvPlugin *plug)
+_patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
 	const LilvNode *node= lilv_plugin_get_uri(plug);
 	const char *uri = lilv_node_as_string(node);
 	const LV2_URID urid = handle->map->map(handle->map->handle, uri);
 
 	if(  _message_request(handle)
-		&& synthpod_patcher_insert(&handle->regs, &handle->forge,
-			handle->regs.synthpod.module_list.urid, 0,
+		&& synthpod_patcher_add(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.module_list.urid, //TODO subject
 			sizeof(uint32_t), handle->forge.URID, &urid) )
+	{
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_mod_remove(plughandle_t *handle, mod_t *mod)
+{
+	if(  _message_request(handle)
+		&& synthpod_patcher_remove(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.module_list.urid, //TODO subject
+			sizeof(uint32_t), handle->forge.URID, &mod->urn) )
 	{
 		_message_write(handle);
 	}
@@ -992,6 +1006,7 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 	if(!mod)
 		return;
 
+	mod->handle = handle;
 	mod->urn = urn;
 	mod->pos = nk_vec2(handle->nxt.x, handle->nxt.y);
 	_hash_add(&handle->mods, mod);
@@ -1339,6 +1354,32 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 		lilv_nodes_free(mod->writables);
 }
 
+static bool
+_mod_remove_cb(void *node, void *data)
+{
+	mod_conn_t *mod_conn = node;
+	mod_t *mod = data;
+	plughandle_t *handle = mod->handle;
+
+	if(  (mod_conn->source_mod == mod)
+		|| (mod_conn->sink_mod == mod) )
+	{
+		_mod_conn_free(handle, mod_conn);
+
+		return false;
+	}
+
+	return true;
+}
+
+static void
+_mod_remove(plughandle_t *handle, mod_t *mod)
+{
+	_hash_remove(&handle->mods, mod);
+	_hash_remove_cb(&handle->conns, _mod_remove_cb, mod);
+	_mod_free(handle, mod);
+}
+
 static void
 _load(plughandle_t *handle)
 {
@@ -1346,7 +1387,7 @@ _load(plughandle_t *handle)
 	{
 		case SELECTOR_GRID_PLUGINS:
 		{
-			_mod_insert(handle, handle->plugin_selector);
+			_patch_mod_add(handle, handle->plugin_selector);
 		} break;
 		case SELECTOR_GRID_PRESETS:
 		{
@@ -2830,7 +2871,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 
 								if(i == j)
 								{
-									_connection_add(handle, source_port, sink_port);
+									_patch_connection_add(handle, source_port, sink_port);
 								}
 
 								j++;
@@ -2874,7 +2915,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 
 	if(_mod_moveable(handle, ctx, mod, &bounds))
 	{
-		//FIXME right click
+		_patch_mod_remove(handle, mod);
 	}
 
 	const bool is_hovering = nk_input_is_mouse_hovering_rect(in, bounds);
@@ -3100,11 +3141,11 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 						{
 							if(port_conn)
 							{
-								_connection_remove(handle, source_port, sink_port);
+								_patch_connection_remove(handle, source_port, sink_port);
 							}
 							else
 							{
-								_connection_add(handle, source_port, sink_port);
+								_patch_connection_add(handle, source_port, sink_port);
 							}
 						}
 					}
@@ -3784,6 +3825,37 @@ _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 }
 
 static void
+_add_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
+{
+	mod_t *mod = _mod_find_by_urn(handle, urn->body);
+	if(!mod)
+	{
+		_mod_add(handle, urn->body);
+
+		// get information for each of those, FIXME only if not already available
+		if(  _message_request(handle)
+			&& synthpod_patcher_get(&handle->regs, &handle->forge,
+				urn->body, 0, 0) )
+		{
+			_message_write(handle);
+		}
+	}
+}
+
+static void
+_rem_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
+{
+	mod_t *mod = _mod_find_by_urn(handle, urn->body);
+	if(mod)
+	{
+		_mod_remove(handle, mod);
+
+		if(handle->module_selector == mod)
+			handle->module_selector = NULL;
+	}
+}
+
+static void
 port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 	uint32_t format, const void *buffer)
 {
@@ -3820,7 +3892,8 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 					{
 						printf("got patch:Set: %s\n", handle->unmap->unmap(handle->unmap->handle, prop));
 
-						if(prop == handle->regs.synthpod.module_list.urid)
+						if(  (prop == handle->regs.synthpod.module_list.urid)
+							&& (value->type == handle->forge.Tuple) )
 						{
 							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
 
@@ -3834,21 +3907,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 							LV2_ATOM_TUPLE_FOREACH(tup, itm)
 							{
-								const LV2_Atom_URID *urid = (const LV2_Atom_URID *)itm;
-								const char *urn = handle->unmap->unmap(handle->unmap->handle, urid->body);
-								printf("<- %s\n", urn);
-
-								// get information for each of those, FIXME only if not already available
-								{
-									if(  _message_request(handle)
-										&& synthpod_patcher_get(&handle->regs, &handle->forge,
-											urid->body, 0, 0) )
-									{
-										_message_write(handle);
-									}
-								}
-
-								_mod_add(handle, urid->body);
+								_add_mod(handle, (const LV2_Atom_URID *)itm);
 							}
 
 							// get connection matrix
@@ -3859,10 +3918,12 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								_message_write(handle);
 							}
 						}
-						else if(prop == handle->regs.synthpod.connection_list.urid)
+						else if( (prop == handle->regs.synthpod.connection_list.urid)
+							&& (value->type == handle->forge.Tuple) )
 						{
 							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
 
+							printf(":::::\n");
 							HASH_FREE(&handle->conns, ptr)
 							{
 								mod_conn_t *mod_conn = ptr;
@@ -3871,9 +3932,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 							LV2_ATOM_TUPLE_FOREACH(tup, itm)
 							{
-								const LV2_Atom_Object *body2 = (const LV2_Atom_Object *)itm;
-
-								_add_connection(handle, body2);
+								_add_connection(handle, (const LV2_Atom_Object *)itm);
 							}
 						}
 					}
@@ -3960,23 +4019,35 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 					if(  add && (add->atom.type == handle->forge.Object)
 						&& rem && (rem->atom.type == handle->forge.Object) )
 					{
-						//printf("got patch:Patch for %u\n", subj);
-
 						LV2_ATOM_OBJECT_FOREACH(rem, prop)
 						{
+							printf("got patch:remove for %u\n", subj);
+
 							if(  (prop->key == handle->regs.synthpod.connection_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
 							{
 								_rem_connection(handle, (const LV2_Atom_Object *)&prop->value);
 							}
+							else if(  (prop->key == handle->regs.synthpod.module_list.urid)
+								&& (prop->value.type == handle->forge.URID) )
+							{
+								_rem_mod(handle, (const LV2_Atom_URID *)&prop->value);
+							}
 						}
 
 						LV2_ATOM_OBJECT_FOREACH(add, prop)
 						{
+							printf("got patch:remove for %u\n", subj);
+
 							if(  (prop->key == handle->regs.synthpod.connection_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
 							{
 								_add_connection(handle, (const LV2_Atom_Object *)&prop->value);
+							}
+							else if(  (prop->key == handle->regs.synthpod.module_list.urid)
+								&& (prop->value.type == handle->forge.URID) )
+							{
+								_add_mod(handle, (const LV2_Atom_URID *)&prop->value);
 							}
 						}
 					}

@@ -90,35 +90,35 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				_sp_app_to_ui_advance(app, size);
 			}
 
-			//signal to NK FIXME remove duplicate code in *_app_ui
+			//signal to NK
 			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
 			if(answer)
 			{
-				LV2_Atom_Forge_Frame frame [2];
 				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
-				LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
-					&app->regs, &app->forge, &frame[0], 0, 0, app->regs.synthpod.module_list.urid); //FIXME
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_add(&app->regs, &app->forge,
+					0, 0, app->regs.synthpod.module_list.urid, //TODO subject
+					sizeof(uint32_t), app->forge.URID, &mod->urn);
 				if(ref)
-					ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
-				for(unsigned m = 0; m < app->num_mods; m++)
-				{
-					mod_t *mod2 = app->mods[m];
-
-					if(ref)
-						ref = lv2_atom_forge_urid(&app->forge, mod2->urn);
-				}
-				if(ref)
-				{
-					synthpod_patcher_pop(&app->forge, frame, 2);
 					_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
-				}
 			}
 
 			break;
 		}
 		case JOB_TYPE_REPLY_MODULE_DEL:
 		{
-			//FIXME signal to UI
+			const LV2_URID urn = job->urn;
+
+			// signal to NK
+			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+			if(answer)
+			{
+				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_remove(&app->regs, &app->forge,
+					0, 0, app->regs.synthpod.module_list.urid, //TODO subject
+				 	sizeof(uint32_t), app->forge.URID, &urn);
+				if(ref)
+					_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+			}
 
 			break;
 		}
@@ -270,6 +270,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		}
 		case JOB_TYPE_REQUEST_MODULE_DEL:
 		{
+			const LV2_URID urn = job->mod->urn;
 			int status = _sp_app_mod_del(app, job->mod);
 
 			// signal to app
@@ -278,7 +279,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_MODULE_DEL;
-				job1->status = status; //TODO makes not much sense, does it?
+				job1->urn = urn;
 				_sp_worker_to_app_advance(app, job_size);
 			}
 

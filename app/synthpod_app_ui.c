@@ -1332,77 +1332,57 @@ _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	}
 }
 
-__realtime static bool
-_sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
+__realtime static void
+_mod_list_add(sp_app_t *app, const LV2_Atom_URID *urid)
 {
-	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urid->body);
+	printf("got patch:add for moduleList: %s\n", uri);
 
-	const LV2_Atom_URID *subject = NULL;
-	const LV2_Atom_Int *seqn = NULL;
-	const LV2_Atom *body = NULL;
-
-	lv2_atom_object_get(obj,
-		app->regs.patch.subject.urid, &subject,
-		app->regs.patch.sequence_number.urid, &seqn,
-		app->regs.patch.body.urid, &body,
-		0);
-
-	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
-		? subject->body : 0;
-	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
-		? seqn->body : 0;
-
-	printf("got patch:Insert: %s\n",
-		app->driver->unmap->unmap(app->driver->unmap->handle, subj));
-
-	if(  (subj == app->regs.synthpod.module_list.urid)
-		&& (body->type == app->forge.URID) )
+	// send request to worker thread
+	const size_t uri_sz = strlen(uri) + 1;
+	const size_t size = sizeof(job_t) + uri_sz;
+	job_t *job = _sp_app_to_worker_request(app, size);
+	if(job)
 	{
-		const LV2_Atom_URID *bd = (const LV2_Atom_URID *)body;
-		const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, bd->body);
-		printf("got patch:Insert for moduleList: %s\n", uri);
-
-		// send request to worker thread
-		const size_t uri_sz = strlen(uri) + 1;
-		const size_t size = sizeof(job_t) + uri_sz;
-		job_t *job = _sp_app_to_worker_request(app, size);
-		if(job)
-		{
-			job->request = JOB_TYPE_REQUEST_MODULE_ADD;
-			memcpy(job->uri, uri, uri_sz);
-			_sp_app_to_worker_advance(app, size);
-		}
+		job->request = JOB_TYPE_REQUEST_MODULE_ADD;
+		memcpy(job->uri, uri, uri_sz);
+		_sp_app_to_worker_advance(app, size);
 	}
-
-	return advance_ui[app->block_state];
 }
 
-__realtime static bool
-_sp_app_from_ui_patch_delete(sp_app_t *app, const LV2_Atom *atom)
+__realtime static void
+_mod_list_rem(sp_app_t *app, const LV2_Atom_URID *urn)
 {
-	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn->body);
+	printf("got patch:remove for moduleList: %s\n", uri);
 
-	const LV2_Atom_URID *subject = NULL;
-	const LV2_Atom_Int *seqn = NULL;
+	// search mod according to its URN
+	mod_t *mod = _mod_find_by_urn(app, urn->body);
+	if(!mod) // mod not found
+		return;
 
-	lv2_atom_object_get(obj,
-		app->regs.patch.subject.urid, &subject,
-		app->regs.patch.sequence_number.urid, &seqn,
-		0);
-
-	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
-		? subject->body : 0;
-	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
-		? seqn->body : 0;
-
-	if(subj)
+	int needs_ramping = 0;
+	for(unsigned p1=0; p1<mod->num_ports; p1++)
 	{
-		printf("got patch:Delete: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
+		port_t *port = &mod->ports[p1];
 
-		//TODO handle more properties
+		// disconnect sources
+		for(int s=0; s<port->num_sources; s++)
+		{
+			_sp_app_port_disconnect_request(app,
+				port->sources[s].port, port, RAMP_STATE_DOWN);
+		}
+
+		// disconnect sinks
+		for(unsigned m=0; m<app->num_mods; m++)
+			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
+			{
+				needs_ramping += _sp_app_port_disconnect_request(app,
+					port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DEL);
+			}
 	}
-
-	return advance_ui[app->block_state];
+	if(needs_ramping == 0)
+		_sp_app_mod_eject(app, mod);
 }
 
 __realtime static bool
@@ -1441,16 +1421,26 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 			{
 				_connection_list_rem(app, (const LV2_Atom_Object *)&prop->value);
 			}
+			else if( (prop->key == app->regs.synthpod.module_list.urid)
+				&& (prop->value.type == app->forge.URID) )
+			{
+				_mod_list_rem(app, (const LV2_Atom_URID *)&prop->value);
+			}
 		}
 
 		LV2_ATOM_OBJECT_FOREACH(add, prop)
 		{
-			printf("got patch:remove: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
+			printf("got patch:add: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
 
 			if(  (prop->key == app->regs.synthpod.connection_list.urid)
 				&& (prop->value.type == app->forge.Object) )
 			{
 				_connection_list_add(app, (const LV2_Atom_Object *)&prop->value);
+			}
+			else if( (prop->key == app->regs.synthpod.module_list.urid)
+				&& (prop->value.type == app->forge.URID) )
+			{
+				_mod_list_add(app, (const LV2_Atom_URID *)&prop->value);
 			}
 		}
 	}
@@ -1547,12 +1537,6 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.patch.set.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_patch_set;
-
-	from_uis[ptr].protocol = app->regs.patch.insert.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_patch_insert;
-
-	from_uis[ptr].protocol = app->regs.patch.delete.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_patch_delete;
 
 	from_uis[ptr].protocol = app->regs.patch.patch.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_patch_patch;
