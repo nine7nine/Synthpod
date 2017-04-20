@@ -74,6 +74,18 @@ _synthpod_patcher_internal_body(reg_t *regs, LV2_Atom_Forge *forge)
 }
 
 static inline LV2_Atom_Forge_Ref
+_synthpod_patcher_internal_add(reg_t *regs, LV2_Atom_Forge *forge)
+{
+	return lv2_atom_forge_key(forge, regs->patch.add.urid);
+}
+
+static inline LV2_Atom_Forge_Ref
+_synthpod_patcher_internal_remove(reg_t *regs, LV2_Atom_Forge *forge)
+{
+	return lv2_atom_forge_key(forge, regs->patch.remove.urid);
+}
+
+static inline LV2_Atom_Forge_Ref
 _synthpod_patcher_internal_value(reg_t *regs, LV2_Atom_Forge *forge)
 {
 	return lv2_atom_forge_key(forge, regs->patch.value.urid);
@@ -203,6 +215,122 @@ synthpod_patcher_insert_atom(reg_t *regs, LV2_Atom_Forge *forge,
 	return ref;
 }
 
+// patch:remove aka patch:Patch
+static LV2_Atom_Forge_Ref
+synthpod_patcher_remove_object(reg_t *regs, LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
+	LV2_URID subject, int32_t seqn, LV2_URID property)
+{
+	LV2_Atom_Forge_Ref ref = _synthpod_patcher_internal_object(regs, forge, frame,
+		regs->patch.patch.urid, subject, seqn);
+	if(ref)
+		ref = _synthpod_patcher_internal_add(regs, forge);
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &frame[1], 0, 0);
+	// add nothing
+	if(ref)
+		lv2_atom_forge_pop(forge, &frame[1]);
+	if(ref)
+		ref = _synthpod_patcher_internal_remove(regs, forge);
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &frame[1], 0, 0);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, property);
+
+	return ref;
+}
+
+static LV2_Atom_Forge_Ref
+synthpod_patcher_remove(reg_t *regs, LV2_Atom_Forge *forge,
+	LV2_URID subject, int32_t seqn, LV2_URID property,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Frame frame [2];
+
+	LV2_Atom_Forge_Ref ref = synthpod_patcher_remove_object(regs, forge, frame,
+		subject, seqn, property);
+	if(ref)
+		ref = _synthpod_patcher_internal_raw(regs, forge, size, type, body);
+	if(ref)
+		synthpod_patcher_pop(forge, frame, 2);
+
+	return ref;
+}
+
+static LV2_Atom_Forge_Ref
+synthpod_patcher_remove_atom(reg_t *regs, LV2_Atom_Forge *forge,
+	LV2_URID subject, int32_t seqn, LV2_URID property,
+	const LV2_Atom *atom)
+{
+	LV2_Atom_Forge_Frame frame [2];
+
+	LV2_Atom_Forge_Ref ref = synthpod_patcher_remove_object(regs, forge, frame,
+		subject, seqn, property);
+	if(ref)
+		ref = _synthpod_patcher_internal_atom(regs, forge, atom);
+	if(ref)
+		synthpod_patcher_pop(forge, frame, 2);
+
+	return ref;
+}
+
+// patch:add aka patch:Patch
+static LV2_Atom_Forge_Ref
+synthpod_patcher_add_object(reg_t *regs, LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
+	LV2_URID subject, int32_t seqn, LV2_URID property)
+{
+	LV2_Atom_Forge_Ref ref = _synthpod_patcher_internal_object(regs, forge, frame,
+		regs->patch.patch.urid, subject, seqn);
+	if(ref)
+		ref = _synthpod_patcher_internal_remove(regs, forge);
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &frame[1], 0, 0);
+	// add nothing
+	if(ref)
+		lv2_atom_forge_pop(forge, &frame[1]);
+	if(ref)
+		ref = _synthpod_patcher_internal_add(regs, forge);
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &frame[1], 0, 0);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, property);
+
+	return ref;
+}
+
+static LV2_Atom_Forge_Ref
+synthpod_patcher_add(reg_t *regs, LV2_Atom_Forge *forge,
+	LV2_URID subject, int32_t seqn, LV2_URID property,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Frame frame [2];
+
+	LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(regs, forge, frame,
+		subject, seqn, property);
+	if(ref)
+		ref = _synthpod_patcher_internal_raw(regs, forge, size, type, body);
+	if(ref)
+		synthpod_patcher_pop(forge, frame, 2);
+
+	return ref;
+}
+
+static LV2_Atom_Forge_Ref
+synthpod_patcher_add_atom(reg_t *regs, LV2_Atom_Forge *forge,
+	LV2_URID subject, int32_t seqn, LV2_URID property,
+	const LV2_Atom *atom)
+{
+	LV2_Atom_Forge_Frame frame [2];
+
+	LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(regs, forge, frame,
+		subject, seqn, property);
+	if(ref)
+		ref = _synthpod_patcher_internal_atom(regs, forge, atom);
+	if(ref)
+		synthpod_patcher_pop(forge, frame, 2);
+
+	return ref;
+}
+
 // patch:Move
 static LV2_Atom_Forge_Ref
 synthpod_patcher_move(reg_t *regs, LV2_Atom_Forge *forge,
@@ -237,6 +365,7 @@ synthpod_patcher_put_object(reg_t *regs, LV2_Atom_Forge *forge, LV2_Atom_Forge_F
 
 	return ref;
 }
+
 static LV2_Atom_Forge_Ref
 synthpod_patcher_put(reg_t *regs, LV2_Atom_Forge *forge,
 	LV2_URID subject, int32_t seqn,

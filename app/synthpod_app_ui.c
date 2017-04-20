@@ -1232,6 +1232,106 @@ _port_find_by_symbol(sp_app_t *app, LV2_URID urn, const char *symbol)
 	return NULL;
 }
 
+__realtime static void
+_connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
+{
+	printf("got patch:add for connectionList:\n");
+
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom *src_symbol = NULL;
+	const LV2_Atom_URID *snk_module = NULL;
+	const LV2_Atom *snk_symbol = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.synthpod.connection_source_module.urid, &src_module,
+		app->regs.synthpod.connection_source_symbol.urid, &src_symbol,
+		app->regs.synthpod.connection_sink_module.urid, &snk_module,
+		app->regs.synthpod.connection_sink_symbol.urid, &snk_symbol,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const char *src_sym = src_symbol
+		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+	const LV2_URID snk_urn = snk_module
+		? snk_module->body : 0;
+	const char *snk_sym = snk_symbol
+		? LV2_ATOM_BODY_CONST(snk_symbol) : NULL;
+
+	if(src_urn && src_sym && snk_urn && snk_sym)
+	{
+		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+		port_t *snk_port = _port_find_by_symbol(app, snk_urn, snk_sym);
+
+		if(src_port && snk_port)
+		{
+			const int32_t state = _sp_app_port_connect(app, src_port, snk_port);
+			(void)state;
+
+			// signal to UI
+			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+			if(answer)
+			{
+				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
+				synthpod_patcher_add_atom(&app->regs, &app->forge,
+					0, 0, app->regs.synthpod.connection_list.urid, &obj->atom); //TODO subject
+					
+				_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+			}
+		}
+	}
+}
+
+__realtime static void
+_connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
+{
+	printf("got patch:remove for connectionList:\n");
+
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom *src_symbol = NULL;
+	const LV2_Atom_URID *snk_module = NULL;
+	const LV2_Atom *snk_symbol = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.synthpod.connection_source_module.urid, &src_module,
+		app->regs.synthpod.connection_source_symbol.urid, &src_symbol,
+		app->regs.synthpod.connection_sink_module.urid, &snk_module,
+		app->regs.synthpod.connection_sink_symbol.urid, &snk_symbol,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const char *src_sym = src_symbol
+		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+	const LV2_URID snk_urn = snk_module
+		? snk_module->body : 0;
+	const char *snk_sym = snk_symbol
+		? LV2_ATOM_BODY_CONST(snk_symbol) : NULL;
+
+	if(src_urn && src_sym && snk_urn && snk_sym)
+	{
+		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+		port_t *snk_port = _port_find_by_symbol(app, snk_urn, snk_sym);
+
+		if(src_port && snk_port)
+		{
+			const int32_t state = _sp_app_port_disconnect_request(app, src_port, snk_port, RAMP_STATE_DOWN);
+			(void)state;
+
+			// signal to UI
+			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+			if(answer)
+			{
+				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
+				synthpod_patcher_remove_atom(&app->regs, &app->forge,
+					0, 0, app->regs.synthpod.connection_list.urid, &obj->atom); //TODO subject
+
+				_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+			}
+		}
+	}
+}
+
 __realtime static bool
 _sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
 {
@@ -1273,59 +1373,6 @@ _sp_app_from_ui_patch_insert(sp_app_t *app, const LV2_Atom *atom)
 			_sp_app_to_worker_advance(app, size);
 		}
 	}
-	else if( (subj == app->regs.synthpod.connection_list.urid)
-		&& (body->type == app->forge.Object) )
-	{
-		const LV2_Atom_Object *bd = (const LV2_Atom_Object *)body;
-		printf("got patch:Insert for connectionList:\n");
-
-		const LV2_Atom_URID *src_module = NULL;
-		const LV2_Atom *src_symbol = NULL;
-		const LV2_Atom_URID *snk_module = NULL;
-		const LV2_Atom *snk_symbol = NULL;
-
-		lv2_atom_object_get(bd,
-			app->regs.synthpod.connection_source_module.urid, &src_module,
-			app->regs.synthpod.connection_source_symbol.urid, &src_symbol,
-			app->regs.synthpod.connection_sink_module.urid, &snk_module,
-			app->regs.synthpod.connection_sink_symbol.urid, &snk_symbol,
-			0);
-
-		const LV2_URID src_urn = src_module
-			? src_module->body : 0;
-		const char *src_sym = src_symbol
-			? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
-		const LV2_URID snk_urn = snk_module
-			? snk_module->body : 0;
-		const char *snk_sym = snk_symbol
-			? LV2_ATOM_BODY_CONST(snk_symbol) : NULL;
-
-		if(src_urn && src_sym && snk_urn && snk_sym)
-		{
-			port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
-			port_t *snk_port = _port_find_by_symbol(app, snk_urn, snk_sym);
-
-			if(src_port && snk_port)
-			{
-				const int32_t state = _sp_app_port_connect(app, src_port, snk_port);
-				if(state == 1) // success
-				{
-					// signal to UI
-					LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
-					if(answer)
-					{
-						LV2_Atom_Forge_Frame frame [1];
-						lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
-						synthpod_patcher_insert_atom(&app->regs, &app->forge,
-							app->regs.synthpod.connection_list.urid, 0, &bd->atom);
-							
-						_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
-					}
-				}
-				// else FIXME
-			}
-		}
-	}
 
 	return advance_ui[app->block_state];
 }
@@ -1353,6 +1400,59 @@ _sp_app_from_ui_patch_delete(sp_app_t *app, const LV2_Atom *atom)
 		printf("got patch:Delete: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
 
 		//TODO handle more properties
+	}
+
+	return advance_ui[app->block_state];
+}
+
+__realtime static bool
+_sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
+{
+	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+
+	const LV2_Atom_URID *subject = NULL;
+	const LV2_Atom_Int *seqn = NULL;
+	const LV2_Atom_Object *add = NULL;
+	const LV2_Atom_Object *rem = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.patch.subject.urid, &subject,
+		app->regs.patch.sequence_number.urid, &seqn,
+		app->regs.patch.add.urid, &add,
+		app->regs.patch.remove.urid, &rem,
+		0);
+
+	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
+		? subject->body : 0; //FIXME check for
+	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
+		? seqn->body : 0;
+
+	printf("got patch:Patch: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
+
+	if(  add && (add->atom.type == app->forge.Object)
+		&& rem && (rem->atom.type == app->forge.Object) )
+	{
+		LV2_ATOM_OBJECT_FOREACH(rem, prop)
+		{
+			printf("got patch:remove: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
+
+			if(  (prop->key == app->regs.synthpod.connection_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				_connection_list_rem(app, (const LV2_Atom_Object *)&prop->value);
+			}
+		}
+
+		LV2_ATOM_OBJECT_FOREACH(add, prop)
+		{
+			printf("got patch:remove: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
+
+			if(  (prop->key == app->regs.synthpod.connection_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				_connection_list_add(app, (const LV2_Atom_Object *)&prop->value);
+			}
+		}
 	}
 
 	return advance_ui[app->block_state];
@@ -1453,6 +1553,9 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.patch.delete.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_patch_delete;
+
+	from_uis[ptr].protocol = app->regs.patch.patch.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_patch_patch;
 
 	assert(ptr == FROM_UI_NUM);
 	// sort according to URID
