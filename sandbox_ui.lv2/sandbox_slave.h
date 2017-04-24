@@ -51,17 +51,17 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 int
 sandbox_slave_recv(sandbox_slave_t *sb);
 
-int
-sandbox_slave_flush(sandbox_slave_t *sb);
+void
+sandbox_slave_wait(sandbox_slave_t *sb);
+
+bool
+sandbox_slave_timedwait(sandbox_slave_t *sb, const struct timespec *abs_timeout);
 
 const void *
 sandbox_slave_extension_data(sandbox_slave_t *sb, const char *URI);
 
 void
 sandbox_slave_run(sandbox_slave_t *sb);
-
-int
-sandbox_slave_fd_get(sandbox_slave_t *sb);
 
 const char *
 sandbox_slave_title_get(sandbox_slave_t *sb);

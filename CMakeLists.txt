@@ -143,10 +143,6 @@ if((${ELM_VERSION} VERSION_EQUAL "1.13.0") OR (${ELM_VERSION} VERSION_GREATER "1
 	add_definitions("-DELM_1_13")
 endif()
 
-# nanomsg
-pkg_search_module(NANOMSG REQUIRED libnanomsg nanomsg)
-include_directories(${NANOMSG_INCLUDE_DIRS})
-
 add_subdirectory(app)
 add_subdirectory(ui)
 add_subdirectory(bin)

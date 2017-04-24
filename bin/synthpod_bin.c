@@ -30,80 +30,19 @@
 #define CHUNK_SIZE 0x10000
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
-static _Atomic xpress_uuid_t voice_uuid = ATOMIC_VAR_INIT(1);
+#define CONTROL_PORT_INDEX 14
+#define NOTIFY_PORT_INDEX 15
+
+static atomic_bool done = ATOMIC_VAR_INIT(false);
+
+static atomic_long voice_uuid = ATOMIC_VAR_INIT(1);
 
 __realtime static xpress_uuid_t
 _voice_map_new_uuid(void *handle)
 {
-	_Atomic xpress_uuid_t *uuid = handle;
+	atomic_long *uuid = handle;
 
 	return atomic_fetch_add_explicit(uuid, 1, memory_order_relaxed);
-}
-
-static inline void
-_light_sem_init(light_sem_t *lsem, int count)
-{
-	assert(count >= 0);
-	atomic_init(&lsem->count, 0);
-	uv_sem_init(&lsem->sem, count);
-	lsem->spin = 10000; //TODO make this configurable or self-adapting
-}
-
-static inline void
-_light_sem_deinit(light_sem_t *lsem)
-{
-	uv_sem_destroy(&lsem->sem);
-}
-
-static inline void
-_light_sem_wait_partial_spinning(light_sem_t *lsem)
-{
-	int old_count;
-	int spin = lsem->spin;
-
-	while(spin--)
-	{
-		old_count = atomic_load_explicit(&lsem->count, memory_order_relaxed);
-
-		if(  (old_count > 0) && atomic_compare_exchange_strong_explicit(
-			&lsem->count, &old_count, old_count - 1, memory_order_acquire, memory_order_acquire) )
-		{
-			return; // immediately return from wait as there was a new signal while spinning
-		}
-
-		atomic_signal_fence(memory_order_acquire); // prevent compiler from collapsing the loop
-	}
-
-	old_count = atomic_fetch_sub_explicit(&lsem->count, 1, memory_order_acquire);
-
-	if(old_count <= 0)
-		uv_sem_wait(&lsem->sem);
-}
-
-static inline bool
-_light_sem_trywait(light_sem_t *lsem)
-{
-	int old_count = atomic_load_explicit(&lsem->count, memory_order_relaxed);
-
-	return (old_count > 0) && atomic_compare_exchange_strong_explicit(
-		&lsem->count, &old_count, old_count - 1, memory_order_acquire, memory_order_acquire);
-}
-
-static inline void
-_light_sem_wait(light_sem_t *lsem)
-{
-	if(!_light_sem_trywait(lsem))
-		_light_sem_wait_partial_spinning(lsem);
-}
-
-static inline void
-_light_sem_signal(light_sem_t *lsem, int count)
-{
-	int old_count = atomic_fetch_add_explicit(&lsem->count, count, memory_order_release);
-	int to_release = -old_count < count ? -old_count : count;
-
-	if(to_release > 0) // old_count changed from (-1) to (0)
-		uv_sem_post(&lsem->sem);
 }
 
 __realtime static void
@@ -111,86 +50,7 @@ _close_request(void *data)
 {
 	bin_t *bin = data;
 
-	if(bin->has_gui) // UI has actually been started by app
-		atomic_store_explicit(&bin->ui_is_done, true, memory_order_relaxed);
-	else
-		bin_quit(bin);
-}
-
-//FIXME handle this somewhere
-__non_realtime static void
-_ui_opened(void *data, int status)
-{
-	bin_t *bin = data;
-
-	//printf("_ui_opened: %i\n", status);
-	synthpod_nsm_opened(bin->nsm, status);
-}
-
-__non_realtime static void
-_ui_animator(uv_timer_t* handle)
-{
-	bin_t *bin = handle->data;
-
-	if(atomic_load_explicit(&bin->ui_is_done, memory_order_relaxed))
-		uv_stop(&bin->loop);
-
-	size_t size;
-	const LV2_Atom *atom;
-	while( (atom = varchunk_read_request(bin->app_to_ui, &size)) )
-	{
-		if(bin->sb)
-		{
-			if(sandbox_master_send(bin->sb, 15, size, bin->atom_eventTransfer, atom))
-				uv_stop(&bin->loop);
-			if(sandbox_master_flush(bin->sb))
-				uv_stop(&bin->loop);
-		}
-
-		varchunk_read_advance(bin->app_to_ui);
-	}
-}
-
-__non_realtime static void
-_worker_thread(void *data)
-{
-	bin_t *bin = data;
-	
-	pthread_t self = pthread_self();
-
-	if(bin->worker_prio)
-	{
-		struct sched_param schedp;
-		memset(&schedp, 0, sizeof(struct sched_param));
-		schedp.sched_priority = bin->worker_prio;
-		
-		if(schedp.sched_priority)
-		{
-			if(pthread_setschedparam(self, SCHED_RR, &schedp))
-				fprintf(stderr, "pthread_setschedparam error\n");
-		}
-	}
-
-	while(!atomic_load_explicit(&bin->worker_dead, memory_order_relaxed))
-	{
-		_light_sem_wait(&bin->worker_sem);
-
-		size_t size;
-		const void *body;
-		while((body = varchunk_read_request(bin->app_to_worker, &size)))
-		{
-			sp_worker_from_app(bin->app, size, body);
-			varchunk_read_advance(bin->app_to_worker);
-		}
-
-		const char *trace;
-		while((trace = varchunk_read_request(bin->app_to_log, &size)))
-		{
-			fprintf(stderr, "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] %s", trace);
-
-			varchunk_read_advance(bin->app_to_log);
-		}
-	}
+	bin_quit(bin);
 }
 
 __realtime static void *
@@ -205,37 +65,33 @@ _app_to_ui_advance(size_t size, void *data)
 {
 	bin_t *bin = data;
 
+	/* FIXME
 	// copy com events to com buffer
-	const LV2_Atom_Object *obj = bin->app_to_ui->buf + bin->app_to_ui->head
-		+ sizeof(varchunk_elmnt_t);
+	const LV2_Atom_Object *obj = bin->app_to_ui.buf[0];
+	size_t sz;
 	if(sp_app_com_event(bin->app, obj->body.otype))
 	{
 		void *dst;
 		if((dst = varchunk_write_request(bin->app_from_com, size)))
 		{
-			memcpy(dst, obj, size);
+			memcpy(dst, src, size);
 			varchunk_write_advance(bin->app_from_com, size);
 		}
 	}
+	*/
 
 	varchunk_write_advance(bin->app_to_ui, size);
+	sandbox_master_signal(bin->sb);
 }
 
-__non_realtime static void *
+__realtime static void *
 _ui_to_app_request(size_t size, void *data)
 {
 	bin_t *bin = data;
 
-	void *ptr;
-	do
-	{
-		ptr = varchunk_write_request(bin->app_from_ui, size);
-	}
-	while(!ptr); // wait until there is enough space
-
-	return ptr;
+	return varchunk_write_request(bin->app_from_ui, size);
 }
-__non_realtime static void
+__realtime static void
 _ui_to_app_advance(size_t size, void *data)
 {
 	bin_t *bin = data;
@@ -256,7 +112,7 @@ _app_to_worker_advance(size_t size, void *data)
 	bin_t *bin = data;
 
 	varchunk_write_advance(bin->app_to_worker, size);
-	_light_sem_signal(&bin->worker_sem, 1);
+	sandbox_master_signal(bin->sb);
 }
 
 __non_realtime static void *
@@ -305,10 +161,9 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 
 	// check for trace mode AND DSP thread ID
 	if( (type == bin->log_trace)
-		&& !uv_thread_equal(&this, &bin->self) // not UI thread ID
-		&& !uv_thread_equal(&this, &bin->worker_thread) ) // not worker thread ID
+		&& !uv_thread_equal(&this, &bin->self) ) // not worker thread ID
 	{
-		_atomic_spin_lock(&bin->trace_lock);
+		_atomic_spin_lock(&bin->trace_lock); //FIXME use per-dsp-thread ringbuffer
 		char *trace;
 		if((trace = varchunk_write_request(bin->app_to_log, 1024)))
 		{
@@ -317,7 +172,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 			size_t written = strlen(trace) + 1;
 			varchunk_write_advance(bin->app_to_log, written);
 			_atomic_unlock(&bin->trace_lock);
-			_light_sem_signal(&bin->worker_sem, 1);
+			sandbox_master_signal(bin->sb);
 
 			return written;
 		}
@@ -363,10 +218,10 @@ _sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
 {
 	bin_t *bin = data;
 
-	if(index == 14) // control for synthpod:stereo
+	if(index == CONTROL_PORT_INDEX) // control for synthpod:stereo
 	{
 		void *dst;
-		if( (dst = _ui_to_app_request(size, bin)) )
+		if((dst = _ui_to_app_request(size, bin)))
 		{
 			memcpy(dst, buf, size);
 
@@ -383,35 +238,19 @@ _sb_subscribe_cb(void *data, uint32_t index, uint32_t protocol, bool state)
 	// nothing
 }
 
+static bin_t *bin_ptr = NULL;
 __non_realtime static void
-_sb_recv(uv_poll_t* handle, int status, int events)
+_sig(int sig)
 {
-	bin_t *bin = handle->data;
-
-	if(sandbox_master_recv(bin->sb))
-		uv_stop(&bin->loop);
-}
-
-__non_realtime static void
-_exit_cb(uv_process_t *process, int64_t exit_status, int term_signal)
-{
-	bin_t *bin = process->data;
-
-	uv_stop(&bin->loop);
-}
-
-__non_realtime static void
-_sig(uv_signal_t *hndl, int sig)
-{
-	bin_t *bin = hndl->data;
-
-	uv_stop(&bin->loop);
+	atomic_store_explicit(&done, true, memory_order_relaxed);
+	if(bin_ptr)
+		sandbox_master_signal(bin_ptr->sb);
 }
 
 void
 bin_init(bin_t *bin)
 {
-	uv_loop_init(&bin->loop);
+	bin_ptr = bin;
 
 	// varchunk init
 	bin->app_to_ui = varchunk_new(CHUNK_SIZE, true);
@@ -466,163 +305,87 @@ bin_init(bin_t *bin)
 	bin->sb_driver.recv_cb = _sb_recv_cb;
 	bin->sb_driver.subscribe_cb = _sb_subscribe_cb;
 
-	bin->sb = sandbox_master_new(&bin->sb_driver, bin);
-	if(bin->sb)
-	{
-		const int fd = sandbox_master_fd_get(bin->sb);
-		if(fd)
-		{
-			// automatically start gui in separate process
-			if(bin->has_gui
-				&& (!strncmp(bin->socket_path, "ipc://", 6) || !strncmp(bin->socket_path, "tcp://", 6)) )
-			{
-//#define USE_NK
-#ifdef USE_NK
-				const char *cmd = SYNTHPOD_BIN_DIR"synthpod_sandbox_x11";
-#else
-				const char *cmd = SYNTHPOD_BIN_DIR"synthpod_sandbox_efl";
-#endif
+	bin->sb = sandbox_master_new(&bin->sb_driver, bin); //FIXME check
 
-				size_t sz = 128;
-				char cwd [128];
-				uv_cwd(cwd, &sz);
+	signal(SIGTERM, _sig);
+	signal(SIGQUIT, _sig);
+	signal(SIGINT, _sig);
 
-				char window_title [128];
-				snprintf(window_title, 128, "Synthpod - %s", bin->socket_path);
-
-				char update_rate [128];
-				snprintf(update_rate, 128, "%i", bin->update_rate);
-
-				char socket_path [128];
-				snprintf(socket_path, 128, "%s", bin->socket_path);
-
-				// tcp socket path needs to be changed for local slave
-				const bool is_tcp = strncmp(bin->socket_path, "tcp://", 6) == 0;
-				if(is_tcp)
-				{
-					const char *port_ptr = strrchr(bin->socket_path, ':');
-					if(port_ptr)
-					{
-						uint16_t port;
-						if(sscanf(port_ptr + 1, "%"SCNu16, &port) == 1)
-							snprintf(socket_path, 128, "tcp://localhost:%"PRIu16, port);
-					}
-				}
-
-				char *args [] = {
-					(char *)cmd,
-					"-p", SYNTHPOD_PREFIX"stereo",
-					"-b", SYNTHPOD_PLUGIN_DIR, //FIXME look up dynamically
-#ifdef USE_NK
-					"-u", SYNTHPOD_PREFIX"root_4_nk",
-#else
-					"-u", SYNTHPOD_PREFIX"root_3_eo",
-#endif
-					"-s", socket_path,
-					"-w", window_title,
-					"-f", update_rate,
-					NULL
-				};
-#ifdef USE_NK
-#	undef USE_NK
-#endif
-
-				uv_stdio_container_t stdio [3] = {
-					[0] = {
-						.flags = UV_INHERIT_FD | UV_READABLE_PIPE,
-						.data.fd = fileno(stdin)
-					},
-					[1] = {
-						.flags = UV_INHERIT_FD | UV_WRITABLE_PIPE,
-						.data.fd = fileno(stdout)
-					},
-					[2] = {
-						.flags = UV_INHERIT_FD | UV_WRITABLE_PIPE,
-						.data.fd = fileno(stderr)
-					},
-				};
-
-				const uv_process_options_t opts = {
-					.exit_cb = _exit_cb,
-					.file = cmd,
-					.args = args,
-					.env = NULL,
-					.cwd = cwd,
-					.flags = UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS
-						| UV_PROCESS_WINDOWS_HIDE,
-					.stdio_count = 3,
-					.stdio = stdio,
-					.uid = 0,
-					.gid = 0
-				};
-				bin->exe.data = bin;
-				if(uv_spawn(&bin->loop, &bin->exe, &opts))
-					fprintf(stderr, "uv_spawn failed\n");
-			}
-
-			bin->hndl.data = bin;
-			uv_poll_init(&bin->loop, &bin->hndl, fd);
-			uv_poll_start(&bin->hndl, UV_READABLE, _sb_recv);
-
-			bin->sig_term.data = bin;
-			uv_signal_init(&bin->loop, &bin->sig_term);
-			uv_signal_start(&bin->sig_term, _sig, SIGTERM);
-
-			bin->sig_quit.data = bin;
-			uv_signal_init(&bin->loop, &bin->sig_quit);
-			uv_signal_start(&bin->sig_quit, _sig, SIGQUIT);
-
-			bin->sig_int.data = bin;
-			uv_signal_init(&bin->loop, &bin->sig_int);
-			uv_signal_start(&bin->sig_int, _sig, SIGINT);
-		}
-	}
+	uv_loop_init(&bin->loop);
 }
 
 void
 bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 {
-	uv_timer_init(&bin->loop, &bin->ui_anim);
-	bin->ui_anim.data = bin;
-	const unsigned ms = 1000 / bin->update_rate;
-	uv_timer_start(&bin->ui_anim, _ui_animator, ms, ms);
-
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
 	bin->nsm = synthpod_nsm_new(exe, argv[optind], &bin->loop, nsm_driver, bin); //TODO check
 
-	// init semaphores
-	atomic_init(&bin->worker_dead, 0);
-	_light_sem_init(&bin->worker_sem, 0);
+	pthread_t self = pthread_self();
 
-	// threads init
-	if(uv_thread_create(&bin->worker_thread, _worker_thread, bin))
-		fprintf(stderr, "creation of worker thread failed\n");
+	if(bin->worker_prio)
+	{
+		struct sched_param schedp;
+		memset(&schedp, 0, sizeof(struct sched_param));
+		schedp.sched_priority = bin->worker_prio;
+		
+		if(schedp.sched_priority)
+		{
+			if(pthread_setschedparam(self, SCHED_RR, &schedp))
+				fprintf(stderr, "pthread_setschedparam error\n");
+		}
+	}
 
-	atomic_init(&bin->ui_is_done , false);
+	while(!atomic_load_explicit(&done, memory_order_relaxed))
+	{
+		sandbox_master_wait(bin->sb);
 
-	// main loop
-	uv_run(&bin->loop, UV_RUN_DEFAULT);
+		// read events from UI shared mem
+		if(sandbox_master_recv(bin->sb))
+			bin_quit(bin);
 
-	if(uv_is_active((uv_handle_t *)&bin->ui_anim))
-		uv_timer_stop(&bin->ui_anim);
-	uv_close((uv_handle_t *)&bin->ui_anim, NULL);
+		// route events from app to UI
+		{
+			size_t size;
+			const LV2_Atom_Object *obj;
+			while((obj= varchunk_read_request(bin->app_to_ui, &size)))
+			{
+				sandbox_master_send(bin->sb, NOTIFY_PORT_INDEX, size, bin->atom_eventTransfer, obj);
+				varchunk_read_advance(bin->app_to_ui);
+			}
+		}
+
+		// read events from worker
+		{
+			size_t size;
+			const void *body;
+			while((body = varchunk_read_request(bin->app_to_worker, &size)))
+			{
+				sp_worker_from_app(bin->app, size, body);
+				varchunk_read_advance(bin->app_to_worker);
+			}
+		}
+
+		// read events from logger
+		{
+			size_t size;
+			const char *trace;
+			while((trace = varchunk_read_request(bin->app_to_log, &size)))
+			{
+				fprintf(stderr, "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] %s", trace);
+
+				varchunk_read_advance(bin->app_to_log);
+			}
+		}
+	}
 }
 
 void
 bin_stop(bin_t *bin)
 {
-	// threads deinit
-	atomic_store_explicit(&bin->worker_dead, 1, memory_order_relaxed);
-	_light_sem_signal(&bin->worker_sem, 1);
-	uv_thread_join(&bin->worker_thread);
-
 	// NSM deinit
 	synthpod_nsm_free(bin->nsm);
-
-	// deinit semaphores
-	_light_sem_deinit(&bin->worker_sem);
 
 	if(bin->path)
 		free(bin->path);
@@ -631,28 +394,6 @@ bin_stop(bin_t *bin)
 void
 bin_deinit(bin_t *bin)
 {
-	if(uv_is_active((uv_handle_t *)&bin->sig_int))
-		uv_signal_stop(&bin->sig_int);
-	//uv_close((uv_handle_t *)&bin->sig_int, NULL);
-
-	if(uv_is_active((uv_handle_t *)&bin->sig_quit))
-		uv_signal_stop(&bin->sig_quit);
-	//uv_close((uv_handle_t *)&bin->sig_quit, NULL);
-
-	if(uv_is_active((uv_handle_t *)&bin->sig_term))
-		uv_signal_stop(&bin->sig_term);
-	//uv_close((uv_handle_t *)&bin->sig_term, NULL);
-
-	if(uv_is_active((uv_handle_t *)&bin->hndl))
-		uv_poll_stop(&bin->hndl);
-	uv_close((uv_handle_t *)&bin->hndl, NULL);
-
-	if(bin->has_gui)
-	{
-		if(uv_is_active((uv_handle_t *)&bin->exe))
-			uv_process_kill(&bin->exe, SIGINT);
-		uv_close((uv_handle_t *)&bin->exe, NULL);
-	}
 	if(bin->sb)
 		sandbox_master_free(bin->sb);
 
@@ -749,6 +490,7 @@ bin_process_post(bin_t *bin)
 	// nothing
 }
 
+//FIXME
 void
 bin_bundle_new(bin_t *bin)
 {
@@ -773,5 +515,5 @@ bin_bundle_save(bin_t *bin, const char *bundle_path)
 void
 bin_quit(bin_t *bin)
 {
-	uv_stop(&bin->loop);
+	atomic_store_explicit(&done, true, memory_order_relaxed);
 }

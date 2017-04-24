@@ -39,12 +39,12 @@ struct _app_t {
 
 	GtkWidget *win;
 	GtkWidget *widget;
-	GSource *source;
+	guint timeout;
 	guint signal;
 };
 
 static gboolean
-_recv(void *data)
+_anim(void *data)
 {
 	wrap_t *wrap = data;
 
@@ -54,34 +54,8 @@ _recv(void *data)
 		wrap->app->win = NULL;
 	}
 
-	if(sandbox_slave_flush(wrap->sb))
-	{
-		gtk_main_quit();
-		wrap->app->win = NULL;
-	}
-
 	return true;
 }
-
-static gboolean
-_source_prepare(GSource *base, int *timeout)
-{
-	*timeout = -1;
-	return false; // wait for poll
-}
-
-static gboolean
-_source_dispatch(GSource *base, GSourceFunc callback, void *data)
-{
-	return callback(data);
-}
-
-static GSourceFuncs source_funcs = {
-	.prepare = _source_prepare,
-	.check = NULL,
-	.dispatch = _source_dispatch,
-	.finalize = NULL
-};
 
 static void
 _destroy(GtkWidget *widget, void *data)
@@ -137,27 +111,6 @@ _init(sandbox_slave_t *sb, void *data)
 	gtk_container_add(GTK_CONTAINER(app->win), app->widget);
 	gtk_widget_show_all(app->win);
 
-	const int fd = sandbox_slave_fd_get(sb);
-	if(fd == -1)
-	{
-		fprintf(stderr, "sandbox_slave_fd_get failed\n");
-		goto fail;
-	}
-
-	app->source = g_source_new(&source_funcs, sizeof(GSource));
-	if(!app->source)
-	{
-		fprintf(stderr, "g_source_new failed\n");
-		goto fail;
-	}
-
-	static wrap_t wrap;
-	wrap.sb = sb;
-	wrap.app = app;
-	g_source_set_callback(app->source, _recv, &wrap, NULL);
-	g_source_add_unix_fd(app->source, fd, G_IO_IN);
-	g_source_attach(app->source, NULL);
-
 	app->signal = g_unix_signal_add(SIGINT, _sig, app);
 	if(!app->signal)
 	{
@@ -176,6 +129,12 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 {
 	app_t *app = data;
 
+	wrap_t wrap = {
+		.app = app,
+		.sb = sb
+	};
+
+	app->timeout = g_timeout_add(1000 / update_rate, _anim, &wrap); //FIXME check
 	gtk_main();
 }
 
@@ -184,8 +143,8 @@ _deinit(void *data)
 {
 	app_t *app = data;
 
-	if(app->source)
-		g_source_destroy(app->source);
+	if(app->timeout)
+		g_source_remove(app->timeout);
 
 	if(app->signal)
 		g_source_remove(app->signal);

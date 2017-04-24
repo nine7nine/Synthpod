@@ -147,13 +147,6 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
-		to.tv_nsec += ns;
-		while(to.tv_nsec >= 1000000000)
-		{
-			to.tv_nsec -= 1000000000;
-			to.tv_sec += 1;
-		}
-
 		xcb_generic_event_t *e;
 		while((e = xcb_poll_for_event(app->conn)))
 		{
@@ -191,17 +184,23 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 			free(e);
 		}
 
-		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL);
-
-		if(sandbox_slave_recv(sb))
-			atomic_store_explicit(&done, true, memory_order_relaxed);
-		if(app->idle_iface)
+		if(sandbox_slave_timedwait(sb, &to)) // timedout
 		{
 			if(app->idle_iface->idle(app->handle))
 				atomic_store_explicit(&done, true, memory_order_relaxed);
+
+			to.tv_nsec += ns;
+			while(to.tv_nsec >= 1000000000)
+			{
+				to.tv_nsec -= 1000000000;
+				to.tv_sec += 1;
+			}
 		}
-		if(sandbox_slave_flush(sb))
-			atomic_store_explicit(&done, true, memory_order_relaxed);
+		else
+		{
+			if(sandbox_slave_recv(sb))
+				atomic_store_explicit(&done, true, memory_order_relaxed);
+		}
 	}
 }
 

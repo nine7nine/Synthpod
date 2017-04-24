@@ -642,12 +642,6 @@ sp_ui_resize(sp_ui_t *ui, int w, int h)
 }
 
 void
-sp_ui_iterate(sp_ui_t *ui)
-{
-	ecore_main_loop_iterate();
-}
-
-void
 sp_ui_refresh(sp_ui_t *ui)
 {
 	if(!ui)

@@ -83,20 +83,20 @@ sandbox_master_send(sandbox_master_t *sb, uint32_t index, uint32_t size,
 	return -1;
 }
 
-int
-sandbox_master_flush(sandbox_master_t *sb)
+void
+sandbox_master_wait(sandbox_master_t *sb)
 {
-	if(sb)
-		return _sandbox_io_flush(&sb->io);
-
-	return -1;
+	_sandbox_io_wait(&sb->io);
 }
 
-int
-sandbox_master_fd_get(sandbox_master_t *sb)
+bool
+sandbox_master_timedwait(sandbox_master_t *sb, const struct timespec *abs_timeout)
 {
-	if(sb)
-		return _sandbox_io_fd_get(&sb->io);
+	return _sandbox_io_timedwait(&sb->io, abs_timeout);
+}
 
-	return -1;
+void
+sandbox_master_signal(sandbox_master_t *sb)
+{
+	_sandbox_io_signal(&sb->io);
 }

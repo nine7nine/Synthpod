@@ -39,8 +39,7 @@ if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 	set(LIBS_BIN
 		synthpod.lib
 		${UV_LDFLAGS}
-		${NANOMSG_LDFLAGS}
-		m)
+		rt pthread m)
 endif()
 
 if(BUILD_JACK)
@@ -201,7 +200,7 @@ if(  BUILD_SANDBOX_X11  OR BUILD_SANDBOX_EFL
 	install(FILES "${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz" DESTINATION share/man/man1)
 
 	set(SANDBOX_LIBS
-		${NANOMSG_LDFLAGS}
+		rt pthread
 		${LILV_LDFLAGS})
 endif()
 

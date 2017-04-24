@@ -951,12 +951,11 @@ main(int argc, char **argv)
 	handle.session_id = NULL;
 	handle.seq_size = SEQ_SIZE;
 
-	bin->has_gui = true;
 	bin->audio_prio = 70; // not used
 	bin->worker_prio = 60;
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 	bin->bad_plugins = false;
-	bin->socket_path = "ipc:///tmp/synthpod";
+	bin->socket_path = "shm:///synthpod";
 	bin->update_rate = 25;
 
 	fprintf(stderr,
@@ -994,13 +993,11 @@ main(int argc, char **argv)
 					"OPTIONS\n"
 					"   [-v]                 print version and full license information\n"
 					"   [-h]                 print usage information\n"
-					"   [-g]                 enable GUI (default)\n"
-					"   [-G]                 disable GUI\n"
 					"   [-b]                 enable bad plugins\n"
 					"   [-B]                 disable bad plugins (default)\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
-					"   [-l] link-path       socket link path (ipc:///tmp/synthpod)\n"
+					"   [-l] link-path       socket link path (shm:///synthpod)\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-u] client-uuid     client UUID for JACK session management\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n"
@@ -1008,12 +1005,6 @@ main(int argc, char **argv)
 					"   [-f] update-rate     GUI update rate (25)\n\n"
 					, argv[0]);
 				return 0;
-			case 'g':
-				bin->has_gui = true;
-				break;
-			case 'G':
-				bin->has_gui = false;
-				break;
 			case 'b':
 				bin->bad_plugins = true;
 				break;

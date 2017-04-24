@@ -535,13 +535,16 @@ sandbox_slave_recv(sandbox_slave_t *sb)
 	return -1;
 }
 
-int
-sandbox_slave_flush(sandbox_slave_t *sb)
+void
+sandbox_slave_wait(sandbox_slave_t *sb)
 {
-	if(sb)
-		return _sandbox_io_flush(&sb->io);
+	_sandbox_io_wait(&sb->io);
+}
 
-	return -1;
+bool
+sandbox_slave_timedwait(sandbox_slave_t *sb, const struct timespec *abs_timeout)
+{
+	return _sandbox_io_timedwait(&sb->io, abs_timeout);
 }
 
 const void *
@@ -558,15 +561,6 @@ sandbox_slave_run(sandbox_slave_t *sb)
 {
 	if(sb && sb->driver && sb->driver->run_cb)
 		sb->driver->run_cb(sb, sb->update_rate, sb->data);
-}
-
-int
-sandbox_slave_fd_get(sandbox_slave_t *sb)
-{
-	if(sb)
-		return _sandbox_io_fd_get(&sb->io);
-
-	return -1;
 }
 
 const char *

@@ -28,7 +28,7 @@ _ext_ui_subscribe_function(LV2UI_Controller controller, uint32_t port,
 }
 
 static Eina_Bool
-_sbox_ui_recv(void *data, Ecore_Fd_Handler *fd_handler)
+_sbox_ui_anim(void *data)
 {
 	sandbox_master_t *sb = data;
 
@@ -52,10 +52,10 @@ _sbox_ui_hide(mod_t *mod)
 		mod_ui->sbox.del = NULL;
 	}
 
-	if(mod_ui->sbox.fd)
+	if(mod_ui->sbox.anim)
 	{
-		ecore_main_fd_handler_del(mod_ui->sbox.fd);
-		mod_ui->sbox.fd = NULL;
+		ecore_animator_del(mod_ui->sbox.anim);
+		mod_ui->sbox.anim = NULL;
 	}
 
 	if(mod_ui->sbox.exe)
@@ -187,7 +187,7 @@ _sbox_ui_show(mod_t *mod)
 	const char *bundle_path = lilv_uri_to_path(lilv_node_as_string(bundle_uri));
 #endif
 	const char *ui_uri = lilv_node_as_uri(lilv_ui_get_uri(mod_ui->ui));
-	strcpy(mod_ui->sbox.socket_path, "ipc:///tmp/synthpod_XXXXXX");
+	strcpy(mod_ui->sbox.socket_path, "shm:///synthpod_XXXXXX");
 	int _fd = mkstemp(&mod_ui->sbox.socket_path[6]); //TODO check
 	if(_fd)
 		close(_fd);
@@ -201,7 +201,6 @@ _sbox_ui_show(mod_t *mod)
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod);
 	if(!mod_ui->sbox.sb)
 		fprintf(stderr, "failed to initialize sandbox master\n");
-	const int fd = sandbox_master_fd_get(mod_ui->sbox.sb); //FIXME check
 
 	char *cmd = NULL;
 	asprintf(&cmd, "%s -p '%s' -b '%s' -u '%s' -s '%s' -w '%s' -f %f",
@@ -213,8 +212,7 @@ _sbox_ui_show(mod_t *mod)
 
 	mod_ui->sbox.exe = ecore_exe_run(cmd, mod_ui); //FIXME check
 	free(cmd);
-	mod_ui->sbox.fd= ecore_main_fd_handler_add(fd, ECORE_FD_READ,
-		_sbox_ui_recv, mod_ui->sbox.sb, NULL, NULL);
+	mod_ui->sbox.anim = ecore_animator_add(_sbox_ui_anim, mod_ui->sbox.sb);
 	mod_ui->sbox.del = ecore_event_handler_add(ECORE_EXE_EVENT_DEL, _sbox_ui_quit, mod);
 
 	_mod_visible_set(mod, 1, mod_ui->urid);
@@ -231,32 +229,13 @@ _sbox_ui_show(mod_t *mod)
 	_mod_subscription_set(mod, mod_ui->ui, 1);
 }
 
-static inline void
-_sbox_ui_flush(void *data)
-{
-	mod_t *mod = data;
-	mod_ui_t *mod_ui = mod->mod_ui;
-
-	const bool more = sandbox_master_flush(mod_ui->sbox.sb);
-	if(more)
-	{
-		//fprintf(stderr, "_sbox_ui_flush there is more\n");
-		ecore_job_add(_sbox_ui_flush, mod); // schedule flush
-	}
-}
-
 static void
 _sbox_ui_port_event(mod_t *mod, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
 	mod_ui_t *mod_ui = mod->mod_ui;
 
-	const bool more = sandbox_master_send(mod_ui->sbox.sb, index, size, protocol, buf);
-	if(!more)
-	{
-		//fprintf(stderr, "_sbox_ui_port_event there is more\n");
-		ecore_job_add(_sbox_ui_flush, mod); // schedule flush
-	}
+	sandbox_master_send(mod_ui->sbox.sb, index, size, protocol, buf); //FIXME check
 }
 
 const mod_ui_driver_t sbox_ui_driver = {

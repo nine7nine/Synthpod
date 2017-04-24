@@ -191,7 +191,7 @@ struct _mod_ui_t {
 			sandbox_master_t *sb;
 			sandbox_master_driver_t driver;
 			Ecore_Exe *exe;
-			Ecore_Fd_Handler *fd;
+			Ecore_Animator *anim;
 			Ecore_Event_Handler *del;
 			char socket_path [64]; //TODO how big
 		} sbox;

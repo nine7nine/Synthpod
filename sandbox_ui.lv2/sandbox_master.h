@@ -52,11 +52,14 @@ int
 sandbox_master_send(sandbox_master_t *sb, uint32_t index, uint32_t size,
 	uint32_t format, const void *buf);
 
-int
-sandbox_master_flush(sandbox_master_t *sb);
+void
+sandbox_master_wait(sandbox_master_t *sb);
 
-int
-sandbox_master_fd_get(sandbox_master_t *sb);
+bool
+sandbox_master_timedwait(sandbox_master_t *sb, const struct timespec *abs_timeout);
+
+void
+sandbox_master_signal(sandbox_master_t *sb);
 
 #ifdef __cplusplus
 }

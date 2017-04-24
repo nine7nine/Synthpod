@@ -44,19 +44,12 @@
 #define JAN_1970 (uint64_t)0x83aa7e80
 
 typedef enum _save_state_t save_state_t;
-typedef struct _light_sem_t light_sem_t;
 typedef struct _bin_t bin_t;
 
 enum _save_state_t {
 	SAVE_STATE_INTERNAL = 0,
 	SAVE_STATE_NSM,
 	SAVE_STATE_JACK
-};
-
-struct _light_sem_t {
-	uv_sem_t sem;
-	_Atomic int count;
-	int spin;
 };
 
 struct _bin_t {
@@ -81,20 +74,9 @@ struct _bin_t {
 	char *path;
 	synthpod_nsm_t *nsm;
 
-	bool has_gui;
-
 	varchunk_t *app_to_ui;
 	varchunk_t *app_from_ui;
 	
-	uv_timer_t ui_anim;
-	uv_signal_t sig_term;
-	uv_signal_t sig_quit;
-	uv_signal_t sig_int;
-	
-	_Atomic int worker_dead;
-	uv_thread_t worker_thread;
-	light_sem_t worker_sem;
-
 	LV2_URID log_error;
 	LV2_URID log_note;
 	LV2_URID log_trace;
@@ -115,10 +97,7 @@ struct _bin_t {
 
 	sandbox_master_driver_t sb_driver;
 	sandbox_master_t *sb;
-	uv_poll_t hndl;
-	uv_process_t exe;
 
-	_Atomic bool ui_is_done;
 	uv_loop_t loop;
 };
 

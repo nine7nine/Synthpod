@@ -34,11 +34,11 @@ struct _app_t {
 	Evas_Object *win;
 	Evas_Object *bg;
 	Evas_Object *widget;
-	Ecore_Fd_Handler *fd;
+	Ecore_Animator *anim;
 };
 
 static Eina_Bool
-_recv(void *data, Ecore_Fd_Handler *fd_handler)
+_anim(void *data)
 {
 	sandbox_slave_t *sb = data;
 
@@ -116,18 +116,10 @@ _init(sandbox_slave_t *sb, void *data)
 	evas_object_resize(app->win, w, h);
 	evas_object_show(app->win);
 
-	const int fd = sandbox_slave_fd_get(sb);
-	if(fd == -1)
+	app->anim = ecore_animator_add(_anim, sb);
+	if(!app->anim)
 	{
-		fprintf(stderr, "sandbox_slave_instantiate failed\n");
-		goto fail;
-	}
-
-	app->fd= ecore_main_fd_handler_add(fd, ECORE_FD_READ,
-		_recv, sb, NULL, NULL);
-	if(!app->fd)
-	{
-		fprintf(stderr, "ecore_main_fd_handler_add failed\n");
+		fprintf(stderr, "ecore_animator_add failed\n");
 		goto fail;
 	}
 
@@ -142,6 +134,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 {
 	app_t *app = data;
 
+	ecore_animator_frametime_set(1.f / update_rate);
 	elm_run();
 }
 
@@ -150,8 +143,8 @@ _deinit(void *data)
 {
 	app_t *app = data;
 
-	if(app->fd)
-		ecore_main_fd_handler_del(app->fd);
+	if(app->anim)
+		ecore_animator_del(app->anim);
 
 	if(app->bg)
 	{

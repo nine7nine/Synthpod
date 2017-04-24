@@ -102,7 +102,7 @@ _show_cb(LV2UI_Handle instance)
 	if(!handle->done)
 		return 0; // already showing
 
-	strncpy(handle->socket_path, "ipc:///tmp/sandbox_ui_XXXXXX", SOCKET_PATH_LEN);
+	strncpy(handle->socket_path, "shm:///sandbox_ui_XXXXXX", SOCKET_PATH_LEN);
 	int fd = mkstemp(&handle->socket_path[6]);
 	if(!fd)
 		return -1;
@@ -204,7 +204,6 @@ _idle_cb(LV2UI_Handle instance)
 	if(!handle->done && handle->sb)
 	{
 		sandbox_master_recv(handle->sb);
-		sandbox_master_flush(handle->sb);
 	}
 
 	return handle->done;

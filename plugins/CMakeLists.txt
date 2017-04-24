@@ -46,7 +46,7 @@ add_library(synthpod_ui.lv2 MODULE
 	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c
 	synthpod_lv2_ui.c)
 target_link_libraries(synthpod_ui.lv2
-	${NANOMSG_LDFLAGS}
+	rt pthread
 	${SRATOM_LDFLAGS})
 set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
 install(TARGETS synthpod_ui.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
@@ -56,7 +56,7 @@ add_executable(sandbox_efl
 	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
 target_link_libraries(sandbox_efl
 	${ELM_LDFLAGS}
-	${NANOMSG_LDFLAGS}
+	rt pthread
 	${LILV_LDFLAGS})
 install(TARGETS sandbox_efl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 

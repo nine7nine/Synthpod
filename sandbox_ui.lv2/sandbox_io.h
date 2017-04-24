@@ -19,12 +19,16 @@
 #define _SANDBOX_IO_H
 
 #include <inttypes.h>
+#include <semaphore.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <string.h>
+#include <errno.h>
 
 #include <netatom.lv2/netatom.h>
 
-#include <nanomsg/nn.h>
-#include <nanomsg/pair.h>
-#include <nanomsg/tcp.h>
+#include <varchunk.h>
 
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
@@ -38,14 +42,10 @@ extern "C" {
 
 #define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
-#undef LV2_ATOM_TUPLE_FOREACH // there is a bug in LV2 1.10.0
-#define LV2_ATOM_TUPLE_FOREACH(tuple, iter) \
-	for (LV2_Atom* (iter) = lv2_atom_tuple_begin(tuple); \
-	     !lv2_atom_tuple_is_end(LV2_ATOM_BODY(tuple), (tuple)->atom.size, (iter)); \
-	     (iter) = lv2_atom_tuple_next(iter))
-
 typedef struct _atom_ser_t atom_ser_t;
 typedef struct _sandbox_io_subscription_t sandbox_io_subscription_t;
+typedef struct _sandbox_io_shm_body_t sandbox_io_shm_body_t;
+typedef struct _sandbox_io_shm_t sandbox_io_shm_t;
 typedef struct _sandbox_io_t sandbox_io_t;
 
 typedef void (*_sandbox_io_recv_cb_t)(void *data, uint32_t index, uint32_t size,
@@ -64,13 +64,25 @@ struct _sandbox_io_subscription_t {
 	int32_t state;
 };
 
+#define SANDBOX_BUFFER_SIZE 0x20000 // 1M
+
+struct _sandbox_io_shm_body_t {
+	sem_t sem;
+	varchunk_t varchunk;
+	uint8_t buf [SANDBOX_BUFFER_SIZE];
+};
+
+struct _sandbox_io_shm_t {
+	sandbox_io_shm_body_t to_master;
+	sandbox_io_shm_body_t from_master;
+};
+
 struct _sandbox_io_t {
+	bool is_master;
+	bool drop;
+
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
-
-	int sock;
-	int id;
-	bool drop;
 
 	struct {
 		netatom_t *tx;
@@ -95,6 +107,9 @@ struct _sandbox_io_t {
 	LV2_URID ui_port_subscribe;
 	LV2_URID ui_update_rate;
 	LV2_URID params_sample_rate;
+
+	char *name;
+	sandbox_io_shm_t *shm;
 };
 
 static inline LV2_Atom_Forge_Ref
@@ -140,155 +155,144 @@ _sandbox_io_reset(sandbox_io_t *io)
 	ser->offset = 0; //TODO free?
 
 	lv2_atom_forge_set_sink(&io->forge, _sink, _deref, ser);
-	lv2_atom_forge_tuple(&io->forge, &io->frame);
 }
 
 static inline int
 _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 	_sandbox_io_subscribe_cb_t subscribe_cb, void *data)
 {
-	uint8_t *buf = NULL;
-	int sz;
+	const uint8_t *buf = NULL;
+	size_t sz;
 	bool close_request = false;
 
-	while((sz = nn_recv(io->sock, &buf, NN_MSG, NN_DONTWAIT)) != -1)
+	sandbox_io_shm_body_t *rx = io->is_master
+		? &io->shm->to_master
+		: &io->shm->from_master;
+
+	while((buf = varchunk_read_request(&rx->varchunk, &sz)))
 	{
 		const LV2_Atom *atom = netatom_deserialize(io->netatom.rx, buf, sz);
 		if(atom)
 		{
-			LV2_ATOM_TUPLE_FOREACH((LV2_Atom_Tuple *)atom, itm)
+			if(!lv2_atom_forge_is_object_type(&io->forge, atom->type))
+				continue;
+
+			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+
+			if(obj->body.otype == io->float_protocol)
 			{
-				LV2_Atom_Object *obj = (LV2_Atom_Object *)itm;
+				const LV2_Atom_Int *index = NULL;
+				const LV2_Atom_Float *value = NULL;
 
-				if(!lv2_atom_forge_is_object_type(&io->forge, obj->atom.type))
-					continue;
+				LV2_Atom_Object_Query q [] = {
+					{io->core_index, (const LV2_Atom **)&index},
+					{io->rdf_value, (const LV2_Atom **)&value},
+					{0, NULL}
+				};
+				lv2_atom_object_query(obj, q);
 
-				if(obj->body.otype == io->float_protocol)
+				if(  index && (index->atom.type == io->forge.Int)
+						&& (index->atom.size == sizeof(int32_t))
+					&& value && (value->atom.type == io->forge.Float)
+						&& (value->atom.size == sizeof(float)) )
 				{
-					const LV2_Atom_Int *index = NULL;
-					const LV2_Atom_Float *value = NULL;
+					recv_cb(data, index->body,
+						sizeof(float), io->float_protocol, &value->body);
+					recv_cb(data, index->body,
+						sizeof(float), 0, &value->body);
+				}
+			}
+			else if(obj->body.otype == io->peak_protocol)
+			{
+				const LV2_Atom_Int *index = NULL;
+				const LV2_Atom_Int *period_start = NULL;
+				const LV2_Atom_Int *period_size = NULL;
+				const LV2_Atom_Float *peak= NULL;
 
-					LV2_Atom_Object_Query q [] = {
-						{io->core_index, (const LV2_Atom **)&index},
-						{io->rdf_value, (const LV2_Atom **)&value},
-						{0, NULL}
-					};
-					lv2_atom_object_query(obj, q);
+				LV2_Atom_Object_Query q [] = {
+					{io->core_index, (const LV2_Atom **)&index},
+					{io->ui_period_start, (const LV2_Atom **)&period_start},
+					{io->ui_period_size, (const LV2_Atom **)&period_size},
+					{io->ui_peak, (const LV2_Atom **)&peak},
+					{0, NULL}
+				};
+				lv2_atom_object_query(obj, q);
 
-					if(  index && (index->atom.type == io->forge.Int)
-							&& (index->atom.size == sizeof(int32_t))
-						&& value && (value->atom.type == io->forge.Float)
-							&& (value->atom.size == sizeof(float)) )
+				if(  index && (index->atom.type == io->forge.Int)
+						&& (index->atom.size == sizeof(int32_t))
+					&& period_start && (period_start->atom.type == io->forge.Int)
+						&& (period_start->atom.size == sizeof(int32_t))
+					&& period_size && (period_size->atom.type == io->forge.Int)
+						&& (period_size->atom.size == sizeof(int32_t))
+					&& peak && (peak->atom.type == io->forge.Float)
+						&& (peak->atom.size == sizeof(float)) )
 					{
+						const LV2UI_Peak_Data peak_data = {
+							.period_start = period_start->body,
+							.period_size = period_size->body,
+							.peak = peak->body
+						};
 						recv_cb(data, index->body,
-							sizeof(float), io->float_protocol, &value->body);
-						recv_cb(data, index->body,
-							sizeof(float), 0, &value->body);
+							sizeof(LV2UI_Peak_Data), io->peak_protocol, &peak_data);
 					}
-				}
-				else if(obj->body.otype == io->peak_protocol)
+			}
+			else if( (obj->body.otype == io->event_transfer)
+				|| (obj->body.otype == io->atom_transfer) )
+			{
+				const LV2_Atom_Int *index = NULL;
+				const LV2_Atom *value = NULL;
+
+				LV2_Atom_Object_Query q [] = {
+					{io->core_index, (const LV2_Atom **)&index},
+					{io->rdf_value, (const LV2_Atom **)&value},
+					{0, NULL}
+				};
+				lv2_atom_object_query(obj, q);
+
+				if(  index && (index->atom.type == io->forge.Int)
+						&& (index->atom.size == sizeof(int32_t))
+					&& value)
 				{
-					const LV2_Atom_Int *index = NULL;
-					const LV2_Atom_Int *period_start = NULL;
-					const LV2_Atom_Int *period_size = NULL;
-					const LV2_Atom_Float *peak= NULL;
-
-					LV2_Atom_Object_Query q [] = {
-						{io->core_index, (const LV2_Atom **)&index},
-						{io->ui_period_start, (const LV2_Atom **)&period_start},
-						{io->ui_period_size, (const LV2_Atom **)&period_size},
-						{io->ui_peak, (const LV2_Atom **)&peak},
-						{0, NULL}
-					};
-					lv2_atom_object_query(obj, q);
-
-					if(  index && (index->atom.type == io->forge.Int)
-							&& (index->atom.size == sizeof(int32_t))
-						&& period_start && (period_start->atom.type == io->forge.Int)
-							&& (period_start->atom.size == sizeof(int32_t))
-						&& period_size && (period_size->atom.type == io->forge.Int)
-							&& (period_size->atom.size == sizeof(int32_t))
-						&& peak && (peak->atom.type == io->forge.Float)
-							&& (peak->atom.size == sizeof(float)) )
-						{
-							const LV2UI_Peak_Data peak_data = {
-								.period_start = period_start->body,
-								.period_size = period_size->body,
-								.peak = peak->body
-							};
-							recv_cb(data, index->body,
-								sizeof(LV2UI_Peak_Data), io->peak_protocol, &peak_data);
-						}
+					recv_cb(data, index->body,
+						lv2_atom_total_size(value), obj->body.otype, value);
 				}
-				else if( (obj->body.otype == io->event_transfer)
-					|| (obj->body.otype == io->atom_transfer) )
+			}
+			else if(obj->body.otype == io->ui_port_subscribe)
+			{
+				const LV2_Atom_Int *index = NULL;
+				const LV2_Atom_URID *protocol = NULL;
+				const LV2_Atom_Bool *value = NULL;
+
+				LV2_Atom_Object_Query q [] = {
+					{io->core_index, (const LV2_Atom **)&index},
+					{io->ui_protocol, (const LV2_Atom **)&protocol},
+					{io->rdf_value, (const LV2_Atom **)&value},
+					{0, NULL}
+				};
+				lv2_atom_object_query(obj, q);
+
+				if(  index && (index->atom.type == io->forge.Int)
+						&& (index->atom.size == sizeof(int32_t))
+					&& value && (value->atom.type == io->forge.Bool)
+					&& protocol && (protocol->atom.type == io->forge.URID))
 				{
-					const LV2_Atom_Int *index = NULL;
-					const LV2_Atom *value = NULL;
-
-					LV2_Atom_Object_Query q [] = {
-						{io->core_index, (const LV2_Atom **)&index},
-						{io->rdf_value, (const LV2_Atom **)&value},
-						{0, NULL}
-					};
-					lv2_atom_object_query(obj, q);
-
-					if(  index && (index->atom.type == io->forge.Int)
-							&& (index->atom.size == sizeof(int32_t))
-						&& value)
-					{
-						recv_cb(data, index->body,
-							lv2_atom_total_size(value), obj->body.otype, value);
-					}
+					if(subscribe_cb)
+						subscribe_cb(data, index->body, protocol->body, value->body);
 				}
-				else if(obj->body.otype == io->ui_port_subscribe)
-				{
-					const LV2_Atom_Int *index = NULL;
-					const LV2_Atom_URID *protocol = NULL;
-					const LV2_Atom_Bool *value = NULL;
-
-					LV2_Atom_Object_Query q [] = {
-						{io->core_index, (const LV2_Atom **)&index},
-						{io->ui_protocol, (const LV2_Atom **)&protocol},
-						{io->rdf_value, (const LV2_Atom **)&value},
-						{0, NULL}
-					};
-					lv2_atom_object_query(obj, q);
-
-					if(  index && (index->atom.type == io->forge.Int)
-							&& (index->atom.size == sizeof(int32_t))
-						&& value && (value->atom.type == io->forge.Bool)
-						&& protocol && (protocol->atom.type == io->forge.URID))
-					{
-						if(subscribe_cb)
-							subscribe_cb(data, index->body, protocol->body, value->body);
-					}
-				}
-				else if(obj->body.otype == io->ui_close_request)
-				{
-					close_request = true;
-				}
+			}
+			else if(obj->body.otype == io->ui_close_request)
+			{
+				close_request = true;
 			}
 		}
 
-		nn_freemsg(buf);
+		varchunk_read_advance(&rx->varchunk);
 	}
 
 	if(close_request)
-	{
 		return -1; // received ui:closeRequest
-	}
 
-	const int status = nn_errno();
-	switch(status)
-	{
-		case EAGAIN:
-			return 0; // success
-
-		default:
-			fprintf(stderr, "nn_recv: %s\n", nn_strerror(errno));
-			return status;
-	}
+	return 0;
 }
 
 static inline int
@@ -297,35 +301,22 @@ _sandbox_io_flush(sandbox_io_t *io)
 	const LV2_Atom *atom = (const LV2_Atom *)io->ser.buf;
 
 	if( (io->ser.offset == 0) || (atom->size == 0) )
-		return 0; // empty tuple, aka success
+		return 0; // empty atom, aka success
 
 	uint32_t sz;
 	const uint8_t *buf = netatom_serialize(io->netatom.tx, atom, &sz);
-	if(!buf)
-		return -1; // serialization failed
-
-	const int written = nn_send(io->sock, buf, sz, NN_DONTWAIT);
-	
-	if(written == -1) // error has occured, so check it
+	if(buf)
 	{
-		if(io->drop) // drop messages if not connected yet
-		{
-			const uint64_t n = nn_get_statistic(io->sock, NN_STAT_CURRENT_CONNECTIONS);
-			if(n == (uint64_t)-1)
-				fprintf(stderr, "nn_get_statistic failed\n");
-			else if(n == 0) // no connections, yet
-				_sandbox_io_reset(io);
-		}
+		sandbox_io_shm_body_t *tx = io->is_master
+			? &io->shm->from_master
+			: &io->shm->to_master;
 
-		const int status = nn_errno();
-		switch(status)
+		uint8_t *dst;
+		if((dst = varchunk_write_request(&tx->varchunk, sz)))
 		{
-			case EAGAIN:
-				return 0;
-
-			default:
-				fprintf(stderr, "nn_send: %s\n", nn_strerror(errno));
-				return status;
+			memcpy(dst, buf, sz);
+			varchunk_write_advance(&tx->varchunk, sz);
+			sem_post(&tx->sem);
 		}
 	}
 
@@ -395,27 +386,41 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	}
 
 	lv2_atom_forge_pop(&io->forge, &frame);
-
-	//lv2_atom_forge_pop(&io->forge, &io->frame);
 	
 	return _sandbox_io_flush(io);
 }
 
-static inline int
-_sandbox_io_fd_get(sandbox_io_t *io)
+static inline void
+_sandbox_io_wait(sandbox_io_t *io)
 {
-	int fd = -1;
-	size_t sz = sizeof(int);
+	sandbox_io_shm_body_t *rx = io->is_master
+		? &io->shm->to_master
+		: &io->shm->from_master;
 
-	if(io->sock == -1)
-		return -1;
+	sem_wait(&rx->sem);
+}
 
-	if(nn_getsockopt(io->sock, NN_SOL_SOCKET, NN_RCVFD, &fd, &sz) < 0)
-		return -1;
+static inline bool
+_sandbox_io_timedwait(sandbox_io_t *io, const struct timespec *abs_timeout)
+{
+	sandbox_io_shm_body_t *rx = io->is_master
+		? &io->shm->to_master
+		: &io->shm->from_master;
 
-	//printf("_sandbox_io_fd_get: %i\n", fd);
+	if(sem_timedwait(&rx->sem, abs_timeout) == -1)
+		return errno == ETIMEDOUT;
 
-	return fd;
+	return false;
+}
+
+static inline void
+_sandbox_io_signal(sandbox_io_t *io)
+{
+	sandbox_io_shm_body_t *rx = io->is_master
+		? &io->shm->to_master
+		: &io->shm->from_master;
+
+	sem_post(&rx->sem);
 }
 
 static inline int
@@ -425,6 +430,7 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	io->map = map;
 	io->unmap = unmap;
 
+	io->is_master = is_master;
 	io->drop = drop_messages;
 
 	io->ser.offset = 0;
@@ -433,6 +439,7 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	if(!io->ser.buf)
 		return -1;
 
+	const bool is_shm = strncmp(socket_path, "shm://", 6) == 0;
 	const bool is_tcp = strncmp(socket_path, "tcp://", 6) == 0;
 	const bool swap = is_tcp ? true : false;
 
@@ -441,44 +448,44 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	if(!(io->netatom.rx = netatom_new(io->map, io->unmap, swap)))
 		return -1;
 
-	if((io->sock = nn_socket(AF_SP, NN_PAIR)) == -1)
+	const size_t total_size = sizeof(sandbox_io_shm_t);
+
+	const char *name = is_shm
+		? &socket_path[6]
+		: NULL;
+	if(!name)
 		return -1;
 
-	//TODO make this configurable
-	const int linger = 10000; // ms
-	const int sndbuf = 0x20000; // bytes
-	const int rcvbuf = 0x20000; // bytes
-	const int rcvmaxsize = -1; // indefinite
-	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_LINGER, &linger, sizeof(linger)) == -1)
+	io->name = strdup(name);
+	if(!io->name)
 		return -1;
-	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_SNDBUF, &sndbuf, sizeof(sndbuf)) == -1)
+
+	const int fd = io->is_master
+		? shm_open(io->name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
+		: shm_open(io->name, O_RDWR, S_IRUSR | S_IWUSR);
+	if(fd == -1)
 		return -1;
-	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_RCVBUF, &rcvbuf, sizeof(rcvbuf)) == -1)
-		return -1;
-	if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_RCVMAXSIZE, &rcvmaxsize, sizeof(rcvmaxsize)) == -1)
-		return -1;
-	if(is_tcp)
+
+	if(  (ftruncate(fd, total_size) == -1)
+		|| ((io->shm = mmap(NULL, total_size, PROT_READ | PROT_WRITE,
+					MAP_SHARED, fd, 0)) == MAP_FAILED) )
 	{
-		// disable nagle's algorithm
-		const int nodelay = 1;
-		if(nn_setsockopt(io->sock, NN_TCP, NN_TCP_NODELAY, &nodelay, sizeof(nodelay)) == -1)
-			return -1;
+		if(io->is_master)
+			shm_unlink(io->name);
 
-		// enable IPv6 addressing
-		const int ipv4only = 0;
-		if(nn_setsockopt(io->sock, NN_SOL_SOCKET, NN_IPV4ONLY, &ipv4only, sizeof(ipv4only)) == -1)
-			return -1;
+		return -1;
 	}
+	close(fd);
 
-	if(is_master)
+	if(io->is_master)
 	{
-		if((io->id = nn_bind(io->sock, socket_path)) == -1)
+		if(sem_init(&io->shm->from_master.sem, 1, 0) == -1)
 			return -1;
-	}
-	else // is_slave
-	{
-		if((io->id = nn_connect(io->sock, socket_path)) == -1)
+		if(sem_init(&io->shm->to_master.sem, 1, 0) == -1)
 			return -1;
+
+		varchunk_init(&io->shm->from_master.varchunk, SANDBOX_BUFFER_SIZE, true);
+		varchunk_init(&io->shm->to_master.varchunk, SANDBOX_BUFFER_SIZE, true);
 	}
 
 	lv2_atom_forge_init(&io->forge, map);
@@ -513,19 +520,21 @@ _sandbox_io_deinit(sandbox_io_t *io, bool terminate)
 		usleep(100000); // wait 100ms, for timer-based UIs to receive message
 	}
 
-	if(io->id != -1)
+	const size_t total_size = sizeof(sandbox_io_shm_t);
+	if(io->shm)
 	{
-		const int res = nn_shutdown(io->sock, io->id);
-		if(res < 0)
-			fprintf(stderr, "nn_shutdown failed: %s\n", nn_strerror(nn_errno()));
-	}
+		if(io->is_master)
+		{
+			sem_destroy(&io->shm->from_master.sem);
+			sem_destroy(&io->shm->to_master.sem);
+		}
 
-	if(io->sock != -1)
-	{
-		const int res = nn_close(io->sock);
-		if(res < 0)
-			fprintf(stderr, "nn_close failed: %s\n", nn_strerror(nn_errno()));
+		munmap(io->shm, total_size);
+		if(io->is_master)
+			shm_unlink(io->name);
 	}
+	if(io->name)
+		free(io->name);
 
 	if(io->netatom.tx)
 		netatom_free(io->netatom.tx);
