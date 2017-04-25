@@ -89,8 +89,6 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 			if(app->idle_iface->idle(app->handle))
 				atomic_store_explicit(&done, true, memory_order_relaxed);
 		}
-		if(sandbox_slave_flush(sb))
-			atomic_store_explicit(&done, true, memory_order_relaxed);
 	}
 
 	if(app->show_iface)

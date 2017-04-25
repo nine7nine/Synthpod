@@ -100,8 +100,6 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 		if(sandbox_slave_recv(sb))
 			atomic_store_explicit(&done, true, memory_order_relaxed);
 		LV2_EXTERNAL_UI_RUN(app->widget);
-		if(sandbox_slave_flush(sb))
-			atomic_store_explicit(&done, true, memory_order_relaxed);
 	}
 
 	LV2_EXTERNAL_UI_HIDE(app->widget);
