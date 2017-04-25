@@ -372,7 +372,6 @@ struct _sp_app_t {
 
 	unsigned num_mods;
 	mod_t *mods [MAX_MODS];
-	mod_t *ords [MAX_MODS];
 
 	sp_app_system_source_t system_sources [64]; //FIXME, how many?
 	sp_app_system_sink_t system_sinks [64]; //FIXME, how many?
@@ -488,6 +487,9 @@ _sp_app_to_worker_advance(sp_app_t *app, size_t written)
 		app->driver->to_worker_advance(written, app->data);
 }
 
+void
+_sp_app_order(sp_app_t *app);
+
 /*
  * State
  */
@@ -523,9 +525,6 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod);
 
 void
 _sp_app_mod_reinitialize(mod_t *mod);
-
-void
-_sp_app_mod_qsort(mod_t **a, int n);
 
 LV2_Worker_Status
 _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload);

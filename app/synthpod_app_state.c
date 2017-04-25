@@ -1101,7 +1101,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			continue;
 
 		// inject module into module graph
-		app->ords[app->num_mods] = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 
@@ -1147,8 +1146,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		free(path);
 	}
 
-	// sort ordered list
-	_sp_app_mod_qsort(app->ords, app->num_mods);
+	_sp_app_order(app);
 
 	LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, iter)
 	{

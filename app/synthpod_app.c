@@ -388,7 +388,6 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	mod = _sp_app_mod_add(app, uri_str, 0, 0);
 	if(mod)
 	{
-		app->ords[app->num_mods] = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 	}
@@ -400,7 +399,6 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	mod = _sp_app_mod_add(app, uri_str, 0, 0);
 	if(mod)
 	{
-		app->ords[app->num_mods] = mod;
 		app->mods[app->num_mods] = mod;
 		app->num_mods += 1;
 	}
@@ -877,4 +875,62 @@ sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
 			-1, bundle_path);
 		adv(size, data);
 	}
+}
+
+// sort according to position
+__realtime static void
+_sp_app_mod_qsort(mod_t **A, int n)
+{
+	if(n < 2)
+		return;
+
+	const mod_t *p = A[0];
+
+	int i = -1;
+	int j = n;
+
+	while(true)
+	{
+		do {
+			i += 1;
+		} while( (A[i]->pos.x < p->pos.x) || ( (A[i]->pos.x == p->pos.x) && (A[i]->pos.y < p->pos.y) ) );
+
+		do {
+			j -= 1;
+		} while( (A[j]->pos.x > p->pos.x) || ( (A[j]->pos.x == p->pos.x) && (A[j]->pos.y > p->pos.y) ) );
+
+		if(i >= j)
+			break;
+
+		mod_t *tmp = A[i];
+		A[i] = A[j];
+		A[j] = tmp;
+	}
+
+	_sp_app_mod_qsort(A, j + 1);
+	_sp_app_mod_qsort(A + j + 1, n - j - 1);
+}
+
+/*
+__non_realtime static void
+_sp_app_order_dump(sp_app_t *app)
+{
+	for(unsigned m = 0; m < app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		printf("%u: %u\n", m, mod->uid);
+	}
+	printf("\n");
+}
+*/
+
+__realtime void
+_sp_app_order(sp_app_t *app)
+{
+	//_sp_app_order_dump(app);
+	_sp_app_mod_qsort(app->mods, app->num_mods);
+	//_sp_app_order_dump(app);
+
+	_dsp_master_reorder(app);
 }

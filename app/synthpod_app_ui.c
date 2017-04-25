@@ -1181,11 +1181,13 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 				&& (value->type == app->forge.Float) )
 			{
 				mod->pos.x = ((const LV2_Atom_Float *)value)->body;
+				_sp_app_order(app);
 			}
 			else if( (prop == app->regs.synthpod.module_position_y.urid)
 				&& (value->type == app->forge.Float) )
 			{
 				mod->pos.y = ((const LV2_Atom_Float *)value)->body;
+				_sp_app_order(app);
 			}
 		}
 

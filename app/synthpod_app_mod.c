@@ -118,61 +118,6 @@ _zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
 	return ZERO_WORKER_SUCCESS;
 }
 
-static inline mod_t *
-_mod_bsearch(u_id_t p, mod_t **a, unsigned n)
-{
-	unsigned start = 0;
-	unsigned end = n;
-
-	while(start < end)
-	{
-		const unsigned mid = start + (end - start)/2;
-		mod_t *dst = a[mid];
-
-		if(p < dst->uid)
-			end = mid;
-		else if(p > dst->uid)
-			start = mid + 1;
-		else
-			return dst;
-	}
-
-	return NULL;
-}
-
-void
-_sp_app_mod_qsort(mod_t **A, int n)
-{
-	if(n < 2)
-		return;
-
-	const mod_t *p = *A;
-
-	int i = -1;
-	int j = n;
-
-	while(true)
-	{
-		do {
-			i += 1;
-		} while(A[i]->uid < p->uid);
-
-		do {
-			j -= 1;
-		} while(A[j]->uid > p->uid);
-
-		if(i >= j)
-			break;
-
-		mod_t *tmp = A[i];
-		A[i] = A[j];
-		A[j] = tmp;
-	}
-
-	_sp_app_mod_qsort(A, j + 1);
-	_sp_app_mod_qsort(A + j + 1, n - j - 1);
-}
-
 __non_realtime static char *
 _mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 {
@@ -1038,9 +983,13 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 mod_t *
 _sp_app_mod_get(sp_app_t *app, u_id_t uid)
 {
-	mod_t *mod = _mod_bsearch(uid, app->ords, app->num_mods);
-	if(mod)
-		return mod;
+	for(unsigned m = 0; m < app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		if(mod->uid == uid)
+			return mod;
+	}
 
 	return NULL;
 }
@@ -1056,13 +1005,6 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 		if(app->mods[m] == mod)
 			offset += 1;
 		app->mods[m] = app->mods[m+offset];
-	}
-	// remove mod from ->ords
-	for(unsigned m=0, offset=0; m<app->num_mods; m++)
-	{
-		if(app->ords[m] == mod)
-			offset += 1;
-		app->ords[m] = app->ords[m+offset];
 	}
 
 	// disconnect all ports

@@ -70,16 +70,12 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			if(app->num_mods >= MAX_MODS)
 				break; //TODO delete mod
 
-			// inject module into ordered list
-			app->ords[app->num_mods] = mod;
-
 			// inject module into module graph
 			app->mods[app->num_mods] = app->mods[app->num_mods-1]; // system sink
 			app->mods[app->num_mods-1] = mod;
 			app->num_mods += 1;
 
-			// sort ordered list
-			_sp_app_mod_qsort(app->ords, app->num_mods);
+			_sp_app_order(app);
 
 			//signal to UI
 			size_t size = sizeof(transmit_module_add_t)
