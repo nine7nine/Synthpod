@@ -200,7 +200,8 @@ struct _port_conn_t {
 struct _mod_conn_t {
 	mod_t *source_mod;
 	mod_t *sink_mod;
-	property_type_t type;
+	property_type_t source_type;
+	property_type_t sink_type;
 	hash_t conns;
 
 	struct nk_vec2 pos;
@@ -560,7 +561,8 @@ _mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 		mod_conn->pos = nk_vec2(
 			(source_mod->pos.x + sink_mod->pos.x)/2,
 			(source_mod->pos.y + sink_mod->pos.y)/2);
-		mod_conn->type = PROPERTY_TYPE_NONE;
+		mod_conn->source_type = PROPERTY_TYPE_NONE;
+		mod_conn->sink_type = PROPERTY_TYPE_NONE;
 		_hash_add(&handle->conns, mod_conn);
 	}
 
@@ -590,14 +592,15 @@ _mod_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn)
 static void
 _mod_conn_refresh_type(mod_conn_t *mod_conn)
 {
-	mod_conn->type = PROPERTY_TYPE_NONE;
+	mod_conn->source_type = PROPERTY_TYPE_NONE;
+	mod_conn->sink_type = PROPERTY_TYPE_NONE;
 
 	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
 	{
 		port_conn_t *port_conn = *port_conn_itr;
 
-		mod_conn->type |= port_conn->source_port->type;
-		mod_conn->type |= port_conn->sink_port->type;
+		mod_conn->source_type |= port_conn->source_port->type;
+		mod_conn->sink_type |= port_conn->sink_port->type;
 	}
 }
 
@@ -624,8 +627,8 @@ _port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
 		port_conn->source_port = source_port;
 		port_conn->sink_port = sink_port;
 
-		mod_conn->type |= source_port->type;
-		mod_conn->type |= sink_port->type;
+		mod_conn->source_type |= source_port->type;
+		mod_conn->sink_type |= sink_port->type;
 		_hash_add(&mod_conn->conns, port_conn);
 	}
 
@@ -2985,7 +2988,8 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 					mod_conn = _mod_conn_add(handle, src, mod);
 				if(mod_conn)
 				{
-					mod_conn->type |= handle->type;
+					mod_conn->source_type |= handle->type;
+					mod_conn->sink_type |= handle->type;
 
 					if(nk_input_is_key_down(in, NK_KEY_CTRL)) // automatic connection
 					{
@@ -3195,8 +3199,11 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 static void
 _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_conn, float dy)
 {
-	if(!(mod_conn->type & handle->type))
+	if(  !(mod_conn->source_type & handle->type)
+		|| !(mod_conn->sink_type & handle->type) )
+	{
 		return;
+	}
 
 	const struct nk_input *in = &ctx->input;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
