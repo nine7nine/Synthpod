@@ -377,6 +377,10 @@ struct _reg_t {
 		reg_item_t connection_source_symbol;
 		reg_item_t connection_sink_module;
 		reg_item_t connection_sink_symbol;
+
+		reg_item_t subscription_list;
+		reg_item_t subscription_module;
+		reg_item_t subscription_symbol;
 	} synthpod;
 };
 
@@ -634,6 +638,10 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.connection_source_symbol, world, map, SYNTHPOD_PREFIX"connectionSourceSymbol");
 	_register(&regs->synthpod.connection_sink_module, world, map, SYNTHPOD_PREFIX"connectionSinkModule");
 	_register(&regs->synthpod.connection_sink_symbol, world, map, SYNTHPOD_PREFIX"connectionSinkSymbol");
+
+	_register(&regs->synthpod.subscription_list, world, map, SYNTHPOD_PREFIX"subscriptionList");
+	_register(&regs->synthpod.subscription_module, world, map, SYNTHPOD_PREFIX"subscriptionModule");
+	_register(&regs->synthpod.subscription_symbol, world, map, SYNTHPOD_PREFIX"subscriptionSymbol");
 }
 
 static inline void
@@ -859,6 +867,10 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.connection_source_symbol);
 	_unregister(&regs->synthpod.connection_sink_module);
 	_unregister(&regs->synthpod.connection_sink_symbol);
+
+	_unregister(&regs->synthpod.subscription_list);
+	_unregister(&regs->synthpod.subscription_module);
+	_unregister(&regs->synthpod.subscription_symbol);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))

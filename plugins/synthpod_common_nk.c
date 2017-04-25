@@ -959,6 +959,75 @@ _patch_connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink
 	}
 }
 
+static LV2_Atom_Forge_Ref
+_patch_subscription_internal(plughandle_t *handle, port_t *source_port)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.subscription_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.subscription_symbol.urid);
+	if(ref)
+		ref = lv2_atom_forge_string(&handle->forge, source_port->symbol, strlen(source_port->symbol));
+
+	return ref;
+}
+
+static void
+_patch_subscription_add(plughandle_t *handle, port_t *source_port)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.subscription_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& _patch_subscription_internal(handle, source_port) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_subscription_remove(plughandle_t *handle, port_t *source_port)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_remove_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.subscription_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& _patch_subscription_internal(handle, source_port) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_mod_unsubscribe_all(plughandle_t *handle, mod_t *mod)
+{
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		_patch_subscription_remove(handle, port);
+	}
+}
+
+static void
+_mod_subscribe_all(plughandle_t *handle, mod_t *mod)
+{
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		_patch_subscription_add(handle, port);
+	}
+}
+
 static void
 _patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
@@ -2932,6 +3001,21 @@ _mod_num_sinks(mod_t *mod, property_type_t type)
 }
 
 static void
+_set_module_selector(plughandle_t *handle, mod_t *mod)
+{
+	if(handle->module_selector)
+		_mod_unsubscribe_all(handle, mod);
+
+	if(mod)
+		_mod_subscribe_all(handle, mod);
+
+	handle->module_selector = mod;
+	handle->preset_selector = NULL;
+	handle->preset_find_matches = true;
+	handle->port_find_matches = true;
+}
+
+static void
 _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 {
 	if(!(mod->source_type & handle->type) && !(mod->sink_type & handle->type) )
@@ -2967,10 +3051,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 	if(  is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
 	{
-		handle->module_selector = mod;
-		handle->preset_selector = NULL;
-		handle->preset_find_matches = true;
-		handle->port_find_matches = true;
+		_set_module_selector(handle, mod);
 	}
 
 	mod->hovered = is_hovering;
@@ -3921,7 +4002,7 @@ _rem_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
 		_mod_remove(handle, mod);
 
 		if(handle->module_selector == mod)
-			handle->module_selector = NULL;
+			_set_module_selector(handle, NULL);
 	}
 }
 

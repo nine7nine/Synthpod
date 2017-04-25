@@ -1329,6 +1329,73 @@ _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	}
 }
 
+//FIXME _subscription_list_clear, e.g. with patch:wildcard
+
+__realtime static void
+_subscription_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
+{
+	printf("got patch:add for subscriptionList:\n");
+
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom *src_symbol = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.synthpod.subscription_module.urid, &src_module,
+		app->regs.synthpod.subscription_symbol.urid, &src_symbol,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const char *src_sym = src_symbol
+		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+
+	if(src_urn && src_sym)
+	{
+		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+
+		if(src_port)
+		{
+			src_port->subscriptions += 1;
+
+			if(src_port->type == PORT_TYPE_CONTROL)
+			{
+				const float *buf_ptr = PORT_BASE_ALIGNED(src_port);
+				src_port->last = *buf_ptr - 0.1; // will force notification
+			}
+		}
+	}
+}
+
+__realtime static void
+_subscription_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
+{
+	printf("got patch:remove for subscriptionList:\n");
+
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom *src_symbol = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.synthpod.subscription_module.urid, &src_module,
+		app->regs.synthpod.subscription_symbol.urid, &src_symbol,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const char *src_sym = src_symbol
+		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+
+	if(src_urn && src_sym)
+	{
+		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+
+		if(src_port)
+		{
+			if(src_port->subscriptions > 0)
+				src_port->subscriptions -= 1;
+		}
+	}
+}
+
 __realtime static void
 _mod_list_add(sp_app_t *app, const LV2_Atom_URID *urid)
 {
@@ -1418,6 +1485,11 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 			{
 				_connection_list_rem(app, (const LV2_Atom_Object *)&prop->value);
 			}
+			else if( (prop->key == app->regs.synthpod.subscription_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				_subscription_list_rem(app, (const LV2_Atom_Object *)&prop->value);
+			}
 			else if( (prop->key == app->regs.synthpod.module_list.urid)
 				&& (prop->value.type == app->forge.URID) )
 			{
@@ -1433,6 +1505,11 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 				&& (prop->value.type == app->forge.Object) )
 			{
 				_connection_list_add(app, (const LV2_Atom_Object *)&prop->value);
+			}
+			else if(  (prop->key == app->regs.synthpod.subscription_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				_subscription_list_add(app, (const LV2_Atom_Object *)&prop->value);
 			}
 			else if( (prop->key == app->regs.synthpod.module_list.urid)
 				&& (prop->value.type == app->forge.URID) )
