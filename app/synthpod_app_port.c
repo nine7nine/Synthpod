@@ -16,6 +16,7 @@
  */
 
 #include <synthpod_app_private.h>
+#include <synthpod_patcher.h>
 
 #define PORT_SIZE(PORT) ((PORT)->size)
 
@@ -632,6 +633,49 @@ _port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
+__realtime static LV2_Atom_Forge_Ref
+_patch_notification_internal(sp_app_t *app, port_t *source_port,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.notification_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&app->forge, source_port->mod->urn);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.notification_symbol.urid);
+	if(ref)
+		ref = lv2_atom_forge_string(&app->forge, source_port->symbol, strlen(source_port->symbol));
+
+	if(ref)
+		ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.notification_value.urid);
+	if(ref)
+		ref = lv2_atom_forge_atom(&app->forge, size, type);
+	if(ref)
+		ref = lv2_atom_forge_write(&app->forge, body, size);
+
+	return ref;
+}
+
+__realtime static void
+_patch_notification_add(sp_app_t *app, port_t *source_port,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+	if(answer)
+	{
+		if(synthpod_patcher_add_object(&app->regs, &app->forge, &frame[0],
+				0, 0, app->regs.synthpod.notification_list.urid) //TODO subject
+			&& lv2_atom_forge_object(&app->forge, &frame[2], 0, 0)
+			&& _patch_notification_internal(app, source_port, size, type, body) )
+		{
+			synthpod_patcher_pop(&app->forge, frame, 3);
+			_sp_app_to_ui_advance_atom(app, answer);
+		}
+	}
+}
+
 __realtime static inline void
 _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
@@ -654,6 +698,9 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 			_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, &new_val);
 			_sp_app_to_ui_advance(app, size);
 		}
+
+		// for nk
+		_patch_notification_add(app, port, sizeof(float), app->forge.Float, &new_val);
 	}
 }
 
@@ -690,6 +737,8 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 				port->mod->uid, port->index, &data);
 			_sp_app_to_ui_advance(app, size);
 		}
+
+		// FIXME for nk
 	}
 }
 
@@ -713,6 +762,8 @@ _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 			port->mod->uid, port->index, atom_size, atom);
 		_sp_app_to_ui_advance(app, size);
 	}
+
+	// FIXME for nk
 }
 
 __realtime static inline void
@@ -740,6 +791,8 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 					port->mod->uid, port->index, atom_size, atom);
 				_sp_app_to_ui_advance(app, size);
 			}
+
+			// FIXME for nk
 		}
 	}
 	else // patched
@@ -771,6 +824,8 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 							port->mod->uid, port->index, atom_size, &obj->atom);
 						_sp_app_to_ui_advance(app, size);
 					}
+
+					// FIXME for nk
 				}
 			}
 		}

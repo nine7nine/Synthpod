@@ -1028,6 +1028,46 @@ _mod_subscribe_all(plughandle_t *handle, mod_t *mod)
 	}
 }
 
+static LV2_Atom_Forge_Ref
+_patch_notification_internal(plughandle_t *handle, port_t *source_port,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_symbol.urid);
+	if(ref)
+		ref = lv2_atom_forge_string(&handle->forge, source_port->symbol, strlen(source_port->symbol));
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_value.urid);
+	if(ref)
+		ref = lv2_atom_forge_atom(&handle->forge, size, type);
+	if(ref)
+		ref = lv2_atom_forge_write(&handle->forge, body, size);
+
+	return ref;
+}
+
+static void
+_patch_notification_add(plughandle_t *handle, port_t *source_port,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.notification_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& _patch_notification_internal(handle, source_port, size, type, body) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
 static void
 _patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
@@ -1175,6 +1215,9 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 				lilv_node_free(val);
 			}
+			else
+				control->val.f = 0.f;
+
 			if(min)
 			{
 				if(control->is_int)
@@ -1186,6 +1229,9 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 				lilv_node_free(min);
 			}
+			else
+				control->min.f = 0.f;
+
 			if(max)
 			{
 				if(control->is_int)
@@ -1197,6 +1243,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 				lilv_node_free(max);
 			}
+			else
+				control->max.f = 1.f;
 
 			if(control->is_int)
 				control->span.i = control->max.i - control->min.i;
@@ -2388,10 +2436,12 @@ _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 
 const char *lab = "#"; //FIXME
 
-static void
+static bool
 _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control,
 	float dy, const char *name_str)
 {
+	bool changed = false;
+
 	const float DY = nk_window_get_content_region(ctx).h
 		- 2*ctx->style.window.group_padding.y;
 	const float ratio [] = {0.7, 0.3};
@@ -2413,6 +2463,8 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 				const float inc = control->span.i / nk_widget_width(ctx);
 				int val = control->val.i;
 				nk_property_int(ctx, lab, control->min.i, &val, control->max.i, 1.f, inc);
+				if(val != control->val.i)
+					changed = true;
 				control->val.i = val;
 			}
 		}
@@ -2434,7 +2486,7 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 					{
 						control->points_ref = point;
 						control->val = point->val;
-						//FIXME
+						changed = true;
 					}
 				}
 
@@ -2451,7 +2503,10 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 			{
 				const float step = control->span.f / 100.f;
 				const float inc = control->span.f / nk_widget_width(ctx);
+				const float val = control->val.f;
 				nk_property_float(ctx, lab, control->min.f, &control->val.f, control->max.f, step, inc);
+				if(val != control->val.f)
+					changed = true;
 			}
 		}
 
@@ -2462,14 +2517,14 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 	{
 		if(_dial_int(ctx, control->min.i, &control->val.i, control->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
 	else if(control->is_bool)
 	{
 		if(_dial_bool(ctx, &control->val.i, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
 	else if(!_hash_empty(&control->points))
@@ -2480,14 +2535,18 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 	{
 		if(_dial_float(ctx, control->min.f, &control->val.f, control->max.f, 1.f, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
+
+	return changed;
 }
 
 static void
 _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 {
+	plughandle_t *handle = mod->handle;
+
 	LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
 	const char *name_str = name_node ? lilv_node_as_string(name_node) : "Unknown";
 
@@ -2502,10 +2561,15 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			case PROPERTY_TYPE_CV:
 			{
 				_expose_audio_port(ctx, mod, &port->audio, dy, name_str, true);
+				//FIXME notification
 			} break;
 			case PROPERTY_TYPE_CONTROL:
 			{
-				_expose_control_port(ctx, mod, &port->control, dy, name_str);
+				if(_expose_control_port(ctx, mod, &port->control, dy, name_str))
+				{
+					_patch_notification_add(handle, port,
+						sizeof(float), handle->forge.Float, &port->control.val.f); //FIXME handle int, bool
+				}
 			} break;
 			case PROPERTY_TYPE_ATOM:
 			{
@@ -3976,6 +4040,45 @@ _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 }
 
 static void
+_add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
+{
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom *src_symbol = NULL;
+	const LV2_Atom *src_value = NULL;
+
+	lv2_atom_object_get(obj,
+		handle->regs.synthpod.notification_module.urid, &src_module,
+		handle->regs.synthpod.notification_symbol.urid, &src_symbol,
+		handle->regs.synthpod.notification_value.urid, &src_value,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const char *src_sym = src_symbol
+		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+
+	if(src_urn && src_sym && src_value)
+	{
+		mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
+
+		if(src_mod)
+		{
+			port_t *src_port = _mod_port_find_by_symbol(src_mod, src_sym);
+
+			if(src_port)
+			{
+				if(  (src_value->type == handle->forge.Float)
+					|| (src_port->type == PROPERTY_TYPE_CONTROL) )
+				{
+					src_port->control.val.f = ((const LV2_Atom_Float *)src_value)->body;
+				}
+				//FIXME handle remaining types, e.g. audio, property
+			}
+		}
+	}
+}
+
+static void
 _add_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
 {
 	mod_t *mod = _mod_find_by_urn(handle, urn->body);
@@ -3999,10 +4102,10 @@ _rem_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
 	mod_t *mod = _mod_find_by_urn(handle, urn->body);
 	if(mod)
 	{
-		_mod_remove(handle, mod);
-
 		if(handle->module_selector == mod)
 			_set_module_selector(handle, NULL);
+
+		_mod_remove(handle, mod);
 	}
 }
 
@@ -4179,6 +4282,11 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_rem_connection(handle, (const LV2_Atom_Object *)&prop->value);
 							}
+							else if(  (prop->key == handle->regs.synthpod.notification_list.urid)
+								&& (prop->value.type == handle->forge.Object) )
+							{
+								//FIXME never reached
+							}
 							else if(  (prop->key == handle->regs.synthpod.module_list.urid)
 								&& (prop->value.type == handle->forge.URID) )
 							{
@@ -4194,6 +4302,11 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								&& (prop->value.type == handle->forge.Object) )
 							{
 								_add_connection(handle, (const LV2_Atom_Object *)&prop->value);
+							}
+							else if(  (prop->key == handle->regs.synthpod.notification_list.urid)
+								&& (prop->value.type == handle->forge.Object) )
+							{
+								_add_notification(handle, (const LV2_Atom_Object *)&prop->value);
 							}
 							else if(  (prop->key == handle->regs.synthpod.module_list.urid)
 								&& (prop->value.type == handle->forge.URID) )

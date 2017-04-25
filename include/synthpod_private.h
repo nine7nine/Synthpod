@@ -381,6 +381,11 @@ struct _reg_t {
 		reg_item_t subscription_list;
 		reg_item_t subscription_module;
 		reg_item_t subscription_symbol;
+
+		reg_item_t notification_list;
+		reg_item_t notification_module;
+		reg_item_t notification_symbol;
+		reg_item_t notification_value;
 	} synthpod;
 };
 
@@ -642,6 +647,11 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.subscription_list, world, map, SYNTHPOD_PREFIX"subscriptionList");
 	_register(&regs->synthpod.subscription_module, world, map, SYNTHPOD_PREFIX"subscriptionModule");
 	_register(&regs->synthpod.subscription_symbol, world, map, SYNTHPOD_PREFIX"subscriptionSymbol");
+
+	_register(&regs->synthpod.notification_list, world, map, SYNTHPOD_PREFIX"notificationList");
+	_register(&regs->synthpod.notification_module, world, map, SYNTHPOD_PREFIX"notificationModule");
+	_register(&regs->synthpod.notification_symbol, world, map, SYNTHPOD_PREFIX"notificationSymbol");
+	_register(&regs->synthpod.notification_value, world, map, SYNTHPOD_PREFIX"notificationValue");
 }
 
 static inline void
@@ -871,6 +881,11 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.subscription_list);
 	_unregister(&regs->synthpod.subscription_module);
 	_unregister(&regs->synthpod.subscription_symbol);
+
+	_unregister(&regs->synthpod.notification_list);
+	_unregister(&regs->synthpod.notification_module);
+	_unregister(&regs->synthpod.notification_symbol);
+	_unregister(&regs->synthpod.notification_value);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))

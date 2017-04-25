@@ -1397,6 +1397,51 @@ _subscription_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 }
 
 __realtime static void
+_notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
+{
+	printf("got patch:add for notificationList:\n");
+
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom *src_symbol = NULL;
+	const LV2_Atom *src_value = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.synthpod.notification_module.urid, &src_module,
+		app->regs.synthpod.notification_symbol.urid, &src_symbol,
+		app->regs.synthpod.notification_value.urid, &src_value,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const char *src_sym = src_symbol
+		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+
+	if(src_urn && src_sym && src_value)
+	{
+		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+
+		if(src_port)
+		{
+			if(src_value->type == app->forge.Float)
+			{
+				const float val = ((const LV2_Atom_Float *)src_value)->body;
+				float *buf_ptr = PORT_BASE_ALIGNED(src_port);
+
+				if(src_port->type == PORT_TYPE_CONTROL)
+				{
+					*buf_ptr = val;
+				}
+				else if(src_port->type == PORT_TYPE_CV)
+				{
+					for(unsigned i = 0; i < app->driver->max_block_size; i++)
+						buf_ptr[i] = val;
+				}
+			}
+		}
+	}
+}
+
+__realtime static void
 _mod_list_add(sp_app_t *app, const LV2_Atom_URID *urid)
 {
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urid->body);
@@ -1490,6 +1535,11 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 			{
 				_subscription_list_rem(app, (const LV2_Atom_Object *)&prop->value);
 			}
+			else if( (prop->key == app->regs.synthpod.notification_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				//FIXME never reached
+			}
 			else if( (prop->key == app->regs.synthpod.module_list.urid)
 				&& (prop->value.type == app->forge.URID) )
 			{
@@ -1510,6 +1560,11 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 				&& (prop->value.type == app->forge.Object) )
 			{
 				_subscription_list_add(app, (const LV2_Atom_Object *)&prop->value);
+			}
+			else if(  (prop->key == app->regs.synthpod.notification_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				_notification_list_add(app, (const LV2_Atom_Object *)&prop->value);
 			}
 			else if( (prop->key == app->regs.synthpod.module_list.urid)
 				&& (prop->value.type == app->forge.URID) )
