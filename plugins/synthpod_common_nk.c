@@ -2889,6 +2889,48 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	}
 }
 
+static inline unsigned
+_mod_num_sources(mod_t *mod, property_type_t type)
+{
+	if(mod->source_type & type)
+	{
+		unsigned num = 0;
+
+		HASH_FOREACH(&mod->sources, port_itr)
+		{
+			port_t *port = *port_itr;
+
+			if(port->type & type)
+				num += 1;
+		}
+
+		return num;
+	}
+
+	return 0;
+}
+
+static inline unsigned
+_mod_num_sinks(mod_t *mod, property_type_t type)
+{
+	if(mod->sink_type & type)
+	{
+		unsigned num = 0;
+
+		HASH_FOREACH(&mod->sinks, port_itr)
+		{
+			port_t *port = *port_itr;
+
+			if(port->type & type)
+				num += 1;
+		}
+
+		return num;
+	}
+
+	return 0;
+}
+
 static void
 _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 {
@@ -2948,14 +2990,58 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 		nk_stroke_rect(canvas, body, style->rounding, style->border,
 			is_hilighted ? hilight_color : style->border_color);
 
-		const char *mod_name = lilv_node_as_string(name_node);
-		const size_t mod_name_len = strlen(mod_name);
-		const float fw = font->width(font->userdata, font->height, mod_name, mod_name_len);
 		const float fh = font->height;
-		body.x += (body.w - fw)/2;
-		body.y += (body.h - fh)/2;
-		nk_draw_text(canvas, body, mod_name, mod_name_len, font,
-			style->normal.data.color, style->text_normal);
+		const float fy = body.y + (body.h - fh)/2;
+		{
+			const char *mod_name = lilv_node_as_string(name_node);
+			const size_t mod_name_len = strlen(mod_name);
+			const float fw = font->width(font->userdata, font->height, mod_name, mod_name_len);
+			const struct nk_rect body2 = {
+				.x = body.x + (body.w - fw)/2,
+				.y = fy,
+				.w = fw,
+				.h = fh
+			};
+			nk_draw_text(canvas, body2, mod_name, mod_name_len, font,
+				style->normal.data.color, style->text_normal);
+		}
+
+		const unsigned nsources = _mod_num_sources(mod, handle->type);
+		const unsigned nsinks = _mod_num_sinks(mod, handle->type);
+
+		if(nsources)
+		{
+			char nums [32];
+			snprintf(nums, 32, "%u", nsources);
+
+			const size_t nums_len = strlen(nums);
+			const float fw = font->width(font->userdata, font->height, nums, nums_len);
+			const struct nk_rect body2 = {
+				.x = body.x + body.w - fw - 4.f,
+				.y = fy,
+				.w = fw,
+				.h = fh
+			};
+			nk_draw_text(canvas, body2, nums, nums_len, font,
+				style->normal.data.color, style->text_normal);
+		}
+
+		if(nsinks)
+		{
+			char nums [32];
+			snprintf(nums, 32, "%u", nsinks);
+
+			const size_t nums_len = strlen(nums);
+			const float fw = font->width(font->userdata, font->height, nums, nums_len);
+			const struct nk_rect body2 = {
+				.x = body.x + 4.f,
+				.y = fy,
+				.w = fw,
+				.h = fh
+			};
+			nk_draw_text(canvas, body2, nums, nums_len, font,
+				style->normal.data.color, style->text_normal);
+		}
 	}
 
 	_mod_connectors(handle, ctx, mod, nk_vec2(bounds.w, bounds.h), is_hilighted);
@@ -2977,27 +3063,8 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 	if(!src || !snk)
 		return;
 
-	int nx = 0;
-	HASH_FOREACH(&mod_conn->source_mod->sources, source_port_itr)
-	{
-		port_t *source_port = *source_port_itr;
-
-		if(!(source_port->type & handle->type))
-			continue;
-
-		nx += 1;
-	}
-
-	int ny = 0;
-	HASH_FOREACH(&mod_conn->sink_mod->sinks, sink_port_itr)
-	{
-		port_t *sink_port = *sink_port_itr;
-
-		if(!(sink_port->type & handle->type))
-			continue;
-
-		ny += 1;
-	}
+	const unsigned nx = _mod_num_sources(mod_conn->source_mod, handle->type);
+	const unsigned ny = _mod_num_sinks(mod_conn->sink_mod, handle->type);
 
 	const float ps = 16.f * handle->scale;
 	const float pw = nx * ps;
