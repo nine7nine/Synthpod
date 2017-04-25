@@ -310,6 +310,8 @@ struct _plughandle_t {
 	} linking;
 
 	property_type_t type;
+
+	bool done;
 };
 
 static const char *grid_labels [SELECTOR_GRID_MAX] = {
@@ -1430,7 +1432,8 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-Q");
-			nk_button_label(ctx, "Quit");
+			if(nk_button_label(ctx, "Quit"))
+				handle->done = true;
 		}
 		nk_menubar_end(ctx);
 	}
@@ -4062,7 +4065,10 @@ _idle(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
 
-	return nk_pugl_process_events(&handle->win);
+	if(nk_pugl_process_events(&handle->win) || handle->done)
+		return 1;
+
+	return 0;
 }
 
 static const LV2UI_Idle_Interface idle_ext = {
