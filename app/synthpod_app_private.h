@@ -444,6 +444,22 @@ _sp_app_to_ui_advance(sp_app_t *app, size_t written)
 	if(app->driver->to_ui_advance)
 		app->driver->to_ui_advance(written, app->data);
 }
+
+static inline LV2_Atom *
+_sp_app_to_ui_request_atom(sp_app_t *app)
+{
+	size_t maximum;
+	LV2_Atom *atom = _sp_app_to_ui_request_max(app, 0, &maximum);
+	if(atom)
+		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)atom, maximum);
+	return atom;	
+}
+
+static inline void
+_sp_app_to_ui_advance_atom(sp_app_t *app, const LV2_Atom *atom)
+{
+	_sp_app_to_ui_advance(app, lv2_atom_total_size(atom));
+}
 	
 void
 sp_app_from_ui_fill(sp_app_t *app);

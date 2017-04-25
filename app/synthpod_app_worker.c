@@ -93,15 +93,14 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			}
 
 			//signal to NK
-			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
 			if(answer)
 			{
-				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
 				LV2_Atom_Forge_Ref ref = synthpod_patcher_add(&app->regs, &app->forge,
 					0, 0, app->regs.synthpod.module_list.urid, //TODO subject
 					sizeof(uint32_t), app->forge.URID, &mod->urn);
 				if(ref)
-					_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+					_sp_app_to_ui_advance_atom(app, answer);
 			}
 
 			break;
@@ -111,15 +110,15 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			const LV2_URID urn = job->urn;
 
 			// signal to NK
-			LV2_Atom *answer  = _sp_app_to_ui_request(app, 1024); //FIXME
+			size_t maximum;
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
 			if(answer)
 			{
-				lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)answer, 1024);
 				LV2_Atom_Forge_Ref ref = synthpod_patcher_remove(&app->regs, &app->forge,
 					0, 0, app->regs.synthpod.module_list.urid, //TODO subject
 				 	sizeof(uint32_t), app->forge.URID, &urn);
 				if(ref)
-					_sp_app_to_ui_advance(app, lv2_atom_total_size(answer));
+					_sp_app_to_ui_advance_atom(app, answer);
 			}
 
 			break;
