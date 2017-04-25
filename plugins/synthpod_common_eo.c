@@ -70,7 +70,7 @@ _content_del(void *data, Evas *e, Evas_Object *obj, void *event_info)
 }
 
 static void *
-_to_app_request(size_t size, void *data)
+_to_app_request(size_t minimum, size_t *maximum, void *data)
 {
 	plughandle_t *handle = data;
 
@@ -78,27 +78,34 @@ _to_app_request(size_t size, void *data)
 	if(handle->zero_writer)
 	{
 		return handle->zero_writer->request(handle->zero_writer->handle,
-			handle->control_port, size, handle->uri.event_transfer);
+			handle->control_port, minimum, maximum, handle->uri.event_transfer);
 	}
 
-	return size <= CHUNK_SIZE
-		? handle->buf.app
-		: NULL;
+	if(minimum <= CHUNK_SIZE)
+	{
+		if(maximum)
+			*maximum = CHUNK_SIZE;
+		return handle->buf.app;
+	}
+
+	if(maximum)
+		*maximum = 0;
+	return NULL;
 }
 static void
-_to_app_advance(size_t size, void *data)
+_to_app_advance(size_t written, void *data)
 {
 	plughandle_t *handle = data;
 
 	// use zero writer if available
 	if(handle->zero_writer)
 	{
-		handle->zero_writer->advance(handle->zero_writer->handle, size);
+		handle->zero_writer->advance(handle->zero_writer->handle, written);
 		return;
 	}
 	
 	handle->write_function(handle->controller, handle->control_port,
-		size, handle->uri.event_transfer, handle->buf.app);
+		written, handle->uri.event_transfer, handle->buf.app);
 }
 
 static Evas_Object *

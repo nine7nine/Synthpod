@@ -54,8 +54,8 @@ typedef enum _sp_ui_features_t sp_ui_features_t;
 typedef struct _sp_ui_t sp_ui_t;
 typedef struct _sp_ui_driver_t sp_ui_driver_t;
 
-typedef void *(*sp_to_request_t)(size_t size, void *data);
-typedef void (*sp_to_advance_t)(size_t size, void *data);
+typedef void *(*sp_to_request_t)(size_t minimum, size_t *maximum, void *data);
+typedef void (*sp_to_advance_t)(size_t written, void *data);
 
 typedef void (*sp_close_t)(void *data);
 

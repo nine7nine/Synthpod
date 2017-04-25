@@ -41,7 +41,7 @@ typedef void *Zero_Worker_Handle;
 
 // non-rt thread
 typedef void *(*Zero_Worker_Request_Function)(Zero_Worker_Handle handle,
-	uint32_t size);
+	uint32_t minimum, size_t *maximum);
 typedef Zero_Worker_Status (*Zero_Worker_Advance_Function)(Zero_Worker_Handle handle,
 	uint32_t written);
 

@@ -234,68 +234,70 @@ static const Zero_Worker_Interface zero_iface = {
 };
 
 __realtime static void *
-_to_ui_request(size_t size, void *data)
+_to_ui_request(size_t minimum, size_t *maximum, void *data)
 {
 	plughandle_t *handle = data;
 
+	if(maximum)
+		*maximum = CHUNK_SIZE;
 	return handle->buf;
 }
 __realtime static void
-_to_ui_advance(size_t size, void *data)
+_to_ui_advance(size_t written, void *data)
 {
 	plughandle_t *handle = data;
 	LV2_Atom_Forge *forge = &handle->forge.notify;
 	LV2_Atom_Forge_Ref *ref = &handle->ref.notify;
 
-	//printf("_to_ui_advance: %zu\n", size);
+	//printf("_to_ui_advance: %zu\n", written);
 
-	if(forge->offset + size > forge->size)
+	if(forge->offset + written > forge->size)
 		return; // buffer overflow
 
 	if(*ref)
 		*ref = lv2_atom_forge_frame_time(forge, 0);
 	if(*ref)
-		*ref = lv2_atom_forge_raw(forge, handle->buf, size);
+		*ref = lv2_atom_forge_raw(forge, handle->buf, written);
 	if(*ref)
-		lv2_atom_forge_pad(forge, size);
+		lv2_atom_forge_pad(forge, written);
 }
 
 __realtime static void *
-_to_worker_request(size_t size, void *data)
+_to_worker_request(size_t minimum, size_t *maximum, void *data)
 {
 	plughandle_t *handle = data;
 
-	return varchunk_write_request(handle->app_to_worker, size);
+	return varchunk_write_request_max(handle->app_to_worker, minimum, maximum);
 }
 __realtime static void
-_to_worker_advance(size_t size, void *data)
+_to_worker_advance(size_t written, void *data)
 {
 	plughandle_t *handle = data;
 
-	varchunk_write_advance(handle->app_to_worker, size);
+	varchunk_write_advance(handle->app_to_worker, written);
 	handle->trigger_worker = true;
 }
 
 __non_realtime static void *
-_to_app_request(size_t size, void *data)
+_to_app_request(size_t minimum, size_t *maximum, void *data)
 {
 	plughandle_t *handle = data;
 
 	void *ptr;
 	do
 	{
-		ptr = varchunk_write_request(handle->app_from_worker, size);
+		ptr = varchunk_write_request_max(handle->app_from_worker, minimum, maximum);
 	}
 	while(!ptr); // wait until there is enough space
 
 	return ptr;
 }
 __non_realtime static void
-_to_app_advance(size_t size, void *data)
+_to_app_advance(size_t written, void *data)
 {
 	plughandle_t *handle = data;	
 
-	varchunk_write_advance(handle->app_from_worker, size);
+	varchunk_write_advance(handle->app_from_worker, written);
 }
 
 static LV2_Handle
@@ -650,7 +652,7 @@ _process_post(plughandle_t *handle)
 		if(handle->zero_sched)
 		{
 			int32_t *i;
-			if((i = handle->zero_sched->request(handle->zero_sched->handle, sizeof(int32_t))))
+			if((i = handle->zero_sched->request(handle->zero_sched->handle, sizeof(int32_t), NULL)))
 			{
 				*i = 1;
 				handle->zero_sched->advance(handle->zero_sched->handle, sizeof(int32_t));

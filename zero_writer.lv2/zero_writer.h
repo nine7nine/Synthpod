@@ -35,7 +35,7 @@ typedef void *Zero_Writer_Handle;
 
 // ui-thread
 typedef void *(*Zero_Writer_Request_Function)(Zero_Writer_Handle handle,
-	uint32_t index, uint32_t size, uint32_t protocol);
+	uint32_t index, uint32_t minimum, size_t *maximum, uint32_t protocol);
 typedef void (*Zero_Writer_Advance_Function)(Zero_Writer_Handle handle,
 	uint32_t written);
 

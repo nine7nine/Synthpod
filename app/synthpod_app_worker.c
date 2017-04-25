@@ -19,15 +19,17 @@
 #include <synthpod_patcher.h>
 
 static inline void *
-__sp_worker_to_app_request(sp_app_t *app, size_t size)
+__sp_worker_to_app_request(sp_app_t *app, size_t minimum, size_t *maximum)
 {
 	if(app->driver->to_app_request)
-		return app->driver->to_app_request(size, app->data);
+		return app->driver->to_app_request(minimum, maximum, app->data);
 	else
 		return NULL;
 }
-#define _sp_worker_to_app_request(APP, SIZE) \
-	ASSUME_ALIGNED(__sp_worker_to_app_request((APP), (SIZE)))
+#define _sp_worker_to_app_request(APP, MINIMUM) \
+	ASSUME_ALIGNED(__sp_worker_to_app_request((APP), (MINIMUM), NULL))
+#define _sp_worker_to_app_request_max(APP, MINIMUM, MAXIMUM) \
+	ASSUME_ALIGNED(__sp_worker_to_app_request((APP), (MINIMUM), (MAXIMUM)))
 
 static inline void
 _sp_worker_to_app_advance(sp_app_t *app, size_t size)

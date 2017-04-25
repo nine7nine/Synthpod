@@ -98,12 +98,12 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 }
 
 __realtime static void *
-_zero_sched_request(Zero_Worker_Handle handle, uint32_t size)
+_zero_sched_request(Zero_Worker_Handle handle, uint32_t minimum, size_t *maximum)
 {
 	mod_t *mod = handle;
 	mod_worker_t *mod_worker = &mod->mod_worker;
 
-	return varchunk_write_request(mod_worker->app_to_worker, size);
+	return varchunk_write_request_max(mod_worker->app_to_worker, minimum, maximum);
 }
 
 __realtime static Zero_Worker_Status
@@ -521,12 +521,12 @@ _sp_worker_respond_sync(LV2_Worker_Respond_Handle handle, uint32_t size, const v
 }
 
 __non_realtime static void *
-_sp_zero_request(Zero_Worker_Handle handle, uint32_t size)
+_sp_zero_request(Zero_Worker_Handle handle, uint32_t minimum, size_t *maximum)
 {
 	mod_t *mod = handle;
 	mod_worker_t *mod_worker = &mod->mod_worker;
 
-	return varchunk_write_request(mod_worker->app_from_worker, size);
+	return varchunk_write_request_max(mod_worker->app_from_worker, minimum, maximum); 
 }
 
 __non_realtime static Zero_Worker_Status

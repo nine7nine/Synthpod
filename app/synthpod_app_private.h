@@ -426,21 +426,23 @@ extern const port_driver_t ev_port_driver;
  * UI
  */
 static inline void *
-__sp_app_to_ui_request(sp_app_t *app, size_t size)
+__sp_app_to_ui_request(sp_app_t *app, size_t minimum, size_t *maximum)
 {
 	if(app->driver->to_ui_request)
-		return app->driver->to_ui_request(size, app->data);
+		return app->driver->to_ui_request(minimum, maximum, app->data);
 	else
 		return NULL;
 }
-#define _sp_app_to_ui_request(APP, SIZE) \
-	ASSUME_ALIGNED(__sp_app_to_ui_request((APP), (SIZE)))
+#define _sp_app_to_ui_request(APP, MINIMUM) \
+	ASSUME_ALIGNED(__sp_app_to_ui_request((APP), (MINIMUM), NULL))
+#define _sp_app_to_ui_request_max(APP, MINIMUM, MAXIMUM) \
+	ASSUME_ALIGNED(__sp_app_to_ui_request((APP), (MINIMUM), (MAXIMUM)))
 
 static inline void
-_sp_app_to_ui_advance(sp_app_t *app, size_t size)
+_sp_app_to_ui_advance(sp_app_t *app, size_t written)
 {
 	if(app->driver->to_ui_advance)
-		app->driver->to_ui_advance(size, app->data);
+		app->driver->to_ui_advance(written, app->data);
 }
 	
 void
@@ -451,21 +453,23 @@ sp_app_from_ui_fill(sp_app_t *app);
  */
 
 static inline void *
-__sp_app_to_worker_request(sp_app_t *app, size_t size)
+__sp_app_to_worker_request(sp_app_t *app, size_t minimum, size_t *maximum)
 {
 	if(app->driver->to_worker_request)
-		return app->driver->to_worker_request(size, app->data);
+		return app->driver->to_worker_request(minimum, maximum, app->data);
 	else
 		return NULL;
 }
-#define _sp_app_to_worker_request(APP, SIZE) \
-	ASSUME_ALIGNED(__sp_app_to_worker_request((APP), (SIZE)))
+#define _sp_app_to_worker_request(APP, MINIMUM) \
+	ASSUME_ALIGNED(__sp_app_to_worker_request((APP), (MINIMUM), NULL))
+#define _sp_app_to_worker_request_max(APP, MINIMUM, MAXIMUM) \
+	ASSUME_ALIGNED(__sp_app_to_worker_request((APP), (MINIMUM), (MAXIMUM)))
 
 static inline void
-_sp_app_to_worker_advance(sp_app_t *app, size_t size)
+_sp_app_to_worker_advance(sp_app_t *app, size_t written)
 {
 	if(app->driver->to_worker_advance)
-		app->driver->to_worker_advance(size, app->data);
+		app->driver->to_worker_advance(written, app->data);
 }
 
 /*

@@ -41,8 +41,8 @@ typedef struct _sp_app_system_source_t sp_app_system_source_t;
 typedef struct _sp_app_system_sink_t sp_app_system_sink_t;
 typedef struct _sp_app_driver_t sp_app_driver_t;
 
-typedef void *(*sp_to_request_t)(size_t size, void *data);
-typedef void (*sp_to_advance_t)(size_t size, void *data);
+typedef void *(*sp_to_request_t)(size_t minimum, size_t *maximum, void *data);
+typedef void (*sp_to_advance_t)(size_t written, void *data);
 
 typedef void *(*sp_system_port_add)(void *data, system_port_t type,
 	const char *short_name, const char *pretty_name, const char *designation,

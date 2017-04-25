@@ -850,7 +850,7 @@ sp_app_bundle_load(sp_app_t *app, const char *bundle_path,
 	// signal to app
 	size_t size = sizeof(transmit_bundle_load_t)
 		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
-	transmit_bundle_load_t *trans = req(size, data);
+	transmit_bundle_load_t *trans = req(size, NULL, data);
 	if(trans)
 	{
 		_sp_transmit_bundle_load_fill(&app->regs, &app->forge, trans, size,
@@ -870,7 +870,7 @@ sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
 	// signal to app
 	size_t size = sizeof(transmit_bundle_save_t)
 		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
-	transmit_bundle_save_t *trans = req(size, data);
+	transmit_bundle_save_t *trans = req(size, NULL, data);
 	if(trans)
 	{
 		_sp_transmit_bundle_save_fill(&app->regs, &app->forge, trans, size,

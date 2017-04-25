@@ -451,22 +451,24 @@ struct _midi_controller_t {
 };
 
 static inline void *
-__sp_ui_to_app_request(sp_ui_t *ui, size_t size)
+__sp_ui_to_app_request(sp_ui_t *ui, size_t minimum, size_t *maximum)
 {
 	if(ui->driver->to_app_request && !ui->dirty)
-		return ui->driver->to_app_request(size, ui->data);
+		return ui->driver->to_app_request(minimum, maximum, ui->data);
 	else
 		return NULL;
 }
 
-#define _sp_ui_to_app_request(APP, SIZE) \
-	ASSUME_ALIGNED(__sp_ui_to_app_request((APP), (SIZE)))
+#define _sp_ui_to_app_request(APP, MINIMUM) \
+	ASSUME_ALIGNED(__sp_ui_to_app_request((APP), (MINIMUM), NULL))
+#define _sp_ui_to_app_request_max(APP, MINIMUM, MAXIMUM) \
+	ASSUME_ALIGNED(__sp_ui_to_app_request((APP), (MINIMUM), (MAXIMUM)))
 
 static inline void
-_sp_ui_to_app_advance(sp_ui_t *ui, size_t size)
+_sp_ui_to_app_advance(sp_ui_t *ui, size_t written)
 {
 	if(ui->driver->to_app_advance && !ui->dirty)
-		ui->driver->to_app_advance(size, ui->data);
+		ui->driver->to_app_advance(written, ui->data);
 }
 
 static int

@@ -54,14 +54,14 @@ _close_request(void *data)
 }
 
 __realtime static void *
-_app_to_ui_request(size_t size, void *data)
+_app_to_ui_request(size_t minimum, size_t *maximum, void *data)
 {
 	bin_t *bin = data;
 
-	return varchunk_write_request(bin->app_to_ui, size);
+	return varchunk_write_request_max(bin->app_to_ui, minimum, maximum);
 }
 __realtime static void
-_app_to_ui_advance(size_t size, void *data)
+_app_to_ui_advance(size_t written, void *data)
 {
 	bin_t *bin = data;
 
@@ -80,61 +80,61 @@ _app_to_ui_advance(size_t size, void *data)
 	}
 	*/
 
-	varchunk_write_advance(bin->app_to_ui, size);
+	varchunk_write_advance(bin->app_to_ui, written);
 	sandbox_master_signal(bin->sb);
 }
 
 __realtime static void *
-_ui_to_app_request(size_t size, void *data)
+_ui_to_app_request(size_t minimum, size_t *maximum, void *data)
 {
 	bin_t *bin = data;
 
-	return varchunk_write_request(bin->app_from_ui, size);
+	return varchunk_write_request_max(bin->app_from_ui, minimum, maximum);
 }
 __realtime static void
-_ui_to_app_advance(size_t size, void *data)
+_ui_to_app_advance(size_t written, void *data)
 {
 	bin_t *bin = data;
 
-	varchunk_write_advance(bin->app_from_ui, size);
+	varchunk_write_advance(bin->app_from_ui, written);
 }
 
 __realtime static void *
-_app_to_worker_request(size_t size, void *data)
+_app_to_worker_request(size_t minimum, size_t *maximum, void *data)
 {
 	bin_t *bin = data;
 
-	return varchunk_write_request(bin->app_to_worker, size);
+	return varchunk_write_request_max(bin->app_to_worker, minimum, maximum);
 }
 __realtime static void
-_app_to_worker_advance(size_t size, void *data)
+_app_to_worker_advance(size_t written, void *data)
 {
 	bin_t *bin = data;
 
-	varchunk_write_advance(bin->app_to_worker, size);
+	varchunk_write_advance(bin->app_to_worker, written);
 	sandbox_master_signal(bin->sb);
 }
 
 __non_realtime static void *
-_worker_to_app_request(size_t size, void *data)
+_worker_to_app_request(size_t minimum, size_t *maximum, void *data)
 {
 	bin_t *bin = data;
 
 	void *ptr;
 	do
 	{
-		ptr = varchunk_write_request(bin->app_from_worker, size);
+		ptr = varchunk_write_request_max(bin->app_from_worker, minimum, maximum);
 	}
 	while(!ptr); // wait until there is enough space
 
 	return ptr;
 }
 __non_realtime static void
-_worker_to_app_advance(size_t size, void *data)
+_worker_to_app_advance(size_t written, void *data)
 {
 	bin_t *bin = data;
 
-	varchunk_write_advance(bin->app_from_worker, size);
+	varchunk_write_advance(bin->app_from_worker, written);
 }
 
 static inline void
@@ -221,7 +221,7 @@ _sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
 	if(index == CONTROL_PORT_INDEX) // control for synthpod:stereo
 	{
 		void *dst;
-		if((dst = _ui_to_app_request(size, bin)))
+		if((dst = _ui_to_app_request(size, NULL, bin)))
 		{
 			memcpy(dst, buf, size);
 

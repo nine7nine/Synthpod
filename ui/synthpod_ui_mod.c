@@ -126,14 +126,14 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 }
 
 static void * //XXX check with _ui_write_function
-_zero_writer_request(Zero_Writer_Handle handle, uint32_t port, uint32_t size,
-	uint32_t protocol)
+_zero_writer_request(Zero_Writer_Handle handle, uint32_t port, uint32_t minimum,
+	size_t *maximum, uint32_t protocol)
 {
 	mod_t *mod = handle;
 	sp_ui_t *ui = mod->ui;
 	port_t *tar = &mod->ports[port];
 
-	//printf("_zero_writer_request: %u\n", size);
+	//printf("_zero_writer_request: %u\n", minimum);
 
 	// ignore output ports
 	if(tar->direction != PORT_DIRECTION_INPUT)
@@ -148,25 +148,31 @@ _zero_writer_request(Zero_Writer_Handle handle, uint32_t port, uint32_t size,
 
 	if(protocol == ui->regs.port.atom_transfer.urid)
 	{
-		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(minimum);
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
+			if(maximum)
+				*maximum = minimum;
 			return _sp_transfer_atom_fill(&ui->regs, &ui->forge, trans, mod->uid,
-				tar->index, size, NULL);
+				tar->index, minimum, NULL);
 		}
 	}
 	else if(protocol == ui->regs.port.event_transfer.urid)
 	{
-		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(size);
+		size_t len = sizeof(transfer_atom_t) + lv2_atom_pad_size(minimum);
 		transfer_atom_t *trans = _sp_ui_to_app_request(ui, len);
 		if(trans)
 		{
+			if(maximum)
+				*maximum = minimum;
 			return _sp_transfer_event_fill(&ui->regs, &ui->forge, trans, mod->uid,
-				tar->index, size, NULL);
+				tar->index, minimum, NULL);
 		}
 	}
 
+	if(maximum)
+		*maximum = 0;
 	return NULL; // protocol not supported 
 }
 
