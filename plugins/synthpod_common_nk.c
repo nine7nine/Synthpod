@@ -150,6 +150,7 @@ struct _port_t {
 struct _param_t {
 	const LilvNode *param;
 	bool is_readonly;
+	LV2_URID property;
 	LV2_URID range;
 	param_union_t min;
 	param_union_t max;
@@ -667,6 +668,20 @@ _mod_port_find_by_symbol(mod_t *mod, const char *symbol)
 	return NULL;
 }
 
+static param_t *
+_mod_param_find_by_property(mod_t *mod, LV2_URID property)
+{
+	HASH_FOREACH(&mod->params, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		if(param->property == property)
+			return param;
+	}
+
+	return NULL;
+}
+
 static mod_t *
 _mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
 {
@@ -693,6 +708,7 @@ _register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter,
 	param->param = parameter;
 	param->is_readonly = is_readonly;
 
+	param->property = handle->map->map(handle->map->handle, lilv_node_as_uri(parameter));
 	param->range = 0;
 	LilvNode *range = lilv_world_get(handle->world, parameter, handle->node.rdfs_range, NULL);
 	if(range)
@@ -709,14 +725,14 @@ _register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter,
 	{
 		if(param->range == handle->forge.Int)
 			param->min.i = _node_as_int(min, 0);
-		else if(param->range == handle->forge.Long)
-			param->min.i = _node_as_int(min, 0);
 		else if(param->range == handle->forge.Bool)
 			param->min.i = _node_as_bool(min, false);
+		else if(param->range == handle->forge.Long)
+			param->min.h = _node_as_int(min, 0);
 		else if(param->range == handle->forge.Float)
-			param->min.i = _node_as_float(min, 0.f);
+			param->min.f = _node_as_float(min, 0.f);
 		else if(param->range == handle->forge.Double)
-			param->min.i = _node_as_float(min, 0.f);
+			param->min.d = _node_as_float(min, 0.f);
 		//FIXME
 		lilv_node_free(min);
 	}
@@ -726,14 +742,14 @@ _register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter,
 	{
 		if(param->range == handle->forge.Int)
 			param->max.i = _node_as_int(max, 1);
-		else if(param->range == handle->forge.Long)
-			param->min.i = _node_as_int(min, 1);
 		else if(param->range == handle->forge.Bool)
-			param->min.i = _node_as_bool(min, true);
+			param->max.i = _node_as_bool(max, true);
+		else if(param->range == handle->forge.Long)
+			param->max.h = _node_as_int(max, 1);
 		else if(param->range == handle->forge.Float)
-			param->min.i = _node_as_float(min, 1.f);
+			param->max.f = _node_as_float(max, 1.f);
 		else if(param->range == handle->forge.Double)
-			param->min.i = _node_as_float(min, 1.f);
+			param->max.d = _node_as_float(max, 1.f);
 		//FIXME
 		lilv_node_free(max);
 	}
@@ -743,24 +759,24 @@ _register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter,
 	{
 		if(param->range == handle->forge.Int)
 			param->val.i = _node_as_int(val, 0);
-		else if(param->range == handle->forge.Long)
-			param->min.i = _node_as_int(min, 0);
 		else if(param->range == handle->forge.Bool)
-			param->min.i = _node_as_bool(min, false);
+			param->val.i = _node_as_bool(min, false);
+		else if(param->range == handle->forge.Long)
+			param->val.h = _node_as_int(min, 0);
 		else if(param->range == handle->forge.Float)
-			param->min.i = _node_as_float(min, 0.f);
+			param->val.f = _node_as_float(min, 0.f);
 		else if(param->range == handle->forge.Double)
-			param->min.i = _node_as_float(min, 0.f);
+			param->val.d = _node_as_float(min, 0.f);
 		//FIXME
 		lilv_node_free(val);
 	}
 
 	if(param->range == handle->forge.Int)
 		param->span.i = param->max.i - param->min.i;
-	else if(param->range == handle->forge.Long)
-		param->span.h = param->max.h - param->min.h;
 	else if(param->range == handle->forge.Bool)
 		param->span.i = param->max.i - param->min.i;
+	else if(param->range == handle->forge.Long)
+		param->span.h = param->max.h - param->min.h;
 	else if(param->range == handle->forge.Float)
 		param->span.f = param->max.f - param->min.f;
 	else if(param->range == handle->forge.Double)
@@ -1068,6 +1084,57 @@ _patch_notification_add(plughandle_t *handle, port_t *source_port,
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
+	}
+}
+
+static LV2_Atom_Forge_Ref
+_patch_notification_patch_set_internal(plughandle_t *handle, port_t *source_port,
+	LV2_URID subject, int32_t seqn, LV2_URID property,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_symbol.urid);
+	if(ref)
+		ref = lv2_atom_forge_string(&handle->forge, source_port->symbol, strlen(source_port->symbol));
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_value.urid);
+	if(ref)
+		ref = synthpod_patcher_set(&handle->regs, &handle->forge,
+			subject, seqn, property, size, type, body);
+
+	return ref;
+}
+
+static void
+_patch_notification_add_patch_set(plughandle_t *handle, mod_t *mod,
+	LV2_URID proto, LV2_URID subject, int32_t seqn, LV2_URID property,
+	uint32_t size, LV2_URID type, const void *body)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		if(!(port->type & PROPERTY_TYPE_PATCH))
+			continue;
+
+		//FIXME set patch:destination to handle->regs.core.plugin.urid to omit feedback
+		if(  _message_request(handle)
+			&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+				0, 0, handle->regs.synthpod.notification_list.urid) //TODO subject
+			&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, proto)
+			&& _patch_notification_patch_set_internal(handle, port,
+				subject, seqn, property, size, type, body) )
+		{
+			synthpod_patcher_pop(&handle->forge, frame, 3);
+			_message_write(handle);
+		}
 	}
 }
 
@@ -2582,10 +2649,6 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			{
 				_expose_atom_port(ctx, mod, &port->audio, dy, name_str, false);
 			} break;
-			case PROPERTY_TYPE_PARAM:
-			{
-				//FIXME
-			} break;
 
 			default:
 				break;
@@ -2598,7 +2661,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 		lilv_node_free(name_node);
 }
 
-static void
+static bool
 _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle,
 	float dy, const char *name_str)
 {
@@ -2606,6 +2669,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 		- 2*ctx->style.window.group_padding.y;
 	const float ratio [] = {0.7, 0.3};
 
+	bool changed = false;
 	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
@@ -2623,6 +2687,8 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 				const float inc = param->span.i / nk_widget_width(ctx);
 				int val = param->val.i;
 				nk_property_int(ctx, lab, param->min.i, &val, param->max.i, 1.f, inc);
+				if(val != param->val.i)
+					changed = true;
 				param->val.i = val;
 			}
 		}
@@ -2637,6 +2703,8 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 				const float inc = param->span.h / nk_widget_width(ctx);
 				int val = param->val.h;
 				nk_property_int(ctx, lab, param->min.h, &val, param->max.h, 1.f, inc);
+				if(val != param->val.h)
+					changed = true;
 				param->val.h = val;
 			}
 		}
@@ -2654,7 +2722,10 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 			{
 				const float step = param->span.f / 100.f;
 				const float inc = param->span.f / nk_widget_width(ctx);
+				const float val = param->val.f;
 				nk_property_float(ctx, lab, param->min.f, &param->val.f, param->max.f, step, inc);
+				if(val != param->val.f)
+					changed = true;
 			}
 		}
 		else if(param->range == handle->forge.Double)
@@ -2667,14 +2738,17 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 			{
 				const double step = param->span.d / 100.0;
 				const float inc = param->span.d / nk_widget_width(ctx);
+				const double val = param->val.d;
 				nk_property_double(ctx, lab, param->min.d, &param->val.d, param->max.d, step, inc);
+				if(val != param->val.d)
+					changed = true;
 			}
 		}
 		else
 		{
 			nk_spacing(ctx, 1);
 		}
-		//FIXME
+		//FIXME handle remaining types
 
 		nk_group_end(ctx);
 	}
@@ -2683,46 +2757,48 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 	{
 		if(_dial_int(ctx, param->min.i, &param->val.i, param->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
 	else if(param->range == handle->forge.Long)
 	{
 		if(_dial_long(ctx, param->min.h, &param->val.h, param->max.h, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
 	else if(param->range == handle->forge.Bool)
 	{
 		if(_dial_bool(ctx, &param->val.i, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
 	else if(param->range == handle->forge.Float)
 	{
 		if(_dial_float(ctx, param->min.f, &param->val.f, param->max.f, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
 	else if(param->range == handle->forge.Double)
 	{
 		if(_dial_double(ctx, param->min.d, &param->val.d, param->max.d, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
 		{
-			//FIXME
+			changed = true;
 		}
 	}
 	else
 	{
 		nk_spacing(ctx, 1);
 	}
-	//FIXME
+	//FIXME handle remaining types
+	
+	return changed;
 }
 
 static void
-_expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, float dy)
+_expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t *param, float dy)
 {
 	LilvNode *name_node = lilv_world_get(handle->world, param->param, handle->node.rdfs_label, NULL);
 	if(!name_node)
@@ -2731,7 +2807,40 @@ _expose_param(plughandle_t *handle, struct nk_context *ctx, param_t *param, floa
 
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
 	{
-		_expose_param_inner(ctx, param, handle, dy, name_str);
+		if(_expose_param_inner(ctx, param, handle, dy, name_str))
+		{
+			if(param->range == handle->forge.Int)
+			{
+				_patch_notification_add_patch_set(handle, mod,
+					handle->regs.port.event_transfer.urid, 0, 0, param->property,
+					sizeof(int32_t), handle->forge.Int, &param->val.i); //FIXME
+			}
+			else if(param->range == handle->forge.Bool)
+			{
+				_patch_notification_add_patch_set(handle, mod,
+					handle->regs.port.event_transfer.urid, 0, 0, param->property,
+					sizeof(int32_t), handle->forge.Bool, &param->val.i);
+			}
+			else if(param->range == handle->forge.Long)
+			{
+				_patch_notification_add_patch_set(handle, mod,
+					handle->regs.port.event_transfer.urid, 0, 0, param->property,
+					sizeof(int64_t), handle->forge.Long, &param->val.h);
+			}
+			else if(param->range == handle->forge.Float)
+			{
+				_patch_notification_add_patch_set(handle, mod,
+					handle->regs.port.event_transfer.urid, 0, 0, param->property,
+					sizeof(float), handle->forge.Float, &param->val.f);
+			}
+			else if(param->range == handle->forge.Double)
+			{
+				_patch_notification_add_patch_set(handle, mod,
+					handle->regs.port.event_transfer.urid, 0, 0, param->property,
+					sizeof(double), handle->forge.Double, &param->val.d);
+			}
+			//FIXME handle remaining types
+		}
 
 		nk_group_end(ctx);
 	}
@@ -2844,7 +2953,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				first = false;
 			}
 
-			_expose_param(handle, ctx, param, dy);
+			_expose_param(handle, mod, ctx, param, dy);
 		}
 	}
 }
@@ -4081,7 +4190,7 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 			{
 				if(  (src_proto == handle->regs.port.float_protocol.urid)
 					&& (src_value->type == handle->forge.Float)
-					&& (src_port->type == PROPERTY_TYPE_CONTROL) )
+					&& (src_port->type & PROPERTY_TYPE_CONTROL) )
 				{
 					control_port_t *control = &src_port->control;
 
@@ -4092,7 +4201,7 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 				}
 				else if( (src_proto == handle->regs.port.peak_protocol.urid)
 					&& (src_value->type == handle->forge.Tuple)
-					&& (src_port->type == PROPERTY_TYPE_AUDIO || src_port->type == PROPERTY_TYPE_CV) )
+					&& (src_port->type & PROPERTY_TYPE_AUDIO || src_port->type & PROPERTY_TYPE_CV) )
 				{
 					const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)src_value;
 					const LV2_Atom_Int *period_start = (const LV2_Atom_Int *)lv2_atom_tuple_begin(tup);
@@ -4102,18 +4211,71 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 					audio_port_t *audio = &src_port->audio;
 
 					audio->peak = peak->body;
-					nk_pugl_post_redisplay(&handle->win); //FIXME put this where we draw audio widgets?
 				}
 				else if( (src_proto == handle->regs.port.event_transfer.urid)
-					&& (src_port->type == PROPERTY_TYPE_ATOM) )
+					&& (src_port->type & PROPERTY_TYPE_ATOM) )
 				{
-					//FIXME handle patch messages
+					const LV2_Atom_Object *pobj = (const LV2_Atom_Object *)src_value;
+					if(  (pobj->atom.type == handle->forge.Object)
+						&& (pobj->body.otype == handle->regs.patch.set.urid) )
+					{
+						//printf("got patch:Set notification\n");
+						const LV2_Atom_URID *subject = NULL;
+						const LV2_Atom_URID *property = NULL;
+						const LV2_Atom *value = NULL;
+
+						lv2_atom_object_get(pobj,
+							handle->regs.patch.subject.urid, &subject,
+							handle->regs.patch.property.urid, &property,
+							handle->regs.patch.value.urid, &value,
+							0);
+
+						const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+							? subject->body
+							: 0;
+						const LV2_URID prop = property && (property->atom.type == handle->forge.URID)
+							? property->body
+							: 0;
+
+						if(prop && value)
+						{
+							param_t *param = _mod_param_find_by_property(src_mod, prop);
+
+							if(  param
+								&& (param->range == value->type) )
+							{
+								if(param->range == handle->forge.Int)
+								{
+									param->val.i = ((const LV2_Atom_Int *)value)->body;
+								}
+								else if(param->range == handle->forge.Bool)
+								{
+									param->val.i = ((const LV2_Atom_Bool *)value)->body;
+								}
+								else if(param->range == handle->forge.Long)
+								{
+									param->val.h = ((const LV2_Atom_Long *)value)->body;
+								}
+								else if(param->range == handle->forge.Float)
+								{
+									param->val.f = ((const LV2_Atom_Float *)value)->body;
+								}
+								else if(param->range == handle->forge.Double)
+								{
+									param->val.d = ((const LV2_Atom_Double *)value)->body;
+								}
+								//FIXME handle remaining types
+							}
+						}
+					}
 				}
 				else if( (src_proto == handle->regs.port.atom_transfer.urid)
-					&& (src_port->type == PROPERTY_TYPE_ATOM) )
+					&& (src_port->type & PROPERTY_TYPE_ATOM) )
 				{
 					//FIXME rarely (never) sent by any plugin
 				}
+
+				nk_pugl_post_redisplay(&handle->win);
 			}
 		}
 	}
@@ -4185,7 +4347,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 					if(prop && value)
 					{
-						printf("got patch:Set: %s\n", handle->unmap->unmap(handle->unmap->handle, prop));
+						//printf("got patch:Set: %s\n", handle->unmap->unmap(handle->unmap->handle, prop));
 
 						if(  (prop == handle->regs.synthpod.module_list.urid)
 							&& (value->type == handle->forge.Tuple) )
@@ -4218,7 +4380,6 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						{
 							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
 
-							printf(":::::\n");
 							HASH_FREE(&handle->conns, ptr)
 							{
 								mod_conn_t *mod_conn = ptr;
@@ -4248,7 +4409,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 					if(subj && body)
 					{
-						printf("got patch:Put for %u\n", subj);
+						//printf("got patch:Put for %u\n", subj);
 
 						const LV2_Atom_URID *plugin = NULL;
 						const LV2_Atom_Float *mod_pos_x = NULL;
@@ -4316,7 +4477,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 					{
 						LV2_ATOM_OBJECT_FOREACH(rem, prop)
 						{
-							printf("got patch:remove for %u\n", subj);
+							//printf("got patch:remove for %u\n", subj);
 
 							if(  (prop->key == handle->regs.synthpod.connection_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
@@ -4337,7 +4498,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 						LV2_ATOM_OBJECT_FOREACH(add, prop)
 						{
-							printf("got patch:remove for %u\n", subj);
+							//printf("got patch:remove for %u\n", subj);
 
 							if(  (prop->key == handle->regs.synthpod.connection_list.urid)
 								&& (prop->value.type == handle->forge.Object) )

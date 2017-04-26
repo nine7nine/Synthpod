@@ -1001,11 +1001,11 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 	const LV2_URID prop = property && (property->atom.type == app->forge.URID)
 		? property->body : 0;
 
-	printf("got patch:Get for <%s>\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
+	//printf("got patch:Get for <%s>\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
 
 	if(!subj && prop) //FIXME
 	{
-		printf("\tpatch:property <%s>\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
+		//printf("\tpatch:property <%s>\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
 
 		if(prop == app->regs.synthpod.module_list.urid)
 		{
@@ -1163,7 +1163,7 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 
 	if(subj && prop && value)
 	{
-		printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
+		//printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
 
 		mod_t *mod = NULL;
 		for(unsigned m = 0; m < app->num_mods; m++)
@@ -1234,7 +1234,7 @@ _port_find_by_symbol(sp_app_t *app, LV2_URID urn, const char *symbol)
 __realtime static void
 _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
-	printf("got patch:add for connectionList:\n");
+	//printf("got patch:add for connectionList:\n");
 
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
@@ -1283,7 +1283,7 @@ _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 __realtime static void
 _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 {
-	printf("got patch:remove for connectionList:\n");
+	//printf("got patch:remove for connectionList:\n");
 
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
@@ -1334,7 +1334,7 @@ _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 __realtime static void
 _subscription_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
-	printf("got patch:add for subscriptionList:\n");
+	//printf("got patch:add for subscriptionList:\n");
 
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
@@ -1369,7 +1369,7 @@ _subscription_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 __realtime static void
 _subscription_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 {
-	printf("got patch:remove for subscriptionList:\n");
+	//printf("got patch:remove for subscriptionList:\n");
 
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
@@ -1399,7 +1399,7 @@ _subscription_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 __realtime static void
 _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
-	printf("got patch:add for notificationList:\n");
+	//printf("got patch:add for notificationList:\n");
 
 	const LV2_URID src_proto = obj->body.otype;
 	const LV2_Atom_URID *src_module = NULL;
@@ -1443,6 +1443,32 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 					}
 				}
 			}
+			else if( (src_proto == app->regs.port.event_transfer.urid)
+				&& (src_port->type == PORT_TYPE_ATOM) )
+			{
+				//printf("got atom:eventTransfer\n");
+
+				// messages from UI are ALWAYS appended to default port buffer, no matter
+				// how many sources the port may have
+				const uint32_t capacity = PORT_SIZE(src_port);
+				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(src_port);
+
+				// find last event
+				LV2_Atom_Event *last = NULL;
+				LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+					last = ev;
+
+				LV2_Atom_Event *ev = _lv2_atom_sequence_append_atom(seq, capacity,
+					last ? last->time.frames : 0, src_value);
+				(void)ev; //TODO check
+			}
+			else if( (src_proto == app->regs.port.atom_transfer.urid)
+				&& (src_port->type == PORT_TYPE_ATOM) )
+			{
+				//printf("got atom:atomTransfer\n");
+				LV2_Atom *atom = PORT_BASE_ALIGNED(src_port);
+				//FIXME memcpy(atom, src_value, lv2_atom_total-size(src_value));
+			}
 		}
 	}
 }
@@ -1451,7 +1477,7 @@ __realtime static void
 _mod_list_add(sp_app_t *app, const LV2_Atom_URID *urid)
 {
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urid->body);
-	printf("got patch:add for moduleList: %s\n", uri);
+	//printf("got patch:add for moduleList: %s\n", uri);
 
 	// send request to worker thread
 	const size_t uri_sz = strlen(uri) + 1;
@@ -1469,7 +1495,7 @@ __realtime static void
 _mod_list_rem(sp_app_t *app, const LV2_Atom_URID *urn)
 {
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn->body);
-	printf("got patch:remove for moduleList: %s\n", uri);
+	//printf("got patch:remove for moduleList: %s\n", uri);
 
 	// search mod according to its URN
 	mod_t *mod = _mod_find_by_urn(app, urn->body);
@@ -1522,14 +1548,14 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
 		? seqn->body : 0;
 
-	printf("got patch:Patch: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
+	//printf("got patch:Patch: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, subj));
 
 	if(  add && (add->atom.type == app->forge.Object)
 		&& rem && (rem->atom.type == app->forge.Object) )
 	{
 		LV2_ATOM_OBJECT_FOREACH(rem, prop)
 		{
-			printf("got patch:remove: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
+			//printf("got patch:remove: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
 
 			if(  (prop->key == app->regs.synthpod.connection_list.urid)
 				&& (prop->value.type == app->forge.Object) )
@@ -1555,7 +1581,7 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 
 		LV2_ATOM_OBJECT_FOREACH(add, prop)
 		{
-			printf("got patch:add: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
+			//printf("got patch:add: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop->key));
 
 			if(  (prop->key == app->regs.synthpod.connection_list.urid)
 				&& (prop->value.type == app->forge.Object) )
