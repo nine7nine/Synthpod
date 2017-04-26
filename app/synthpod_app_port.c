@@ -658,7 +658,7 @@ _patch_notification_internal(sp_app_t *app, port_t *source_port,
 
 __realtime static void
 _patch_notification_add(sp_app_t *app, port_t *source_port,
-	uint32_t size, LV2_URID type, const void *body)
+	LV2_URID proto, uint32_t size, LV2_URID type, const void *body)
 {
 	LV2_Atom_Forge_Frame frame [3];
 
@@ -667,7 +667,7 @@ _patch_notification_add(sp_app_t *app, port_t *source_port,
 	{
 		if(synthpod_patcher_add_object(&app->regs, &app->forge, &frame[0],
 				0, 0, app->regs.synthpod.notification_list.urid) //TODO subject
-			&& lv2_atom_forge_object(&app->forge, &frame[2], 0, 0)
+			&& lv2_atom_forge_object(&app->forge, &frame[2], 0, proto)
 			&& _patch_notification_internal(app, source_port, size, type, body) )
 		{
 			synthpod_patcher_pop(&app->forge, frame, 3);
@@ -700,7 +700,8 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 		}
 
 		// for nk
-		_patch_notification_add(app, port, sizeof(float), app->forge.Float, &new_val);
+		_patch_notification_add(app, port, app->regs.port.float_protocol.urid,
+			sizeof(float), app->forge.Float, &new_val);
 	}
 }
 

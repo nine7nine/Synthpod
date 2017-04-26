@@ -1056,14 +1056,14 @@ _patch_notification_internal(plughandle_t *handle, port_t *source_port,
 
 static void
 _patch_notification_add(plughandle_t *handle, port_t *source_port,
-	uint32_t size, LV2_URID type, const void *body)
+	LV2_URID proto, uint32_t size, LV2_URID type, const void *body)
 {
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
 		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
 			0, 0, handle->regs.synthpod.notification_list.urid) //TODO subject
-		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, proto)
 		&& _patch_notification_internal(handle, source_port, size, type, body) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
@@ -2574,7 +2574,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 						? port->control.val.i
 						: port->control.val.f;
 
-					_patch_notification_add(handle, port,
+					_patch_notification_add(handle, port, handle->regs.port.float_protocol.urid,
 						sizeof(float), handle->forge.Float, &val);
 				}
 			} break;
@@ -4053,6 +4053,7 @@ _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 static void
 _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
+	const LV2_URID src_proto = obj->body.otype;
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom *src_value = NULL;
@@ -4078,7 +4079,8 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 
 			if(src_port)
 			{
-				if(  (src_value->type == handle->forge.Float)
+				if(  (src_proto == handle->regs.port.float_protocol.urid)
+					&& (src_value->type == handle->forge.Float)
 					&& (src_port->type == PROPERTY_TYPE_CONTROL) )
 				{
 					if(src_port->control.is_bool || src_port->control.is_int)
@@ -4086,7 +4088,7 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 					else // float
 						src_port->control.val.f = ((const LV2_Atom_Float *)src_value)->body;
 				}
-				//FIXME handle remaining types, e.g. audio, property
+				//FIXME handle remaining types, e.g. audio, cv, parameter
 			}
 		}
 	}

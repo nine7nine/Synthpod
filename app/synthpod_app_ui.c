@@ -1401,6 +1401,7 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
 	printf("got patch:add for notificationList:\n");
 
+	const LV2_URID src_proto = obj->body.otype;
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom *src_value = NULL;
@@ -1422,7 +1423,8 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 
 		if(src_port)
 		{
-			if(src_value->type == app->forge.Float)
+			if(  (src_proto == app->regs.port.float_protocol.urid)
+				&& (src_value->type == app->forge.Float) )
 			{
 				const float val = ((const LV2_Atom_Float *)src_value)->body;
 				float *buf_ptr = PORT_BASE_ALIGNED(src_port);
