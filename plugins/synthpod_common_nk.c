@@ -2455,27 +2455,7 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 		nk_layout_row_dynamic(ctx, dy, 1);
 		nk_label(ctx, name_str, NK_TEXT_LEFT);
 
-		if(control->is_int)
-		{
-			if(control->is_readonly)
-			{
-				nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIi32, control->val.i);
-			}
-			else // !readonly
-			{
-				const float inc = control->span.i / nk_widget_width(ctx);
-				int val = control->val.i;
-				nk_property_int(ctx, lab, control->min.i, &val, control->max.i, 1.f, inc);
-				if(val != control->val.i)
-					changed = true;
-				control->val.i = val;
-			}
-		}
-		else if(control->is_bool)
-		{
-			nk_spacing(ctx, 1);
-		}
-		else if(!_hash_empty(&control->points))
+		if(!_hash_empty(&control->points))
 		{
 			scale_point_t *ref = control->points_ref;
 			if(nk_combo_begin_label(ctx, ref->label, nk_vec2(nk_widget_width(ctx), 7*dy)))
@@ -2495,6 +2475,26 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 
 				nk_combo_end(ctx);
 			}
+		}
+		else if(control->is_int)
+		{
+			if(control->is_readonly)
+			{
+				nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIi32, control->val.i);
+			}
+			else // !readonly
+			{
+				const float inc = control->span.i / nk_widget_width(ctx);
+				int val = control->val.i;
+				nk_property_int(ctx, lab, control->min.i, &val, control->max.i, 1.f, inc);
+				if(val != control->val.i)
+					changed = true;
+				control->val.i = val;
+			}
+		}
+		else if(control->is_bool)
+		{
+			nk_spacing(ctx, 1);
 		}
 		else // is_float
 		{
@@ -2516,7 +2516,11 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 		nk_group_end(ctx);
 	}
 
-	if(control->is_int)
+	if(!_hash_empty(&control->points))
+	{
+		nk_spacing(ctx, 1);
+	}
+	else if(control->is_int)
 	{
 		if(_dial_int(ctx, control->min.i, &control->val.i, control->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
 		{
@@ -2529,10 +2533,6 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 		{
 			changed = true;
 		}
-	}
-	else if(!_hash_empty(&control->points))
-	{
-		nk_spacing(ctx, 1);
 	}
 	else // is_float
 	{
@@ -2570,8 +2570,12 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			{
 				if(_expose_control_port(ctx, mod, &port->control, dy, name_str))
 				{
+					const float val = port->control.is_bool || port->control.is_int
+						? port->control.val.i
+						: port->control.val.f;
+
 					_patch_notification_add(handle, port,
-						sizeof(float), handle->forge.Float, &port->control.val.f); //FIXME handle int, bool
+						sizeof(float), handle->forge.Float, &val);
 				}
 			} break;
 			case PROPERTY_TYPE_ATOM:
@@ -4075,9 +4079,12 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 			if(src_port)
 			{
 				if(  (src_value->type == handle->forge.Float)
-					|| (src_port->type == PROPERTY_TYPE_CONTROL) )
+					&& (src_port->type == PROPERTY_TYPE_CONTROL) )
 				{
-					src_port->control.val.f = ((const LV2_Atom_Float *)src_value)->body;
+					if(src_port->control.is_bool || src_port->control.is_int)
+						src_port->control.val.i = ((const LV2_Atom_Float *)src_value)->body;
+					else // float
+						src_port->control.val.f = ((const LV2_Atom_Float *)src_value)->body;
 				}
 				//FIXME handle remaining types, e.g. audio, property
 			}

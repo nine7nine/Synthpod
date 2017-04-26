@@ -1430,11 +1430,15 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				if(src_port->type == PORT_TYPE_CONTROL)
 				{
 					*buf_ptr = val;
+					src_port->last = *buf_ptr; // we don't want any notification
 				}
 				else if(src_port->type == PORT_TYPE_CV)
 				{
 					for(unsigned i = 0; i < app->driver->max_block_size; i++)
+					{
 						buf_ptr[i] = val;
+						//FIXME omit notification ?
+					}
 				}
 			}
 		}
