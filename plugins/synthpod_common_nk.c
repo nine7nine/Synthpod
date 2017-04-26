@@ -4083,12 +4083,37 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 					&& (src_value->type == handle->forge.Float)
 					&& (src_port->type == PROPERTY_TYPE_CONTROL) )
 				{
-					if(src_port->control.is_bool || src_port->control.is_int)
-						src_port->control.val.i = ((const LV2_Atom_Float *)src_value)->body;
+					control_port_t *control = &src_port->control;
+
+					if(control->is_bool || control->is_int)
+						control->val.i = ((const LV2_Atom_Float *)src_value)->body;
 					else // float
-						src_port->control.val.f = ((const LV2_Atom_Float *)src_value)->body;
+						control->val.f = ((const LV2_Atom_Float *)src_value)->body;
 				}
-				//FIXME handle remaining types, e.g. audio, cv, parameter
+				else if( (src_proto == handle->regs.port.peak_protocol.urid)
+					&& (src_value->type == handle->forge.Tuple)
+					&& (src_port->type == PROPERTY_TYPE_AUDIO || src_port->type == PROPERTY_TYPE_CV) )
+				{
+					const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)src_value;
+					const LV2_Atom_Int *period_start = (const LV2_Atom_Int *)lv2_atom_tuple_begin(tup);
+					const LV2_Atom_Int *period_size = (const LV2_Atom_Int *)lv2_atom_tuple_next(&period_start->atom);
+					const LV2_Atom_Float *peak = (const LV2_Atom_Float *)lv2_atom_tuple_next(&period_size->atom);;
+
+					audio_port_t *audio = &src_port->audio;
+
+					audio->peak = peak->body;
+					nk_pugl_post_redisplay(&handle->win); //FIXME put this where we draw audio widgets?
+				}
+				else if( (src_proto == handle->regs.port.event_transfer.urid)
+					&& (src_port->type == PROPERTY_TYPE_ATOM) )
+				{
+					//FIXME handle patch messages
+				}
+				else if( (src_proto == handle->regs.port.atom_transfer.urid)
+					&& (src_port->type == PROPERTY_TYPE_ATOM) )
+				{
+					//FIXME rarely (never) sent by any plugin
+				}
 			}
 		}
 	}

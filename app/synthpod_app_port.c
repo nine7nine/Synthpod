@@ -724,7 +724,7 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 		// update last value
 		port->last = peak;
 
-		LV2UI_Peak_Data data = {
+		const LV2UI_Peak_Data data = {
 			.period_start = app->fps.period_cnt,
 			.period_size = nsamples,
 			.peak = peak
@@ -739,7 +739,46 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 			_sp_app_to_ui_advance(app, size);
 		}
 
-		// FIXME for nk
+		// for nk
+		const struct {
+			LV2_Atom_Tuple header;
+			LV2_Atom_Int period_start;
+				int32_t space_1;
+			LV2_Atom_Int period_size;
+				int32_t space_2;
+			LV2_Atom_Float peak;
+				int32_t space_3;
+		} tup = {
+			.header = {
+				.atom = {
+					.size = 3*sizeof(LV2_Atom_Long),
+					.type = app->forge.Tuple
+				}
+			},
+			.period_start = {
+				.atom = {
+					.size = sizeof(int32_t),
+					.type = app->forge.Int
+				},
+				.body = data.period_start
+			},
+			.period_size = {
+				.atom = {
+					.size = sizeof(int32_t),
+					.type = app->forge.Int
+				},
+				.body = data.period_size
+			},
+			.peak = {
+				.atom = {
+					.size = sizeof(float),
+					.type = app->forge.Float
+				},
+				.body = data.peak
+			}
+		};
+		_patch_notification_add(app, port, app->regs.port.peak_protocol.urid,
+			tup.header.atom.size, tup.header.atom.type, &tup.period_start);
 	}
 }
 
@@ -764,7 +803,9 @@ _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 		_sp_app_to_ui_advance(app, size);
 	}
 
-	// FIXME for nk
+	// for nk
+	_patch_notification_add(app, port, app->regs.port.atom_transfer.urid,
+		atom->size, atom->type, LV2_ATOM_BODY_CONST(atom));
 }
 
 __realtime static inline void
@@ -793,7 +834,9 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 				_sp_app_to_ui_advance(app, size);
 			}
 
-			// FIXME for nk
+			// for nk
+			_patch_notification_add(app, port, app->regs.port.event_transfer.urid,
+				atom->size, atom->type, LV2_ATOM_BODY_CONST(atom));
 		}
 	}
 	else // patched
@@ -826,7 +869,9 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 						_sp_app_to_ui_advance(app, size);
 					}
 
-					// FIXME for nk
+					// for nk
+					_patch_notification_add(app, port, app->regs.port.event_transfer.urid,
+						obj->atom.size, obj->atom.type, &obj->body);
 				}
 			}
 		}
