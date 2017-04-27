@@ -979,6 +979,40 @@ _sp_app_from_ui_path_get(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
+//FIXME move into another file
+__realtime static mod_t *
+_mod_find_by_urn(sp_app_t *app, LV2_URID urn)
+{
+	for(unsigned m = 0; m < app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+
+		if(mod->urn == urn)
+			return mod;
+	}
+
+	return NULL;
+}
+
+//FIXME move into another file
+__realtime static port_t *
+_port_find_by_symbol(sp_app_t *app, LV2_URID urn, const char *symbol)
+{
+	mod_t *mod = _mod_find_by_urn(app, urn);
+	if(mod)
+	{
+		for(unsigned p = 0; p < mod->num_ports; p++)
+		{
+			port_t *port = &mod->ports[p];
+
+			if(!strcmp(port->symbol, symbol))
+				return port;
+		}
+	}
+
+	return NULL;
+}
+
 __realtime static bool
 _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 {
@@ -1165,16 +1199,7 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 	{
 		//printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
 
-		mod_t *mod = NULL;
-		for(unsigned m = 0; m < app->num_mods; m++)
-		{
-			if(app->mods[m]->urn == subj)
-			{
-				mod = app->mods[m];
-				break;
-			}
-		}
-
+		mod_t *mod = _mod_find_by_urn(app, subj);
 		if(mod)
 		{
 			if(  (prop == app->regs.synthpod.module_position_x.urid)
@@ -1189,46 +1214,58 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 				mod->pos.y = ((const LV2_Atom_Float *)value)->body;
 				_sp_app_order(app);
 			}
+			else if( (prop == app->regs.pset.preset.urid)
+				&& (value->type == app->forge.URID) )
+			{
+				if(app->block_state == BLOCKING_STATE_RUN)
+				{
+					const bool needs_ramping = _mod_needs_ramping(mod, RAMP_STATE_DOWN_DRAIN, true);
+					app->silence_state = !needs_ramping
+						? SILENCING_STATE_RUN
+						: SILENCING_STATE_BLOCK;
+
+					// send request to worker thread
+					size_t size = sizeof(job_t);
+					job_t *job = _sp_app_to_worker_request(app, size);
+					if(job)
+					{
+						app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+						job->request = JOB_TYPE_REQUEST_DRAIN;
+						job->status = 0;
+						_sp_app_to_worker_advance(app, size);
+					}
+				}
+				else if(app->block_state == BLOCKING_STATE_BLOCK)
+				{
+					if(app->silence_state == SILENCING_STATE_BLOCK)
+						return false; // not fully silenced yet, wait
+
+					// send request to worker thread
+					const LV2_URID pset_urid = ((const LV2_Atom_URID *)value)->body;
+					const char *pset_uri = app->driver->unmap->unmap(app->driver->unmap->handle, pset_urid);
+					size_t size = sizeof(job_t) + strlen(pset_uri) + 1;
+					job_t *job = _sp_app_to_worker_request(app, size);
+					if(job)
+					{
+						app->block_state = BLOCKING_STATE_WAIT; // wait for job
+						mod->bypassed = true;
+
+						job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
+						job->mod = mod;
+						memcpy(job->uri, pset_uri, strlen(pset_uri) + 1);
+						_sp_app_to_worker_advance(app, size);
+
+						return true; // advance
+					}
+				}
+			}
 		}
 
 		//TODO handle more properties
 	}
 
 	return advance_ui[app->block_state];
-}
-
-//FIXME move into another file
-__realtime static mod_t *
-_mod_find_by_urn(sp_app_t *app, LV2_URID urn)
-{
-	for(unsigned m = 0; m < app->num_mods; m++)
-	{
-		mod_t *mod = app->mods[m];
-
-		if(mod->urn == urn)
-			return mod;
-	}
-
-	return NULL;
-}
-
-//FIXME move into another file
-__realtime static port_t *
-_port_find_by_symbol(sp_app_t *app, LV2_URID urn, const char *symbol)
-{
-	mod_t *mod = _mod_find_by_urn(app, urn);
-	if(mod)
-	{
-		for(unsigned p = 0; p < mod->num_ports; p++)
-		{
-			port_t *port = &mod->ports[p];
-
-			if(!strcmp(port->symbol, symbol))
-				return port;
-		}
-	}
-
-	return NULL;
 }
 
 __realtime static void

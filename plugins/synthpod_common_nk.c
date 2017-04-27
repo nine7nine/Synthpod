@@ -81,13 +81,6 @@ enum _property_type_t {
 	PROPERTY_TYPE_MAX
 };
 
-enum _selector_grid_t {
-	SELECTOR_GRID_PLUGINS = 0,
-	SELECTOR_GRID_PRESETS,
-
-	SELECTOR_GRID_MAX
-};
-
 enum _selector_search_t {
 	SELECTOR_SEARCH_NAME = 0,
 	SELECTOR_SEARCH_COMMENT,
@@ -223,7 +216,6 @@ struct _plughandle_t {
 
 	nk_pugl_window_t win;
 
-	selector_grid_t grid_selector;
 	const LilvPlugin *plugin_selector;
 	mod_t *module_selector;
 	const LilvNode *preset_selector;
@@ -314,16 +306,6 @@ struct _plughandle_t {
 	property_type_t type;
 
 	bool done;
-};
-
-static const char *grid_labels [SELECTOR_GRID_MAX] = {
-	[SELECTOR_GRID_PLUGINS] = "Plugins",
-	[SELECTOR_GRID_PRESETS] = "Presets"
-};
-
-static const char *grid_tooltips [SELECTOR_GRID_MAX] = {
-	[SELECTOR_GRID_PLUGINS] = "Ctrl-P",
-	[SELECTOR_GRID_PRESETS] = "Ctrl-R"
 };
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
@@ -1166,6 +1148,21 @@ _patch_mod_remove(plughandle_t *handle, mod_t *mod)
 	}
 }
 
+static void
+_patch_mod_preset_set(plughandle_t *handle, mod_t *mod, const LilvNode *preset)
+{
+	const char *preset_uri = lilv_node_as_uri(preset);
+	const LV2_URID preset_urid = handle->map->map(handle->map->handle, preset_uri);;
+
+	if(  _message_request(handle)
+		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+			mod->urn, 0, handle->regs.pset.preset.urid,
+			sizeof(uint32_t), handle->forge.URID, &preset_urid) )
+	{
+		_message_write(handle);
+	}
+}
+
 static mod_t *
 _mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
 {
@@ -1569,24 +1566,6 @@ _mod_remove(plughandle_t *handle, mod_t *mod)
 	_mod_free(handle, mod);
 }
 
-static void
-_load(plughandle_t *handle)
-{
-	switch(handle->grid_selector)
-	{
-		case SELECTOR_GRID_PLUGINS:
-		{
-			_patch_mod_add(handle, handle->plugin_selector);
-		} break;
-		case SELECTOR_GRID_PRESETS:
-		{
-			//TODO
-		} break;
-
-		default: break;
-	}
-}
-
 static bool
 _tooltip_visible(struct nk_context *ctx)
 {
@@ -1782,7 +1761,7 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx,
 				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
 				{
 					handle->plugin_selector = plug;
-					_load(handle);
+					_patch_mod_add(handle, handle->plugin_selector);
 				}
 
 				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
@@ -2011,7 +1990,7 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
 				{
 					handle->preset_selector = preset;
-					_load(handle);
+					_patch_mod_preset_set(handle, handle->module_selector, handle->preset_selector);
 				}
 
 				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
