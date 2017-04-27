@@ -319,6 +319,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		case JOB_TYPE_REQUEST_BUNDLE_LOAD:
 		{
 			int status = _sp_app_state_bundle_load(app, job->uri);
+			printf("loaded from: %s\n", job->uri);
 
 			// signal to app
 			size_t job_size = sizeof(job_t) + strlen(job->uri) + 1;
@@ -336,6 +337,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		case JOB_TYPE_REQUEST_BUNDLE_SAVE:
 		{
 			int status = _sp_app_state_bundle_save(app, job->uri);
+			printf("saved to: %s\n", job->uri);
 
 			// signal to app
 			size_t job_size = sizeof(job_t) + strlen(job->uri) + 1;

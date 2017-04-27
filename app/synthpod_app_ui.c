@@ -1122,6 +1122,20 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				}
 			}
 		}
+		else if(prop == app->regs.pset.preset.urid)
+		{
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const LV2_URID bundle_urid = app->driver->map->map(app->driver->map->handle, app->bundle_path); //FIXME store bundle path as URID
+
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, subj, sn, prop,
+					sizeof(uint32_t), app->forge.URID, &bundle_urid);
+				if(ref)
+					_sp_app_to_ui_advance_atom(app, answer);
+			}
+		}
 		//TODO handle more properties
 	}
 	else if(subj)
@@ -1195,7 +1209,7 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 	const LV2_URID prop = property && (property->atom.type == app->forge.URID)
 		? property->body : 0;
 
-	if(subj && prop && value)
+	if(subj && prop && value) // is for a module
 	{
 		//printf("got patch:Set: %s\n", app->driver->unmap->unmap(app->driver->unmap->handle, prop));
 
@@ -1263,6 +1277,109 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 		}
 
 		//TODO handle more properties
+	}
+
+	return advance_ui[app->block_state];
+}
+
+__realtime static bool
+_sp_app_from_ui_patch_copy(sp_app_t *app, const LV2_Atom *atom)
+{
+	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+
+	const LV2_Atom_URID *subject = NULL;
+	const LV2_Atom_Int *seqn = NULL;
+	const LV2_Atom_URID *destination = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.patch.subject.urid, &subject,
+		app->regs.patch.sequence_number.urid, &seqn,
+		app->regs.patch.destination.urid, &destination,
+		0);
+
+	const LV2_URID subj = subject && (subject->atom.type == app->forge.URID)
+		? subject->body : 0;
+	const int32_t sn = seqn && (seqn->atom.type == app->forge.Int)
+		? seqn->body : 0;
+	const LV2_URID dest = destination && (destination->atom.type == app->forge.URID)
+		? destination->body : 0;
+
+	if(!subj && dest) // save bundle to dest
+	{
+		const char *path_str = app->driver->unmap->unmap(app->driver->unmap->handle, dest); //FIXME use urn directly
+
+		if(app->block_state == BLOCKING_STATE_RUN)
+		{
+			// send request to worker thread
+			size_t size = sizeof(job_t);
+			job_t *job = _sp_app_to_worker_request(app, size);
+			if(job)
+			{
+				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+				job->request = JOB_TYPE_REQUEST_DRAIN;
+				job->status = 0;
+				_sp_app_to_worker_advance(app, size);
+			}
+		}
+		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		{
+			// send request to worker thread
+			size_t size = sizeof(job_t) + strlen(path_str) + 1;
+			job_t *job = _sp_app_to_worker_request(app, size);
+			if(job)
+			{
+				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+
+				job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
+				job->status = -1; //FIXME what is this for again?
+				memcpy(job->uri, path_str, strlen(path_str) + 1);
+				_sp_app_to_worker_advance(app, size);
+
+				return true; // advance
+			}
+		}
+	}
+	else if(subj && !dest) // copy bundle from subj
+	{
+		const char *path_str = app->driver->unmap->unmap(app->driver->unmap->handle, subj); //FIXME use urn directly
+
+		if(app->block_state == BLOCKING_STATE_RUN)
+		{
+			//FIXME ramp down system outputs
+
+			// send request to worker thread
+			size_t size = sizeof(job_t);
+			job_t *job = _sp_app_to_worker_request(app, size);
+			if(job)
+			{
+				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+				job->request = JOB_TYPE_REQUEST_DRAIN;
+				job->status = 0;
+				_sp_app_to_worker_advance(app, size);
+			}
+		}
+		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		{
+			//FIXME ramp up system outputs
+
+			// send request to worker thread
+			size_t size = sizeof(job_t) + strlen(path_str) + 1;
+			job_t *job = _sp_app_to_worker_request(app, size);
+			if(job)
+			{
+				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+				app->load_bundle = true; // for sp_app_bypassed
+
+				job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
+				job->status = -1; //FIXME what is this for again?
+				memcpy(job->uri, path_str, strlen(path_str) + 1);
+				_sp_app_to_worker_advance(app, size);
+
+				return true; // advance
+			}
+		}
 	}
 
 	return advance_ui[app->block_state];
@@ -1735,6 +1852,9 @@ sp_app_from_ui_fill(sp_app_t *app)
 
 	from_uis[ptr].protocol = app->regs.patch.set.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_patch_set;
+
+	from_uis[ptr].protocol = app->regs.patch.copy.urid;
+	from_uis[ptr++].cb = _sp_app_from_ui_patch_copy;
 
 	from_uis[ptr].protocol = app->regs.patch.patch.urid;
 	from_uis[ptr++].cb = _sp_app_from_ui_patch_patch;

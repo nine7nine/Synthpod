@@ -208,6 +208,8 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 
 	LV2_URID atom_eventTransfer;
+	LV2_URID bundle_urn;
+	LV2_URID self_urn;
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
@@ -1631,24 +1633,48 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 		{
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-N");
-			nk_button_label(ctx, "New");
+			if(nk_button_label(ctx, "New") && handle->self_urn)
+			{
+				if(  _message_request(handle)
+					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
+						handle->self_urn, 0, 0) )
+				{
+					_message_write(handle);
+				}
+			}
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-O");
-			nk_button_label(ctx, "Open");
+			if(nk_button_label(ctx, "Open"))
+			{
+				//FIXME open file dialog
+			}
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-S");
-			nk_button_label(ctx, "Save");
+			if(nk_button_label(ctx, "Save") && handle->bundle_urn)
+			{
+				if(  _message_request(handle)
+					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
+						0, 0, handle->bundle_urn) )
+				{
+					_message_write(handle);
+				}
+			}
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-Shift-S");
-			nk_button_label(ctx, "Save As");
+			if(nk_button_label(ctx, "Save As"))
+			{
+				//FIXME open file dialog
+			}
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-Q");
 			if(nk_button_label(ctx, "Quit"))
+			{
 				handle->done = true;
+			}
 		}
 		nk_menubar_end(ctx);
 	}
@@ -3877,13 +3903,20 @@ _init(plughandle_t *handle)
 
 	sp_regs_init(&handle->regs, handle->world, handle->map);
 
+	// patch:Get [patch:property spod:moduleList]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.module_list.urid) )
 	{
-		if(  _message_request(handle)
-			&& synthpod_patcher_get(&handle->regs, &handle->forge,
-				0, 0, handle->regs.synthpod.module_list.urid) )
-		{
-			_message_write(handle);
-		}
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property pset:preset]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.pset.preset.urid) )
+	{
+		_message_write(handle);
 	}
 }
 
@@ -4018,6 +4051,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
 	handle->atom_eventTransfer = handle->map->map(handle->map->handle, LV2_ATOM__eventTransfer);
+	handle->self_urn = handle->map->map(handle->map->handle, plugin_uri);
 
 	handle->controller = controller;
 	handle->writer = write_function;
@@ -4423,6 +4457,13 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_add_connection(handle, (const LV2_Atom_Object *)itm);
 							}
+						}
+						else if( (prop == handle->regs.pset.preset.urid)
+							&& (value->type == handle->forge.URID) )
+						{
+							const LV2_Atom_URID *urid = (const LV2_Atom_URID *)value;
+
+							handle->bundle_urn = urid->body;
 						}
 					}
 				}
