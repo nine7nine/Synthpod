@@ -1120,6 +1120,55 @@ _patch_notification_add_patch_set(plughandle_t *handle, mod_t *mod,
 	}
 }
 
+static LV2_Atom_Forge_Ref
+_patch_notification_patch_get_internal(plughandle_t *handle, port_t *source_port,
+	LV2_URID subject, int32_t seqn, LV2_URID property)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_symbol.urid);
+	if(ref)
+		ref = lv2_atom_forge_string(&handle->forge, source_port->symbol, strlen(source_port->symbol));
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.notification_value.urid);
+	if(ref)
+		ref = synthpod_patcher_get(&handle->regs, &handle->forge,
+			subject, seqn, property);
+
+	return ref;
+}
+
+static void
+_patch_notification_add_patch_get(plughandle_t *handle, mod_t *mod,
+	LV2_URID proto, LV2_URID subject, int32_t seqn, LV2_URID property)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		if(!(port->type & PROPERTY_TYPE_PATCH))
+			continue;
+
+		//FIXME set patch:destination to handle->regs.core.plugin.urid to omit feedback
+		if(  _message_request(handle)
+			&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+				0, 0, handle->regs.synthpod.notification_list.urid) //TODO subject
+			&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, proto)
+			&& _patch_notification_patch_get_internal(handle, port,
+				subject, seqn, 0) ) // property == 0 -> get all
+		{
+			synthpod_patcher_pop(&handle->forge, frame, 3);
+			_message_write(handle);
+		}
+	}
+}
+
 static void
 _patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
@@ -3167,7 +3216,12 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 		_mod_unsubscribe_all(handle, mod);
 
 	if(mod)
+	{
 		_mod_subscribe_all(handle, mod);
+
+		_patch_notification_add_patch_get(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
+	}
 
 	handle->module_selector = mod;
 	handle->preset_selector = NULL;
