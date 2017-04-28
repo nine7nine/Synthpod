@@ -324,6 +324,49 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 	}
 }
 
+void
+_sp_app_reset(sp_app_t *app)
+{
+	// remove existing modules
+	int num_mods = app->num_mods;
+
+	app->num_mods = 0;
+
+	for(int m=0; m<num_mods; m++)
+		_sp_app_mod_del(app, app->mods[m]);
+}
+
+void
+_sp_app_populate(sp_app_t *app)
+{
+	const char *uri_str;
+	mod_t *mod;
+
+	app->uid = 1;
+
+	// inject source mod
+	uri_str = SYNTHPOD_PREFIX"source";
+	mod = _sp_app_mod_add(app, uri_str, 0, 0);
+	if(mod)
+	{
+		app->mods[app->num_mods] = mod;
+		app->num_mods += 1;
+	}
+	else
+		fprintf(stderr, "failed to create system source\n");
+
+	// inject sink mod
+	uri_str = SYNTHPOD_PREFIX"sink";
+	mod = _sp_app_mod_add(app, uri_str, 0, 0);
+	if(mod)
+	{
+		app->mods[app->num_mods] = mod;
+		app->num_mods += 1;
+	}
+	else
+		fprintf(stderr, "failed to create system sink\n");
+}
+
 sp_app_t *
 sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 {
@@ -378,32 +421,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	sp_app_from_ui_fill(app);
 
-	const char *uri_str;
-	mod_t *mod;
-
-	app->uid = 1;
-
-	// inject source mod
-	uri_str = SYNTHPOD_PREFIX"source";
-	mod = _sp_app_mod_add(app, uri_str, 0, 0);
-	if(mod)
-	{
-		app->mods[app->num_mods] = mod;
-		app->num_mods += 1;
-	}
-	else
-		fprintf(stderr, "failed to create system source\n");
-
-	// inject sink mod
-	uri_str = SYNTHPOD_PREFIX"sink";
-	mod = _sp_app_mod_add(app, uri_str, 0, 0);
-	if(mod)
-	{
-		app->mods[app->num_mods] = mod;
-		app->num_mods += 1;
-	}
-	else
-		fprintf(stderr, "failed to create system sink\n");
+	_sp_app_populate(app);
 
 	app->fps.bound = driver->sample_rate / 24; //TODO make this configurable
 	app->fps.counter = 0;
@@ -657,6 +675,9 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			_sp_transmit_module_list_fill(&app->regs, &app->forge, trans, size);
 			_sp_app_to_ui_advance(app, size);
 		}
+
+		// to nk
+		_sp_app_ui_set_modlist(app, 0, 0); //FIXME subj, seqn
 
 		// recalculate concurrency
 		_dsp_master_reorder(app);

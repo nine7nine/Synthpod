@@ -3910,14 +3910,6 @@ _init(plughandle_t *handle)
 	{
 		_message_write(handle);
 	}
-
-	// patch:Get [patch:property pset:preset]
-	if(  _message_request(handle)
-		&& synthpod_patcher_get(&handle->regs, &handle->forge,
-			0, 0, handle->regs.pset.preset.urid) )
-	{
-		_message_write(handle);
-	}
 }
 
 static void
@@ -4434,10 +4426,18 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								_add_mod(handle, (const LV2_Atom_URID *)itm);
 							}
 
-							// get connection matrix
+							// patch:Get [patch:property spod:connectionList]
 							if(  _message_request(handle)
 								&& synthpod_patcher_get(&handle->regs, &handle->forge,
 									0, 0, handle->regs.synthpod.connection_list.urid) )
+							{
+								_message_write(handle);
+							}
+
+							// patch:Get [patch:property pset:preset]
+							if(  _message_request(handle)
+								&& synthpod_patcher_get(&handle->regs, &handle->forge,
+									0, 0, handle->regs.pset.preset.urid) )
 							{
 								_message_write(handle);
 							}

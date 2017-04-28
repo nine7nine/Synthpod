@@ -491,6 +491,12 @@ _sp_app_to_worker_advance(sp_app_t *app, size_t written)
 void
 _sp_app_order(sp_app_t *app);
 
+void
+_sp_app_reset(sp_app_t *app);
+
+void
+_sp_app_populate(sp_app_t *app);
+
 /*
  * State
  */
@@ -582,5 +588,11 @@ _sp_app_port_unlock(port_t *port)
 {
 	atomic_flag_clear_explicit(&port->lock, memory_order_release);
 }
+
+/*
+ * Ui
+ */
+void
+_sp_app_ui_set_modlist(sp_app_t *app, LV2_URID subj, int32_t seqn);
 
 #endif

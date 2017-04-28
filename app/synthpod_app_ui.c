@@ -1013,6 +1013,32 @@ _port_find_by_symbol(sp_app_t *app, LV2_URID urn, const char *symbol)
 	return NULL;
 }
 
+__realtime void
+_sp_app_ui_set_modlist(sp_app_t *app, LV2_URID subj, int32_t seqn)
+{
+	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+	if(answer)
+	{
+		LV2_Atom_Forge_Frame frame [2];
+		LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
+			&app->regs, &app->forge, &frame[0], subj, seqn, app->regs.synthpod.module_list.urid);
+		if(ref)
+			ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
+		for(unsigned m = 0; m < app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+
+			if(ref)
+				ref = lv2_atom_forge_urid(&app->forge, mod->urn);
+		}
+		if(ref)
+		{
+			synthpod_patcher_pop(&app->forge, frame, 2);
+			_sp_app_to_ui_advance_atom(app, answer);
+		}
+	}
+}
+
 __realtime static bool
 _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 {
@@ -1043,27 +1069,7 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 
 		if(prop == app->regs.synthpod.module_list.urid)
 		{
-			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
-			if(answer)
-			{
-				LV2_Atom_Forge_Frame frame [2];
-				LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
-					&app->regs, &app->forge, &frame[0], subj, sn, prop);
-				if(ref)
-					ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
-				for(unsigned m = 0; m < app->num_mods; m++)
-				{
-					mod_t *mod = app->mods[m];
-
-					if(ref)
-						ref = lv2_atom_forge_urid(&app->forge, mod->urn);
-				}
-				if(ref)
-				{
-					synthpod_patcher_pop(&app->forge, frame, 2);
-					_sp_app_to_ui_advance_atom(app, answer);
-				}
-			}
+			_sp_app_ui_set_modlist(app, subj, sn);
 		}
 		else if(prop == app->regs.synthpod.connection_list.urid)
 		{

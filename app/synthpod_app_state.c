@@ -533,6 +533,18 @@ _state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	return NULL;
 }
 
+static void
+_toggle_dirty(sp_app_t *app)
+{
+	while(true)
+	{
+		bool expected = false;
+		const bool desired = true;
+		if(atomic_compare_exchange_weak(&app->dirty, &expected, desired))
+			break;
+	}
+}
+
 int
 _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 {
@@ -553,7 +565,7 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 		return -1;
 
 	LV2_Atom_Object *obj = _deserialize_from_turtle(app->sratom, app->driver->unmap, state_dst);
-	if(obj)
+	if(obj) // existing project
 	{
 		// restore state
 		sp_app_restore(app, _state_retrieve, obj,
@@ -562,22 +574,15 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 
 		free(obj); // allocated by _deserialize_from_turtle
 	}
-	else
+	else if(!strcmp(bundle_path, SYNTHPOD_PREFIX"stereo")) // new project from UI
 	{
-		FILE *f = fopen(state_dst, "rb");
-
-		if(f) // path does not yet exist, aka new project
-		{
-			fclose(f);
-
-			while(true)
-			{
-				bool expected = false;
-				const bool desired = true;
-				if(atomic_compare_exchange_weak(&app->dirty, &expected, desired))
-					break;
-			}
-		}
+		_sp_app_reset(app);
+		_sp_app_populate(app);
+		_toggle_dirty(app);
+	}
+	else // new project from CLI
+	{
+		_toggle_dirty(app);
 	}
 
 	free(state_dst);
@@ -1048,13 +1053,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	if(!(_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
 		return LV2_STATE_ERR_BAD_FLAGS;
 
-	// remove existing modules
-	int num_mods = app->num_mods;
-
-	app->num_mods = 0;
-
-	for(int m=0; m<num_mods; m++)
-		_sp_app_mod_del(app, app->mods[m]);
+	_sp_app_reset(app);
 
 	LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, iter)
 	{
@@ -1258,13 +1257,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		}
 	}
 
-	while(true)
-	{
-		bool expected = false;
-		const bool desired = true;
-		if(atomic_compare_exchange_weak(&app->dirty, &expected, desired))
-			break;
-	}
+	_toggle_dirty(app);
 
 	return LV2_STATE_SUCCESS;
 }
