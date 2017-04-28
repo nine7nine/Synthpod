@@ -28,7 +28,12 @@
 #include <osc.lv2/osc.h>
 #include <xpress.lv2/xpress.h>
 
+#include <sandbox_master.h>
+
 #include <math.h>
+#include <unistd.h> // fork
+#include <sys/wait.h> // waitpid
+#include <errno.h> // waitpid
 
 #define NK_PUGL_API
 #include <nk_pugl/nk_pugl.h>
@@ -57,6 +62,7 @@ typedef struct _port_t port_t;
 typedef struct _param_t param_t;
 typedef struct _prop_t prop_t;
 typedef struct _mod_conn_t mod_conn_t;
+typedef struct _mod_ui_t mod_ui_t;
 typedef struct _port_conn_t port_conn_t;
 typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
@@ -128,7 +134,7 @@ struct _audio_port_t {
 
 struct _port_t {
 	property_type_t type;
-	int32_t index;
+	uint32_t index;
 	const char *symbol;
 	mod_t *mod;
 	const LilvPort *port;
@@ -163,6 +169,7 @@ struct _mod_t {
 
 	LV2_URID urn;
 	const LilvPlugin *plug;
+	LilvUIs *uis;
 
 	hash_t ports;
 	hash_t groups;
@@ -202,6 +209,18 @@ struct _mod_conn_t {
 	bool moving;
 };
 
+struct _mod_ui_t {
+	const LilvUI *ui;
+	LV2_URID urn;
+	mod_t *mod;
+	pid_t pid;
+	struct {
+		sandbox_master_driver_t driver;
+		sandbox_master_t *sb;
+		char *socket_uri;
+	} sbox;
+};
+
 struct _plughandle_t {
 	LilvWorld *world;
 
@@ -224,6 +243,7 @@ struct _plughandle_t {
 
 	hash_t mods;
 	hash_t conns;
+	hash_t uis;
 
 	struct {
 		LilvNode *pg_group;
@@ -336,7 +356,7 @@ static inline void
 _message_write(plughandle_t *handle)
 {
 	handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
-	handle->regs.port.event_transfer.urid, &handle->atom);
+		handle->regs.port.event_transfer.urid, &handle->atom);
 }
 
 static size_t
@@ -516,393 +536,6 @@ _node_as_bool(const LilvNode *node, int32_t dflt)
 		return lilv_node_as_bool(node) ? 1 : 0;
 	else
 		return dflt;
-}
-
-static void
-_port_conn_free(port_conn_t *port_conn);
-
-static mod_conn_t *
-_mod_conn_find(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
-{
-	HASH_FOREACH(&handle->conns, mod_conn_itr)
-	{
-		mod_conn_t *mod_conn = *mod_conn_itr;
-
-		if( (mod_conn->source_mod == source_mod) && (mod_conn->sink_mod == sink_mod) )
-			return mod_conn;
-	}
-
-	return NULL;
-}
-
-static mod_conn_t *
-_mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
-{
-	mod_conn_t *mod_conn = calloc(1, sizeof(mod_conn_t));
-	if(mod_conn)
-	{
-		mod_conn->source_mod = source_mod;
-		mod_conn->sink_mod = sink_mod;
-		mod_conn->pos = nk_vec2(
-			(source_mod->pos.x + sink_mod->pos.x)/2,
-			(source_mod->pos.y + sink_mod->pos.y)/2);
-		mod_conn->source_type = PROPERTY_TYPE_NONE;
-		mod_conn->sink_type = PROPERTY_TYPE_NONE;
-		_hash_add(&handle->conns, mod_conn);
-	}
-
-	return mod_conn;
-}
-
-static void
-_mod_conn_free(plughandle_t *handle, mod_conn_t *mod_conn)
-{
-	HASH_FREE(&mod_conn->conns, port_conn_ptr)
-	{
-		port_conn_t *port_conn = port_conn_ptr;
-
-		_port_conn_free(port_conn);
-	}
-
-	free(mod_conn);
-}
-
-static void
-_mod_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn)
-{
-	_hash_remove(&handle->conns, mod_conn);
-	_mod_conn_free(handle, mod_conn);
-}
-
-static void
-_mod_conn_refresh_type(mod_conn_t *mod_conn)
-{
-	mod_conn->source_type = PROPERTY_TYPE_NONE;
-	mod_conn->sink_type = PROPERTY_TYPE_NONE;
-
-	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
-	{
-		port_conn_t *port_conn = *port_conn_itr;
-
-		mod_conn->source_type |= port_conn->source_port->type;
-		mod_conn->sink_type |= port_conn->sink_port->type;
-	}
-}
-
-static port_conn_t *
-_port_conn_find(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
-{
-	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
-	{
-		port_conn_t *port_conn = *port_conn_itr;
-
-		if( (port_conn->source_port == source_port) && (port_conn->sink_port == sink_port) )
-			return port_conn;
-	}
-
-	return NULL;
-}
-
-static port_conn_t *
-_port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
-{
-	port_conn_t *port_conn = calloc(1, sizeof(port_conn_t));
-	if(port_conn)
-	{
-		port_conn->source_port = source_port;
-		port_conn->sink_port = sink_port;
-
-		mod_conn->source_type |= source_port->type;
-		mod_conn->sink_type |= sink_port->type;
-		_hash_add(&mod_conn->conns, port_conn);
-	}
-
-	return port_conn;
-}
-
-static void
-_port_conn_free(port_conn_t *port_conn)
-{
-	free(port_conn);
-}
-
-static void
-_port_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn, port_conn_t *port_conn)
-{
-	_hash_remove(&mod_conn->conns, port_conn);
-	_port_conn_free(port_conn);
-
-	if(_hash_size(&mod_conn->conns) == 0)
-		_mod_conn_remove(handle, mod_conn);
-	else
-		_mod_conn_refresh_type(mod_conn);
-}
-
-static port_t *
-_mod_port_find_by_symbol(mod_t *mod, const char *symbol)
-{
-	HASH_FOREACH(&mod->ports, port_itr)
-	{
-		port_t *port = *port_itr;
-
-		if(!strcmp(port->symbol, symbol))
-			return port;
-	}
-
-	return NULL;
-}
-
-static param_t *
-_mod_param_find_by_property(mod_t *mod, LV2_URID property)
-{
-	HASH_FOREACH(&mod->params, param_itr)
-	{
-		param_t *param = *param_itr;
-
-		if(param->property == property)
-			return param;
-	}
-
-	return NULL;
-}
-
-static mod_t *
-_mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
-{
-	HASH_FOREACH(&handle->mods, mod_itr)
-	{
-		mod_t *mod = *mod_itr;
-
-		if(mod->urn == urn)
-			return mod;
-	}
-
-	return NULL;
-}
-
-static void
-_register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter, bool is_readonly)
-{
-	param_t *param = calloc(1, sizeof(param_t));
-	if(!param)
-		return;
-
-	_hash_add(&mod->params, param);
-
-	param->param = parameter;
-	param->is_readonly = is_readonly;
-
-	param->property = handle->map->map(handle->map->handle, lilv_node_as_uri(parameter));
-	param->range = 0;
-	LilvNode *range = lilv_world_get(handle->world, parameter, handle->node.rdfs_range, NULL);
-	if(range)
-	{
-		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
-		lilv_node_free(range);
-	}
-
-	if(!param->range)
-		return;
-
-	LilvNode *min = lilv_world_get(handle->world, parameter, handle->node.lv2_minimum, NULL);
-	if(min)
-	{
-		if(param->range == handle->forge.Int)
-			param->min.i = _node_as_int(min, 0);
-		else if(param->range == handle->forge.Bool)
-			param->min.i = _node_as_bool(min, false);
-		else if(param->range == handle->forge.Long)
-			param->min.h = _node_as_int(min, 0);
-		else if(param->range == handle->forge.Float)
-			param->min.f = _node_as_float(min, 0.f);
-		else if(param->range == handle->forge.Double)
-			param->min.d = _node_as_float(min, 0.f);
-		//FIXME
-		lilv_node_free(min);
-	}
-
-	LilvNode *max = lilv_world_get(handle->world, parameter, handle->node.lv2_maximum, NULL);
-	if(max)
-	{
-		if(param->range == handle->forge.Int)
-			param->max.i = _node_as_int(max, 1);
-		else if(param->range == handle->forge.Bool)
-			param->max.i = _node_as_bool(max, true);
-		else if(param->range == handle->forge.Long)
-			param->max.h = _node_as_int(max, 1);
-		else if(param->range == handle->forge.Float)
-			param->max.f = _node_as_float(max, 1.f);
-		else if(param->range == handle->forge.Double)
-			param->max.d = _node_as_float(max, 1.f);
-		//FIXME
-		lilv_node_free(max);
-	}
-
-	LilvNode *val = lilv_world_get(handle->world, parameter, handle->node.lv2_default, NULL);
-	if(val)
-	{
-		if(param->range == handle->forge.Int)
-			param->val.i = _node_as_int(val, 0);
-		else if(param->range == handle->forge.Bool)
-			param->val.i = _node_as_bool(min, false);
-		else if(param->range == handle->forge.Long)
-			param->val.h = _node_as_int(min, 0);
-		else if(param->range == handle->forge.Float)
-			param->val.f = _node_as_float(min, 0.f);
-		else if(param->range == handle->forge.Double)
-			param->val.d = _node_as_float(min, 0.f);
-		//FIXME
-		lilv_node_free(val);
-	}
-
-	if(param->range == handle->forge.Int)
-		param->span.i = param->max.i - param->min.i;
-	else if(param->range == handle->forge.Bool)
-		param->span.i = param->max.i - param->min.i;
-	else if(param->range == handle->forge.Long)
-		param->span.h = param->max.h - param->min.h;
-	else if(param->range == handle->forge.Float)
-		param->span.f = param->max.f - param->min.f;
-	else if(param->range == handle->forge.Double)
-		param->span.d = param->max.d - param->min.d;
-	//FIXME
-}
-
-static inline float
-dBFSp6(float peak)
-{
-	const float d = 6.f + 20.f * log10f(fabsf(peak) / 2.f);
-	const float e = (d + 64.f) / 70.f;
-	return NK_CLAMP(0.f, e, 1.f);
-}
-
-#if 0
-static inline float
-dBFS(float peak)
-{
-	const float d = 20.f * log10f(fabsf(peak));
-	const float e = (d + 70.f) / 70.f;
-	return NK_CLAMP(0.f, e, 1.f);
-}
-#endif
-
-static int
-_sort_rdfs_label(const void *a, const void *b, void *data)
-{
-	plughandle_t *handle = data;
-
-	const LilvNode *group_a = *(const LilvNode **)a;
-	const LilvNode *group_b = *(const LilvNode **)b;
-
-	const char *name_a = NULL;
-	const char *name_b = NULL;
-
-	LilvNode *node_a = lilv_world_get(handle->world, group_a, handle->node.rdfs_label, NULL);
-	if(!node_a)
-		node_a = lilv_world_get(handle->world, group_a, handle->node.lv2_name, NULL);
-
-	LilvNode *node_b = lilv_world_get(handle->world, group_b, handle->node.rdfs_label, NULL);
-	if(!node_b)
-		node_b = lilv_world_get(handle->world, group_b, handle->node.lv2_name, NULL);
-
-	if(node_a)
-		name_a = lilv_node_as_string(node_a);
-	if(node_b)
-		name_b = lilv_node_as_string(node_b);
-
-	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
-		: 0;
-
-	if(node_a)
-		lilv_node_free(node_a);
-	if(node_b)
-		lilv_node_free(node_b);
-
-	return ret;
-}
-
-static int
-_sort_port_name(const void *a, const void *b, void *data)
-{
-	mod_t *mod = data;
-
-	const port_t *port_a = *(const port_t **)a;
-	const port_t *port_b = *(const port_t **)b;
-
-	const char *name_a = NULL;
-	const char *name_b = NULL;
-
-	LilvNode *node_a = lilv_port_get_name(mod->plug, port_a->port);
-	LilvNode *node_b = lilv_port_get_name(mod->plug, port_b->port);
-
-	if(node_a)
-		name_a = lilv_node_as_string(node_a);
-	if(node_b)
-		name_b = lilv_node_as_string(node_b);
-
-	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
-		: 0;
-
-	if(node_a)
-		lilv_node_free(node_a);
-	if(node_b)
-		lilv_node_free(node_b);
-
-	return ret;
-}
-
-static int
-_sort_scale_point_name(const void *a, const void *b)
-{
-	const scale_point_t *scale_point_a = *(const scale_point_t **)a;
-	const scale_point_t *scale_point_b = *(const scale_point_t **)b;
-
-	const char *name_a = scale_point_a->label;
-	const char *name_b = scale_point_b->label;
-
-	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
-		: 0;
-
-	return ret;
-}
-
-static int
-_sort_param_name(const void *a, const void *b, void *data)
-{
-	plughandle_t *handle = data;
-
-	const param_t *param_a = *(const param_t **)a;
-	const param_t *param_b = *(const param_t **)b;
-
-	const char *name_a = NULL;
-	const char *name_b = NULL;
-
-	LilvNode *node_a = lilv_world_get(handle->world, param_a->param, handle->node.rdfs_label, NULL);
-	if(!node_a)
-		node_a = lilv_world_get(handle->world, param_a->param, handle->node.lv2_name, NULL);
-
-	LilvNode *node_b = lilv_world_get(handle->world, param_b->param, handle->node.rdfs_label, NULL);
-	if(!node_b)
-		node_b = lilv_world_get(handle->world, param_b->param, handle->node.lv2_name, NULL);
-
-	if(node_a)
-		name_a = lilv_node_as_string(node_a);
-	if(node_b)
-		name_b = lilv_node_as_string(node_b);
-
-	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
-		: 0;
-
-	if(node_a)
-		lilv_node_free(node_a);
-	if(node_b)
-		lilv_node_free(node_b);
-
-	return ret;
 }
 
 static LV2_Atom_Forge_Ref
@@ -1172,6 +805,747 @@ _patch_notification_add_patch_get(plughandle_t *handle, mod_t *mod,
 }
 
 static void
+_port_conn_free(port_conn_t *port_conn);
+
+static mod_conn_t *
+_mod_conn_find(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
+{
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		if( (mod_conn->source_mod == source_mod) && (mod_conn->sink_mod == sink_mod) )
+			return mod_conn;
+	}
+
+	return NULL;
+}
+
+static mod_conn_t *
+_mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
+{
+	mod_conn_t *mod_conn = calloc(1, sizeof(mod_conn_t));
+	if(mod_conn)
+	{
+		mod_conn->source_mod = source_mod;
+		mod_conn->sink_mod = sink_mod;
+		mod_conn->pos = nk_vec2(
+			(source_mod->pos.x + sink_mod->pos.x)/2,
+			(source_mod->pos.y + sink_mod->pos.y)/2);
+		mod_conn->source_type = PROPERTY_TYPE_NONE;
+		mod_conn->sink_type = PROPERTY_TYPE_NONE;
+		_hash_add(&handle->conns, mod_conn);
+	}
+
+	return mod_conn;
+}
+
+static void
+_mod_conn_free(plughandle_t *handle, mod_conn_t *mod_conn)
+{
+	HASH_FREE(&mod_conn->conns, port_conn_ptr)
+	{
+		port_conn_t *port_conn = port_conn_ptr;
+
+		_port_conn_free(port_conn);
+	}
+
+	free(mod_conn);
+}
+
+static void
+_mod_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn)
+{
+	_hash_remove(&handle->conns, mod_conn);
+	_mod_conn_free(handle, mod_conn);
+}
+
+static void
+_mod_conn_refresh_type(mod_conn_t *mod_conn)
+{
+	mod_conn->source_type = PROPERTY_TYPE_NONE;
+	mod_conn->sink_type = PROPERTY_TYPE_NONE;
+
+	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+	{
+		port_conn_t *port_conn = *port_conn_itr;
+
+		mod_conn->source_type |= port_conn->source_port->type;
+		mod_conn->sink_type |= port_conn->sink_port->type;
+	}
+}
+
+static port_t *
+_mod_port_find_by_symbol(mod_t *mod, const char *symbol)
+{
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		if(!strcmp(port->symbol, symbol))
+			return port;
+	}
+
+	return NULL;
+}
+
+static port_t *
+_mod_port_find_by_index(mod_t *mod, uint32_t index)
+{
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		if(port->index == index)
+			return port;
+	}
+
+	return NULL;
+}
+
+static param_t *
+_mod_param_find_by_property(mod_t *mod, LV2_URID property)
+{
+	HASH_FOREACH(&mod->params, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		if(param->property == property)
+			return param;
+	}
+
+	return NULL;
+}
+
+static mod_t *
+_mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
+{
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		if(mod->urn == urn)
+			return mod;
+	}
+
+	return NULL;
+}
+
+static mod_ui_t *
+_mod_ui_find_by_mod(plughandle_t *handle, mod_t *mod)
+{
+	HASH_FOREACH(&handle->uis, mod_ui_itr)
+	{
+		mod_ui_t *mod_ui = *mod_ui_itr;
+
+		if(mod_ui->mod == mod)
+			return mod_ui;
+	}
+
+	return NULL;
+}
+
+static void
+_mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
+	uint32_t src_proto, const LV2_Atom *src_value, bool route_to_ui)
+{
+	mod_ui_t *mod_ui = route_to_ui
+		? _mod_ui_find_by_mod(handle, src_mod) //FIXME there may be multiples
+		: NULL;
+
+	if(  (src_proto == handle->regs.port.float_protocol.urid)
+		&& (src_value->type == handle->forge.Float)
+		&& (src_port->type & PROPERTY_TYPE_CONTROL) )
+	{
+		control_port_t *control = &src_port->control;
+		const float f32 = ((const LV2_Atom_Float *)src_value)->body;
+
+		if(control->is_bool || control->is_int)
+			control->val.i = f32;
+		else // float
+			control->val.f = f32;
+
+		if(mod_ui)
+		{
+			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
+				sizeof(float), 0, &f32);
+			(void)status; //FIXME
+		}
+	}
+	else if( (src_proto == handle->regs.port.peak_protocol.urid)
+		&& (src_value->type == handle->forge.Tuple)
+		&& (src_port->type & PROPERTY_TYPE_AUDIO || src_port->type & PROPERTY_TYPE_CV) )
+	{
+		const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)src_value;
+		const LV2_Atom_Int *period_start = (const LV2_Atom_Int *)lv2_atom_tuple_begin(tup);
+		const LV2_Atom_Int *period_size = (const LV2_Atom_Int *)lv2_atom_tuple_next(&period_start->atom);
+		const LV2_Atom_Float *peak = (const LV2_Atom_Float *)lv2_atom_tuple_next(&period_size->atom);;
+
+		audio_port_t *audio = &src_port->audio;
+
+		audio->peak = peak ? peak->body : 0;
+
+		if(mod_ui)
+		{
+			const LV2UI_Peak_Data pdata = {
+				.period_start = period_start ? period_start->body : 0,
+				.period_size = period_size ? period_size->body : 0,
+				.peak = audio->peak
+			};
+			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
+				sizeof(LV2UI_Peak_Data),
+				handle->regs.port.peak_protocol.urid, &pdata);
+			(void)status; //FIXME
+		}
+	}
+	else if( (src_proto == handle->regs.port.event_transfer.urid)
+		&& (src_port->type & PROPERTY_TYPE_ATOM) )
+	{
+		const LV2_Atom_Object *pobj = (const LV2_Atom_Object *)src_value;
+		if(  (pobj->atom.type == handle->forge.Object)
+			&& (pobj->body.otype == handle->regs.patch.set.urid) )
+		{
+			//printf("got patch:Set notification\n");
+			const LV2_Atom_URID *subject = NULL;
+			const LV2_Atom_URID *property = NULL;
+			const LV2_Atom *value = NULL;
+
+			lv2_atom_object_get(pobj,
+				handle->regs.patch.subject.urid, &subject,
+				handle->regs.patch.property.urid, &property,
+				handle->regs.patch.value.urid, &value,
+				0);
+
+			const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+				? subject->body
+				: 0;
+			const LV2_URID prop = property && (property->atom.type == handle->forge.URID)
+				? property->body
+				: 0;
+
+			if(prop && value)
+			{
+				param_t *param = _mod_param_find_by_property(src_mod, prop);
+
+				if(  param
+					&& (param->range == value->type) )
+				{
+					if(param->range == handle->forge.Int)
+					{
+						param->val.i = ((const LV2_Atom_Int *)value)->body;
+					}
+					else if(param->range == handle->forge.Bool)
+					{
+						param->val.i = ((const LV2_Atom_Bool *)value)->body;
+					}
+					else if(param->range == handle->forge.Long)
+					{
+						param->val.h = ((const LV2_Atom_Long *)value)->body;
+					}
+					else if(param->range == handle->forge.Float)
+					{
+						param->val.f = ((const LV2_Atom_Float *)value)->body;
+					}
+					else if(param->range == handle->forge.Double)
+					{
+						param->val.d = ((const LV2_Atom_Double *)value)->body;
+					}
+					//FIXME handle remaining types
+				}
+			}
+		}
+
+		if(mod_ui)
+		{
+			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
+				lv2_atom_total_size(src_value),
+				handle->regs.port.event_transfer.urid, src_value);
+			(void)status; //FIXME
+		}
+	}
+	else if( (src_proto == handle->regs.port.atom_transfer.urid)
+		&& (src_port->type & PROPERTY_TYPE_ATOM) )
+	{
+		//FIXME rarely (never) sent by any plugin
+
+		if(mod_ui)
+		{
+			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
+				lv2_atom_total_size(src_value),
+				handle->regs.port.atom_transfer.urid, src_value);
+			(void)status; //FIXME
+		}
+	}
+
+	nk_pugl_post_redisplay(&handle->win);
+}
+
+static void
+_mod_ui_write_function(LV2UI_Controller controller, uint32_t index,
+	uint32_t size, uint32_t protocol, const void *buffer)
+{
+	mod_ui_t *mod_ui = controller;
+	mod_t *mod = mod_ui->mod;
+	plughandle_t *handle = mod->handle;
+
+	if(protocol == 0)
+		protocol = handle->regs.port.float_protocol.urid;
+
+	//printf("_mod_ui_write_function: %u %u %u\n", index, size, protocol);
+
+	port_t *port = _mod_port_find_by_index(mod, index);
+	if(port)
+	{
+		if(protocol == handle->regs.port.float_protocol.urid)
+		{
+			// route to dsp
+			_patch_notification_add(handle, port, protocol,
+				sizeof(float), handle->forge.Float, buffer);
+
+			// route to nk
+			const LV2_Atom_Float flt = {
+				.atom = {
+					.size = sizeof(float),
+					.type = handle->forge.Float
+				},
+				.body = *(const float *)buffer
+			};
+			_mod_nk_write_function(handle, mod, port, protocol, &flt.atom, false);
+		}
+		else if( (protocol == handle->regs.port.event_transfer.urid)
+			|| (protocol == handle->regs.port.atom_transfer.urid) )
+		{
+			const LV2_Atom *atom = buffer;
+
+			// route to dsp
+			_patch_notification_add(handle, port, protocol,
+				atom->size, atom->type, LV2_ATOM_BODY_CONST(atom));
+
+			// route to nk
+			_mod_nk_write_function(handle, mod, port, protocol, atom, false);
+		}
+	}
+}
+
+static void
+_mod_ui_subscribe_function(LV2UI_Controller controller, uint32_t index,
+	uint32_t protocol, bool state)
+{
+	mod_ui_t *mod_ui = controller;
+	mod_t *mod = mod_ui->mod;
+	plughandle_t *handle = mod->handle;
+
+	printf("_mod_ui_subscribe_function: %u %u %i\n", index, protocol, state);
+
+	// route to dsp
+	port_t *port = _mod_port_find_by_index(mod, index);
+	if(port)
+		_patch_subscription_add(handle, port);
+}
+
+static mod_ui_t *
+_mod_ui_find_by_ui(plughandle_t *handle, const LilvUI *ui)
+{
+	HASH_FOREACH(&handle->uis, mod_ui_itr)
+	{
+		mod_ui_t *mod_ui = *mod_ui_itr;
+
+		if(mod_ui->ui == ui)
+			return mod_ui;
+	}
+
+	return NULL;
+}
+
+static mod_ui_t *
+_mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
+{
+	mod_ui_t *mod_ui = calloc(1, sizeof(mod_ui_t));
+	if(mod_ui)
+	{
+		const LilvNode *ui_node = lilv_ui_get_uri(ui);
+		const char *ui_uri = lilv_node_as_uri(ui_node);
+
+		mod_ui->ui = ui;
+		mod_ui->urn = handle->map->map(handle->map->handle, ui_uri);
+		mod_ui->mod = mod;
+
+		const LilvNode *plugin_node = lilv_plugin_get_uri(mod->plug);
+		const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
+
+		const char *plugin_uri = plugin_node ? lilv_node_as_uri(plugin_node) : NULL;
+		const char *bundle_uri = bundle_node ? lilv_node_as_uri(bundle_node) : NULL;
+		char window_name [128];
+		char update_rate [32];
+
+		char *bundle_path = lilv_file_uri_parse(bundle_uri, NULL);
+
+		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///%"PRIu32"-%"PRIu32, mod->urn, mod_ui->urn) == -1)
+			mod_ui->sbox.socket_uri = NULL;
+		snprintf(window_name, 128, "%s", "Name"); //FIXME
+		snprintf(update_rate, 32, "%f", 30.f); //FIXME
+
+		mod_ui->sbox.driver.socket_path = mod_ui->sbox.socket_uri;
+		mod_ui->sbox.driver.map = handle->map;
+		mod_ui->sbox.driver.unmap = handle->unmap;
+		mod_ui->sbox.driver.recv_cb = _mod_ui_write_function;
+		mod_ui->sbox.driver.subscribe_cb = _mod_ui_subscribe_function;
+		mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);
+
+		const char *exec_uri = NULL;
+#if defined(SANDBOX_X11)
+		if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+			exec_uri = "/usr/local/bin/synthpod_sandbox_x11"; //FIXME prefix
+#endif
+#if defined(SANDBOX_GTK2)
+		if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+			exec_uri = "/usr/local/bin/synthpod_sandbox_gtk2"; //FIXME prefix
+#endif
+#if defined(SANDBOX_GTK3)
+		if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+			exec_uri = "/usr/local/bin/synthpod_sandbox_gtk3"; //FIXME prefix
+#endif
+#if defined(SANDBOX_QT4)
+		if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+			exec_uri = "/usr/local/bin/synthpod_sandbox_qt4"; //FIXME prefix
+#endif
+#if defined(SANDBOX_QT5)
+		if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+			exec_uri = "/usr/local/bin/synthpod_sandbox_qt5"; //FIXME prefix
+#endif
+#if defined(SANDBOX_SHOW)
+		if(lilv_ui_is_a(ui, handle->regs.ui.show_interface.node))
+			exec_uri = "/usr/local/bin/synthpod_sandbox_show"; //FIXME prefix
+#endif
+#if defined(SANDBOX_KX)
+		if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+			exec_uri = "/usr/local/bin/synthpod_sandbox_kx"; //FIXME prefix
+#endif
+
+		printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n", exec_uri, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_uri, window_name, update_rate);
+
+		if(exec_uri && plugin_uri && bundle_path && ui_uri && mod_ui->sbox.socket_uri && mod_ui->sbox.sb)
+		{
+			const pid_t pid = fork();
+			if(pid == 0) // child
+			{
+				char *const args [] = {
+					(char *)exec_uri,
+					"-p", (char *)plugin_uri,
+					"-b", (char *)bundle_path,
+					"-u", (char *)ui_uri,
+					"-s", mod_ui->sbox.socket_uri,
+					"-w", window_name,
+					"-r", update_rate,
+					NULL
+				};
+
+				execvp(args[0], args);
+			}
+
+			// parent
+			mod_ui->pid = pid;
+			free(bundle_path);
+		}
+
+		// parent
+		_hash_add(&handle->uis, mod_ui);
+	}
+
+	return mod_ui;
+}
+
+static void
+_mod_ui_free(plughandle_t *handle, mod_ui_t *mod_ui)
+{
+	kill(mod_ui->pid, SIGTERM);
+	sandbox_master_free(mod_ui->sbox.sb);
+	free(mod_ui->sbox.socket_uri);
+	free(mod_ui);
+}
+
+static void
+_mod_ui_remove(plughandle_t *handle, mod_ui_t *mod_ui)
+{
+	_hash_remove(&handle->uis, mod_ui);
+	_mod_ui_free(handle, mod_ui);
+}
+
+static port_conn_t *
+_port_conn_find(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
+{
+	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+	{
+		port_conn_t *port_conn = *port_conn_itr;
+
+		if( (port_conn->source_port == source_port) && (port_conn->sink_port == sink_port) )
+			return port_conn;
+	}
+
+	return NULL;
+}
+
+static port_conn_t *
+_port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
+{
+	port_conn_t *port_conn = calloc(1, sizeof(port_conn_t));
+	if(port_conn)
+	{
+		port_conn->source_port = source_port;
+		port_conn->sink_port = sink_port;
+
+		mod_conn->source_type |= source_port->type;
+		mod_conn->sink_type |= sink_port->type;
+		_hash_add(&mod_conn->conns, port_conn);
+	}
+
+	return port_conn;
+}
+
+static void
+_port_conn_free(port_conn_t *port_conn)
+{
+	free(port_conn);
+}
+
+static void
+_port_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn, port_conn_t *port_conn)
+{
+	_hash_remove(&mod_conn->conns, port_conn);
+	_port_conn_free(port_conn);
+
+	if(_hash_size(&mod_conn->conns) == 0)
+		_mod_conn_remove(handle, mod_conn);
+	else
+		_mod_conn_refresh_type(mod_conn);
+}
+
+static void
+_register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter, bool is_readonly)
+{
+	param_t *param = calloc(1, sizeof(param_t));
+	if(!param)
+		return;
+
+	_hash_add(&mod->params, param);
+
+	param->param = parameter;
+	param->is_readonly = is_readonly;
+
+	param->property = handle->map->map(handle->map->handle, lilv_node_as_uri(parameter));
+	param->range = 0;
+	LilvNode *range = lilv_world_get(handle->world, parameter, handle->node.rdfs_range, NULL);
+	if(range)
+	{
+		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
+		lilv_node_free(range);
+	}
+
+	if(!param->range)
+		return;
+
+	LilvNode *min = lilv_world_get(handle->world, parameter, handle->node.lv2_minimum, NULL);
+	if(min)
+	{
+		if(param->range == handle->forge.Int)
+			param->min.i = _node_as_int(min, 0);
+		else if(param->range == handle->forge.Bool)
+			param->min.i = _node_as_bool(min, false);
+		else if(param->range == handle->forge.Long)
+			param->min.h = _node_as_int(min, 0);
+		else if(param->range == handle->forge.Float)
+			param->min.f = _node_as_float(min, 0.f);
+		else if(param->range == handle->forge.Double)
+			param->min.d = _node_as_float(min, 0.f);
+		//FIXME
+		lilv_node_free(min);
+	}
+
+	LilvNode *max = lilv_world_get(handle->world, parameter, handle->node.lv2_maximum, NULL);
+	if(max)
+	{
+		if(param->range == handle->forge.Int)
+			param->max.i = _node_as_int(max, 1);
+		else if(param->range == handle->forge.Bool)
+			param->max.i = _node_as_bool(max, true);
+		else if(param->range == handle->forge.Long)
+			param->max.h = _node_as_int(max, 1);
+		else if(param->range == handle->forge.Float)
+			param->max.f = _node_as_float(max, 1.f);
+		else if(param->range == handle->forge.Double)
+			param->max.d = _node_as_float(max, 1.f);
+		//FIXME
+		lilv_node_free(max);
+	}
+
+	LilvNode *val = lilv_world_get(handle->world, parameter, handle->node.lv2_default, NULL);
+	if(val)
+	{
+		if(param->range == handle->forge.Int)
+			param->val.i = _node_as_int(val, 0);
+		else if(param->range == handle->forge.Bool)
+			param->val.i = _node_as_bool(min, false);
+		else if(param->range == handle->forge.Long)
+			param->val.h = _node_as_int(min, 0);
+		else if(param->range == handle->forge.Float)
+			param->val.f = _node_as_float(min, 0.f);
+		else if(param->range == handle->forge.Double)
+			param->val.d = _node_as_float(min, 0.f);
+		//FIXME
+		lilv_node_free(val);
+	}
+
+	if(param->range == handle->forge.Int)
+		param->span.i = param->max.i - param->min.i;
+	else if(param->range == handle->forge.Bool)
+		param->span.i = param->max.i - param->min.i;
+	else if(param->range == handle->forge.Long)
+		param->span.h = param->max.h - param->min.h;
+	else if(param->range == handle->forge.Float)
+		param->span.f = param->max.f - param->min.f;
+	else if(param->range == handle->forge.Double)
+		param->span.d = param->max.d - param->min.d;
+	//FIXME
+}
+
+static inline float
+dBFSp6(float peak)
+{
+	const float d = 6.f + 20.f * log10f(fabsf(peak) / 2.f);
+	const float e = (d + 64.f) / 70.f;
+	return NK_CLAMP(0.f, e, 1.f);
+}
+
+#if 0
+static inline float
+dBFS(float peak)
+{
+	const float d = 20.f * log10f(fabsf(peak));
+	const float e = (d + 70.f) / 70.f;
+	return NK_CLAMP(0.f, e, 1.f);
+}
+#endif
+
+static int
+_sort_rdfs_label(const void *a, const void *b, void *data)
+{
+	plughandle_t *handle = data;
+
+	const LilvNode *group_a = *(const LilvNode **)a;
+	const LilvNode *group_b = *(const LilvNode **)b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_world_get(handle->world, group_a, handle->node.rdfs_label, NULL);
+	if(!node_a)
+		node_a = lilv_world_get(handle->world, group_a, handle->node.lv2_name, NULL);
+
+	LilvNode *node_b = lilv_world_get(handle->world, group_b, handle->node.rdfs_label, NULL);
+	if(!node_b)
+		node_b = lilv_world_get(handle->world, group_b, handle->node.lv2_name, NULL);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
+
+static int
+_sort_port_name(const void *a, const void *b, void *data)
+{
+	mod_t *mod = data;
+
+	const port_t *port_a = *(const port_t **)a;
+	const port_t *port_b = *(const port_t **)b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_port_get_name(mod->plug, port_a->port);
+	LilvNode *node_b = lilv_port_get_name(mod->plug, port_b->port);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
+
+static int
+_sort_scale_point_name(const void *a, const void *b)
+{
+	const scale_point_t *scale_point_a = *(const scale_point_t **)a;
+	const scale_point_t *scale_point_b = *(const scale_point_t **)b;
+
+	const char *name_a = scale_point_a->label;
+	const char *name_b = scale_point_b->label;
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	return ret;
+}
+
+static int
+_sort_param_name(const void *a, const void *b, void *data)
+{
+	plughandle_t *handle = data;
+
+	const param_t *param_a = *(const param_t **)a;
+	const param_t *param_b = *(const param_t **)b;
+
+	const char *name_a = NULL;
+	const char *name_b = NULL;
+
+	LilvNode *node_a = lilv_world_get(handle->world, param_a->param, handle->node.rdfs_label, NULL);
+	if(!node_a)
+		node_a = lilv_world_get(handle->world, param_a->param, handle->node.lv2_name, NULL);
+
+	LilvNode *node_b = lilv_world_get(handle->world, param_b->param, handle->node.rdfs_label, NULL);
+	if(!node_b)
+		node_b = lilv_world_get(handle->world, param_b->param, handle->node.lv2_name, NULL);
+
+	if(node_a)
+		name_a = lilv_node_as_string(node_a);
+	if(node_b)
+		name_b = lilv_node_as_string(node_b);
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	if(node_a)
+		lilv_node_free(node_a);
+	if(node_b)
+		lilv_node_free(node_b);
+
+	return ret;
+}
+
+static void
 _patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
 	const LilvNode *node= lilv_plugin_get_uri(plug);
@@ -1248,6 +1622,7 @@ static void
 _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 {
 	mod->plug = plug;
+	mod->uis = lilv_plugin_get_uis(mod->plug);
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug);
 
 	for(unsigned p=0; p<num_ports; p++)
@@ -1589,6 +1964,8 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 
 	if(mod->writables)
 		lilv_nodes_free(mod->writables);
+
+	lilv_uis_free(mod->uis); //FIXME may be referred by app->uis
 }
 
 static bool
@@ -2697,6 +3074,15 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 
 					_patch_notification_add(handle, port, handle->regs.port.float_protocol.urid,
 						sizeof(float), handle->forge.Float, &val);
+
+					// route to ui
+					mod_ui_t *mod_ui = _mod_ui_find_by_mod(handle, mod); //FIXME there may be multiple
+					if(mod_ui)
+					{
+						const int status = sandbox_master_send(mod_ui->sbox.sb, port->index,
+							sizeof(float), 0, &val);
+						(void)status; //FIXME
+					}
 				}
 			} break;
 			case PROPERTY_TYPE_ATOM:
@@ -2867,7 +3253,9 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 			{
 				_patch_notification_add_patch_set(handle, mod,
 					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					sizeof(int32_t), handle->forge.Int, &param->val.i); //FIXME
+					sizeof(int32_t), handle->forge.Int, &param->val.i);
+
+				//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
 			}
 			else if(param->range == handle->forge.Bool)
 			{
@@ -3284,7 +3672,23 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 
 	if(_mod_moveable(handle, ctx, mod, &bounds))
 	{
-		_patch_mod_remove(handle, mod);
+		if(nk_input_is_key_down(in, NK_KEY_SHIFT)) //FIXME
+		{
+			const LilvUI *ui = lilv_uis_get(mod->uis, lilv_uis_begin(mod->uis)); //FIXME show selection of all supported UIs
+
+			if(ui)
+			{
+				mod_ui_t *mod_ui = _mod_ui_find_by_ui(handle, ui);
+				if(mod_ui)
+					_mod_ui_remove(handle, mod_ui); // kill existing UI
+				else
+					mod_ui = _mod_ui_add(handle, mod, ui); // spawn UI
+			}
+		}
+		else
+		{
+			_patch_mod_remove(handle, mod);
+		}
 	}
 
 	const bool is_hovering = nk_input_is_mouse_hovering_rect(in, bounds);
@@ -4115,6 +4519,12 @@ cleanup(LV2UI_Handle instance)
 		_mod_conn_free(handle, mod_conn);
 	}
 
+	HASH_FREE(&handle->uis, ptr)
+	{
+		mod_ui_t *mod_ui = ptr;
+		_mod_ui_free(handle, mod_ui);
+	}
+
 	_hash_free(&handle->plugin_matches);
 	_hash_free(&handle->preset_matches);
 	_hash_free(&handle->port_matches);
@@ -4247,94 +4657,7 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 
 			if(src_port)
 			{
-				if(  (src_proto == handle->regs.port.float_protocol.urid)
-					&& (src_value->type == handle->forge.Float)
-					&& (src_port->type & PROPERTY_TYPE_CONTROL) )
-				{
-					control_port_t *control = &src_port->control;
-
-					if(control->is_bool || control->is_int)
-						control->val.i = ((const LV2_Atom_Float *)src_value)->body;
-					else // float
-						control->val.f = ((const LV2_Atom_Float *)src_value)->body;
-				}
-				else if( (src_proto == handle->regs.port.peak_protocol.urid)
-					&& (src_value->type == handle->forge.Tuple)
-					&& (src_port->type & PROPERTY_TYPE_AUDIO || src_port->type & PROPERTY_TYPE_CV) )
-				{
-					const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)src_value;
-					const LV2_Atom_Int *period_start = (const LV2_Atom_Int *)lv2_atom_tuple_begin(tup);
-					const LV2_Atom_Int *period_size = (const LV2_Atom_Int *)lv2_atom_tuple_next(&period_start->atom);
-					const LV2_Atom_Float *peak = (const LV2_Atom_Float *)lv2_atom_tuple_next(&period_size->atom);;
-
-					audio_port_t *audio = &src_port->audio;
-
-					audio->peak = peak->body;
-				}
-				else if( (src_proto == handle->regs.port.event_transfer.urid)
-					&& (src_port->type & PROPERTY_TYPE_ATOM) )
-				{
-					const LV2_Atom_Object *pobj = (const LV2_Atom_Object *)src_value;
-					if(  (pobj->atom.type == handle->forge.Object)
-						&& (pobj->body.otype == handle->regs.patch.set.urid) )
-					{
-						//printf("got patch:Set notification\n");
-						const LV2_Atom_URID *subject = NULL;
-						const LV2_Atom_URID *property = NULL;
-						const LV2_Atom *value = NULL;
-
-						lv2_atom_object_get(pobj,
-							handle->regs.patch.subject.urid, &subject,
-							handle->regs.patch.property.urid, &property,
-							handle->regs.patch.value.urid, &value,
-							0);
-
-						const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
-							? subject->body
-							: 0;
-						const LV2_URID prop = property && (property->atom.type == handle->forge.URID)
-							? property->body
-							: 0;
-
-						if(prop && value)
-						{
-							param_t *param = _mod_param_find_by_property(src_mod, prop);
-
-							if(  param
-								&& (param->range == value->type) )
-							{
-								if(param->range == handle->forge.Int)
-								{
-									param->val.i = ((const LV2_Atom_Int *)value)->body;
-								}
-								else if(param->range == handle->forge.Bool)
-								{
-									param->val.i = ((const LV2_Atom_Bool *)value)->body;
-								}
-								else if(param->range == handle->forge.Long)
-								{
-									param->val.h = ((const LV2_Atom_Long *)value)->body;
-								}
-								else if(param->range == handle->forge.Float)
-								{
-									param->val.f = ((const LV2_Atom_Float *)value)->body;
-								}
-								else if(param->range == handle->forge.Double)
-								{
-									param->val.d = ((const LV2_Atom_Double *)value)->body;
-								}
-								//FIXME handle remaining types
-							}
-						}
-					}
-				}
-				else if( (src_proto == handle->regs.port.atom_transfer.urid)
-					&& (src_port->type & PROPERTY_TYPE_ATOM) )
-				{
-					//FIXME rarely (never) sent by any plugin
-				}
-
-				nk_pugl_post_redisplay(&handle->win);
+				_mod_nk_write_function(handle, src_mod, src_port, src_proto, src_value, true);
 			}
 		}
 	}
@@ -4601,6 +4924,37 @@ static int
 _idle(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
+
+	// handle communication with plugin UIs
+	{
+rewind:
+
+		HASH_FOREACH(&handle->uis, mod_ui_itr)
+		{
+			mod_ui_t *mod_ui = *mod_ui_itr;
+
+			bool rolling = true;
+
+			int status;
+			const int res = waitpid(mod_ui->pid, &status, WUNTRACED | WNOHANG);
+			if(res < 0)
+			{
+				if(errno == ECHILD) // child not existing
+					rolling = false;
+			}
+			else if(res == mod_ui->pid)
+			{
+				if(!WIFSTOPPED(status) && !WIFCONTINUED(status)) // child exited/crashed
+					rolling = false;
+			}
+
+			if(!rolling || sandbox_master_recv(mod_ui->sbox.sb))
+			{
+				_mod_ui_remove(handle, mod_ui);
+				goto rewind;
+			}
+		}
+	}
 
 	if(nk_pugl_process_events(&handle->win) || handle->done)
 		return 1;

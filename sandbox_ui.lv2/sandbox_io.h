@@ -461,7 +461,7 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 		return -1;
 
 	const int fd = io->is_master
-		? shm_open(io->name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
+		? shm_open(io->name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR)
 		: shm_open(io->name, O_RDWR, S_IRUSR | S_IWUSR);
 	if(fd == -1)
 		return -1;

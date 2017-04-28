@@ -130,15 +130,42 @@ else() # GNU/Linux
 	set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}/pugl/pugl/pugl_x11.c)
 endif()
 
+if(BUILD_SANDBOX_X11)
+	add_definitions("-DSANDBOX_X11")
+endif()
+if(BUILD_SANDBOX_GTK2)
+	add_definitions("-DSANDBOX_GTK2")
+endif()
+if(BUILD_SANDBOX_GTK3)
+	add_definitions("-DSANDBOX_GTK3")
+endif()
+if(BUILD_SANDBOX_QT4)
+	add_definitions("-DSANDBOX_QT4")
+endif()
+if(BUILD_SANDBOX_QT5)
+	add_definitions("-DSANDBOX_QT5")
+endif()
+if(BUILD_SANDBOX_EFL)
+	add_definitions("-DSANDBOX_EFL")
+endif()
+if(BUILD_SANDBOX_SHOW)
+	add_definitions("-DSANDBOX_SHOW")
+endif()
+if(BUILD_SANDBOX_KX)
+	add_definitions("-DSANDBOX_KX")
+endif()
+
 # synthpod_nk
 add_library(synthpod_nk.lv2 MODULE
 	synthpod_lv2_nk.c
 	synthpod_common_nk.c
 	synthpod_keyboard_nk.c
+	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c
 	${TAR_NK})
 target_link_libraries(synthpod_nk.lv2
 	${LIBS_NK}
-	${LILV_LDFLAGS})
+	${LILV_LDFLAGS}
+	rt pthread)
 set_target_properties(synthpod_nk.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_nk")
 install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
