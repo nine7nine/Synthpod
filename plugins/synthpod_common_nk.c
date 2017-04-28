@@ -3239,7 +3239,7 @@ static void
 _set_module_selector(plughandle_t *handle, mod_t *mod)
 {
 	if(handle->module_selector)
-		_mod_unsubscribe_all(handle, mod);
+		_mod_unsubscribe_all(handle, handle->module_selector);
 
 	if(mod)
 	{
