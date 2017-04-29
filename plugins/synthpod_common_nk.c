@@ -41,7 +41,7 @@
 #include <lilv/lilv.h>
 
 #define SEARCH_BUF_MAX 128
-#define ATOM_BUF_MAX 1024
+#define ATOM_BUF_MAX 0x20000 // 1M
 #define CONTROL 14 //FIXME
 
 #ifdef Bool
@@ -947,14 +947,32 @@ _mod_ui_get_first(mod_t *mod)
 	return NULL;
 }
 
+static bool
+_mod_ui_is_running(mod_ui_t *mod_ui)
+{
+	return (mod_ui->pid != 0) && mod_ui->sbox.sb;
+}
+
+static void
+_mod_uis_send(mod_t *mod, uint32_t index, uint32_t size, uint32_t format,
+	const void *buf)
+{
+	HASH_FOREACH(&mod->uis, mod_ui_itr)
+	{
+		mod_ui_t *mod_ui = *mod_ui_itr;
+
+		if(!_mod_ui_is_running(mod_ui))
+			continue;
+
+		const int status = sandbox_master_send(mod_ui->sbox.sb, index, size, format, buf);
+		(void)status; //FIXME
+	}
+}
+
 static void
 _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 	uint32_t src_proto, const LV2_Atom *src_value, bool route_to_ui)
 {
-	mod_ui_t *mod_ui = route_to_ui
-		? _mod_ui_get_first(src_mod) //FIXME there may be multiples
-		: NULL;
-
 	if(  (src_proto == handle->regs.port.float_protocol.urid)
 		&& (src_value->type == handle->forge.Float)
 		&& (src_port->type & PROPERTY_TYPE_CONTROL) )
@@ -967,11 +985,9 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 		else // float
 			control->val.f = f32;
 
-		if(mod_ui)
+		if(route_to_ui)
 		{
-			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
-				sizeof(float), 0, &f32);
-			(void)status; //FIXME
+			_mod_uis_send(src_mod, src_port->index, sizeof(float), 0, &f32);
 		}
 	}
 	else if( (src_proto == handle->regs.port.peak_protocol.urid)
@@ -987,17 +1003,16 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 
 		audio->peak = peak ? peak->body : 0;
 
-		if(mod_ui)
+		if(route_to_ui)
 		{
 			const LV2UI_Peak_Data pdata = {
 				.period_start = period_start ? period_start->body : 0,
 				.period_size = period_size ? period_size->body : 0,
 				.peak = audio->peak
 			};
-			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
-				sizeof(LV2UI_Peak_Data),
+
+			_mod_uis_send(src_mod, src_port->index, sizeof(LV2UI_Peak_Data),
 				handle->regs.port.peak_protocol.urid, &pdata);
-			(void)status; //FIXME
 		}
 	}
 	else if( (src_proto == handle->regs.port.event_transfer.urid)
@@ -1057,12 +1072,10 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 			}
 		}
 
-		if(mod_ui)
+		if(route_to_ui)
 		{
-			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
-				lv2_atom_total_size(src_value),
+			_mod_uis_send(src_mod, src_port->index, lv2_atom_total_size(src_value),
 				handle->regs.port.event_transfer.urid, src_value);
-			(void)status; //FIXME
 		}
 	}
 	else if( (src_proto == handle->regs.port.atom_transfer.urid)
@@ -1070,12 +1083,10 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 	{
 		//FIXME rarely (never) sent by any plugin
 
-		if(mod_ui)
+		if(route_to_ui)
 		{
-			const int status = sandbox_master_send(mod_ui->sbox.sb, src_port->index,
-				lv2_atom_total_size(src_value),
+			_mod_uis_send(src_mod, src_port->index, lv2_atom_total_size(src_value),
 				handle->regs.port.atom_transfer.urid, src_value);
-			(void)status; //FIXME
 		}
 	}
 
@@ -1123,8 +1134,7 @@ _mod_ui_write_function(LV2UI_Controller controller, uint32_t index,
 			_patch_notification_add(handle, port, protocol,
 				atom->size, atom->type, LV2_ATOM_BODY_CONST(atom));
 
-			// route to nk
-			_mod_nk_write_function(handle, mod, port, protocol, atom, false);
+			// FIXME routing to nk not needed, will be fed back via dsp 
 		}
 	}
 }
@@ -1281,12 +1291,6 @@ _mod_ui_run(mod_ui_t *mod_ui)
 		// parent
 		mod_ui->pid = pid;
 	}
-}
-
-static bool
-_mod_ui_is_running(mod_ui_t *mod_ui)
-{
-	return (mod_ui->pid != 0) && mod_ui->sbox.sb;
 }
 
 static void
@@ -3135,13 +3139,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 						sizeof(float), handle->forge.Float, &val);
 
 					// route to ui
-					mod_ui_t *mod_ui = _mod_ui_get_first(mod); //FIXME there may be multiple
-					if(mod_ui)
-					{
-						const int status = sandbox_master_send(mod_ui->sbox.sb, port->index,
-							sizeof(float), 0, &val);
-						(void)status; //FIXME
-					}
+					_mod_uis_send(mod, port->index, sizeof(float), 0, &val);
 				}
 			} break;
 			case PROPERTY_TYPE_ATOM:
@@ -3308,13 +3306,12 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 	{
 		if(_expose_param_inner(ctx, param, handle, dy, name_str))
 		{
+			//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
 			if(param->range == handle->forge.Int)
 			{
 				_patch_notification_add_patch_set(handle, mod,
 					handle->regs.port.event_transfer.urid, 0, 0, param->property,
 					sizeof(int32_t), handle->forge.Int, &param->val.i);
-
-				//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
 			}
 			else if(param->range == handle->forge.Bool)
 			{
@@ -3733,18 +3730,13 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 	{
 		if(nk_input_is_key_down(in, NK_KEY_SHIFT)) //FIXME
 		{
-			const LilvUI *ui = lilv_uis_get(mod->ui_nodes, lilv_uis_begin(mod->ui_nodes)); //FIXME show selection of all supported UIs
-
-			if(ui)
+			mod_ui_t *mod_ui = _mod_ui_get_first(mod);
+			if(mod_ui)
 			{
-				mod_ui_t *mod_ui = _mod_ui_get_first(mod);
-				if(mod_ui)
-				{
-					if(_mod_ui_is_running(mod_ui))
-						_mod_ui_stop(mod_ui); // stop existing UI
-					else
-						_mod_ui_run(mod_ui); // run UI
-				}
+				if(_mod_ui_is_running(mod_ui))
+					_mod_ui_stop(mod_ui); // stop existing UI
+				else
+					_mod_ui_run(mod_ui); // run UI
 			}
 		}
 		else
