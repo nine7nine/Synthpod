@@ -54,6 +54,7 @@ typedef enum _selector_search_t selector_search_t;
 typedef union _param_union_t param_union_t;
 
 typedef struct _hash_t hash_t;
+typedef struct _chunk_t chunk_t;
 typedef struct _scale_point_t scale_point_t;
 typedef struct _control_port_t control_port_t;
 typedef struct _audio_port_t audio_port_t;
@@ -101,12 +102,19 @@ struct _hash_t {
 	unsigned size;
 };
 
+struct _chunk_t {
+	uint32_t size;
+	uint8_t *body;
+};
+
 union _param_union_t {
- int32_t b;
- int32_t i;
- int64_t h;
- float f;
- double d;
+	int32_t b;
+	int32_t i;
+	int64_t h;
+	float f;
+	double d;
+	struct nk_text_edit editor;
+	chunk_t chunk;
 };
 
 struct _scale_point_t {
@@ -1029,6 +1037,8 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 	if(range)
 	{
 		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
+		if(param->range == handle->forge.String)
+			nk_textedit_init_default(&param->val.editor);
 		lilv_node_free(range);
 	}
 
@@ -1131,12 +1141,39 @@ _param_add(hash_t *hash, bool is_readonly)
 }
 
 static void
-_param_free(param_t *param)
+_param_free(plughandle_t *handle, param_t *param)
 {
+	if(param->range == handle->forge.String)
+	{
+		nk_textedit_free(&param->val.editor);
+	}
+	else if(param->range == handle->forge.Chunk)
+	{
+		free(param->val.chunk.body);
+	}
+
 	free(param->label);
 	free(param->comment);
 	free(param->units_symbol);
 	free(param);
+}
+
+static void
+_set_string(struct nk_str *str, uint32_t size, const char *body)
+{
+	nk_str_clear(str);
+
+	// replace tab with 2 spaces
+	const char *end = body + size - 1;
+	const char *from = body;
+	for(const char *to = strchr(from, '\t');
+		to && (to < end);
+		from = to + 1, to = strchr(from, '\t'))
+	{
+		nk_str_append_text_utf8(str, from, to-from);
+		nk_str_append_text_utf8(str, "  ", 2);
+	}
+	nk_str_append_text_utf8(str, from, end-from);
 }
 
 static void
@@ -1161,6 +1198,18 @@ _param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
 	else if(param->range == handle->forge.Double)
 	{
 		param->val.d = ((const LV2_Atom_Double *)value)->body;
+	}
+	else if(param->range == handle->forge.String)
+	{
+		struct nk_str *str = &param->val.editor.string;
+		_set_string(str, value->size, LV2_ATOM_BODY_CONST(value));
+	}
+	else if(param->range == handle->forge.Chunk)
+	{
+		param->val.chunk.size = value->size;
+		param->val.chunk.body = realloc(param->val.chunk.body, value->size);
+		if(param->val.chunk.body)
+			memcpy(param->val.chunk.body, LV2_ATOM_BODY_CONST(value), value->size);
 	}
 	//FIXME handle remaining types
 }
@@ -1303,7 +1352,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								HASH_FREE(&src_mod->wdynams, param_ptr)
 								{
 									param_t *param = param_ptr;
-									_param_free(param);
+									_param_free(handle, param);
 								}
 							}
 							else if(subj)
@@ -1312,7 +1361,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								if(param)
 								{
 									_hash_remove(&src_mod->wdynams, param);
-									_param_free(param);
+									_param_free(handle, param);
 								}
 							}
 						}
@@ -1326,7 +1375,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								HASH_FREE(&src_mod->rdynams, param_ptr)
 								{
 									param_t *param = param_ptr;
-									_param_free(param);
+									_param_free(handle, param);
 								}
 							}
 							else if(subj)
@@ -1335,7 +1384,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								if(param)
 								{
 									_hash_remove(&src_mod->rdynams, param);
-									_param_free(param);
+									_param_free(handle, param);
 								}
 							}
 						}
@@ -1428,6 +1477,8 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 									&& (prop->value.type == handle->forge.URID) )
 								{
 									param->range = ((const LV2_Atom_URID *)&prop->value)->body;
+									if(param->range == handle->forge.String)
+										nk_textedit_init_default(&param->val.editor);
 								}
 								else if( (prop->key == handle->regs.rdfs.label.urid)
 									&& (prop->value.type == handle->forge.String) )
@@ -2321,7 +2372,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	HASH_FREE(&mod->params, ptr)
 	{
 		param_t *param = ptr;
-		_param_free(param);
+		_param_free(handle, param);
 	}
 
 	if(mod->presets)
@@ -3478,6 +3529,34 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 }
 
 static bool
+_widget_string(plughandle_t *handle, struct nk_context *ctx,
+	struct nk_text_edit *editor, bool editable)
+{
+	bool commited = false;
+
+	const int old_len = nk_str_len_char(&editor->string);
+	nk_flags flags = NK_EDIT_BOX;
+	if(!editable)
+		flags |= NK_EDIT_READ_ONLY;
+#if 0 //FIXME
+	if(has_shift_enter)
+#endif
+		flags |= NK_EDIT_SIG_ENTER;
+	const nk_flags state = nk_edit_buffer(ctx, flags,
+		editor, nk_filter_default);
+	if(state & NK_EDIT_COMMITED)
+		commited = true;
+#if 0 //FIXME
+	if( (state & NK_EDIT_ACTIVE) && (old_len != nk_str_len_char(editor.string)) )
+		param->dirty = true;
+	if( (state & NK_EDIT_ACTIVE) && handle->has_control_a)
+		nk_textedit_select_all(editor);
+#endif
+
+	return commited;
+}
+
+static bool
 _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle,
 	float dy, const char *name_str)
 {
@@ -3559,6 +3638,16 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 				if(val != param->val.d)
 					changed = true;
 			}
+		}
+		else if(param->range == handle->forge.String)
+		{
+			if(_widget_string(handle, ctx, &param->val.editor, !param->is_readonly))
+				changed = true;
+		}
+		else if(param->range == handle->forge.Chunk)
+		{
+			nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIu32" bytes", param->val.chunk.size);
+			//FIXME file dialog
 		}
 		else
 		{
@@ -3652,6 +3741,23 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 				_patch_notification_add_patch_set(handle, mod,
 					handle->regs.port.event_transfer.urid, 0, 0, param->property,
 					sizeof(double), handle->forge.Double, &param->val.d);
+			}
+			else if(param->range == handle->forge.String)
+			{
+				const char *str = nk_str_get_const(&param->val.editor.string);
+				const uint32_t sz= nk_str_len_char(&param->val.editor.string) + 1;
+
+				_patch_notification_add_patch_set(handle, mod,
+					handle->regs.port.event_transfer.urid, 0, 0, param->property,
+					sz, handle->forge.String, str);
+			}
+			else if(param->range == handle->forge.Chunk)
+			{
+				chunk_t *chunk = &param->val.chunk;
+
+				_patch_notification_add_patch_set(handle, mod,
+					handle->regs.port.event_transfer.urid, 0, 0, param->property,
+					chunk->size, handle->forge.Chunk, chunk->body);
 			}
 			//FIXME handle remaining types
 		}
