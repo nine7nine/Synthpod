@@ -146,14 +146,19 @@ struct _port_t {
 };
 
 struct _param_t {
-	const LilvNode *param;
 	bool is_readonly;
 	LV2_URID property;
 	LV2_URID range;
+
 	param_union_t min;
 	param_union_t max;
 	param_union_t span;
 	param_union_t val;
+
+	char *label;
+	char *comment;
+	LV2_URID units_unit;
+	char *units_symbol;
 };
 
 struct _prop_t {
@@ -175,6 +180,8 @@ struct _mod_t {
 	hash_t groups;
 	hash_t banks;
 	hash_t params;
+	hash_t wdynams;
+	hash_t rdynams;
 
 	LilvNodes *readables;
 	LilvNodes *writables;
@@ -799,7 +806,7 @@ _patch_notification_add_patch_get(plughandle_t *handle, mod_t *mod,
 				0, 0, handle->regs.synthpod.notification_list.urid) //TODO subject
 			&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, proto)
 			&& _patch_notification_patch_get_internal(handle, port,
-				subject, seqn, 0) ) // property == 0 -> get all
+				subject, seqn, property) ) // property == 0 -> get all
 		{
 			synthpod_patcher_pop(&handle->forge, frame, 3);
 			_message_write(handle);
@@ -916,6 +923,34 @@ _mod_param_find_by_property(mod_t *mod, LV2_URID property)
 		if(param->property == property)
 			return param;
 	}
+	HASH_FOREACH(&mod->wdynams, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		if(param->property == property)
+			return param;
+	}
+	HASH_FOREACH(&mod->rdynams, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		if(param->property == property)
+			return param;
+	}
+
+	return NULL;
+}
+
+static param_t *
+_mod_dynam_find_by_property(hash_t *hash, LV2_URID property)
+{
+	HASH_FOREACH(hash, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		if(param->property == property)
+			return param;
+	}
 
 	return NULL;
 }
@@ -970,6 +1005,167 @@ _mod_uis_send(mod_t *mod, uint32_t index, uint32_t size, uint32_t format,
 }
 
 static void
+_param_update_span(plughandle_t *handle, param_t *param)
+{
+	if(param->range == handle->forge.Int)
+		param->span.i = param->max.i - param->min.i;
+	else if(param->range == handle->forge.Bool)
+		param->span.i = param->max.i - param->min.i;
+	else if(param->range == handle->forge.Long)
+		param->span.h = param->max.h - param->min.h;
+	else if(param->range == handle->forge.Float)
+		param->span.f = param->max.f - param->min.f;
+	else if(param->range == handle->forge.Double)
+		param->span.d = param->max.d - param->min.d;
+	//FIXME more types
+}
+
+static void
+_param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
+{
+	param->property = handle->map->map(handle->map->handle, lilv_node_as_uri(param_node));
+
+	LilvNode *range = lilv_world_get(handle->world, param_node, handle->node.rdfs_range, NULL);
+	if(range)
+	{
+		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
+		lilv_node_free(range);
+	}
+
+	if(param->range)
+	{
+		LilvNode *min = lilv_world_get(handle->world, param_node, handle->node.lv2_minimum, NULL);
+		if(min)
+		{
+			if(param->range == handle->forge.Int)
+				param->min.i = _node_as_int(min, 0);
+			else if(param->range == handle->forge.Bool)
+				param->min.i = _node_as_bool(min, false);
+			else if(param->range == handle->forge.Long)
+				param->min.h = _node_as_int(min, 0);
+			else if(param->range == handle->forge.Float)
+				param->min.f = _node_as_float(min, 0.f);
+			else if(param->range == handle->forge.Double)
+				param->min.d = _node_as_float(min, 0.f);
+			//FIXME
+			lilv_node_free(min);
+		}
+
+		LilvNode *max = lilv_world_get(handle->world, param_node, handle->node.lv2_maximum, NULL);
+		if(max)
+		{
+			if(param->range == handle->forge.Int)
+				param->max.i = _node_as_int(max, 1);
+			else if(param->range == handle->forge.Bool)
+				param->max.i = _node_as_bool(max, true);
+			else if(param->range == handle->forge.Long)
+				param->max.h = _node_as_int(max, 1);
+			else if(param->range == handle->forge.Float)
+				param->max.f = _node_as_float(max, 1.f);
+			else if(param->range == handle->forge.Double)
+				param->max.d = _node_as_float(max, 1.f);
+			//FIXME
+			lilv_node_free(max);
+		}
+
+		LilvNode *val = lilv_world_get(handle->world, param_node, handle->node.lv2_default, NULL);
+		if(val)
+		{
+			if(param->range == handle->forge.Int)
+				param->val.i = _node_as_int(val, 0);
+			else if(param->range == handle->forge.Bool)
+				param->val.i = _node_as_bool(min, false);
+			else if(param->range == handle->forge.Long)
+				param->val.h = _node_as_int(min, 0);
+			else if(param->range == handle->forge.Float)
+				param->val.f = _node_as_float(min, 0.f);
+			else if(param->range == handle->forge.Double)
+				param->val.d = _node_as_float(min, 0.f);
+			//FIXME
+			lilv_node_free(val);
+		}
+
+		_param_update_span(handle, param);
+	}
+
+	LilvNode *label = lilv_world_get(handle->world, param_node, handle->regs.rdfs.label.node, NULL);
+	if(label)
+	{
+		if(lilv_node_is_string(label))
+			param->label = strdup(lilv_node_as_string(label));
+		lilv_node_free(label);
+	}
+
+	LilvNode *comment = lilv_world_get(handle->world, param_node, handle->regs.rdfs.comment.node, NULL);
+	if(comment)
+	{
+		if(lilv_node_is_string(comment))
+			param->comment = strdup(lilv_node_as_string(comment));
+		lilv_node_free(comment);
+	}
+
+	LilvNode *units_unit = lilv_world_get(handle->world, param_node, handle->regs.units.unit.node, NULL);
+	if(units_unit)
+	{
+		if(lilv_node_is_uri(units_unit))
+			param->units_unit = handle->map->map(handle->map->handle, lilv_node_as_uri(units_unit));
+		lilv_node_free(units_unit);
+	}
+
+	//FIXME units_symbol
+}
+
+static param_t *
+_param_add(hash_t *hash, bool is_readonly)
+{
+	param_t *param = calloc(1, sizeof(param_t));
+	if(param)
+	{
+		param->is_readonly = is_readonly;
+		param->range = 0;
+
+		_hash_add(hash, param);
+	}
+
+	return param;
+}
+
+static void
+_param_free(param_t *param)
+{
+	free(param->label);
+	free(param->comment);
+	free(param->units_symbol);
+	free(param);
+}
+
+static void
+_param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
+{
+	if(param->range == handle->forge.Int)
+	{
+		param->val.i = ((const LV2_Atom_Int *)value)->body;
+	}
+	else if(param->range == handle->forge.Bool)
+	{
+		param->val.i = ((const LV2_Atom_Bool *)value)->body;
+	}
+	else if(param->range == handle->forge.Long)
+	{
+		param->val.h = ((const LV2_Atom_Long *)value)->body;
+	}
+	else if(param->range == handle->forge.Float)
+	{
+		param->val.f = ((const LV2_Atom_Float *)value)->body;
+	}
+	else if(param->range == handle->forge.Double)
+	{
+		param->val.d = ((const LV2_Atom_Double *)value)->body;
+	}
+	//FIXME handle remaining types
+}
+
+static void
 _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 	uint32_t src_proto, const LV2_Atom *src_value, bool route_to_ui)
 {
@@ -1019,55 +1215,280 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 		&& (src_port->type & PROPERTY_TYPE_ATOM) )
 	{
 		const LV2_Atom_Object *pobj = (const LV2_Atom_Object *)src_value;
-		if(  (pobj->atom.type == handle->forge.Object)
-			&& (pobj->body.otype == handle->regs.patch.set.urid) )
+
+		if(pobj->atom.type == handle->forge.Object)
 		{
-			//printf("got patch:Set notification\n");
-			const LV2_Atom_URID *subject = NULL;
-			const LV2_Atom_URID *property = NULL;
-			const LV2_Atom *value = NULL;
-
-			lv2_atom_object_get(pobj,
-				handle->regs.patch.subject.urid, &subject,
-				handle->regs.patch.property.urid, &property,
-				handle->regs.patch.value.urid, &value,
-				0);
-
-			const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
-				? subject->body
-				: 0;
-			const LV2_URID prop = property && (property->atom.type == handle->forge.URID)
-				? property->body
-				: 0;
-
-			if(prop && value)
+			if(pobj->body.otype == handle->regs.patch.set.urid)
 			{
-				param_t *param = _mod_param_find_by_property(src_mod, prop);
+				//printf("got patch:Set notification\n");
+				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_URID *property = NULL;
+				const LV2_Atom *value = NULL;
 
-				if(  param
-					&& (param->range == value->type) )
+				lv2_atom_object_get(pobj,
+					handle->regs.patch.subject.urid, &subject,
+					handle->regs.patch.property.urid, &property,
+					handle->regs.patch.value.urid, &value,
+					0);
+
+				const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+					? subject->body
+					: 0;
+				const LV2_URID prop = property && (property->atom.type == handle->forge.URID)
+					? property->body
+					: 0;
+
+				if(prop && value)
 				{
-					if(param->range == handle->forge.Int)
+					param_t *param = _mod_param_find_by_property(src_mod, prop);
+					if(param && (param->range == value->type) )
 					{
-						param->val.i = ((const LV2_Atom_Int *)value)->body;
+						_param_set_value(handle, param, value);
 					}
-					else if(param->range == handle->forge.Bool)
+				}
+			}
+			else if(pobj->body.otype == handle->regs.patch.put.urid)
+			{
+				//printf("got patch:Put notification\n");
+				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_Object *body = NULL;
+
+				lv2_atom_object_get(pobj,
+					handle->regs.patch.subject.urid, &subject,
+					handle->regs.patch.body.urid, &body,
+					0);
+
+				const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+					? subject->body
+					: 0;
+
+				LV2_ATOM_OBJECT_FOREACH(body, prop)
+				{
+					param_t *param = _mod_param_find_by_property(src_mod, prop->key);
+					if(param && (param->range == prop->value.type) )
 					{
-						param->val.i = ((const LV2_Atom_Bool *)value)->body;
+						_param_set_value(handle, param, &prop->value);
 					}
-					else if(param->range == handle->forge.Long)
+				}
+			}
+			else if(pobj->body.otype == handle->regs.patch.patch.urid)
+			{
+				//printf("got patch:Patch notification\n");
+				const LV2_Atom_URID *subject = NULL;
+				const LV2_Atom_Object *rem = NULL;
+				const LV2_Atom_Object *add = NULL;
+
+				lv2_atom_object_get(pobj,
+					handle->regs.patch.subject.urid, &subject,
+					handle->regs.patch.remove.urid, &rem,
+					handle->regs.patch.add.urid, &add,
+					0);
+
+				const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+					? subject->body
+					: 0;
+
+				if(  rem && (rem->atom.type == handle->forge.Object)
+					&& add && (add->atom.type == handle->forge.Object) )
+				{
+					LV2_ATOM_OBJECT_FOREACH(rem, prop)
 					{
-						param->val.h = ((const LV2_Atom_Long *)value)->body;
+						if(  (prop->key == handle->regs.patch.writable.urid)
+							&& (prop->value.type == handle->forge.URID) )
+						{
+							const LV2_URID property = ((const LV2_Atom_URID *)&prop->value)->body;
+
+							if(property == handle->regs.patch.wildcard.urid)
+							{
+								HASH_FREE(&src_mod->wdynams, param_ptr)
+								{
+									param_t *param = param_ptr;
+									_param_free(param);
+								}
+							}
+							else if(subj)
+							{
+								param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, subj);
+								if(param)
+								{
+									_hash_remove(&src_mod->wdynams, param);
+									_param_free(param);
+								}
+							}
+						}
+						else if( (prop->key == handle->regs.patch.readable.urid)
+							&& (prop->value.type == handle->forge.URID) )
+						{
+							const LV2_URID property = ((const LV2_Atom_URID *)&prop->value)->body;
+
+							if(property == handle->regs.patch.wildcard.urid)
+							{
+								HASH_FREE(&src_mod->rdynams, param_ptr)
+								{
+									param_t *param = param_ptr;
+									_param_free(param);
+								}
+							}
+							else if(subj)
+							{
+								param_t *param = _mod_dynam_find_by_property(&src_mod->rdynams, subj);
+								if(param)
+								{
+									_hash_remove(&src_mod->rdynams, param);
+									_param_free(param);
+								}
+							}
+						}
+						else if(subj)
+						{
+							param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, subj);
+							if(!param)
+								param = _mod_dynam_find_by_property(&src_mod->rdynams, subj);
+							if(param)
+							{
+								if(prop->key == handle->regs.rdfs.range.urid)
+								{
+									param->range = 0;
+								}
+								else if(prop->key == handle->regs.rdfs.label.urid)
+								{
+									free(param->label);
+									param->label = NULL;
+								}
+								else if(prop->key == handle->regs.rdfs.comment.urid)
+								{
+									free(param->comment);
+									param->comment= NULL;
+								}
+								else if(prop->key == handle->regs.core.minimum.urid)
+								{
+									param->min.i = 0;
+								}
+								else if(prop->key == handle->regs.core.maximum.urid)
+								{
+									param->max.i = 0;
+								}
+								else if(prop->key == handle->regs.units.unit.urid)
+								{
+									param->units_unit = 0;
+								}
+								else if(prop->key == handle->regs.units.symbol.urid)
+								{
+									free(param->units_symbol);
+									param->units_symbol = NULL;
+								}
+							}
+						}
 					}
-					else if(param->range == handle->forge.Float)
+
+					LV2_ATOM_OBJECT_FOREACH(add, prop)
 					{
-						param->val.f = ((const LV2_Atom_Float *)value)->body;
+						if(  (prop->key == handle->regs.patch.writable.urid)
+							&& (prop->value.type == handle->forge.URID) )
+						{
+							const LV2_URID property = ((const LV2_Atom_URID *)&prop->value)->body;
+
+							param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, property);
+							if(!param)
+								param = _param_add(&src_mod->wdynams, false);
+							if(param)
+							{
+								param->property = property;
+
+								// patch:Get [patch:property property]
+								_patch_notification_add_patch_get(handle, src_mod,
+									handle->regs.port.event_transfer.urid, 0, 0, property);
+							}
+						}
+						else if( (prop->key == handle->regs.patch.readable.urid)
+							&& (prop->value.type == handle->forge.URID) )
+						{
+							const LV2_URID property = ((const LV2_Atom_URID *)&prop->value)->body;
+
+							param_t *param = _mod_dynam_find_by_property(&src_mod->rdynams, property);
+							if(!param)
+								param = _param_add(&src_mod->rdynams, true);
+							if(param)
+							{
+								param->property = property;
+
+								// patch:Get [patch:property property]
+								_patch_notification_add_patch_get(handle, src_mod,
+									handle->regs.port.event_transfer.urid, 0, 0, property);
+							}
+						}
+						else if(subj)
+						{
+							param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, subj);
+							if(!param)
+								param = _mod_dynam_find_by_property(&src_mod->rdynams, subj);
+							if(param)
+							{
+								if(  (prop->key == handle->regs.rdfs.range.urid)
+									&& (prop->value.type == handle->forge.URID) )
+								{
+									param->range = ((const LV2_Atom_URID *)&prop->value)->body;
+								}
+								else if( (prop->key == handle->regs.rdfs.label.urid)
+									&& (prop->value.type == handle->forge.String) )
+								{
+									free(param->label);
+									param->label = strdup(LV2_ATOM_BODY_CONST(&prop->value));
+								}
+								else if( (prop->key == handle->regs.rdfs.comment.urid)
+									&& (prop->value.type == handle->forge.String) )
+								{
+									free(param->comment);
+									param->comment = strdup(LV2_ATOM_BODY_CONST(&prop->value));
+								}
+								else if( (prop->key == handle->regs.core.minimum.urid)
+									&& (prop->value.type == param->range) )
+								{
+									if(param->range == handle->forge.Int)
+										param->min.i = ((const LV2_Atom_Int *)&prop->value)->body;
+									else if(param->range == handle->forge.Bool)
+										param->min.i = ((const LV2_Atom_Bool *)&prop->value)->body;
+									else if(param->range == handle->forge.Long)
+										param->min.h = ((const LV2_Atom_Long *)&prop->value)->body;
+									else if(param->range == handle->forge.Float)
+										param->min.f = ((const LV2_Atom_Float *)&prop->value)->body;
+									else if(param->range == handle->forge.Double)
+										param->min.d = ((const LV2_Atom_Double *)&prop->value)->body;
+									//FIXME support more types
+
+									_param_update_span(handle, param);
+								}
+								else if( (prop->key == handle->regs.core.maximum.urid)
+									&& (prop->value.type == param->range) )
+								{
+									if(param->range == handle->forge.Int)
+										param->max.i = ((const LV2_Atom_Int *)&prop->value)->body;
+									else if(param->range == handle->forge.Bool)
+										param->max.i = ((const LV2_Atom_Bool *)&prop->value)->body;
+									else if(param->range == handle->forge.Long)
+										param->max.h = ((const LV2_Atom_Long *)&prop->value)->body;
+									else if(param->range == handle->forge.Float)
+										param->max.f = ((const LV2_Atom_Float *)&prop->value)->body;
+									else if(param->range == handle->forge.Double)
+										param->max.d = ((const LV2_Atom_Double *)&prop->value)->body;
+									//FIXME support more types
+
+									_param_update_span(handle, param);
+								}
+								else if( (prop->key == handle->regs.units.unit.urid)
+									&& (prop->value.type == handle->forge.URID) )
+								{
+									param->units_unit = ((const LV2_Atom_URID *)&prop->value)->body;
+								}
+								else if( (prop->key == handle->regs.units.symbol.urid)
+									&& (prop->value.type == handle->forge.String) )
+								{
+									free(param->units_symbol);
+									param->units_symbol = strdup(LV2_ATOM_BODY_CONST(&prop->value));
+								}
+							}
+						}
 					}
-					else if(param->range == handle->forge.Double)
-					{
-						param->val.d = ((const LV2_Atom_Double *)value)->body;
-					}
-					//FIXME handle remaining types
 				}
 			}
 		}
@@ -1369,94 +1790,6 @@ _port_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn, port_conn_t *port_
 		_mod_conn_refresh_type(mod_conn);
 }
 
-static void
-_register_parameter(plughandle_t *handle, mod_t *mod, const LilvNode *parameter, bool is_readonly)
-{
-	param_t *param = calloc(1, sizeof(param_t));
-	if(!param)
-		return;
-
-	_hash_add(&mod->params, param);
-
-	param->param = parameter;
-	param->is_readonly = is_readonly;
-
-	param->property = handle->map->map(handle->map->handle, lilv_node_as_uri(parameter));
-	param->range = 0;
-	LilvNode *range = lilv_world_get(handle->world, parameter, handle->node.rdfs_range, NULL);
-	if(range)
-	{
-		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
-		lilv_node_free(range);
-	}
-
-	if(!param->range)
-		return;
-
-	LilvNode *min = lilv_world_get(handle->world, parameter, handle->node.lv2_minimum, NULL);
-	if(min)
-	{
-		if(param->range == handle->forge.Int)
-			param->min.i = _node_as_int(min, 0);
-		else if(param->range == handle->forge.Bool)
-			param->min.i = _node_as_bool(min, false);
-		else if(param->range == handle->forge.Long)
-			param->min.h = _node_as_int(min, 0);
-		else if(param->range == handle->forge.Float)
-			param->min.f = _node_as_float(min, 0.f);
-		else if(param->range == handle->forge.Double)
-			param->min.d = _node_as_float(min, 0.f);
-		//FIXME
-		lilv_node_free(min);
-	}
-
-	LilvNode *max = lilv_world_get(handle->world, parameter, handle->node.lv2_maximum, NULL);
-	if(max)
-	{
-		if(param->range == handle->forge.Int)
-			param->max.i = _node_as_int(max, 1);
-		else if(param->range == handle->forge.Bool)
-			param->max.i = _node_as_bool(max, true);
-		else if(param->range == handle->forge.Long)
-			param->max.h = _node_as_int(max, 1);
-		else if(param->range == handle->forge.Float)
-			param->max.f = _node_as_float(max, 1.f);
-		else if(param->range == handle->forge.Double)
-			param->max.d = _node_as_float(max, 1.f);
-		//FIXME
-		lilv_node_free(max);
-	}
-
-	LilvNode *val = lilv_world_get(handle->world, parameter, handle->node.lv2_default, NULL);
-	if(val)
-	{
-		if(param->range == handle->forge.Int)
-			param->val.i = _node_as_int(val, 0);
-		else if(param->range == handle->forge.Bool)
-			param->val.i = _node_as_bool(min, false);
-		else if(param->range == handle->forge.Long)
-			param->val.h = _node_as_int(min, 0);
-		else if(param->range == handle->forge.Float)
-			param->val.f = _node_as_float(min, 0.f);
-		else if(param->range == handle->forge.Double)
-			param->val.d = _node_as_float(min, 0.f);
-		//FIXME
-		lilv_node_free(val);
-	}
-
-	if(param->range == handle->forge.Int)
-		param->span.i = param->max.i - param->min.i;
-	else if(param->range == handle->forge.Bool)
-		param->span.i = param->max.i - param->min.i;
-	else if(param->range == handle->forge.Long)
-		param->span.h = param->max.h - param->min.h;
-	else if(param->range == handle->forge.Float)
-		param->span.f = param->max.f - param->min.f;
-	else if(param->range == handle->forge.Double)
-		param->span.d = param->max.d - param->min.d;
-	//FIXME
-}
-
 static inline float
 dBFSp6(float peak)
 {
@@ -1566,30 +1899,12 @@ _sort_param_name(const void *a, const void *b, void *data)
 	const param_t *param_a = *(const param_t **)a;
 	const param_t *param_b = *(const param_t **)b;
 
-	const char *name_a = NULL;
-	const char *name_b = NULL;
-
-	LilvNode *node_a = lilv_world_get(handle->world, param_a->param, handle->node.rdfs_label, NULL);
-	if(!node_a)
-		node_a = lilv_world_get(handle->world, param_a->param, handle->node.lv2_name, NULL);
-
-	LilvNode *node_b = lilv_world_get(handle->world, param_b->param, handle->node.rdfs_label, NULL);
-	if(!node_b)
-		node_b = lilv_world_get(handle->world, param_b->param, handle->node.lv2_name, NULL);
-
-	if(node_a)
-		name_a = lilv_node_as_string(node_a);
-	if(node_b)
-		name_b = lilv_node_as_string(node_b);
+	const char *name_a = param_a->label;
+	const char *name_b = param_b->label;
 
 	const int ret = name_a && name_b
 		? strcasecmp(name_a, name_b)
 		: 0;
-
-	if(node_a)
-		lilv_node_free(node_a);
-	if(node_b)
-		lilv_node_free(node_b);
 
 	return ret;
 }
@@ -1938,15 +2253,19 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 	LILV_FOREACH(nodes, i, mod->readables)
 	{
-		const LilvNode *parameter = lilv_nodes_get(mod->readables, i);
+		const LilvNode *param_node= lilv_nodes_get(mod->readables, i);
 
-		_register_parameter(handle, mod, parameter, true);
+		param_t *param = _param_add(&mod->params, true);
+		if(param)
+			_param_fill(handle, param, param_node);
 	}
 	LILV_FOREACH(nodes, i, mod->writables)
 	{
-		const LilvNode *parameter = lilv_nodes_get(mod->readables, i);
+		const LilvNode *param_node = lilv_nodes_get(mod->readables, i);
 
-		_register_parameter(handle, mod, parameter, false);
+		param_t *param = _param_add(&mod->params, false);
+		if(param)
+			_param_fill(handle, param, param_node);
 	}
 
 	_hash_sort_r(&mod->params, _sort_param_name, handle);
@@ -2002,7 +2321,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	HASH_FREE(&mod->params, ptr)
 	{
 		param_t *param = ptr;
-		free(param);
+		_param_free(param);
 	}
 
 	if(mod->presets)
@@ -3297,10 +3616,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 static void
 _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t *param, float dy)
 {
-	LilvNode *name_node = lilv_world_get(handle->world, param->param, handle->node.rdfs_label, NULL);
-	if(!name_node)
-		name_node = lilv_world_get(handle->world, param->param, handle->node.lv2_name, NULL);
-	const char *name_str = name_node ? lilv_node_as_string(name_node) : "Unknown";
+	const char *name_str = param->label ? param->label : "Unknown";
 
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
 	{
@@ -3342,9 +3658,6 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 
 		nk_group_end(ctx);
 	}
-
-	if(name_node)
-		lilv_node_free(name_node);
 }
 
 static void
@@ -3446,6 +3759,40 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			{
 				nk_layout_row_dynamic(ctx, dy, 1);
 				_tab_label(ctx, "Parameters");
+
+				nk_layout_row_dynamic(ctx, DY, 4);
+				first = false;
+			}
+
+			_expose_param(handle, mod, ctx, param, dy);
+		}
+	}
+
+	{
+		bool first = true;
+		HASH_FOREACH(&mod->wdynams, itr)
+		{
+			param_t *param = *itr;
+
+			if(first)
+			{
+				nk_layout_row_dynamic(ctx, dy, 1);
+				_tab_label(ctx, "Dynameters");
+
+				nk_layout_row_dynamic(ctx, DY, 4);
+				first = false;
+			}
+
+			_expose_param(handle, mod, ctx, param, dy);
+		}
+		HASH_FOREACH(&mod->rdynams, itr)
+		{
+			param_t *param = *itr;
+
+			if(first)
+			{
+				nk_layout_row_dynamic(ctx, dy, 1);
+				_tab_label(ctx, "Dynameters");
 
 				nk_layout_row_dynamic(ctx, DY, 4);
 				first = false;
@@ -4929,12 +5276,12 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_rem_connection(handle, (const LV2_Atom_Object *)&prop->value);
 							}
-							else if(  (prop->key == handle->regs.synthpod.notification_list.urid)
+							else if( (prop->key == handle->regs.synthpod.notification_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
 							{
 								//FIXME never reached
 							}
-							else if(  (prop->key == handle->regs.synthpod.module_list.urid)
+							else if( (prop->key == handle->regs.synthpod.module_list.urid)
 								&& (prop->value.type == handle->forge.URID) )
 							{
 								_rem_mod(handle, (const LV2_Atom_URID *)&prop->value);
@@ -4950,12 +5297,12 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_add_connection(handle, (const LV2_Atom_Object *)&prop->value);
 							}
-							else if(  (prop->key == handle->regs.synthpod.notification_list.urid)
+							else if( (prop->key == handle->regs.synthpod.notification_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
 							{
 								_add_notification(handle, (const LV2_Atom_Object *)&prop->value);
 							}
-							else if(  (prop->key == handle->regs.synthpod.module_list.urid)
+							else if( (prop->key == handle->regs.synthpod.module_list.urid)
 								&& (prop->value.type == handle->forge.URID) )
 							{
 								_add_mod(handle, (const LV2_Atom_URID *)&prop->value);
