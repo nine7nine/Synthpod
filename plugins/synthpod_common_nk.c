@@ -49,7 +49,6 @@
 #endif
 
 typedef enum _property_type_t property_type_t;
-typedef enum _selector_grid_t selector_grid_t;
 typedef enum _selector_search_t selector_search_t;
 
 typedef union _param_union_t param_union_t;
@@ -169,7 +168,8 @@ struct _mod_t {
 
 	LV2_URID urn;
 	const LilvPlugin *plug;
-	LilvUIs *uis;
+	LilvUIs *ui_nodes;
+	hash_t uis;
 
 	hash_t ports;
 	hash_t groups;
@@ -210,14 +210,18 @@ struct _mod_conn_t {
 };
 
 struct _mod_ui_t {
-	const LilvUI *ui;
-	LV2_URID urn;
 	mod_t *mod;
+	const LilvUI *ui;
+	const char *uri;
+
 	pid_t pid;
 	struct {
 		sandbox_master_driver_t driver;
 		sandbox_master_t *sb;
 		char *socket_uri;
+		char *bundle_path;
+		char *window_name;
+		char *update_rate;
 	} sbox;
 };
 
@@ -243,7 +247,6 @@ struct _plughandle_t {
 
 	hash_t mods;
 	hash_t conns;
-	hash_t uis;
 
 	struct {
 		LilvNode *pg_group;
@@ -932,14 +935,13 @@ _mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
 }
 
 static mod_ui_t *
-_mod_ui_find_by_mod(plughandle_t *handle, mod_t *mod)
+_mod_ui_get_first(mod_t *mod)
 {
-	HASH_FOREACH(&handle->uis, mod_ui_itr)
+	HASH_FOREACH(&mod->uis, mod_ui_itr)
 	{
 		mod_ui_t *mod_ui = *mod_ui_itr;
 
-		if(mod_ui->mod == mod)
-			return mod_ui;
+		return mod_ui;
 	}
 
 	return NULL;
@@ -950,7 +952,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 	uint32_t src_proto, const LV2_Atom *src_value, bool route_to_ui)
 {
 	mod_ui_t *mod_ui = route_to_ui
-		? _mod_ui_find_by_mod(handle, src_mod) //FIXME there may be multiples
+		? _mod_ui_get_first(src_mod) //FIXME there may be multiples
 		: NULL;
 
 	if(  (src_proto == handle->regs.port.float_protocol.urid)
@@ -1144,131 +1146,174 @@ _mod_ui_subscribe_function(LV2UI_Controller controller, uint32_t index,
 }
 
 static mod_ui_t *
-_mod_ui_find_by_ui(plughandle_t *handle, const LilvUI *ui)
-{
-	HASH_FOREACH(&handle->uis, mod_ui_itr)
-	{
-		mod_ui_t *mod_ui = *mod_ui_itr;
-
-		if(mod_ui->ui == ui)
-			return mod_ui;
-	}
-
-	return NULL;
-}
-
-static mod_ui_t *
 _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 {
+	bool supported = false;
+#if defined(SANDBOX_X11)
+	if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+		supported = true;
+#endif
+#if defined(SANDBOX_GTK2)
+	if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+		supported = true;
+#endif
+#if defined(SANDBOX_GTK3)
+	if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+		supported = true;
+#endif
+#if defined(SANDBOX_QT4)
+	if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+		supported = true;
+#endif
+#if defined(SANDBOX_QT5)
+	if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+		supported = true;
+#endif
+#if defined(SANDBOX_SHOW)
+	if(lilv_ui_is_a(ui, handle->regs.ui.show_interface.node))
+		supported = true;
+#endif
+#if defined(SANDBOX_KX)
+	if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+		supported = true;
+#endif
+	if(!supported)
+		return NULL;
+
 	mod_ui_t *mod_ui = calloc(1, sizeof(mod_ui_t));
 	if(mod_ui)
 	{
 		const LilvNode *ui_node = lilv_ui_get_uri(ui);
-		const char *ui_uri = lilv_node_as_uri(ui_node);
 
-		mod_ui->ui = ui;
-		mod_ui->urn = handle->map->map(handle->map->handle, ui_uri);
 		mod_ui->mod = mod;
+		mod_ui->ui = ui;
+		mod_ui->uri = lilv_node_as_uri(ui_node);
+		const LV2_URID ui_urn = handle->map->map(handle->map->handle, mod_ui->uri);
 
-		const LilvNode *plugin_node = lilv_plugin_get_uri(mod->plug);
 		const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
-
-		const char *plugin_uri = plugin_node ? lilv_node_as_uri(plugin_node) : NULL;
 		const char *bundle_uri = bundle_node ? lilv_node_as_uri(bundle_node) : NULL;
-		char window_name [128];
-		char update_rate [32];
+		mod_ui->sbox.bundle_path = lilv_file_uri_parse(bundle_uri, NULL);
 
-		char *bundle_path = lilv_file_uri_parse(bundle_uri, NULL);
-
-		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///%"PRIu32"-%"PRIu32, mod->urn, mod_ui->urn) == -1)
+		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///%"PRIu32"-%"PRIu32, mod->urn, ui_urn) == -1)
 			mod_ui->sbox.socket_uri = NULL;
-		snprintf(window_name, 128, "%s", "Name"); //FIXME
-		snprintf(update_rate, 32, "%f", 30.f); //FIXME
+
+		if(asprintf(&mod_ui->sbox.window_name, "%s", mod_ui->uri) == -1)
+			mod_ui->sbox.window_name = NULL;
+
+		if(asprintf(&mod_ui->sbox.update_rate, "%f", 30.f) == -1)
+			mod_ui->sbox.update_rate = NULL;
 
 		mod_ui->sbox.driver.socket_path = mod_ui->sbox.socket_uri;
 		mod_ui->sbox.driver.map = handle->map;
 		mod_ui->sbox.driver.unmap = handle->unmap;
 		mod_ui->sbox.driver.recv_cb = _mod_ui_write_function;
 		mod_ui->sbox.driver.subscribe_cb = _mod_ui_subscribe_function;
-		mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);
 
-		const char *exec_uri = NULL;
-#if defined(SANDBOX_X11)
-		if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
-			exec_uri = "/usr/local/bin/synthpod_sandbox_x11"; //FIXME prefix
-#endif
-#if defined(SANDBOX_GTK2)
-		if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
-			exec_uri = "/usr/local/bin/synthpod_sandbox_gtk2"; //FIXME prefix
-#endif
-#if defined(SANDBOX_GTK3)
-		if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
-			exec_uri = "/usr/local/bin/synthpod_sandbox_gtk3"; //FIXME prefix
-#endif
-#if defined(SANDBOX_QT4)
-		if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
-			exec_uri = "/usr/local/bin/synthpod_sandbox_qt4"; //FIXME prefix
-#endif
-#if defined(SANDBOX_QT5)
-		if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
-			exec_uri = "/usr/local/bin/synthpod_sandbox_qt5"; //FIXME prefix
-#endif
-#if defined(SANDBOX_SHOW)
-		if(lilv_ui_is_a(ui, handle->regs.ui.show_interface.node))
-			exec_uri = "/usr/local/bin/synthpod_sandbox_show"; //FIXME prefix
-#endif
-#if defined(SANDBOX_KX)
-		if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
-			exec_uri = "/usr/local/bin/synthpod_sandbox_kx"; //FIXME prefix
-#endif
-
-		printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n", exec_uri, plugin_uri, bundle_path, ui_uri, mod_ui->sbox.socket_uri, window_name, update_rate);
-
-		if(exec_uri && plugin_uri && bundle_path && ui_uri && mod_ui->sbox.socket_uri && mod_ui->sbox.sb)
-		{
-			const pid_t pid = fork();
-			if(pid == 0) // child
-			{
-				char *const args [] = {
-					(char *)exec_uri,
-					"-p", (char *)plugin_uri,
-					"-b", (char *)bundle_path,
-					"-u", (char *)ui_uri,
-					"-s", mod_ui->sbox.socket_uri,
-					"-w", window_name,
-					"-r", update_rate,
-					NULL
-				};
-
-				execvp(args[0], args);
-			}
-
-			// parent
-			mod_ui->pid = pid;
-			free(bundle_path);
-		}
-
-		// parent
-		_hash_add(&handle->uis, mod_ui);
+		_hash_add(&mod->uis, mod_ui);
 	}
 
 	return mod_ui;
 }
 
 static void
-_mod_ui_free(plughandle_t *handle, mod_ui_t *mod_ui)
+_mod_ui_run(mod_ui_t *mod_ui)
 {
-	kill(mod_ui->pid, SIGTERM);
-	sandbox_master_free(mod_ui->sbox.sb);
-	free(mod_ui->sbox.socket_uri);
-	free(mod_ui);
+	const LilvUI *ui = mod_ui->ui;
+	mod_t *mod = mod_ui->mod;
+	plughandle_t *handle = mod->handle;
+
+	const LilvNode *plugin_node = lilv_plugin_get_uri(mod->plug);
+	const char *plugin_uri = plugin_node ? lilv_node_as_uri(plugin_node) : NULL;
+
+	const char *exec_uri = NULL;
+#if defined(SANDBOX_X11)
+	if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_x11"; //FIXME prefix
+#endif
+#if defined(SANDBOX_GTK2)
+	if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_gtk2"; //FIXME prefix
+#endif
+#if defined(SANDBOX_GTK3)
+	if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_gtk3"; //FIXME prefix
+#endif
+#if defined(SANDBOX_QT4)
+	if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_qt4"; //FIXME prefix
+#endif
+#if defined(SANDBOX_QT5)
+	if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_qt5"; //FIXME prefix
+#endif
+#if defined(SANDBOX_SHOW)
+	if(lilv_ui_is_a(ui, handle->regs.ui.show_interface.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_show"; //FIXME prefix
+#endif
+#if defined(SANDBOX_KX)
+	if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_kx"; //FIXME prefix
+#endif
+
+	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);
+
+	if(exec_uri && plugin_uri && mod_ui->sbox.bundle_path && mod_ui->uri
+		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name
+		&& mod_ui->sbox.update_rate && mod_ui->sbox.sb)
+	{
+		const pid_t pid = fork();
+		if(pid == 0) // child
+		{
+			char *const args [] = {
+				(char *)exec_uri,
+				"-p", (char *)plugin_uri,
+				"-b", mod_ui->sbox.bundle_path,
+				"-u", (char *)mod_ui->uri,
+				"-s", mod_ui->sbox.socket_uri,
+				"-w", mod_ui->sbox.window_name,
+				"-r", mod_ui->sbox.update_rate,
+				NULL
+			};
+
+			execvp(args[0], args);
+		}
+
+		// parent
+		mod_ui->pid = pid;
+	}
+}
+
+static bool
+_mod_ui_is_running(mod_ui_t *mod_ui)
+{
+	return (mod_ui->pid != 0) && mod_ui->sbox.sb;
 }
 
 static void
-_mod_ui_remove(plughandle_t *handle, mod_ui_t *mod_ui)
+_mod_ui_stop(mod_ui_t *mod_ui)
 {
-	_hash_remove(&handle->uis, mod_ui);
-	_mod_ui_free(handle, mod_ui);
+	if(mod_ui->pid)
+	{
+		kill(mod_ui->pid, SIGTERM);
+		mod_ui->pid = 0;
+	}
+
+	if(mod_ui->sbox.sb)
+	{
+		sandbox_master_free(mod_ui->sbox.sb);
+		mod_ui->sbox.sb = NULL;
+	}
+}
+
+static void
+_mod_ui_free(mod_ui_t *mod_ui)
+{
+	if(_mod_ui_is_running(mod_ui))
+		_mod_ui_stop(mod_ui);
+
+	lilv_free(mod_ui->sbox.bundle_path);
+	free(mod_ui->sbox.socket_uri);
+	free(mod_ui);
 }
 
 static port_conn_t *
@@ -1622,7 +1667,6 @@ static void
 _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 {
 	mod->plug = plug;
-	mod->uis = lilv_plugin_get_uis(mod->plug);
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug);
 
 	for(unsigned p=0; p<num_ports; p++)
@@ -1903,6 +1947,15 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 	_hash_sort_r(&mod->params, _sort_param_name, handle);
 
+	// add UIs
+	mod->ui_nodes = lilv_plugin_get_uis(mod->plug);
+	LILV_FOREACH(uis, itr, mod->ui_nodes)
+	{
+		const LilvUI *ui = lilv_uis_get(mod->ui_nodes, itr);
+
+		_mod_ui_add(handle, mod, ui);
+	}
+
 	nk_pugl_post_redisplay(&handle->win); //FIXME
 }
 
@@ -1965,7 +2018,13 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	if(mod->writables)
 		lilv_nodes_free(mod->writables);
 
-	lilv_uis_free(mod->uis); //FIXME may be referred by app->uis
+	HASH_FREE(&mod->uis, ptr)
+	{
+		mod_ui_t *mod_ui = ptr;
+		_mod_ui_free(mod_ui);
+	}
+
+	lilv_uis_free(mod->ui_nodes);
 }
 
 static bool
@@ -3076,7 +3135,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 						sizeof(float), handle->forge.Float, &val);
 
 					// route to ui
-					mod_ui_t *mod_ui = _mod_ui_find_by_mod(handle, mod); //FIXME there may be multiple
+					mod_ui_t *mod_ui = _mod_ui_get_first(mod); //FIXME there may be multiple
 					if(mod_ui)
 					{
 						const int status = sandbox_master_send(mod_ui->sbox.sb, port->index,
@@ -3674,15 +3733,18 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 	{
 		if(nk_input_is_key_down(in, NK_KEY_SHIFT)) //FIXME
 		{
-			const LilvUI *ui = lilv_uis_get(mod->uis, lilv_uis_begin(mod->uis)); //FIXME show selection of all supported UIs
+			const LilvUI *ui = lilv_uis_get(mod->ui_nodes, lilv_uis_begin(mod->ui_nodes)); //FIXME show selection of all supported UIs
 
 			if(ui)
 			{
-				mod_ui_t *mod_ui = _mod_ui_find_by_ui(handle, ui);
+				mod_ui_t *mod_ui = _mod_ui_get_first(mod);
 				if(mod_ui)
-					_mod_ui_remove(handle, mod_ui); // kill existing UI
-				else
-					mod_ui = _mod_ui_add(handle, mod, ui); // spawn UI
+				{
+					if(_mod_ui_is_running(mod_ui))
+						_mod_ui_stop(mod_ui); // stop existing UI
+					else
+						_mod_ui_run(mod_ui); // run UI
+				}
 			}
 		}
 		else
@@ -4519,12 +4581,6 @@ cleanup(LV2UI_Handle instance)
 		_mod_conn_free(handle, mod_conn);
 	}
 
-	HASH_FREE(&handle->uis, ptr)
-	{
-		mod_ui_t *mod_ui = ptr;
-		_mod_ui_free(handle, mod_ui);
-	}
-
 	_hash_free(&handle->plugin_matches);
 	_hash_free(&handle->preset_matches);
 	_hash_free(&handle->port_matches);
@@ -4926,12 +4982,16 @@ _idle(LV2UI_Handle instance)
 	plughandle_t *handle = instance;
 
 	// handle communication with plugin UIs
+	HASH_FOREACH(&handle->mods, mod_itr)
 	{
-rewind:
+		mod_t *mod = *mod_itr;
 
-		HASH_FOREACH(&handle->uis, mod_ui_itr)
+		HASH_FOREACH(&mod->uis, mod_ui_itr)
 		{
 			mod_ui_t *mod_ui = *mod_ui_itr;
+
+			if(!_mod_ui_is_running(mod_ui))
+				continue;
 
 			bool rolling = true;
 
@@ -4950,8 +5010,7 @@ rewind:
 
 			if(!rolling || sandbox_master_recv(mod_ui->sbox.sb))
 			{
-				_mod_ui_remove(handle, mod_ui);
-				goto rewind;
+				_mod_ui_stop(mod_ui);
 			}
 		}
 	}
