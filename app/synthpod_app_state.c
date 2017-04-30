@@ -908,10 +908,8 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 							&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
 							&& lv2_atom_forge_object(forge, &port_frame, 0, app->regs.core.Port.urid) )
 						{
-							const char *symbol = lilv_node_as_string(lilv_port_get_symbol(mod->plug, port->tar));
-
 							ref = lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
-								&& lv2_atom_forge_string(forge, symbol, strlen(symbol));
+								&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol));
 
 							if(ref && port->selected)
 							{
@@ -934,12 +932,10 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 									&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
 									&& lv2_atom_forge_object(forge, &source_frame, 0, app->regs.core.Port.urid) )
 								{
-									const char *symbol2 = lilv_node_as_string(lilv_port_get_symbol(mod->plug, source->tar));
-
 									ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
 										&& lv2_atom_forge_int(forge, source->mod->uid)
 										&& lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
-										&& lv2_atom_forge_string(forge, symbol2, strlen(symbol2));
+										&& lv2_atom_forge_string(forge, source->symbol, strlen(source->symbol));
 
 									if(ref)
 										lv2_atom_forge_pop(forge, &source_frame);
@@ -1198,12 +1194,9 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			for(unsigned i=0; i<mod->num_ports; i++)
 			{
 				port_t *port = &mod->ports[i];
-				const LilvNode *port_symbol_node = lilv_port_get_symbol(mod->plug, port->tar);
-				if(!port_symbol_node)
-					continue;
 
 				// search for matching port symbol
-				if(strcmp(port_symbol_str, lilv_node_as_string(port_symbol_node)))
+				if(strcmp(port_symbol_str, port->symbol))
 					continue;
 
 				port->selected = port_selected && (port_selected->atom.type == app->forge.Bool) ? port_selected->body : 0;
@@ -1241,9 +1234,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 					for(unsigned j=0; j<source->num_ports; j++)
 					{
 						port_t *tar = &source->ports[j];
-						const LilvNode *source_symbol_node = lilv_port_get_symbol(source->plug, tar->tar);
 
-						if(strcmp(source_symbol_str, lilv_node_as_string(source_symbol_node)))
+						if(strcmp(source_symbol_str, tar->symbol))
 							continue;
 
 						_sp_app_port_connect(app, tar, port);

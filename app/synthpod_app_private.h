@@ -51,12 +51,16 @@ typedef enum _job_type_reply_t job_type_reply_t;
 typedef enum _blocking_state_t blocking_state_t;
 typedef enum _silencing_state_t silencing_state_t;
 typedef enum _ramp_state_t ramp_state_t;
+typedef enum _auto_type_t auto_type_t;
 
 typedef struct _dsp_slave_t dsp_slave_t;
 typedef struct _dsp_client_t dsp_client_t;
 typedef struct _dsp_master_t dsp_master_t;
 
 typedef struct _mod_worker_t mod_worker_t;
+typedef struct _midi_auto_t midi_auto_t;
+typedef struct _osc_auto_t osc_auto_t;
+typedef struct _auto_t auto_t;
 typedef struct _mod_t mod_t;
 typedef struct _port_t port_t;
 typedef struct _job_t job_t;
@@ -197,6 +201,36 @@ struct _mod_worker_t {
 	varchunk_t *app_from_worker;
 };
 
+enum _auto_type_t {
+	AUTO_TYPE_NONE = 0,
+	AUTO_TYPE_MIDI,
+	AUTO_TYPE_OSC
+};
+
+struct _midi_auto_t {
+	uint8_t channel;
+	uint8_t controller;
+	uint8_t min;
+	uint8_t max;
+	uint8_t span;
+};
+
+struct _osc_auto_t {
+	char path [128]; //TODO how big?
+	float min;
+	float max;
+	float span;
+};
+
+struct _auto_t {
+	auto_type_t type;
+	bool learning;
+	union {
+		midi_auto_t midi;
+		osc_auto_t osc;
+	};
+};
+
 struct _mod_t {
 	sp_app_t *app;
 	u_id_t uid;
@@ -294,12 +328,51 @@ struct _source_t {
 	} ramp;
 };
 
+typedef struct _connectable_t connectable_t;
+typedef struct _control_port_t control_port_t;
+typedef struct _audio_port_t audio_port_t;
+typedef struct _cv_port_t cv_port_t;
+typedef struct _atom_port_t atom_port_t;
+
+struct _connectable_t {
+	int num_sources;
+	int num_feedbacks;
+	bool is_ramping;
+	source_t sources [MAX_SOURCES];
+};
+
+struct _control_port_t {
+	bool is_integer;
+	bool is_toggled;
+	float val;
+	float min;
+	float max;
+	float span;
+	auto_t automation;
+	//FIXME
+};
+
+struct _audio_port_t {
+	connectable_t connectable;
+	//FIXME
+};
+
+struct _cv_port_t {
+	connectable_t connectable;
+	//FIXME
+};
+
+struct _atom_port_t {
+	connectable_t connectable;
+	port_buffer_type_t buffer_type; // none, sequence
+	//FIXME
+};
+
 struct _port_t {
 	mod_t *mod;
 	int selected;
 	int monitored;
 	
-	const LilvPort *tar;
 	uint32_t index;
 	const char *symbol;
 
@@ -342,6 +415,13 @@ struct _port_t {
 	float stash;
 	bool stashing;
 	atomic_flag lock;
+
+	union {
+		control_port_t control;
+		audio_port_t audio;
+		cv_port_t cv;
+		atom_port_t atom;
+	};
 };
 
 struct _from_ui_t {
