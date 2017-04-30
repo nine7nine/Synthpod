@@ -198,8 +198,10 @@ _sp_app_mod_slice_pool(mod_t *mod, port_type_t type)
 			// initialize control buffers to default value
 			if(tar->type == PORT_TYPE_CONTROL)
 			{
+				control_port_t *control = &tar->control;
+
 				float *buf_ptr = PORT_BASE_ALIGNED(tar);
-				*buf_ptr = tar->dflt;
+				*buf_ptr = control->dflt;
 			}
 
 			ptr += lv2_atom_pad_size(tar->size);
@@ -699,12 +701,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 		tar->mod = mod;
 		tar->index = i;
 		tar->symbol = lilv_node_as_string(lilv_port_get_symbol(plug, port));
-		tar->integer = lilv_port_has_property(plug, port, app->regs.port.integer.node);
-		tar->toggled = lilv_port_has_property(plug, port, app->regs.port.toggled.node);
 		tar->direction = lilv_port_is_a(plug, port, app->regs.port.input.node)
 			? PORT_DIRECTION_INPUT
 			: PORT_DIRECTION_OUTPUT;
-		atomic_flag_clear_explicit(&tar->lock, memory_order_relaxed);
 
 		// register system ports
 		if(mod->system_ports)
@@ -783,16 +782,21 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 			tar->monitored = 1;
 			tar->protocol = app->regs.port.float_protocol.urid;
 			tar->driver = &control_port_driver;
+
+			control_port_t *control = &tar->control;
+			control->is_integer = lilv_port_has_property(plug, port, app->regs.port.integer.node);
+			control->is_toggled = lilv_port_has_property(plug, port, app->regs.port.toggled.node);
+			atomic_flag_clear_explicit(&control->lock, memory_order_relaxed);
 		
 			LilvNode *dflt_node;
 			LilvNode *min_node;
 			LilvNode *max_node;
 			lilv_port_get_range(mod->plug, port, &dflt_node, &min_node, &max_node);
-			tar->dflt = dflt_node ? lilv_node_as_float(dflt_node) : 0.f;
-			tar->min = min_node ? lilv_node_as_float(min_node) : 0.f;
-			tar->max = max_node ? lilv_node_as_float(max_node) : 1.f;
-			tar->range = tar->max - tar->min;
-			tar->range_1 = 1.f / tar->range;
+			control->dflt = dflt_node ? lilv_node_as_float(dflt_node) : 0.f; //FIXME int, bool
+			control->min = min_node ? lilv_node_as_float(min_node) : 0.f; //FIXME int, bool
+			control->max = max_node ? lilv_node_as_float(max_node) : 1.f; //FIXME int, bool
+			control->range = control->max - control->min;
+			control->range_1 = 1.f / control->range;
 			lilv_node_free(dflt_node);
 			lilv_node_free(min_node);
 			lilv_node_free(max_node);
@@ -803,12 +807,13 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 			tar->type = PORT_TYPE_ATOM;
 			tar->selected = 0;
 			tar->monitored = 0;
-			tar->buffer_type = PORT_BUFFER_TYPE_SEQUENCE; //FIXME properly discover this
 			tar->protocol = app->regs.port.event_transfer.urid; //FIXME handle atom_transfer
 			tar->driver = &seq_port_driver; // FIXME handle atom_port_driver 
 
+			tar->atom.buffer_type = PORT_BUFFER_TYPE_SEQUENCE; //FIXME properly discover this
+
 			// does this port support patch:Message?
-			tar->patchable = lilv_port_supports_event(plug, port, app->regs.patch.message.node);
+			tar->atom.patchable = lilv_port_supports_event(plug, port, app->regs.patch.message.node);
 
 			// check whether this is a control port
 			const LilvPort *control_port = lilv_plugin_get_port_by_designation(plug,
@@ -884,7 +889,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 
 		// initialize atom sequence ports
 		if(  (tar->type == PORT_TYPE_ATOM)
-			&& (tar->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+			&& (tar->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 		{
 			LV2_Atom *atom = tar->base;
 			atom->size = sizeof(LV2_Atom_Sequence_Body);

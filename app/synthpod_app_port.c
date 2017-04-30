@@ -447,17 +447,18 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 __realtime void
 _sp_app_port_control_stash(port_t *port)
 {
+	control_port_t *control = &port->control;
 	void *buf = PORT_BASE_ALIGNED(port);
 
-	if(_sp_app_port_try_lock(port))
+	if(_sp_app_port_try_lock(control))
 	{
-		port->stash = *(float *)buf;
+		control->stash = *(float *)buf;
 
-		_sp_app_port_unlock(port);
+		_sp_app_port_unlock(control);
 	}
 	else
 	{
-		port->stashing = true;
+		control->stashing = true;
 	}
 }
 
@@ -469,8 +470,8 @@ _port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	port_t *src_port = port->sources[0].port;
 
 	// normalize
-	const float norm = (*dst - src_port->min) * src_port->range_1;
-	*dst = port->min + norm * port->range; //TODO handle exponential ranges
+	const float norm = (*dst - src_port->control.min) * src_port->control.range_1;
+	*dst = port->control.min + norm * port->control.range; //TODO handle exponential ranges
 
 	_sp_app_port_control_stash(port);
 }
@@ -488,8 +489,8 @@ _port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		const float *src = PORT_BASE_ALIGNED(src_port);
 
 		// normalize
-		const float norm = (*src - src_port->min) * src_port->range_1;
-		*dst += port->min + norm * port->range; //TODO handle exponential ranges
+		const float norm = (*src - src_port->control.min) * src_port->control.range_1;
+		*dst += port->control.min + norm * port->control.range; //TODO handle exponential ranges
 	}
 
 	_sp_app_port_control_stash(port);
@@ -684,10 +685,10 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 	const float *val = PORT_BASE_ALIGNED(port);
 	new_val = *val;
-	needs_update = new_val != port->last;
+	needs_update = new_val != port->control.last;
 
 	if(needs_update) // update last value
-		port->last = new_val;
+		port->control.last = new_val;
 
 	if(needs_update)
 	{
@@ -719,10 +720,10 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 			peak = val;
 	}
 
-	if(fabs(peak - port->last) >= 1e-3) //TODO make this configurable
+	if(fabs(peak - port->audio.last) >= 1e-3) //TODO make this configurable
 	{
 		// update last value
-		port->last = peak;
+		port->audio.last = peak;
 
 		const LV2UI_Peak_Data data = {
 			.period_start = app->fps.period_cnt,
@@ -789,7 +790,7 @@ _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 	if(atom->size == 0) // empty atom
 		return;
-	else if( (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+	else if( (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
 			&& (atom->size == sizeof(LV2_Atom_Sequence_Body)) ) // empty atom sequence
 		return;
 

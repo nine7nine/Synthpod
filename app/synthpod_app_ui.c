@@ -66,14 +66,14 @@ _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 	if(port->type == PORT_TYPE_CONTROL)
 	{
 		*buf = trans->value.body;
-		port->last = trans->value.body;
+		port->control.last = trans->value.body;
 		_sp_app_port_control_stash(port);
 	}
 	else if(port->type == PORT_TYPE_CV)
 	{
 		for(unsigned i = 0; i < app->driver->max_block_size; i++)
 			buf[i] = trans->value.body;
-		port->last = fabs(trans->value.body);
+		port->cv.last = fabs(trans->value.body);
 	}
 
 	return advance_ui[app->block_state];
@@ -689,8 +689,11 @@ _sp_app_from_ui_port_refresh(sp_app_t *app, const LV2_Atom *atom)
 	if(!port)
 		return advance_ui[app->block_state];
 
-	float *buf_ptr = PORT_BASE_ALIGNED(port);
-	port->last = *buf_ptr - 0.1; // will force notification
+	if(port->type == PORT_TYPE_CONTROL)
+	{
+		float *buf_ptr = PORT_BASE_ALIGNED(port);
+		port->control.last = *buf_ptr - 0.1; // will force notification
+	}
 
 	return advance_ui[app->block_state];
 }
@@ -1520,7 +1523,7 @@ _subscription_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 			if(src_port->type == PORT_TYPE_CONTROL)
 			{
 				const float *buf_ptr = PORT_BASE_ALIGNED(src_port);
-				src_port->last = *buf_ptr - 0.1; // will force notification
+				src_port->control.last = *buf_ptr - 0.1; // will force notification
 			}
 		}
 	}
@@ -1592,7 +1595,7 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				if(src_port->type == PORT_TYPE_CONTROL)
 				{
 					*buf_ptr = val;
-					src_port->last = *buf_ptr; // we don't want any notification
+					src_port->control.last = *buf_ptr; // we don't want any notification
 				}
 				else if(src_port->type == PORT_TYPE_CV)
 				{

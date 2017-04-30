@@ -344,32 +344,46 @@ struct _connectable_t {
 struct _control_port_t {
 	bool is_integer;
 	bool is_toggled;
-	float val;
+
+	float dflt;
 	float min;
 	float max;
-	float span;
+	float range;
+	float range_1;
+	float last;
+	int32_t i32;
+	float f32;
+
+	float stash;
+	bool stashing;
+	atomic_flag lock;
+
 	auto_t automation;
 	//FIXME
 };
 
 struct _audio_port_t {
 	connectable_t connectable;
+	float last;
 	//FIXME
 };
 
 struct _cv_port_t {
 	connectable_t connectable;
+	float last;
 	//FIXME
 };
 
 struct _atom_port_t {
 	connectable_t connectable;
 	port_buffer_type_t buffer_type; // none, sequence
+	bool patchable; // support patch:Message
 	//FIXME
 };
 
 struct _port_t {
 	mod_t *mod;
+
 	int selected;
 	int monitored;
 	
@@ -384,37 +398,19 @@ struct _port_t {
 	size_t size;
 	void *buf;
 	void *base;
-	int32_t i32;
-	float f32;
 
-	int integer;
-	int toggled;
-	port_direction_t direction; // input, output
 	port_type_t type; // audio, CV, control, atom
-	port_buffer_type_t buffer_type; // none, sequence
-	bool patchable; // support patch:Message
-
+	port_direction_t direction; // input, output
 	LV2_URID protocol; // floatProtocol, peakProtocol, atomTransfer, eventTransfer
-	int subscriptions; // subsriptions reference counter
 	const port_driver_t *driver;
 
-	float last;
-
-	float dflt;
-	float min;
-	float max;
-	float range;
-	float range_1;
+	int subscriptions; // subsriptions reference counter
 
 	// system_port iface
 	struct {
 		system_port_t type;
 		void *data;
 	} sys;
-
-	float stash;
-	bool stashing;
-	atomic_flag lock;
 
 	union {
 		control_port_t control;
@@ -649,24 +645,24 @@ int
 _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port);
 
 static inline void
-_sp_app_port_spin_lock(port_t *port)
+_sp_app_port_spin_lock(control_port_t *control)
 {
-	while(atomic_flag_test_and_set_explicit(&port->lock, memory_order_acquire))
+	while(atomic_flag_test_and_set_explicit(&control->lock, memory_order_acquire))
 	{
 		// spin
 	}
 }
 
 static inline bool
-_sp_app_port_try_lock(port_t *port)
+_sp_app_port_try_lock(control_port_t *control)
 {
-	return atomic_flag_test_and_set_explicit(&port->lock, memory_order_acquire) == false;
+	return atomic_flag_test_and_set_explicit(&control->lock, memory_order_acquire) == false;
 }
 
 static inline void
-_sp_app_port_unlock(port_t *port)
+_sp_app_port_unlock(control_port_t *control)
 {
-	atomic_flag_clear_explicit(&port->lock, memory_order_release);
+	atomic_flag_clear_explicit(&control->lock, memory_order_release);
 }
 
 /*

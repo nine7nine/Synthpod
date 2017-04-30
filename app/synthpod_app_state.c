@@ -164,6 +164,7 @@ _state_set_value(const char *symbol, void *data,
 
 	if(tar->type == PORT_TYPE_CONTROL)
 	{
+		control_port_t *control = &tar->control;
 		float val = 0.f;
 
 		if( (type == app->forge.Int) && (size == sizeof(int32_t)) )
@@ -182,7 +183,7 @@ _state_set_value(const char *symbol, void *data,
 		//printf("%u %f\n", index, val);
 		float *buf_ptr = PORT_BASE_ALIGNED(tar);
 		*buf_ptr = val;
-		tar->last = val - 0.1; // triggers notification
+		control->last = val - 0.1; // triggers notification
 
 		_sp_app_port_control_stash(tar);
 	}
@@ -209,33 +210,35 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 	if(  (tar->direction == PORT_DIRECTION_INPUT)
 		&& (tar->type == PORT_TYPE_CONTROL) )
 	{
-		_sp_app_port_spin_lock(tar); // concurrent acess from worker and rt threads
+		control_port_t *control = &tar->control;
 
-		const float stash = tar->stash;
+		_sp_app_port_spin_lock(control); // concurrent acess from worker and rt threads
 
-		_sp_app_port_unlock(tar);
+		const float stash = control->stash;
+
+		_sp_app_port_unlock(control);
 
 		const void *ptr = NULL;
-		if(tar->toggled)
+		if(control->is_toggled)
 		{
 			*size = sizeof(int32_t);
 			*type = app->forge.Bool;
-			tar->i32 = floor(stash);
-			ptr = &tar->i32;
+			control->i32 = floor(stash);
+			ptr = &control->i32;
 		}
-		else if(tar->integer)
+		else if(control->is_integer)
 		{
 			*size = sizeof(int32_t);
 			*type = app->forge.Int;
-			tar->i32 = floor(stash);
-			ptr = &tar->i32;
+			control->i32 = floor(stash);
+			ptr = &control->i32;
 		}
 		else // float
 		{
 			*size = sizeof(float);
 			*type = app->forge.Float;
-			tar->f32 = stash;
-			ptr = &tar->f32;
+			control->f32 = stash;
+			ptr = &control->f32;
 		}
 
 		return ptr;

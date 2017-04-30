@@ -151,7 +151,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		port_t *port = &mod->ports[i];
 
 		if(  (port->type == PORT_TYPE_ATOM)
-			&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+			&& (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
 			&& (port->direction == PORT_DIRECTION_OUTPUT)
 			&& (!mod->system_ports) ) // don't overwrite source buffer events
 		{
@@ -198,13 +198,10 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 
 		// no notification/subscription and no support for patch:Message
 		const bool subscribed = port->subscriptions != 0;
-		if(!(subscribed || port->patchable))
+		if(!subscribed)
 			continue; // skip this port
-
-		/*
-		if(port->patchable)
-			printf("patchable %i %i %i\n", mod->uid, i, subscribed);
-		*/
+		if( (port->type == PORT_TYPE_ATOM) && !port->atom.patchable)
+			continue; // skip this port
 
 		if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
 			port->driver->transfer(app, port, nsamples);
@@ -520,9 +517,9 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			port_t *port = &mod->ports[p];
 
 			// stash control port values
-			if(port->stashing)
+			if( (port->type == PORT_TYPE_CONTROL) && port->control.stashing)
 			{
-				port->stashing = false;
+				port->control.stashing = false;
 				_sp_app_port_control_stash(port);
 			}
 
@@ -531,7 +528,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 
 			// clear atom sequence input buffers
 			if(  (port->type == PORT_TYPE_ATOM)
-				&& (port->buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
+				&& (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
 				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
