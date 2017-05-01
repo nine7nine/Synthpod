@@ -16,6 +16,7 @@
  */
 
 #include <synthpod_app_private.h>
+#include <synthpod_patcher.h>
 
 // non-rt
 void
@@ -677,6 +678,26 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				_sp_app_to_ui_advance(app, size);
 			}
 
+			// to nk
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const float vec [] = {
+					mod_min, mod_avg, mod_max
+				};
+
+				LV2_Atom_Forge_Frame frame [1];
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
+					&app->regs, &app->forge, &frame[0], mod->urn, 0, app->regs.synthpod.module_profiling.urid); //TODO seqn
+				if(ref)
+					ref = lv2_atom_forge_vector(&app->forge, sizeof(float), app->forge.Float, 3, vec);
+				if(ref)
+				{
+					synthpod_patcher_pop(&app->forge, frame, 1);
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+			}
+
 			mod->prof.min = UINT_MAX;
 			mod->prof.max = 0;
 			mod->prof.sum = 0;
@@ -694,6 +715,26 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				_sp_transmit_dsp_profiling_fill(&app->regs, &app->forge, trans, size,
 					app_min, app_avg, app_max);
 				_sp_app_to_ui_advance(app, size);
+			}
+
+			// to nk
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const float vec [] = {
+					app_min, app_avg, app_max
+				};
+
+				LV2_Atom_Forge_Frame frame [1];
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
+					&app->regs, &app->forge, &frame[0], 0, 0, app->regs.synthpod.dsp_profiling.urid); //TODO subj, seqn
+				if(ref)
+					ref = lv2_atom_forge_vector(&app->forge, sizeof(float), app->forge.Float, 3, vec);
+				if(ref)
+				{
+					synthpod_patcher_pop(&app->forge, frame, 1);
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
 			}
 
 			app->prof.t0.tv_sec = app_t2.tv_sec;

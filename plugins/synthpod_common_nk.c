@@ -66,6 +66,7 @@ typedef struct _mod_ui_t mod_ui_t;
 typedef struct _port_conn_t port_conn_t;
 typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
+typedef struct _prof_t prof_t;
 
 enum _property_type_t {
 	PROPERTY_TYPE_NONE				= 0,
@@ -177,6 +178,12 @@ struct _prop_t {
 	};
 };
 
+struct _prof_t {
+	float min;
+	float avg;
+	float max;
+};
+
 struct _mod_t {
 	plughandle_t *handle;
 
@@ -207,6 +214,8 @@ struct _mod_t {
 
 	property_type_t source_type;
 	property_type_t sink_type;
+
+	prof_t prof;
 };
 
 struct _port_conn_t {
@@ -347,6 +356,8 @@ struct _plughandle_t {
 	property_type_t type;
 
 	bool done;
+
+	prof_t prof;
 };
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
@@ -4306,6 +4317,24 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 			nk_draw_text(canvas, body2, nums, nums_len, font,
 				style->normal.data.color, style->text_normal);
 		}
+
+		//FIXME can this be solved more elegantly
+		{
+			char load [32];
+			snprintf(load, 32, "%.1f | %.1f | %.1f %%",
+				mod->prof.min, mod->prof.avg, mod->prof.max);
+
+			const size_t load_len= strlen(load);
+			const float fw = font->width(font->userdata, font->height, load, load_len);
+			const struct nk_rect body2 = {
+				.x = body.x + (body.w - fw)/2,
+				.y = fy + 1.5*fh,
+				.w = fw,
+				.h = fh
+			};
+			nk_draw_text(canvas, body2, load, load_len, font,
+				style->normal.data.color, style->text_normal);
+		}
 	}
 
 	_mod_connectors(handle, ctx, mod, nk_vec2(bounds.w, bounds.h), is_hilighted);
@@ -4775,10 +4804,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 static void
 _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
-	const unsigned n_row = 1;
-
-	nk_layout_row_dynamic(ctx, dy, n_row);
+	nk_layout_row_dynamic(ctx, dy, 2);
 	{
+		nk_labelf(ctx, NK_TEXT_LEFT, "%.1f | %.1f | %.1f %%",
+			handle->prof.min, handle->prof.avg, handle->prof.max);
 		nk_label(ctx, "Synthpod: "SYNTHPOD_VERSION, NK_TEXT_RIGHT);
 	}
 }
@@ -5312,6 +5341,35 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							const LV2_Atom_URID *urid = (const LV2_Atom_URID *)value;
 
 							handle->bundle_urn = urid->body;
+						}
+						else if( (prop == handle->regs.synthpod.dsp_profiling.urid)
+							&& (value->type == handle->forge.Vector) )
+						{
+							const LV2_Atom_Vector *vec = (const LV2_Atom_Vector *)value;
+							const float *f32 = LV2_ATOM_CONTENTS_CONST(LV2_Atom_Vector, value);
+
+							handle->prof.min = f32[0];
+							handle->prof.avg = f32[1];
+							handle->prof.max= f32[2];
+
+							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.module_profiling.urid)
+							&& (value->type == handle->forge.Vector)
+							&& subj )
+						{
+							const LV2_Atom_Vector *vec = (const LV2_Atom_Vector *)value;
+							const float *f32 = LV2_ATOM_CONTENTS_CONST(LV2_Atom_Vector, value);
+
+							mod_t *mod = _mod_find_by_urn(handle, subj);
+							if(mod)
+							{
+								mod->prof.min = f32[0];
+								mod->prof.avg = f32[1];
+								mod->prof.max= f32[2];
+
+								nk_pugl_post_redisplay(&handle->win);
+							}
 						}
 					}
 				}
