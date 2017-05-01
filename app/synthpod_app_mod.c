@@ -659,7 +659,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 	mod->urn = urn;
 	mod->plug = plug;
 	mod->plug_urid = app->driver->map->map(app->driver->map->handle, uri);
-	mod->num_ports = lilv_plugin_get_num_ports(plug);
+	mod->num_ports = lilv_plugin_get_num_ports(plug) + 1; // + automation port
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
 	if(!mod->inst)
 	{
@@ -691,7 +691,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 	}
 	mlock(mod->ports, mod->num_ports * sizeof(port_t));
 
-	for(unsigned i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports-1; i++) // - automation port
 	{
 		port_t *tar = &mod->ports[i];
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
@@ -799,6 +799,14 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 			lilv_node_free(dflt_node);
 			lilv_node_free(min_node);
 			lilv_node_free(max_node);
+
+			//FIXME this is just temporary
+			control->automation.type = AUTO_TYPE_MIDI;
+			control->automation.midi.channel = 0x0;
+			control->automation.midi.controller = 0x1;
+			control->automation.midi.min = 0x0;
+			control->automation.midi.max = 0x7f;
+			control->automation.midi.span = 0x7f;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.atom.node)) 
 		{
@@ -846,6 +854,32 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 			tar->size = lilv_node_as_int(minsize);
 			lilv_node_free(minsize);
 		}
+
+		// increase pool sizes
+		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
+	}
+
+	// automation port //FIXME check
+	{
+		const unsigned i = mod->num_ports - 1;
+		port_t *tar = &mod->ports[i];
+
+		tar->mod = mod;
+		tar->index = i;
+		tar->symbol = "automation";
+		tar->direction = PORT_DIRECTION_INPUT;
+
+		tar->size = app->driver->seq_size;
+		tar->type = PORT_TYPE_ATOM;
+		tar->selected = 0;
+		tar->monitored = 0;
+		tar->protocol = app->regs.port.event_transfer.urid;
+		tar->driver = &seq_port_driver;
+
+		tar->atom.buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
+
+		tar->sys.type = SYSTEM_PORT_NONE;
+		tar->sys.data = NULL;
 
 		// increase pool sizes
 		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);

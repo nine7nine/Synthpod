@@ -142,6 +142,7 @@ struct _audio_port_t {
 struct _port_t {
 	property_type_t type;
 	uint32_t index;
+	char *name;
 	const char *symbol;
 	mod_t *mod;
 	const LilvPort *port;
@@ -1906,8 +1907,8 @@ _sort_port_name(const void *a, const void *b, void *data)
 	const char *name_a = NULL;
 	const char *name_b = NULL;
 
-	LilvNode *node_a = lilv_port_get_name(mod->plug, port_a->port);
-	LilvNode *node_b = lilv_port_get_name(mod->plug, port_b->port);
+	LilvNode *node_a = port_a->port ? lilv_port_get_name(mod->plug, port_a->port) : NULL;
+	LilvNode *node_b = port_b->port ? lilv_port_get_name(mod->plug, port_b->port) : NULL;
 
 	if(node_a)
 		name_a = lilv_node_as_string(node_a);
@@ -2037,9 +2038,9 @@ static void
 _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 {
 	mod->plug = plug;
-	const unsigned num_ports = lilv_plugin_get_num_ports(plug);
+	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 1; // + automation port
 
-	for(unsigned p=0; p<num_ports; p++)
+	for(unsigned p=0; p<num_ports-1; p++) // - automation port
 	{
 		port_t *port = calloc(1, sizeof(port_t));
 		if(!port)
@@ -2052,6 +2053,13 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		port->port = lilv_plugin_get_port_by_index(plug, p);
 		port->symbol = lilv_node_as_string(lilv_port_get_symbol(plug, port->port));
 		port->groups = lilv_port_get_value(plug, port->port, handle->node.pg_group);
+
+		LilvNode *port_name = lilv_port_get_name(plug, port->port);
+		if(port_name)
+		{
+			port->name = strdup(lilv_node_as_string(port_name));
+			lilv_node_free(port_name);
+		}
 
 		LILV_FOREACH(nodes, i, port->groups)
 		{
@@ -2251,6 +2259,28 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			mod->sink_type |= port->type;
 	}
 
+	{
+		const unsigned p = num_ports - 1;
+
+		port_t *port = calloc(1, sizeof(port_t));
+		if(port)
+		{
+			_hash_add(&mod->ports, port);
+
+			port->mod = mod;
+			port->index = p;
+			port->port = NULL;
+			port->symbol = "automation";
+			port->groups = NULL;
+			port->name = strdup("Automation");
+
+			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_AUTOMATION;
+
+			_hash_add(&mod->sinks, port);
+			mod->sink_type |= port->type;
+		}
+	}
+
 	_hash_sort_r(&mod->ports, _sort_port_name, mod);
 	_hash_sort_r(&mod->groups, _sort_rdfs_label, handle);
 
@@ -2334,6 +2364,13 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 }
 
 static void
+_port_free(port_t *port)
+{
+	free(port->name);
+	free(port);
+}
+
+static void
 _mod_free(plughandle_t *handle, mod_t *mod)
 {
 	HASH_FREE(&mod->ports, ptr)
@@ -2356,7 +2393,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 			}
 		}
 
-		free(port);
+		_port_free(port);
 	}
 	_hash_free(&mod->sources);
 	_hash_free(&mod->sinks);
@@ -3248,7 +3285,7 @@ _dial_int(struct nk_context *ctx, int32_t min, int32_t *val, int32_t max, float 
 
 static void
 _expose_atom_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
-	float dy, const char *name_str, bool is_cv)
+	float dy, const char *name_str)
 {
 	const float DY = nk_window_get_content_region(ctx).h
 		- 2*ctx->style.window.group_padding.y;
@@ -3481,25 +3518,22 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 {
 	plughandle_t *handle = mod->handle;
 
-	LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
-	const char *name_str = name_node ? lilv_node_as_string(name_node) : "Unknown";
-
-	if(nk_group_begin(ctx, name_str, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
+	if(nk_group_begin(ctx, port->name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
 	{
 		switch(port->type)
 		{
 			case PROPERTY_TYPE_AUDIO:
 			{
-				_expose_audio_port(ctx, mod, &port->audio, dy, name_str, false);
+				_expose_audio_port(ctx, mod, &port->audio, dy, port->name, false);
 			} break;
 			case PROPERTY_TYPE_CV:
 			{
-				_expose_audio_port(ctx, mod, &port->audio, dy, name_str, true);
+				_expose_audio_port(ctx, mod, &port->audio, dy, port->name, true);
 				//FIXME notification
 			} break;
 			case PROPERTY_TYPE_CONTROL:
 			{
-				if(_expose_control_port(ctx, mod, &port->control, dy, name_str))
+				if(_expose_control_port(ctx, mod, &port->control, dy, port->name))
 				{
 					const float val = port->control.is_bool || port->control.is_int
 						? port->control.val.i
@@ -3512,20 +3546,18 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 					_mod_uis_send(mod, port->index, sizeof(float), 0, &val);
 				}
 			} break;
-			case PROPERTY_TYPE_ATOM:
-			{
-				_expose_atom_port(ctx, mod, &port->audio, dy, name_str, false);
-			} break;
 
 			default:
-				break;
+			{
+				if(port->type & PROPERTY_TYPE_ATOM)
+				{
+					_expose_atom_port(ctx, mod, &port->audio, dy, port->name);
+				}
+			} break;
 		}
 
 		nk_group_end(ctx);
 	}
-
-	if(name_node)
-		lilv_node_free(name_node);
 }
 
 static bool
@@ -4430,11 +4462,8 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 				if(  nk_input_is_mouse_hovering_rect(in, tile)
 					&& !mod_conn->moving)
 				{
-					LilvNode *source_node = lilv_port_get_name(mod_conn->source_mod->plug, source_port->port);
-					LilvNode *sink_node = lilv_port_get_name(mod_conn->sink_mod->plug, sink_port->port);
-
-					const char *source_name = source_node ? lilv_node_as_string(source_node) : NULL;
-					const char *sink_name = sink_node ? lilv_node_as_string(sink_node) : NULL;
+					const char *source_name = source_port->name;
+					const char *sink_name = sink_port->name;
 
 					if(source_name && sink_name)
 					{
@@ -4454,11 +4483,6 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 							}
 						}
 					}
-
-					if(source_node)
-						lilv_node_free(source_node);
-					if(sink_node)
-						lilv_node_free(sink_node);
 				}
 
 				y += ps;

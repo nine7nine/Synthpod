@@ -150,6 +150,64 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		}
 	}
 
+	//FIXME for para/dynameters needs to be multiplexed with patchabel events
+	// apply automation if any
+	{
+		const unsigned p = mod->num_ports - 1;
+		port_t *port = &mod->ports[p];
+		const LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
+
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+		{
+			const int64_t frames = ev->time.frames;
+			const LV2_Atom *atom = &ev->body;
+
+			printf("got automation\n");
+			if(  (atom->type == app->regs.port.midi.urid)
+				&& (atom->size == 3) ) // we're only interested in controller events
+			{
+				const uint8_t *msg = LV2_ATOM_BODY_CONST(atom);
+				const uint8_t cmd = msg[0] & 0xf0;
+
+				if(cmd == 0xb0) // Controller
+				{
+					//FIXME use per-module flag whether it actually has any automations
+					for(unsigned d = 0; d<mod->num_ports - 1; d++) // - automation port
+					{
+						port_t *dst = &mod->ports[d];
+
+						if(dst->type != PORT_TYPE_CONTROL)
+							continue; // skip non-control ports
+
+						control_port_t *control = &dst->control;
+						if(control->automation.type != AUTO_TYPE_MIDI)
+							continue; // skip non-midi automation
+
+						midi_auto_t *mauto = &control->automation.midi;
+						const uint8_t channel = msg[0] & 0x0f;
+						const uint8_t controller = msg[1];
+
+						if(  (mauto->channel == channel)
+							&& (mauto->controller == controller) )
+						{
+							const float rel = (float)(msg[2] - mauto->min) / mauto->span;
+
+							float *f32 = PORT_BASE_ALIGNED(dst);
+							*f32 = rel * control->range + control->min;
+							printf("automation match: %f %f\n", rel, *f32);
+
+							if(control->is_integer)
+								*f32 = floorf(*f32);
+						}
+					}
+					//FIXME iterate over parameters
+					//FIXME iterate over dynameters
+				}
+			}
+			//FIXME handle other events
+		}
+	}
+
 	struct timespec mod_t1;
 	struct timespec mod_t2;
 	clock_gettime(CLOCK_MONOTONIC, &mod_t1);
