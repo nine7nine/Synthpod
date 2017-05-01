@@ -303,6 +303,24 @@ _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	return 0; // not connected
 }
 
+connectable_t *
+_sp_app_port_connectable(port_t *src_port)
+{
+	switch(src_port->type)
+	{
+		case PORT_TYPE_AUDIO:
+			return &src_port->audio.connectable;
+		case PORT_TYPE_CV:
+			return &src_port->cv.connectable;
+		case PORT_TYPE_ATOM:
+			return &src_port->atom.connectable;
+		default:
+			break;
+	}
+
+	return NULL;
+}
+
 int
 _sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
 	ramp_state_t ramp_state)

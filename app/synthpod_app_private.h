@@ -359,19 +359,19 @@ struct _control_port_t {
 };
 
 struct _audio_port_t {
-	//connectable_t connectable;
+	connectable_t connectable;
 	float last;
 	//FIXME
 };
 
 struct _cv_port_t {
-	//connectable_t connectable;
+	connectable_t connectable;
 	float last;
 	//FIXME
 };
 
 struct _atom_port_t {
-	//connectable_t connectable;
+	connectable_t connectable;
 	port_buffer_type_t buffer_type; // none, sequence
 	bool patchable; // support patch:Message
 	//FIXME
@@ -630,6 +630,9 @@ _sp_app_port_control_stash(port_t *port);
 
 int
 _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port);
+
+connectable_t *
+_sp_app_port_connectable(port_t *src_port);
 
 static inline void
 _sp_app_port_spin_lock(control_port_t *control)
