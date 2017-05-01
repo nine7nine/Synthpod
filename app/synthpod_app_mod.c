@@ -1017,9 +1017,13 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 	{
 		port_t *port = &mod->ports[p1];
 
-		// disconnect sources
-		for(int s=0; s<port->num_sources; s++)
-			_sp_app_port_disconnect(app, port->sources[s].port, port);
+		connectable_t *conn = _sp_app_port_connectable(port);
+		if(conn)
+		{
+			// disconnect sources
+			for(int s=0; s<conn->num_sources; s++)
+				_sp_app_port_disconnect(app, conn->sources[s].port, port);
+		}
 
 		// disconnect sinks
 		for(unsigned m=0; m<app->num_mods; m++)

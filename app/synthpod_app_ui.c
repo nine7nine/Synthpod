@@ -217,11 +217,15 @@ _sp_app_from_ui_module_del(sp_app_t *app, const LV2_Atom *atom)
 	{
 		port_t *port = &mod->ports[p1];
 
-		// disconnect sources
-		for(int s=0; s<port->num_sources; s++)
+		connectable_t *conn = _sp_app_port_connectable(port);
+		if(conn)
 		{
-			_sp_app_port_disconnect_request(app,
-				port->sources[s].port, port, RAMP_STATE_DOWN);
+			// disconnect sources
+			for(int s=0; s<conn->num_sources; s++)
+			{
+				_sp_app_port_disconnect_request(app,
+					conn->sources[s].port, port, RAMP_STATE_DOWN);
+			}
 		}
 
 		// disconnect sinks
@@ -1102,35 +1106,39 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					{
 						port_t *port = &mod->ports[p];
 
-						for(int s = 0; s < port->num_sources; s++)
+						connectable_t *conn = _sp_app_port_connectable(port);
+						if(conn)
 						{
-							source_t *source = &port->sources[s];
-
-							if(ref)
-								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, 0);
+							for(int s = 0; s < conn->num_sources; s++)
 							{
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_module.urid);
-								if(ref)
-									ref = lv2_atom_forge_urid(&app->forge, source->port->mod->urn);
+								source_t *source = &conn->sources[s];
 
 								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_symbol.urid);
-								if(ref)
-									ref = lv2_atom_forge_string(&app->forge, source->port->symbol, strlen(source->port->symbol));
+									ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, 0);
+								{
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_module.urid);
+									if(ref)
+										ref = lv2_atom_forge_urid(&app->forge, source->port->mod->urn);
 
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_module.urid);
-								if(ref)
-									ref = lv2_atom_forge_urid(&app->forge, port->mod->urn);
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_symbol.urid);
+									if(ref)
+										ref = lv2_atom_forge_string(&app->forge, source->port->symbol, strlen(source->port->symbol));
 
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_module.urid);
+									if(ref)
+										ref = lv2_atom_forge_urid(&app->forge, port->mod->urn);
+
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_symbol.urid);
+									if(ref)
+										ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+								}
 								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_symbol.urid);
-								if(ref)
-									ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+									lv2_atom_forge_pop(&app->forge, &frame[2]);
 							}
-							if(ref)
-								lv2_atom_forge_pop(&app->forge, &frame[2]);
 						}
 					}
 				}
@@ -1685,11 +1693,15 @@ _mod_list_rem(sp_app_t *app, const LV2_Atom_URID *urn)
 	{
 		port_t *port = &mod->ports[p1];
 
-		// disconnect sources
-		for(int s=0; s<port->num_sources; s++)
+		connectable_t *conn = _sp_app_port_connectable(port);
+		if(conn)
 		{
-			_sp_app_port_disconnect_request(app,
-				port->sources[s].port, port, RAMP_STATE_DOWN);
+			// disconnect sources
+			for(int s=0; s<conn->num_sources; s++)
+			{
+				_sp_app_port_disconnect_request(app,
+					conn->sources[s].port, port, RAMP_STATE_DOWN);
+			}
 		}
 
 		// disconnect sinks

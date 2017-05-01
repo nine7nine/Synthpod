@@ -119,14 +119,18 @@ _dsp_master_reorder(sp_app_t *app)
 			{
 				port_t *port_sink = &mod_sink->ports[p];
 
-				for(int s=0; s<port_sink->num_sources; s++)
+				connectable_t *conn = _sp_app_port_connectable(port_sink);
+				if(conn)
 				{
-					source_t *source =  &port_sink->sources[s];
-
-					if(source->port->mod == mod_source)
+					for(int s=0; s<conn->num_sources; s++)
 					{
-						is_connected = true;
-						break;
+						source_t *source =  &conn->sources[s];
+
+						if(source->port->mod == mod_source)
+						{
+							is_connected = true;
+							break;
+						}
 					}
 				}
 
@@ -171,9 +175,15 @@ _sp_app_port_get(sp_app_t *app, u_id_t uid, uint32_t index)
 bool
 _sp_app_port_connected(port_t *src_port, port_t *snk_port)
 {
-	for(int s = 0; s < snk_port->num_sources; s++)
-		if(snk_port->sources[s].port == src_port)
-			return true;
+	connectable_t *conn = _sp_app_port_connectable(snk_port);
+	if(conn)
+	{
+		for(int s = 0; s < conn->num_sources; s++)
+		{
+			if(conn->sources[s].port == src_port)
+				return true;
+		}
+	}
 
 	return false;
 }
@@ -184,12 +194,16 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	if(_sp_app_port_connected(src_port, snk_port))
 		return 0;
 
-	if(snk_port->num_sources >= MAX_SOURCES)
+	connectable_t *conn = _sp_app_port_connectable(snk_port);
+	if(!conn)
 		return 0;
 
-	source_t *source = &snk_port->sources[snk_port->num_sources];
+	if(conn->num_sources >= MAX_SOURCES)
+		return 0;
+
+	source_t *source = &conn->sources[conn->num_sources];
 	source->port = src_port;;
-	snk_port->num_sources += 1;
+	conn->num_sources += 1;
 
 	// only audio port connections need to be ramped to be clickless
 	if(snk_port->type == PORT_TYPE_AUDIO)
@@ -206,23 +220,27 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 void
 _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 {
+	connectable_t *conn = _sp_app_port_connectable(snk_port);
+	if(!conn)
+		return;
+
 	// update sources list 
 	bool connected = false;
-	for(int i=0, j=0; i<snk_port->num_sources; i++)
+	for(int i=0, j=0; i<conn->num_sources; i++)
 	{
-		if(snk_port->sources[i].port == src_port)
+		if(conn->sources[i].port == src_port)
 		{
 			connected = true;
 			continue;
 		}
 
-		snk_port->sources[j++].port = snk_port->sources[i].port;
+		conn->sources[j++].port = conn->sources[i].port;
 	}
 
 	if(!connected)
 		return;
 
-	snk_port->num_sources -= 1;
+	conn->num_sources -= 1;
 
 	_dsp_master_reorder(app);
 }
@@ -235,14 +253,18 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
 	{
 		source_t *source = NULL;
-	
-		// find connection
-		for(int i=0; i<snk_port->num_sources; i++)
+
+		connectable_t *conn = _sp_app_port_connectable(snk_port);
+		if(conn)
 		{
-			if(snk_port->sources[i].port == src_port)
+			// find connection
+			for(int i=0; i<conn->num_sources; i++)
 			{
-				source = &snk_port->sources[i];
-				break;
+				if(conn->sources[i].port == src_port)
+				{
+					source = &conn->sources[i];
+					break;
+				}
 			}
 		}
 
@@ -275,14 +297,18 @@ _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
 	{
 		source_t *source = NULL;
-	
-		// find connection
-		for(int i=0; i<snk_port->num_sources; i++)
+
+		connectable_t *conn = _sp_app_port_connectable(snk_port);
+		if(conn)
 		{
-			if(snk_port->sources[i].port == src_port)
+			// find connection
+			for(int i=0; i<conn->num_sources; i++)
 			{
-				source = &snk_port->sources[i];
-				break;
+				if(conn->sources[i].port == src_port)
+				{
+					source = &conn->sources[i];
+					break;
+				}
 			}
 		}
 
@@ -304,16 +330,16 @@ _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port)
 }
 
 connectable_t *
-_sp_app_port_connectable(port_t *src_port)
+_sp_app_port_connectable(port_t *port)
 {
-	switch(src_port->type)
+	switch(port->type)
 	{
 		case PORT_TYPE_AUDIO:
-			return &src_port->audio.connectable;
+			return &port->audio.connectable;
 		case PORT_TYPE_CV:
-			return &src_port->cv.connectable;
+			return &port->cv.connectable;
 		case PORT_TYPE_ATOM:
-			return &src_port->atom.connectable;
+			return &port->atom.connectable;
 		default:
 			break;
 	}
@@ -329,14 +355,18 @@ _sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
 		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
 	{
 		source_t *source = NULL;
-	
-		// find connection
-		for(int i=0; i<snk_port->num_sources; i++)
+
+		connectable_t *conn = _sp_app_port_connectable(snk_port);
+		if(conn)
 		{
-			if(snk_port->sources[i].port == src_port)
+			// find connection
+			for(int i=0; i<conn->num_sources; i++)
 			{
-				source = &snk_port->sources[i];
-				break;
+				if(conn->sources[i].port == src_port)
+				{
+					source = &conn->sources[i];
+					break;
+				}
 			}
 		}
 
@@ -428,9 +458,10 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	float *val = PORT_BASE_ALIGNED(port);
 	memset(val, 0, nsamples * sizeof(float)); // init
 
-	for(int s=0; s<port->num_sources; s++)
+	connectable_t *conn = &port->audio.connectable;
+	for(int s=0; s<conn->num_sources; s++)
 	{
-		source_t *source = &port->sources[s];
+		source_t *source = &conn->sources[s];
 
 		// ramp audio output ports
 		if(source->ramp.state != RAMP_STATE_NONE)
@@ -457,9 +488,10 @@ _port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	float *val = PORT_BASE_ALIGNED(port);
 	memset(val, 0, nsamples * sizeof(float)); // init
 
-	for(int s=0; s<port->num_sources; s++)
+	connectable_t *conn = &port->cv.connectable;
+	for(int s=0; s<conn->num_sources; s++)
 	{
-		source_t *source = &port->sources[s];
+		source_t *source = &conn->sources[s];
 
 		const float *src = PORT_BASE_ALIGNED(source->port);
 		for(uint32_t j=0; j<nsamples; j++)
@@ -474,11 +506,12 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	const uint32_t capacity = PORT_SIZE(port);
 	LV2_Atom_Sequence *dst = PORT_BASE_ALIGNED(port);
 
-	const LV2_Atom_Sequence *seq [port->num_sources];
-	const LV2_Atom_Event *itr [port->num_sources];
-	for(int s=0; s<port->num_sources; s++)
+	connectable_t *conn = &port->atom.connectable;
+	const LV2_Atom_Sequence *seq [conn->num_sources];
+	const LV2_Atom_Event *itr [conn->num_sources];
+	for(int s=0; s<conn->num_sources; s++)
 	{
-		seq[s] = PORT_BASE_ALIGNED(port->sources[s].port);
+		seq[s] = PORT_BASE_ALIGNED(conn->sources[s].port);
 		itr[s] = lv2_atom_sequence_begin(&seq[s]->body);
 	}
 
@@ -488,7 +521,7 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		int64_t frames = nsamples;
 
 		// search for next event in timeline accross source ports
-		for(int s=0; s<port->num_sources; s++)
+		for(int s=0; s<conn->num_sources; s++)
 		{
 			if(lv2_atom_sequence_is_end(&seq[s]->body, seq[s]->atom.size, itr[s]))
 				continue; // reached sequence end

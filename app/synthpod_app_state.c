@@ -926,22 +926,26 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 									&& lv2_atom_forge_bool(forge, port->monitored);
 							}
 
-							for(int j=0; j<port->num_sources; j++)
+							connectable_t *conn = _sp_app_port_connectable(port);
+							if(conn)
 							{
-								port_t *source = port->sources[j].port;
-
-								LV2_Atom_Forge_Frame source_frame;
-								if(  ref
-									&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
-									&& lv2_atom_forge_object(forge, &source_frame, 0, app->regs.core.Port.urid) )
+								for(int j=0; j<conn->num_sources; j++)
 								{
-									ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
-										&& lv2_atom_forge_int(forge, source->mod->uid)
-										&& lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
-										&& lv2_atom_forge_string(forge, source->symbol, strlen(source->symbol));
+									port_t *source = conn->sources[j].port;
 
-									if(ref)
-										lv2_atom_forge_pop(forge, &source_frame);
+									LV2_Atom_Forge_Frame source_frame;
+									if(  ref
+										&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
+										&& lv2_atom_forge_object(forge, &source_frame, 0, app->regs.core.Port.urid) )
+									{
+										ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
+											&& lv2_atom_forge_int(forge, source->mod->uid)
+											&& lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
+											&& lv2_atom_forge_string(forge, source->symbol, strlen(source->symbol));
+
+										if(ref)
+											lv2_atom_forge_pop(forge, &source_frame);
+									}
 								}
 							}
 

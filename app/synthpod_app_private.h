@@ -355,26 +355,22 @@ struct _control_port_t {
 	atomic_flag lock;
 
 	auto_t automation;
-	//FIXME
 };
 
 struct _audio_port_t {
 	connectable_t connectable;
 	float last;
-	//FIXME
 };
 
 struct _cv_port_t {
 	connectable_t connectable;
 	float last;
-	//FIXME
 };
 
 struct _atom_port_t {
 	connectable_t connectable;
 	port_buffer_type_t buffer_type; // none, sequence
 	bool patchable; // support patch:Message
-	//FIXME
 };
 
 struct _port_t {
@@ -385,9 +381,6 @@ struct _port_t {
 	
 	uint32_t index;
 	const char *symbol;
-
-	int num_sources;
-	source_t sources [MAX_SOURCES];
 
 	size_t size;
 	void *base;
