@@ -334,7 +334,6 @@ typedef struct _atom_port_t atom_port_t;
 
 struct _connectable_t {
 	int num_sources;
-	bool is_ramping;
 	source_t sources [MAX_SOURCES];
 };
 
@@ -360,19 +359,19 @@ struct _control_port_t {
 };
 
 struct _audio_port_t {
-	connectable_t connectable;
+	//connectable_t connectable;
 	float last;
 	//FIXME
 };
 
 struct _cv_port_t {
-	connectable_t connectable;
+	//connectable_t connectable;
 	float last;
 	//FIXME
 };
 
 struct _atom_port_t {
-	connectable_t connectable;
+	//connectable_t connectable;
 	port_buffer_type_t buffer_type; // none, sequence
 	bool patchable; // support patch:Message
 	//FIXME
@@ -388,7 +387,6 @@ struct _port_t {
 	const char *symbol;
 
 	int num_sources;
-	bool is_ramping;
 	source_t sources [MAX_SOURCES];
 
 	size_t size;

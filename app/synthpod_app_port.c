@@ -187,17 +187,16 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	if(snk_port->num_sources >= MAX_SOURCES)
 		return 0;
 
-	source_t *conn = &snk_port->sources[snk_port->num_sources];
-	conn->port = src_port;;
+	source_t *source = &snk_port->sources[snk_port->num_sources];
+	source->port = src_port;;
 	snk_port->num_sources += 1;
-	snk_port->is_ramping = src_port->type == PORT_TYPE_AUDIO;
 
 	// only audio port connections need to be ramped to be clickless
-	if(snk_port->is_ramping)
+	if(snk_port->type == PORT_TYPE_AUDIO)
 	{
-		conn->ramp.samples = app->ramp_samples;
-		conn->ramp.state = RAMP_STATE_UP;
-		conn->ramp.value = 0.f;
+		source->ramp.samples = app->ramp_samples;
+		source->ramp.state = RAMP_STATE_UP;
+		source->ramp.value = 0.f;
 	}
 
 	_dsp_master_reorder(app);
@@ -224,20 +223,8 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		return;
 
 	snk_port->num_sources -= 1;
-	snk_port->is_ramping = false;
 
 	_dsp_master_reorder(app);
-}
-
-static inline void
-_sp_app_port_reconnect(sp_app_t *app, port_t *src_port, port_t *snk_port, bool is_ramping)
-{
-	//printf("_sp_app_port_reconnect\n");	
-
-	if(!_sp_app_port_connected(src_port, snk_port))
-		return;
-
-	snk_port->is_ramping = is_ramping;
 }
 
 int
@@ -247,28 +234,26 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 	if(  (src_port->direction == PORT_DIRECTION_OUTPUT)
 		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
 	{
-		source_t *conn = NULL;
+		source_t *source = NULL;
 	
 		// find connection
 		for(int i=0; i<snk_port->num_sources; i++)
 		{
 			if(snk_port->sources[i].port == src_port)
 			{
-				conn = &snk_port->sources[i];
+				source = &snk_port->sources[i];
 				break;
 			}
 		}
 
-		if(conn)
+		if(source)
 		{
 			if(src_port->type == PORT_TYPE_AUDIO)
 			{
-				_sp_app_port_reconnect(app, src_port, snk_port, true); // handles port_connect
-
 				// only audio output ports need to be ramped to be clickless
-				conn->ramp.samples = app->ramp_samples;
-				conn->ramp.state = ramp_state;
-				conn->ramp.value = 1.f;
+				source->ramp.samples = app->ramp_samples;
+				source->ramp.state = ramp_state;
+				source->ramp.value = 1.f;
 
 				return 1; // needs ramping
 			}
@@ -289,29 +274,26 @@ _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	if(  (src_port->direction == PORT_DIRECTION_OUTPUT)
 		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
 	{
-		source_t *conn = NULL;
+		source_t *source = NULL;
 	
 		// find connection
 		for(int i=0; i<snk_port->num_sources; i++)
 		{
 			if(snk_port->sources[i].port == src_port)
 			{
-				conn = &snk_port->sources[i];
+				source = &snk_port->sources[i];
 				break;
 			}
 		}
 
-		if(conn)
+		if(source)
 		{
 			if(src_port->type == PORT_TYPE_AUDIO)
 			{
-				//_sp_app_port_reconnect(app, src_port, snk_port, true); // handles port_connect
-				// XXX we are already in multiplex mode
-
 				// only audio output ports need to be ramped to be clickless
-				conn->ramp.samples = app->ramp_samples;
-				conn->ramp.state = RAMP_STATE_UP;
-				conn->ramp.value = 0.f;
+				source->ramp.samples = app->ramp_samples;
+				source->ramp.state = RAMP_STATE_UP;
+				source->ramp.value = 0.f;
 
 				return 1; // needs ramping
 			}
@@ -328,28 +310,26 @@ _sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
 	if(  (src_port->direction == PORT_DIRECTION_OUTPUT)
 		&& (snk_port->direction == PORT_DIRECTION_INPUT) )
 	{
-		source_t *conn = NULL;
+		source_t *source = NULL;
 	
 		// find connection
 		for(int i=0; i<snk_port->num_sources; i++)
 		{
 			if(snk_port->sources[i].port == src_port)
 			{
-				conn = &snk_port->sources[i];
+				source = &snk_port->sources[i];
 				break;
 			}
 		}
 
-		if(conn)
+		if(source)
 		{
 			if(src_port->type == PORT_TYPE_AUDIO)
 			{
-				_sp_app_port_reconnect(app, src_port, snk_port, true); // handles port_connect
-
 				// only audio output ports need to be ramped to be clickless
-				conn->ramp.samples = app->ramp_samples;
-				conn->ramp.state = ramp_state;
-				conn->ramp.value = 1.f;
+				source->ramp.samples = app->ramp_samples;
+				source->ramp.state = ramp_state;
+				source->ramp.value = 1.f;
 
 				return 1; // needs ramping
 			}
@@ -378,8 +358,6 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 		else if(source->ramp.state == RAMP_STATE_DOWN_DRAIN)
 		{
 			// fully silenced, continue with preset loading
-			//_sp_app_port_reconnect(app, source->port, port, false); // handles port_connect
-			// XXX stay in multiplex mode
 
 			app->silence_state = SILENCING_STATE_WAIT;
 			source->ramp.value = 0.f;
@@ -394,7 +372,7 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 		}
 		else if(source->ramp.state == RAMP_STATE_UP)
 		{
-			_sp_app_port_reconnect(app, source->port, port, false); // handles port_connect
+			// nothing
 		}
 
 		source->ramp.state = RAMP_STATE_NONE; // ramp is complete
