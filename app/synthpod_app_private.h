@@ -73,7 +73,6 @@ typedef struct _mod_prof_t mod_prof_t;
 typedef struct _from_ui_t from_ui_t;
 typedef bool (*from_ui_cb_t)(sp_app_t *app, const LV2_Atom *atom);
 
-typedef void (*port_simplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 typedef void (*port_multiplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 typedef void (*port_transfer_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 
@@ -310,7 +309,6 @@ struct _mod_t {
 };
 
 struct _port_driver_t {
-	port_simplex_cb_t simplex;
 	port_multiplex_cb_t multiplex;
 	port_transfer_cb_t transfer;
 	bool sparse_update;
@@ -336,7 +334,6 @@ typedef struct _atom_port_t atom_port_t;
 
 struct _connectable_t {
 	int num_sources;
-	int num_feedbacks;
 	bool is_ramping;
 	source_t sources [MAX_SOURCES];
 };
@@ -391,12 +388,10 @@ struct _port_t {
 	const char *symbol;
 
 	int num_sources;
-	int num_feedbacks;
 	bool is_ramping;
 	source_t sources [MAX_SOURCES];
 
 	size_t size;
-	void *buf;
 	void *base;
 
 	port_type_t type; // audio, CV, control, atom
@@ -489,14 +484,8 @@ extern const port_driver_t audio_port_driver;
 extern const port_driver_t cv_port_driver;
 extern const port_driver_t atom_port_driver;
 extern const port_driver_t seq_port_driver;
-extern const port_driver_t ev_port_driver;
-
-#define SINK_IS_NILPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) == 0) && !(PORT)->is_ramping)
-#define SINK_IS_SIMPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) == 1) && !(PORT)->is_ramping)
-#define SINK_IS_MULTIPLEX(PORT) ((((PORT)->num_sources + (PORT)->num_feedbacks) > 1) || (PORT)->is_ramping)
 
 #define PORT_BASE_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->base)
-#define PORT_BUF_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->buf)
 
 /*
  * UI

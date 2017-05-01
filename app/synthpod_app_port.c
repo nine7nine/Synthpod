@@ -178,36 +178,6 @@ _sp_app_port_connected(port_t *src_port, port_t *snk_port)
 	return false;
 }
 
-static inline void
-_sp_app_port_rewire(port_t *snk_port)
-{
-	if(SINK_IS_SIMPLEX(snk_port))
-	{
-		// directly wire source port output buffer to sink input buffer
-		snk_port->base = PORT_BUF_ALIGNED(snk_port->sources[0].port);
-	}
-	else
-	{
-		// multiplex multiple source port output buffers to sink input buffer
-		snk_port->base = PORT_BUF_ALIGNED(snk_port);
-
-		// clear audio/cv port buffers without connections
-		if(SINK_IS_NILPLEX(snk_port))
-		{
-			if(  (snk_port->type == PORT_TYPE_AUDIO)
-				|| (snk_port->type == PORT_TYPE_CV) )
-			{
-				memset(PORT_BASE_ALIGNED(snk_port), 0x0, snk_port->size);
-			}
-		}
-	}
-
-	lilv_instance_connect_port(
-		snk_port->mod->inst,
-		snk_port->index,
-		snk_port->base);
-}
-
 int
 _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 {
@@ -220,7 +190,6 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 	source_t *conn = &snk_port->sources[snk_port->num_sources];
 	conn->port = src_port;;
 	snk_port->num_sources += 1;
-	snk_port->num_feedbacks += src_port->mod == snk_port->mod ? 1 : 0;
 	snk_port->is_ramping = src_port->type == PORT_TYPE_AUDIO;
 
 	// only audio port connections need to be ramped to be clickless
@@ -231,7 +200,6 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		conn->ramp.value = 0.f;
 	}
 
-	_sp_app_port_rewire(snk_port);
 	_dsp_master_reorder(app);
 	return 1;
 }
@@ -256,10 +224,8 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 		return;
 
 	snk_port->num_sources -= 1;
-	snk_port->num_feedbacks -= src_port->mod == snk_port->mod ? 1 : 0;
 	snk_port->is_ramping = false;
 
-	_sp_app_port_rewire(snk_port);
 	_dsp_master_reorder(app);
 }
 
@@ -272,8 +238,6 @@ _sp_app_port_reconnect(sp_app_t *app, port_t *src_port, port_t *snk_port, bool i
 		return;
 
 	snk_port->is_ramping = is_ramping;
-
-	_sp_app_port_rewire(snk_port);
 }
 
 int
@@ -463,40 +427,6 @@ _sp_app_port_control_stash(port_t *port)
 }
 
 __realtime static inline void
-_port_control_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
-{
-	float *dst = PORT_BASE_ALIGNED(port);
-
-	port_t *src_port = port->sources[0].port;
-
-	// normalize
-	const float norm = (*dst - src_port->control.min) * src_port->control.range_1;
-	*dst = port->control.min + norm * port->control.range; //TODO handle exponential ranges
-
-	_sp_app_port_control_stash(port);
-}
-
-__realtime static inline void
-_port_control_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
-{
-	float *dst = PORT_BASE_ALIGNED(port);
-	*dst = 0; // init
-
-	for(int s=0; s<port->num_sources; s++)
-	{
-		port_t *src_port = port->sources[s].port;
-
-		const float *src = PORT_BASE_ALIGNED(src_port);
-
-		// normalize
-		const float norm = (*src - src_port->control.min) * src_port->control.range_1;
-		*dst += port->control.min + norm * port->control.range; //TODO handle exponential ranges
-	}
-
-	_sp_app_port_control_stash(port);
-}
-
-__realtime static inline void
 _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
 	float *val = PORT_BASE_ALIGNED(port);
@@ -522,22 +452,6 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 			for(uint32_t j=0; j<nsamples; j++)
 				val[j] += src[j];
 		}
-	}
-}
-
-__realtime static inline void
-_port_audio_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
-{
-	source_t *source = &port->sources[0];
-
-	if(source->ramp.state != RAMP_STATE_NONE)
-	{
-		float *src = PORT_BASE_ALIGNED(source->port);
-		const float ramp_value = source->ramp.value;
-		for(uint32_t j=0; j<nsamples; j++)
-			src[j] *= ramp_value;
-
-		_update_ramp(app, source, port, nsamples);
 	}
 }
 
@@ -601,37 +515,6 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		else
 			break; // no more events to process
 	};
-}
-
-__realtime static inline void
-_port_ev_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
-{
-	//const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
-
-	//FIXME FIXME FIXME actually implement me FIXME FIXME FIXME
-}
-
-__realtime static inline void
-_port_seq_simplex(sp_app_t *app, port_t *port, uint32_t nsamples)
-{
-	const LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
-	// move messages from UI to default buffer
-
-	if(seq->atom.size > sizeof(LV2_Atom_Sequence_Body)) // has messages from UI
-	{
-		//printf("adding UI event\n");
-
-		port_t *src_port = port->sources[0].port;
-		const uint32_t capacity = PORT_SIZE(src_port);
-		LV2_Atom_Sequence *dst = PORT_BUF_ALIGNED(src_port);
-
-		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-		{
-			LV2_Atom_Event *ev2 = lv2_atom_sequence_append_event(dst, capacity, ev);
-			if(ev2)
-				ev2->time.frames = nsamples - 1;
-		}
-	}
 }
 
 __realtime static LV2_Atom_Forge_Ref
@@ -880,21 +763,18 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 }
 
 const port_driver_t control_port_driver = {
-	.simplex = _port_control_simplex,
-	.multiplex = _port_control_multiplex,
+	.multiplex = NULL, // unsupported
 	.transfer = _port_float_protocol_update,
 	.sparse_update = true
 };
 
 const port_driver_t audio_port_driver = {
-	.simplex = _port_audio_simplex,
 	.multiplex = _port_audio_multiplex,
 	.transfer = _port_peak_protocol_update,
 	.sparse_update = true
 };
 
 const port_driver_t cv_port_driver = {
-	.simplex = NULL,
 	.multiplex = _port_cv_multiplex,
 	.transfer = _port_peak_protocol_update,
 	.sparse_update = true
@@ -902,22 +782,13 @@ const port_driver_t cv_port_driver = {
 
 //FIXME actually use this
 const port_driver_t atom_port_driver = {
-	.simplex = NULL,
 	.multiplex = NULL, // unsupported
 	.transfer = _port_atom_transfer_update,
 	.sparse_update = false
 };
 
 const port_driver_t seq_port_driver = {
-	.simplex = _port_seq_simplex,
 	.multiplex = _port_seq_multiplex,
 	.transfer = _port_event_transfer_update,
-	.sparse_update = false
-};
-
-const port_driver_t ev_port_driver = {
-	.simplex = NULL,
-	.multiplex = _port_ev_multiplex,
-	.transfer = NULL,
 	.sparse_update = false
 };

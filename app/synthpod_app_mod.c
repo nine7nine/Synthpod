@@ -192,8 +192,7 @@ _sp_app_mod_slice_pool(mod_t *mod, port_type_t type)
 				continue; //skip
 
 			// define buffer slice
-			tar->buf = ptr;
-			tar->base = tar->buf;
+			tar->base = ptr;
 
 			// initialize control buffers to default value
 			if(tar->type == PORT_TYPE_CONTROL)
@@ -891,9 +890,11 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 		if(  (tar->type == PORT_TYPE_ATOM)
 			&& (tar->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 		{
-			LV2_Atom *atom = tar->base;
-			atom->size = sizeof(LV2_Atom_Sequence_Body);
-			atom->type = app->forge.Sequence;
+			LV2_Atom_Sequence *seq = tar->base;
+			seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
+			seq->atom.type = app->forge.Sequence;
+			seq->body.unit = 0;
+			seq->body.pad = 0;
 		}
 	}
 

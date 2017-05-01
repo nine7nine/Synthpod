@@ -131,35 +131,22 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		port_t *port = &mod->ports[p];
 
 		if(port->direction == PORT_DIRECTION_OUTPUT)
-			continue; // not a sink
-
-		if(SINK_IS_MULTIPLEX(port))
+		{
+			if(  (port->type == PORT_TYPE_ATOM)
+				&& (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
+				&& (!mod->system_ports) ) // don't overwrite source buffer events
+			{
+				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
+				seq->atom.size = port->size;
+				seq->atom.type = app->forge.Sequence;
+				seq->body.unit = 0;
+				seq->body.pad = 0;
+			}
+		}
+		else // PORT_DIRECTION_INPUT
 		{
 			if(port->driver->multiplex)
 				port->driver->multiplex(app, port, nsamples);
-		}
-		else if(SINK_IS_SIMPLEX(port))
-		{
-			if(port->driver->simplex)
-				port->driver->simplex(app, port, nsamples);
-		}
-	}
-
-	// clear atom sequence output buffers
-	for(unsigned i=0; i<mod->num_ports; i++)
-	{
-		port_t *port = &mod->ports[i];
-
-		if(  (port->type == PORT_TYPE_ATOM)
-			&& (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-			&& (port->direction == PORT_DIRECTION_OUTPUT)
-			&& (!mod->system_ports) ) // don't overwrite source buffer events
-		{
-			LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
-			seq->atom.type = app->regs.port.sequence.urid;
-			seq->atom.size = port->size;
-			seq->body.unit = 0;
-			seq->body.pad = 0;
 		}
 	}
 
@@ -530,7 +517,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
-				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
 				seq->body.unit = 0;

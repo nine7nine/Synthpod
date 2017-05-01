@@ -110,16 +110,26 @@ _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 	// messages from UI are ALWAYS appended to default port buffer, no matter
 	// how many sources the port may have
 	const uint32_t capacity = PORT_SIZE(port);
-	LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(port);
+	LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 
 	// find last event
 	LV2_Atom_Event *last = NULL;
 	LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		last = ev;
 
-	LV2_Atom_Event *ev = _lv2_atom_sequence_append_atom(seq, capacity,
-		last ? last->time.frames : 0, trans->atom);
-	(void)ev; //TODO check
+	const LV2_Atom_Event dummy =  {
+		.time = {
+			.frames = 0
+		},
+		.body = {
+			.size = atom->size,
+			.type = atom->type
+		}
+	};
+
+	LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, &dummy);
+	if(ev)
+		memcpy(LV2_ATOM_BODY(&ev->body), LV2_ATOM_BODY_CONST(atom), atom->size);
 
 	return advance_ui[app->block_state];
 }
@@ -1614,16 +1624,21 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				// messages from UI are ALWAYS appended to default port buffer, no matter
 				// how many sources the port may have
 				const uint32_t capacity = PORT_SIZE(src_port);
-				LV2_Atom_Sequence *seq = PORT_BUF_ALIGNED(src_port);
+				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(src_port);
 
-				// find last event
-				LV2_Atom_Event *last = NULL;
-				LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-					last = ev;
+				const LV2_Atom_Event dummy =  {
+					.time = {
+						.frames = 0
+					},
+					.body = {
+						.size = src_value->size,
+						.type = src_value->type
+					}
+				};
 
-				LV2_Atom_Event *ev = _lv2_atom_sequence_append_atom(seq, capacity,
-					last ? last->time.frames : 0, src_value);
-				(void)ev; //TODO check
+				LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, &dummy);
+				if(ev)
+					memcpy(LV2_ATOM_BODY(&ev->body), LV2_ATOM_BODY_CONST(src_value), src_value->size);
 			}
 			else if( (src_proto == app->regs.port.atom_transfer.urid)
 				&& (src_port->type == PORT_TYPE_ATOM) )

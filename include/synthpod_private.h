@@ -1948,24 +1948,6 @@ _preset_reload(LilvWorld *world, reg_t *regs, const LilvPlugin *plugin,
 	return presets;
 }
 
-static inline LV2_Atom_Event*
-_lv2_atom_sequence_append_atom(LV2_Atom_Sequence *seq, uint32_t capacity,
-	int64_t frames,	const LV2_Atom *atom)
-{
-	const uint32_t total_size = sizeof(LV2_Atom_Event) + atom->size;
-
-	if(capacity - seq->atom.size < total_size)
-		return NULL;
-
-	LV2_Atom_Event* ev = lv2_atom_sequence_end(&seq->body, seq->atom.size);
-	ev->time.frames = frames;
-	memcpy(&ev->body, atom, lv2_atom_total_size(atom));
-
-	seq->atom.size += lv2_atom_pad_size(total_size);
-
-	return ev;
-}
-
 static inline int
 _signum(LV2_URID urid1, LV2_URID urid2)
 {
