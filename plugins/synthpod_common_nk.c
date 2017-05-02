@@ -4025,6 +4025,21 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT);
 }
 
+static bool
+_source_type_match(plughandle_t *handle, property_type_t source_type)
+{
+	if(handle->type == PROPERTY_TYPE_AUTOMATION)
+		return (PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC) & source_type;
+
+	return handle->type & source_type;
+}
+
+static bool
+_sink_type_match(plughandle_t *handle, property_type_t sink_type)
+{
+	return handle->type & sink_type;
+}
+
 static void
 _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_vec2 dim, bool is_hilighted)
@@ -4036,7 +4051,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	const float cw = 4.f * handle->scale;
 
 	// output connector
-	if(mod->source_type & handle->type)
+	if(_source_type_match(handle, mod->source_type))
 	{
 		const float cx = mod->pos.x - scrolling.x + dim.x/2 + 2*cw;
 		const float cy = mod->pos.y - scrolling.y;
@@ -4070,7 +4085,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	}
 
 	// input connector
-	if(mod->sink_type & handle->type)
+	if(_sink_type_match(handle, mod->sink_type))
 	{
 		const float cx = mod->pos.x - scrolling.x - dim.x/2 - 2*cw;
 		const float cy = mod->pos.y - scrolling.y;
@@ -4111,7 +4126,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 						{
 							port_t *source_port = *source_port_itr;
 
-							if(!(source_port->type & handle->type))
+							if(!_source_type_match(handle, source_port->type))
 								continue;
 
 							unsigned j = 0;
@@ -4119,7 +4134,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 							{
 								port_t *sink_port = *sink_port_itr;
 
-								if(!(sink_port->type & handle->type))
+								if(!_sink_type_match(handle, sink_port->type))
 									continue;
 
 								if(i == j)
@@ -4204,7 +4219,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 static void
 _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 {
-	if(!(mod->source_type & handle->type) && !(mod->sink_type & handle->type) )
+	if(!_source_type_match(handle, mod->source_type) && !_sink_type_match(handle, mod->sink_type))
 		return;
 
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
@@ -4349,11 +4364,8 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 static void
 _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_conn, float dy)
 {
-	if(  !(mod_conn->source_type & handle->type)
-		|| !(mod_conn->sink_type & handle->type) )
-	{
+	if(!_source_type_match(handle, mod_conn->source_type) || !_sink_type_match(handle, mod_conn->sink_type))
 		return;
-	}
 
 	const struct nk_input *in = &ctx->input;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
@@ -4476,7 +4488,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 		{
 			port_t *source_port = *source_port_itr;
 
-			if(!(source_port->type & handle->type))
+			if(!_source_type_match(handle, source_port->type))
 				continue;
 
 			float y = body.y + ps/2;
@@ -4484,7 +4496,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 			{
 				port_t *sink_port = *sink_port_itr;
 
-				if(!(sink_port->type & handle->type))
+				if(!_sink_type_match(handle, sink_port->type))
 					continue;
 
 				port_conn_t *port_conn = _port_conn_find(mod_conn, source_port, sink_port);
