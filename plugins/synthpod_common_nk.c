@@ -1774,16 +1774,22 @@ _mod_ui_run(mod_ui_t *mod_ui)
 
 		// parent
 		mod_ui->pid = pid;
+		_mod_subscribe_all(handle, mod);
 	}
 }
 
 static void
 _mod_ui_stop(mod_ui_t *mod_ui)
 {
+	mod_t *mod = mod_ui->mod;
+	plughandle_t *handle = mod->handle;
+
 	if(mod_ui->pid)
 	{
 		kill(mod_ui->pid, SIGTERM);
 		mod_ui->pid = 0;
+
+		_mod_unsubscribe_all(handle, mod);
 	}
 
 	if(mod_ui->sbox.sb)
@@ -5066,6 +5072,8 @@ cleanup(LV2UI_Handle instance)
 		free(handle->win.cfg.font.face);
 	nk_pugl_hide(&handle->win);
 	nk_pugl_shutdown(&handle->win);
+
+	_set_module_selector(handle, NULL);
 
 	HASH_FREE(&handle->mods, ptr)
 	{
