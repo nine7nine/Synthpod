@@ -41,7 +41,7 @@
 #include <lilv/lilv.h>
 
 #define SEARCH_BUF_MAX 128
-#define ATOM_BUF_MAX 0x20000 // 1M
+#define ATOM_BUF_MAX 0x100000 // 1M
 #define CONTROL 14 //FIXME
 
 #ifdef Bool
@@ -1755,6 +1755,8 @@ _mod_ui_run(mod_ui_t *mod_ui)
 		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name
 		&& mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
+		_mod_subscribe_all(handle, mod);
+
 		const pid_t pid = fork();
 		if(pid == 0) // child
 		{
@@ -1774,7 +1776,6 @@ _mod_ui_run(mod_ui_t *mod_ui)
 
 		// parent
 		mod_ui->pid = pid;
-		_mod_subscribe_all(handle, mod);
 	}
 }
 
@@ -1788,12 +1789,11 @@ _mod_ui_stop(mod_ui_t *mod_ui)
 	{
 		kill(mod_ui->pid, SIGTERM);
 		mod_ui->pid = 0;
-
-		_mod_unsubscribe_all(handle, mod);
 	}
 
 	if(mod_ui->sbox.sb)
 	{
+		_mod_unsubscribe_all(handle, mod);
 		sandbox_master_free(mod_ui->sbox.sb);
 		mod_ui->sbox.sb = NULL;
 	}

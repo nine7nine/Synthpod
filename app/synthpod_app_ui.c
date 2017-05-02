@@ -117,19 +117,12 @@ _sp_app_from_ui_event_transfer(sp_app_t *app, const LV2_Atom *atom)
 	LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		last = ev;
 
-	const LV2_Atom_Event dummy =  {
-		.time = {
-			.frames = 0
-		},
-		.body = {
-			.size = atom->size,
-			.type = atom->type
-		}
-	};
-
-	LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, &dummy);
+	const LV2_Atom_Event *dummy = (const void *)atom- offsetof(LV2_Atom_Event, body);
+	LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, dummy);
 	if(ev)
-		memcpy(LV2_ATOM_BODY(&ev->body), LV2_ATOM_BODY_CONST(atom), atom->size);
+		ev->time.frames = 0;
+	else
+		printf("_sp_app_from_ui_event_transfer: failed to append\n");
 
 	return advance_ui[app->block_state];
 }
@@ -1634,19 +1627,12 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				const uint32_t capacity = PORT_SIZE(src_port);
 				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(src_port);
 
-				const LV2_Atom_Event dummy =  {
-					.time = {
-						.frames = 0
-					},
-					.body = {
-						.size = src_value->size,
-						.type = src_value->type
-					}
-				};
-
-				LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, &dummy);
+				const LV2_Atom_Event *dummy = (const void *)src_value - offsetof(LV2_Atom_Event, body);
+				LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, dummy);
 				if(ev)
-					memcpy(LV2_ATOM_BODY(&ev->body), LV2_ATOM_BODY_CONST(src_value), src_value->size);
+					ev->time.frames = 0;
+				else
+					printf("_notification_list_add: failed to append\n");
 			}
 			else if( (src_proto == app->regs.port.atom_transfer.urid)
 				&& (src_port->type == PORT_TYPE_ATOM) )

@@ -507,15 +507,15 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	LV2_Atom_Sequence *dst = PORT_BASE_ALIGNED(port);
 
 	connectable_t *conn = &port->atom.connectable;
-	const LV2_Atom_Sequence *seq [conn->num_sources];
-	const LV2_Atom_Event *itr [conn->num_sources];
+	const LV2_Atom_Sequence *seq [MAX_SOURCES];
+	const LV2_Atom_Event *itr [MAX_SOURCES];
 	for(int s=0; s<conn->num_sources; s++)
 	{
 		seq[s] = PORT_BASE_ALIGNED(conn->sources[s].port);
 		itr[s] = lv2_atom_sequence_begin(&seq[s]->body);
 	}
 
-	while(1)
+	while(true)
 	{
 		int nxt = -1;
 		int64_t frames = nsamples;
@@ -536,7 +536,10 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		if(nxt >= 0) // next event found
 		{
 			LV2_Atom_Event *ev = lv2_atom_sequence_append_event(dst, capacity, itr[nxt]);
-			(void)ev; //TODO check
+			if(!ev)
+			{
+				printf("_port_seq_multiplex: failed to append\n");
+			}
 
 			// advance iterator
 			itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
@@ -586,6 +589,7 @@ _patch_notification_add(sp_app_t *app, port_t *source_port,
 			synthpod_patcher_pop(&app->forge, frame, 3);
 			_sp_app_to_ui_advance_atom(app, answer);
 		}
+		//FIXME report buffer overflow
 	}
 }
 
@@ -760,15 +764,22 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 			if(lv2_atom_forge_is_object_type(&app->forge, obj->atom.type))
 			{ 
+				/*FIXME
 				const LV2_Atom_URID *destination = NULL;
 				lv2_atom_object_get(obj, app->regs.patch.destination.urid, &destination, NULL);
 				if(destination && (destination->atom.type == app->forge.URID)
 						&& (destination->body == app->regs.core.plugin.urid) )
 					continue; // ignore feedback messages
+				*/
 
 				if(  (obj->body.otype == app->regs.patch.set.urid)
+					|| (obj->body.otype == app->regs.patch.get.urid)
 					|| (obj->body.otype == app->regs.patch.put.urid)
 					|| (obj->body.otype == app->regs.patch.patch.urid)
+					|| (obj->body.otype == app->regs.patch.insert.urid)
+					|| (obj->body.otype == app->regs.patch.move.urid)
+					|| (obj->body.otype == app->regs.patch.copy.urid)
+					|| (obj->body.otype == app->regs.patch.delete.urid)
 					|| (obj->body.otype == app->regs.patch.error.urid)
 					|| (obj->body.otype == app->regs.patch.ack.urid) ) //TODO support more patch messages
 				{

@@ -505,7 +505,7 @@ static inline LV2_Atom *
 _sp_app_to_ui_request_atom(sp_app_t *app)
 {
 	size_t maximum;
-	LV2_Atom *atom = _sp_app_to_ui_request_max(app, 0, &maximum);
+	LV2_Atom *atom = _sp_app_to_ui_request_max(app, 4096, &maximum); //FIXME what should minimum be?
 	if(atom)
 		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)atom, maximum);
 	return atom;	
