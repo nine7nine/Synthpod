@@ -386,7 +386,16 @@ struct _reg_t {
 		reg_item_t notification_module;
 		reg_item_t notification_symbol;
 		reg_item_t notification_value;
+
+		reg_item_t automation_list;
+		reg_item_t automation_module;
+		reg_item_t automation_symbol;
 	} synthpod;
+
+	struct {
+		reg_item_t channel;
+		reg_item_t controller;
+	} midi;
 };
 
 static inline void
@@ -652,6 +661,13 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.notification_module, world, map, SYNTHPOD_PREFIX"notificationModule");
 	_register(&regs->synthpod.notification_symbol, world, map, SYNTHPOD_PREFIX"notificationSymbol");
 	_register(&regs->synthpod.notification_value, world, map, SYNTHPOD_PREFIX"notificationValue");
+
+	_register(&regs->synthpod.automation_list, world, map, SYNTHPOD_PREFIX"automationList");
+	_register(&regs->synthpod.automation_module, world, map, SYNTHPOD_PREFIX"automationModule");
+	_register(&regs->synthpod.automation_symbol, world, map, SYNTHPOD_PREFIX"automationSymbol");
+
+	_register(&regs->midi.channel, world, map, LV2_MIDI__channel);
+	_register(&regs->midi.controller, world, map, LV2_MIDI__Controller);
 }
 
 static inline void
@@ -886,6 +902,13 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.notification_module);
 	_unregister(&regs->synthpod.notification_symbol);
 	_unregister(&regs->synthpod.notification_value);
+
+	_unregister(&regs->synthpod.automation_list);
+	_unregister(&regs->synthpod.automation_module);
+	_unregister(&regs->synthpod.automation_symbol);
+
+	_unregister(&regs->midi.channel);
+	_unregister(&regs->midi.controller);
 }
 
 #define _ATOM_ALIGNED __attribute__((aligned(8)))

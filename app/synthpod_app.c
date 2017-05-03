@@ -163,7 +163,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 			const int64_t frames = ev->time.frames;
 			const LV2_Atom *atom = &ev->body;
 
-			printf("got automation\n");
+			//printf("got automation\n");
 			if(  (atom->type == app->regs.port.midi.urid)
 				&& (atom->size == 3) ) // we're only interested in controller events
 			{
@@ -188,14 +188,18 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 						const uint8_t channel = msg[0] & 0x0f;
 						const uint8_t controller = msg[1];
 
-						if(  (mauto->channel == channel)
-							&& (mauto->controller == controller) )
+						if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
+							&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
 						{
-							const float rel = (float)(msg[2] - mauto->min) / mauto->span;
+							float rel = (msg[2] - mauto->min) * mauto->range_1;
+							if(rel < 0.f)
+								rel = 0.f;
+							else if(rel > 1.f)
+								rel = 1.f;
 
 							float *f32 = PORT_BASE_ALIGNED(dst);
 							*f32 = rel * control->range + control->min;
-							printf("automation match: %f %f\n", rel, *f32);
+							//printf("automation match: %f %f\n", rel, *f32);
 
 							if(control->is_integer)
 								*f32 = floorf(*f32);

@@ -207,11 +207,11 @@ enum _auto_type_t {
 };
 
 struct _midi_auto_t {
-	uint8_t channel;
-	uint8_t controller;
+	int8_t channel;
+	int8_t controller;
 	uint8_t min;
 	uint8_t max;
-	uint8_t span;
+	float range_1;
 };
 
 struct _osc_auto_t {

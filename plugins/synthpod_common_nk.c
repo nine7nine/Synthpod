@@ -60,13 +60,16 @@ typedef struct _control_port_t control_port_t;
 typedef struct _audio_port_t audio_port_t;
 typedef struct _port_t port_t;
 typedef struct _param_t param_t;
-typedef struct _prop_t prop_t;
 typedef struct _mod_conn_t mod_conn_t;
 typedef struct _mod_ui_t mod_ui_t;
 typedef struct _port_conn_t port_conn_t;
 typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
 typedef struct _prof_t prof_t;
+typedef enum  _auto_type_t auto_type_t;
+typedef struct _midi_auto_t midi_auto_t;
+typedef struct _osc_auto_t osc_auto_t;
+typedef struct _auto_t auto_t;
 
 enum _property_type_t {
 	PROPERTY_TYPE_NONE				= 0,
@@ -123,6 +126,33 @@ struct _scale_point_t {
 	param_union_t val;
 };
 
+enum _auto_type_t {
+	AUTO_NONE = 0,
+	AUTO_MIDI,
+	AUTO_OSC
+};
+
+struct _midi_auto_t {
+	int channel;
+	int controller;
+	int min;
+	int max;
+};
+
+struct _osc_auto_t {
+	char *path;
+	float min;
+	float max;
+};
+
+struct _auto_t {
+	auto_type_t type;
+	union {
+		midi_auto_t midi;
+		osc_auto_t osc;
+	};
+};
+
 struct _control_port_t {
 	hash_t points;
 	scale_point_t *points_ref;
@@ -133,6 +163,7 @@ struct _control_port_t {
 	bool is_int;
 	bool is_bool;
 	bool is_readonly;
+	auto_t automation;
 };
 
 struct _audio_port_t {
@@ -169,13 +200,7 @@ struct _param_t {
 	char *comment;
 	LV2_URID units_unit;
 	char *units_symbol;
-};
-
-struct _prop_t {
-	union {
-		port_t port;
-		param_t param;
-	};
+	auto_t automation;
 };
 
 struct _prof_t {
@@ -269,6 +294,8 @@ struct _plughandle_t {
 	const LilvPlugin *plugin_selector;
 	mod_t *module_selector;
 	const LilvNode *preset_selector;
+	port_t *port_selector;
+	param_t *param_selector;
 
 	hash_t mods;
 	hash_t conns;
@@ -374,6 +401,12 @@ static const struct nk_color hilight_color = {200, 100, 0, 255};
 static const struct nk_color button_border_color = {100, 100, 100, 255};
 static const struct nk_color grab_handle_color = {100, 100, 100, 255};
 static const struct nk_color toggle_color = {150, 150, 150, 255};
+
+static const char *auto_labels [] = {
+	[AUTO_NONE] = "None",
+	[AUTO_MIDI] = "MIDI",
+	[AUTO_OSC] = "OSC"
+};
 
 static inline bool
 _message_request(plughandle_t *handle)
@@ -831,6 +864,83 @@ _patch_notification_add_patch_get(plughandle_t *handle, mod_t *mod,
 			synthpod_patcher_pop(&handle->forge, frame, 3);
 			_message_write(handle);
 		}
+	}
+}
+
+static LV2_Atom_Forge_Ref
+_patch_port_automation_internal(plughandle_t *handle, port_t *source_port)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.automation_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.automation_symbol.urid);
+	if(ref)
+		ref = lv2_atom_forge_string(&handle->forge, source_port->symbol, strlen(source_port->symbol));
+
+	return ref;
+}
+
+static LV2_Atom_Forge_Ref
+_patch_port_midi_automation_internal(plughandle_t *handle, port_t *source_port,
+	midi_auto_t *mauto)
+{
+	LV2_Atom_Forge_Ref ref = _patch_port_automation_internal(handle, source_port);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.midi.channel.urid);
+	if(ref)
+		ref = lv2_atom_forge_int(&handle->forge, mauto->channel);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.midi.controller.urid);
+	if(ref)
+		ref = lv2_atom_forge_int(&handle->forge, mauto->controller);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.core.minimum.urid);
+	if(ref)
+		ref = lv2_atom_forge_int(&handle->forge, mauto->min);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.core.maximum.urid);
+	if(ref)
+		ref = lv2_atom_forge_int(&handle->forge, mauto->max);
+
+	return ref;
+}
+
+static void
+_patch_port_midi_automation_add(plughandle_t *handle, port_t *source_port,
+	midi_auto_t *mauto)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.port.midi.urid)
+		&& _patch_port_midi_automation_internal(handle, source_port, mauto) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_port_automation_remove(plughandle_t *handle, port_t *source_port)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_remove_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& _patch_port_automation_internal(handle, source_port) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
 	}
 }
 
@@ -3535,6 +3645,24 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 {
 	plughandle_t *handle = mod->handle;
 
+	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true))
+	{
+		handle->port_selector = port;
+		handle->param_selector = NULL;
+	}
+
+	bool is_hilighted = false;
+	if(handle->port_selector == port)
+	{
+		nk_style_push_color(ctx, &ctx->style.window.group_border_color, hilight_color);
+		is_hilighted = true;
+	}
+	else if( (port->type == PROPERTY_TYPE_CONTROL) && (port->control.automation.type != AUTO_NONE) )
+	{
+		nk_style_push_color(ctx, &ctx->style.window.group_border_color, toggle_color);
+		is_hilighted = true;
+	}
+
 	if(nk_group_begin(ctx, port->name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
 	{
 		switch(port->type)
@@ -3575,6 +3703,9 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 
 		nk_group_end(ctx);
 	}
+
+	if(is_hilighted)
+		nk_style_pop_color(ctx);
 }
 
 static bool
@@ -3756,6 +3887,24 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 {
 	const char *name_str = param->label ? param->label : "Unknown";
 
+	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true))
+	{
+		handle->port_selector = NULL;
+		handle->param_selector = param;
+	}
+
+	bool is_hilighted = false;
+	if(handle->param_selector == param)
+	{
+		nk_style_push_color(ctx, &ctx->style.window.group_border_color, hilight_color);
+		is_hilighted = true;
+	}
+	else if(param->automation.type != AUTO_NONE)
+	{
+		nk_style_push_color(ctx, &ctx->style.window.group_border_color, toggle_color);
+		is_hilighted = true;
+	}
+
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
 	{
 		if(_expose_param_inner(ctx, param, handle, dy, name_str))
@@ -3813,6 +3962,9 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 
 		nk_group_end(ctx);
 	}
+
+	if(is_hilighted)
+		nk_style_pop_color(ctx);
 }
 
 static void
@@ -4212,6 +4364,8 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 
 	handle->module_selector = mod;
 	handle->preset_selector = NULL;
+	handle->port_selector = NULL;
+	handle->param_selector = NULL;
 	handle->preset_find_matches = true;
 	handle->port_find_matches = true;
 }
@@ -4712,8 +4866,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	}
 
 	{
-		const float lower_ratio [3] = {0.2, 0.2, 0.6};
-		nk_layout_row(ctx, NK_DYNAMIC, lower_h, 3, lower_ratio);
+		const float lower_ratio [4] = {0.2, 0.2, 0.4, 0.2};
+		nk_layout_row(ctx, NK_DYNAMIC, lower_h, 4, lower_ratio);
 
 		if(nk_group_begin(ctx, "Plugins", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
 		{
@@ -4812,6 +4966,94 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
 
 				_expose_control_list(handle, mod, ctx, DY, dy, handle->port_find_matches);
+			}
+
+			nk_group_end(ctx);
+		}
+
+		if(nk_group_begin(ctx, "Automations", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		{
+			mod_t *mod = handle->module_selector;
+			if(mod)
+			{
+				port_t *port = handle->port_selector;
+				param_t *param = handle->param_selector;
+
+				auto_t *automation = NULL;
+				if(port && (port->type == PROPERTY_TYPE_CONTROL) )
+					automation = &port->control.automation;
+				else if(param)
+					automation = &param->automation;
+
+				if(automation)
+				{
+					auto_t old_auto = *automation;
+
+					nk_menubar_begin(ctx);
+					{
+						nk_layout_row_dynamic(ctx, dy, 1);
+
+						const auto_type_t auto_type = automation->type;
+						automation->type = nk_combo(ctx, auto_labels, sizeof(auto_labels) / sizeof(char *),
+							automation->type, dy, nk_vec2(nk_widget_width(ctx), dy*5));
+						if(auto_type != automation->type)
+						{
+							if(automation->type == AUTO_MIDI)
+							{
+								// initialize
+								automation->midi.channel = -1;
+								automation->midi.controller = -1;
+								automation->midi.min = 0x0;
+								automation->midi.max = 0x7f;
+							}
+							else if(automation->type == AUTO_OSC)
+							{
+								//FIXME initialize
+							}
+						}
+					}
+					nk_menubar_end(ctx);
+
+					if(automation->type == AUTO_MIDI)
+					{
+						nk_layout_row_dynamic(ctx, dy, 1);
+						nk_spacing(ctx, 1);
+
+						const float ipp = 1.f; //FIXME
+
+						nk_property_int(ctx, "Channel", -1, &automation->midi.channel, 0xf, 1, ipp);
+						nk_property_int(ctx, "Controller", -1, &automation->midi.controller, 0x7f, 1, ipp);
+						nk_property_int(ctx, "Minimum", 0, &automation->midi.min, 0x7f, 1, ipp);
+						nk_property_int(ctx, "Maximum", 0, &automation->midi.max, 0x7f, 1, ipp);
+					}
+					else if(automation->type == AUTO_OSC)
+					{
+						//FIXME
+					}
+
+					if(memcmp(&old_auto, automation, sizeof(auto_t))) // needs sync
+					{
+						printf("automation needs sync\n");
+						if(automation->type == AUTO_NONE)
+						{
+							if(port)
+								_patch_port_automation_remove(handle, port);
+							else if(param)
+								;//FIXME _patch_param_automation_remove(handle, param);
+						}
+						else if(automation->type == AUTO_MIDI)
+						{
+							if(port)
+								_patch_port_midi_automation_add(handle, port, &automation->midi);
+							else if(param)
+								;//FIXME _patch_param_midi_automation_add(handle, param, &automation->midi);
+						}
+						else if(automation->type == AUTO_OSC)
+						{
+							//FIXME
+						}
+					}
+				}
 			}
 
 			nk_group_end(ctx);
@@ -5203,6 +5445,57 @@ _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 }
 
 static void
+_add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
+{
+	if(obj->body.otype == handle->regs.port.midi.urid)
+	{
+		const LV2_Atom_URID *src_module = NULL;
+		const LV2_Atom *src_symbol = NULL;
+		const LV2_Atom_Int *midi_channel = NULL;
+		const LV2_Atom_Int *midi_controller = NULL;
+		const LV2_Atom_Int *core_minimum= NULL;
+		const LV2_Atom_Int *core_maximum= NULL;
+
+		lv2_atom_object_get(obj,
+			handle->regs.synthpod.automation_module.urid, &src_module,
+			handle->regs.synthpod.automation_symbol.urid, &src_symbol,
+			handle->regs.midi.channel.urid, &midi_channel,
+			handle->regs.midi.controller.urid, &midi_controller,
+			handle->regs.core.minimum.urid, &core_minimum,
+			handle->regs.core.maximum.urid, &core_maximum,
+			0);
+
+		const LV2_URID src_urn = src_module
+			? src_module->body : 0;
+		const char *src_sym = src_symbol
+			? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+
+		if(src_urn && src_sym)
+		{
+			mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
+
+			if(src_mod)
+			{
+				port_t *src_port = _mod_port_find_by_symbol(src_mod, src_sym);
+
+				if(src_port && (src_port->type == PROPERTY_TYPE_CONTROL) )
+				{
+					auto_t *automation = &src_port->control.automation;
+					automation->type = AUTO_MIDI;
+
+					midi_auto_t *mauto = &automation->midi;
+					mauto->channel = midi_channel ? midi_channel->body : -1;
+					mauto->controller = midi_controller ? midi_controller->body : -1;
+					mauto->min = core_minimum ? core_minimum->body : 0x0;
+					mauto->max = core_maximum ? core_maximum->body : 0x7f;
+				}
+			}
+		}
+	}
+	//FIXME OSC
+}
+
+static void
 _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
 	const LV2_URID src_proto = obj->body.otype;
@@ -5338,6 +5631,14 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_message_write(handle);
 							}
+
+							// patch:Get [patch:property spod:automationList]
+							if(  _message_request(handle)
+								&& synthpod_patcher_get(&handle->regs, &handle->forge,
+									0, 0, handle->regs.synthpod.automation_list.urid) )
+							{
+								_message_write(handle);
+							}
 						}
 						else if( (prop == handle->regs.synthpod.connection_list.urid)
 							&& (value->type == handle->forge.Tuple) )
@@ -5361,6 +5662,18 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							const LV2_Atom_URID *urid = (const LV2_Atom_URID *)value;
 
 							handle->bundle_urn = urid->body;
+						}
+						else if( (prop == handle->regs.synthpod.automation_list.urid)
+							&& (value->type == handle->forge.Tuple) )
+						{
+							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
+
+							LV2_ATOM_TUPLE_FOREACH(tup, itm)
+							{
+								_add_automation(handle, (const LV2_Atom_Object *)itm);
+							}
+							printf("got spod:automationList\n");
+							//FIXME
 						}
 						else if( (prop == handle->regs.synthpod.dsp_profiling.urid)
 							&& (value->type == handle->forge.Vector) )

@@ -926,6 +926,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 									&& lv2_atom_forge_bool(forge, port->monitored);
 							}
 
+							// serialize port connections
 							connectable_t *conn = _sp_app_port_connectable(port);
 							if(conn)
 							{
@@ -946,6 +947,39 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 										if(ref)
 											lv2_atom_forge_pop(forge, &source_frame);
 									}
+								}
+							}
+
+							// serialize port automations
+							if(port->type == PORT_TYPE_CONTROL)
+							{
+								auto_t *automation = &port->control.automation;
+
+								if(automation->type == AUTO_TYPE_MIDI)
+								{
+									midi_auto_t *mauto = &automation->midi;
+
+									LV2_Atom_Forge_Frame auto_frame;
+									if(  ref
+										&& lv2_atom_forge_key(forge, app->regs.synthpod.automation_list.urid) //FIXME
+										&& lv2_atom_forge_object(forge, &auto_frame, 0, app->regs.port.midi.urid) )
+									{
+										ref = lv2_atom_forge_key(forge, app->regs.midi.channel.urid)
+											&& lv2_atom_forge_int(forge, mauto->channel)
+											&& lv2_atom_forge_key(forge, app->regs.midi.controller.urid)
+											&& lv2_atom_forge_int(forge, mauto->controller)
+											&& lv2_atom_forge_key(forge, app->regs.core.minimum.urid)
+											&& lv2_atom_forge_int(forge, mauto->min)
+											&& lv2_atom_forge_key(forge, app->regs.core.maximum.urid)
+											&& lv2_atom_forge_int(forge, mauto->max);
+
+										if(ref)
+											lv2_atom_forge_pop(forge, &auto_frame);
+									}
+								}
+								else if(automation->type == AUTO_TYPE_OSC)
+								{
+									//FIXME write me
 								}
 							}
 
@@ -1185,10 +1219,12 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			const LV2_Atom_String *port_symbol = NULL;
 			const LV2_Atom_Bool *port_selected = NULL;
 			const LV2_Atom_Bool *port_monitored = NULL;
+			const LV2_Atom_Object *auto_list = NULL;
 			LV2_Atom_Object_Query port_q[] = {
 				{ app->regs.core.symbol.urid, (const LV2_Atom **)&port_symbol },
 				{ app->regs.synthpod.port_selected.urid, (const LV2_Atom **)&port_selected },
 				{ app->regs.synthpod.port_monitored.urid, (const LV2_Atom **)&port_monitored },
+				{ app->regs.synthpod.automation_list.urid, (const LV2_Atom **)&auto_list },
 				{ 0, NULL }
 			};
 			lv2_atom_object_query(port_obj, port_q);
@@ -1208,6 +1244,42 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 				port->selected = port_selected && (port_selected->atom.type == app->forge.Bool) ? port_selected->body : 0;
 				port->monitored = port_monitored && (port_monitored->atom.type == app->forge.Bool) ? port_monitored->body : 0;
+
+				if(  (port->type == PORT_TYPE_CONTROL)
+					&& auto_list
+					&& (auto_list->atom.type == app->forge.Object))
+				{
+					if(auto_list->body.otype == app->regs.port.midi.urid)
+					{
+						const LV2_Atom_Int *midi_channel = NULL;
+						const LV2_Atom_Int *midi_controller = NULL;
+						const LV2_Atom_Int *core_minimum = NULL;
+						const LV2_Atom_Int *core_maximum = NULL;
+
+						LV2_Atom_Object_Query auto_q[] = {
+							{app->regs.midi.channel.urid, (const LV2_Atom **)&midi_channel },
+							{app->regs.midi.controller.urid, (const LV2_Atom **)&midi_controller },
+							{app->regs.core.minimum.urid, (const LV2_Atom **)&core_minimum },
+							{app->regs.core.maximum.urid, (const LV2_Atom **)&core_maximum },
+							{ 0, NULL }
+						};
+						lv2_atom_object_query(auto_list, auto_q);
+
+						auto_t *automation = &port->control.automation;
+						automation->type = AUTO_TYPE_MIDI;
+
+						midi_auto_t *mauto = &automation->midi;
+						mauto->channel = midi_channel ? midi_channel->body : -1;
+						mauto->controller = midi_controller ? midi_controller->body : -1;
+						mauto->min = core_minimum ? core_minimum->body : 0x0;
+						mauto->max = core_maximum ? core_maximum->body : 0x7f;
+						const int range = mauto->max - mauto->min;
+						mauto->range_1 = range
+							? 1.f / range
+							: 0.f;
+					}
+					//FIXME handle OSC
+				}
 
 				LV2_ATOM_OBJECT_FOREACH(port_obj, sub)
 				{

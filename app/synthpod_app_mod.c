@@ -801,12 +801,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 			lilv_node_free(max_node);
 
 			//FIXME this is just temporary
-			control->automation.type = AUTO_TYPE_MIDI;
-			control->automation.midi.channel = 0x0;
-			control->automation.midi.controller = 0x1;
-			control->automation.midi.min = 0x0;
-			control->automation.midi.max = 0x7f;
-			control->automation.midi.span = 0x7f;
+			control->automation.type = AUTO_TYPE_NONE;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.atom.node)) 
 		{
