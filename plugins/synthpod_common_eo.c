@@ -211,8 +211,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	LV2_URID ui_update_rate= handle->driver.map->map(handle->driver.map->handle,
 		LV2_UI__updateRate);
 
-	handle->driver.sample_rate = 44100; // fall-back
-	handle->driver.update_rate = 25.f; // fall-back
+	handle->driver.sample_rate = 48000; // fall-back
+	handle->driver.update_rate = 30.f; // fall-back
 
 	for(LV2_Options_Option *opt = opts;
 		opt && (opt->key != 0) && (opt->value != NULL);

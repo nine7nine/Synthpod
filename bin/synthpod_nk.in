@@ -1,15 +1,11 @@
 #!/usr/bin/sh
 
-SOCKET_PATH=shm:///synthpod
-if [ "$#" -eq 1 ]; then
-	SOCKET_PATH=$1
-fi
-
 exec ${GDB} synthpod_sandbox_x11 \
 	-p http://open-music-kontrollers.ch/lv2/synthpod#stereo \
 	-b @CMAKE_INSTALL_PREFIX@/lib/lv2/synthpod.lv2/ \
 	-u http://open-music-kontrollers.ch/lv2/synthpod#root_4_nk \
-	-s ${SOCKET_PATH} \
+	-s shm:///synthpod \
 	-w "Synthpod - ${SOCKET_PATH}" \
 	-r 48000 \
-	-f 30
+	-f 30 \
+	$*

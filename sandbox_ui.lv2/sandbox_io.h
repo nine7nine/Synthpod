@@ -320,7 +320,7 @@ _sandbox_io_flush(sandbox_io_t *io)
 		}
 		else
 		{
-			fprintf(stderr, "_sandbox_io_flush: buffer overflow\n");
+			//fprintf(stderr, "_sandbox_io_flush: buffer overflow\n");
 		}
 	}
 

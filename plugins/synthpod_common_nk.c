@@ -21,6 +21,7 @@
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
 #include "lv2/lv2plug.in/ns/ext/midi/midi.h"
+#include "lv2/lv2plug.in/ns/ext/options/options.h"
 #include "lv2/lv2plug.in/ns/ext/port-groups/port-groups.h"
 #include "lv2/lv2plug.in/ns/ext/presets/presets.h"
 #include "lv2/lv2plug.in/ns/ext/patch/patch.h"
@@ -385,6 +386,9 @@ struct _plughandle_t {
 	bool done;
 
 	prof_t prof;
+
+	float sample_rate;
+	float update_rate;
 };
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
@@ -1804,7 +1808,9 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 		if(asprintf(&mod_ui->sbox.window_name, "%s", mod_ui->uri) == -1)
 			mod_ui->sbox.window_name = NULL;
 
-		if(asprintf(&mod_ui->sbox.update_rate, "%f", 30.f) == -1)
+		//FIXME sample_rate
+
+		if(asprintf(&mod_ui->sbox.update_rate, "%f", handle->update_rate) == -1)
 			mod_ui->sbox.update_rate = NULL;
 
 		mod_ui->sbox.driver.socket_path = mod_ui->sbox.socket_uri;
@@ -5230,6 +5236,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	void *parent = NULL;
 	LV2UI_Resize *host_resize = NULL;
+	LV2_Options_Option *opts = NULL;
 	for(int i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_UI__parent))
@@ -5240,6 +5247,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->map = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->unmap = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
+			opts = features[i]->data;
 	}
 
 	if(!parent)
@@ -5268,6 +5277,27 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->atom_eventTransfer = handle->map->map(handle->map->handle, LV2_ATOM__eventTransfer);
 	handle->self_urn = handle->map->map(handle->map->handle, plugin_uri);
+
+	const LV2_URID atom_float = handle->map->map(handle->map->handle,
+		LV2_ATOM__Float);
+	const LV2_URID params_sample_rate = handle->map->map(handle->map->handle,
+		LV2_PARAMETERS__sampleRate);
+	const LV2_URID ui_update_rate= handle->map->map(handle->map->handle,
+		LV2_UI__updateRate);
+
+	handle->sample_rate = 48000.f; // fall-back
+	handle->update_rate = 60.f; // fall-back
+
+	for(LV2_Options_Option *opt = opts;
+		opt && (opt->key != 0) && (opt->value != NULL);
+		opt++)
+	{
+		if( (opt->key == params_sample_rate) && (opt->type == atom_float) )
+			handle->sample_rate = *(float*)opt->value;
+		else if( (opt->key == ui_update_rate) && (opt->type == atom_float) )
+			handle->update_rate = *(float*)opt->value;
+		//TODO handle more options
+	}
 
 	handle->controller = controller;
 	handle->writer = write_function;
