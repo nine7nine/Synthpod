@@ -470,10 +470,10 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	_sp_app_populate(app);
 
-	app->fps.bound = driver->sample_rate / 24; //TODO make this configurable
+	app->fps.bound = driver->sample_rate / driver->update_rate;
 	app->fps.counter = 0;
 
-	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s
+	app->ramp_samples = driver->sample_rate / 10; // ramp over 0.1s FIXME make this configurable
 
 	// populate uri_to_id
 	app->uri_to_id.callback_data = app;
