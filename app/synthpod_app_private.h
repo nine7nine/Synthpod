@@ -516,6 +516,12 @@ _sp_app_to_ui_advance_atom(sp_app_t *app, const LV2_Atom *atom)
 {
 	_sp_app_to_ui_advance(app, lv2_atom_total_size(atom));
 }
+
+static inline void
+_sp_app_to_ui_overflow(sp_app_t *app)
+{
+	fprintf(stderr, "app->ui buffer overflow\n");
+}
 	
 void
 sp_app_from_ui_fill(sp_app_t *app);

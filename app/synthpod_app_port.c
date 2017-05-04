@@ -589,7 +589,10 @@ _patch_notification_add(sp_app_t *app, port_t *source_port,
 			synthpod_patcher_pop(&app->forge, frame, 3);
 			_sp_app_to_ui_advance_atom(app, answer);
 		}
-		//FIXME report buffer overflow
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
 	}
 }
 

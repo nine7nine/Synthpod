@@ -96,7 +96,13 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					0, 0, app->regs.synthpod.module_list.urid, //TODO subject
 					sizeof(uint32_t), app->forge.URID, &mod->urn);
 				if(ref)
+				{
 					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 
 			break;
@@ -114,7 +120,13 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					0, 0, app->regs.synthpod.module_list.urid, //TODO subject
 				 	sizeof(uint32_t), app->forge.URID, &urn);
 				if(ref)
+				{
 					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 
 			break;

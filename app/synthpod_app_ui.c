@@ -1046,6 +1046,10 @@ _sp_app_ui_set_modlist(sp_app_t *app, LV2_URID subj, int32_t seqn)
 			synthpod_patcher_pop(&app->forge, frame, 2);
 			_sp_app_to_ui_advance_atom(app, answer);
 		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
 	}
 }
 
@@ -1140,6 +1144,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					synthpod_patcher_pop(&app->forge, frame, 2);
 					_sp_app_to_ui_advance_atom(app, answer);
 				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 		}
 		else if(prop == app->regs.pset.preset.urid)
@@ -1153,7 +1161,13 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					&app->regs, &app->forge, subj, sn, prop,
 					sizeof(uint32_t), app->forge.URID, &bundle_urid);
 				if(ref)
+				{
 					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 		}
 		else if(prop == app->regs.synthpod.automation_list.urid)
@@ -1237,6 +1251,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					synthpod_patcher_pop(&app->forge, frame, 2);
 					_sp_app_to_ui_advance_atom(app, answer);
 				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 		}
 		//TODO handle more properties
@@ -1277,6 +1295,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					{
 						synthpod_patcher_pop(&app->forge, frame, 2);
 						_sp_app_to_ui_advance_atom(app, answer);
+					}
+					else
+					{
+						_sp_app_to_ui_overflow(app);
 					}
 				}
 
@@ -1531,7 +1553,13 @@ _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				LV2_Atom_Forge_Ref ref = synthpod_patcher_add_atom(&app->regs, &app->forge,
 					0, 0, app->regs.synthpod.connection_list.urid, &obj->atom); //TODO subject
 				if(ref)
+				{
 					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 		}
 	}
@@ -1580,7 +1608,13 @@ _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 				LV2_Atom_Forge_Ref ref = synthpod_patcher_remove_atom(&app->regs, &app->forge,
 					0, 0, app->regs.synthpod.connection_list.urid, &obj->atom); //TODO subject
 				if(ref)
+				{
 					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 		}
 	}

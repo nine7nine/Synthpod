@@ -343,13 +343,15 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 
 		// read events from UI shared mem
 		if(sandbox_master_recv(bin->sb))
+		{
 			bin_quit(bin);
+		}
 
 		// route events from app to UI
 		{
 			size_t size;
 			const LV2_Atom_Object *obj;
-			while((obj= varchunk_read_request(bin->app_to_ui, &size)))
+			while((obj = varchunk_read_request(bin->app_to_ui, &size)))
 			{
 				sandbox_master_send(bin->sb, NOTIFY_PORT_INDEX, size, bin->atom_eventTransfer, obj);
 				varchunk_read_advance(bin->app_to_ui);

@@ -700,6 +700,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					synthpod_patcher_pop(&app->forge, frame, 1);
 					_sp_app_to_ui_advance_atom(app, answer);
 				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
 			}
 
 			mod->prof.min = UINT_MAX;
@@ -738,6 +742,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				{
 					synthpod_patcher_pop(&app->forge, frame, 1);
 					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
 				}
 			}
 

@@ -318,6 +318,10 @@ _sandbox_io_flush(sandbox_io_t *io)
 			varchunk_write_advance(&tx->varchunk, sz);
 			sem_post(&tx->sem);
 		}
+		else
+		{
+			fprintf(stderr, "_sandbox_io_flush: buffer overflow\n");
+		}
 	}
 
 	_sandbox_io_reset(io);
