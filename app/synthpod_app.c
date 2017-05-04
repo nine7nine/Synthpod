@@ -705,6 +705,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 					_sp_app_to_ui_overflow(app);
 				}
 			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
 
 			mod->prof.min = UINT_MAX;
 			mod->prof.max = 0;
@@ -747,6 +751,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 				{
 					_sp_app_to_ui_overflow(app);
 				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
 			}
 
 			app->prof.t0.tv_sec = app_t2.tv_sec;

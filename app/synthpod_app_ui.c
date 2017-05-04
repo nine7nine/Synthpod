@@ -1051,6 +1051,10 @@ _sp_app_ui_set_modlist(sp_app_t *app, LV2_URID subj, int32_t seqn)
 			_sp_app_to_ui_overflow(app);
 		}
 	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
 }
 
 __realtime static bool
@@ -1149,6 +1153,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					_sp_app_to_ui_overflow(app);
 				}
 			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
 		}
 		else if(prop == app->regs.pset.preset.urid)
 		{
@@ -1168,6 +1176,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				{
 					_sp_app_to_ui_overflow(app);
 				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
 			}
 		}
 		else if(prop == app->regs.synthpod.automation_list.urid)
@@ -1256,6 +1268,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					_sp_app_to_ui_overflow(app);
 				}
 			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
 		}
 		//TODO handle more properties
 	}
@@ -1300,6 +1316,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 					{
 						_sp_app_to_ui_overflow(app);
 					}
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
 				}
 
 				break; // match
@@ -1561,6 +1581,10 @@ _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 					_sp_app_to_ui_overflow(app);
 				}
 			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
 		}
 	}
 }
@@ -1615,6 +1639,10 @@ _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 				{
 					_sp_app_to_ui_overflow(app);
 				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
 			}
 		}
 	}

@@ -594,6 +594,10 @@ _patch_notification_add(sp_app_t *app, port_t *source_port,
 			_sp_app_to_ui_overflow(app);
 		}
 	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
 }
 
 __realtime static inline void

@@ -104,6 +104,10 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					_sp_app_to_ui_overflow(app);
 				}
 			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
 
 			break;
 		}
@@ -127,6 +131,10 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				{
 					_sp_app_to_ui_overflow(app);
 				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
 			}
 
 			break;
