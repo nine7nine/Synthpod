@@ -27,7 +27,7 @@
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#define CHUNK_SIZE 0x10000
+#define CHUNK_SIZE 0x100000 // 1M
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
 #define CONTROL_PORT_INDEX 14
