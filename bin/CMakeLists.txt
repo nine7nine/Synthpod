@@ -69,7 +69,8 @@ endif()
 
 if(BUILD_ALSA)
 # zita_alsa_pcmi
-	find_library(ZITA_ALSA_PCMI_LIBRARY NAMES zita-alsa-pcmi)
+	find_library(ZITA_ALSA_PCMI_LIBRARY NAMES zita-alsa-pcmi libzita-alsa-pcmi
+		PATHS ${TOOLCHAIN})
 	find_path(ZITA_ALSA_PCMI_INCLUDE_DIR zita-alsa-pcmi.h)
 	if(NOT (ZITA_ALSA_PCMI_LIBRARY AND ZITA_ALSA_PCMI_INCLUDE_DIR))
 		message(FATAL_ERROR "zita-alsa-pcmi not found")

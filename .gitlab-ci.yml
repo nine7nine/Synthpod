@@ -1,0 +1,84 @@
+stages:
+  - build
+  - deploy
+
+.variables_template: &variables_definition
+  variables:
+    BASE_NAME: "synthpod"
+    PKG_CONFIG_PATH: "/opt/lv2/lib/pkgconfig:/opt/${CI_BUILD_NAME}/lib/pkgconfig:/usr/lib/${CI_BUILD_NAME}/pkgconfig"
+    TOOLCHAIN_FILE: "${CI_PROJECT_DIR}/cmake/${CI_BUILD_NAME}.cmake"
+
+.common_template: &common_definition
+  <<: *variables_definition
+  stage: build
+  artifacts:
+    name: "${BASE_NAME}-$(cat VERSION)-${CI_BUILD_NAME}"
+    paths:
+      - "${BASE_NAME}-$(cat VERSION)/"
+
+.build_template: &build_definition
+  <<: *common_definition
+  script:
+    - mkdir build
+    - pushd build
+    - cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ALSA=1 -DBUILD_DOT=1 -DBUILD_DUMMY=1 -DBUILD_JACK=1 -DBUILD_UI=1 -DBUILD_SANDBOX_X11=1 -DBUILD_SANDBOX_SHOW=1 -DBUILD_SANDBOX_KX=1 -DBUILD_SANDBOX_GTK2=0 -DBUILD_SANDBOX_GTK3=0 -DBUILD_SANDBOX_QT4=0 -DBUILD_SANDBOX_QT5=0 -DCMAKE_INSTALL_PREFIX="/opt/${BASE_NAME}" -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} ..
+    - cmake .. # needed for darwin
+    - make
+    - make install
+    - popd
+    - mkdir -p "${BASE_NAME}-$(cat VERSION)/${CI_BUILD_NAME}/opt"
+    - cp -r "/opt/${BASE_NAME}" "${BASE_NAME}-$(cat VERSION)/${CI_BUILD_NAME}/opt/${BASE_NAME}"
+
+.universal_linux_template: &universal_linux_definition
+  image: ventosus/universal-linux-gnu
+  <<: *build_definition
+
+.arm_linux_template: &arm_linux_definition
+  image: ventosus/arm-linux-gnueabihf
+  <<: *build_definition
+
+.universal_w64_template: &universal_w64_definition
+  image: ventosus/universal-w64-mingw32
+  <<: *build_definition
+
+.universal_apple_template: &universal_apple_definition
+  image: ventosus/universal-apple-darwin
+  <<: *build_definition
+
+# building in docker
+x86_64-linux-gnu:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libjack-dev libasound2-dev libzita-alsa-pcmi-dev uuid-dev libxcb-icccm4-dev
+  <<: *universal_linux_definition
+
+i686-linux-gnu:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libjack-dev:i386 libasound2-dev:i386 libzita-alsa-pcmi-dev:i386 uuid-dev:i386 libxcb-icccm4-dev:i386
+  <<: *universal_linux_definition
+
+#arm-linux-gnueabihf:
+#  before_script:
+#    - apt-get update
+#    - apt-get install -y -q libjack-dev:armhf libasound2-dev:armhf libzita-alsa-pcmi-dev:armhf uuid-dev:armhf libxcb-icccm4-dev:armhf
+#  <<: *arm_linux_definition
+#
+#x86_64-w64-mingw32:
+#  <<: *universal_w64_definition
+#
+#i686-w64-mingw32:
+#  <<: *universal_w64_definition
+#
+#universal-apple-darwin:
+#  <<: *universal_apple_definition
+
+pack:
+  <<: *variables_definition
+  stage: deploy
+  script:
+    - echo 'packing up...'
+  artifacts:
+    name: "${BASE_NAME}-$(cat VERSION)"
+    paths:
+      - "${BASE_NAME}-$(cat VERSION)/"

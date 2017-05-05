@@ -175,6 +175,11 @@ include_directories(${LV2_INCLUDE_DIRS})
 pkg_search_module(SRATOM REQUIRED sratom-0>=0.4)
 include_directories(${SRATOM_INCLUDE_DIRS})
 
+if(DEFINED STATIC_LILV)
+	set(SRATOM_LDFLAGS ${LIBS} ${STATIC_SRATOM} ${STATIC_SORD} ${STATIC_SERD})
+	set(LILV_LDFLAGS ${LIBS} ${STATIC_LILV} ${SRATOM_LDFLAGS})
+endif()
+
 set(BIN_LIBS
 	m rt pthread
 	${UV_LDFLAGS}
