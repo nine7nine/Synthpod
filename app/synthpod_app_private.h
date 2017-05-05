@@ -254,7 +254,7 @@ struct _mod_t {
 		const Zero_Worker_Interface *iface;
 		Zero_Worker_Schedule schedule;
 	} zero;
-	
+
 
 	mod_worker_t mod_worker;
 
@@ -263,7 +263,7 @@ struct _mod_t {
 	LV2_Feature *state_features [2];
 
 	// system_port
-	bool system_ports;	
+	bool system_ports;
 
 	// log
 	LV2_Log_Log log;
@@ -385,7 +385,7 @@ struct _port_t {
 
 	int selected;
 	int monitored;
-	
+
 	uint32_t index;
 	const char *symbol;
 
@@ -435,7 +435,7 @@ struct _sp_app_t {
 	int embedded;
 	LilvWorld *world;
 	const LilvPlugins *plugs;
-	
+
 	reg_t regs;
 	LV2_Atom_Forge forge;
 
@@ -446,7 +446,7 @@ struct _sp_app_t {
 	sp_app_system_sink_t system_sinks [64]; //FIXME, how many?
 
 	u_id_t uid;
-	
+
 	LV2_State_Make_Path make_path;
 	LV2_State_Map_Path map_path;
 	LV2_Feature state_feature_list [2];
@@ -515,7 +515,7 @@ _sp_app_to_ui_request_atom(sp_app_t *app)
 	LV2_Atom *atom = _sp_app_to_ui_request_max(app, 4096, &maximum); //FIXME what should minimum be?
 	if(atom)
 		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)atom, maximum);
-	return atom;	
+	return atom;
 }
 
 static inline void
@@ -529,9 +529,25 @@ _sp_app_to_ui_overflow(sp_app_t *app)
 {
 	fprintf(stderr, "app->ui buffer overflow\n");
 }
-	
+
 void
 sp_app_from_ui_fill(sp_app_t *app);
+
+static inline LV2_Atom *
+_sp_request_atom(sp_app_t *app, sp_to_request_t req, void *data)
+{
+	size_t maximum;
+	LV2_Atom *atom = req(4096, &maximum, data); //FIXME what should minimum be?
+	if(atom)
+		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)atom, maximum);
+	return atom;
+}
+
+static inline void
+_sp_advance_atom(sp_app_t *app, const LV2_Atom *atom, sp_to_advance_t adv, void *data)
+{
+	adv(lv2_atom_total_size(atom), data);
+}
 
 /*
  * Worker

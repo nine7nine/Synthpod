@@ -1752,6 +1752,7 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				{
 					*buf_ptr = val;
 					src_port->control.last = *buf_ptr; // we don't want any notification
+					_sp_app_port_control_stash(src_port);
 				}
 				else if(src_port->type == PORT_TYPE_CV)
 				{
@@ -2134,6 +2135,7 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	if(!advance_ui[app->block_state])
 		return false; // we are draining or waiting
 
+#if 0
 	atom = ASSUME_ALIGNED(atom);
 	const transmit_t *transmit = (const transmit_t *)atom;
 
@@ -2150,6 +2152,22 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 	// run callback if found
 	if(from_ui)
 		return from_ui->cb(app, atom);
+#else
+	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
+	//printf("%s\n", app->driver->unmap->unmap(app->driver->unmap->handle, obj->body.otype));
+
+	if(lv2_atom_forge_is_object_type(&app->forge, obj->atom.type))
+	{
+		if(obj->body.otype == app->regs.patch.get.urid)
+			return _sp_app_from_ui_patch_get(app, &obj->atom);
+		else if(obj->body.otype == app->regs.patch.set.urid)
+			return _sp_app_from_ui_patch_set(app, &obj->atom);
+		else if(obj->body.otype == app->regs.patch.copy.urid)
+			return _sp_app_from_ui_patch_copy(app, &obj->atom);
+		else if(obj->body.otype == app->regs.patch.patch.urid)
+			return _sp_app_from_ui_patch_patch(app, &obj->atom);
+	}
+#endif
 
 	return advance_ui[app->block_state];
 }

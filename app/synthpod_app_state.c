@@ -186,7 +186,7 @@ _state_set_value(const char *symbol, void *data,
 		control->last = val - 0.1; // triggers notification
 		// FIXME not rt-safe
 
-		_sp_app_port_control_stash(tar);
+		_sp_app_port_control_stash(tar); // FIXME needs blocking access
 	}
 }
 

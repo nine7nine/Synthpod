@@ -482,7 +482,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	// populate uri_to_id
 	app->uri_to_id.callback_data = app;
 	app->uri_to_id.uri_to_id = _uri_to_id;
-	
+
 	app->sratom = sratom_new(app->driver->map);
 	if(app->sratom)
 		sratom_set_pretty_numbers(app->sratom, false);
@@ -515,7 +515,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		pthread_attr_init(&attr);
 		pthread_create(&dsp_slave->thread, &attr, _dsp_slave_thread, dsp_slave);
 	}
-	
+
 	return app;
 }
 
@@ -565,7 +565,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			mod->zero.iface->end(mod->handle);
 		else if(mod->worker.iface && mod->worker.iface->end_run)
 			mod->worker.iface->end_run(mod->handle);
-	
+
 		for(unsigned p=0; p<mod->num_ports; p++)
 		{
 			port_t *port = &mod->ports[p];
@@ -763,7 +763,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			app->prof.count = 0;
 		}
 	}
-		
+
 	// handle app ui post
 	bool expected = true;
 	const bool desired = false;
@@ -851,7 +851,7 @@ sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options)
 		if(mod->opts.iface && mod->opts.iface->set)
 			status |= mod->opts.iface->set(mod->handle, options);
 	}
-	
+
 	return status;
 }
 
@@ -877,7 +877,7 @@ _sp_app_reinitialize(sp_app_t *app)
 			// set port buffer
 			lilv_instance_connect_port(mod->inst, i, tar->base);
 		}
-	
+
 		lilv_instance_activate(mod->inst);
 	}
 }
@@ -977,6 +977,28 @@ sp_app_bundle_load(sp_app_t *app, const char *bundle_path,
 			-1, bundle_path);
 		adv(size, data);
 	}
+
+	// nk
+	LV2_Atom *answer = _sp_request_atom(app, req, data);
+	if(answer)
+	{
+		const LV2_URID bundle_urid = app->driver->map->map(app->driver->map->handle, bundle_path);
+
+		const LV2_Atom_Forge_Ref ref = synthpod_patcher_copy(
+			&app->regs, &app->forge, bundle_urid, 0, 0);
+		if(ref)
+		{
+			_sp_advance_atom(app, answer, adv, data);
+		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
+	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
 }
 
 //TODO keep in-line with sp_ui_bundle_save
@@ -996,6 +1018,28 @@ sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
 		_sp_transmit_bundle_save_fill(&app->regs, &app->forge, trans, size,
 			-1, bundle_path);
 		adv(size, data);
+	}
+
+	// nk
+	LV2_Atom *answer = _sp_request_atom(app, req, data);
+	if(answer)
+	{
+		const LV2_URID bundle_urid = app->driver->map->map(app->driver->map->handle, bundle_path);
+
+		const LV2_Atom_Forge_Ref ref = synthpod_patcher_copy(
+			&app->regs, &app->forge, 0, 0, bundle_urid);
+		if(ref)
+		{
+			_sp_advance_atom(app, answer, adv, data);
+		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
+	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
 	}
 }
 
