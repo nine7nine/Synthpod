@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0)
 
 project(synthpod)
 
@@ -11,8 +11,28 @@ include(FindUnixCommands)
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
-
+include_directories(${PROJECT_SOURCE_DIR}/app)
+include_directories(${PROJECT_SOURCE_DIR}/ardour.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/bin)
+include_directories(${PROJECT_SOURCE_DIR}/bundle)
+include_directories(${PROJECT_SOURCE_DIR}/ext_ui.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(${PROJECT_SOURCE_DIR}/jackey)
+include_directories(${PROJECT_SOURCE_DIR}/libosc_stream)
+include_directories(${PROJECT_SOURCE_DIR}/mapper.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/netatom.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/nk_pugl)
+include_directories(${PROJECT_SOURCE_DIR}/nuklear)
+include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/plugins)
+include_directories(${PROJECT_SOURCE_DIR}/props.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/pugl)
+include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/ui)
+include_directories(${PROJECT_SOURCE_DIR}/varchunk)
+include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
 
 set(SYNTHPOD_BIN_DIR "bin")
 add_definitions("-DSYNTHPOD_BIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BIN_DIR}/\"")
@@ -25,6 +45,12 @@ add_definitions("-DSYNTHPOD_BUNDLE_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BUND
 
 set(SYNTHPOD_PLUGIN_DIR "lib/lv2/synthpod.lv2")
 add_definitions("-DSYNTHPOD_PLUGIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_PLUGIN_DIR}/\"")
+
+set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
+add_definitions("-DSYNTHPOD_ICON_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_ICON_DIR}/\"")
+
+set(SYNTHPOD_DESKTOP_DIR "share/applications")
+add_definitions("-DSYNTHPOD_DESKTOP_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_DESKTOP_DIR}/\"")
 
 file(STRINGS "VERSION" SYNTHPOD_VERSION)
 string(REPLACE "." ";" VERSION_LIST ${SYNTHPOD_VERSION})
@@ -45,6 +71,8 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,defs ${CMAKE_EXE_LINKER_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,nodelete -Wl,-z,defs ${CMAKE_MODULE_LINKER_FLAGS}")
 set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,defs ${CMAKE_SHARED_LINKER_FLAGS}")
 
+add_definitions("-D_GNU_SOURCE=1") # asprintf
+
 include(CheckCSourceCompiles)
 CHECK_C_SOURCE_COMPILES("
 	int main(int argc, char **argv)
@@ -59,20 +87,43 @@ endif()
 
 # options
 option(BUILD_JACK "Build JACK standalone host" ON)
-option(BUILD_ALSA "Build ALSA standalone host" OFF)
+option(BUILD_ALSA "Build ALSA standalone host" ON)
 option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
-option(BUILD_DOT "Build Dot exporter" ON)
+
+option(BUILD_DOT "Build Dot exporter" OFF)
+
+option(BUILD_UI "Build graphical user interface(s)" ON)
 
 include(CMakeDependentOption)
-option(BUILD_SANDBOX_LIB "Build sandbox library" ON)
-cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_EFL "Build EFL sandbox" ON "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_SHOW "Build show-iface sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
-cmake_dependent_option(BUILD_SANDBOX_KX "Build external-ui sandbox" OFF "BUILD_SANDBOX_LIB" OFF)
+cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" ON "BUILD_UI" OFF)
+cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" OFF "BUILD_UI" OFF)
+cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" OFF "BUILD_UI" OFF)
+cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" OFF "BUILD_UI" OFF)
+cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" OFF "BUILD_UI" OFF)
+cmake_dependent_option(BUILD_SANDBOX_SHOW "Build show-iface sandbox" ON "BUILD_UI" OFF)
+cmake_dependent_option(BUILD_SANDBOX_KX "Build external-ui sandbox" ON "BUILD_UI" OFF)
+
+if(BUILD_SANDBOX_X11)
+	add_definitions("-DSANDBOX_X11")
+endif()
+if(BUILD_SANDBOX_GTK2)
+	add_definitions("-DSANDBOX_GTK2")
+endif()
+if(BUILD_SANDBOX_GTK3)
+	add_definitions("-DSANDBOX_GTK3")
+endif()
+if(BUILD_SANDBOX_QT4)
+	add_definitions("-DSANDBOX_QT4")
+endif()
+if(BUILD_SANDBOX_QT5)
+	add_definitions("-DSANDBOX_QT5")
+endif()
+if(BUILD_SANDBOX_SHOW)
+	add_definitions("-DSANDBOX_SHOW")
+endif()
+if(BUILD_SANDBOX_KX)
+	add_definitions("-DSANDBOX_KX")
+endif()
 
 # vectorization
 include(CheckCCompilerFlag)
@@ -124,46 +175,21 @@ include_directories(${LV2_INCLUDE_DIRS})
 pkg_search_module(SRATOM REQUIRED sratom-0>=0.4)
 include_directories(${SRATOM_INCLUDE_DIRS})
 
-# elm
-pkg_search_module(ELM REQUIRED elementary>=1.8)
-include_directories(${ELM_INCLUDE_DIRS})
+set(BIN_LIBS
+	m rt pthread
+	${UV_LDFLAGS}
+	${UUID_LDFLAGS}
+	${LILV_LDFLAGS}
+	${LV2_LDFLAGS}
+	${SRATOM_LDFLAGS})
 
-# evas-x11
-pkg_search_module(EVAS_OPENGL_X11 OPTIONAL evas-opengl-x11>=1.8)
-pkg_search_module(EVAS_SOFTWARE_X11 OPTIONAL evas-software-x11>=1.8)
-if( (NOT ${EVAS_OPENGL_X11_FOUND}) AND (NOT ${EVAS_SOFTWARE_X11_FOUND}) )
-	message(WARNING "No Evas engine for X11 has been found: UI may not be functional on X11!")
-endif()
-
-if((${ELM_VERSION} VERSION_EQUAL "1.10.0") OR (${ELM_VERSION} VERSION_GREATER "1.10.0"))
-	add_definitions("-DELM_1_10")
-endif()
-
-if((${ELM_VERSION} VERSION_EQUAL "1.13.0") OR (${ELM_VERSION} VERSION_GREATER "1.13.0"))
-	add_definitions("-DELM_1_13")
-endif()
+set(SANDBOX_LIBS
+	rt pthread
+	${LILV_LDFLAGS})
 
 add_subdirectory(app)
-add_subdirectory(ui)
 add_subdirectory(bin)
-add_subdirectory(plugins)
-add_subdirectory(data)
 add_subdirectory(bundle)
-
-# CPack
-set(CPACK_GENERATOR "TBZ2")
-
-set(CPACK_PACKAGE_NAME "synthpod")
-set(CPACK_PACKAGE_VERSION "${SYNTHPOD_VERSION}")
-SET(CPACK_PACKAGE_VERSION_MAJOR ${SYNTHPOD_MAJOR_VERSION})
-SET(CPACK_PACKAGE_VERSION_MINOR ${SYNTHPOD_MINOR_VERSION})
-SET(CPACK_PACKAGE_VERSION_PATCH ${SYNTHPOD_MICRO_VERSION})
-set(CPACK_PACKAGE_CONTACT "Hanspeter Portner <dev@open-music-kontrollers.ch>")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Non-linear plugin container")
-set(CPACK_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY})
-SET(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
-SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
-SET(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
-SET(CPACK_STRIP_FILES ON)
-
-include(CPack)
+add_subdirectory(data)
+add_subdirectory(plugins)
+add_subdirectory(sandbox_ui.lv2)

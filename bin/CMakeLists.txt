@@ -1,29 +1,3 @@
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${PROJECT_SOURCE_DIR}/include)
-include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/libosc_stream)
-include_directories(${PROJECT_SOURCE_DIR}/varchunk)
-include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/jackey)
-include_directories(${PROJECT_SOURCE_DIR}/mapper.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
-
-add_definitions("-D_GNU_SOURCE=1") # asprintf
-
-set(SYNTHPOD_BIN_DIR "bin")
-set(SYNTHPOD_ICON_DIR "share/icons/hicolor/256x256/apps")
-set(SYNTHPOD_DESKTOP_DIR "share/applications")
-
-#FIXME use option
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_ui.in
-	${PROJECT_BINARY_DIR}/bin/synthpod_ui @ONLY)
-install(PROGRAMS ${PROJECT_BINARY_DIR}/bin/synthpod_ui DESTINATION bin)
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_nk.in
-	${PROJECT_BINARY_DIR}/bin/synthpod_nk @ONLY)
-install(PROGRAMS ${PROJECT_BINARY_DIR}/bin/synthpod_nk DESTINATION bin)
-
 if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 # icon
 	install(FILES ${PROJECT_SOURCE_DIR}/data/pix/synthpod.png DESTINATION
@@ -31,15 +5,10 @@ if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 
 	add_library(synthpod.bin OBJECT
 		synthpod_bin.c
-		synthpod_nsm.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c)
+		synthpod_nsm.c)
+
 	set_target_properties(synthpod.bin PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
 	set_target_properties(synthpod.bin PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
-
-	set(LIBS_BIN
-		synthpod.lib
-		${UV_LDFLAGS}
-		rt pthread m)
 endif()
 
 if(BUILD_JACK)
@@ -69,10 +38,12 @@ if(BUILD_JACK)
 # synthpod
 	add_executable(synthpod.jack
 		synthpod_jack.c
-		$<TARGET_OBJECTS:synthpod.bin>)
+		$<TARGET_OBJECTS:synthpod.bin>
+		$<TARGET_OBJECTS:synthpod.lib>
+		$<TARGET_OBJECTS:sandbox_master.lib>)
 	target_link_libraries(synthpod.jack
 		${JACK_LIBS}
-		${LIBS_BIN})
+		${BIN_LIBS})
 	set_target_properties(synthpod.jack PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
 	set_target_properties(synthpod.jack PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.jack PROPERTIES OUTPUT_NAME "synthpod_jack")
@@ -114,11 +85,13 @@ if(BUILD_ALSA)
 	add_executable(synthpod.alsa
 		pcmi.cpp
 		synthpod_alsa.c
-		$<TARGET_OBJECTS:synthpod.bin>)
+		$<TARGET_OBJECTS:synthpod.bin>
+		$<TARGET_OBJECTS:synthpod.lib>
+		$<TARGET_OBJECTS:sandbox_master.lib>)
 	target_link_libraries(synthpod.alsa
 		asound #FIXME
 		${ZITA_ALSA_PCMI_LIBRARY}
-		${LIBS_BIN})
+		${BIN_LIBS})
 	set_target_properties(synthpod.alsa PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
 	set_target_properties(synthpod.alsa PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.alsa PROPERTIES OUTPUT_NAME "synthpod_alsa")
@@ -146,9 +119,11 @@ if(BUILD_DUMMY)
 # synthpod
 	add_executable(synthpod.dummy
 		synthpod_dummy.c
-		$<TARGET_OBJECTS:synthpod.bin>)
+		$<TARGET_OBJECTS:synthpod.bin>
+		$<TARGET_OBJECTS:synthpod.lib>
+		$<TARGET_OBJECTS:sandbox_master.lib>)
 	target_link_libraries(synthpod.dummy
-		${LIBS_BIN})
+		${BIN_LIBS})
 	set_target_properties(synthpod.dummy PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
 	set_target_properties(synthpod.dummy PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.dummy PROPERTIES OUTPUT_NAME "synthpod_dummy")
@@ -184,7 +159,13 @@ if(BUILD_DOT)
 	install(TARGETS synthpod.dot DESTINATION bin)
 endif()
 
-if(  BUILD_SANDBOX_X11  OR BUILD_SANDBOX_EFL
+if(BUILD_UI AND BUILD_SANDBOX_X11)
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_nk.in
+		${PROJECT_BINARY_DIR}/bin/synthpod_nk @ONLY)
+	install(PROGRAMS ${PROJECT_BINARY_DIR}/bin/synthpod_nk DESTINATION bin)
+endif()
+
+if(  BUILD_SANDBOX_X11
 	OR BUILD_SANDBOX_GTK2 OR BUILD_SANDBOX_GTK3
 	OR BUILD_SANDBOX_QT4  OR BUILD_SANDBOX_QT5
 	OR BUILD_SANDBOX_SHOW OR BUILD_SANDBOX_KX)
@@ -198,10 +179,6 @@ if(  BUILD_SANDBOX_X11  OR BUILD_SANDBOX_EFL
 			${CMAKE_CURRENT_SOURCE_DIR}/synthpod_sandbox.1)
 	add_custom_target(SYNTHPOD_SANDBOX_MAN_GZ ALL DEPENDS ${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz)
 	install(FILES "${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz" DESTINATION share/man/man1)
-
-	set(SANDBOX_LIBS
-		rt pthread
-		${LILV_LDFLAGS})
 endif()
 
 if(BUILD_SANDBOX_X11)
@@ -210,7 +187,7 @@ if(BUILD_SANDBOX_X11)
 
 	add_executable(synthpod.sandbox.x11
 		synthpod_sandbox_x11.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
+		$<TARGET_OBJECTS:sandbox_slave.lib>)
 	target_link_libraries(synthpod.sandbox.x11
 		${XCB_LDFLAGS}
 		${XCB_ICCCM_LDFLAGS}
@@ -228,7 +205,7 @@ if(BUILD_SANDBOX_GTK2)
 
 	add_executable(synthpod.sandbox.gtk2
 		synthpod_sandbox_gtk.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
+		$<TARGET_OBJECTS:sandbox_slave.lib>)
 	target_link_libraries(synthpod.sandbox.gtk2
 		${GTK2_LDFLAGS}
 		${SANDBOX_LIBS})
@@ -244,7 +221,7 @@ if(BUILD_SANDBOX_GTK3)
 
 	add_executable(synthpod.sandbox.gtk3
 		synthpod_sandbox_gtk.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
+		$<TARGET_OBJECTS:sandbox_slave.lib>)
 	target_link_libraries(synthpod.sandbox.gtk3
 		${GTK3_LDFLAGS}
 		${SANDBOX_LIBS})
@@ -261,7 +238,7 @@ if(BUILD_SANDBOX_QT4)
 
 	add_executable(synthpod.sandbox.qt4
 		synthpod_sandbox_qt.cpp
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
+		$<TARGET_OBJECTS:sandbox_slave.lib>)
 	target_link_libraries(synthpod.sandbox.qt4
 		${QT4CORE_LDFLAGS}
 		${QT4GUI_LDFLAGS}
@@ -282,7 +259,7 @@ if(BUILD_SANDBOX_QT5)
 
 	add_executable(synthpod.sandbox.qt5
 		synthpod_sandbox_qt.cpp
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
+		$<TARGET_OBJECTS:sandbox_slave.lib>)
 	target_link_libraries(synthpod.sandbox.qt5
 		${QT5CORE_LDFLAGS}
 		${QT5WIDGETS_LDFLAGS}
@@ -298,23 +275,10 @@ if(BUILD_SANDBOX_QT5)
 	install(TARGETS synthpod.sandbox.qt5 DESTINATION bin)
 endif()
 
-if(BUILD_SANDBOX_EFL)
-	add_executable(synthpod.sandbox.efl
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_efl.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
-	target_link_libraries(synthpod.sandbox.efl
-		${ELM_LDFLAGS}
-		${SANDBOX_LIBS})
-	set_target_properties(synthpod.sandbox.efl PROPERTIES OUTPUT_NAME "synthpod_sandbox_efl")
-	set_target_properties(synthpod.sandbox.efl PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
-	set_target_properties(synthpod.sandbox.efl PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
-	install(TARGETS synthpod.sandbox.efl DESTINATION bin)
-endif()
-
 if(BUILD_SANDBOX_SHOW)
 	add_executable(synthpod.sandbox.show
 		synthpod_sandbox_show.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
+		$<TARGET_OBJECTS:sandbox_slave.lib>)
 	target_link_libraries(synthpod.sandbox.show
 		${SANDBOX_LIBS})
 	set_target_properties(synthpod.sandbox.show PROPERTIES OUTPUT_NAME "synthpod_sandbox_show")
@@ -326,7 +290,7 @@ endif()
 if(BUILD_SANDBOX_KX)
 	add_executable(synthpod.sandbox.kx
 		synthpod_sandbox_kx.c
-		${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
+		$<TARGET_OBJECTS:sandbox_slave.lib>)
 	target_link_libraries(synthpod.sandbox.kx
 		${SANDBOX_LIBS})
 	set_target_properties(synthpod.sandbox.kx PROPERTIES OUTPUT_NAME "synthpod_sandbox_kx")

@@ -1,19 +1,3 @@
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${PROJECT_SOURCE_DIR}/include)
-include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/mapper.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/ext_ui.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/zero_worker.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/zero_writer.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/props.lv2)
-include_directories(${PROJECT_SOURCE_DIR}/varchunk)
-include_directories(${PROJECT_SOURCE_DIR}/pugl)
-include_directories(${PROJECT_SOURCE_DIR}/lib) # synthpod_app.h, synthpod_ui.h
-
-add_definitions("-D_GNU_SOURCE=1") # asprintf
-
 # synthpod
 add_library(synthpod.lv2 MODULE
 	synthpod_lv2.c
@@ -33,145 +17,101 @@ add_library(synthpod.lv2 MODULE
 	synthpod_control2atom.c
 	synthpod_mixer.c
 	synthpod_panic.c
-	synthpod_anonymizer.c)
-target_link_libraries(synthpod.lv2 synthpod.lib)
+	synthpod_anonymizer.c
+	$<TARGET_OBJECTS:synthpod.lib>)
+target_link_libraries(synthpod.lv2 ${BIN_LIBS})
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
+set_target_properties(synthpod.lv2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+set_target_properties(synthpod.lv2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 install(TARGETS synthpod.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod_ui.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
-# synthpod_ui
-add_library(synthpod_ui.lv2 MODULE
-	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_ui.c
-	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c
-	synthpod_lv2_ui.c)
-target_link_libraries(synthpod_ui.lv2
-	rt pthread
-	${SRATOM_LDFLAGS})
-set_target_properties(synthpod_ui.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_ui")
-install(TARGETS synthpod_ui.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
-
-add_executable(sandbox_efl
-	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_efl.c
-	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_slave.c)
-target_link_libraries(sandbox_efl
-	${ELM_LDFLAGS}
-	rt pthread
-	${LILV_LDFLAGS})
-install(TARGETS sandbox_efl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
-
-# synthpod_eo
-add_library(synthpod_eo.lv2 MODULE
-	synthpod_lv2_eo.c
-	synthpod_common_eo.c)
-target_link_libraries(synthpod_eo.lv2 synthpod_ui.lib)
-set_target_properties(synthpod_eo.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_eo")
-install(TARGETS synthpod_eo.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
-
+if(BUILD_UI)
 # nk_pugl
-if(WIN32)
-	set(NK_UI_TYPE "WindowsUI")
-elseif(APPLE)
-	set(NK_UI_TYPE "CocoaUI")
-else()
-	set(NK_UI_TYPE "X11UI")
-endif()
-set(LIBS_NK m)
-
-find_package(OpenGL)
-if(${OPENGL_FOUND})
-	set(LIBS_NK ${LIBS_NK} ${OPENGL_LIBRARIES})
-else() # try pkg-config
-	pkg_search_module(GL REQUIRED gl)
-	if(${GL_FOUND})
-		set(LIBS_NK ${LIBS_NK} ${GL_LDFLAGS})
+	if(WIN32)
+		set(NK_UI_TYPE "WindowsUI")
+	elseif(APPLE)
+		set(NK_UI_TYPE "CocoaUI")
 	else()
-		message(FATAL_ERROR "OpenGL not found")
+		set(NK_UI_TYPE "X11UI")
 	endif()
-endif()
-add_definitions("-DPUGL_HAVE_GL")
+	set(LIBS_NK m)
 
-if(WIN32)
-	find_library(GDI32_LIBRARY NAMES gdi32)
-	if(GDI32_LIBRARY)
-		set(LIBS_NK ${LIBS_NK} ${GDI32_LIBRARY})
-	else()
-		message(FATAL_ERROR "gdi32 library not found")
+	find_package(OpenGL)
+	if(${OPENGL_FOUND})
+		set(LIBS_NK ${LIBS_NK} ${OPENGL_LIBRARIES})
+	else() # try pkg-config
+		pkg_search_module(GL REQUIRED gl)
+		if(${GL_FOUND})
+			set(LIBS_NK ${LIBS_NK} ${GL_LDFLAGS})
+		else()
+			message(FATAL_ERROR "OpenGL not found")
+		endif()
 	endif()
+	add_definitions("-DPUGL_HAVE_GL")
 
-	find_library(USER32_LIBRARY NAMES user32)
-	if(USER32_LIBRARY)
-		set(LIBS_NK ${LIBS_NK} ${USER32_LIBRARY})
-	else()
-		message(FATAL_ERROR "user32 library not found")
+	if(WIN32)
+		find_library(GDI32_LIBRARY NAMES gdi32)
+		if(GDI32_LIBRARY)
+			set(LIBS_NK ${LIBS_NK} ${GDI32_LIBRARY})
+		else()
+			message(FATAL_ERROR "gdi32 library not found")
+		endif()
+
+		find_library(USER32_LIBRARY NAMES user32)
+		if(USER32_LIBRARY)
+			set(LIBS_NK ${LIBS_NK} ${USER32_LIBRARY})
+		else()
+			message(FATAL_ERROR "user32 library not found")
+		endif()
+
+		set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}/pugl/pugl/pugl_win.cpp)
+
+	elseif(APPLE)
+		find_library(COCOA_LIBRARY NAMES Cocoa)
+		if(COCOA_LIBRARY)
+			set(LIBS_NK ${LIBS_NK} ${COCOA_LIBRARY})
+		else()
+			message(FATAL_ERROR "Cocoa framework not found")
+		endif()
+
+		set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}pugl/pugl/pugl_osx.m)
+
+	else() # GNU/Linux
+		pkg_search_module(X11 REQUIRED x11>=1.6)
+		include_directories(${X11_INCLUDE_DIRS})
+		set(LIBS_NK ${LIBS_NK} ${X11_LDFLAGS})
+
+		pkg_search_module(XEXT REQUIRED xext>=1.3)
+		include_directories(${XEXT_INCLUDE_DIRS})
+		set(LIBS_NK ${LIBS_NK} ${XEXT_LDFLAGS})
+
+		set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}/pugl/pugl/pugl_x11.c)
 	endif()
-
-	set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}/pugl/pugl/pugl_win.cpp)
-
-elseif(APPLE)
-	find_library(COCOA_LIBRARY NAMES Cocoa)
-	if(COCOA_LIBRARY)
-		set(LIBS_NK ${LIBS_NK} ${COCOA_LIBRARY})
-	else()
-		message(FATAL_ERROR "Cocoa framework not found")
-	endif()
-
-	set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}pugl/pugl/pugl_osx.m)
-
-else() # GNU/Linux
-	pkg_search_module(X11 REQUIRED x11>=1.6)
-	include_directories(${X11_INCLUDE_DIRS})
-	set(LIBS_NK ${LIBS_NK} ${X11_LDFLAGS})
-
-	pkg_search_module(XEXT REQUIRED xext>=1.3)
-	include_directories(${XEXT_INCLUDE_DIRS})
-	set(LIBS_NK ${LIBS_NK} ${XEXT_LDFLAGS})
-
-	set(TAR_NK ${TAR_NK} ${PROJECT_SOURCE_DIR}/pugl/pugl/pugl_x11.c)
-endif()
-
-if(BUILD_SANDBOX_X11)
-	add_definitions("-DSANDBOX_X11")
-endif()
-if(BUILD_SANDBOX_GTK2)
-	add_definitions("-DSANDBOX_GTK2")
-endif()
-if(BUILD_SANDBOX_GTK3)
-	add_definitions("-DSANDBOX_GTK3")
-endif()
-if(BUILD_SANDBOX_QT4)
-	add_definitions("-DSANDBOX_QT4")
-endif()
-if(BUILD_SANDBOX_QT5)
-	add_definitions("-DSANDBOX_QT5")
-endif()
-if(BUILD_SANDBOX_EFL)
-	add_definitions("-DSANDBOX_EFL")
-endif()
-if(BUILD_SANDBOX_SHOW)
-	add_definitions("-DSANDBOX_SHOW")
-endif()
-if(BUILD_SANDBOX_KX)
-	add_definitions("-DSANDBOX_KX")
-endif()
 
 # synthpod_nk
-add_library(synthpod_nk.lv2 MODULE
-	synthpod_lv2_nk.c
-	synthpod_common_nk.c
-	synthpod_keyboard_nk.c
-	${PROJECT_SOURCE_DIR}/sandbox_ui.lv2/sandbox_master.c
-	${TAR_NK})
-target_link_libraries(synthpod_nk.lv2
-	${LIBS_NK}
-	${LILV_LDFLAGS}
-	rt pthread)
-set_target_properties(synthpod_nk.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_nk")
-install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+	add_library(synthpod_nk.lv2 MODULE
+		synthpod_lv2_nk.c
+		synthpod_common_nk.c
+		synthpod_keyboard_nk.c
+		${TAR_NK}
+		$<TARGET_OBJECTS:sandbox_master.lib>)
+	target_link_libraries(synthpod_nk.lv2
+		${LIBS_NK}
+		${LILV_LDFLAGS}
+		rt pthread)
+	set_target_properties(synthpod_nk.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_nk")
+	set_target_properties(synthpod_nk.lv2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod_nk.lv2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
+	install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+
+# font
+	install(FILES ${PROJECT_SOURCE_DIR}/nuklear/extra_font/Cousine-Regular.ttf DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+else()
+	set(UI_WRAP "#")
+endif()
 
 # manifest
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/plugins/manifest.ttl)
 install(FILES ${PROJECT_BINARY_DIR}/plugins/manifest.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
-
-# font
-install(FILES ${PROJECT_SOURCE_DIR}/nuklear/extra_font/Cousine-Regular.ttf DESTINATION ${SYNTHPOD_PLUGIN_DIR})

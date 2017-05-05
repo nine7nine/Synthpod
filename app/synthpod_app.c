@@ -121,7 +121,7 @@ _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 	return map->map(map->handle, uri);
 }
 
-__realtime static void inline
+__realtime static inline void
 _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
 	sp_app_t *app = mod->app;
@@ -240,7 +240,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		mod->prof.max = run_time;
 }
 
-__realtime static void inline
+__realtime static inline void
 _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_timeout)
 {
 	sp_app_t *app = mod->app;
@@ -597,7 +597,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		_sp_app_mod_eject(app, del_me);
 }
 
-static void inline
+static inline void
 _sp_app_process_serial(sp_app_t *app, uint32_t nsamples, bool sparse_update_timeout)
 {
 	// iterate over all modules
@@ -610,7 +610,7 @@ _sp_app_process_serial(sp_app_t *app, uint32_t nsamples, bool sparse_update_time
 	}
 }
 
-static void inline
+static inline void
 _sp_app_process_parallel(sp_app_t *app, uint32_t nsamples, bool sparse_update_timeout)
 {
 	_dsp_master_process(app, &app->dsp_master, nsamples);

@@ -22,9 +22,6 @@
 @prefix synthpod: <http://open-music-kontrollers.ch/lv2/synthpod#> .
 
 # to please sord_validate
-ui:EoUI
-	a rdfs:Class, owl:Class ;
-	rdfs:subClassOf ui:UI .
 kx:Widget
 	a rdfs:Class, owl:Class ;
 	rdfs:subClassOf ui:UI .
@@ -37,35 +34,15 @@ synthpod:stereo
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	ui:ui synthpod:common_1_ui ;
-	ui:ui synthpod:common_2_kx ;
-	ui:ui synthpod:common_3_eo ;
-	ui:ui synthpod:common_4_nk ;
-	ui:ui synthpod:root_3_eo ; #FIXME
-	ui:ui synthpod:root_4_nk ; #FIXME
+	@UI_WRAP@ui:ui synthpod:common_4_nk ;
+	@UI_WRAP@ui:ui synthpod:root_4_nk ; #FIXME
 	rdfs:seeAlso <synthpod.ttl> .
 
-synthpod:common_1_ui
-	a ui:UI ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:common_2_kx
-	a kx:Widget ;
-	ui:binary <synthpod_ui@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
-synthpod:common_3_eo
-	a ui:EoUI ;
-	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:common_4_nk
 	a ui:@NK_UI_TYPE@ ;
 	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
-synthpod:root_3_eo
-	a ui:EoUI ;
-	ui:binary <synthpod_eo@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod_ui.ttl> .
 synthpod:root_4_nk
 	a ui:@NK_UI_TYPE@ ;
 	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
@@ -77,7 +54,7 @@ synthpod:keyboard
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	ui:ui synthpod:keyboard_4_nk ;
+	@UI_WRAP@ui:ui synthpod:keyboard_4_nk ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:keyboard_4_nk
