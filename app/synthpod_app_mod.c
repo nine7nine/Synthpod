@@ -576,6 +576,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 		return NULL;
 	mlock(mod, sizeof(mod_t));
 
+	mod->needs_bypassing = false; // plugins with control ports only need no bypassing upon preset load
+	mod->bypassed = false;
 	atomic_init(&mod->dsp_client.ref_count, 0);
 
 	// populate worker schedule
@@ -676,8 +678,17 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 		LV2_OPTIONS__interface);
 	mod->idisp.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_INLINEDISPLAY__interface);
+	mod->state.iface = lilv_instance_get_extension_data(mod->inst,
+		LV2_STATE__interface);
 	mod->system_ports = lilv_plugin_has_feature(plug, app->regs.synthpod.system_ports.node);
-	bool load_default_state = lilv_plugin_has_feature(plug, app->regs.state.load_default_state.node);
+	const bool load_default_state = lilv_plugin_has_feature(plug, app->regs.state.load_default_state.node);
+	const bool thread_safe_restore = lilv_plugin_has_feature(plug, app->regs.state.thread_safe_restore.node);
+
+	if(mod->state.iface) // plugins with state:interface need bypassing upon preset load
+		mod->needs_bypassing = true;
+
+	if(thread_safe_restore) // plugins with state:threadSafeRestore need no bypassing upon preset load
+		mod->needs_bypassing = false;
 
 	// clear pool sizes
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)

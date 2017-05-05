@@ -180,10 +180,11 @@ _state_set_value(const char *symbol, void *data,
 		else
 			return; //TODO warning
 
-		//printf("%u %f\n", index, val);
+		// FIXME not rt-safe
 		float *buf_ptr = PORT_BASE_ALIGNED(tar);
 		*buf_ptr = val;
 		control->last = val - 0.1; // triggers notification
+		// FIXME not rt-safe
 
 		_sp_app_port_control_stash(tar);
 	}

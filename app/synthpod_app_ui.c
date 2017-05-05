@@ -373,7 +373,7 @@ _sp_app_from_ui_module_preset_load(sp_app_t *app, const LV2_Atom *atom)
 		if(job)
 		{
 			app->block_state = BLOCKING_STATE_WAIT; // wait for job
-			mod->bypassed = true;
+			mod->bypassed = mod->needs_bypassing;
 
 			job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
 			job->mod = mod;
@@ -1408,7 +1408,7 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 					if(job)
 					{
 						app->block_state = BLOCKING_STATE_WAIT; // wait for job
-						mod->bypassed = true;
+						mod->bypassed = mod->needs_bypassing;
 
 						job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
 						job->mod = mod;

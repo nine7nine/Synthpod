@@ -240,6 +240,7 @@ struct _mod_t {
 	bool embedded;
 
 	bool delete_request;
+	bool needs_bypassing;
 	bool bypassed;
 
 	// worker
@@ -253,6 +254,7 @@ struct _mod_t {
 		const Zero_Worker_Interface *iface;
 		Zero_Worker_Schedule schedule;
 	} zero;
+	
 
 	mod_worker_t mod_worker;
 
@@ -280,6 +282,11 @@ struct _mod_t {
 		LV2_Options_Option options [7];
 		const LV2_Options_Interface *iface;
 	} opts;
+
+	// state
+	struct {
+		const LV2_State_Interface *iface;
+	} state;
 
 	// features
 	LV2_Feature feature_list [NUM_FEATURES];
