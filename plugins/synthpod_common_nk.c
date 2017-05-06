@@ -2151,6 +2151,13 @@ _mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
 	return NULL;
 }
 
+static const float nxt_x0 = 115.f;
+static const float nxt_y0 = 50.f;
+static const float nxt_xm = nxt_x0 + 640.f;
+static const float nxt_ym = nxt_y0 + 360.f;
+static const float nxt_xd = 50.f;
+static const float nxt_yd = 50.f;
+
 static void
 _mod_add(plughandle_t *handle, LV2_URID urn)
 {
@@ -2163,8 +2170,20 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 	mod->pos = nk_vec2(handle->nxt.x, handle->nxt.y);
 	_hash_add(&handle->mods, mod);
 
-	handle->nxt.x += 50.f * handle->scale;
-	handle->nxt.y += 50.f * handle->scale;
+	// derive initial position
+	const float xmax = nxt_xm * handle->scale;
+	const float ymax = nxt_ym * handle->scale;
+	const float xd = nxt_xd * handle->scale;
+	const float yd = nxt_yd * handle->scale;
+
+	handle->nxt.y += yd;
+	handle->nxt.x += xd;
+
+	if(handle->nxt.y > ymax)
+		handle->nxt.y = nxt_y0 * handle->scale;
+
+	if(handle->nxt.x > xmax)
+		handle->nxt.x = nxt_x0 * handle->scale;
 }
 
 static void
@@ -5633,7 +5652,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						{
 							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
 
-							handle->nxt = nk_vec2(115.f * handle->scale, 50.f * handle->scale);
+							handle->nxt = nk_vec2(nxt_x0 * handle->scale, nxt_y0 * handle->scale);
 
 							HASH_FREE(&handle->mods, ptr)
 							{
@@ -5792,9 +5811,28 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							}
 
 							if(mod_pos_x && (mod_pos_x->atom.type == handle->forge.Float) && (mod_pos_x->body != 0.f) )
+							{
 								mod->pos.x = mod_pos_x->body;
+							}
+							else if(  _message_request(handle)
+								&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+									mod->urn, 0, handle->regs.synthpod.module_position_x.urid,
+									sizeof(float), handle->forge.Float, &mod->pos.x) )
+							{
+								_message_write(handle);
+							}
+
 							if(mod_pos_y && (mod_pos_y->atom.type == handle->forge.Float) && (mod_pos_y->body != 0.f) )
+							{
 								mod->pos.y = mod_pos_y->body;
+							}
+							else if(  _message_request(handle)
+								&& synthpod_patcher_set(&handle->regs, &handle->forge,
+									mod->urn, 0, handle->regs.synthpod.module_position_y.urid,
+									sizeof(float), handle->forge.Float, &mod->pos.y) )
+							{
+								_message_write(handle);
+							}
 						}
 					}
 					//TODO
