@@ -160,16 +160,6 @@ _dsp_master_reorder(sp_app_t *app)
 	_dsp_master_concurrent(app);
 }
 
-port_t *
-_sp_app_port_get(sp_app_t *app, u_id_t uid, uint32_t index)
-{
-	mod_t *mod = _sp_app_mod_get(app, uid);
-	if(mod && (index < mod->num_ports) )
-		return &mod->ports[index];
-	
-	return NULL;
-}
-
 bool
 _sp_app_port_connected(port_t *src_port, port_t *snk_port)
 {

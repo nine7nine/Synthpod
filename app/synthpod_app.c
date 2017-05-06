@@ -393,11 +393,9 @@ _sp_app_populate(sp_app_t *app)
 	const char *uri_str;
 	mod_t *mod;
 
-	app->uid = 1;
-
 	// inject source mod
 	uri_str = SYNTHPOD_PREFIX"source";
-	mod = _sp_app_mod_add(app, uri_str, 0, 0);
+	mod = _sp_app_mod_add(app, uri_str, 0);
 	if(mod)
 	{
 		app->mods[app->num_mods] = mod;
@@ -408,7 +406,7 @@ _sp_app_populate(sp_app_t *app)
 
 	// inject sink mod
 	uri_str = SYNTHPOD_PREFIX"sink";
-	mod = _sp_app_mod_add(app, uri_str, 0, 0);
+	mod = _sp_app_mod_add(app, uri_str, 0);
 	if(mod)
 	{
 		app->mods[app->num_mods] = mod;

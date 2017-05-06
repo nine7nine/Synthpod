@@ -40,6 +40,9 @@
 #define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
 #define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
 
+#define URN_UUID_PREFIX "urn:uuid:"
+#define URN_UUID_LENGTH 46
+
 #define NUM_FEATURES 19
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
@@ -52,6 +55,7 @@ typedef enum _silencing_state_t silencing_state_t;
 typedef enum _ramp_state_t ramp_state_t;
 typedef enum _auto_type_t auto_type_t;
 
+typedef char urn_uuid_t [URN_UUID_LENGTH];
 typedef struct _dsp_slave_t dsp_slave_t;
 typedef struct _dsp_client_t dsp_client_t;
 typedef struct _dsp_master_t dsp_master_t;
@@ -228,7 +232,7 @@ struct _auto_t {
 
 struct _mod_t {
 	sp_app_t *app;
-	u_id_t uid;
+	urn_uuid_t urn_uri;
 	LV2_URID urn;
 	bool selected;
 	LV2_URID visible;
@@ -436,8 +440,6 @@ struct _sp_app_t {
 	sp_app_system_source_t system_sources [64]; //FIXME, how many?
 	sp_app_system_sink_t system_sinks [64]; //FIXME, how many?
 
-	u_id_t uid;
-
 	LV2_State_Make_Path make_path;
 	LV2_State_Map_Path map_path;
 	LV2_Feature state_feature_list [2];
@@ -587,20 +589,20 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path);
 /*
  * Mod
  */
-mod_t *
-_sp_app_mod_get(sp_app_t *app, u_id_t uid);
-
 const LilvPlugin *
 _sp_app_mod_is_supported(sp_app_t *app, const void *uri);
 
 mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn);
+_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn);
 
 void
 _sp_app_mod_eject(sp_app_t *app, mod_t *mod);
 
 int
 _sp_app_mod_del(sp_app_t *app, mod_t *mod);
+
+mod_t *
+_sp_app_mod_get(sp_app_t *app, LV2_URID urn);
 
 void
 _sp_app_mod_reinitialize(mod_t *mod);
@@ -613,9 +615,6 @@ _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload);
  */
 void 
 _dsp_master_reorder(sp_app_t *app);
-
-port_t *
-_sp_app_port_get(sp_app_t *app, u_id_t uid, uint32_t index);
 
 void
 _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port);

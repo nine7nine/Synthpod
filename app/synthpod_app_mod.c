@@ -25,11 +25,6 @@
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#define URN_UUID_PREFIX "urn:uuid:"
-#define URN_UUID_LENGTH 46
-
-typedef char urn_uuid_t [URN_UUID_LENGTH];
-
 static void
 urn_uuid_unparse_random(char *buf)
 {
@@ -47,10 +42,10 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	mod_t *mod = handle;
 	sp_app_t *app = mod->app;
 
-	char prefix [32]; //TODO how big?
+	char prefix [128]; //TODO how big?
 	char buf [1024]; //TODO how big?
 
-	snprintf(prefix, 32, "("ANSI_COLOR_CYAN"DSP"ANSI_COLOR_RESET") {"ANSI_COLOR_BOLD"%i"ANSI_COLOR_RESET"} ", mod->uid);
+	snprintf(prefix, 128, "("ANSI_COLOR_CYAN"DSP"ANSI_COLOR_RESET") {"ANSI_COLOR_BOLD"%s"ANSI_COLOR_RESET"} ", mod->urn_uri);
 	vsnprintf(buf, 1024, fmt, args);
 
 	char *pch = strtok(buf, "\n");
@@ -125,7 +120,7 @@ _mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 	sp_app_t *app = mod->app;
 	
 	char *absolute_path = NULL;
-	asprintf(&absolute_path, "%s/%u/%s", app->bundle_path, mod->uid, abstract_path);
+	asprintf(&absolute_path, "%s/%s/%s", app->bundle_path, mod->urn_uri, abstract_path);
 
 	// create leading directory tree, e.g. up to last '/'
 	if(absolute_path)
@@ -503,7 +498,7 @@ _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload)
 __non_realtime static void
 _sp_app_mod_worker_work_async(mod_t *mod, size_t size, const void *payload)
 {
-	//printf("_mod_worker_work: %u, %zu\n", mod->uid, size);
+	//printf("_mod_worker_work: %s, %zu\n", mod->urn_uri, size);
 
 	// zero worker takes precedence over standard worker
 	if(mod->zero.iface && mod->zero.iface->work)
@@ -564,7 +559,7 @@ _mod_queue_draw(void *data)
 }
 
 mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
+_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 {
 	const LilvPlugin *plug;
 
@@ -649,15 +644,17 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 	_sp_app_mod_features_populate(app, mod);
 
 	mod->app = app;
-	mod->uid = (uid != 0)
-		? uid
-		: app->uid++;
 	if(urn == 0)
 	{
-		urn_uuid_t urn_uri;
-		urn_uuid_unparse_random(urn_uri);
-		urn = app->driver->map->map(app->driver->map->handle, urn_uri);
+		urn_uuid_unparse_random(mod->urn_uri);
+		urn = app->driver->map->map(app->driver->map->handle, mod->urn_uri);
 	}
+	else
+	{
+		const char *urn_uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
+		strcpy(mod->urn_uri, urn_uri);
+	}
+	//printf("urn: %s\n", mod->urn_uri);
 	mod->urn = urn;
 	mod->plug = plug;
 	mod->plug_urid = app->driver->map->map(app->driver->map->handle, uri);
@@ -743,12 +740,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, u_id_t uid, LV2_URID urn)
 				LilvNode *port_name_node = lilv_port_get_name(plug, port);
 				LilvNode *port_designation= lilv_port_get(plug, port, app->regs.core.designation.node);
 
-				asprintf(&short_name, "#%u_%s",
-					mod->uid, lilv_node_as_string(port_symbol_node));
-				asprintf(&pretty_name, "#%u - %s",
-					mod->uid, lilv_node_as_string(port_name_node));
+				asprintf(&short_name, "#%"PRIu32"_%s",
+					mod->urn, lilv_node_as_string(port_symbol_node));
+				asprintf(&pretty_name, "#%"PRIu32" - %s",
+					mod->urn, lilv_node_as_string(port_name_node));
 				designation = port_designation ? lilv_node_as_string(port_designation) : NULL;
-				const uint32_t order = (mod->uid << 16) | tar->index;
+				const uint32_t order = (mod->urn << 16) | tar->index;
 
 				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
 					short_name, pretty_name, designation,
@@ -1025,14 +1022,15 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	return 0; //success
 }
 
+//FIXME remove duplicate code from _app_ui.c
 mod_t *
-_sp_app_mod_get(sp_app_t *app, u_id_t uid)
+_sp_app_mod_get(sp_app_t *app, LV2_URID urn)
 {
 	for(unsigned m = 0; m < app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
-		if(mod->uid == uid)
+		if(mod->urn == urn)
 			return mod;
 	}
 

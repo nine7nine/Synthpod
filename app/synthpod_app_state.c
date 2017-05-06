@@ -748,6 +748,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 
+	/*FIXME
 	// cleanup state module trees
 	for(int uid=0; uid<app->uid; uid++)
 	{
@@ -792,6 +793,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			}
 		}
 	}
+*/
 
 	// store minor version
 	const int32_t minor_version = SYNTHPOD_MINOR_VERSION;
@@ -839,8 +841,8 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 			{
 				mod_t *mod = app->mods[m];
 
-				char uid [64];
-				sprintf(uid, "%u/", mod->uid);
+				char uid [128];
+				snprintf(uid, 128, "%s/", mod->urn_uri);
 				char *path = make_path->path(make_path->handle, uid);
 				if(path)
 				{
@@ -871,9 +873,6 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				{
 					ref = lv2_atom_forge_key(forge, app->regs.rdf.subject.urid)
 						&& lv2_atom_forge_urid(forge, mod->urn);
-
-					ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
-						&& lv2_atom_forge_int(forge, mod->uid);
 
 					ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_x.urid)
 						&& lv2_atom_forge_float(forge, mod->pos.x);
@@ -942,8 +941,8 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 										&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
 										&& lv2_atom_forge_object(forge, &source_frame, 0, app->regs.core.Port.urid) )
 									{
-										ref = lv2_atom_forge_key(forge, app->regs.core.index.urid)
-											&& lv2_atom_forge_int(forge, source->mod->uid)
+										ref = lv2_atom_forge_key(forge, app->regs.rdf.subject.urid)
+											&& lv2_atom_forge_urid(forge, source->mod->urn)
 											&& lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
 											&& lv2_atom_forge_string(forge, source->symbol, strlen(source->symbol));
 
@@ -1103,7 +1102,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			|| !mod_obj->body.otype)
 			continue;
 
-		const LV2_Atom_Int *mod_index = NULL;
 		const LV2_Atom_URID *mod_subject = NULL;
 		const LV2_Atom_Float *mod_pos_x = NULL;
 		const LV2_Atom_Float *mod_pos_y = NULL;
@@ -1112,7 +1110,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		const LV2_Atom_Bool *mod_disabled = NULL;
 		const LV2_Atom_Bool *mod_embedded = NULL;
 		LV2_Atom_Object_Query mod_q[] = {
-			{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
 			{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
 			{ app->regs.synthpod.module_position_x.urid, (const LV2_Atom **)&mod_pos_x },
 			{ app->regs.synthpod.module_position_y.urid, (const LV2_Atom **)&mod_pos_y },
@@ -1124,18 +1121,14 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		};
 		lv2_atom_object_query(mod_obj, mod_q);
 	
-		if(!mod_index || (mod_index->atom.type != app->forge.Int) )
-			continue;
-
 		if(mod_subject && (mod_subject->atom.type != app->forge.URID) )
 			continue;
 
 		const char *mod_uri_str = app->driver->unmap->unmap(app->driver->unmap->handle, mod_obj->body.otype);
-		const u_id_t mod_uid = mod_index->body;
 		const LV2_URID mod_urn = mod_subject
 			? mod_subject->body
 			: 0;
-		mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_uid, mod_urn);
+		mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn);
 		if(!mod)
 			continue;
 
@@ -1156,11 +1149,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		mod->embedded = mod_embedded && (mod_embedded->atom.type == app->forge.Bool)
 			? mod_embedded->body : false;
 
-		if(mod->uid > app->uid - 1)
-			app->uid = mod->uid + 1;
-
-		char uid [64];
-		sprintf(uid, "%u/state.ttl", mod_uid);
+		char uid [128];
+		snprintf(uid, 128, "%s/state.ttl", mod->urn_uri);
 		char *path = map_path->absolute_path(map_path->handle, uid);
 		if(!path)
 			continue;
@@ -1195,18 +1185,18 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			|| !mod_obj->body.otype)
 			continue;
 
-		const LV2_Atom_Int *mod_index = NULL;
+		const LV2_Atom_URID *mod_subject = NULL;
 		LV2_Atom_Object_Query mod_q[] = {
-			{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
+			{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
 			{ 0, NULL }
 		};
 		lv2_atom_object_query(mod_obj, mod_q);
 	
-		if(!mod_index || (mod_index->atom.type != app->forge.Int) )
+		if(!mod_subject || (mod_subject->atom.type != app->forge.URID) )
 			continue;
 
-		const u_id_t mod_uid = mod_index->body;
-		mod_t *mod = _sp_app_mod_get(app, mod_uid);
+		const LV2_URID mod_urn = mod_subject ->body;
+		mod_t *mod = _sp_app_mod_get(app, mod_urn);
 		if(!mod)
 			continue;
 
@@ -1294,22 +1284,22 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 						continue;
 
 					const LV2_Atom_String *source_symbol = NULL;
-					const LV2_Atom_Int *source_index = NULL;
+					const LV2_Atom_URID *source_subject = NULL;
 					LV2_Atom_Object_Query source_q[] = {
 						{ app->regs.core.symbol.urid, (const LV2_Atom **)&source_symbol },
-						{ app->regs.core.index.urid, (const LV2_Atom **)&source_index },
+						{ app->regs.rdf.subject.urid, (const LV2_Atom **)&source_subject },
 						{ 0, NULL }
 					};
 					lv2_atom_object_query(source_obj, source_q);
 
 					if(  !source_symbol || (source_symbol->atom.type != app->forge.String)
-						|| !source_index || (source_index->atom.type != app->forge.Int) )
+						|| !source_subject || (source_subject->atom.type != app->forge.URID) )
 						continue;
 
-					const uint32_t source_uid = source_index->body;
+					const LV2_URID source_urn = source_subject->body;
 					const char *source_symbol_str = LV2_ATOM_BODY_CONST(source_symbol);
 
-					mod_t *source = _sp_app_mod_get(app, source_uid);
+					mod_t *source = _sp_app_mod_get(app, source_urn);
 					if(!source)
 						continue;
 				
