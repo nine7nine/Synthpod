@@ -1087,22 +1087,22 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 									ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, 0);
 								{
 									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_module.urid);
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_module.urid);
 									if(ref)
 										ref = lv2_atom_forge_urid(&app->forge, source->port->mod->urn);
 
 									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_source_symbol.urid);
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_symbol.urid);
 									if(ref)
 										ref = lv2_atom_forge_string(&app->forge, source->port->symbol, strlen(source->port->symbol));
 
 									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_module.urid);
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
 									if(ref)
 										ref = lv2_atom_forge_urid(&app->forge, port->mod->urn);
 
 									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.connection_sink_symbol.urid);
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
 									if(ref)
 										ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
 								}
@@ -1184,15 +1184,15 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 							midi_auto_t *mauto = &automation->midi;
 
 							if(ref)
-								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, app->regs.port.midi.urid);
+								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, app->regs.midi.Controller.urid);
 							{
 								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.automation_module.urid);
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
 								if(ref)
 									ref = lv2_atom_forge_urid(&app->forge, port->mod->urn);
 
 								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.automation_symbol.urid);
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
 								if(ref)
 									ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
 
@@ -1202,7 +1202,7 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 									ref = lv2_atom_forge_int(&app->forge, mauto->channel);
 
 								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.controller.urid);
+									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.controller_number.urid);
 								if(ref)
 									ref = lv2_atom_forge_int(&app->forge, mauto->controller);
 
@@ -1499,7 +1499,7 @@ _sp_app_from_ui_patch_copy(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-__realtime static void
+__realtime void
 _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
 	//printf("got patch:add for connectionList:\n");
@@ -1510,10 +1510,10 @@ _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom *snk_symbol = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.connection_source_module.urid, &src_module,
-		app->regs.synthpod.connection_source_symbol.urid, &src_symbol,
-		app->regs.synthpod.connection_sink_module.urid, &snk_module,
-		app->regs.synthpod.connection_sink_symbol.urid, &snk_symbol,
+		app->regs.synthpod.source_module.urid, &src_module,
+		app->regs.synthpod.source_symbol.urid, &src_symbol,
+		app->regs.synthpod.sink_module.urid, &snk_module,
+		app->regs.synthpod.sink_symbol.urid, &snk_symbol,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1569,10 +1569,10 @@ _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom *snk_symbol = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.connection_source_module.urid, &src_module,
-		app->regs.synthpod.connection_source_symbol.urid, &src_symbol,
-		app->regs.synthpod.connection_sink_module.urid, &snk_module,
-		app->regs.synthpod.connection_sink_symbol.urid, &snk_symbol,
+		app->regs.synthpod.source_module.urid, &src_module,
+		app->regs.synthpod.source_symbol.urid, &src_symbol,
+		app->regs.synthpod.sink_module.urid, &snk_module,
+		app->regs.synthpod.sink_symbol.urid, &snk_symbol,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1628,8 +1628,8 @@ _subscription_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom *src_symbol = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.subscription_module.urid, &src_module,
-		app->regs.synthpod.subscription_symbol.urid, &src_symbol,
+		app->regs.synthpod.sink_module.urid, &src_module,
+		app->regs.synthpod.sink_symbol.urid, &src_symbol,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1663,8 +1663,8 @@ _subscription_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom *src_symbol = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.subscription_module.urid, &src_module,
-		app->regs.synthpod.subscription_symbol.urid, &src_symbol,
+		app->regs.synthpod.sink_module.urid, &src_module,
+		app->regs.synthpod.sink_symbol.urid, &src_symbol,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1695,9 +1695,9 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom *src_value = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.notification_module.urid, &src_module,
-		app->regs.synthpod.notification_symbol.urid, &src_symbol,
-		app->regs.synthpod.notification_value.urid, &src_value,
+		app->regs.synthpod.sink_module.urid, &src_module,
+		app->regs.synthpod.sink_symbol.urid, &src_symbol,
+		app->regs.rdf.value.urid, &src_value,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1769,8 +1769,8 @@ _automation_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom *src_symbol = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.automation_module.urid, &src_module,
-		app->regs.synthpod.automation_symbol.urid, &src_symbol,
+		app->regs.synthpod.sink_module.urid, &src_module,
+		app->regs.synthpod.sink_symbol.urid, &src_symbol,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1800,10 +1800,10 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom_Int *src_max = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.automation_module.urid, &src_module,
-		app->regs.synthpod.automation_symbol.urid, &src_symbol,
+		app->regs.synthpod.sink_module.urid, &src_module,
+		app->regs.synthpod.sink_symbol.urid, &src_symbol,
 		app->regs.midi.channel.urid, &src_channel,
-		app->regs.midi.controller.urid, &src_controller,
+		app->regs.midi.controller_number.urid, &src_controller,
 		app->regs.core.minimum.urid, &src_min,
 		app->regs.core.maximum.urid, &src_max,
 		0);
@@ -1817,13 +1817,13 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	{
 		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
 
-		if(src_port->type == PORT_TYPE_CONTROL)
+		if(src_port && (src_port->type == PORT_TYPE_CONTROL) )
 		{
 			auto_t *automation = &src_port->control.automation;
 
 			automation->type = AUTO_TYPE_MIDI;
-			automation->midi.channel = src_channel ? src_channel->body : 0x0;
-			automation->midi.controller = src_controller ? src_controller->body : 0x1;
+			automation->midi.channel = src_channel ? src_channel->body : -1;
+			automation->midi.controller = src_controller ? src_controller->body : -1;
 			automation->midi.min = src_min ? src_min->body : 0x0;
 			automation->midi.max = src_max ? src_max->body : 0x7f;
 
@@ -1835,14 +1835,14 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	};
 }
 
-__realtime static void
+__realtime void
 _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
 	//printf("got patch:add for automationList:\n");
 
 	const LV2_URID src_proto = obj->body.otype;
 
-	if(src_proto == app->regs.port.midi.urid)
+	if(src_proto == app->regs.midi.Controller.urid)
 		_midi_automation_list_add(app, obj);
 	//FIXME OSC
 }

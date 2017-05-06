@@ -343,18 +343,12 @@ struct _reg_t {
 		reg_item_t module_move;
 		reg_item_t module_preset_load;
 		reg_item_t module_preset_save;
-		reg_item_t module_selected;
-		reg_item_t module_embedded;
 		reg_item_t module_visible;
 		reg_item_t module_disabled;
 		reg_item_t module_profiling;
 		reg_item_t module_position_x;
 		reg_item_t module_position_y;
 		reg_item_t port_refresh;
-		reg_item_t port_connected;
-		reg_item_t port_subscribed;
-		reg_item_t port_monitored;
-		reg_item_t port_selected;
 		reg_item_t bundle_load;
 		reg_item_t bundle_save;
 		reg_item_t path_get;
@@ -372,29 +366,21 @@ struct _reg_t {
 		reg_item_t osc_port;
 		reg_item_t com_port;
 
-		reg_item_t connection_list;
-		reg_item_t connection_source_module;
-		reg_item_t connection_source_symbol;
-		reg_item_t connection_sink_module;
-		reg_item_t connection_sink_symbol;
-
 		reg_item_t subscription_list;
-		reg_item_t subscription_module;
-		reg_item_t subscription_symbol;
-
 		reg_item_t notification_list;
-		reg_item_t notification_module;
-		reg_item_t notification_symbol;
-		reg_item_t notification_value;
-
 		reg_item_t automation_list;
-		reg_item_t automation_module;
-		reg_item_t automation_symbol;
+		reg_item_t connection_list;
+
+		reg_item_t source_module;
+		reg_item_t source_symbol;
+		reg_item_t sink_module;
+		reg_item_t sink_symbol;
 	} synthpod;
 
 	struct {
+		reg_item_t Controller;
 		reg_item_t channel;
-		reg_item_t controller;
+		reg_item_t controller_number;
 	} midi;
 };
 
@@ -618,18 +604,12 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.module_move, world, map, SYNTHPOD_PREFIX"moduleMove");
 	_register(&regs->synthpod.module_preset_load, world, map, SYNTHPOD_PREFIX"modulePresetLoad");
 	_register(&regs->synthpod.module_preset_save, world, map, SYNTHPOD_PREFIX"modulePresetSave");
-	_register(&regs->synthpod.module_selected, world, map, SYNTHPOD_PREFIX"moduleSelect");
-	_register(&regs->synthpod.module_embedded, world, map, SYNTHPOD_PREFIX"moduleEmbedded");
 	_register(&regs->synthpod.module_visible, world, map, SYNTHPOD_PREFIX"moduleVisible");
 	_register(&regs->synthpod.module_disabled, world, map, SYNTHPOD_PREFIX"moduleDisabled");
 	_register(&regs->synthpod.module_profiling, world, map, SYNTHPOD_PREFIX"moduleProfiling");
 	_register(&regs->synthpod.module_position_x, world, map, SYNTHPOD_PREFIX"modulePositionX");
 	_register(&regs->synthpod.module_position_y, world, map, SYNTHPOD_PREFIX"modulePositionY");
 	_register(&regs->synthpod.port_refresh, world, map, SYNTHPOD_PREFIX"portRefresh");
-	_register(&regs->synthpod.port_connected, world, map, SYNTHPOD_PREFIX"portConnect");
-	_register(&regs->synthpod.port_subscribed, world, map, SYNTHPOD_PREFIX"portSubscribe");
-	_register(&regs->synthpod.port_monitored, world, map, SYNTHPOD_PREFIX"portMonitor");
-	_register(&regs->synthpod.port_selected, world, map, SYNTHPOD_PREFIX"portSelect");
 	_register(&regs->synthpod.bundle_load, world, map, SYNTHPOD_PREFIX"bundleLoad");
 	_register(&regs->synthpod.bundle_save, world, map, SYNTHPOD_PREFIX"bundleSave");
 	_register(&regs->synthpod.path_get, world, map, SYNTHPOD_PREFIX"pathGet");
@@ -648,26 +628,18 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.com_port, world, map, SYNTHPOD_PREFIX"ComPort");
 
 	_register(&regs->synthpod.connection_list, world, map, SYNTHPOD_PREFIX"connectionList");
-	_register(&regs->synthpod.connection_source_module, world, map, SYNTHPOD_PREFIX"connectionSourceModule");
-	_register(&regs->synthpod.connection_source_symbol, world, map, SYNTHPOD_PREFIX"connectionSourceSymbol");
-	_register(&regs->synthpod.connection_sink_module, world, map, SYNTHPOD_PREFIX"connectionSinkModule");
-	_register(&regs->synthpod.connection_sink_symbol, world, map, SYNTHPOD_PREFIX"connectionSinkSymbol");
-
 	_register(&regs->synthpod.subscription_list, world, map, SYNTHPOD_PREFIX"subscriptionList");
-	_register(&regs->synthpod.subscription_module, world, map, SYNTHPOD_PREFIX"subscriptionModule");
-	_register(&regs->synthpod.subscription_symbol, world, map, SYNTHPOD_PREFIX"subscriptionSymbol");
-
 	_register(&regs->synthpod.notification_list, world, map, SYNTHPOD_PREFIX"notificationList");
-	_register(&regs->synthpod.notification_module, world, map, SYNTHPOD_PREFIX"notificationModule");
-	_register(&regs->synthpod.notification_symbol, world, map, SYNTHPOD_PREFIX"notificationSymbol");
-	_register(&regs->synthpod.notification_value, world, map, SYNTHPOD_PREFIX"notificationValue");
-
 	_register(&regs->synthpod.automation_list, world, map, SYNTHPOD_PREFIX"automationList");
-	_register(&regs->synthpod.automation_module, world, map, SYNTHPOD_PREFIX"automationModule");
-	_register(&regs->synthpod.automation_symbol, world, map, SYNTHPOD_PREFIX"automationSymbol");
 
+	_register(&regs->synthpod.source_module, world, map, SYNTHPOD_PREFIX"sourceModule");
+	_register(&regs->synthpod.source_symbol, world, map, SYNTHPOD_PREFIX"sourceSymbol");
+	_register(&regs->synthpod.sink_module, world, map, SYNTHPOD_PREFIX"sinkModule");
+	_register(&regs->synthpod.sink_symbol, world, map, SYNTHPOD_PREFIX"sinkSymbol");
+
+	_register(&regs->midi.Controller, world, map, LV2_MIDI__Controller);
 	_register(&regs->midi.channel, world, map, LV2_MIDI__channel);
-	_register(&regs->midi.controller, world, map, LV2_MIDI__Controller);
+	_register(&regs->midi.controller_number, world, map, LV2_MIDI__controllerNumber);
 }
 
 static inline void
@@ -860,18 +832,12 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.module_move);
 	_unregister(&regs->synthpod.module_preset_load);
 	_unregister(&regs->synthpod.module_preset_save);
-	_unregister(&regs->synthpod.module_selected);
-	_unregister(&regs->synthpod.module_embedded);
 	_unregister(&regs->synthpod.module_visible);
 	_unregister(&regs->synthpod.module_disabled);
 	_unregister(&regs->synthpod.module_profiling);
 	_unregister(&regs->synthpod.module_position_x);
 	_unregister(&regs->synthpod.module_position_y);
 	_unregister(&regs->synthpod.port_refresh);
-	_unregister(&regs->synthpod.port_connected);
-	_unregister(&regs->synthpod.port_subscribed);
-	_unregister(&regs->synthpod.port_monitored);
-	_unregister(&regs->synthpod.port_selected);
 	_unregister(&regs->synthpod.bundle_load);
 	_unregister(&regs->synthpod.bundle_save);
 	_unregister(&regs->synthpod.dsp_profiling);
@@ -889,26 +855,18 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.com_port);
 
 	_unregister(&regs->synthpod.connection_list);
-	_unregister(&regs->synthpod.connection_source_module);
-	_unregister(&regs->synthpod.connection_source_symbol);
-	_unregister(&regs->synthpod.connection_sink_module);
-	_unregister(&regs->synthpod.connection_sink_symbol);
-
 	_unregister(&regs->synthpod.subscription_list);
-	_unregister(&regs->synthpod.subscription_module);
-	_unregister(&regs->synthpod.subscription_symbol);
-
 	_unregister(&regs->synthpod.notification_list);
-	_unregister(&regs->synthpod.notification_module);
-	_unregister(&regs->synthpod.notification_symbol);
-	_unregister(&regs->synthpod.notification_value);
-
 	_unregister(&regs->synthpod.automation_list);
-	_unregister(&regs->synthpod.automation_module);
-	_unregister(&regs->synthpod.automation_symbol);
 
+	_unregister(&regs->synthpod.source_module);
+	_unregister(&regs->synthpod.source_symbol);
+	_unregister(&regs->synthpod.sink_module);
+	_unregister(&regs->synthpod.sink_symbol);
+
+	_unregister(&regs->midi.Controller);
 	_unregister(&regs->midi.channel);
-	_unregister(&regs->midi.controller);
+	_unregister(&regs->midi.controller_number);
 }
 
 #if 0

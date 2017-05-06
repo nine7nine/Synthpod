@@ -833,187 +833,229 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 
 	if(ser.buf)
 	{
-		LV2_Atom_Forge_Ref ref;
-		LV2_Atom_Forge_Frame graph_frame;
-		if( (ref = lv2_atom_forge_tuple(forge, &graph_frame)) )
+		// spod:moduleList
 		{
-			for(unsigned m=0; m<app->num_mods; m++)
+			LV2_Atom_Forge_Ref ref;
+			LV2_Atom_Forge_Frame mod_list_frame;
+
+			if( (ref = lv2_atom_forge_object(forge, &mod_list_frame, 0, 0)) )
 			{
-				mod_t *mod = app->mods[m];
-
-				char uid [128];
-				snprintf(uid, 128, "%s/", mod->urn_uri);
-				char *path = make_path->path(make_path->handle, uid);
-				if(path)
+				for(unsigned m=0; m<app->num_mods; m++)
 				{
-					LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-						app->driver->map, NULL, NULL, NULL, path,
-						_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
+					mod_t *mod = app->mods[m];
 
-					if(state)
+					char uid [128];
+					snprintf(uid, 128, "%s/", mod->urn_uri);
+					char *path = make_path->path(make_path->handle, uid);
+					if(path)
 					{
-						lilv_state_set_label(state, "state"); //TODO use path prefix?
-						lilv_state_save(app->world, app->driver->map, app->driver->unmap,
-							state, NULL, path, "state.ttl");
-						lilv_state_free(state);
-					}
-					else
-						fprintf(stderr, "sp_app_save: invalid state\n");
+						LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+							app->driver->map, NULL, NULL, NULL, path,
+							_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 
-					free(path);
-				}
-				else
-					fprintf(stderr, "sp_app_save: invalid path\n");
-
-				const LV2_URID uri_urid = app->driver->map->map(app->driver->map->handle, mod->uri_str);
-
-				LV2_Atom_Forge_Frame mod_frame;
-				if(  ref
-					&& lv2_atom_forge_object(forge, &mod_frame, 0, uri_urid))
-				{
-					ref = lv2_atom_forge_key(forge, app->regs.rdf.subject.urid)
-						&& lv2_atom_forge_urid(forge, mod->urn);
-
-					ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_x.urid)
-						&& lv2_atom_forge_float(forge, mod->pos.x);
-
-					ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_y.urid)
-						&& lv2_atom_forge_float(forge, mod->pos.y);
-
-					if(ref && mod->selected)
-					{
-						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_selected.urid)
-							&& lv2_atom_forge_bool(forge, mod->selected);
-					}
-
-					if(ref && mod->visible)
-					{
-						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_visible.urid)
-							&& lv2_atom_forge_urid(forge, mod->visible);
-					}
-
-					if(ref && mod->disabled)
-					{
-						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_disabled.urid)
-							&& lv2_atom_forge_bool(forge, mod->disabled);
-					}
-
-					if(ref && mod->embedded)
-					{
-						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_embedded.urid)
-							&& lv2_atom_forge_bool(forge, mod->embedded);
-					}
-
-					for(unsigned i=0; i<mod->num_ports; i++)
-					{
-						port_t *port = &mod->ports[i];
-
-						LV2_Atom_Forge_Frame port_frame;
-						if(  ref
-							&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
-							&& lv2_atom_forge_object(forge, &port_frame, 0, app->regs.core.Port.urid) )
+						if(state)
 						{
-							ref = lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
-								&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol));
-
-							if(ref && port->selected)
-							{
-								ref = lv2_atom_forge_key(forge, app->regs.synthpod.port_selected.urid)
-									&& lv2_atom_forge_bool(forge, port->selected);
-							}
-
-							if(ref && port->monitored)
-							{
-								ref = lv2_atom_forge_key(forge, app->regs.synthpod.port_monitored.urid)
-									&& lv2_atom_forge_bool(forge, port->monitored);
-							}
-
-							// serialize port connections
-							connectable_t *conn = _sp_app_port_connectable(port);
-							if(conn)
-							{
-								for(int j=0; j<conn->num_sources; j++)
-								{
-									port_t *source = conn->sources[j].port;
-
-									LV2_Atom_Forge_Frame source_frame;
-									if(  ref
-										&& lv2_atom_forge_key(forge, app->regs.core.port.urid)
-										&& lv2_atom_forge_object(forge, &source_frame, 0, app->regs.core.Port.urid) )
-									{
-										ref = lv2_atom_forge_key(forge, app->regs.rdf.subject.urid)
-											&& lv2_atom_forge_urid(forge, source->mod->urn)
-											&& lv2_atom_forge_key(forge, app->regs.core.symbol.urid)
-											&& lv2_atom_forge_string(forge, source->symbol, strlen(source->symbol));
-
-										if(ref)
-											lv2_atom_forge_pop(forge, &source_frame);
-									}
-								}
-							}
-
-							// serialize port automations
-							if(port->type == PORT_TYPE_CONTROL)
-							{
-								auto_t *automation = &port->control.automation;
-
-								if(automation->type == AUTO_TYPE_MIDI)
-								{
-									midi_auto_t *mauto = &automation->midi;
-
-									LV2_Atom_Forge_Frame auto_frame;
-									if(  ref
-										&& lv2_atom_forge_key(forge, app->regs.synthpod.automation_list.urid) //FIXME
-										&& lv2_atom_forge_object(forge, &auto_frame, 0, app->regs.port.midi.urid) )
-									{
-										ref = lv2_atom_forge_key(forge, app->regs.midi.channel.urid)
-											&& lv2_atom_forge_int(forge, mauto->channel)
-											&& lv2_atom_forge_key(forge, app->regs.midi.controller.urid)
-											&& lv2_atom_forge_int(forge, mauto->controller)
-											&& lv2_atom_forge_key(forge, app->regs.core.minimum.urid)
-											&& lv2_atom_forge_int(forge, mauto->min)
-											&& lv2_atom_forge_key(forge, app->regs.core.maximum.urid)
-											&& lv2_atom_forge_int(forge, mauto->max);
-
-										if(ref)
-											lv2_atom_forge_pop(forge, &auto_frame);
-									}
-								}
-								else if(automation->type == AUTO_TYPE_OSC)
-								{
-									//FIXME write me
-								}
-							}
-
-							if(ref)
-								lv2_atom_forge_pop(forge, &port_frame);
+							lilv_state_set_label(state, "state"); //TODO use path prefix?
+							lilv_state_save(app->world, app->driver->map, app->driver->unmap,
+								state, NULL, path, "state.ttl");
+							lilv_state_free(state);
 						}
 						else
-							fprintf(stderr, "sp_app_save: invalid port\n");
+							fprintf(stderr, "sp_app_save: invalid state\n");
+
+						free(path);
 					}
+					else
+						fprintf(stderr, "sp_app_save: invalid path\n");
 
-					if(ref)
-						lv2_atom_forge_pop(forge, &mod_frame);
+					const LV2_URID uri_urid = app->driver->map->map(app->driver->map->handle, mod->uri_str);
+
+					LV2_Atom_Forge_Frame mod_frame;
+					if(  ref
+						&& lv2_atom_forge_key(forge, mod->urn)
+						&& lv2_atom_forge_object(forge, &mod_frame, 0, uri_urid) )
+					{
+						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_x.urid)
+							&& lv2_atom_forge_float(forge, mod->pos.x);
+
+						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_y.urid)
+							&& lv2_atom_forge_float(forge, mod->pos.y);
+
+						if(ref && mod->visible)
+						{
+							ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_visible.urid)
+								&& lv2_atom_forge_urid(forge, mod->visible);
+						}
+
+						if(ref && mod->disabled)
+						{
+							ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_disabled.urid)
+								&& lv2_atom_forge_bool(forge, mod->disabled);
+						}
+
+						if(ref)
+							lv2_atom_forge_pop(forge, &mod_frame);
+					}
+					else
+						fprintf(stderr, "sp_app_save: invalid mod\n");
 				}
-				else
-					fprintf(stderr, "sp_app_save: invalid mod\n");
+
+				if(ref)
+					lv2_atom_forge_pop(forge, &mod_list_frame);
 			}
+			else
+				fprintf(stderr, "sp_app_save: invalid spod:moduleList\n");
 
-			if(ref)
-				lv2_atom_forge_pop(forge, &graph_frame);
+			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
+			if(ref && atom)
+			{
+				store(hndl, app->regs.synthpod.module_list.urid,
+					LV2_ATOM_BODY_CONST(atom), atom->size, atom->type,
+					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+			}
+			else
+				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
 		}
-		else
-			fprintf(stderr, "sp_app_save: invalid graph\n");
 
-		const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
-		if(ref && atom)
+		// reset ser
+		ser.offset = 0;
+		lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
+
+		// spod:connectionList
 		{
-			store(hndl, app->regs.synthpod.graph.urid,
-				LV2_ATOM_BODY_CONST(atom), atom->size, atom->type,
-				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+			LV2_Atom_Forge_Ref ref;
+			LV2_Atom_Forge_Frame conn_list_frame;
+
+			if( (ref = lv2_atom_forge_tuple(forge, &conn_list_frame)) )
+			{
+				for(unsigned m=0; m<app->num_mods; m++)
+				{
+					mod_t *mod = app->mods[m];
+
+					for(unsigned p=0; p<mod->num_ports; p++)
+					{
+						port_t *port = &mod->ports[p];
+
+						// serialize port connections
+						connectable_t *conn = _sp_app_port_connectable(port);
+						if(conn)
+						{
+							for(int j=0; j<conn->num_sources; j++)
+							{
+								port_t *source = conn->sources[j].port;
+
+								LV2_Atom_Forge_Frame source_frame;
+								if(  ref
+									&& lv2_atom_forge_object(forge, &source_frame, 0, 0) )
+								{
+									ref = lv2_atom_forge_key(forge, app->regs.synthpod.source_module.urid)
+										&& lv2_atom_forge_urid(forge, source->mod->urn)
+										&& lv2_atom_forge_key(forge, app->regs.synthpod.source_symbol.urid)
+										&& lv2_atom_forge_string(forge, source->symbol, strlen(source->symbol))
+										&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_module.urid)
+										&& lv2_atom_forge_urid(forge, port->mod->urn)
+										&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_symbol.urid)
+										&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol));
+
+									if(ref)
+										lv2_atom_forge_pop(forge, &source_frame);
+								}
+							}
+						}
+
+					}
+				}
+
+				if(ref)
+					lv2_atom_forge_pop(forge, &conn_list_frame);
+			}
+			else
+				fprintf(stderr, "sp_app_save: invalid spod:connectionList\n");
+
+			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
+			if(ref && atom)
+			{
+				store(hndl, app->regs.synthpod.connection_list.urid,
+					LV2_ATOM_BODY_CONST(atom), atom->size, atom->type,
+					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+			}
+			else
+				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
 		}
-		else
-			fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+
+		// reset ser
+		ser.offset = 0;
+		lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
+
+		// spod:automationList
+		{
+			LV2_Atom_Forge_Ref ref;
+			LV2_Atom_Forge_Frame conn_list_frame;
+
+			if( (ref = lv2_atom_forge_tuple(forge, &conn_list_frame)) )
+			{
+				for(unsigned m=0; m<app->num_mods; m++)
+				{
+					mod_t *mod = app->mods[m];
+
+					for(unsigned p=0; p<mod->num_ports; p++)
+					{
+						port_t *port = &mod->ports[p];
+
+						// serialize port automations
+						if(port->type == PORT_TYPE_CONTROL)
+						{
+							auto_t *automation = &port->control.automation;
+
+							if(automation->type == AUTO_TYPE_MIDI)
+							{
+								midi_auto_t *mauto = &automation->midi;
+
+								LV2_Atom_Forge_Frame auto_frame;
+								if(  ref
+									&& lv2_atom_forge_object(forge, &auto_frame, 0, app->regs.midi.Controller.urid) )
+								{
+									ref = lv2_atom_forge_key(forge, app->regs.synthpod.sink_module.urid)
+										&& lv2_atom_forge_urid(forge, port->mod->urn)
+										&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_symbol.urid)
+										&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol))
+										&& lv2_atom_forge_key(forge, app->regs.midi.channel.urid)
+										&& lv2_atom_forge_int(forge, mauto->channel)
+										&& lv2_atom_forge_key(forge, app->regs.midi.controller_number.urid)
+										&& lv2_atom_forge_int(forge, mauto->controller)
+										&& lv2_atom_forge_key(forge, app->regs.core.minimum.urid)
+										&& lv2_atom_forge_int(forge, mauto->min)
+										&& lv2_atom_forge_key(forge, app->regs.core.maximum.urid)
+										&& lv2_atom_forge_int(forge, mauto->max);
+
+									if(ref)
+										lv2_atom_forge_pop(forge, &auto_frame);
+								}
+							}
+							else if(automation->type == AUTO_TYPE_OSC)
+							{
+								//FIXME write me
+							}
+						}
+					}
+				}
+
+				if(ref)
+					lv2_atom_forge_pop(forge, &conn_list_frame);
+			}
+			else
+				fprintf(stderr, "sp_app_save: invalid spod:automationList\n");
+
+			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
+			if(ref && atom)
+			{
+				store(hndl, app->regs.synthpod.automation_list.urid,
+					LV2_ATOM_BODY_CONST(atom), atom->size, atom->type,
+					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+			}
+			else
+				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+		}
 
 		free(ser.buf);
 
@@ -1021,6 +1063,71 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	}
 
 	return LV2_STATE_ERR_UNKNOWN;
+}
+
+static void
+_mod_inject(sp_app_t *app, LV2_URID mod_urn, const LV2_Atom_Object *mod_obj,
+	const LV2_State_Map_Path *map_path)
+{
+	if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
+		|| !mod_obj->body.otype)
+		return;
+
+	const LV2_Atom_Float *mod_pos_x = NULL;
+	const LV2_Atom_Float *mod_pos_y = NULL;
+	const LV2_Atom_Bool *mod_visible = NULL;
+	const LV2_Atom_Bool *mod_disabled = NULL;
+	LV2_Atom_Object_Query mod_q[] = {
+		{ app->regs.synthpod.module_position_x.urid, (const LV2_Atom **)&mod_pos_x },
+		{ app->regs.synthpod.module_position_y.urid, (const LV2_Atom **)&mod_pos_y },
+		{ app->regs.synthpod.module_visible.urid, (const LV2_Atom **)&mod_visible },
+		{ app->regs.synthpod.module_disabled.urid, (const LV2_Atom **)&mod_disabled },
+		{ 0, NULL }
+	};
+	lv2_atom_object_query(mod_obj, mod_q);
+
+	const char *mod_uri_str = app->driver->unmap->unmap(app->driver->unmap->handle, mod_obj->body.otype);
+	mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn);
+	if(!mod)
+		return;
+
+	// inject module into module graph
+	app->mods[app->num_mods] = mod;
+	app->num_mods += 1;
+
+	mod->pos.x = mod_pos_x && (mod_pos_x->atom.type == app->forge.Float)
+		? mod_pos_x->body : 0.f;
+	mod->pos.y = mod_pos_y && (mod_pos_y->atom.type == app->forge.Float)
+		? mod_pos_y->body : 0.f;
+	mod->visible = mod_visible && (mod_visible->atom.type == app->forge.URID)
+		? mod_visible->body : 0;
+	mod->disabled = mod_disabled && (mod_disabled->atom.type == app->forge.Bool)
+		? mod_disabled->body : false;
+
+	char uid [128];
+	snprintf(uid, 128, "%s/state.ttl", mod->urn_uri);
+	char *path = map_path->absolute_path(map_path->handle, uid);
+	if(!path)
+		return;
+
+	// strip 'file://'
+	const char *tmp = !strncmp(path, "file://", 7)
+		? path + 7
+		: path;
+
+	LilvState *state = lilv_state_new_from_file(app->world,
+		app->driver->map, NULL, tmp);
+
+	if(state)
+	{
+		lilv_state_restore(state, mod->inst, _state_set_value, mod,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, false));
+	}
+	else
+		fprintf(stderr, "failed to load state from file\n");
+
+	lilv_state_free(state);
+	free(path);
 }
 
 LV2_State_Status
@@ -1079,244 +1186,191 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	if(pane_left && (type == app->forge.Float) && (size == sizeof(float)) )
 		app->nleft = *pane_left;
 
-	// retrieve graph
-	const LV2_Atom_Tuple *graph_body = retrieve(hndl, app->regs.synthpod.graph.urid,
+	// retrieve spod:moduleList
+	const LV2_Atom_Object_Body *mod_list_body = retrieve(hndl, app->regs.synthpod.module_list.urid,
 		&size, &type, &_flags);
-	
-	if(!graph_body)
-		return LV2_STATE_ERR_UNKNOWN;
-
-	if(type != app->forge.Tuple)
-		return LV2_STATE_ERR_BAD_TYPE;
-
-	if(!(_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)))
-		return LV2_STATE_ERR_BAD_FLAGS;
-
-	_sp_app_reset(app);
-
-	LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, iter)
+	if(  mod_list_body
+		&& (type == app->forge.Object)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
 	{
-		const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)iter;
+		_sp_app_reset(app);
 
-		if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
-			|| !mod_obj->body.otype)
-			continue;
-
-		const LV2_Atom_URID *mod_subject = NULL;
-		const LV2_Atom_Float *mod_pos_x = NULL;
-		const LV2_Atom_Float *mod_pos_y = NULL;
-		const LV2_Atom_Bool *mod_selected = NULL;
-		const LV2_Atom_Bool *mod_visible = NULL;
-		const LV2_Atom_Bool *mod_disabled = NULL;
-		const LV2_Atom_Bool *mod_embedded = NULL;
-		LV2_Atom_Object_Query mod_q[] = {
-			{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
-			{ app->regs.synthpod.module_position_x.urid, (const LV2_Atom **)&mod_pos_x },
-			{ app->regs.synthpod.module_position_y.urid, (const LV2_Atom **)&mod_pos_y },
-			{ app->regs.synthpod.module_selected.urid, (const LV2_Atom **)&mod_selected },
-			{ app->regs.synthpod.module_visible.urid, (const LV2_Atom **)&mod_visible },
-			{ app->regs.synthpod.module_disabled.urid, (const LV2_Atom **)&mod_disabled },
-			{ app->regs.synthpod.module_embedded.urid, (const LV2_Atom **)&mod_embedded },
-			{ 0, NULL }
-		};
-		lv2_atom_object_query(mod_obj, mod_q);
-	
-		if(mod_subject && (mod_subject->atom.type != app->forge.URID) )
-			continue;
-
-		const char *mod_uri_str = app->driver->unmap->unmap(app->driver->unmap->handle, mod_obj->body.otype);
-		const LV2_URID mod_urn = mod_subject
-			? mod_subject->body
-			: 0;
-		mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn);
-		if(!mod)
-			continue;
-
-		// inject module into module graph
-		app->mods[app->num_mods] = mod;
-		app->num_mods += 1;
-
-		mod->pos.x = mod_pos_x && (mod_pos_x->atom.type == app->forge.Float)
-			? mod_pos_x->body : 0.f;
-		mod->pos.y = mod_pos_y && (mod_pos_y->atom.type == app->forge.Float)
-			? mod_pos_y->body : 0.f;
-		mod->selected = mod_selected && (mod_selected->atom.type == app->forge.Bool)
-			? mod_selected->body : false;
-		mod->visible = mod_visible && (mod_visible->atom.type == app->forge.URID)
-			? mod_visible->body : 0;
-		mod->disabled = mod_disabled && (mod_disabled->atom.type == app->forge.Bool)
-			? mod_disabled->body : false;
-		mod->embedded = mod_embedded && (mod_embedded->atom.type == app->forge.Bool)
-			? mod_embedded->body : false;
-
-		char uid [128];
-		snprintf(uid, 128, "%s/state.ttl", mod->urn_uri);
-		char *path = map_path->absolute_path(map_path->handle, uid);
-		if(!path)
-			continue;
-
-		// strip 'file://'
-		const char *tmp = !strncmp(path, "file://", 7)
-			? path + 7
-			: path;
-
-		LilvState *state = lilv_state_new_from_file(app->world,
-			app->driver->map, NULL, tmp);
-
-		if(state)
+		LV2_ATOM_OBJECT_BODY_FOREACH(mod_list_body, size, prop)
 		{
-			lilv_state_restore(state, mod->inst, _state_set_value, mod,
-				LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, false));
-		}
-		else
-			fprintf(stderr, "failed to load state from file\n");
+			const LV2_URID mod_urn = prop->key;
+			const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)&prop->value;
 
-		lilv_state_free(state);
-		free(path);
+			_mod_inject(app, mod_urn, mod_obj, map_path);
+		}
+
+		_sp_app_order(app);
 	}
 
-	_sp_app_order(app);
-
-	LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, iter)
+	// retrieve spod:connectionList
+	const LV2_Atom_Object_Body *conn_list_body = retrieve(hndl, app->regs.synthpod.connection_list.urid,
+		&size, &type, &_flags);
+	if(  conn_list_body
+		&& (type == app->forge.Tuple)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
 	{
-		const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)iter;
-
-		if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
-			|| !mod_obj->body.otype)
-			continue;
-
-		const LV2_Atom_URID *mod_subject = NULL;
-		LV2_Atom_Object_Query mod_q[] = {
-			{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
-			{ 0, NULL }
-		};
-		lv2_atom_object_query(mod_obj, mod_q);
-	
-		if(!mod_subject || (mod_subject->atom.type != app->forge.URID) )
-			continue;
-
-		const LV2_URID mod_urn = mod_subject ->body;
-		mod_t *mod = _sp_app_mod_get(app, mod_urn);
-		if(!mod)
-			continue;
-
-		LV2_ATOM_OBJECT_FOREACH(mod_obj, item)
+		LV2_ATOM_TUPLE_BODY_FOREACH(conn_list_body, size, item)
 		{
-			const LV2_Atom_Object *port_obj = (const LV2_Atom_Object *)&item->value;
+			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)item;
 
-			if(  (item->key != app->regs.core.port.urid)
-				|| !lv2_atom_forge_is_object_type(&app->forge, port_obj->atom.type)
-				|| (port_obj->body.otype != app->regs.core.Port.urid) )
+			if(!lv2_atom_forge_is_object_type(&app->forge, obj->atom.type))
 				continue;
 
-			const LV2_Atom_String *port_symbol = NULL;
-			const LV2_Atom_Bool *port_selected = NULL;
-			const LV2_Atom_Bool *port_monitored = NULL;
-			const LV2_Atom_Object *auto_list = NULL;
-			LV2_Atom_Object_Query port_q[] = {
-				{ app->regs.core.symbol.urid, (const LV2_Atom **)&port_symbol },
-				{ app->regs.synthpod.port_selected.urid, (const LV2_Atom **)&port_selected },
-				{ app->regs.synthpod.port_monitored.urid, (const LV2_Atom **)&port_monitored },
-				{ app->regs.synthpod.automation_list.urid, (const LV2_Atom **)&auto_list },
+			_connection_list_add(app, obj);
+		}
+	}
+
+	// retrieve spod:automationList
+	const LV2_Atom_Object_Body *auto_list_body = retrieve(hndl, app->regs.synthpod.automation_list.urid,
+		&size, &type, &_flags);
+	if(  auto_list_body
+		&& (type == app->forge.Tuple)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
+	{
+		LV2_ATOM_TUPLE_BODY_FOREACH(auto_list_body, size, item)
+		{
+			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)item;
+
+			if(!lv2_atom_forge_is_object_type(&app->forge, obj->atom.type))
+				continue;
+
+			_automation_list_add(app, obj);
+		}
+	}
+
+	// retrieve spod:graph // XXX old save format
+	const LV2_Atom_Object_Body *graph_body = retrieve(hndl, app->regs.synthpod.graph.urid,
+		&size, &type, &_flags);
+	if(  graph_body
+		&& (type == app->forge.Tuple)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
+	{
+		_sp_app_reset(app);
+
+		LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, mod_item)
+		{
+			const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)mod_item;
+
+			if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
+				|| !mod_obj->body.otype)
+				continue;
+
+			const LV2_Atom_URID *mod_subject = NULL;
+			LV2_Atom_Object_Query mod_q[] = {
+				{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
 				{ 0, NULL }
 			};
-			lv2_atom_object_query(port_obj, port_q);
-
-			if(!port_symbol || (port_symbol->atom.type != app->forge.String) )
+			lv2_atom_object_query(mod_obj, mod_q);
+		
+			if(!mod_subject || (mod_subject->atom.type != app->forge.URID) )
 				continue;
 
-			const char *port_symbol_str = LV2_ATOM_BODY_CONST(port_symbol);
+			const LV2_URID mod_urn = mod_subject ->body;
+			_mod_inject(app, mod_urn, mod_obj, map_path);
+		}
 
-			for(unsigned i=0; i<mod->num_ports; i++)
+		_sp_app_order(app);
+
+		LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, mod_item)
+		{
+			const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)mod_item;
+
+			if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
+				|| !mod_obj->body.otype)
+				continue;
+
+			const LV2_Atom_URID *mod_subject = NULL;
+			LV2_Atom_Object_Query mod_q[] = {
+				{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
+				{ 0, NULL }
+			};
+			lv2_atom_object_query(mod_obj, mod_q);
+		
+			if(!mod_subject || (mod_subject->atom.type != app->forge.URID) )
+				continue;
+
+			const LV2_URID mod_urn = mod_subject ->body;
+			mod_t *mod = _sp_app_mod_get(app, mod_urn);
+			if(!mod)
+				continue;
+
+			LV2_ATOM_OBJECT_FOREACH(mod_obj, item)
 			{
-				port_t *port = &mod->ports[i];
+				const LV2_Atom_Object *port_obj = (const LV2_Atom_Object *)&item->value;
 
-				// search for matching port symbol
-				if(strcmp(port_symbol_str, port->symbol))
+				if(  (item->key != app->regs.core.port.urid)
+					|| !lv2_atom_forge_is_object_type(&app->forge, port_obj->atom.type)
+					|| (port_obj->body.otype != app->regs.core.Port.urid) )
 					continue;
 
-				port->selected = port_selected && (port_selected->atom.type == app->forge.Bool) ? port_selected->body : 0;
-				port->monitored = port_monitored && (port_monitored->atom.type == app->forge.Bool) ? port_monitored->body : 0;
+				const LV2_Atom_String *port_symbol = NULL;
+				LV2_Atom_Object_Query port_q[] = {
+					{ app->regs.core.symbol.urid, (const LV2_Atom **)&port_symbol },
+					{ 0, NULL }
+				};
+				lv2_atom_object_query(port_obj, port_q);
 
-				if(  (port->type == PORT_TYPE_CONTROL)
-					&& auto_list
-					&& (auto_list->atom.type == app->forge.Object))
+				if(!port_symbol || (port_symbol->atom.type != app->forge.String) )
+					continue;
+
+				const char *port_symbol_str = LV2_ATOM_BODY_CONST(port_symbol);
+
+				for(unsigned i=0; i<mod->num_ports; i++)
 				{
-					if(auto_list->body.otype == app->regs.port.midi.urid)
+					port_t *port = &mod->ports[i];
+
+					// search for matching port symbol
+					if(strcmp(port_symbol_str, port->symbol))
+						continue;
+
+					LV2_ATOM_OBJECT_FOREACH(port_obj, sub)
 					{
-						const LV2_Atom_Int *midi_channel = NULL;
-						const LV2_Atom_Int *midi_controller = NULL;
-						const LV2_Atom_Int *core_minimum = NULL;
-						const LV2_Atom_Int *core_maximum = NULL;
+						const LV2_Atom_Object *source_obj = (const LV2_Atom_Object *)&sub->value;
 
-						LV2_Atom_Object_Query auto_q[] = {
-							{app->regs.midi.channel.urid, (const LV2_Atom **)&midi_channel },
-							{app->regs.midi.controller.urid, (const LV2_Atom **)&midi_controller },
-							{app->regs.core.minimum.urid, (const LV2_Atom **)&core_minimum },
-							{app->regs.core.maximum.urid, (const LV2_Atom **)&core_maximum },
-							{ 0, NULL }
-						};
-						lv2_atom_object_query(auto_list, auto_q);
-
-						auto_t *automation = &port->control.automation;
-						automation->type = AUTO_TYPE_MIDI;
-
-						midi_auto_t *mauto = &automation->midi;
-						mauto->channel = midi_channel ? midi_channel->body : -1;
-						mauto->controller = midi_controller ? midi_controller->body : -1;
-						mauto->min = core_minimum ? core_minimum->body : 0x0;
-						mauto->max = core_maximum ? core_maximum->body : 0x7f;
-						const int range = mauto->max - mauto->min;
-						mauto->range_1 = range
-							? 1.f / range
-							: 0.f;
-					}
-					//FIXME handle OSC
-				}
-
-				LV2_ATOM_OBJECT_FOREACH(port_obj, sub)
-				{
-					const LV2_Atom_Object *source_obj = (const LV2_Atom_Object *)&sub->value;
-
-					if(  (sub->key != app->regs.core.port.urid)
-						|| !lv2_atom_forge_is_object_type(&app->forge, source_obj->atom.type)
-						|| (source_obj->body.otype != app->regs.core.Port.urid) )
-						continue;
-
-					const LV2_Atom_String *source_symbol = NULL;
-					const LV2_Atom_URID *source_subject = NULL;
-					LV2_Atom_Object_Query source_q[] = {
-						{ app->regs.core.symbol.urid, (const LV2_Atom **)&source_symbol },
-						{ app->regs.rdf.subject.urid, (const LV2_Atom **)&source_subject },
-						{ 0, NULL }
-					};
-					lv2_atom_object_query(source_obj, source_q);
-
-					if(  !source_symbol || (source_symbol->atom.type != app->forge.String)
-						|| !source_subject || (source_subject->atom.type != app->forge.URID) )
-						continue;
-
-					const LV2_URID source_urn = source_subject->body;
-					const char *source_symbol_str = LV2_ATOM_BODY_CONST(source_symbol);
-
-					mod_t *source = _sp_app_mod_get(app, source_urn);
-					if(!source)
-						continue;
-				
-					for(unsigned j=0; j<source->num_ports; j++)
-					{
-						port_t *tar = &source->ports[j];
-
-						if(strcmp(source_symbol_str, tar->symbol))
+						if(  (sub->key != app->regs.core.port.urid)
+							|| !lv2_atom_forge_is_object_type(&app->forge, source_obj->atom.type)
+							|| (source_obj->body.otype != app->regs.core.Port.urid) )
 							continue;
 
-						_sp_app_port_connect(app, tar, port);
+						const LV2_Atom_String *source_symbol = NULL;
+						const LV2_Atom_URID *source_subject = NULL;
+						LV2_Atom_Object_Query source_q[] = {
+							{ app->regs.core.symbol.urid, (const LV2_Atom **)&source_symbol },
+							{ app->regs.rdf.subject.urid, (const LV2_Atom **)&source_subject },
+							{ 0, NULL }
+						};
+						lv2_atom_object_query(source_obj, source_q);
 
-						break;
+						if(  !source_symbol || (source_symbol->atom.type != app->forge.String)
+							|| !source_subject || (source_subject->atom.type != app->forge.URID) )
+							continue;
+
+						const LV2_URID source_urn = source_subject->body;
+						const char *source_symbol_str = LV2_ATOM_BODY_CONST(source_symbol);
+
+						mod_t *source = _sp_app_mod_get(app, source_urn);
+						if(!source)
+							continue;
+					
+						for(unsigned j=0; j<source->num_ports; j++)
+						{
+							port_t *tar = &source->ports[j];
+
+							if(strcmp(source_symbol_str, tar->symbol))
+								continue;
+
+							_sp_app_port_connect(app, tar, port);
+
+							break;
+						}
 					}
-				}
 
-				break;
+					break;
+				}
 			}
 		}
 	}

@@ -204,12 +204,18 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 								else if(rel > 1.f)
 									rel = 1.f;
 
-								float *f32 = PORT_BASE_ALIGNED(dst);
-								*f32 = rel * control->range + control->min;
-								//printf("automation match: %f %f\n", rel, *f32);
-
+								float f32 = rel * control->range + control->min;
 								if(control->is_integer)
-									*f32 = floorf(*f32);
+									f32 = floorf(f32);
+
+								if(f32 < control->min)
+									f32 = control->min;
+								else if(f32 > control->max)
+									f32 = control->max;
+
+								float *buf = PORT_BASE_ALIGNED(dst);
+								*buf = f32;
+								//printf("automation match: %f %f\n", rel, *f32);
 							}
 						}
 						//FIXME iterate over parameters

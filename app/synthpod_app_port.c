@@ -541,17 +541,17 @@ __realtime static LV2_Atom_Forge_Ref
 _patch_notification_internal(sp_app_t *app, port_t *source_port,
 	uint32_t size, LV2_URID type, const void *body)
 {
-	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.notification_module.urid);
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&app->forge, source_port->mod->urn);
 
 	if(ref)
-		ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.notification_symbol.urid);
+		ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
 	if(ref)
 		ref = lv2_atom_forge_string(&app->forge, source_port->symbol, strlen(source_port->symbol));
 
 	if(ref)
-		ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.notification_value.urid);
+		ref = lv2_atom_forge_key(&app->forge, app->regs.rdf.value.urid);
 	if(ref)
 		ref = lv2_atom_forge_atom(&app->forge, size, type);
 	if(ref)

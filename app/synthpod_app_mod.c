@@ -767,8 +767,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		{
 			tar->size = app->driver->max_block_size * sizeof(float);
 			tar->type =  PORT_TYPE_AUDIO;
-			tar->selected = 1;
-			tar->monitored = 1;
 			tar->protocol = app->regs.port.peak_protocol.urid;
 			tar->driver = &audio_port_driver;
 		}
@@ -776,8 +774,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		{
 			tar->size = app->driver->max_block_size * sizeof(float);
 			tar->type = PORT_TYPE_CV;
-			tar->selected = 1;
-			tar->monitored = 1;
 			tar->protocol = app->regs.port.peak_protocol.urid;
 			tar->driver = &cv_port_driver;
 		}
@@ -785,8 +781,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		{
 			tar->size = sizeof(float);
 			tar->type = PORT_TYPE_CONTROL;
-			tar->selected = 0;
-			tar->monitored = 1;
 			tar->protocol = app->regs.port.float_protocol.urid;
 			tar->driver = &control_port_driver;
 
@@ -815,8 +809,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		{
 			tar->size = app->driver->seq_size;
 			tar->type = PORT_TYPE_ATOM;
-			tar->selected = 0;
-			tar->monitored = 0;
 			tar->protocol = app->regs.port.event_transfer.urid; //FIXME handle atom_transfer
 			tar->driver = &seq_port_driver; // FIXME handle atom_port_driver 
 
@@ -832,12 +824,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 					: app->regs.port.output.node
 					, app->regs.core.control.node);
 			(void)control_port; //TODO use this?
-
-			// only select supported event ports by default
-			tar->selected = lilv_port_supports_event(plug, port, app->regs.port.midi.node)
-				|| lilv_port_supports_event(plug, port, app->regs.port.time_position.node)
-				|| lilv_port_supports_event(plug, port, app->regs.port.osc_event.node)
-				|| lilv_port_supports_event(plug, port, app->regs.xpress.message.node);
 		}
 		else
 		{
@@ -874,8 +860,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 
 		tar->size = app->driver->seq_size;
 		tar->type = PORT_TYPE_ATOM;
-		tar->selected = 0;
-		tar->monitored = 0;
 		tar->protocol = app->regs.port.event_transfer.urid;
 		tar->driver = &seq_port_driver;
 
@@ -938,10 +922,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	// load presets
 	mod->presets = lilv_plugin_get_related(mod->plug, app->regs.pset.preset.node);
 	
-	// selection
-	mod->selected = 1;
-	mod->embedded = 1;
-
 	// spawn worker thread
 	if(mod->worker.iface)
 	{
