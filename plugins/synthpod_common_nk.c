@@ -4291,7 +4291,9 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 			4*cw, 4*cw
 		);
 
-		const bool is_hovering_body = nk_input_is_mouse_hovering_rect(in, bounds);
+		// only allow connecting via grab handle on self
+		const bool is_hovering_body = nk_input_is_mouse_hovering_rect(in, bounds)
+			&& (!handle->linking.active || (mod != handle->linking.source_mod));
 		const bool is_hovering_handle = nk_input_is_mouse_hovering_rect(in, outer);
 		nk_fill_arc(canvas, cx, cy, cw, 0.f, 2*NK_PI,
 			is_hilighted ? hilight_color : grab_handle_color);
