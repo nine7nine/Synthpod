@@ -18,8 +18,6 @@
 #include <synthpod_app_private.h>
 #include <synthpod_patcher.h>
 
-#define PORT_SIZE(PORT) ((PORT)->size)
-
 __realtime static inline void
 _dsp_master_concurrent(sp_app_t *app)
 {
@@ -615,14 +613,6 @@ _port_float_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 	if(needs_update)
 	{
-		size_t size = sizeof(transfer_float_t);
-		transfer_float_t *trans = _sp_app_to_ui_request(app, size);
-		if(trans)
-		{
-			_sp_transfer_float_fill(&app->regs, &app->forge, trans, port->mod->uid, port->index, &new_val);
-			_sp_app_to_ui_advance(app, size);
-		}
-
 		// for nk
 		_patch_notification_add(app, port, app->regs.port.float_protocol.urid,
 			sizeof(float), app->forge.Float, &new_val);
@@ -653,15 +643,6 @@ _port_peak_protocol_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 			.period_size = nsamples,
 			.peak = peak
 		};
-
-		size_t size = sizeof(transfer_peak_t);
-		transfer_peak_t *trans = _sp_app_to_ui_request(app, size);
-		if(trans)
-		{
-			_sp_transfer_peak_fill(&app->regs, &app->forge, trans,
-				port->mod->uid, port->index, &data);
-			_sp_app_to_ui_advance(app, size);
-		}
 
 		// for nk
 		const struct {
@@ -717,16 +698,6 @@ _port_atom_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 			&& (atom->size == sizeof(LV2_Atom_Sequence_Body)) ) // empty atom sequence
 		return;
 
-	uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-	size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
-	transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-	if(trans)
-	{
-		_sp_transfer_atom_fill(&app->regs, &app->forge, trans,
-			port->mod->uid, port->index, atom_size, atom);
-		_sp_app_to_ui_advance(app, size);
-	}
-
 	// for nk
 	_patch_notification_add(app, port, app->regs.port.atom_transfer.urid,
 		atom->size, atom->type, LV2_ATOM_BODY_CONST(atom));
@@ -747,16 +718,6 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 		{
 			const LV2_Atom *atom = &ev->body;
-
-			const uint32_t atom_size = sizeof(LV2_Atom) + atom->size;
-			const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
-			transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-			if(trans)
-			{
-				_sp_transfer_event_fill(&app->regs, &app->forge, trans,
-					port->mod->uid, port->index, atom_size, atom);
-				_sp_app_to_ui_advance(app, size);
-			}
 
 			// for nk
 			_patch_notification_add(app, port, app->regs.port.event_transfer.urid,
@@ -790,16 +751,6 @@ _port_event_transfer_update(sp_app_t *app, port_t *port, uint32_t nsamples)
 					|| (obj->body.otype == app->regs.patch.error.urid)
 					|| (obj->body.otype == app->regs.patch.ack.urid) ) //TODO support more patch messages
 				{
-					const uint32_t atom_size = sizeof(LV2_Atom) + obj->atom.size;
-					const size_t size = sizeof(transfer_atom_t) + lv2_atom_pad_size(atom_size);
-					transfer_atom_t *trans = _sp_app_to_ui_request(app, size);
-					if(trans)
-					{
-						_sp_transfer_event_fill(&app->regs, &app->forge, trans,
-							port->mod->uid, port->index, atom_size, &obj->atom);
-						_sp_app_to_ui_advance(app, size);
-					}
-
 					// for nk
 					_patch_notification_add(app, port, app->regs.port.event_transfer.urid,
 						obj->atom.size, obj->atom.type, &obj->body);

@@ -50,6 +50,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 	{
 		case JOB_TYPE_REPLY_MODULE_SUPPORTED:
 		{
+#if 0
 			//signal to UI
 			size_t size = sizeof(transmit_module_supported_t)
 				+ lv2_atom_pad_size(strlen(job->uri) + 1);
@@ -60,6 +61,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					job->status, job->uri);
 				_sp_app_to_ui_advance(app, size);
 			}
+#endif
 
 			break;
 		}
@@ -76,17 +78,6 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			app->num_mods += 1;
 
 			_sp_app_order(app);
-
-			//signal to UI
-			size_t size = sizeof(transmit_module_add_t)
-				+ lv2_atom_pad_size(strlen(mod->uri_str) + 1);
-			transmit_module_add_t *trans = _sp_app_to_ui_request(app, size);
-			if(trans)
-			{
-				_sp_transmit_module_add_fill(&app->regs, &app->forge, trans, size,
-					mod->uid, mod->uri_str);
-				_sp_app_to_ui_advance(app, size);
-			}
 
 			//signal to NK
 			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
@@ -166,6 +157,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				}
 			}
 
+#if 0
 			//signal to UI
 			size_t size = sizeof(transmit_module_preset_load_t);
 			transmit_module_preset_load_t *trans = _sp_app_to_ui_request(app, size);
@@ -175,6 +167,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					mod->uid, NULL);
 				_sp_app_to_ui_advance(app, size);
 			}
+#endif
 
 			break;
 		}
@@ -198,6 +191,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			assert(app->load_bundle == true);
 			app->load_bundle = false; // for sp_app_bypassed
 
+#if 0
 			// signal to UI
 			size_t size = sizeof(transmit_bundle_load_t)
 				+ lv2_atom_pad_size(strlen(job->uri) + 1);
@@ -208,6 +202,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					job->status, job->uri);
 				_sp_app_to_ui_advance(app, size);
 			}
+#endif
 
 			break;
 		}
@@ -219,6 +214,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			app->block_state = BLOCKING_STATE_RUN; // release block
 			assert(app->load_bundle == false);
 
+#if 0
 			// signal to UI
 			size_t size = sizeof(transmit_bundle_save_t)
 				+ lv2_atom_pad_size(strlen(job->uri) + 1);
@@ -229,6 +225,7 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 					job->status, job->uri);
 				_sp_app_to_ui_advance(app, size);
 			}
+#endif
 
 			break;
 		}

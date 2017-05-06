@@ -1081,6 +1081,7 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 		_sp_app_to_worker_advance(app, size);
 	}
 
+#if 0
 	// signal to ui
 	size = sizeof(transmit_module_del_t);
 	transmit_module_del_t *trans = _sp_app_to_ui_request(app, size);
@@ -1089,4 +1090,5 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 		_sp_transmit_module_del_fill(&app->regs, &app->forge, trans, size, mod->uid);
 		_sp_app_to_ui_advance(app, size);
 	}
+#endif
 }

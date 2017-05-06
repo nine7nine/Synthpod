@@ -18,39 +18,7 @@
 #include <synthpod_app_private.h>
 #include <synthpod_patcher.h>
 
-#define PORT_SIZE(PORT) ((PORT)->size)
-
-__non_realtime static int
-_from_ui_cmp(const void *itm1, const void *itm2)
-{
-	const from_ui_t *from_ui1 = itm1;
-	const from_ui_t *from_ui2 = itm2;
-
-	return _signum(from_ui1->protocol, from_ui2->protocol);
-}
-
-static inline const from_ui_t *
-_from_ui_bsearch(uint32_t p, from_ui_t *a, unsigned n)
-{
-	unsigned start = 0;
-	unsigned end = n;
-
-	while(start < end)
-	{
-		const unsigned mid = start + (end - start)/2;
-		const from_ui_t *dst = &a[mid];
-
-		if(p < dst->protocol)
-			end = mid;
-		else if(p > dst->protocol)
-			start = mid + 1;
-		else
-			return dst;
-	}
-
-	return NULL;
-}
-
+#if 0 // is deprecated
 __realtime static bool
 _sp_app_from_ui_float_protocol(sp_app_t *app, const LV2_Atom *atom)
 {
@@ -288,46 +256,6 @@ _sp_app_from_ui_module_move(sp_app_t *app, const LV2_Atom *atom)
 	//TODO signal to ui
 
 	return advance_ui[app->block_state];
-}
-
-static inline bool
-_mod_needs_ramping(mod_t *mod, ramp_state_t state, bool silencing)
-{
-	sp_app_t *app = mod->app;
-
-	// ramping
-	int needs_ramping = 0;
-	for(unsigned p1=0; p1<mod->num_ports; p1++)
-	{
-		port_t *port = &mod->ports[p1];
-
-		// silence sources
-		/* TODO is this needed?
-		for(int s=0; s<port->num_sources; s++)
-		{
-			_sp_app_port_silence_request(app,
-				port->sources[s].port, port, state);
-		}
-		*/
-
-		// silence sinks
-		for(unsigned m=0; m<app->num_mods; m++)
-			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
-			{
-				if(silencing)
-				{
-					needs_ramping += _sp_app_port_silence_request(app,
-						port, &app->mods[m]->ports[p2], state);
-				}
-				else
-				{
-					needs_ramping += _sp_app_port_desilence(app,
-						port, &app->mods[m]->ports[p2]);
-				}
-			}
-	}
-
-	return needs_ramping > 0;
 }
 
 __realtime static bool
@@ -987,6 +915,47 @@ _sp_app_from_ui_path_get(sp_app_t *app, const LV2_Atom *atom)
 	}
 
 	return advance_ui[app->block_state];
+}
+#endif
+
+static inline bool
+_mod_needs_ramping(mod_t *mod, ramp_state_t state, bool silencing)
+{
+	sp_app_t *app = mod->app;
+
+	// ramping
+	int needs_ramping = 0;
+	for(unsigned p1=0; p1<mod->num_ports; p1++)
+	{
+		port_t *port = &mod->ports[p1];
+
+		// silence sources
+		/* TODO is this needed?
+		for(int s=0; s<port->num_sources; s++)
+		{
+			_sp_app_port_silence_request(app,
+				port->sources[s].port, port, state);
+		}
+		*/
+
+		// silence sinks
+		for(unsigned m=0; m<app->num_mods; m++)
+			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
+			{
+				if(silencing)
+				{
+					needs_ramping += _sp_app_port_silence_request(app,
+						port, &app->mods[m]->ports[p2], state);
+				}
+				else
+				{
+					needs_ramping += _sp_app_port_desilence(app,
+						port, &app->mods[m]->ports[p2]);
+				}
+			}
+	}
+
+	return needs_ramping > 0;
 }
 
 //FIXME move into another file
@@ -2028,131 +1997,12 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 	return advance_ui[app->block_state];
 }
 
-void
-sp_app_from_ui_fill(sp_app_t *app)
-{
-	unsigned ptr = 0;
-	from_ui_t *from_uis = app->from_uis;
-
-	from_uis[ptr].protocol = app->regs.port.float_protocol.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_float_protocol;
-
-	from_uis[ptr].protocol = app->regs.port.atom_transfer.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_atom_transfer;
-
-	from_uis[ptr].protocol = app->regs.port.event_transfer.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_event_transfer;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_list.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_list;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_supported.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_supported;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_add.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_add;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_del.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_del;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_move.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_move;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_preset_load.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_preset_load;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_preset_save.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_preset_save;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_selected.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_selected;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_visible.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_visible;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_disabled.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_disabled;
-
-	from_uis[ptr].protocol = app->regs.synthpod.module_embedded.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_module_embedded;
-
-	from_uis[ptr].protocol = app->regs.synthpod.port_connected.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_port_connected;
-
-	from_uis[ptr].protocol = app->regs.synthpod.port_subscribed.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_port_subscribed;
-
-	from_uis[ptr].protocol = app->regs.synthpod.port_refresh.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_port_refresh;
-
-	from_uis[ptr].protocol = app->regs.synthpod.port_selected.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_port_selected;
-
-	from_uis[ptr].protocol = app->regs.synthpod.port_monitored.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_port_monitored;
-
-	from_uis[ptr].protocol = app->regs.synthpod.bundle_load.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_bundle_load;
-
-	from_uis[ptr].protocol = app->regs.synthpod.bundle_save.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_bundle_save;
-
-	from_uis[ptr].protocol = app->regs.synthpod.grid_cols.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_grid_cols;
-
-	from_uis[ptr].protocol = app->regs.synthpod.grid_rows.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_grid_rows;
-
-	from_uis[ptr].protocol = app->regs.synthpod.pane_left.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_pane_left;
-
-	from_uis[ptr].protocol = app->regs.synthpod.quit.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_quit;
-
-	from_uis[ptr].protocol = app->regs.synthpod.path_get.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_path_get;
-
-	from_uis[ptr].protocol = app->regs.patch.get.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_patch_get;
-
-	from_uis[ptr].protocol = app->regs.patch.set.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_patch_set;
-
-	from_uis[ptr].protocol = app->regs.patch.copy.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_patch_copy;
-
-	from_uis[ptr].protocol = app->regs.patch.patch.urid;
-	from_uis[ptr++].cb = _sp_app_from_ui_patch_patch;
-
-	assert(ptr == FROM_UI_NUM);
-	// sort according to URID
-	qsort(from_uis, FROM_UI_NUM, sizeof(from_ui_t), _from_ui_cmp);
-}
-
 bool
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 {
 	if(!advance_ui[app->block_state])
 		return false; // we are draining or waiting
 
-#if 0
-	atom = ASSUME_ALIGNED(atom);
-	const transmit_t *transmit = (const transmit_t *)atom;
-
-	// check for atom object type
-	if(!lv2_atom_forge_is_object_type(&app->forge, transmit->obj.atom.type))
-		return advance_ui[app->block_state];
-
-	// what we want to search for
-	const uint32_t protocol = transmit->obj.body.otype;
-
-	// search for corresponding callback
-	const from_ui_t *from_ui = _from_ui_bsearch(protocol, app->from_uis, FROM_UI_NUM);
-
-	// run callback if found
-	if(from_ui)
-		return from_ui->cb(app, atom);
-#else
 	const LV2_Atom_Object *obj = ASSUME_ALIGNED(atom);
 	//printf("%s\n", app->driver->unmap->unmap(app->driver->unmap->handle, obj->body.otype));
 
@@ -2167,7 +2017,6 @@ sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom)
 		else if(obj->body.otype == app->regs.patch.patch.urid)
 			return _sp_app_from_ui_patch_patch(app, &obj->atom);
 	}
-#endif
 
 	return advance_ui[app->block_state];
 }

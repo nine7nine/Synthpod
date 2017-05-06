@@ -470,8 +470,6 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	lv2_atom_forge_init(&app->forge, app->driver->map);
 	sp_regs_init(&app->regs, app->world, app->driver->map);
 
-	sp_app_from_ui_fill(app);
-
 	_sp_app_populate(app);
 
 	app->fps.bound = driver->sample_rate / driver->update_rate;
@@ -671,15 +669,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			const float mod_avg = mod->prof.sum * tot_time_1;
 			const float mod_max = mod->prof.max * app->prof.count * tot_time_1;
 
-			const size_t size = sizeof(transmit_module_profiling_t);
-			transmit_module_profiling_t *trans = _sp_app_to_ui_request(app, size);
-			if(trans)
-			{
-				_sp_transmit_module_profiling_fill(&app->regs, &app->forge, trans, size,
-					mod->uid, mod_min, mod_avg, mod_max);
-				_sp_app_to_ui_advance(app, size);
-			}
-
 			// to nk
 			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
 			if(answer)
@@ -717,15 +706,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 			const float app_min = app->prof.min * app->prof.count * tot_time_1;
 			const float app_avg = app->prof.sum * tot_time_1;
 			const float app_max = app->prof.max * app->prof.count * tot_time_1;
-
-			const size_t size = sizeof(transmit_dsp_profiling_t);
-			transmit_dsp_profiling_t *trans = _sp_app_to_ui_request(app, size);
-			if(trans)
-			{
-				_sp_transmit_dsp_profiling_fill(&app->regs, &app->forge, trans, size,
-					app_min, app_avg, app_max);
-				_sp_app_to_ui_advance(app, size);
-			}
 
 			// to nk
 			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
@@ -769,14 +749,6 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	const bool desired = false;
 	if(atomic_compare_exchange_weak(&app->dirty, &expected, desired))
 	{
-		size_t size = sizeof(transmit_module_list_t);
-		transmit_module_list_t *trans = _sp_app_to_ui_request(app, size);
-		if(trans)
-		{
-			_sp_transmit_module_list_fill(&app->regs, &app->forge, trans, size);
-			_sp_app_to_ui_advance(app, size);
-		}
-
 		// to nk
 		_sp_app_ui_set_modlist(app, 0, 0); //FIXME subj, seqn
 
@@ -967,17 +939,6 @@ sp_app_bundle_load(sp_app_t *app, const char *bundle_path,
 	if(!bundle_path)
 		return;
 
-	// signal to app
-	size_t size = sizeof(transmit_bundle_load_t)
-		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
-	transmit_bundle_load_t *trans = req(size, NULL, data);
-	if(trans)
-	{
-		_sp_transmit_bundle_load_fill(&app->regs, &app->forge, trans, size,
-			-1, bundle_path);
-		adv(size, data);
-	}
-
 	// nk
 	LV2_Atom *answer = _sp_request_atom(app, req, data);
 	if(answer)
@@ -1008,17 +969,6 @@ sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
 {
 	if(!bundle_path)
 		return;
-
-	// signal to app
-	size_t size = sizeof(transmit_bundle_save_t)
-		+ lv2_atom_pad_size(strlen(bundle_path) + 1);
-	transmit_bundle_save_t *trans = req(size, NULL, data);
-	if(trans)
-	{
-		_sp_transmit_bundle_save_fill(&app->regs, &app->forge, trans, size,
-			-1, bundle_path);
-		adv(size, data);
-	}
 
 	// nk
 	LV2_Atom *answer = _sp_request_atom(app, req, data);

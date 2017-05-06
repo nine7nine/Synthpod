@@ -362,6 +362,7 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 		mod->presets = _preset_reload(app->world, &app->regs, mod->plug,
 			mod->presets, bndl);
 
+#if 0
 		// signal ui to reload its presets, too
 		size_t size = sizeof(transmit_module_preset_save_t)
 								+ lv2_atom_pad_size(strlen(bndl) + 1);
@@ -372,6 +373,7 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 				size, mod->uid, bndl);
 			_sp_app_to_ui_advance(app, size);
 		}
+#endif
 	}
 	
 	// cleanup

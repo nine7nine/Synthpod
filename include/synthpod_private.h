@@ -911,6 +911,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->midi.controller);
 }
 
+#if 0
 #define _ATOM_ALIGNED __attribute__((aligned(8)))
 
 // app <-> ui communication for module/port manipulations
@@ -1926,6 +1927,7 @@ _sp_transfer_patch_get_all_fill(reg_t *regs, LV2_Atom_Forge *forge,
 
 	trans->dest_val = regs->core.plugin.urid;
 }
+#endif
 
 // non-rt
 static LilvNodes *

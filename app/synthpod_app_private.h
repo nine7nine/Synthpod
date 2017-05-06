@@ -43,7 +43,6 @@
 #define NUM_FEATURES 19
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
-#define FROM_UI_NUM 30
 #define MAX_SLAVES 7 // e.g. 8-core machines
 
 typedef enum _job_type_request_t job_type_request_t;
@@ -69,9 +68,6 @@ typedef struct _pool_t pool_t;
 typedef struct _port_driver_t port_driver_t;
 typedef struct _app_prof_t app_prof_t;
 typedef struct _mod_prof_t mod_prof_t;
-
-typedef struct _from_ui_t from_ui_t;
-typedef bool (*from_ui_cb_t)(sp_app_t *app, const LV2_Atom *atom);
 
 typedef void (*port_multiplex_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
 typedef void (*port_transfer_cb_t) (sp_app_t *app, port_t *port, uint32_t nsamples);
@@ -413,11 +409,6 @@ struct _port_t {
 	};
 };
 
-struct _from_ui_t {
-	LV2_URID protocol;
-	from_ui_cb_t cb;
-};
-
 struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
@@ -472,8 +463,6 @@ struct _sp_app_t {
 	int32_t nrows;
 	float nleft;
 
-	from_ui_t from_uis [FROM_UI_NUM];
-
 	dsp_master_t dsp_master;
 };
 
@@ -484,6 +473,7 @@ extern const port_driver_t atom_port_driver;
 extern const port_driver_t seq_port_driver;
 
 #define PORT_BASE_ALIGNED(PORT) ASSUME_ALIGNED((PORT)->base)
+#define PORT_SIZE(PORT) ((PORT)->size)
 
 /*
  * UI
@@ -529,9 +519,6 @@ _sp_app_to_ui_overflow(sp_app_t *app)
 {
 	fprintf(stderr, "app->ui buffer overflow\n");
 }
-
-void
-sp_app_from_ui_fill(sp_app_t *app);
 
 static inline LV2_Atom *
 _sp_request_atom(sp_app_t *app, sp_to_request_t req, void *data)
