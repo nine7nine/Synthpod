@@ -15,6 +15,8 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <inttypes.h>
+
 #include <synthpod_app_private.h>
 
 typedef struct _atom_ser_t atom_ser_t;
@@ -844,9 +846,10 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				{
 					mod_t *mod = app->mods[m];
 
-					char uid [128];
-					snprintf(uid, 128, "%s/", mod->urn_uri);
-					char *path = make_path->path(make_path->handle, uid);
+					char dir [128];
+					snprintf(dir, 128, "%s/", mod->urn_uri); // only save in new format
+
+					char *path = make_path->path(make_path->handle, dir);
 					if(path)
 					{
 						LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
@@ -1066,7 +1069,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 }
 
 static void
-_mod_inject(sp_app_t *app, LV2_URID mod_urn, const LV2_Atom_Object *mod_obj,
+_mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Object *mod_obj,
 	const LV2_State_Map_Path *map_path)
 {
 	if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
@@ -1104,9 +1107,15 @@ _mod_inject(sp_app_t *app, LV2_URID mod_urn, const LV2_Atom_Object *mod_obj,
 	mod->disabled = mod_disabled && (mod_disabled->atom.type == app->forge.Bool)
 		? mod_disabled->body : false;
 
-	char uid [128];
-	snprintf(uid, 128, "%s/state.ttl", mod->urn_uri);
-	char *path = map_path->absolute_path(map_path->handle, uid);
+	mod->uid = mod_uid;
+
+	char dir [128];
+	if(mod->uid) // support for old foramt
+		snprintf(dir, 128, "%"PRIi32"/state.ttl", mod->uid);
+	else
+		snprintf(dir, 128, "%s/state.ttl", mod->urn_uri);
+
+	char *path = map_path->absolute_path(map_path->handle, dir);
 	if(!path)
 		return;
 
@@ -1197,10 +1206,11 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 		LV2_ATOM_OBJECT_BODY_FOREACH(mod_list_body, size, prop)
 		{
+			const int32_t mod_index = 0;
 			const LV2_URID mod_urn = prop->key;
 			const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)&prop->value;
 
-			_mod_inject(app, mod_urn, mod_obj, map_path);
+			_mod_inject(app, mod_index, mod_urn, mod_obj, map_path);
 		}
 
 		_sp_app_order(app);
@@ -1259,18 +1269,18 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 				|| !mod_obj->body.otype)
 				continue;
 
-			const LV2_Atom_URID *mod_subject = NULL;
+			const LV2_Atom_Int *mod_index = NULL;
 			LV2_Atom_Object_Query mod_q[] = {
-				{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
+				{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
 				{ 0, NULL }
 			};
 			lv2_atom_object_query(mod_obj, mod_q);
 		
-			if(!mod_subject || (mod_subject->atom.type != app->forge.URID) )
+			if(!mod_index || (mod_index->atom.type != app->forge.Int) )
 				continue;
 
-			const LV2_URID mod_urn = mod_subject ->body;
-			_mod_inject(app, mod_urn, mod_obj, map_path);
+			const LV2_URID mod_urn = 0;
+			_mod_inject(app, mod_index->body, mod_urn, mod_obj, map_path);
 		}
 
 		_sp_app_order(app);
@@ -1283,18 +1293,17 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 				|| !mod_obj->body.otype)
 				continue;
 
-			const LV2_Atom_URID *mod_subject = NULL;
+			const LV2_Atom_Int *mod_index = NULL;
 			LV2_Atom_Object_Query mod_q[] = {
-				{ app->regs.rdf.subject.urid, (const LV2_Atom **)&mod_subject },
+				{ app->regs.core.index.urid, (const LV2_Atom **)&mod_index },
 				{ 0, NULL }
 			};
 			lv2_atom_object_query(mod_obj, mod_q);
 		
-			if(!mod_subject || (mod_subject->atom.type != app->forge.URID) )
+			if(!mod_index || (mod_index->atom.type != app->forge.Int) )
 				continue;
 
-			const LV2_URID mod_urn = mod_subject ->body;
-			mod_t *mod = _sp_app_mod_get(app, mod_urn);
+			mod_t *mod = _sp_app_mod_get_by_uid(app, mod_index->body);
 			if(!mod)
 				continue;
 
@@ -1337,22 +1346,21 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 							continue;
 
 						const LV2_Atom_String *source_symbol = NULL;
-						const LV2_Atom_URID *source_subject = NULL;
+						const LV2_Atom_Int *source_index = NULL;
 						LV2_Atom_Object_Query source_q[] = {
 							{ app->regs.core.symbol.urid, (const LV2_Atom **)&source_symbol },
-							{ app->regs.rdf.subject.urid, (const LV2_Atom **)&source_subject },
+							{ app->regs.core.index.urid, (const LV2_Atom **)&source_index },
 							{ 0, NULL }
 						};
 						lv2_atom_object_query(source_obj, source_q);
 
 						if(  !source_symbol || (source_symbol->atom.type != app->forge.String)
-							|| !source_subject || (source_subject->atom.type != app->forge.URID) )
+							|| !source_index || (source_index->atom.type != app->forge.Int) )
 							continue;
 
-						const LV2_URID source_urn = source_subject->body;
 						const char *source_symbol_str = LV2_ATOM_BODY_CONST(source_symbol);
 
-						mod_t *source = _sp_app_mod_get(app, source_urn);
+						mod_t *source = _sp_app_mod_get_by_uid(app, source_index->body);
 						if(!source)
 							continue;
 					

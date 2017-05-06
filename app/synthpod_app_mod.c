@@ -1002,15 +1002,14 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	return 0; //success
 }
 
-//FIXME remove duplicate code from _app_ui.c
 mod_t *
-_sp_app_mod_get(sp_app_t *app, LV2_URID urn)
+_sp_app_mod_get_by_uid(sp_app_t *app, int32_t uid)
 {
 	for(unsigned m = 0; m < app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 
-		if(mod->urn == urn)
+		if(mod->uid == uid)
 			return mod;
 	}
 

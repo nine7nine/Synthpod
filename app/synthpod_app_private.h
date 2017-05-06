@@ -232,6 +232,7 @@ struct _auto_t {
 
 struct _mod_t {
 	sp_app_t *app;
+	int32_t uid;
 	urn_uuid_t urn_uri;
 	LV2_URID urn;
 	LV2_URID visible;
@@ -597,7 +598,7 @@ int
 _sp_app_mod_del(sp_app_t *app, mod_t *mod);
 
 mod_t *
-_sp_app_mod_get(sp_app_t *app, LV2_URID urn);
+_sp_app_mod_get_by_uid(sp_app_t *app, int32_t uid);
 
 void
 _sp_app_mod_reinitialize(mod_t *mod);
