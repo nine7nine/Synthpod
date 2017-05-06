@@ -2151,12 +2151,12 @@ _mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
 	return NULL;
 }
 
-static const float nxt_x0 = 115.f;
-static const float nxt_y0 = 50.f;
-static const float nxt_xm = nxt_x0 + 640.f;
-static const float nxt_ym = nxt_y0 + 360.f;
-static const float nxt_xd = 50.f;
-static const float nxt_yd = 50.f;
+#define nxt_x0 115.f
+#define nxt_y0  50.f
+#define nxt_xm (nxt_x0 + 640.f)
+#define nxt_ym (nxt_y0 + 360.f)
+#define nxt_xd 50.f
+#define nxt_yd 50.f
 
 static void
 _mod_add(plughandle_t *handle, LV2_URID urn)
