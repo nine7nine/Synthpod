@@ -4139,7 +4139,7 @@ static bool
 _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_rect *bounds)
 {
-	const struct nk_input *in = &ctx->input;
+	struct nk_input *in = &ctx->input;
 
 	const bool is_hovering = nk_input_is_mouse_hovering_rect(in, *bounds);
 
@@ -4198,8 +4198,17 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 		mod->moving = true;
 	}
 
-	return is_hovering
-		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT);
+	if  (is_hovering
+		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
+	{
+		// consume mouse event
+		in->mouse.buttons[NK_BUTTON_RIGHT].down = nk_false;
+		in->mouse.buttons[NK_BUTTON_RIGHT].clicked = nk_false;
+
+		return true;
+	}
+
+	return false;
 }
 
 static bool
@@ -4227,6 +4236,11 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 
 	const float cw = 4.f * handle->scale;
 
+	const struct nk_rect bounds = nk_rect(
+		mod->pos.x - dim.x/2, mod->pos.y - dim.y/2,
+		dim.x, dim.y
+	);
+
 	// output connector
 	if(_source_type_match(handle, mod->source_type))
 	{
@@ -4237,18 +4251,24 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 			4*cw, 4*cw
 		);
 
+		// start linking process
+		const bool has_click_body = nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, bounds, nk_true);
+		const bool has_click_handle = nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, outer, nk_true);
+		if(  (has_click_body || has_click_handle)
+			&& !nk_input_is_key_down(in, NK_KEY_CTRL))
+		{
+			handle->linking.active = true;
+			handle->linking.source_mod = mod;
+		}
+
+		const bool is_hovering_body = nk_input_is_mouse_hovering_rect(in, bounds);
+		const bool is_hovering_handle= nk_input_is_mouse_hovering_rect(in, outer);
 		nk_fill_arc(canvas, cx, cy, cw, 0.f, 2*NK_PI,
 			is_hilighted ? hilight_color : grab_handle_color);
-		if(  (nk_input_is_mouse_hovering_rect(in, outer) && !handle->linking.active)
+		if(  (is_hovering_handle && !handle->linking.active)
 			|| (handle->linking.active && (handle->linking.source_mod == mod)) )
 		{
 			nk_stroke_arc(canvas, cx, cy, 2*cw, 0.f, 2*NK_PI, 1.f, hilight_color);
-		}
-
-		// start linking process
-		if(nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, outer, nk_true)) {
-			handle->linking.active = nk_true;
-			handle->linking.source_mod = mod;
 		}
 
 		// draw ilne from linked node slot to mouse position
@@ -4271,16 +4291,18 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 			4*cw, 4*cw
 		);
 
+		const bool is_hovering_body = nk_input_is_mouse_hovering_rect(in, bounds);
+		const bool is_hovering_handle = nk_input_is_mouse_hovering_rect(in, outer);
 		nk_fill_arc(canvas, cx, cy, cw, 0.f, 2*NK_PI,
 			is_hilighted ? hilight_color : grab_handle_color);
-		if(  nk_input_is_mouse_hovering_rect(in, outer)
+		if(  (is_hovering_handle || is_hovering_body)
 			&& handle->linking.active)
 		{
 			nk_stroke_arc(canvas, cx, cy, 2*cw, 0.f, 2*NK_PI, 1.f, hilight_color);
 		}
 
 		if(  nk_input_is_mouse_released(in, NK_BUTTON_LEFT)
-			&& nk_input_is_mouse_hovering_rect(in, outer)
+			&& (is_hovering_handle || is_hovering_body)
 			&& handle->linking.active)
 		{
 			handle->linking.active = nk_false;
@@ -4546,7 +4568,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 	if(!_source_type_match(handle, mod_conn->source_type) || !_sink_type_match(handle, mod_conn->sink_type))
 		return;
 
-	const struct nk_input *in = &ctx->input;
+	struct nk_input *in = &ctx->input;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	const struct nk_vec2 scrolling = handle->scrolling;
 
@@ -4589,6 +4611,31 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 		&& nk_input_is_key_down(in, NK_KEY_CTRL) )
 	{
 		mod_conn->moving = true;
+	}
+	else if(is_hovering
+		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
+	{
+		// consume mouse event
+		in->mouse.buttons[NK_BUTTON_RIGHT].down = nk_false;
+		in->mouse.buttons[NK_BUTTON_RIGHT].clicked = nk_false;
+
+		unsigned count = 0;
+		HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+		{
+			port_conn_t *port_conn = *port_conn_itr;
+
+			if( (port_conn->source_port->type & handle->type) && (port_conn->sink_port->type & handle->type) )
+			{
+				_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
+				count += 1;
+			}
+		}
+
+		if(count == 0) // is empty matrix, demask for current type
+		{
+			mod_conn->source_type &= ~(handle->type);
+			mod_conn->sink_type &= ~(handle->type);
+		}
 	}
 
 	const bool is_hilighted = mod_conn->source_mod->hovered
