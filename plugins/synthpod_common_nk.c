@@ -348,6 +348,7 @@ struct _plughandle_t {
 	hash_t plugin_matches;
 	hash_t preset_matches;
 	hash_t port_matches;
+	hash_t param_matches;
 
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
@@ -3974,13 +3975,33 @@ _refresh_main_port_list(plughandle_t *handle, mod_t *mod)
 }
 
 static void
-_refresh_main_parameter_list(plughandle_t *handle, mod_t *mod)
+_refresh_main_param_list(plughandle_t *handle, mod_t *mod)
 {
-	//FIXME
+	_hash_free(&handle->param_matches);
+
+	bool search = _textedit_len(&handle->port_search_edit) != 0;
+
+	HASH_FOREACH(&mod->params, itr)
+	{
+		param_t *param = *itr;
+
+		bool visible = true;
+		if(search)
+		{
+			if(param->label)
+			{
+				if(!strcasestr(param->label, _textedit_const(&handle->port_search_edit)))
+					visible = false;
+			}
+		}
+
+		if(visible)
+			_hash_add(&handle->param_matches, param);
+	}
 }
 
 static void
-_refresh_main_dynameter_list(plughandle_t *handle, mod_t *mod)
+_refresh_main_dynam_list(plughandle_t *handle, mod_t *mod)
 {
 	//FIXME
 }
@@ -3990,7 +4011,10 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	float DY, float dy, bool find_matches)
 {
 	if(_hash_empty(&handle->port_matches) || find_matches)
+	{
 		_refresh_main_port_list(handle, mod);
+		_refresh_main_param_list(handle, mod);
+	}
 
 	HASH_FOREACH(&mod->groups, itr)
 	{
@@ -4047,7 +4071,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 
 	{
 		bool first = true;
-		HASH_FOREACH(&mod->params, itr)
+		HASH_FOREACH(&handle->param_matches, itr)
 		{
 			param_t *param = *itr;
 
@@ -5439,6 +5463,7 @@ cleanup(LV2UI_Handle instance)
 	_hash_free(&handle->plugin_matches);
 	_hash_free(&handle->preset_matches);
 	_hash_free(&handle->port_matches);
+	_hash_free(&handle->param_matches);
 
 	_deinit(handle);
 
