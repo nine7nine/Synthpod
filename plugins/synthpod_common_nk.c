@@ -3961,19 +3961,28 @@ _refresh_main_port_list(plughandle_t *handle, mod_t *mod)
 		bool visible = true;
 		if(search)
 		{
-			LilvNode *name_node = lilv_port_get_name(mod->plug, port->port);
-			if(name_node)
+			if(port->name)
 			{
-				if(!strcasestr(lilv_node_as_string(name_node), _textedit_const(&handle->port_search_edit)))
+				if(!strcasestr(port->name, _textedit_const(&handle->port_search_edit)))
 					visible = false;
-
-				lilv_node_free(name_node);
 			}
 		}
 
 		if(visible)
 			_hash_add(&handle->port_matches, port);
 	}
+}
+
+static void
+_refresh_main_parameter_list(plughandle_t *handle, mod_t *mod)
+{
+	//FIXME
+}
+
+static void
+_refresh_main_dynameter_list(plughandle_t *handle, mod_t *mod)
+{
+	//FIXME
 }
 
 static void
