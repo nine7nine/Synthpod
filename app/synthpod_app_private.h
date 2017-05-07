@@ -47,6 +47,7 @@
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 #define MAX_SLAVES 7 // e.g. 8-core machines
+#define MAX_AUTOMATIONS 64
 
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
@@ -224,6 +225,7 @@ struct _osc_auto_t {
 struct _auto_t {
 	auto_type_t type;
 	bool learning;
+	LV2_URID property;
 	union {
 		midi_auto_t midi;
 		osc_auto_t osc;
@@ -312,6 +314,8 @@ struct _mod_t {
 		float x;
 		float y;
 	} pos;
+
+	auto_t param_automations [MAX_AUTOMATIONS];
 };
 
 struct _port_driver_t {

@@ -1153,7 +1153,7 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 		}
 		else if(prop == app->regs.synthpod.automation_list.urid)
 		{
-			printf("patch:Get for spod:automationList\n");
+			//printf("patch:Get for spod:automationList\n");
 
 			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
 			if(answer)
@@ -1189,7 +1189,7 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 								if(ref)
 									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
 								if(ref)
-									ref = lv2_atom_forge_urid(&app->forge, port->mod->urn);
+									ref = lv2_atom_forge_urid(&app->forge, mod->urn);
 
 								if(ref)
 									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
@@ -1224,7 +1224,56 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 							//FIXME
 						}
 					}
-					//FIXME parameters
+
+					for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+					{
+						auto_t *automation = &mod->param_automations[i];
+
+						if(automation->type == AUTO_TYPE_MIDI)
+						{
+							midi_auto_t *mauto = &automation->midi;
+
+							if(ref)
+								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, app->regs.midi.Controller.urid);
+							{
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
+								if(ref)
+									ref = lv2_atom_forge_urid(&app->forge, mod->urn);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
+								if(ref)
+									ref = lv2_atom_forge_urid(&app->forge, automation->property);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.channel.urid);
+								if(ref)
+									ref = lv2_atom_forge_int(&app->forge, mauto->channel);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.controller_number.urid);
+								if(ref)
+									ref = lv2_atom_forge_int(&app->forge, mauto->controller);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.core.minimum.urid);
+								if(ref)
+									ref = lv2_atom_forge_int(&app->forge, mauto->min);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.core.maximum.urid);
+								if(ref)
+									ref = lv2_atom_forge_int(&app->forge, mauto->max);
+							}
+							if(ref)
+								lv2_atom_forge_pop(&app->forge, &frame[2]);
+						}
+						else if(automation->type == AUTO_TYPE_OSC)
+						{
+							//FIXME
+						}
+					}
 				}
 
 				if(ref)
@@ -1767,16 +1816,22 @@ _automation_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
+	const LV2_Atom_URID *src_property = NULL;
 
 	lv2_atom_object_get(obj,
 		app->regs.synthpod.sink_module.urid, &src_module,
 		app->regs.synthpod.sink_symbol.urid, &src_symbol,
+		app->regs.patch.property.urid, &src_property,
 		0);
 
 	const LV2_URID src_urn = src_module
 		? src_module->body : 0;
 	const char *src_sym = src_symbol
 		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+	const LV2_URID src_prop = src_property
+		? src_property->body : 0;
+
+	auto_t *automation = NULL;
 
 	if(src_urn && src_sym)
 	{
@@ -1784,9 +1839,30 @@ _automation_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 
 		if(src_port->type == PORT_TYPE_CONTROL)
 		{
-			src_port->control.automation.type = AUTO_TYPE_NONE;
+			automation = &src_port->control.automation;
 		}
-	};
+	}
+	else if(src_urn && src_prop)
+	{
+		mod_t *mod = _mod_find_by_urn(app, src_urn);
+		
+		if(mod)
+		{
+			for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+			{
+				if(mod->param_automations[i].type == AUTO_TYPE_NONE)
+					continue; // search empty slot
+
+				if(mod->param_automations[i].property == src_prop)
+					automation = &mod->param_automations[i];
+			}
+		}
+	}
+
+	if(automation)
+	{
+		automation->type = AUTO_TYPE_NONE;
+	}
 }
 
 __realtime static void
@@ -1794,6 +1870,7 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
+	const LV2_Atom_URID *src_property = NULL;
 	const LV2_Atom_Int *src_channel = NULL;
 	const LV2_Atom_Int *src_controller = NULL;
 	const LV2_Atom_Int *src_min = NULL;
@@ -1802,6 +1879,7 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	lv2_atom_object_get(obj,
 		app->regs.synthpod.sink_module.urid, &src_module,
 		app->regs.synthpod.sink_symbol.urid, &src_symbol,
+		app->regs.patch.property.urid, &src_property,
 		app->regs.midi.channel.urid, &src_channel,
 		app->regs.midi.controller_number.urid, &src_controller,
 		app->regs.core.minimum.urid, &src_min,
@@ -1812,6 +1890,10 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		? src_module->body : 0;
 	const char *src_sym = src_symbol
 		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+	const LV2_URID src_prop = src_property
+		? src_property->body : 0;
+
+	auto_t *automation = NULL;
 
 	if(src_urn && src_sym)
 	{
@@ -1819,20 +1901,40 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 
 		if(src_port && (src_port->type == PORT_TYPE_CONTROL) )
 		{
-			auto_t *automation = &src_port->control.automation;
-
-			automation->type = AUTO_TYPE_MIDI;
-			automation->midi.channel = src_channel ? src_channel->body : -1;
-			automation->midi.controller = src_controller ? src_controller->body : -1;
-			automation->midi.min = src_min ? src_min->body : 0x0;
-			automation->midi.max = src_max ? src_max->body : 0x7f;
-
-			const int range = automation->midi.max - automation->midi.min;
-			automation->midi.range_1 = range
-				? 1.f / range
-				: 0.f;
+			automation = &src_port->control.automation;
 		}
-	};
+	}
+	else if(src_urn && src_prop)
+	{
+		mod_t *mod = _mod_find_by_urn(app, src_urn);
+		
+		if(mod)
+		{
+			for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+			{
+				if(mod->param_automations[i].type != AUTO_TYPE_NONE)
+					continue; // search empty slot
+
+				automation = &mod->param_automations[i];
+			}
+		}
+	}
+
+	if(automation)
+	{
+		automation->type = AUTO_TYPE_MIDI;
+		automation->property = src_prop;
+
+		automation->midi.channel = src_channel ? src_channel->body : -1;
+		automation->midi.controller = src_controller ? src_controller->body : -1;
+		automation->midi.min = src_min ? src_min->body : 0x0;
+		automation->midi.max = src_max ? src_max->body : 0x7f;
+
+		const int range = automation->midi.max - automation->midi.min;
+		automation->midi.range_1 = range
+			? 1.f / range
+			: 0.f;
+	}
 }
 
 __realtime void

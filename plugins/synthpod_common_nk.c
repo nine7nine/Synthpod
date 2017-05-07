@@ -130,7 +130,9 @@ struct _scale_point_t {
 enum _auto_type_t {
 	AUTO_NONE = 0,
 	AUTO_MIDI,
-	AUTO_OSC
+	AUTO_OSC,
+
+	AUTO_MAX,
 };
 
 struct _midi_auto_t {
@@ -191,6 +193,7 @@ struct _param_t {
 	bool is_readonly;
 	LV2_URID property;
 	LV2_URID range;
+	mod_t *mod;
 
 	param_union_t min;
 	param_union_t max;
@@ -889,13 +892,24 @@ _patch_port_automation_internal(plughandle_t *handle, port_t *source_port)
 }
 
 static LV2_Atom_Forge_Ref
-_patch_port_midi_automation_internal(plughandle_t *handle, port_t *source_port,
-	midi_auto_t *mauto)
+_patch_param_automation_internal(plughandle_t *handle, param_t *source_param)
 {
-	LV2_Atom_Forge_Ref ref = _patch_port_automation_internal(handle, source_port);
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_param->mod->urn);
 
 	if(ref)
-		ref = lv2_atom_forge_key(&handle->forge, handle->regs.midi.channel.urid);
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.patch.property.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_param->property);
+
+	return ref;
+}
+
+static LV2_Atom_Forge_Ref
+_patch_midi_automation_internal(plughandle_t *handle, midi_auto_t *mauto)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.midi.channel.urid);
 	if(ref)
 		ref = lv2_atom_forge_int(&handle->forge, mauto->channel);
 
@@ -927,7 +941,8 @@ _patch_port_midi_automation_add(plughandle_t *handle, port_t *source_port,
 		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
 			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.midi.Controller.urid)
-		&& _patch_port_midi_automation_internal(handle, source_port, mauto) )
+		&& _patch_port_automation_internal(handle, source_port)
+		&& _patch_midi_automation_internal(handle, mauto) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -944,6 +959,40 @@ _patch_port_automation_remove(plughandle_t *handle, port_t *source_port)
 			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
 		&& _patch_port_automation_internal(handle, source_port) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_param_midi_automation_add(plughandle_t *handle, param_t *source_param,
+	midi_auto_t *mauto)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.midi.Controller.urid)
+		&& _patch_param_automation_internal(handle, source_param)
+		&& _patch_midi_automation_internal(handle, mauto) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_param_automation_remove(plughandle_t *handle, param_t *source_param)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_remove_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& _patch_param_automation_internal(handle, source_param) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -1247,13 +1296,14 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 }
 
 static param_t *
-_param_add(hash_t *hash, bool is_readonly)
+_param_add(mod_t *mod, hash_t *hash, bool is_readonly)
 {
 	param_t *param = calloc(1, sizeof(param_t));
 	if(param)
 	{
 		param->is_readonly = is_readonly;
 		param->range = 0;
+		param->mod = mod;
 
 		_hash_add(hash, param);
 	}
@@ -1600,7 +1650,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 
 							param_t *param = _mod_dynam_find_by_property(src_mod, property);
 							if(!param)
-								param = _param_add(&src_mod->dynams, false);
+								param = _param_add(src_mod, &src_mod->dynams, false);
 							if(param)
 							{
 								param->property = property;
@@ -1617,7 +1667,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 
 							param_t *param = _mod_dynam_find_by_property(src_mod, property);
 							if(!param)
-								param = _param_add(&src_mod->dynams, true);
+								param = _param_add(src_mod, &src_mod->dynams, true);
 							if(param)
 							{
 								param->property = property;
@@ -2490,7 +2540,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	{
 		const LilvNode *param_node= lilv_nodes_get(mod->readables, i);
 
-		param_t *param = _param_add(&mod->params, true);
+		param_t *param = _param_add(mod, &mod->params, true);
 		if(param)
 			_param_fill(handle, param, param_node);
 	}
@@ -2498,7 +2548,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	{
 		const LilvNode *param_node = lilv_nodes_get(mod->readables, i);
 
-		param_t *param = _param_add(&mod->params, false);
+		param_t *param = _param_add(mod, &mod->params, false);
 		if(param)
 			_param_fill(handle, param, param_node);
 	}
@@ -5055,7 +5105,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						nk_layout_row_dynamic(ctx, dy, 1);
 
 						const auto_type_t auto_type = automation->type;
-						automation->type = nk_combo(ctx, auto_labels, sizeof(auto_labels) / sizeof(char *),
+						automation->type = nk_combo(ctx, auto_labels, AUTO_MAX - 1, //FIXME enable OSC
 							automation->type, dy, nk_vec2(nk_widget_width(ctx), dy*5));
 						if(auto_type != automation->type)
 						{
@@ -5100,14 +5150,14 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							if(port)
 								_patch_port_automation_remove(handle, port);
 							else if(param)
-								;//FIXME _patch_param_automation_remove(handle, param);
+								_patch_param_automation_remove(handle, param);
 						}
 						else if(automation->type == AUTO_MIDI)
 						{
 							if(port)
 								_patch_port_midi_automation_add(handle, port, &automation->midi);
 							else if(param)
-								;//FIXME _patch_param_midi_automation_add(handle, param, &automation->midi);
+								_patch_param_midi_automation_add(handle, param, &automation->midi);
 						}
 						else if(automation->type == AUTO_OSC)
 						{
@@ -5552,6 +5602,7 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 	{
 		const LV2_Atom_URID *src_module = NULL;
 		const LV2_Atom *src_symbol = NULL;
+		const LV2_Atom_URID *src_property = NULL;
 		const LV2_Atom_Int *midi_channel = NULL;
 		const LV2_Atom_Int *midi_controller = NULL;
 		const LV2_Atom_Int *core_minimum= NULL;
@@ -5560,6 +5611,7 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 		lv2_atom_object_get(obj,
 			handle->regs.synthpod.sink_module.urid, &src_module,
 			handle->regs.synthpod.sink_symbol.urid, &src_symbol,
+			handle->regs.patch.property.urid, &src_property,
 			handle->regs.midi.channel.urid, &midi_channel,
 			handle->regs.midi.controller_number.urid, &midi_controller,
 			handle->regs.core.minimum.urid, &core_minimum,
@@ -5570,6 +5622,10 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 			? src_module->body : 0;
 		const char *src_sym = src_symbol
 			? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+		const LV2_URID src_prop = src_property 
+			? src_property->body : 0;
+
+		auto_t *automation = NULL;
 
 		if(src_urn && src_sym)
 		{
@@ -5581,16 +5637,34 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 
 				if(src_port && (src_port->type == PROPERTY_TYPE_CONTROL) )
 				{
-					auto_t *automation = &src_port->control.automation;
-					automation->type = AUTO_MIDI;
-
-					midi_auto_t *mauto = &automation->midi;
-					mauto->channel = midi_channel ? midi_channel->body : -1;
-					mauto->controller = midi_controller ? midi_controller->body : -1;
-					mauto->min = core_minimum ? core_minimum->body : 0x0;
-					mauto->max = core_maximum ? core_maximum->body : 0x7f;
+					automation = &src_port->control.automation;
 				}
 			}
+		}
+		else if(src_urn && src_prop)
+		{
+			mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
+
+			if(src_mod)
+			{
+				param_t *src_param = _mod_param_find_by_property(src_mod, src_prop);
+
+				if(src_param)
+				{
+					automation = &src_param->automation;
+				}
+			}
+		}
+
+		if(automation)
+		{
+			automation->type = AUTO_MIDI;
+
+			midi_auto_t *mauto = &automation->midi;
+			mauto->channel = midi_channel ? midi_channel->body : -1;
+			mauto->controller = midi_controller ? midi_controller->body : -1;
+			mauto->min = core_minimum ? core_minimum->body : 0x0;
+			mauto->max = core_maximum ? core_maximum->body : 0x7f;
 		}
 	}
 	//FIXME OSC
@@ -5773,8 +5847,6 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_add_automation(handle, (const LV2_Atom_Object *)itm);
 							}
-							printf("got spod:automationList\n");
-							//FIXME
 						}
 						else if( (prop == handle->regs.synthpod.dsp_profiling.urid)
 							&& (value->type == handle->forge.Vector) )

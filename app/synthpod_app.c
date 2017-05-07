@@ -179,6 +179,9 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 					if(cmd == 0xb0) // Controller
 					{
+						const uint8_t channel = msg[0] & 0x0f;
+						const uint8_t controller = msg[1];
+
 						//FIXME use per-module flag whether it actually has any automations
 						for(unsigned d = 0; d<mod->num_ports - 1; d++) // - automation port
 						{
@@ -192,8 +195,6 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 								continue; // skip non-midi automation
 
 							midi_auto_t *mauto = &control->automation.midi;
-							const uint8_t channel = msg[0] & 0x0f;
-							const uint8_t controller = msg[1];
 
 							if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
 								&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
@@ -215,11 +216,35 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 								float *buf = PORT_BASE_ALIGNED(dst);
 								*buf = f32;
-								//printf("automation match: %f %f\n", rel, *f32);
+								//printf("automation match: %f %f\n", rel, f32);
 							}
 						}
-						//FIXME iterate over parameters
-						//FIXME iterate over dynameters
+
+						// iterate over parameters
+						for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+						{
+							auto_t *automation = &mod->param_automations[i];
+
+							if(automation->type != AUTO_TYPE_MIDI)
+								continue;
+
+							midi_auto_t *mauto = &automation->midi;
+
+							if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
+								&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
+							{
+								float rel = (msg[2] - mauto->min) * mauto->range_1;
+								if(rel < 0.f)
+									rel = 0.f;
+								else if(rel > 1.f)
+									rel = 1.f;
+
+								float f32 = rel * 127.f; //FIXME
+								printf("automation match: %f %f\n", rel, f32);
+
+								//FIXME append patch:Set to patch:Message ports
+							}
+						}
 					}
 				}
 				//FIXME handle other events
