@@ -4,7 +4,7 @@
 
 ### Build status
 
-[![Build Status](https://travis-ci.org/OpenMusicKontrollers/synthpod.svg?branch=master)](https://travis-ci.org/OpenMusicKontrollers/synthpod)
+[![build status](https://gitlab.com/OpenMusicKontrollers/synthpod/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/synthpod/commits/master)
 
 ### About
 
@@ -12,9 +12,11 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 ### Mandatory dependencies
 
-* [Elementary](https://www.enlightenment.org/about-efl) (EFL UI toolkit)
-* [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
 * [LV2](http://lv2plug.in) (LV2 plugin specification)
+* [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
+* [sratom](http://drobilla.net/software/sratom/) (LV2 atom serialization library)
+* [libuv](http://libuv.org) (asynchronous I/O library)
+* [libuuid](http://linux.die.net/man/3/libuuid) (universally unique identifier library)
 
 ### Optional dependencies for JACK backend
 
@@ -27,7 +29,6 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 ### Optional dependencies for plugin UIs
 
-* [nanomsg](http://nanomsg.org/) (socket library)
 * [libxcb](https://xcb.freedesktop.org/) (X protocol C-language Binding)
 * [Gtk2](http://www.gtk.org/) (cross-platform UI toolkit)
 * [Gtk3](http://www.gtk.org/) (cross-platform UI toolkit)
@@ -36,7 +37,7 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 
 ### Build / install
 
-	git clone https://github.com/OpenMusicKontrollers/synthpod.git
+	git clone https://gitlab.com/OpenMusicKontrollers/synthpod.git
 	cd synthpod 
 	mkdir build
 	cd build
@@ -47,9 +48,9 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 #### ArchLinux
 
 	# mandatory build dependencies
-	sudo pacman -S cmake elementary lilv lv2
+	sudo pacman -S cmake lv2 lilv libuv
 	# optional build dependencies
-	sudo pacman -S jack alsa zita-alsa-pcmi nanomsg libxcb gtk2 gtk3 qt4 qt
+	sudo pacman -S jack alsa zita-alsa-pcmi libxcb gtk2 gtk3 qt4 qt
 
 ### License (everything but synthpod\_alsa)
 
