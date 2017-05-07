@@ -44,7 +44,7 @@ if(BUILD_JACK)
 	target_link_libraries(synthpod.jack
 		${JACK_LIBS}
 		${BIN_LIBS})
-	set_target_properties(synthpod.jack PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.jack PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.jack PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.jack PROPERTIES OUTPUT_NAME "synthpod_jack")
 	install(TARGETS synthpod.jack DESTINATION bin)
@@ -93,7 +93,7 @@ if(BUILD_ALSA)
 		asound #FIXME
 		${ZITA_ALSA_PCMI_LIBRARY}
 		${BIN_LIBS})
-	set_target_properties(synthpod.alsa PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.alsa PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.alsa PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.alsa PROPERTIES OUTPUT_NAME "synthpod_alsa")
 	install(TARGETS synthpod.alsa DESTINATION bin)
@@ -125,7 +125,7 @@ if(BUILD_DUMMY)
 		$<TARGET_OBJECTS:sandbox_master.lib>)
 	target_link_libraries(synthpod.dummy
 		${BIN_LIBS})
-	set_target_properties(synthpod.dummy PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.dummy PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.dummy PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.dummy PROPERTIES OUTPUT_NAME "synthpod_dummy")
 	install(TARGETS synthpod.dummy DESTINATION bin)
@@ -155,7 +155,7 @@ if(BUILD_DOT)
 	target_link_libraries(synthpod.dot
 		${SRATOM_LDFLAGS})
 	set_target_properties(synthpod.dot PROPERTIES OUTPUT_NAME "synthpod_dot")
-	set_target_properties(synthpod.dot PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.dot PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.dot PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	install(TARGETS synthpod.dot DESTINATION bin)
 endif()
@@ -195,7 +195,7 @@ if(BUILD_SANDBOX_X11)
 		${SANDBOX_LIBS})
 	target_include_directories(synthpod.sandbox.x11 PUBLIC ${XCB_INCLUDE_DIRS})
 	target_include_directories(synthpod.sandbox.x11 PUBLIC ${XCB_ICCCM_INCLUDE_DIRS})
-	set_target_properties(synthpod.sandbox.x11 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.sandbox.x11 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.sandbox.x11 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.sandbox.x11 PROPERTIES OUTPUT_NAME "synthpod_sandbox_x11")
 	install(TARGETS synthpod.sandbox.x11 DESTINATION bin)
@@ -211,7 +211,7 @@ if(BUILD_SANDBOX_GTK2)
 		${GTK2_LDFLAGS}
 		${SANDBOX_LIBS})
 	target_include_directories(synthpod.sandbox.gtk2 PUBLIC ${GTK2_INCLUDE_DIRS})
-	set_target_properties(synthpod.sandbox.gtk2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.sandbox.gtk2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.sandbox.gtk2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.sandbox.gtk2 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk2")
 	install(TARGETS synthpod.sandbox.gtk2 DESTINATION bin)
@@ -227,7 +227,7 @@ if(BUILD_SANDBOX_GTK3)
 		${GTK3_LDFLAGS}
 		${SANDBOX_LIBS})
 	target_include_directories(synthpod.sandbox.gtk3 PUBLIC ${GTK3_INCLUDE_DIRS})
-	set_target_properties(synthpod.sandbox.gtk3 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.sandbox.gtk3 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.sandbox.gtk3 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	set_target_properties(synthpod.sandbox.gtk3 PROPERTIES OUTPUT_NAME "synthpod_sandbox_gtk3")
 	install(TARGETS synthpod.sandbox.gtk3 DESTINATION bin)
@@ -248,8 +248,9 @@ if(BUILD_SANDBOX_QT4)
 	target_include_directories(synthpod.sandbox.qt4 PUBLIC ${QT4GUI_INCLUDE_DIRS})
 	set_target_properties(synthpod.sandbox.qt4 PROPERTIES COMPILE_DEFINITIONS "SYNTHPOD_SANDBOX_QT=4")
 	set_target_properties(synthpod.sandbox.qt4 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt4")
-	set_target_properties(synthpod.sandbox.qt4 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.sandbox.qt4 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.sandbox.qt4 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
+	set_target_properties(synthpod.sandbox.qt4 PROPERTIES COMPILE_OPTIONS "-fPIC") # -fPIE is not enough for Qt
 	install(TARGETS synthpod.sandbox.qt4 DESTINATION bin)
 endif()
 
@@ -271,8 +272,9 @@ if(BUILD_SANDBOX_QT5)
 	target_include_directories(synthpod.sandbox.qt5 PUBLIC ${QT5GUI_INCLUDE_DIRS})
 	set_target_properties(synthpod.sandbox.qt5 PROPERTIES COMPILE_DEFINITIONS "SYNTHPOD_SANDBOX_QT=5")
 	set_target_properties(synthpod.sandbox.qt5 PROPERTIES OUTPUT_NAME "synthpod_sandbox_qt5")
-	set_target_properties(synthpod.sandbox.qt5 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.sandbox.qt5 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.sandbox.qt5 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
+	set_target_properties(synthpod.sandbox.qt5 PROPERTIES COMPILE_OPTIONS "-fPIC") # -fPIE is not enough for Qt
 	install(TARGETS synthpod.sandbox.qt5 DESTINATION bin)
 endif()
 
@@ -283,7 +285,7 @@ if(BUILD_SANDBOX_SHOW)
 	target_link_libraries(synthpod.sandbox.show
 		${SANDBOX_LIBS})
 	set_target_properties(synthpod.sandbox.show PROPERTIES OUTPUT_NAME "synthpod_sandbox_show")
-	set_target_properties(synthpod.sandbox.show PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.sandbox.show PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.sandbox.show PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	install(TARGETS synthpod.sandbox.show DESTINATION bin)
 endif()
@@ -295,7 +297,7 @@ if(BUILD_SANDBOX_KX)
 	target_link_libraries(synthpod.sandbox.kx
 		${SANDBOX_LIBS})
 	set_target_properties(synthpod.sandbox.kx PROPERTIES OUTPUT_NAME "synthpod_sandbox_kx")
-	set_target_properties(synthpod.sandbox.kx PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
+	set_target_properties(synthpod.sandbox.kx PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
 	set_target_properties(synthpod.sandbox.kx PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
 	install(TARGETS synthpod.sandbox.kx DESTINATION bin)
 endif()
