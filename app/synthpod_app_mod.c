@@ -801,9 +801,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 			lilv_node_free(dflt_node);
 			lilv_node_free(min_node);
 			lilv_node_free(max_node);
-
-			//FIXME this is just temporary
-			control->automation.type = AUTO_TYPE_NONE;
 		}
 		else if(lilv_port_is_a(plug, port, app->regs.port.atom.node)) 
 		{

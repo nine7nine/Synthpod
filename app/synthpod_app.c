@@ -162,8 +162,8 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		// apply automation if any
 		{
 			const unsigned p = mod->num_ports - 1;
-			port_t *port = &mod->ports[p];
-			const LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
+			port_t *auto_port = &mod->ports[p];
+			const LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(auto_port);
 
 			LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
 			{
@@ -182,48 +182,10 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 						const uint8_t channel = msg[0] & 0x0f;
 						const uint8_t controller = msg[1];
 
-						//FIXME use per-module flag whether it actually has any automations
-						for(unsigned d = 0; d<mod->num_ports - 1; d++) // - automation port
-						{
-							port_t *dst = &mod->ports[d];
-
-							if(dst->type != PORT_TYPE_CONTROL)
-								continue; // skip non-control ports
-
-							control_port_t *control = &dst->control;
-							if(control->automation.type != AUTO_TYPE_MIDI)
-								continue; // skip non-midi automation
-
-							midi_auto_t *mauto = &control->automation.midi;
-
-							if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
-								&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
-							{
-								float rel = (msg[2] - mauto->min) * mauto->range_1;
-								if(rel < 0.f)
-									rel = 0.f;
-								else if(rel > 1.f)
-									rel = 1.f;
-
-								float f32 = rel * control->range + control->min;
-								if(control->is_integer)
-									f32 = floorf(f32);
-
-								if(f32 < control->min)
-									f32 = control->min;
-								else if(f32 > control->max)
-									f32 = control->max;
-
-								float *buf = PORT_BASE_ALIGNED(dst);
-								*buf = f32;
-								//printf("automation match: %f %f\n", rel, f32);
-							}
-						}
-
-						// iterate over parameters
+						// iterate over automations
 						for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
 						{
-							auto_t *automation = &mod->param_automations[i];
+							auto_t *automation = &mod->automations[i];
 
 							if(automation->type != AUTO_TYPE_MIDI)
 								continue;
@@ -239,10 +201,49 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 								else if(rel > 1.f)
 									rel = 1.f;
 
-								float f32 = rel * 127.f; //FIXME
-								printf("automation match: %f %f\n", rel, f32);
+								port_t *port = &mod->ports[automation->index];
+								if(port->type == PORT_TYPE_CONTROL)
+								{
+									control_port_t *control = &port->control;
 
-								//FIXME append patch:Set to patch:Message ports
+									float f32 = rel * control->range + control->min;
+									if(control->is_integer)
+										f32 = floorf(f32);
+
+									if(f32 < control->min)
+										f32 = control->min;
+									else if(f32 > control->max)
+										f32 = control->max;
+
+									float *buf = PORT_BASE_ALIGNED(port);
+									*buf = f32;
+
+									//printf("control automation match: %f %f\n", rel, f32);
+								}
+								else if( (port->type == PORT_TYPE_ATOM) && automation->property )
+								{
+									const int32_t i32 = floorf(rel * 127.f); //FIXME use correct scaling
+
+									LV2_Atom_Sequence *control = PORT_BASE_ALIGNED(port);
+									LV2_Atom_Event *dst = lv2_atom_sequence_end(&control->body, control->atom.size);
+									LV2_Atom_Forge_Frame obj_frame;
+
+									lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)dst, PORT_SIZE(port) - control->atom.size - sizeof(LV2_Atom));
+
+									if(  lv2_atom_forge_frame_time(&app->forge, nsamples - 1)
+										&& lv2_atom_forge_object(&app->forge, &obj_frame, 0, app->regs.patch.set.urid)
+										&& lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid)
+										&& lv2_atom_forge_urid(&app->forge, automation->property)
+										&& lv2_atom_forge_key(&app->forge, app->regs.patch.value.urid)
+										&& lv2_atom_forge_int(&app->forge, i32) ) //FIXME use correct type
+									{
+										lv2_atom_forge_pop(&app->forge, &obj_frame);
+
+										control->atom.size += sizeof(LV2_Atom_Event) + dst->body.size;
+									}
+
+									//printf("parameter automation match: %f %f\n", rel, f32);
+								}
 							}
 						}
 					}

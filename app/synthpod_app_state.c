@@ -1001,44 +1001,55 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 				{
 					mod_t *mod = app->mods[m];
 
-					for(unsigned p=0; p<mod->num_ports; p++)
+					for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
 					{
-						port_t *port = &mod->ports[p];
+						auto_t *automation = &mod->automations[i];
+						port_t *port = &mod->ports[automation->index];
 
-						// serialize port automations
-						if(port->type == PORT_TYPE_CONTROL)
+						if(automation->type == AUTO_TYPE_MIDI)
 						{
-							auto_t *automation = &port->control.automation;
+							midi_auto_t *mauto = &automation->midi;
 
-							if(automation->type == AUTO_TYPE_MIDI)
+							LV2_Atom_Forge_Frame auto_frame;
+							if(  ref
+								&& lv2_atom_forge_object(forge, &auto_frame, 0, app->regs.midi.Controller.urid) )
 							{
-								midi_auto_t *mauto = &automation->midi;
+								ref = lv2_atom_forge_key(forge, app->regs.synthpod.sink_module.urid)
+									&& lv2_atom_forge_urid(forge, mod->urn)
 
-								LV2_Atom_Forge_Frame auto_frame;
-								if(  ref
-									&& lv2_atom_forge_object(forge, &auto_frame, 0, app->regs.midi.Controller.urid) )
+									&& lv2_atom_forge_key(forge, app->regs.midi.channel.urid)
+									&& lv2_atom_forge_int(forge, mauto->channel)
+
+									&& lv2_atom_forge_key(forge, app->regs.midi.controller_number.urid)
+									&& lv2_atom_forge_int(forge, mauto->controller)
+
+									&& lv2_atom_forge_key(forge, app->regs.core.minimum.urid)
+									&& lv2_atom_forge_int(forge, mauto->min)
+
+									&& lv2_atom_forge_key(forge, app->regs.core.maximum.urid)
+									&& lv2_atom_forge_int(forge, mauto->max);
+
+								if(ref)
 								{
-									ref = lv2_atom_forge_key(forge, app->regs.synthpod.sink_module.urid)
-										&& lv2_atom_forge_urid(forge, port->mod->urn)
-										&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_symbol.urid)
-										&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol))
-										&& lv2_atom_forge_key(forge, app->regs.midi.channel.urid)
-										&& lv2_atom_forge_int(forge, mauto->channel)
-										&& lv2_atom_forge_key(forge, app->regs.midi.controller_number.urid)
-										&& lv2_atom_forge_int(forge, mauto->controller)
-										&& lv2_atom_forge_key(forge, app->regs.core.minimum.urid)
-										&& lv2_atom_forge_int(forge, mauto->min)
-										&& lv2_atom_forge_key(forge, app->regs.core.maximum.urid)
-										&& lv2_atom_forge_int(forge, mauto->max);
-
-									if(ref)
-										lv2_atom_forge_pop(forge, &auto_frame);
+									if(automation->property)
+									{
+										ref = lv2_atom_forge_key(forge, app->regs.patch.property.urid)
+											&& lv2_atom_forge_urid(forge, automation->property);
+									}
+									else
+									{
+										ref = lv2_atom_forge_key(forge, app->regs.synthpod.sink_symbol.urid)
+											&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol));
+									}
 								}
+
+								if(ref)
+									lv2_atom_forge_pop(forge, &auto_frame);
 							}
-							else if(automation->type == AUTO_TYPE_OSC)
-							{
-								//FIXME write me
-							}
+						}
+						else if(automation->type == AUTO_TYPE_OSC)
+						{
+							//FIXME
 						}
 					}
 				}

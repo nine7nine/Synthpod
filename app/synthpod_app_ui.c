@@ -1168,66 +1168,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				{
 					mod_t *mod = app->mods[m];
 
-					for(unsigned p = 0; p < mod->num_ports; p++)
-					{
-						port_t *port = &mod->ports[p];
-
-						if(port->type != PORT_TYPE_CONTROL)
-							continue;
-
-						auto_t *automation = &port->control.automation;
-						if(automation->type == AUTO_TYPE_NONE)
-							continue;
-
-						if(automation->type == AUTO_TYPE_MIDI)
-						{
-							midi_auto_t *mauto = &automation->midi;
-
-							if(ref)
-								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, app->regs.midi.Controller.urid);
-							{
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
-								if(ref)
-									ref = lv2_atom_forge_urid(&app->forge, mod->urn);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
-								if(ref)
-									ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.channel.urid);
-								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->channel);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.controller_number.urid);
-								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->controller);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.core.minimum.urid);
-								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->min);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.core.maximum.urid);
-								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->max);
-							}
-							if(ref)
-								lv2_atom_forge_pop(&app->forge, &frame[2]);
-						}
-						else if(automation->type == AUTO_TYPE_OSC)
-						{
-							//FIXME
-						}
-					}
-
 					for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
 					{
-						auto_t *automation = &mod->param_automations[i];
+						auto_t *automation = &mod->automations[i];
+						port_t *port = &mod->ports[automation->index];
 
 						if(automation->type == AUTO_TYPE_MIDI)
 						{
@@ -1241,10 +1185,20 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 								if(ref)
 									ref = lv2_atom_forge_urid(&app->forge, mod->urn);
 
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
-								if(ref)
-									ref = lv2_atom_forge_urid(&app->forge, automation->property);
+								if(automation->property)
+								{
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
+									if(ref)
+										ref = lv2_atom_forge_urid(&app->forge, automation->property);
+								}
+								else
+								{
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
+									if(ref)
+										ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+								}
 
 								if(ref)
 									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.channel.urid);
@@ -1810,6 +1764,47 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 }
 
 __realtime static void
+_automation_list_rem_internal(port_t *port, LV2_URID prop)
+{
+	mod_t *mod = port->mod;
+	
+	for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+	{
+		auto_t *automation = &mod->automations[i];
+
+		if(automation->type == AUTO_TYPE_NONE)
+			continue; // ignore
+
+		if(!prop && (automation->index == port->index))
+			automation->type = AUTO_TYPE_NONE; // invalidate
+		else if(prop && (automation->property == prop) )
+			automation->type = AUTO_TYPE_NONE; // invalidate
+	}
+}
+
+__realtime static port_t *
+_automation_port_find(mod_t *mod, const char *src_sym, LV2_URID src_prop)
+{
+	for(unsigned p = 0; p < mod->num_ports; p++)
+	{
+		port_t *port = &mod->ports[p];
+
+		if(src_sym)
+		{
+			if( (port->type == PORT_TYPE_CONTROL) && !strcmp(port->symbol, src_sym) )
+				return port;
+		}
+		else if(src_prop)
+		{
+			if( (port->type == PORT_TYPE_ATOM) && port->atom.patchable)
+				return port;
+		}
+	}
+
+	return NULL;
+}
+
+__realtime static void
 _automation_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 {
 	//printf("got patch:remove for automationList:\n");
@@ -1831,37 +1826,14 @@ _automation_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_URID src_prop = src_property
 		? src_property->body : 0;
 
-	auto_t *automation = NULL;
-
-	if(src_urn && src_sym)
+	mod_t *mod = _mod_find_by_urn(app, src_urn);
+	if(mod)
 	{
-		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
-
-		if(src_port->type == PORT_TYPE_CONTROL)
+		port_t *port = _automation_port_find(mod, src_sym, src_prop);
+		if(port)
 		{
-			automation = &src_port->control.automation;
+			_automation_list_rem_internal(port, src_prop);
 		}
-	}
-	else if(src_urn && src_prop)
-	{
-		mod_t *mod = _mod_find_by_urn(app, src_urn);
-		
-		if(mod)
-		{
-			for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
-			{
-				if(mod->param_automations[i].type == AUTO_TYPE_NONE)
-					continue; // search empty slot
-
-				if(mod->param_automations[i].property == src_prop)
-					automation = &mod->param_automations[i];
-			}
-		}
-	}
-
-	if(automation)
-	{
-		automation->type = AUTO_TYPE_NONE;
 	}
 }
 
@@ -1893,47 +1865,39 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_URID src_prop = src_property
 		? src_property->body : 0;
 
-	auto_t *automation = NULL;
-
-	if(src_urn && src_sym)
+	mod_t *mod = _mod_find_by_urn(app, src_urn);
+	if(mod)
 	{
-		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+		port_t *port = _automation_port_find(mod, src_sym, src_prop);
+		if(port)
+		{
+			_automation_list_rem_internal(port, src_prop); // remove any previously registered automation
 
-		if(src_port && (src_port->type == PORT_TYPE_CONTROL) )
-		{
-			automation = &src_port->control.automation;
-		}
-	}
-	else if(src_urn && src_prop)
-	{
-		mod_t *mod = _mod_find_by_urn(app, src_urn);
-		
-		if(mod)
-		{
 			for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
 			{
-				if(mod->param_automations[i].type != AUTO_TYPE_NONE)
+				auto_t *automation = &mod->automations[i];
+
+				if(automation->type != AUTO_TYPE_NONE)
 					continue; // search empty slot
 
-				automation = &mod->param_automations[i];
+				// fill slot
+				automation->type = AUTO_TYPE_MIDI;
+				automation->index = port->index;
+				automation->property = src_prop;
+
+				automation->midi.channel = src_channel ? src_channel->body : -1;
+				automation->midi.controller = src_controller ? src_controller->body : -1;
+				automation->midi.min = src_min ? src_min->body : 0x0;
+				automation->midi.max = src_max ? src_max->body : 0x7f;
+
+				const int range = automation->midi.max - automation->midi.min;
+				automation->midi.range_1 = range
+					? 1.f / range
+					: 0.f;
+
+				break;
 			}
 		}
-	}
-
-	if(automation)
-	{
-		automation->type = AUTO_TYPE_MIDI;
-		automation->property = src_prop;
-
-		automation->midi.channel = src_channel ? src_channel->body : -1;
-		automation->midi.controller = src_controller ? src_controller->body : -1;
-		automation->midi.min = src_min ? src_min->body : 0x0;
-		automation->midi.max = src_max ? src_max->body : 0x7f;
-
-		const int range = automation->midi.max - automation->midi.min;
-		automation->midi.range_1 = range
-			? 1.f / range
-			: 0.f;
 	}
 }
 

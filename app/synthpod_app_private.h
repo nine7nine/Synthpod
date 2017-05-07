@@ -224,11 +224,12 @@ struct _osc_auto_t {
 
 struct _auto_t {
 	auto_type_t type;
-	bool learning;
+	uint32_t index;
 	LV2_URID property;
+
 	union {
 		midi_auto_t midi;
-		osc_auto_t osc;
+		//osc_auto_t osc;
 	};
 };
 
@@ -315,7 +316,7 @@ struct _mod_t {
 		float y;
 	} pos;
 
-	auto_t param_automations [MAX_AUTOMATIONS];
+	auto_t automations [MAX_AUTOMATIONS];
 };
 
 struct _port_driver_t {
@@ -363,8 +364,6 @@ struct _control_port_t {
 	float stash;
 	bool stashing;
 	atomic_flag lock;
-
-	auto_t automation;
 };
 
 struct _audio_port_t {
