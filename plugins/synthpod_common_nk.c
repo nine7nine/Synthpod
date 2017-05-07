@@ -292,9 +292,7 @@ struct _plughandle_t {
 
 	nk_pugl_window_t win;
 
-	const LilvPlugin *plugin_selector;
 	mod_t *module_selector;
-	const LilvNode *preset_selector;
 	port_t *port_selector;
 	param_t *param_selector;
 
@@ -335,6 +333,7 @@ struct _plughandle_t {
 	} node;
 
 	float dy;
+	float dy2;
 
 	enum nk_collapse_states plugin_collapse_states;
 	enum nk_collapse_states preset_import_collapse_states;
@@ -405,6 +404,8 @@ static const struct nk_color hilight_color = {200, 100, 0, 255};
 static const struct nk_color button_border_color = {100, 100, 100, 255};
 static const struct nk_color grab_handle_color = {100, 100, 100, 255};
 static const struct nk_color toggle_color = {150, 150, 150, 255};
+static const struct nk_color head_color = {12, 12, 12, 255};
+static const struct nk_color group_color = {24, 24, 24, 255};
 
 static const char *auto_labels [] = {
 	[AUTO_NONE] = "None",
@@ -2821,7 +2822,6 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx,
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 
 	int count = 0;
-	bool selector_visible = false;
 	HASH_FOREACH(&handle->plugin_matches, itr)
 	{
 		const LilvPlugin *plug = *itr;
@@ -2832,48 +2832,24 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx,
 			{
 				const char *name_str = lilv_node_as_string(name_node);
 
-				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
-				{
-					handle->plugin_selector = plug;
-					_patch_mod_add(handle, handle->plugin_selector);
-				}
-
 				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
 					? nk_style_item_color(nk_rgb(40, 40, 40))
 					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
-				nk_style_push_style_item(ctx, &ctx->style.selectable.hover,
-					nk_style_item_color(nk_rgb(35, 35, 35)));
-				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed,
-					nk_style_item_color(nk_rgb(30, 30, 30)));
-				nk_style_push_style_item(ctx, &ctx->style.selectable.hover_active,
-					nk_style_item_color(nk_rgb(35, 35, 35)));
-				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed_active,
-					nk_style_item_color(nk_rgb(30, 30, 30)));
 
-				const int selected = plug == handle->plugin_selector;
-				if(nk_select_label(ctx, name_str, NK_TEXT_LEFT, selected))
+				if(nk_select_label(ctx, name_str, NK_TEXT_LEFT, nk_false))
 				{
-					handle->plugin_selector = plug;
+					_patch_mod_add(handle, plug);
 				}
 
 				nk_style_pop_style_item(ctx);
-				nk_style_pop_style_item(ctx);
-				nk_style_pop_style_item(ctx);
-				nk_style_pop_style_item(ctx);
-				nk_style_pop_style_item(ctx);
-
-				if(plug == handle->plugin_selector)
-					selector_visible = true;
 
 				lilv_node_free(name_node);
 			}
 		}
 	}
-
-	if(!selector_visible)
-		handle->plugin_selector = NULL;
 }
 
+#if 0
 static void
 _expose_main_plugin_info(plughandle_t *handle, struct nk_context *ctx)
 {
@@ -2928,6 +2904,7 @@ _expose_main_plugin_info(plughandle_t *handle, struct nk_context *ctx)
 	if(license_nodes)
 		lilv_nodes_free(license_nodes);
 }
+#endif
 
 static void
 _refresh_main_preset_list_for_bank(plughandle_t *handle,
@@ -2995,16 +2972,8 @@ _tab_label(struct nk_context *ctx, const char *label)
 {
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	struct nk_rect bounds = nk_widget_bounds(ctx);
-	const struct nk_color bg = nk_rgb(24, 24, 24); //FIXME use color from style
-	//const struct nk_color bg = ctx->style.window.header.normal.data.color;
 
-	nk_fill_rect(canvas, bounds, 10, bg);
-
-	const float h = bounds.h;
-	bounds.h /= 2;
-	bounds.y += bounds.h;
-	nk_fill_rect(canvas, bounds, 0, bg);
-
+	nk_fill_rect(canvas, bounds, 0.f, group_color);
 	nk_label(ctx, label, NK_TEXT_CENTERED);
 }
 
@@ -3051,7 +3020,10 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 						? lilv_node_as_string(bank_label_node)
 						: "Unbanked";
 
+					nk_layout_row_dynamic(ctx, handle->dy2, 1);
 					_tab_label(ctx, bank_label);
+
+					nk_layout_row_dynamic(ctx, handle->dy2, 1);
 
 					if(bank_label_node)
 						lilv_node_free(bank_label_node);
@@ -3061,34 +3033,15 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 
 				const char *label_str = lilv_node_as_string(label_node);
 
-				if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
-				{
-					handle->preset_selector = preset;
-					_patch_mod_preset_set(handle, handle->module_selector, handle->preset_selector);
-				}
-
 				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
 					? nk_style_item_color(nk_rgb(40, 40, 40))
 					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
-				nk_style_push_style_item(ctx, &ctx->style.selectable.hover,
-					nk_style_item_color(nk_rgb(35, 35, 35)));
-				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed,
-					nk_style_item_color(nk_rgb(30, 30, 30)));
-				nk_style_push_style_item(ctx, &ctx->style.selectable.hover_active,
-					nk_style_item_color(nk_rgb(35, 35, 35)));
-				nk_style_push_style_item(ctx, &ctx->style.selectable.pressed_active,
-					nk_style_item_color(nk_rgb(30, 30, 30)));
 
-				int selected = preset == handle->preset_selector;
-				if(nk_selectable_label(ctx, label_str, NK_TEXT_LEFT, &selected))
+				if(nk_select_label(ctx, label_str, NK_TEXT_LEFT, nk_false))
 				{
-					handle->preset_selector = preset;
+					_patch_mod_preset_set(handle, handle->module_selector, preset);
 				}
 
-				nk_style_pop_style_item(ctx);
-				nk_style_pop_style_item(ctx);
-				nk_style_pop_style_item(ctx);
-				nk_style_pop_style_item(ctx);
 				nk_style_pop_style_item(ctx);
 
 				lilv_node_free(label_node);
@@ -3119,6 +3072,7 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 	}
 }
 
+#if 0
 static void
 _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 {
@@ -3165,6 +3119,7 @@ _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 	if(license_node)
 		lilv_node_free(license_node);
 }
+#endif
 
 static int
 _dial_bool(struct nk_context *ctx, int32_t *val, struct nk_color color, bool editable)
@@ -4046,7 +4001,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 
 				if(first)
 				{
-					nk_layout_row_dynamic(ctx, dy, 1);
+					nk_layout_row_dynamic(ctx, handle->dy2, 1);
 					_tab_label(ctx, lilv_node_as_string(group_label_node));
 
 					nk_layout_row_dynamic(ctx, DY, 4);
@@ -4070,7 +4025,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 
 			if(first)
 			{
-				nk_layout_row_dynamic(ctx, dy, 1);
+				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Ungrouped");
 
 				nk_layout_row_dynamic(ctx, DY, 4);
@@ -4089,7 +4044,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 
 			if(first)
 			{
-				nk_layout_row_dynamic(ctx, dy, 1);
+				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Parameters");
 
 				nk_layout_row_dynamic(ctx, DY, 4);
@@ -4108,8 +4063,8 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 
 			if(first)
 			{
-				nk_layout_row_dynamic(ctx, dy, 1);
-				_tab_label(ctx, "Dynameters");
+				nk_layout_row_dynamic(ctx, handle->dy2, 1);
+				_tab_label(ctx, "Dynameters (r/w)");
 
 				nk_layout_row_dynamic(ctx, DY, 4);
 				first = false;
@@ -4123,8 +4078,8 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 
 			if(first)
 			{
-				nk_layout_row_dynamic(ctx, dy, 1);
-				_tab_label(ctx, "Dynameters");
+				nk_layout_row_dynamic(ctx, handle->dy2, 1);
+				_tab_label(ctx, "Dynameters (r/o)");
 
 				nk_layout_row_dynamic(ctx, DY, 4);
 				first = false;
@@ -4412,7 +4367,6 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 	}
 
 	handle->module_selector = mod;
-	handle->preset_selector = NULL;
 	handle->port_selector = NULL;
 	handle->param_selector = NULL;
 	handle->preset_find_matches = true;
@@ -4768,10 +4722,29 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 	}
 }
 
+static inline int
+_group_begin(struct nk_context *ctx, const char *title, nk_flags flags, struct nk_rect *bb)
+{
+	*bb = nk_widget_bounds(ctx);
+
+	return nk_group_begin(ctx, title, flags);
+}
+
+static inline void
+_group_end(struct nk_context *ctx, struct nk_rect *bb)
+{
+	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+	struct nk_style *style = &ctx->style;
+
+	nk_group_end(ctx);
+	nk_stroke_rect(canvas, *bb, 0.f, style->window.group_border, style->window.group_border_color);
+}
+
 static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+	struct nk_style *style = &ctx->style;
 	const struct nk_input *in = &ctx->input;
 
 	handle->plugin_find_matches = false;
@@ -4781,11 +4754,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	const struct nk_rect total_space = nk_window_get_content_region(ctx);
 	const float vertical = total_space.h
 		- handle->dy
-		- 3*ctx->style.window.group_padding.y;
+		- 3*style->window.group_padding.y;
 	const float upper_h = vertical * 0.6f;
 	const float lower_h = vertical * 0.4f
 		- handle->dy
-		- 2*ctx->style.window.group_padding.y;
+		- 2*style->window.group_padding.y;
 
 	nk_layout_space_begin(ctx, NK_STATIC, upper_h,
 		_hash_size(&handle->mods) + _hash_size(&handle->conns));
@@ -4807,7 +4780,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		// display grid
 		{
 			struct nk_rect ssize = nk_layout_space_bounds(ctx);
-			ssize.h -= ctx->style.window.group_padding.y;
+			ssize.h -= style->window.group_padding.y;
 			const float grid_size = 28.0f * handle->scale;
 
 			nk_fill_rect(canvas, ssize, 0.f, grid_background_color);
@@ -4872,21 +4845,21 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
 
 		if(is_audio)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "Audio"))
 			handle->type = PROPERTY_TYPE_AUDIO;
 		if(is_audio)
 			nk_style_pop_color(ctx);
 
 		if(is_cv)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "CV"))
 			handle->type = PROPERTY_TYPE_CV;
 		if(is_cv)
 			nk_style_pop_color(ctx);
 
 		if(is_atom)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "Atom"))
 			handle->type = PROPERTY_TYPE_ATOM;
 		if(is_atom)
@@ -4895,35 +4868,35 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		nk_spacing(ctx, 1);
 
 		if(is_midi)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "MIDI"))
 			handle->type = PROPERTY_TYPE_MIDI;
 		if(is_midi)
 			nk_style_pop_color(ctx);
 
 		if(is_osc)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "OSC"))
 			handle->type = PROPERTY_TYPE_OSC;
 		if(is_osc)
 			nk_style_pop_color(ctx);
 
 		if(is_time)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "Time"))
 			handle->type = PROPERTY_TYPE_TIME;
 		if(is_time)
 			nk_style_pop_color(ctx);
 
 		if(is_patch)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "Patch"))
 			handle->type = PROPERTY_TYPE_PATCH;
 		if(is_patch)
 			nk_style_pop_color(ctx);
 
 		if(is_xpress)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "XPression"))
 			handle->type = PROPERTY_TYPE_XPRESS;
 		if(is_xpress)
@@ -4932,7 +4905,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		nk_spacing(ctx, 1);
 
 		if(is_automation)
-			nk_style_push_color(ctx, &ctx->style.button.border_color, hilight_color);
+			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
 		if(nk_button_label(ctx, "Automation"))
 			handle->type = PROPERTY_TYPE_AUTOMATION;
 		if(is_automation)
@@ -4940,10 +4913,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	}
 
 	{
+		struct nk_rect bb;
 		const float lower_ratio [4] = {0.2, 0.2, 0.4, 0.2};
 		nk_layout_row(ctx, NK_DYNAMIC, lower_h, 4, lower_ratio);
 
-		if(nk_group_begin(ctx, "Plugins", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		if(_group_begin(ctx, "Plugins", NK_WINDOW_TITLE, &bb))
 		{
 			nk_menubar_begin(ctx);
 			{
@@ -4965,17 +4939,18 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			}
 			nk_menubar_end(ctx);
 
-			nk_layout_row_dynamic(ctx, dy, 1);
+			nk_layout_row_dynamic(ctx, handle->dy2, 1);
+			nk_spacing(ctx, 1); // fixes mouse-over bug
 			_expose_main_plugin_list(handle, ctx, handle->plugin_find_matches);
 
 #if 0
 			_expose_main_plugin_info(handle, ctx);
 #endif
 
-			nk_group_end(ctx);
+			_group_end(ctx, &bb);
 		}
 
-		if(nk_group_begin(ctx, "Presets", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		if(_group_begin(ctx, "Presets", NK_WINDOW_TITLE, &bb))
 		{
 			nk_menubar_begin(ctx);
 			{
@@ -4997,16 +4972,15 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			}
 			nk_menubar_end(ctx);
 
-			nk_layout_row_dynamic(ctx, dy, 1);
 			_expose_main_preset_list(handle, ctx, handle->preset_find_matches);
 
 #if 0
 			_expose_main_preset_info(handle, ctx);
 #endif
-			nk_group_end(ctx);
+			_group_end(ctx, &bb);
 		}
 
-		if(nk_group_begin(ctx, "Controls", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		if(_group_begin(ctx, "Controls", NK_WINDOW_TITLE, &bb))
 		{
 			nk_menubar_begin(ctx);
 			{
@@ -5037,15 +5011,15 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			mod_t *mod = handle->module_selector;
 			if(mod)
 			{
-				const float DY = dy*2 + 6*ctx->style.window.group_padding.y + 2*ctx->style.window.group_border;
+				const float DY = dy*2 + 6*style->window.group_padding.y + 2*style->window.group_border;
 
 				_expose_control_list(handle, mod, ctx, DY, dy, handle->port_find_matches);
 			}
 
-			nk_group_end(ctx);
+			_group_end(ctx, &bb);
 		}
 
-		if(nk_group_begin(ctx, "Automations", NK_WINDOW_BORDER | NK_WINDOW_TITLE))
+		if(_group_begin(ctx, "Automations", NK_WINDOW_TITLE, &bb))
 		{
 			mod_t *mod = handle->module_selector;
 			if(mod)
@@ -5130,7 +5104,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				}
 			}
 
-			nk_group_end(ctx);
+			_group_end(ctx, &bb);
 		}
 	}
 }
@@ -5251,9 +5225,12 @@ static void
 _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 {
 	plughandle_t *handle = data;
+	const struct nk_user_font *font = ctx->style.font;
+	const struct nk_style *style = &handle->win.ctx.style;
 
 	handle->scale = nk_pugl_get_scale(&handle->win);
 	handle->dy = 20.f * handle->scale;
+	handle->dy2 = font->height + 2 * style->window.header.label_padding.y;
 
 	handle->has_control_a = nk_pugl_is_shortcut_pressed(&ctx->input, 'a', true);
 
@@ -5392,6 +5369,17 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	// adjust styling
 	struct nk_style *style = &handle->win.ctx.style;
 	style->button.border_color = button_border_color;
+
+	style->window.header.label_padding = nk_vec2(4.f, 1.f);
+	style->window.header.padding = nk_vec2(4.f, 1.f);
+	style->window.header.normal.data.color = head_color;
+	style->window.header.hover.data.color = head_color;
+	style->window.header.active.data.color = head_color;
+
+	style->selectable.hover.data.color = hilight_color;
+	style->selectable.pressed.data.color = hilight_color;
+	style->selectable.text_hover = nk_rgb(0, 0, 0);
+	style->selectable.text_pressed = nk_rgb(0, 0, 0);
 	//TODO more styling changes to come here
 
 	handle->scale = nk_pugl_get_scale(&handle->win);
