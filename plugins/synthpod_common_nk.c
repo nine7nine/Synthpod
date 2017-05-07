@@ -222,8 +222,7 @@ struct _mod_t {
 	hash_t groups;
 	hash_t banks;
 	hash_t params;
-	hash_t wdynams;
-	hash_t rdynams;
+	hash_t dynams;
 
 	LilvNodes *readables;
 	LilvNodes *writables;
@@ -349,6 +348,7 @@ struct _plughandle_t {
 	hash_t preset_matches;
 	hash_t port_matches;
 	hash_t param_matches;
+	hash_t dynam_matches;
 
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
@@ -374,7 +374,7 @@ struct _plughandle_t {
 
 	bool plugin_find_matches;
 	bool preset_find_matches;
-	bool port_find_matches;
+	bool prop_find_matches;
 
 	struct {
 		bool active;
@@ -1059,14 +1059,7 @@ _mod_param_find_by_property(mod_t *mod, LV2_URID property)
 		if(param->property == property)
 			return param;
 	}
-	HASH_FOREACH(&mod->wdynams, param_itr)
-	{
-		param_t *param = *param_itr;
-
-		if(param->property == property)
-			return param;
-	}
-	HASH_FOREACH(&mod->rdynams, param_itr)
+	HASH_FOREACH(&mod->dynams, param_itr)
 	{
 		param_t *param = *param_itr;
 
@@ -1078,9 +1071,9 @@ _mod_param_find_by_property(mod_t *mod, LV2_URID property)
 }
 
 static param_t *
-_mod_dynam_find_by_property(hash_t *hash, LV2_URID property)
+_mod_dynam_find_by_property(mod_t *mod, LV2_URID property)
 {
-	HASH_FOREACH(hash, param_itr)
+	HASH_FOREACH(&mod->dynams, param_itr)
 	{
 		param_t *param = *param_itr;
 
@@ -1343,6 +1336,48 @@ _param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
 }
 
 static void
+_refresh_main_dynam_list(plughandle_t *handle, mod_t *mod)
+{
+	_hash_free(&handle->dynam_matches);
+
+	bool search = _textedit_len(&handle->port_search_edit) != 0;
+
+	HASH_FOREACH(&mod->dynams, itr)
+	{
+		param_t *param = *itr;
+
+		bool visible = true;
+		if(search)
+		{
+			if(param->label)
+			{
+				if(!strcasestr(param->label, _textedit_const(&handle->port_search_edit)))
+					visible = false;
+			}
+		}
+
+		if(visible)
+			_hash_add(&handle->dynam_matches, param);
+	}
+}
+
+static int
+_sort_param_name(const void *a, const void *b)
+{
+	const param_t *param_a = *(const param_t **)a;
+	const param_t *param_b = *(const param_t **)b;
+
+	const char *name_a = param_a->label;
+	const char *name_b = param_b->label;
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	return ret;
+}
+
+static void
 _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 	uint32_t src_proto, const LV2_Atom *src_value, bool route_to_ui)
 {
@@ -1477,18 +1512,18 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 
 							if(property == handle->regs.patch.wildcard.urid)
 							{
-								HASH_FREE(&src_mod->wdynams, param_ptr)
+								HASH_FREE(&src_mod->dynams, param_ptr)
 								{
 									param_t *param = param_ptr;
 									_param_free(handle, param);
-								}
+								} //FIXME only delete writables
 							}
 							else if(subj)
 							{
-								param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, subj);
+								param_t *param = _mod_dynam_find_by_property(src_mod, subj);
 								if(param)
 								{
-									_hash_remove(&src_mod->wdynams, param);
+									_hash_remove(&src_mod->dynams, param);
 									_param_free(handle, param);
 								}
 							}
@@ -1500,27 +1535,25 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 
 							if(property == handle->regs.patch.wildcard.urid)
 							{
-								HASH_FREE(&src_mod->rdynams, param_ptr)
+								HASH_FREE(&src_mod->dynams, param_ptr)
 								{
 									param_t *param = param_ptr;
 									_param_free(handle, param);
-								}
+								} //FIXME only delete readables
 							}
 							else if(subj)
 							{
-								param_t *param = _mod_dynam_find_by_property(&src_mod->rdynams, subj);
+								param_t *param = _mod_dynam_find_by_property(src_mod, subj);
 								if(param)
 								{
-									_hash_remove(&src_mod->rdynams, param);
+									_hash_remove(&src_mod->dynams, param);
 									_param_free(handle, param);
 								}
 							}
 						}
 						else if(subj)
 						{
-							param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, subj);
-							if(!param)
-								param = _mod_dynam_find_by_property(&src_mod->rdynams, subj);
+							param_t *param = _mod_dynam_find_by_property(src_mod, subj);
 							if(param)
 							{
 								if(prop->key == handle->regs.rdfs.range.urid)
@@ -1565,9 +1598,9 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 						{
 							const LV2_URID property = ((const LV2_Atom_URID *)&prop->value)->body;
 
-							param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, property);
+							param_t *param = _mod_dynam_find_by_property(src_mod, property);
 							if(!param)
-								param = _param_add(&src_mod->wdynams, false);
+								param = _param_add(&src_mod->dynams, false);
 							if(param)
 							{
 								param->property = property;
@@ -1582,9 +1615,9 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 						{
 							const LV2_URID property = ((const LV2_Atom_URID *)&prop->value)->body;
 
-							param_t *param = _mod_dynam_find_by_property(&src_mod->rdynams, property);
+							param_t *param = _mod_dynam_find_by_property(src_mod, property);
 							if(!param)
-								param = _param_add(&src_mod->rdynams, true);
+								param = _param_add(&src_mod->dynams, true);
 							if(param)
 							{
 								param->property = property;
@@ -1596,9 +1629,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 						}
 						else if(subj)
 						{
-							param_t *param = _mod_dynam_find_by_property(&src_mod->wdynams, subj);
-							if(!param)
-								param = _mod_dynam_find_by_property(&src_mod->rdynams, subj);
+							param_t *param = _mod_dynam_find_by_property(src_mod, subj);
 							if(param)
 							{
 								if(  (prop->key == handle->regs.rdfs.range.urid)
@@ -1613,6 +1644,8 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								{
 									free(param->label);
 									param->label = strdup(LV2_ATOM_BODY_CONST(&prop->value));
+									_refresh_main_dynam_list(handle, src_mod);
+									_hash_sort(&src_mod->dynams, _sort_param_name);
 								}
 								else if( (prop->key == handle->regs.rdfs.comment.urid)
 									&& (prop->value.type == handle->forge.String) )
@@ -2032,32 +2065,17 @@ _sort_rdfs_label(const void *a, const void *b, void *data)
 }
 
 static int
-_sort_port_name(const void *a, const void *b, void *data)
+_sort_port_name(const void *a, const void *b)
 {
-	mod_t *mod = data;
-
 	const port_t *port_a = *(const port_t **)a;
 	const port_t *port_b = *(const port_t **)b;
 
-	const char *name_a = NULL;
-	const char *name_b = NULL;
-
-	LilvNode *node_a = port_a->port ? lilv_port_get_name(mod->plug, port_a->port) : NULL;
-	LilvNode *node_b = port_b->port ? lilv_port_get_name(mod->plug, port_b->port) : NULL;
-
-	if(node_a)
-		name_a = lilv_node_as_string(node_a);
-	if(node_b)
-		name_b = lilv_node_as_string(node_b);
+	const char *name_a = port_a->name;
+	const char *name_b = port_b->name;
 
 	const int ret = name_a && name_b
 		? strcasecmp(name_a, name_b)
 		: 0;
-
-	if(node_a)
-		lilv_node_free(node_a);
-	if(node_b)
-		lilv_node_free(node_b);
 
 	return ret;
 }
@@ -2070,24 +2088,6 @@ _sort_scale_point_name(const void *a, const void *b)
 
 	const char *name_a = scale_point_a->label;
 	const char *name_b = scale_point_b->label;
-
-	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
-		: 0;
-
-	return ret;
-}
-
-static int
-_sort_param_name(const void *a, const void *b, void *data)
-{
-	plughandle_t *handle = data;
-
-	const param_t *param_a = *(const param_t **)a;
-	const param_t *param_b = *(const param_t **)b;
-
-	const char *name_a = param_a->label;
-	const char *name_b = param_b->label;
 
 	const int ret = name_a && name_b
 		? strcasecmp(name_a, name_b)
@@ -2435,7 +2435,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		}
 	}
 
-	_hash_sort_r(&mod->ports, _sort_port_name, mod);
+	_hash_sort(&mod->ports, _sort_port_name);
 	_hash_sort_r(&mod->groups, _sort_rdfs_label, handle);
 
 	mod->presets = lilv_plugin_get_related(plug, handle->node.pset_Preset);
@@ -2503,7 +2503,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			_param_fill(handle, param, param_node);
 	}
 
-	_hash_sort_r(&mod->params, _sort_param_name, handle);
+	_hash_sort(&mod->params, _sort_param_name);
 
 	// add UIs
 	mod->ui_nodes = lilv_plugin_get_uis(mod->plug);
@@ -4001,12 +4001,6 @@ _refresh_main_param_list(plughandle_t *handle, mod_t *mod)
 }
 
 static void
-_refresh_main_dynam_list(plughandle_t *handle, mod_t *mod)
-{
-	//FIXME
-}
-
-static void
 _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	float DY, float dy, bool find_matches)
 {
@@ -4014,6 +4008,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	{
 		_refresh_main_port_list(handle, mod);
 		_refresh_main_param_list(handle, mod);
+		_refresh_main_dynam_list(handle, mod);
 	}
 
 	HASH_FOREACH(&mod->groups, itr)
@@ -4090,29 +4085,14 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 
 	{
 		bool first = true;
-		HASH_FOREACH(&mod->wdynams, itr)
+		HASH_FOREACH(&handle->dynam_matches, itr)
 		{
 			param_t *param = *itr;
 
 			if(first)
 			{
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
-				_tab_label(ctx, "Dynameters (r/w)");
-
-				nk_layout_row_dynamic(ctx, DY, 4);
-				first = false;
-			}
-
-			_expose_param(handle, mod, ctx, param, dy);
-		}
-		HASH_FOREACH(&mod->rdynams, itr)
-		{
-			param_t *param = *itr;
-
-			if(first)
-			{
-				nk_layout_row_dynamic(ctx, handle->dy2, 1);
-				_tab_label(ctx, "Dynameters (r/o)");
+				_tab_label(ctx, "Dynameters");
 
 				nk_layout_row_dynamic(ctx, DY, 4);
 				first = false;
@@ -4403,7 +4383,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 	handle->port_selector = NULL;
 	handle->param_selector = NULL;
 	handle->preset_find_matches = true;
-	handle->port_find_matches = true;
+	handle->prop_find_matches = true;
 }
 
 static void
@@ -4782,7 +4762,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 	handle->plugin_find_matches = false;
 	handle->preset_find_matches = false;
-	handle->port_find_matches = false;
+	handle->prop_find_matches = false;
 
 	const struct nk_rect total_space = nk_window_get_content_region(ctx);
 	const float vertical = total_space.h
@@ -5023,13 +5003,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
 					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 				if(old_sel != handle->port_search_selector)
-					handle->port_find_matches = true;
+					handle->prop_find_matches = true;
 				const size_t old_len = _textedit_len(&handle->port_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
 				_textedit_zero_terminate(&handle->port_search_edit);
 				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
-					handle->port_find_matches = true;
+					handle->prop_find_matches = true;
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->port_search_edit);
 
@@ -5046,7 +5026,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			{
 				const float DY = dy*2 + 6*style->window.group_padding.y + 2*style->window.group_border;
 
-				_expose_control_list(handle, mod, ctx, DY, dy, handle->port_find_matches);
+				_expose_control_list(handle, mod, ctx, DY, dy, handle->prop_find_matches);
 			}
 
 			_group_end(ctx, &bb);
@@ -5464,6 +5444,7 @@ cleanup(LV2UI_Handle instance)
 	_hash_free(&handle->preset_matches);
 	_hash_free(&handle->port_matches);
 	_hash_free(&handle->param_matches);
+	_hash_free(&handle->dynam_matches);
 
 	_deinit(handle);
 
