@@ -1191,6 +1191,10 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 										ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
 									if(ref)
 										ref = lv2_atom_forge_urid(&app->forge, automation->property);
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.rdfs.range.urid);
+									if(ref)
+										ref = lv2_atom_forge_urid(&app->forge, automation->range);
 								}
 								else
 								{
@@ -1843,6 +1847,7 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom_URID *src_property = NULL;
+	const LV2_Atom_URID *src_range = NULL;
 	const LV2_Atom_Int *src_channel = NULL;
 	const LV2_Atom_Int *src_controller = NULL;
 	const LV2_Atom_Int *src_min = NULL;
@@ -1852,6 +1857,7 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		app->regs.synthpod.sink_module.urid, &src_module,
 		app->regs.synthpod.sink_symbol.urid, &src_symbol,
 		app->regs.patch.property.urid, &src_property,
+		app->regs.rdfs.range.urid, &src_range,
 		app->regs.midi.channel.urid, &src_channel,
 		app->regs.midi.controller_number.urid, &src_controller,
 		app->regs.core.minimum.urid, &src_min,
@@ -1864,6 +1870,8 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
 	const LV2_URID src_prop = src_property
 		? src_property->body : 0;
+	const LV2_URID src_ran = src_range
+		? src_range->body : 0;
 
 	mod_t *mod = _mod_find_by_urn(app, src_urn);
 	if(mod)
@@ -1884,6 +1892,7 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				automation->type = AUTO_TYPE_MIDI;
 				automation->index = port->index;
 				automation->property = src_prop;
+				automation->range = src_ran;
 
 				automation->midi.channel = src_channel ? src_channel->body : -1;
 				automation->midi.controller = src_controller ? src_controller->body : -1;

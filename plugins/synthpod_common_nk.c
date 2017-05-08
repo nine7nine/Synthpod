@@ -903,6 +903,11 @@ _patch_param_automation_internal(plughandle_t *handle, param_t *source_param)
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_param->property);
 
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.rdfs.range.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_param->range);
+
 	return ref;
 }
 

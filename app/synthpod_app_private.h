@@ -226,6 +226,7 @@ struct _auto_t {
 	auto_type_t type;
 	uint32_t index;
 	LV2_URID property;
+	LV2_URID range;
 
 	union {
 		midi_auto_t midi;

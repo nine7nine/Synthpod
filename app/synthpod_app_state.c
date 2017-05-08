@@ -1034,7 +1034,9 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 									if(automation->property)
 									{
 										ref = lv2_atom_forge_key(forge, app->regs.patch.property.urid)
-											&& lv2_atom_forge_urid(forge, automation->property);
+											&& lv2_atom_forge_urid(forge, automation->property)
+											&& lv2_atom_forge_key(forge, app->regs.rdfs.range.urid)
+											&& lv2_atom_forge_urid(forge, automation->range);
 									}
 									else
 									{

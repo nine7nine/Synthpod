@@ -222,7 +222,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 								}
 								else if( (port->type == PORT_TYPE_ATOM) && automation->property )
 								{
-									const int32_t i32 = floorf(rel * 127.f); //FIXME use correct scaling
+									const float f32 = rel * 127.f; //FIXME use correct scaling
 
 									LV2_Atom_Sequence *control = PORT_BASE_ALIGNED(port);
 									LV2_Atom_Event *dst = lv2_atom_sequence_end(&control->body, control->atom.size);
@@ -230,14 +230,41 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 									lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)dst, PORT_SIZE(port) - control->atom.size - sizeof(LV2_Atom));
 
-									if(  lv2_atom_forge_frame_time(&app->forge, nsamples - 1)
+									LV2_Atom_Forge_Ref ref;
+									ref = lv2_atom_forge_frame_time(&app->forge, nsamples - 1)
 										&& lv2_atom_forge_object(&app->forge, &obj_frame, 0, app->regs.patch.set.urid)
 										&& lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid)
 										&& lv2_atom_forge_urid(&app->forge, automation->property)
-										&& lv2_atom_forge_key(&app->forge, app->regs.patch.value.urid)
-										&& lv2_atom_forge_int(&app->forge, i32) ) //FIXME use correct type
+										&& lv2_atom_forge_key(&app->forge, app->regs.patch.value.urid);
+									if(ref)
 									{
-										lv2_atom_forge_pop(&app->forge, &obj_frame);
+										if(automation->range == app->forge.Bool)
+										{
+											const int32_t i32 = (f32 != 0.f);
+											ref = lv2_atom_forge_bool(&app->forge, i32);
+										}
+										else if(automation->range == app->forge.Int)
+										{
+											const int32_t i32 = floorf(f32);
+											ref = lv2_atom_forge_int(&app->forge, i32);
+										}
+										else if(automation->range == app->forge.Long)
+										{
+											const int64_t i64 = floorf(f32);
+											ref = lv2_atom_forge_long(&app->forge, i64);
+										}
+										else if(automation->range == app->forge.Float)
+										{
+											ref = lv2_atom_forge_float(&app->forge, f32);
+										}
+										else if(automation->range == app->forge.Double)
+										{
+											ref = lv2_atom_forge_double(&app->forge, f32);
+										}
+										//FIXME support more types
+
+										if(ref)
+											lv2_atom_forge_pop(&app->forge, &obj_frame);
 
 										control->atom.size += sizeof(LV2_Atom_Event) + dst->body.size;
 									}
