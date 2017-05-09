@@ -1253,6 +1253,12 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 
 	if(param->range)
 	{
+		if(param->range == handle->forge.Bool)
+		{
+			param->min.b = 0;
+			param->max.b = 1;
+		}
+
 		LilvNode *min = lilv_world_get(handle->world, param_node, handle->node.lv2_minimum, NULL);
 		if(min)
 		{
@@ -1727,6 +1733,11 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 									param->range = ((const LV2_Atom_URID *)&prop->value)->body;
 									if(param->range == handle->forge.String)
 										nk_textedit_init_default(&param->val.editor);
+									else if(param->range == handle->forge.Bool)
+									{
+										param->min.b = 0;
+										param->min.b = 1;
+									}
 								}
 								else if( (prop->key == handle->regs.rdfs.label.urid)
 									&& (prop->value.type == handle->forge.String) )
