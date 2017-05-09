@@ -195,35 +195,29 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 							if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
 								&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
 							{
-								float rel = (msg[2] - mauto->min) * mauto->range_1;
-								if(rel < 0.f)
-									rel = 0.f;
-								else if(rel > 1.f)
-									rel = 1.f;
+								// linear mapping from MIDI to automation value
+								double f64 = msg[2] * automation->mul + automation->add;
+
+								// clip automation value to destination range
+								if(f64 < automation->c)
+									f64 = automation->c;
+								else if(f64 > automation->d)
+									f64 = automation->d;
 
 								port_t *port = &mod->ports[automation->index];
 								if(port->type == PORT_TYPE_CONTROL)
 								{
 									control_port_t *control = &port->control;
 
-									float f32 = rel * control->range + control->min;
-									if(control->is_integer)
-										f32 = floorf(f32);
-
-									if(f32 < control->min)
-										f32 = control->min;
-									else if(f32 > control->max)
-										f32 = control->max;
-
 									float *buf = PORT_BASE_ALIGNED(port);
-									*buf = f32;
+									*buf = control->is_integer
+										? floor(f64)
+										: f64;
 
 									//printf("control automation match: %f %f\n", rel, f32);
 								}
 								else if( (port->type == PORT_TYPE_ATOM) && automation->property )
 								{
-									const float f32 = rel * 127.f; //FIXME use correct scaling
-
 									LV2_Atom_Sequence *control = PORT_BASE_ALIGNED(port);
 									LV2_Atom_Event *dst = lv2_atom_sequence_end(&control->body, control->atom.size);
 									LV2_Atom_Forge_Frame obj_frame;
@@ -240,26 +234,23 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 									{
 										if(automation->range == app->forge.Bool)
 										{
-											const int32_t i32 = (f32 != 0.f);
-											ref = lv2_atom_forge_bool(&app->forge, i32);
+											ref = lv2_atom_forge_bool(&app->forge, f64 != 0.0);
 										}
 										else if(automation->range == app->forge.Int)
 										{
-											const int32_t i32 = floorf(f32);
-											ref = lv2_atom_forge_int(&app->forge, i32);
+											ref = lv2_atom_forge_int(&app->forge, floor(f64));
 										}
 										else if(automation->range == app->forge.Long)
 										{
-											const int64_t i64 = floorf(f32);
-											ref = lv2_atom_forge_long(&app->forge, i64);
+											ref = lv2_atom_forge_long(&app->forge, floor(f64));
 										}
 										else if(automation->range == app->forge.Float)
 										{
-											ref = lv2_atom_forge_float(&app->forge, f32);
+											ref = lv2_atom_forge_float(&app->forge, f64);
 										}
 										else if(automation->range == app->forge.Double)
 										{
-											ref = lv2_atom_forge_double(&app->forge, f32);
+											ref = lv2_atom_forge_double(&app->forge, f64);
 										}
 										//FIXME support more types
 

@@ -118,6 +118,7 @@ union _param_union_t {
 	int64_t h;
 	float f;
 	double d;
+	double u;
 	struct nk_text_edit editor;
 	chunk_t chunk;
 };
@@ -138,8 +139,8 @@ enum _auto_type_t {
 struct _midi_auto_t {
 	int channel;
 	int controller;
-	int min;
-	int max;
+	int a;
+	int b;
 };
 
 struct _osc_auto_t {
@@ -150,6 +151,10 @@ struct _osc_auto_t {
 
 struct _auto_t {
 	auto_type_t type;
+
+	double c;
+	double d;
+
 	union {
 		midi_auto_t midi;
 		osc_auto_t osc;
@@ -912,33 +917,43 @@ _patch_param_automation_internal(plughandle_t *handle, param_t *source_param)
 }
 
 static LV2_Atom_Forge_Ref
-_patch_midi_automation_internal(plughandle_t *handle, midi_auto_t *mauto)
+_patch_midi_automation_internal(plughandle_t *handle, auto_t *automation)
 {
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.midi.channel.urid);
 	if(ref)
-		ref = lv2_atom_forge_int(&handle->forge, mauto->channel);
+		ref = lv2_atom_forge_int(&handle->forge, automation->midi.channel);
 
 	if(ref)
 		ref = lv2_atom_forge_key(&handle->forge, handle->regs.midi.controller_number.urid);
 	if(ref)
-		ref = lv2_atom_forge_int(&handle->forge, mauto->controller);
+		ref = lv2_atom_forge_int(&handle->forge, automation->midi.controller);
 
 	if(ref)
-		ref = lv2_atom_forge_key(&handle->forge, handle->regs.core.minimum.urid);
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_min.urid);
 	if(ref)
-		ref = lv2_atom_forge_int(&handle->forge, mauto->min);
+		ref = lv2_atom_forge_double(&handle->forge, automation->midi.a);
 
 	if(ref)
-		ref = lv2_atom_forge_key(&handle->forge, handle->regs.core.maximum.urid);
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_max.urid);
 	if(ref)
-		ref = lv2_atom_forge_int(&handle->forge, mauto->max);
+		ref = lv2_atom_forge_double(&handle->forge, automation->midi.b);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_min.urid);
+	if(ref)
+		ref = lv2_atom_forge_double(&handle->forge, automation->c);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_max.urid);
+	if(ref)
+		ref = lv2_atom_forge_double(&handle->forge, automation->d);
 
 	return ref;
 }
 
 static void
 _patch_port_midi_automation_add(plughandle_t *handle, port_t *source_port,
-	midi_auto_t *mauto)
+	auto_t *automation)
 {
 	LV2_Atom_Forge_Frame frame [3];
 
@@ -947,7 +962,7 @@ _patch_port_midi_automation_add(plughandle_t *handle, port_t *source_port,
 			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.midi.Controller.urid)
 		&& _patch_port_automation_internal(handle, source_port)
-		&& _patch_midi_automation_internal(handle, mauto) )
+		&& _patch_midi_automation_internal(handle, automation) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -970,9 +985,28 @@ _patch_port_automation_remove(plughandle_t *handle, port_t *source_port)
 	}
 }
 
+static inline double
+_param_union_as_double(LV2_Atom_Forge *forge, LV2_URID range, param_union_t *pu)
+{
+	if(range == forge->Bool)
+		return pu->b;
+	else if(range == forge->Int)
+		return pu->i;
+	else if(range == forge->Long)
+		return pu->h;
+	else if(range == forge->Float)
+		return pu->f;
+	else if(range == forge->Double)
+		return pu->d;
+	else if(range == forge->URID)
+		return pu->u;
+
+	return 0.0;
+}
+
 static void
 _patch_param_midi_automation_add(plughandle_t *handle, param_t *source_param,
-	midi_auto_t *mauto)
+	auto_t *automation)
 {
 	LV2_Atom_Forge_Frame frame [3];
 
@@ -981,7 +1015,7 @@ _patch_param_midi_automation_add(plughandle_t *handle, param_t *source_param,
 			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.midi.Controller.urid)
 		&& _patch_param_automation_internal(handle, source_param)
-		&& _patch_midi_automation_internal(handle, mauto) )
+		&& _patch_midi_automation_internal(handle, automation) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -5095,11 +5129,27 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				port_t *port = handle->port_selector;
 				param_t *param = handle->param_selector;
 
+				double c = 0.0;
+				double d = 0.0;
+
 				auto_t *automation = NULL;
 				if(port && (port->type == PROPERTY_TYPE_CONTROL) )
+				{
 					automation = &port->control.automation;
+					control_port_t *control = &port->control;
+					c = control->is_int || control->is_bool
+						? control->min.i
+						: control->min.f;
+					d = control->is_int || control->is_bool
+						? control->max.i
+						: control->max.f;
+				}
 				else if(param)
+				{
 					automation = &param->automation;
+					c = _param_union_as_double(&handle->forge, param->range, &param->min);
+					d = _param_union_as_double(&handle->forge, param->range, &param->max);
+				}
 
 				if(automation)
 				{
@@ -5119,8 +5169,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 								// initialize
 								automation->midi.channel = -1;
 								automation->midi.controller = -1;
-								automation->midi.min = 0x0;
-								automation->midi.max = 0x7f;
+								automation->midi.a = 0x0;
+								automation->midi.b = 0x7f;
+								automation->c = c;
+								automation->d = d;
 							}
 							else if(automation->type == AUTO_OSC)
 							{
@@ -5135,12 +5187,16 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						nk_layout_row_dynamic(ctx, dy, 1);
 						nk_spacing(ctx, 1);
 
+						const double inc = 1.0; //FIXME
 						const float ipp = 1.f; //FIXME
 
-						nk_property_int(ctx, "Channel", -1, &automation->midi.channel, 0xf, 1, ipp);
-						nk_property_int(ctx, "Controller", -1, &automation->midi.controller, 0x7f, 1, ipp);
-						nk_property_int(ctx, "Minimum", 0, &automation->midi.min, 0x7f, 1, ipp);
-						nk_property_int(ctx, "Maximum", 0, &automation->midi.max, 0x7f, 1, ipp);
+						nk_property_int(ctx, "MIDI Channel", -1, &automation->midi.channel, 0xf, 1, ipp);
+						nk_property_int(ctx, "MIDI Controller", -1, &automation->midi.controller, 0x7f, 1, ipp);
+						nk_property_int(ctx, "MIDI Minimum", 0, &automation->midi.a, 0x7f, 1, ipp);
+						nk_property_int(ctx, "MIDI Maximum", 0, &automation->midi.b, 0x7f, 1, ipp);
+						nk_spacing(ctx, 1);
+						nk_property_double(ctx, "Target Minimum", c, &automation->c, d, inc, ipp);
+						nk_property_double(ctx, "Target Maximum", c, &automation->d, d, inc, ipp);
 					}
 					else if(automation->type == AUTO_OSC)
 					{
@@ -5160,9 +5216,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						else if(automation->type == AUTO_MIDI)
 						{
 							if(port)
-								_patch_port_midi_automation_add(handle, port, &automation->midi);
+								_patch_port_midi_automation_add(handle, port, automation);
 							else if(param)
-								_patch_param_midi_automation_add(handle, param, &automation->midi);
+								_patch_param_midi_automation_add(handle, param, automation);
 						}
 						else if(automation->type == AUTO_OSC)
 						{
@@ -5610,8 +5666,10 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 		const LV2_Atom_URID *src_property = NULL;
 		const LV2_Atom_Int *midi_channel = NULL;
 		const LV2_Atom_Int *midi_controller = NULL;
-		const LV2_Atom_Int *core_minimum= NULL;
-		const LV2_Atom_Int *core_maximum= NULL;
+		const LV2_Atom_Double *src_min = NULL;
+		const LV2_Atom_Double *src_max = NULL;
+		const LV2_Atom_Double *snk_min = NULL;
+		const LV2_Atom_Double *snk_max = NULL;
 
 		lv2_atom_object_get(obj,
 			handle->regs.synthpod.sink_module.urid, &src_module,
@@ -5619,8 +5677,10 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 			handle->regs.patch.property.urid, &src_property,
 			handle->regs.midi.channel.urid, &midi_channel,
 			handle->regs.midi.controller_number.urid, &midi_controller,
-			handle->regs.core.minimum.urid, &core_minimum,
-			handle->regs.core.maximum.urid, &core_maximum,
+			handle->regs.synthpod.source_min.urid, &src_min,
+			handle->regs.synthpod.source_max.urid, &src_max,
+			handle->regs.synthpod.sink_min.urid, &snk_min,
+			handle->regs.synthpod.sink_max.urid, &snk_max,
 			0);
 
 		const LV2_URID src_urn = src_module
@@ -5643,6 +5703,8 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 				if(src_port && (src_port->type == PROPERTY_TYPE_CONTROL) )
 				{
 					automation = &src_port->control.automation;
+
+					control_port_t *control = &src_port->control;
 				}
 			}
 		}
@@ -5665,11 +5727,14 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 		{
 			automation->type = AUTO_MIDI;
 
+			automation->midi.a = src_min ? src_min->body : 0x0;
+			automation->midi.b = src_max ? src_max->body : 0x7f;
+			automation->c = snk_min ? snk_min->body : 0.0; //FIXME
+			automation->d = snk_max ? snk_max->body : 0.0; //FIXME
+
 			midi_auto_t *mauto = &automation->midi;
 			mauto->channel = midi_channel ? midi_channel->body : -1;
 			mauto->controller = midi_controller ? midi_controller->body : -1;
-			mauto->min = core_minimum ? core_minimum->body : 0x0;
-			mauto->max = core_maximum ? core_maximum->body : 0x7f;
 		}
 	}
 	//FIXME OSC

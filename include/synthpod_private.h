@@ -375,6 +375,11 @@ struct _reg_t {
 		reg_item_t source_symbol;
 		reg_item_t sink_module;
 		reg_item_t sink_symbol;
+
+		reg_item_t source_min;
+		reg_item_t source_max;
+		reg_item_t sink_min;
+		reg_item_t sink_max;
 	} synthpod;
 
 	struct {
@@ -637,6 +642,11 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.sink_module, world, map, SYNTHPOD_PREFIX"sinkModule");
 	_register(&regs->synthpod.sink_symbol, world, map, SYNTHPOD_PREFIX"sinkSymbol");
 
+	_register(&regs->synthpod.source_min, world, map, SYNTHPOD_PREFIX"sourceMinimum");
+	_register(&regs->synthpod.source_max, world, map, SYNTHPOD_PREFIX"sourceMaximum");
+	_register(&regs->synthpod.sink_min, world, map, SYNTHPOD_PREFIX"sinkMinimum");
+	_register(&regs->synthpod.sink_max, world, map, SYNTHPOD_PREFIX"sinkMaximum");
+
 	_register(&regs->midi.Controller, world, map, LV2_MIDI__Controller);
 	_register(&regs->midi.channel, world, map, LV2_MIDI__channel);
 	_register(&regs->midi.controller_number, world, map, LV2_MIDI__controllerNumber);
@@ -863,6 +873,11 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.source_symbol);
 	_unregister(&regs->synthpod.sink_module);
 	_unregister(&regs->synthpod.sink_symbol);
+
+	_unregister(&regs->synthpod.source_min);
+	_unregister(&regs->synthpod.source_max);
+	_unregister(&regs->synthpod.sink_min);
+	_unregister(&regs->synthpod.sink_max);
 
 	_unregister(&regs->midi.Controller);
 	_unregister(&regs->midi.channel);

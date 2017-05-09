@@ -1215,14 +1215,24 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 									ref = lv2_atom_forge_int(&app->forge, mauto->controller);
 
 								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.core.minimum.urid);
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_min.urid);
 								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->min);
+									ref = lv2_atom_forge_double(&app->forge, automation->a);
 
 								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.core.maximum.urid);
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_max.urid);
 								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->max);
+									ref = lv2_atom_forge_double(&app->forge, automation->b);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_min.urid);
+								if(ref)
+									ref = lv2_atom_forge_double(&app->forge, automation->c);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
+								if(ref)
+									ref = lv2_atom_forge_double(&app->forge, automation->d);
 							}
 							if(ref)
 								lv2_atom_forge_pop(&app->forge, &frame[2]);
@@ -1850,8 +1860,10 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom_URID *src_range = NULL;
 	const LV2_Atom_Int *src_channel = NULL;
 	const LV2_Atom_Int *src_controller = NULL;
-	const LV2_Atom_Int *src_min = NULL;
-	const LV2_Atom_Int *src_max = NULL;
+	const LV2_Atom_Double *src_min = NULL;
+	const LV2_Atom_Double *src_max = NULL;
+	const LV2_Atom_Double *snk_min = NULL;
+	const LV2_Atom_Double *snk_max = NULL;
 
 	lv2_atom_object_get(obj,
 		app->regs.synthpod.sink_module.urid, &src_module,
@@ -1860,8 +1872,10 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		app->regs.rdfs.range.urid, &src_range,
 		app->regs.midi.channel.urid, &src_channel,
 		app->regs.midi.controller_number.urid, &src_controller,
-		app->regs.core.minimum.urid, &src_min,
-		app->regs.core.maximum.urid, &src_max,
+		app->regs.synthpod.source_min.urid, &src_min,
+		app->regs.synthpod.source_max.urid, &src_max,
+		app->regs.synthpod.sink_min.urid, &snk_min,
+		app->regs.synthpod.sink_max.urid, &snk_max,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1894,15 +1908,21 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				automation->property = src_prop;
 				automation->range = src_ran;
 
+				automation->a = src_min ? src_min->body : 0.0;
+				automation->b = src_max ? src_max->body : 0.0;
+				automation->c = snk_min ? snk_min->body : 0.0;
+				automation->d = snk_max ? snk_max->body : 0.0;
+
+				const double div = automation->b - automation->a;
+				automation->mul = div
+					? (automation->d - automation->c) / div
+					: 0.0;
+				automation->add = div
+					? (automation->c*automation->b - automation->a*automation->d) / div
+					: 0.0;
+
 				automation->midi.channel = src_channel ? src_channel->body : -1;
 				automation->midi.controller = src_controller ? src_controller->body : -1;
-				automation->midi.min = src_min ? src_min->body : 0x0;
-				automation->midi.max = src_max ? src_max->body : 0x7f;
-
-				const int range = automation->midi.max - automation->midi.min;
-				automation->midi.range_1 = range
-					? 1.f / range
-					: 0.f;
 
 				break;
 			}

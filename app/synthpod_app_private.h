@@ -210,16 +210,10 @@ enum _auto_type_t {
 struct _midi_auto_t {
 	int8_t channel;
 	int8_t controller;
-	uint8_t min;
-	uint8_t max;
-	float range_1;
 };
 
 struct _osc_auto_t {
 	char path [128]; //TODO how big?
-	float min;
-	float max;
-	float span;
 };
 
 struct _auto_t {
@@ -227,6 +221,14 @@ struct _auto_t {
 	uint32_t index;
 	LV2_URID property;
 	LV2_URID range;
+
+	double a;
+	double b;
+	double c;
+	double d;
+
+	double mul;
+	double add;
 
 	union {
 		midi_auto_t midi;

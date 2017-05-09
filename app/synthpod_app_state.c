@@ -1023,11 +1023,17 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 									&& lv2_atom_forge_key(forge, app->regs.midi.controller_number.urid)
 									&& lv2_atom_forge_int(forge, mauto->controller)
 
-									&& lv2_atom_forge_key(forge, app->regs.core.minimum.urid)
-									&& lv2_atom_forge_int(forge, mauto->min)
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.source_min.urid)
+									&& lv2_atom_forge_double(forge, automation->a)
 
-									&& lv2_atom_forge_key(forge, app->regs.core.maximum.urid)
-									&& lv2_atom_forge_int(forge, mauto->max);
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.source_max.urid)
+									&& lv2_atom_forge_double(forge, automation->b)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_min.urid)
+									&& lv2_atom_forge_double(forge, automation->c)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_max.urid)
+									&& lv2_atom_forge_double(forge, automation->d);
 
 								if(ref)
 								{
