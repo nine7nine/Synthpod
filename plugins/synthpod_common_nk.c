@@ -4132,7 +4132,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 					nk_layout_row_dynamic(ctx, handle->dy2, 1);
 					_tab_label(ctx, lilv_node_as_string(group_label_node));
 
-					nk_layout_row_dynamic(ctx, DY, 4);
+					nk_layout_row_dynamic(ctx, DY, 2);
 					first = false;
 				}
 
@@ -4156,7 +4156,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Ungrouped");
 
-				nk_layout_row_dynamic(ctx, DY, 4);
+				nk_layout_row_dynamic(ctx, DY, 2);
 				first = false;
 			}
 
@@ -4175,7 +4175,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Parameters");
 
-				nk_layout_row_dynamic(ctx, DY, 4);
+				nk_layout_row_dynamic(ctx, DY, 2);
 				first = false;
 			}
 
@@ -4194,7 +4194,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Dynameters");
 
-				nk_layout_row_dynamic(ctx, DY, 4);
+				nk_layout_row_dynamic(ctx, DY, 2);
 				first = false;
 			}
 
@@ -5034,13 +5034,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		{
 			nk_menubar_begin(ctx);
 			{
-				const float dim [2] = {0.4, 0.6};
+				const float dim [2] = {0.6, 0.4};
 				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-				const selector_search_t old_sel = handle->plugin_search_selector;
-				handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->plugin_search_selector)
-					handle->plugin_find_matches = true;
+
 				const size_t old_len = _textedit_len(&handle->plugin_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
@@ -5049,6 +5045,12 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					handle->plugin_find_matches = true;
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->plugin_search_edit);
+
+				const selector_search_t old_sel = handle->plugin_search_selector;
+				handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->plugin_search_selector)
+					handle->plugin_find_matches = true;
 			}
 			nk_menubar_end(ctx);
 
@@ -5067,13 +5069,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		{
 			nk_menubar_begin(ctx);
 			{
-				const float dim [2] = {0.4, 0.6};
+				const float dim [2] = {0.6, 0.4};
 				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-				const selector_search_t old_sel = handle->preset_search_selector;
-				handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->preset_search_selector)
-					handle->preset_find_matches = true;
+
 				const size_t old_len = _textedit_len(&handle->preset_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
@@ -5082,6 +5080,12 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					handle->preset_find_matches = true;
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->preset_search_edit);
+
+				const selector_search_t old_sel = handle->preset_search_selector;
+				handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->preset_search_selector)
+					handle->preset_find_matches = true;
 			}
 			nk_menubar_end(ctx);
 
@@ -5097,13 +5101,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		{
 			nk_menubar_begin(ctx);
 			{
-				const float dim [7] = {0.2, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1};
-				nk_layout_row(ctx, NK_DYNAMIC, dy, 7, dim);
-				const selector_search_t old_sel = handle->port_search_selector;
-				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->port_search_selector)
-					handle->prop_find_matches = true;
+				const float dim [2] = {0.6, 0.4};
+				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+
 				const size_t old_len = _textedit_len(&handle->port_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
@@ -5113,11 +5113,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->port_search_edit);
 
-				nk_check_label(ctx, "In", nk_true); //FIXME
-				nk_check_label(ctx, "Out", nk_true); //FIXME
-				nk_check_label(ctx, "Audio", nk_true); //FIXME
-				nk_check_label(ctx, "Ctrl.", nk_true); //FIXME
-				nk_check_label(ctx, "Event", nk_true); //FIXME
+				const selector_search_t old_sel = handle->port_search_selector;
+				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->port_search_selector)
+					handle->prop_find_matches = true;
 			}
 			nk_menubar_end(ctx);
 
