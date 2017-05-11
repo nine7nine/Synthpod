@@ -1891,49 +1891,60 @@ _mod_ui_subscribe_function(LV2UI_Controller controller, uint32_t index,
 static mod_ui_t *
 _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 {
+	const LilvNode *ui_node = lilv_ui_get_uri(ui);
+	const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
+
+	lilv_world_load_bundle(handle->world, bundle_node);
+	lilv_world_load_resource(handle->world, ui_node);
+
 	bool supported = false;
+	if(false)
+		{} // never reached
 #if defined(SANDBOX_X11)
-	if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
 		supported = true;
 #endif
 #if defined(SANDBOX_GTK2)
-	if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
 		supported = true;
 #endif
 #if defined(SANDBOX_GTK3)
-	if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
 		supported = true;
 #endif
 #if defined(SANDBOX_QT4)
-	if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
 		supported = true;
 #endif
 #if defined(SANDBOX_QT5)
-	if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
-		supported = true;
-#endif
-#if defined(SANDBOX_SHOW)
-	if(lilv_ui_is_a(ui, handle->regs.ui.show_interface.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
 		supported = true;
 #endif
 #if defined(SANDBOX_KX)
-	if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
 		supported = true;
 #endif
+#if defined(SANDBOX_SHOW)
+	else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
+		supported = true;
+#endif
+
 	if(!supported)
+	{
+		lilv_world_unload_resource(handle->world, ui_node);
+		lilv_world_unload_bundle(handle->world, bundle_node);
+
 		return NULL;
+	}
 
 	mod_ui_t *mod_ui = calloc(1, sizeof(mod_ui_t));
 	if(mod_ui)
 	{
-		const LilvNode *ui_node = lilv_ui_get_uri(ui);
-
 		mod_ui->mod = mod;
 		mod_ui->ui = ui;
 		mod_ui->uri = lilv_node_as_uri(ui_node);
 		const LV2_URID ui_urn = handle->map->map(handle->map->handle, mod_ui->uri);
 
-		const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
 		const char *bundle_uri = bundle_node ? lilv_node_as_uri(bundle_node) : NULL;
 		mod_ui->sbox.bundle_path = lilv_file_uri_parse(bundle_uri, NULL);
 
@@ -1964,6 +1975,7 @@ static void
 _mod_ui_run(mod_ui_t *mod_ui)
 {
 	const LilvUI *ui = mod_ui->ui;
+	const LilvNode *ui_node = lilv_ui_get_uri(ui);
 	mod_t *mod = mod_ui->mod;
 	plughandle_t *handle = mod->handle;
 
@@ -1971,33 +1983,35 @@ _mod_ui_run(mod_ui_t *mod_ui)
 	const char *plugin_uri = plugin_node ? lilv_node_as_uri(plugin_node) : NULL;
 
 	const char *exec_uri = NULL;
+	if(false)
+		{} // never reached
 #if defined(SANDBOX_X11)
-	if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
 		exec_uri = "/usr/local/bin/synthpod_sandbox_x11"; //FIXME prefix
 #endif
 #if defined(SANDBOX_GTK2)
-	if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
 		exec_uri = "/usr/local/bin/synthpod_sandbox_gtk2"; //FIXME prefix
 #endif
 #if defined(SANDBOX_GTK3)
-	if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
 		exec_uri = "/usr/local/bin/synthpod_sandbox_gtk3"; //FIXME prefix
 #endif
 #if defined(SANDBOX_QT4)
-	if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
 		exec_uri = "/usr/local/bin/synthpod_sandbox_qt4"; //FIXME prefix
 #endif
 #if defined(SANDBOX_QT5)
-	if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
 		exec_uri = "/usr/local/bin/synthpod_sandbox_qt5"; //FIXME prefix
 #endif
-#if defined(SANDBOX_SHOW)
-	if(lilv_ui_is_a(ui, handle->regs.ui.show_interface.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_show"; //FIXME prefix
-#endif
 #if defined(SANDBOX_KX)
-	if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+	else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
 		exec_uri = "/usr/local/bin/synthpod_sandbox_kx"; //FIXME prefix
+#endif
+#if defined(SANDBOX_SHOW)
+	else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
+		exec_uri = "/usr/local/bin/synthpod_sandbox_show"; //FIXME prefix
 #endif
 
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);
@@ -2053,8 +2067,17 @@ _mod_ui_stop(mod_ui_t *mod_ui)
 static void
 _mod_ui_free(mod_ui_t *mod_ui)
 {
+	mod_t *mod = mod_ui->mod;
+	plughandle_t *handle = mod->handle;
+
+	const LilvNode *ui_node = lilv_ui_get_uri(mod_ui->ui);
+	const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
+
 	if(_mod_ui_is_running(mod_ui))
 		_mod_ui_stop(mod_ui);
+
+	lilv_world_unload_resource(handle->world, ui_node);
+	lilv_world_unload_bundle(handle->world, bundle_node);
 
 	lilv_free(mod_ui->sbox.bundle_path);
 	free(mod_ui->sbox.socket_uri);
