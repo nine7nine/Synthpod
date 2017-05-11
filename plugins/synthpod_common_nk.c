@@ -3803,8 +3803,8 @@ _widget_string(plughandle_t *handle, struct nk_context *ctx,
 	if(has_shift_enter)
 #endif
 		flags |= NK_EDIT_SIG_ENTER;
-	const nk_flags state = nk_edit_buffer(ctx, flags,
-		editor, nk_filter_default);
+	const nk_flags state = nk_edit_buffer(ctx, flags, editor, nk_filter_default);
+	_textedit_zero_terminate(editor);
 	if(state & NK_EDIT_COMMITED)
 		commited = true;
 #if 0 //FIXME
