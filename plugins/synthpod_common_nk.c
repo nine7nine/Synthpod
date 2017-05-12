@@ -296,6 +296,8 @@ struct _plughandle_t {
 	LV2_URID_Unmap *unmap;
 	LV2UI_Write_Function writer;
 	LV2UI_Controller controller;
+	
+	const char *bundle_path;
 
 	nk_pugl_window_t win;
 
@@ -397,6 +399,18 @@ struct _plughandle_t {
 
 	float sample_rate;
 	float update_rate;
+
+	struct {
+		struct nk_image atom;
+		struct nk_image audio;
+		struct nk_image control;
+		struct nk_image cv;
+		struct nk_image midi;
+		struct nk_image osc;
+		struct nk_image patch;
+		struct nk_image time;
+		struct nk_image xpress;
+	} icon;
 };
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
@@ -2751,13 +2765,16 @@ _tooltip_visible(struct nk_context *ctx)
 static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
+	struct nk_style *style = &ctx->style;
+
 	nk_menubar_begin(ctx);
 	{
-		nk_layout_row_dynamic(ctx, dy, 5);
+		nk_layout_row_static(ctx, dy, 1.2*dy, 15);
+
 		{
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-N");
-			if(nk_button_label(ctx, "New") && handle->self_urn)
+			if(nk_button_label(ctx, "N") && handle->self_urn)
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -2768,15 +2785,8 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 			}
 
 			if(_tooltip_visible(ctx))
-				nk_tooltip(ctx, "Ctrl-O");
-			if(nk_button_label(ctx, "Open"))
-			{
-				//FIXME open file dialog
-			}
-
-			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-S");
-			if(nk_button_label(ctx, "Save") && handle->bundle_urn)
+			if(nk_button_label(ctx, "S") && handle->bundle_urn)
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -2787,19 +2797,96 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 			}
 
 			if(_tooltip_visible(ctx))
-				nk_tooltip(ctx, "Ctrl-Shift-S");
-			if(nk_button_label(ctx, "Save As"))
-			{
-				//FIXME open file dialog
-			}
-
-			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-Q");
-			if(nk_button_label(ctx, "Quit"))
+			if(nk_button_label(ctx, "Q"))
 			{
 				handle->done = true;
 			}
 		}
+
+		nk_spacing(ctx, 1);
+
+		{
+			const bool is_audio = handle->type == PROPERTY_TYPE_AUDIO;
+			const bool is_cv = handle->type == PROPERTY_TYPE_CV;
+			const bool is_atom = handle->type == PROPERTY_TYPE_ATOM;
+
+			const bool is_midi = handle->type == PROPERTY_TYPE_MIDI;
+			const bool is_osc = handle->type == PROPERTY_TYPE_OSC;
+			const bool is_time = handle->type == PROPERTY_TYPE_TIME;
+			const bool is_patch = handle->type == PROPERTY_TYPE_PATCH;
+			const bool is_xpress = handle->type == PROPERTY_TYPE_XPRESS;
+
+			const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
+
+			if(is_audio)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.audio, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_AUDIO;
+			if(is_audio)
+				nk_style_pop_color(ctx);
+
+			if(is_cv)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.cv, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_CV;
+			if(is_cv)
+				nk_style_pop_color(ctx);
+
+			if(is_atom)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.atom, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_ATOM;
+			if(is_atom)
+				nk_style_pop_color(ctx);
+
+			nk_spacing(ctx, 1);
+
+			if(is_midi)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.midi, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_MIDI;
+			if(is_midi)
+				nk_style_pop_color(ctx);
+
+			if(is_osc)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.osc, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_OSC;
+			if(is_osc)
+				nk_style_pop_color(ctx);
+
+			if(is_time)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.time, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_TIME;
+			if(is_time)
+				nk_style_pop_color(ctx);
+
+			if(is_patch)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.patch, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_PATCH;
+			if(is_patch)
+				nk_style_pop_color(ctx);
+
+			if(is_xpress)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_image_label(ctx, handle->icon.xpress, "", NK_TEXT_RIGHT))
+				handle->type = PROPERTY_TYPE_XPRESS;
+			if(is_xpress)
+				nk_style_pop_color(ctx);
+
+			nk_spacing(ctx, 1);
+
+			if(is_automation)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "A"))
+				handle->type = PROPERTY_TYPE_AUTOMATION;
+			if(is_automation)
+				nk_style_pop_color(ctx);
+		}
+
 		nk_menubar_end(ctx);
 	}
 }
@@ -4891,10 +4978,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	const float vertical = total_space.h
 		- handle->dy
 		- 2*style->window.group_padding.y;
-	const float upper_h = vertical * 0.6f;
-	const float lower_h = vertical * 0.4f
-		- handle->dy
-		- 6*style->window.group_padding.y;
+	const float upper_h = vertical * 0.65f;
+	const float lower_h = vertical * 0.35f
+		- 4*style->window.group_padding.y;
 
 	const float upper_ratio [2] = {0.8, 0.2};
 	nk_layout_row(ctx, NK_DYNAMIC, vertical, 4, upper_ratio);
@@ -4970,89 +5056,6 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_push_scissor(canvas, old_clip);
 		}
 		nk_layout_space_end(ctx);
-
-		{
-			nk_layout_row_dynamic(ctx, dy, 11);
-
-			const bool is_audio = handle->type == PROPERTY_TYPE_AUDIO;
-			const bool is_cv = handle->type == PROPERTY_TYPE_CV;
-			const bool is_atom = handle->type == PROPERTY_TYPE_ATOM;
-
-			const bool is_midi = handle->type == PROPERTY_TYPE_MIDI;
-			const bool is_osc = handle->type == PROPERTY_TYPE_OSC;
-			const bool is_time = handle->type == PROPERTY_TYPE_TIME;
-			const bool is_patch = handle->type == PROPERTY_TYPE_PATCH;
-			const bool is_xpress = handle->type == PROPERTY_TYPE_XPRESS;
-
-			const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
-
-			if(is_audio)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "Audio"))
-				handle->type = PROPERTY_TYPE_AUDIO;
-			if(is_audio)
-				nk_style_pop_color(ctx);
-
-			if(is_cv)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "CV"))
-				handle->type = PROPERTY_TYPE_CV;
-			if(is_cv)
-				nk_style_pop_color(ctx);
-
-			if(is_atom)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "Atom"))
-				handle->type = PROPERTY_TYPE_ATOM;
-			if(is_atom)
-				nk_style_pop_color(ctx);
-
-			nk_spacing(ctx, 1);
-
-			if(is_midi)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "MIDI"))
-				handle->type = PROPERTY_TYPE_MIDI;
-			if(is_midi)
-				nk_style_pop_color(ctx);
-
-			if(is_osc)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "OSC"))
-				handle->type = PROPERTY_TYPE_OSC;
-			if(is_osc)
-				nk_style_pop_color(ctx);
-
-			if(is_time)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "Time"))
-				handle->type = PROPERTY_TYPE_TIME;
-			if(is_time)
-				nk_style_pop_color(ctx);
-
-			if(is_patch)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "Patch"))
-				handle->type = PROPERTY_TYPE_PATCH;
-			if(is_patch)
-				nk_style_pop_color(ctx);
-
-			if(is_xpress)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "XPression"))
-				handle->type = PROPERTY_TYPE_XPRESS;
-			if(is_xpress)
-				nk_style_pop_color(ctx);
-
-			nk_spacing(ctx, 1);
-
-			if(is_automation)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "Automation"))
-				handle->type = PROPERTY_TYPE_AUTOMATION;
-			if(is_automation)
-				nk_style_pop_color(ctx);
-		}
 
 		{
 			nk_layout_row_dynamic(ctx, lower_h, 4);
@@ -5441,6 +5444,29 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 	nk_end(ctx);
 }
 
+static struct nk_image
+_icon_load(plughandle_t *handle, const char *file)
+{
+	struct nk_image img;
+	char *path;
+	//if(asprintf(&path, "%s%s", handle->bundle_path, file) != -1)
+	if(asprintf(&path, "%s%s", SYNTHPOD_DATA_DIR, file) != -1) //FIXME
+	{
+		img = nk_pugl_icon_load(&handle->win, path);
+		free(path);
+	}
+	else
+		img = nk_image_id(0);
+
+	return img;
+}
+
+static void
+_icon_unload(plughandle_t *handle, struct nk_image img)
+{
+	nk_pugl_icon_unload(&handle->win, img);
+}
+
 static LV2UI_Handle
 instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	const char *bundle_path, LV2UI_Write_Function write_function,
@@ -5553,6 +5579,12 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	style->selectable.text_hover = nk_rgb(0, 0, 0);
 	style->selectable.text_pressed = nk_rgb(0, 0, 0);
 	//TODO more styling changes to come here
+	//
+	struct nk_style_button *bst = &handle->win.ctx.style.button;
+	bst->image_padding.x = -1;
+	bst->image_padding.y = -1;
+	bst->text_hover = nk_rgb(0xff, 0xff, 0xff);
+	bst->text_active = nk_rgb(0xff, 0xff, 0xff);
 
 	handle->scale = nk_pugl_get_scale(&handle->win);
 
@@ -5572,6 +5604,16 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->type = PROPERTY_TYPE_AUDIO; //FIXME make configurable
 
+	handle->icon.atom = _icon_load(handle, "atom.png");
+	handle->icon.audio = _icon_load(handle, "audio.png");
+	handle->icon.control = _icon_load(handle, "control.png");
+	handle->icon.cv = _icon_load(handle, "cv.png");
+	handle->icon.midi = _icon_load(handle, "midi.png");
+	handle->icon.osc = _icon_load(handle, "osc.png");
+	handle->icon.patch = _icon_load(handle, "patch.png");
+	handle->icon.time = _icon_load(handle, "time.png");
+	handle->icon.xpress = _icon_load(handle, "xpress.png");
+
 	return handle;
 }
 
@@ -5579,6 +5621,16 @@ static void
 cleanup(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
+
+	_icon_unload(handle, handle->icon.atom);
+	_icon_unload(handle, handle->icon.audio);
+	_icon_unload(handle, handle->icon.control);
+	_icon_unload(handle, handle->icon.cv);
+	_icon_unload(handle, handle->icon.midi);
+	_icon_unload(handle, handle->icon.osc);
+	_icon_unload(handle, handle->icon.patch);
+	_icon_unload(handle, handle->icon.time);
+	_icon_unload(handle, handle->icon.xpress);
 
 	if(handle->win.cfg.font.face)
 		free(handle->win.cfg.font.face);
