@@ -1894,7 +1894,7 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 	const LilvNode *ui_node = lilv_ui_get_uri(ui);
 	const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
 
-	lilv_world_load_bundle(handle->world, bundle_node);
+	//lilv_world_load_bundle(handle->world, (LilvNode *)bundle_node);
 	lilv_world_load_resource(handle->world, ui_node);
 
 	bool supported = false;
@@ -1932,7 +1932,7 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 	if(!supported)
 	{
 		lilv_world_unload_resource(handle->world, ui_node);
-		lilv_world_unload_bundle(handle->world, bundle_node);
+		//lilv_world_unload_bundle(handle->world, (LilvNode *)bundle_node);
 
 		return NULL;
 	}
@@ -2077,7 +2077,7 @@ _mod_ui_free(mod_ui_t *mod_ui)
 		_mod_ui_stop(mod_ui);
 
 	lilv_world_unload_resource(handle->world, ui_node);
-	lilv_world_unload_bundle(handle->world, bundle_node);
+	//lilv_world_unload_bundle(handle->world, (LilvNode *)bundle_node);
 
 	lilv_free(mod_ui->sbox.bundle_path);
 	free(mod_ui->sbox.socket_uri);
