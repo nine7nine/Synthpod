@@ -4155,7 +4155,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 					nk_layout_row_dynamic(ctx, handle->dy2, 1);
 					_tab_label(ctx, lilv_node_as_string(group_label_node));
 
-					nk_layout_row_dynamic(ctx, DY, 2);
+					nk_layout_row_dynamic(ctx, DY, 1);
 					first = false;
 				}
 
@@ -4179,7 +4179,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Ungrouped");
 
-				nk_layout_row_dynamic(ctx, DY, 2);
+				nk_layout_row_dynamic(ctx, DY, 1);
 				first = false;
 			}
 
@@ -4198,7 +4198,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Parameters");
 
-				nk_layout_row_dynamic(ctx, DY, 2);
+				nk_layout_row_dynamic(ctx, DY, 1);
 				first = false;
 			}
 
@@ -4217,7 +4217,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Dynameters");
 
-				nk_layout_row_dynamic(ctx, DY, 2);
+				nk_layout_row_dynamic(ctx, DY, 1);
 				first = false;
 			}
 
@@ -4890,380 +4890,394 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	const struct nk_rect total_space = nk_window_get_content_region(ctx);
 	const float vertical = total_space.h
 		- handle->dy
-		- 3*style->window.group_padding.y;
+		- 2*style->window.group_padding.y;
 	const float upper_h = vertical * 0.6f;
 	const float lower_h = vertical * 0.4f
 		- handle->dy
-		- 2*style->window.group_padding.y;
+		- 6*style->window.group_padding.y;
 
-	nk_layout_space_begin(ctx, NK_STATIC, upper_h,
-		_hash_size(&handle->mods) + _hash_size(&handle->conns));
+	const float upper_ratio [2] = {0.8, 0.2};
+	nk_layout_row(ctx, NK_DYNAMIC, vertical, 4, upper_ratio);
+
+	struct nk_rect bb;
+	if(nk_group_begin(ctx, "left", NK_WINDOW_NO_SCROLLBAR))
 	{
-    const struct nk_rect old_clip = canvas->clip;
-		const struct nk_rect space_bounds= nk_layout_space_bounds(ctx);
-		nk_push_scissor(canvas, space_bounds);
-
-		// graph content scrolling
-		if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
-			&& nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE))
+		nk_layout_space_begin(ctx, NK_STATIC, upper_h,
+			_hash_size(&handle->mods) + _hash_size(&handle->conns));
 		{
-			handle->scrolling.x -= in->mouse.delta.x;
-			handle->scrolling.y -= in->mouse.delta.y;
-		}
+			const struct nk_rect old_clip = canvas->clip;
+			const struct nk_rect space_bounds= nk_layout_space_bounds(ctx);
+			nk_push_scissor(canvas, space_bounds);
 
-		const struct nk_vec2 scrolling = handle->scrolling;
-
-		// display grid
-		{
-			struct nk_rect ssize = nk_layout_space_bounds(ctx);
-			ssize.h -= style->window.group_padding.y;
-			const float grid_size = 28.0f * handle->scale;
-
-			nk_fill_rect(canvas, ssize, 0.f, grid_background_color);
-
-			for(float x = fmod(ssize.x - scrolling.x, grid_size);
-				x < ssize.w;
-				x += grid_size)
+			// graph content scrolling
+			if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
+				&& nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE))
 			{
-				nk_stroke_line(canvas, x + ssize.x, ssize.y, x + ssize.x, ssize.y + ssize.h,
-					1.0f, grid_line_color);
+				handle->scrolling.x -= in->mouse.delta.x;
+				handle->scrolling.y -= in->mouse.delta.y;
 			}
 
-			for(float y = fmod(ssize.y - scrolling.y, grid_size);
-				y < ssize.h;
-				y += grid_size)
+			const struct nk_vec2 scrolling = handle->scrolling;
+
+			// display grid
 			{
-				nk_stroke_line(canvas, ssize.x, y + ssize.y, ssize.x + ssize.w, y + ssize.y,
-					1.0f, grid_line_color);
-			}
-		}
+				struct nk_rect ssize = nk_layout_space_bounds(ctx);
+				ssize.h -= style->window.group_padding.y;
+				const float grid_size = 28.0f * handle->scale;
 
-		HASH_FOREACH(&handle->mods, mod_itr)
-		{
-			mod_t *mod = *mod_itr;
+				nk_fill_rect(canvas, ssize, 0.f, grid_background_color);
 
-			_expose_mod(handle, ctx, mod, dy);
-
-			mod->hilighted = false;
-		}
-
-		HASH_FOREACH(&handle->conns, mod_conn_itr)
-		{
-			mod_conn_t *mod_conn = *mod_conn_itr;
-
-			_expose_mod_conn(handle, ctx, mod_conn, dy);
-		}
-
-		// reset linking connection
-		if(  handle->linking.active
-			&& nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
-		{
-			handle->linking.active = false;
-		}
-
-    nk_push_scissor(canvas, old_clip);
-	}
-	nk_layout_space_end(ctx);
-
-	{
-		nk_layout_row_dynamic(ctx, dy, 11);
-
-		const bool is_audio = handle->type == PROPERTY_TYPE_AUDIO;
-		const bool is_cv = handle->type == PROPERTY_TYPE_CV;
-		const bool is_atom = handle->type == PROPERTY_TYPE_ATOM;
-
-		const bool is_midi = handle->type == PROPERTY_TYPE_MIDI;
-		const bool is_osc = handle->type == PROPERTY_TYPE_OSC;
-		const bool is_time = handle->type == PROPERTY_TYPE_TIME;
-		const bool is_patch = handle->type == PROPERTY_TYPE_PATCH;
-		const bool is_xpress = handle->type == PROPERTY_TYPE_XPRESS;
-
-		const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
-
-		if(is_audio)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "Audio"))
-			handle->type = PROPERTY_TYPE_AUDIO;
-		if(is_audio)
-			nk_style_pop_color(ctx);
-
-		if(is_cv)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "CV"))
-			handle->type = PROPERTY_TYPE_CV;
-		if(is_cv)
-			nk_style_pop_color(ctx);
-
-		if(is_atom)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "Atom"))
-			handle->type = PROPERTY_TYPE_ATOM;
-		if(is_atom)
-			nk_style_pop_color(ctx);
-
-		nk_spacing(ctx, 1);
-
-		if(is_midi)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "MIDI"))
-			handle->type = PROPERTY_TYPE_MIDI;
-		if(is_midi)
-			nk_style_pop_color(ctx);
-
-		if(is_osc)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "OSC"))
-			handle->type = PROPERTY_TYPE_OSC;
-		if(is_osc)
-			nk_style_pop_color(ctx);
-
-		if(is_time)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "Time"))
-			handle->type = PROPERTY_TYPE_TIME;
-		if(is_time)
-			nk_style_pop_color(ctx);
-
-		if(is_patch)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "Patch"))
-			handle->type = PROPERTY_TYPE_PATCH;
-		if(is_patch)
-			nk_style_pop_color(ctx);
-
-		if(is_xpress)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "XPression"))
-			handle->type = PROPERTY_TYPE_XPRESS;
-		if(is_xpress)
-			nk_style_pop_color(ctx);
-
-		nk_spacing(ctx, 1);
-
-		if(is_automation)
-			nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-		if(nk_button_label(ctx, "Automation"))
-			handle->type = PROPERTY_TYPE_AUTOMATION;
-		if(is_automation)
-			nk_style_pop_color(ctx);
-	}
-
-	{
-		struct nk_rect bb;
-		const float lower_ratio [4] = {0.2, 0.2, 0.4, 0.2};
-		nk_layout_row(ctx, NK_DYNAMIC, lower_h, 4, lower_ratio);
-
-		if(_group_begin(ctx, "Plugins", NK_WINDOW_TITLE, &bb))
-		{
-			nk_menubar_begin(ctx);
-			{
-				const float dim [2] = {0.6, 0.4};
-				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-
-				const size_t old_len = _textedit_len(&handle->plugin_search_edit);
-				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
-				_textedit_zero_terminate(&handle->plugin_search_edit);
-				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->plugin_search_edit)) )
-					handle->plugin_find_matches = true;
-				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-					nk_textedit_select_all(&handle->plugin_search_edit);
-
-				const selector_search_t old_sel = handle->plugin_search_selector;
-				handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->plugin_search_selector)
-					handle->plugin_find_matches = true;
-			}
-			nk_menubar_end(ctx);
-
-			nk_layout_row_dynamic(ctx, handle->dy2, 1);
-			nk_spacing(ctx, 1); // fixes mouse-over bug
-			_expose_main_plugin_list(handle, ctx, handle->plugin_find_matches);
-
-#if 0
-			_expose_main_plugin_info(handle, ctx);
-#endif
-
-			_group_end(ctx, &bb);
-		}
-
-		if(_group_begin(ctx, "Presets", NK_WINDOW_TITLE, &bb))
-		{
-			nk_menubar_begin(ctx);
-			{
-				const float dim [2] = {0.6, 0.4};
-				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-
-				const size_t old_len = _textedit_len(&handle->preset_search_edit);
-				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
-				_textedit_zero_terminate(&handle->preset_search_edit);
-				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->preset_search_edit)) )
-					handle->preset_find_matches = true;
-				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-					nk_textedit_select_all(&handle->preset_search_edit);
-
-				const selector_search_t old_sel = handle->preset_search_selector;
-				handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->preset_search_selector)
-					handle->preset_find_matches = true;
-			}
-			nk_menubar_end(ctx);
-
-			_expose_main_preset_list(handle, ctx, handle->preset_find_matches);
-
-#if 0
-			_expose_main_preset_info(handle, ctx);
-#endif
-			_group_end(ctx, &bb);
-		}
-
-		if(_group_begin(ctx, "Controls", NK_WINDOW_TITLE, &bb))
-		{
-			nk_menubar_begin(ctx);
-			{
-				const float dim [2] = {0.6, 0.4};
-				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-
-				const size_t old_len = _textedit_len(&handle->port_search_edit);
-				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
-				_textedit_zero_terminate(&handle->port_search_edit);
-				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
-					handle->prop_find_matches = true;
-				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-					nk_textedit_select_all(&handle->port_search_edit);
-
-				const selector_search_t old_sel = handle->port_search_selector;
-				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->port_search_selector)
-					handle->prop_find_matches = true;
-			}
-			nk_menubar_end(ctx);
-
-			mod_t *mod = handle->module_selector;
-			if(mod)
-			{
-				const float DY = dy*2 + 6*style->window.group_padding.y + 2*style->window.group_border;
-
-				_expose_control_list(handle, mod, ctx, DY, dy, handle->prop_find_matches);
-			}
-
-			_group_end(ctx, &bb);
-		}
-
-		if(_group_begin(ctx, "Automations", NK_WINDOW_TITLE, &bb))
-		{
-			mod_t *mod = handle->module_selector;
-			if(mod)
-			{
-				port_t *port = handle->port_selector;
-				param_t *param = handle->param_selector;
-
-				double c = 0.0;
-				double d = 0.0;
-
-				auto_t *automation = NULL;
-				if(port && (port->type == PROPERTY_TYPE_CONTROL) )
+				for(float x = fmod(ssize.x - scrolling.x, grid_size);
+					x < ssize.w;
+					x += grid_size)
 				{
-					automation = &port->control.automation;
-					control_port_t *control = &port->control;
-					c = control->is_int || control->is_bool
-						? control->min.i
-						: control->min.f;
-					d = control->is_int || control->is_bool
-						? control->max.i
-						: control->max.f;
-				}
-				else if(param)
-				{
-					automation = &param->automation;
-					c = _param_union_as_double(&handle->forge, param->range, &param->min);
-					d = _param_union_as_double(&handle->forge, param->range, &param->max);
+					nk_stroke_line(canvas, x + ssize.x, ssize.y, x + ssize.x, ssize.y + ssize.h,
+						1.0f, grid_line_color);
 				}
 
-				if(automation)
+				for(float y = fmod(ssize.y - scrolling.y, grid_size);
+					y < ssize.h;
+					y += grid_size)
 				{
-					auto_t old_auto = *automation;
+					nk_stroke_line(canvas, ssize.x, y + ssize.y, ssize.x + ssize.w, y + ssize.y,
+						1.0f, grid_line_color);
+				}
+			}
 
-					nk_menubar_begin(ctx);
+			HASH_FOREACH(&handle->mods, mod_itr)
+			{
+				mod_t *mod = *mod_itr;
+
+				_expose_mod(handle, ctx, mod, dy);
+
+				mod->hilighted = false;
+			}
+
+			HASH_FOREACH(&handle->conns, mod_conn_itr)
+			{
+				mod_conn_t *mod_conn = *mod_conn_itr;
+
+				_expose_mod_conn(handle, ctx, mod_conn, dy);
+			}
+
+			// reset linking connection
+			if(  handle->linking.active
+				&& nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
+			{
+				handle->linking.active = false;
+			}
+
+			nk_push_scissor(canvas, old_clip);
+		}
+		nk_layout_space_end(ctx);
+
+		{
+			nk_layout_row_dynamic(ctx, dy, 11);
+
+			const bool is_audio = handle->type == PROPERTY_TYPE_AUDIO;
+			const bool is_cv = handle->type == PROPERTY_TYPE_CV;
+			const bool is_atom = handle->type == PROPERTY_TYPE_ATOM;
+
+			const bool is_midi = handle->type == PROPERTY_TYPE_MIDI;
+			const bool is_osc = handle->type == PROPERTY_TYPE_OSC;
+			const bool is_time = handle->type == PROPERTY_TYPE_TIME;
+			const bool is_patch = handle->type == PROPERTY_TYPE_PATCH;
+			const bool is_xpress = handle->type == PROPERTY_TYPE_XPRESS;
+
+			const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
+
+			if(is_audio)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "Audio"))
+				handle->type = PROPERTY_TYPE_AUDIO;
+			if(is_audio)
+				nk_style_pop_color(ctx);
+
+			if(is_cv)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "CV"))
+				handle->type = PROPERTY_TYPE_CV;
+			if(is_cv)
+				nk_style_pop_color(ctx);
+
+			if(is_atom)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "Atom"))
+				handle->type = PROPERTY_TYPE_ATOM;
+			if(is_atom)
+				nk_style_pop_color(ctx);
+
+			nk_spacing(ctx, 1);
+
+			if(is_midi)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "MIDI"))
+				handle->type = PROPERTY_TYPE_MIDI;
+			if(is_midi)
+				nk_style_pop_color(ctx);
+
+			if(is_osc)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "OSC"))
+				handle->type = PROPERTY_TYPE_OSC;
+			if(is_osc)
+				nk_style_pop_color(ctx);
+
+			if(is_time)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "Time"))
+				handle->type = PROPERTY_TYPE_TIME;
+			if(is_time)
+				nk_style_pop_color(ctx);
+
+			if(is_patch)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "Patch"))
+				handle->type = PROPERTY_TYPE_PATCH;
+			if(is_patch)
+				nk_style_pop_color(ctx);
+
+			if(is_xpress)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "XPression"))
+				handle->type = PROPERTY_TYPE_XPRESS;
+			if(is_xpress)
+				nk_style_pop_color(ctx);
+
+			nk_spacing(ctx, 1);
+
+			if(is_automation)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			if(nk_button_label(ctx, "Automation"))
+				handle->type = PROPERTY_TYPE_AUTOMATION;
+			if(is_automation)
+				nk_style_pop_color(ctx);
+		}
+
+		{
+			nk_layout_row_dynamic(ctx, lower_h, 4);
+
+			if(_group_begin(ctx, "Bundles", NK_WINDOW_TITLE, &bb))
+			{
+				//FIXME
+
+				_group_end(ctx, &bb);
+			}
+
+			if(_group_begin(ctx, "Plugins", NK_WINDOW_TITLE, &bb))
+			{
+				nk_menubar_begin(ctx);
+				{
+					const float dim [2] = {0.6, 0.4};
+					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+
+					const size_t old_len = _textedit_len(&handle->plugin_search_edit);
+					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->plugin_search_edit, nk_filter_default);
+					_textedit_zero_terminate(&handle->plugin_search_edit);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->plugin_search_edit)) )
+						handle->plugin_find_matches = true;
+					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+						nk_textedit_select_all(&handle->plugin_search_edit);
+
+					const selector_search_t old_sel = handle->plugin_search_selector;
+					handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+						handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+					if(old_sel != handle->plugin_search_selector)
+						handle->plugin_find_matches = true;
+				}
+				nk_menubar_end(ctx);
+
+				nk_layout_row_dynamic(ctx, handle->dy2, 1);
+				nk_spacing(ctx, 1); // fixes mouse-over bug
+				_expose_main_plugin_list(handle, ctx, handle->plugin_find_matches);
+
+#if 0
+				_expose_main_plugin_info(handle, ctx);
+#endif
+
+				_group_end(ctx, &bb);
+			}
+
+			if(_group_begin(ctx, "Presets", NK_WINDOW_TITLE, &bb))
+			{
+				nk_menubar_begin(ctx);
+				{
+					const float dim [2] = {0.6, 0.4};
+					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+
+					const size_t old_len = _textedit_len(&handle->preset_search_edit);
+					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
+					_textedit_zero_terminate(&handle->preset_search_edit);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->preset_search_edit)) )
+						handle->preset_find_matches = true;
+					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+						nk_textedit_select_all(&handle->preset_search_edit);
+
+					const selector_search_t old_sel = handle->preset_search_selector;
+					handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+						handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+					if(old_sel != handle->preset_search_selector)
+						handle->preset_find_matches = true;
+				}
+				nk_menubar_end(ctx);
+
+				_expose_main_preset_list(handle, ctx, handle->preset_find_matches);
+
+#if 0
+				_expose_main_preset_info(handle, ctx);
+#endif
+				_group_end(ctx, &bb);
+			}
+
+			if(_group_begin(ctx, "Automations", NK_WINDOW_TITLE, &bb))
+			{
+				mod_t *mod = handle->module_selector;
+				if(mod)
+				{
+					port_t *port = handle->port_selector;
+					param_t *param = handle->param_selector;
+
+					double c = 0.0;
+					double d = 0.0;
+
+					auto_t *automation = NULL;
+					if(port && (port->type == PROPERTY_TYPE_CONTROL) )
 					{
-						nk_layout_row_dynamic(ctx, dy, 1);
+						automation = &port->control.automation;
+						control_port_t *control = &port->control;
+						c = control->is_int || control->is_bool
+							? control->min.i
+							: control->min.f;
+						d = control->is_int || control->is_bool
+							? control->max.i
+							: control->max.f;
+					}
+					else if(param)
+					{
+						automation = &param->automation;
+						c = _param_union_as_double(&handle->forge, param->range, &param->min);
+						d = _param_union_as_double(&handle->forge, param->range, &param->max);
+					}
 
-						const auto_type_t auto_type = automation->type;
-						automation->type = nk_combo(ctx, auto_labels, AUTO_MAX - 1, //FIXME enable OSC
-							automation->type, dy, nk_vec2(nk_widget_width(ctx), dy*5));
-						if(auto_type != automation->type)
+					if(automation)
+					{
+						auto_t old_auto = *automation;
+
+						nk_menubar_begin(ctx);
 						{
-							if(automation->type == AUTO_MIDI)
+							nk_layout_row_dynamic(ctx, dy, 1);
+
+							const auto_type_t auto_type = automation->type;
+							automation->type = nk_combo(ctx, auto_labels, AUTO_MAX - 1, //FIXME enable OSC
+								automation->type, dy, nk_vec2(nk_widget_width(ctx), dy*5));
+							if(auto_type != automation->type)
 							{
-								// initialize
-								automation->midi.channel = -1;
-								automation->midi.controller = -1;
-								automation->midi.a = 0x0;
-								automation->midi.b = 0x7f;
-								automation->c = c;
-								automation->d = d;
-							}
-							else if(automation->type == AUTO_OSC)
-							{
-								//FIXME initialize
+								if(automation->type == AUTO_MIDI)
+								{
+									// initialize
+									automation->midi.channel = -1;
+									automation->midi.controller = -1;
+									automation->midi.a = 0x0;
+									automation->midi.b = 0x7f;
+									automation->c = c;
+									automation->d = d;
+								}
+								else if(automation->type == AUTO_OSC)
+								{
+									//FIXME initialize
+								}
 							}
 						}
-					}
-					nk_menubar_end(ctx);
+						nk_menubar_end(ctx);
 
-					if(automation->type == AUTO_MIDI)
-					{
-						nk_layout_row_dynamic(ctx, dy, 1);
-						nk_spacing(ctx, 1);
-
-						const double inc = 1.0; //FIXME
-						const float ipp = 1.f; //FIXME
-
-						nk_property_int(ctx, "MIDI Channel", -1, &automation->midi.channel, 0xf, 1, ipp);
-						nk_property_int(ctx, "MIDI Controller", -1, &automation->midi.controller, 0x7f, 1, ipp);
-						nk_property_int(ctx, "MIDI Minimum", 0, &automation->midi.a, 0x7f, 1, ipp);
-						nk_property_int(ctx, "MIDI Maximum", 0, &automation->midi.b, 0x7f, 1, ipp);
-						nk_spacing(ctx, 1);
-						nk_property_double(ctx, "Target Minimum", c, &automation->c, d, inc, ipp);
-						nk_property_double(ctx, "Target Maximum", c, &automation->d, d, inc, ipp);
-					}
-					else if(automation->type == AUTO_OSC)
-					{
-						//FIXME
-					}
-
-					if(memcmp(&old_auto, automation, sizeof(auto_t))) // needs sync
-					{
-						printf("automation needs sync\n");
-						if(automation->type == AUTO_NONE)
+						if(automation->type == AUTO_MIDI)
 						{
-							if(port)
-								_patch_port_automation_remove(handle, port);
-							else if(param)
-								_patch_param_automation_remove(handle, param);
-						}
-						else if(automation->type == AUTO_MIDI)
-						{
-							if(port)
-								_patch_port_midi_automation_add(handle, port, automation);
-							else if(param)
-								_patch_param_midi_automation_add(handle, param, automation);
+							nk_layout_row_dynamic(ctx, dy, 1);
+							nk_spacing(ctx, 1);
+
+							const double inc = 1.0; //FIXME
+							const float ipp = 1.f; //FIXME
+
+							nk_property_int(ctx, "MIDI Channel", -1, &automation->midi.channel, 0xf, 1, ipp);
+							nk_property_int(ctx, "MIDI Controller", -1, &automation->midi.controller, 0x7f, 1, ipp);
+							nk_property_int(ctx, "MIDI Minimum", 0, &automation->midi.a, 0x7f, 1, ipp);
+							nk_property_int(ctx, "MIDI Maximum", 0, &automation->midi.b, 0x7f, 1, ipp);
+							nk_spacing(ctx, 1);
+							nk_property_double(ctx, "Target Minimum", c, &automation->c, d, inc, ipp);
+							nk_property_double(ctx, "Target Maximum", c, &automation->d, d, inc, ipp);
 						}
 						else if(automation->type == AUTO_OSC)
 						{
 							//FIXME
 						}
+
+						if(memcmp(&old_auto, automation, sizeof(auto_t))) // needs sync
+						{
+							printf("automation needs sync\n");
+							if(automation->type == AUTO_NONE)
+							{
+								if(port)
+									_patch_port_automation_remove(handle, port);
+								else if(param)
+									_patch_param_automation_remove(handle, param);
+							}
+							else if(automation->type == AUTO_MIDI)
+							{
+								if(port)
+									_patch_port_midi_automation_add(handle, port, automation);
+								else if(param)
+									_patch_param_midi_automation_add(handle, param, automation);
+							}
+							else if(automation->type == AUTO_OSC)
+							{
+								//FIXME
+							}
+						}
 					}
 				}
-			}
 
-			_group_end(ctx, &bb);
+				_group_end(ctx, &bb);
+			}
 		}
+
+		nk_group_end(ctx);
+	}
+
+	if(_group_begin(ctx, "Controls", NK_WINDOW_TITLE, &bb))
+	{
+		nk_menubar_begin(ctx);
+		{
+			const float dim [2] = {0.6, 0.4};
+			nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+
+			const size_t old_len = _textedit_len(&handle->port_search_edit);
+			const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+			const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
+			_textedit_zero_terminate(&handle->port_search_edit);
+			if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
+				handle->prop_find_matches = true;
+			if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+				nk_textedit_select_all(&handle->port_search_edit);
+
+			const selector_search_t old_sel = handle->port_search_selector;
+			handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+				handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+			if(old_sel != handle->port_search_selector)
+				handle->prop_find_matches = true;
+		}
+		nk_menubar_end(ctx);
+
+		mod_t *mod = handle->module_selector;
+		if(mod)
+		{
+			const float DY = dy*2 + 6*style->window.group_padding.y + 2*style->window.group_border;
+
+			_expose_control_list(handle, mod, ctx, DY, dy, handle->prop_find_matches);
+		}
+
+		_group_end(ctx, &bb);
 	}
 }
 
