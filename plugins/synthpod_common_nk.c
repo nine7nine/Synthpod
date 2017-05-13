@@ -4128,7 +4128,7 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 		is_hilighted = true;
 	}
 
-	if(nk_group_begin(ctx, name_str, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
+	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
 		if(_expose_param_inner(ctx, param, handle, dy, name_str))
 		{
