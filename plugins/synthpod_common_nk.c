@@ -3874,18 +3874,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 		handle->param_selector = NULL;
 	}
 
-	bool is_hilighted = false;
-	if(handle->port_selector == port)
-	{
-		nk_style_push_color(ctx, &ctx->style.window.group_border_color, hilight_color);
-		is_hilighted = true;
-	}
-	else if( (port->type == PROPERTY_TYPE_CONTROL) && (port->control.automation.type != AUTO_NONE) )
-	{
-		nk_style_push_color(ctx, &ctx->style.window.group_border_color, toggle_color);
-		is_hilighted = true;
-	}
-
+	const struct nk_rect bb = nk_widget_bounds(ctx);
 	if(nk_group_begin(ctx, port->name, NK_WINDOW_NO_SCROLLBAR))
 	{
 		switch(port->type)
@@ -3925,10 +3914,18 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 		}
 
 		nk_group_end(ctx);
-	}
 
-	if(is_hilighted)
-		nk_style_pop_color(ctx);
+		if(handle->port_selector == port) // mark focus
+		{
+			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, hilight_color);
+		}
+		else if( (port->type == PROPERTY_TYPE_CONTROL) && (port->control.automation.type != AUTO_NONE) ) // mark automation state
+		{
+			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, toggle_color);
+		}
+	}
 }
 
 static bool
@@ -4116,18 +4113,7 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 		handle->param_selector = param;
 	}
 
-	bool is_hilighted = false;
-	if(handle->param_selector == param)
-	{
-		nk_style_push_color(ctx, &ctx->style.window.group_border_color, hilight_color);
-		is_hilighted = true;
-	}
-	else if(param->automation.type != AUTO_NONE)
-	{
-		nk_style_push_color(ctx, &ctx->style.window.group_border_color, toggle_color);
-		is_hilighted = true;
-	}
-
+	const struct nk_rect bb = nk_widget_bounds(ctx);
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
 		if(_expose_param_inner(ctx, param, handle, dy, name_str))
@@ -4184,10 +4170,18 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 		}
 
 		nk_group_end(ctx);
-	}
 
-	if(is_hilighted)
-		nk_style_pop_color(ctx);
+		if(handle->param_selector == param) // mark focus
+		{
+			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, hilight_color);
+		}
+		else if(param->automation.type != AUTO_NONE) // mark automation state
+		{
+			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, toggle_color);
+		}
+	}
 }
 
 static void
