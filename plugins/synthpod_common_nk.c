@@ -410,6 +410,11 @@ struct _plughandle_t {
 		struct nk_image patch;
 		struct nk_image time;
 		struct nk_image xpress;
+		struct nk_image automaton;
+
+		struct nk_image plus;
+		struct nk_image download;
+		struct nk_image cancel;
 	} icon;
 };
 
@@ -2774,7 +2779,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 		{
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-N");
-			if(nk_button_label(ctx, "N") && handle->self_urn)
+			if(nk_button_image_label(ctx, handle->icon.plus, "", NK_TEXT_RIGHT))
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -2786,7 +2791,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-S");
-			if(nk_button_label(ctx, "S") && handle->bundle_urn)
+			if(nk_button_image_label(ctx, handle->icon.download, "", NK_TEXT_RIGHT))
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -2798,7 +2803,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-Q");
-			if(nk_button_label(ctx, "Q"))
+			if(nk_button_image_label(ctx, handle->icon.cancel, "", NK_TEXT_RIGHT))
 			{
 				handle->done = true;
 			}
@@ -2881,7 +2886,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 
 			if(is_automation)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			if(nk_button_label(ctx, "A"))
+			if(nk_button_image_label(ctx, handle->icon.automaton, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_AUTOMATION;
 			if(is_automation)
 				nk_style_pop_color(ctx);
@@ -3619,33 +3624,30 @@ _expose_atom_port(struct nk_context *ctx, mod_t *mod, port_t *port,
 		const bool has_time = port->type & PROPERTY_TYPE_TIME;
 		const bool has_patch = port->type & PROPERTY_TYPE_PATCH;
 		const bool has_xpress = port->type & PROPERTY_TYPE_XPRESS;
+		const bool has_automation = port->type & PROPERTY_TYPE_AUTOMATION;
 
-		const bool is_automation = port->type == PROPERTY_TYPE_AUTOMATION;
+		const unsigned n = has_midi + has_osc + has_time + has_patch + has_xpress + has_automation;
 
 		nk_layout_row_dynamic(ctx, dy, 1);
 		nk_label(ctx, name_str, NK_TEXT_LEFT);
 
-		nk_layout_row_static(ctx, dy, dy, 6);
+		if(n)
+		{
+			nk_layout_row_static(ctx, dy, dy, n);
 
-		if(has_midi) nk_image(ctx, handle->icon.midi);
-		else nk_spacing(ctx, 1);
-
-		if(has_osc) nk_image(ctx, handle->icon.osc);
-		else nk_spacing(ctx, 1);
-
-		if(has_time) nk_image(ctx, handle->icon.time);
-		else nk_spacing(ctx, 1);
-
-		if(has_patch) nk_image(ctx, handle->icon.patch);
-		else nk_spacing(ctx, 1);
-
-		if(has_xpress) nk_image(ctx, handle->icon.xpress);
-		else nk_spacing(ctx, 1);
-
-		/*FIXME
-		if(is_automation) nk_image(ctx, handle->icon.automation);
-		else nk_spacing(ctx, 1);
-		*/
+			if(has_midi)
+				nk_image(ctx, handle->icon.midi);
+			if(has_osc)
+				nk_image(ctx, handle->icon.osc);
+			if(has_time)
+				nk_image(ctx, handle->icon.time);
+			if(has_patch)
+				nk_image(ctx, handle->icon.patch);
+			if(has_xpress)
+				nk_image(ctx, handle->icon.xpress);
+			if(has_automation)
+				nk_image(ctx, handle->icon.automaton);
+		}
 
 		nk_group_end(ctx);
 	}
@@ -5673,6 +5675,10 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->icon.patch = _icon_load(handle, "patch.png");
 	handle->icon.time = _icon_load(handle, "time.png");
 	handle->icon.xpress = _icon_load(handle, "xpress.png");
+	handle->icon.automaton = _icon_load(handle, "automaton.png");
+	handle->icon.plus = _icon_load(handle, "plus.png");
+	handle->icon.download = _icon_load(handle, "download.png");
+	handle->icon.cancel = _icon_load(handle, "cancel.png");
 
 	return handle;
 }
@@ -5691,6 +5697,10 @@ cleanup(LV2UI_Handle instance)
 	_icon_unload(handle, handle->icon.patch);
 	_icon_unload(handle, handle->icon.time);
 	_icon_unload(handle, handle->icon.xpress);
+	_icon_unload(handle, handle->icon.automaton);
+	_icon_unload(handle, handle->icon.plus);
+	_icon_unload(handle, handle->icon.download);
+	_icon_unload(handle, handle->icon.cancel);
 
 	if(handle->win.cfg.font.face)
 		free(handle->win.cfg.font.face);
