@@ -3602,9 +3602,11 @@ _dial_int(struct nk_context *ctx, int32_t min, int32_t *val, int32_t max, float 
 }
 
 static void
-_expose_atom_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
+_expose_atom_port(struct nk_context *ctx, mod_t *mod, port_t *port,
 	float dy, const char *name_str)
 {
+	plughandle_t *handle = mod->handle;
+
 	const float DY = nk_window_get_content_region(ctx).h
 		- 2*ctx->style.window.group_padding.y;
 	const float ratio [] = {0.7, 0.3};
@@ -3612,15 +3614,41 @@ _expose_atom_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
+		const bool has_midi = port->type & PROPERTY_TYPE_MIDI;
+		const bool has_osc = port->type & PROPERTY_TYPE_OSC;
+		const bool has_time = port->type & PROPERTY_TYPE_TIME;
+		const bool has_patch = port->type & PROPERTY_TYPE_PATCH;
+		const bool has_xpress = port->type & PROPERTY_TYPE_XPRESS;
+
+		const bool is_automation = port->type == PROPERTY_TYPE_AUTOMATION;
+
 		nk_layout_row_dynamic(ctx, dy, 1);
 		nk_label(ctx, name_str, NK_TEXT_LEFT);
 
-		//FIXME
+		nk_layout_row_static(ctx, dy, dy, 6);
+
+		if(has_midi) nk_image(ctx, handle->icon.midi);
+		else nk_spacing(ctx, 1);
+
+		if(has_osc) nk_image(ctx, handle->icon.osc);
+		else nk_spacing(ctx, 1);
+
+		if(has_time) nk_image(ctx, handle->icon.time);
+		else nk_spacing(ctx, 1);
+
+		if(has_patch) nk_image(ctx, handle->icon.patch);
+		else nk_spacing(ctx, 1);
+
+		if(has_xpress) nk_image(ctx, handle->icon.xpress);
+		else nk_spacing(ctx, 1);
+
+		/*FIXME
+		if(is_automation) nk_image(ctx, handle->icon.automation);
+		else nk_spacing(ctx, 1);
+		*/
 
 		nk_group_end(ctx);
 	}
-
-	//FIXME
 }
 
 static void
@@ -3887,7 +3915,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			{
 				if(port->type & PROPERTY_TYPE_ATOM)
 				{
-					_expose_atom_port(ctx, mod, &port->audio, dy, port->name);
+					_expose_atom_port(ctx, mod, port, dy, port->name);
 				}
 			} break;
 		}
