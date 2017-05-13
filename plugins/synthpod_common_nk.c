@@ -3854,7 +3854,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 		is_hilighted = true;
 	}
 
-	if(nk_group_begin(ctx, port->name, NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
+	if(nk_group_begin(ctx, port->name, NK_WINDOW_NO_SCROLLBAR))
 	{
 		switch(port->type)
 		{
@@ -4211,6 +4211,23 @@ _refresh_main_param_list(plughandle_t *handle, mod_t *mod)
 }
 
 static void
+_ruler(struct nk_context *ctx)
+{
+	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+
+	struct nk_rect body;
+	const enum nk_widget_layout_states states = nk_widget(&body, ctx);
+	if(states != NK_WIDGET_INVALID)
+	{
+		struct nk_style_button *style = &ctx->style.button;
+		const struct nk_user_font *font = ctx->style.font;
+
+		nk_stroke_line(canvas, body.x, body.y, body.x + body.w, body.y + body.h,
+			ctx->style.window.group_border, ctx->style.window.group_border_color);
+	}
+}
+
+static void
 _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	float DY, float dy, bool find_matches)
 {
@@ -4241,11 +4258,15 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				{
 					nk_layout_row_dynamic(ctx, handle->dy2, 1);
 					_tab_label(ctx, lilv_node_as_string(group_label_node));
-
-					nk_layout_row_dynamic(ctx, DY, 1);
 					first = false;
 				}
+				else
+				{
+					nk_layout_row_dynamic(ctx, 1.f, 1);
+					_ruler(ctx);
+				}
 
+				nk_layout_row_dynamic(ctx, DY, 1);
 				_expose_port(ctx, mod, port, dy);
 			}
 
@@ -4265,11 +4286,15 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			{
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Ungrouped");
-
-				nk_layout_row_dynamic(ctx, DY, 1);
 				first = false;
 			}
+			else
+			{
+				nk_layout_row_dynamic(ctx, 1.f, 1);
+				_ruler(ctx);
+			}
 
+			nk_layout_row_dynamic(ctx, DY, 1);
 			_expose_port(ctx, mod, port, dy);
 		}
 	}
@@ -4284,11 +4309,14 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			{
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Parameters");
-
-				nk_layout_row_dynamic(ctx, DY, 1);
 				first = false;
 			}
+			else {
+				nk_layout_row_dynamic(ctx, 1.f, 1);
+				_ruler(ctx);
+			}
 
+			nk_layout_row_dynamic(ctx, DY, 1);
 			_expose_param(handle, mod, ctx, param, dy);
 		}
 	}
@@ -4303,11 +4331,15 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			{
 				nk_layout_row_dynamic(ctx, handle->dy2, 1);
 				_tab_label(ctx, "Dynameters");
-
-				nk_layout_row_dynamic(ctx, DY, 1);
 				first = false;
 			}
+			else
+			{
+				nk_layout_row_dynamic(ctx, 1.f, 1);
+				_ruler(ctx);
+			}
 
+			nk_layout_row_dynamic(ctx, DY, 1);
 			_expose_param(handle, mod, ctx, param, dy);
 		}
 	}
