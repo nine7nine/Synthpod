@@ -2388,8 +2388,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->type = PROPERTY_TYPE_AUDIO;
 			audio_port_t *audio = &port->audio;
 
-			audio->peak = dBFSp6(2.f * rand() / RAND_MAX);
-			audio->gain = (float)rand() / RAND_MAX;
+			audio->peak = dBFSp6(0.f);
+			audio->gain = 0.f;
 			//TODO
 		}
 		else if(is_cv)
@@ -2397,8 +2397,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->type = PROPERTY_TYPE_CV;
 			audio_port_t *audio = &port->audio;
 
-			audio->peak = dBFSp6(2.f * rand() / RAND_MAX);
-			audio->gain = (float)rand() / RAND_MAX;
+			audio->peak = dBFSp6(0.f);
+			audio->gain = 0.f;
 			//TODO
 		}
 		else if(is_control)
@@ -3747,10 +3747,12 @@ _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 		nk_group_end(ctx);
 	}
 
+#if 0
 	if(_dial_float(ctx, 0.f, &audio->gain, 1.f, 1.f, nk_rgb(0xff, 0xff, 0xff), true))
 	{
 		//FIXME
 	}
+#endif
 }
 
 const char *lab = "#"; //FIXME
