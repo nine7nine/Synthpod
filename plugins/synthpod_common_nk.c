@@ -2774,11 +2774,14 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 
 	nk_menubar_begin(ctx);
 	{
+		bool is_hovered;
 		nk_layout_row_static(ctx, dy, 1.2*dy, 15);
 
 		{
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-N");
+			if((is_hovered = nk_widget_is_hovered(ctx)))
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.plus, "", NK_TEXT_RIGHT))
 			{
 				if(  _message_request(handle)
@@ -2788,9 +2791,13 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 					_message_write(handle);
 				}
 			}
+			if(is_hovered)
+				nk_style_pop_color(ctx);
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-S");
+			if((is_hovered = nk_widget_is_hovered(ctx)))
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.download, "", NK_TEXT_RIGHT))
 			{
 				if(  _message_request(handle)
@@ -2800,13 +2807,19 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 					_message_write(handle);
 				}
 			}
+			if(is_hovered)
+				nk_style_pop_color(ctx);
 
 			if(_tooltip_visible(ctx))
 				nk_tooltip(ctx, "Ctrl-Q");
+			if((is_hovered = nk_widget_is_hovered(ctx)))
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.cancel, "", NK_TEXT_RIGHT))
 			{
 				handle->done = true;
 			}
+			if(is_hovered)
+				nk_style_pop_color(ctx);
 		}
 
 		nk_spacing(ctx, 1);
@@ -2824,71 +2837,98 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 
 			const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_audio)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.audio, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_AUDIO;
-			if(is_audio)
+			if(is_audio || is_hovered)
 				nk_style_pop_color(ctx);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_cv)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.cv, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_CV;
-			if(is_cv)
+			if(is_cv || is_hovered)
 				nk_style_pop_color(ctx);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_atom)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.atom, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_ATOM;
-			if(is_atom)
+			if(is_atom || is_hovered)
 				nk_style_pop_color(ctx);
 
 			nk_spacing(ctx, 1);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_midi)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.midi, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_MIDI;
-			if(is_midi)
+			if(is_midi || is_hovered)
 				nk_style_pop_color(ctx);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_osc)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.osc, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_OSC;
-			if(is_osc)
+			if(is_osc || is_hovered)
 				nk_style_pop_color(ctx);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_time)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.time, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_TIME;
-			if(is_time)
+			if(is_time || is_hovered)
 				nk_style_pop_color(ctx);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_patch)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.patch, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_PATCH;
-			if(is_patch)
+			if(is_patch || is_hovered)
 				nk_style_pop_color(ctx);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_xpress)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.xpress, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_XPRESS;
-			if(is_xpress)
+			if(is_xpress || is_hovered)
 				nk_style_pop_color(ctx);
 
 			nk_spacing(ctx, 1);
 
+			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_automation)
 				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
 			if(nk_button_image_label(ctx, handle->icon.automaton, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_AUTOMATION;
-			if(is_automation)
+			if(is_automation || is_hovered)
 				nk_style_pop_color(ctx);
 		}
 
