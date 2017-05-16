@@ -383,6 +383,7 @@ _dsp_slave_thread(void *data)
 		sem_wait(&dsp_slave->sem);
 
 		_dsp_slave_spin(dsp_master, false);
+		sched_yield();
 	}
 
 	return NULL;

@@ -380,6 +380,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				varchunk_read_advance(bin->app_to_log);
 			}
 		}
+		sched_yield();
 	}
 }
 

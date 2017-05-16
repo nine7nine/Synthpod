@@ -511,6 +511,7 @@ _process(prog_t *handle)
 
 		// increase cur_frames
 		handle->cycle.cur_frames = handle->cycle.ref_frames;
+		sched_yield();
 	}
 	pcmi_pcm_stop(handle->pcmi);
 	
