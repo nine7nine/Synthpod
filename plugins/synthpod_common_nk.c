@@ -4002,10 +4002,18 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 {
 	const float DY = nk_window_get_content_region(ctx).h
 		- 2*ctx->style.window.group_padding.y;
-	const float ratio [] = {0.7, 0.3};
 
 	bool changed = false;
-	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
+	if(param->range == handle->forge.String)
+	{
+		nk_layout_row_dynamic(ctx, DY, 1);
+	}
+	else // !String
+	{
+		const float ratio [] = {0.7, 0.3};
+		nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
+	}
+
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
 		nk_layout_row_dynamic(ctx, dy, 1);
@@ -4081,6 +4089,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 		}
 		else if(param->range == handle->forge.String)
 		{
+			nk_layout_row_dynamic(ctx, dy*1.2, 1); // editor field needs to be heigher
 			if(_widget_string(handle, ctx, &param->val.editor, !param->is_readonly))
 				changed = true;
 		}
