@@ -1764,7 +1764,7 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				if(ev)
 					ev->time.frames = 0;
 				else
-					printf("_notification_list_add: failed to append\n");
+					_sp_printf_rt(app, "_notification_list_add: failed to append\n");
 			}
 			else if( (src_proto == app->regs.port.atom_transfer.urid)
 				&& (src_port->type == PORT_TYPE_ATOM) )

@@ -480,6 +480,42 @@ extern const port_driver_t seq_port_driver;
 #define PORT_SIZE(PORT) ((PORT)->size)
 
 /*
+ * Debug
+ */
+static inline int
+_sp_vprintf(sp_app_t *app, const char *fmt, va_list args)
+{
+	return vfprintf(stderr, fmt, args);
+}
+
+static inline int
+_sp_printf(sp_app_t *app, const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	const int ret = _sp_vprintf(app, fmt, args);
+	va_end(args);
+	return ret;
+}
+
+static inline int
+_sp_vprintf_rt(sp_app_t *app, const char *fmt, va_list args)
+{
+	//return vfprintf(stderr, fmt, args); FIXME
+	return 0;
+}
+
+static inline int
+_sp_printf_rt(sp_app_t *app, const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	const int ret = _sp_vprintf_rt(app, fmt, args);
+	va_end(args);
+	return ret;
+}
+
+/*
  * UI
  */
 static inline void *
@@ -521,7 +557,7 @@ _sp_app_to_ui_advance_atom(sp_app_t *app, const LV2_Atom *atom)
 static inline void
 _sp_app_to_ui_overflow(sp_app_t *app)
 {
-	fprintf(stderr, "app->ui buffer overflow\n");
+	_sp_printf_rt(app, "app->ui buffer overflow\n");
 }
 
 static inline LV2_Atom *

@@ -361,7 +361,7 @@ _dsp_slave_spin(dsp_master_t *dsp_master, bool is_master)
 	}
 }
 
-__realtime static void *
+__non_realtime static void *
 _dsp_slave_thread(void *data)
 {
 	dsp_slave_t *dsp_slave = data;
