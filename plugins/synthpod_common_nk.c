@@ -285,6 +285,7 @@ struct _mod_ui_t {
 
 struct _plughandle_t {
 	LilvWorld *world;
+	LilvNodes *bundles;
 
 	LV2_Atom_Forge forge;
 
@@ -350,20 +351,24 @@ struct _plughandle_t {
 	enum nk_collapse_states plugin_info_collapse_states;
 	enum nk_collapse_states preset_info_collapse_states;
 
+	selector_search_t bundle_search_selector;
 	selector_search_t plugin_search_selector;
 	selector_search_t preset_search_selector;
 	selector_search_t port_search_selector;
 
+	hash_t bundle_matches;
 	hash_t plugin_matches;
 	hash_t preset_matches;
 	hash_t port_matches;
 	hash_t param_matches;
 	hash_t dynam_matches;
 
+	char bundle_search_buf [SEARCH_BUF_MAX];
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
 	char port_search_buf [SEARCH_BUF_MAX];
 
+	struct nk_text_edit bundle_search_edit;
 	struct nk_text_edit plugin_search_edit;
 	struct nk_text_edit preset_search_edit;
 	struct nk_text_edit port_search_edit;
@@ -382,6 +387,7 @@ struct _plughandle_t {
 	struct nk_vec2 nxt;
 	float scale;
 
+	bool bundle_find_matches;
 	bool plugin_find_matches;
 	bool preset_find_matches;
 	bool prop_find_matches;
@@ -2966,6 +2972,122 @@ _sort_plugin_name(const void *a, const void *b)
 }
 
 static void
+_discover_bundles(plughandle_t *handle)
+{
+	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
+	if(!plugs)
+		return;
+
+	LilvNode *self_uri = lilv_new_uri(handle->world, "http://open-music-kontrollers.ch/lv2/synthpod#stereo");
+	if(self_uri)
+	{
+		const LilvPlugin *plug = lilv_plugins_get_by_uri(plugs, self_uri);
+		if(plug)
+		{
+			handle->bundles = lilv_plugin_get_related(plug, handle->node.pset_Preset);
+
+			if(handle->bundles)
+			{
+				LILV_FOREACH(nodes, itr, handle->bundles)
+				{
+					const LilvNode *bundle = lilv_nodes_get(handle->bundles, itr);
+
+					lilv_world_load_resource(handle->world, bundle);
+				}
+			}
+		}
+
+		lilv_node_free(self_uri);
+	}
+}
+
+static void
+_undiscover_bundles(plughandle_t *handle)
+{
+	if(handle->bundles)
+	{
+		LILV_FOREACH(nodes, itr, handle->bundles)
+		{
+			const LilvNode *bundle = lilv_nodes_get(handle->bundles, itr);
+
+			lilv_world_unload_resource(handle->world, bundle);
+		}
+
+		lilv_nodes_free(handle->bundles);
+	}
+}
+
+static void
+_refresh_main_bundle_list(plughandle_t *handle)
+{
+	_hash_free(&handle->bundle_matches);
+
+	bool search = _textedit_len(&handle->bundle_search_edit) != 0;
+
+	LILV_FOREACH(nodes, itr, handle->bundles)
+	{
+		const LilvNode *bundle = lilv_nodes_get(handle->bundles, itr);
+
+		//FIXME support other search criteria
+		LilvNode *label_node = lilv_world_get(handle->world, bundle, handle->node.rdfs_label, NULL);
+		if(!label_node)
+			label_node = lilv_world_get(handle->world, bundle, handle->node.lv2_name, NULL);
+		if(label_node)
+		{
+			const char *label_str = lilv_node_as_string(label_node);
+
+			if(!search || strcasestr(label_str, _textedit_const(&handle->bundle_search_edit)))
+			{
+				_hash_add(&handle->bundle_matches, (void *)bundle);
+			}
+
+			lilv_node_free(label_node);
+		}
+	}
+
+}
+
+static void
+_expose_main_bundle_list(plughandle_t *handle, struct nk_context *ctx,
+	bool find_matches)
+{
+	if(_hash_empty(&handle->bundle_matches) || find_matches)
+		_refresh_main_bundle_list(handle);
+
+	int count = 0;
+	HASH_FOREACH(&handle->bundle_matches, itr)
+	{
+		const LilvNode *bundle = *itr;
+		if(bundle)
+		{
+			LilvNode *label_node = lilv_world_get(handle->world, bundle, handle->node.rdfs_label, NULL);
+			if(!label_node)
+				label_node = lilv_world_get(handle->world, bundle, handle->node.lv2_name, NULL);
+			if(label_node)
+			{
+				const char *label_str = lilv_node_as_string(label_node);
+				const char *offset = NULL;
+				if( (offset = strstr(label_str, ".lv2/")))
+					label_str = offset + 5; // skip path prefix
+
+				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
+					? nk_style_item_color(nk_rgb(40, 40, 40))
+					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
+
+				if(nk_select_label(ctx, label_str, NK_TEXT_LEFT, nk_false))
+				{
+					//FIXME switch to that bundle
+				}
+
+				nk_style_pop_style_item(ctx);
+
+				lilv_node_free(label_node);
+			}
+		}
+	}
+}
+
+static void
 _refresh_main_plugin_list(plughandle_t *handle)
 {
 	_hash_free(&handle->plugin_matches);
@@ -5077,6 +5199,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	struct nk_style *style = &ctx->style;
 	const struct nk_input *in = &ctx->input;
 
+	handle->bundle_find_matches = false;
 	handle->plugin_find_matches = false;
 	handle->preset_find_matches = false;
 	handle->prop_find_matches = false;
@@ -5169,7 +5292,31 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 			if(_group_begin(ctx, "Bundles", NK_WINDOW_TITLE, &bb))
 			{
-				//FIXME
+				nk_menubar_begin(ctx);
+				{
+					const float dim [2] = {0.6, 0.4};
+					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+
+					const size_t old_len = _textedit_len(&handle->bundle_search_edit);
+					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->bundle_search_edit, nk_filter_default);
+					_textedit_zero_terminate(&handle->bundle_search_edit);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->bundle_search_edit)) )
+						handle->bundle_find_matches = true;
+					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+						nk_textedit_select_all(&handle->bundle_search_edit);
+
+					const selector_search_t old_sel = handle->bundle_search_selector;
+					handle->bundle_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+						handle->bundle_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+					if(old_sel != handle->bundle_search_selector)
+						handle->bundle_find_matches = true;
+				}
+				nk_menubar_end(ctx);
+
+				nk_layout_row_dynamic(ctx, handle->dy2, 1);
+				nk_spacing(ctx, 1); // fixes mouse-over bug
+				_expose_main_bundle_list(handle, ctx, handle->bundle_find_matches);
 
 				_group_end(ctx, &bb);
 			}
@@ -5455,6 +5602,8 @@ _init(plughandle_t *handle)
 	handle->node.patch_Message = lilv_new_uri(handle->world, LV2_PATCH__Message);
 	handle->node.xpress_Message = lilv_new_uri(handle->world, XPRESS_PREFIX"Message");
 
+	_discover_bundles(handle);
+
 	sp_regs_init(&handle->regs, handle->world, handle->map);
 
 	// patch:Get [patch:property spod:moduleList]
@@ -5498,6 +5647,8 @@ _deinit(plughandle_t *handle)
 		lilv_node_free(handle->node.patch_writable);
 		lilv_node_free(handle->node.rdf_type);
 		lilv_node_free(handle->node.lv2_Plugin);
+
+		_undiscover_bundles(handle);
 
 		lilv_world_free(handle->world);
 	}
@@ -5703,6 +5854,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->plugin_info_collapse_states = NK_MINIMIZED;
 	handle->preset_info_collapse_states = NK_MINIMIZED;
 
+	nk_textedit_init_fixed(&handle->bundle_search_edit, handle->bundle_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->plugin_search_edit, handle->plugin_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->preset_search_edit, handle->preset_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->port_search_edit, handle->port_search_buf, SEARCH_BUF_MAX);
@@ -5766,6 +5918,7 @@ cleanup(LV2UI_Handle instance)
 		_mod_conn_free(handle, mod_conn);
 	}
 
+	_hash_free(&handle->bundle_matches);
 	_hash_free(&handle->plugin_matches);
 	_hash_free(&handle->preset_matches);
 	_hash_free(&handle->port_matches);
