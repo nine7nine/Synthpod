@@ -3046,6 +3046,7 @@ _refresh_main_bundle_list(plughandle_t *handle)
 		}
 	}
 
+	_hash_sort_r(&handle->bundle_matches, _sort_rdfs_label, handle);
 }
 
 static void
