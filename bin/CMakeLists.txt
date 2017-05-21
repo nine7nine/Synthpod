@@ -161,9 +161,9 @@ if(BUILD_DOT)
 endif()
 
 if(BUILD_UI AND BUILD_SANDBOX_X11)
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_nk.in
-		${PROJECT_BINARY_DIR}/bin/synthpod_nk @ONLY)
-	install(PROGRAMS ${PROJECT_BINARY_DIR}/bin/synthpod_nk DESTINATION bin)
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_ui.in
+		${PROJECT_BINARY_DIR}/bin/synthpod_ui @ONLY)
+	install(PROGRAMS ${PROJECT_BINARY_DIR}/bin/synthpod_ui DESTINATION bin)
 endif()
 
 if(  BUILD_SANDBOX_X11
