@@ -6240,6 +6240,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 							handle->nxt = nk_vec2(nxt_x0 * handle->scale, nxt_y0 * handle->scale);
 
+							_set_module_selector(handle, NULL);
 							HASH_FREE(&handle->mods, ptr)
 							{
 								mod_t *mod = ptr;
