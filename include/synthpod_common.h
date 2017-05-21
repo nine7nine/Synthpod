@@ -18,6 +18,7 @@
 #ifndef _SYNTHPOD_COMMON_H
 #define _SYNTHPOD_COMMON_H
 
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <err.h>
@@ -25,11 +26,14 @@
 #include <string.h>
 #include <ftw.h>
 
-#define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
+#define SYNTHPOD_PREFIX					"http://open-music-kontrollers.ch/lv2/synthpod#"
+
+#define SYNTHPOD_STEREO_URI			SYNTHPOD_PREFIX"stereo"
+#define SYNTHPOD_COMMON_NK_URI	SYNTHPOD_PREFIX"common_4_nk"
+#define SYNTHPOD_ROOT_NK_URI	  SYNTHPOD_PREFIX"root_4_nk"
 
 #ifdef _WIN32
 #	define SYNTHPOD_SYMBOL_EXTERN __declspec(dllexport)
-#	include <Evil.h>
 #	define mlock(...)
 #	define munlock(...)
 #else

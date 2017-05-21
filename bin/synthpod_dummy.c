@@ -446,6 +446,7 @@ main(int argc, char **argv)
 	bin->worker_prio = 60;
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 	bin->bad_plugins = false;
+	bin->has_gui = false;
 	bin->socket_path = "shm:///synthpod";
 	bin->update_rate = 25;
 
@@ -484,6 +485,8 @@ main(int argc, char **argv)
 					"OPTIONS\n"
 					"   [-v]                 print version and full license information\n"
 					"   [-h]                 print usage information\n"
+					"   [-g]                 load GUI\n"
+					"   [-G]                 do NOT load GUI (default)\n"
 					"   [-b]                 enable bad plugins\n"
 					"   [-B]                 disable bad plugins (default)\n"
 					"   [-y] audio-priority  audio thread realtime priority (70)\n"
@@ -498,6 +501,12 @@ main(int argc, char **argv)
 					"   [-f] update-rate     GUI update rate (25)\n\n"
 					, argv[0]);
 				return 0;
+			case 'g': 
+				bin->has_gui = true;
+				break;
+			case 'G':
+				bin->has_gui = true;
+				break;
 			case 'b':
 				bin->bad_plugins = true;
 				break;

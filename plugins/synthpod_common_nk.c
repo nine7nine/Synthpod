@@ -17,6 +17,7 @@
 
 #include <synthpod_lv2.h>
 #include <synthpod_patcher.h>
+#include <synthpod_common.h>
 
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
@@ -2012,31 +2013,31 @@ _mod_ui_run(mod_ui_t *mod_ui)
 		{} // never reached
 #if defined(SANDBOX_X11)
 	else if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_x11"; //FIXME prefix
+		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_x11";
 #endif
 #if defined(SANDBOX_GTK2)
 	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_gtk2"; //FIXME prefix
+		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_gtk2";
 #endif
 #if defined(SANDBOX_GTK3)
 	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_gtk3"; //FIXME prefix
+		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_gtk3";
 #endif
 #if defined(SANDBOX_QT4)
 	else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_qt4"; //FIXME prefix
+		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_qt4";
 #endif
 #if defined(SANDBOX_QT5)
 	else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_qt5"; //FIXME prefix
+		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_qt5";
 #endif
 #if defined(SANDBOX_KX)
 	else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_kx"; //FIXME prefix
+		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_kx";
 #endif
 #if defined(SANDBOX_SHOW)
 	else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
-		exec_uri = "/usr/local/bin/synthpod_sandbox_show"; //FIXME prefix
+		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_show";
 #endif
 
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);

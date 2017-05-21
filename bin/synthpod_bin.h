@@ -30,6 +30,7 @@
 #include <varchunk.h>
 #include <sandbox_master.h>
 
+#include <synthpod_common.h>
 #include <synthpod_nsm.h>
 
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
@@ -88,6 +89,7 @@ struct _bin_t {
 	uv_thread_t self;
 	atomic_flag trace_lock;
 
+	bool has_gui;
 	int audio_prio;
 	int worker_prio;
 	int num_slaves;
@@ -97,6 +99,8 @@ struct _bin_t {
 
 	sandbox_master_driver_t sb_driver;
 	sandbox_master_t *sb;
+
+	pid_t child;
 
 	uv_loop_t loop;
 };

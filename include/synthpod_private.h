@@ -18,9 +18,7 @@
 #ifndef _SYNTHPOD_PRIVATE_H
 #define _SYNTHPOD_PRIVATE_H
 
-#define SYNTHPOD_PREFIX				"http://open-music-kontrollers.ch/lv2/synthpod#"
 #define SYNTHPOD_WORLD				SYNTHPOD_PREFIX"world"
-#define LV2_UI__EoUI          LV2_UI_PREFIX"EoUI"
 
 #if defined(HAS_BUILTIN_ASSUME_ALIGNED)
 #	define ASSUME_ALIGNED(PTR) __builtin_assume_aligned((PTR), 8)
@@ -165,7 +163,6 @@ struct _reg_t {
 	} log;
 
 	struct {
-		reg_item_t eo;
 		reg_item_t window_title;
 		reg_item_t show_interface;
 		reg_item_t idle_interface;
@@ -452,7 +449,6 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->log.trace, world, map, LV2_LOG__Trace);
 	_register(&regs->log.warning, world, map, LV2_LOG__Warning);
 
-	_register(&regs->ui.eo, world, map, LV2_UI__EoUI);
 	_register(&regs->ui.window_title, world, map, LV2_UI__windowTitle);
 	_register(&regs->ui.show_interface, world, map, LV2_UI__showInterface);
 	_register(&regs->ui.idle_interface, world, map, LV2_UI__idleInterface);
@@ -694,7 +690,6 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->log.trace);
 	_unregister(&regs->log.warning);
 
-	_unregister(&regs->ui.eo);
 	_unregister(&regs->ui.window_title);
 	_unregister(&regs->ui.show_interface);
 	_unregister(&regs->ui.idle_interface);

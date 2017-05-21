@@ -17,6 +17,9 @@
 
 #include <getopt.h>
 #include <inttypes.h>
+#include <unistd.h> // fork
+#include <sys/wait.h> // waitpid
+#include <errno.h> // waitpid
 
 #include <synthpod_bin.h>
 
@@ -311,6 +314,31 @@ bin_init(bin_t *bin)
 	signal(SIGQUIT, _sig);
 	signal(SIGINT, _sig);
 
+	if(bin->has_gui)
+	{
+		char urate [32];
+		char wname [128];
+		snprintf(urate, 32, "%i", bin->update_rate);
+		snprintf(wname, 128, "Synthpod - %s", bin->socket_path);
+
+		bin->child = fork();
+		if(bin->child == 0) // child
+		{
+			char *const args [] = {
+				SYNTHPOD_BIN_DIR"synthpod_sandbox_x11",
+				"-p", SYNTHPOD_STEREO_URI,
+				"-b", SYNTHPOD_PLUGIN_DIR,
+				"-u", SYNTHPOD_ROOT_NK_URI,
+				"-s", (char *)bin->socket_path,
+				"-w", wname,
+				"-r", urate,
+				NULL
+			};
+
+			execvp(args[0], args);
+		}
+	}
+
 	uv_loop_init(&bin->loop);
 }
 
@@ -337,9 +365,51 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 		}
 	}
 
+	const unsigned nsecs = 1000000000;
+	struct timespec to;
+	clock_gettime(CLOCK_REALTIME, &to);
+	unsigned count = 0;
+
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
-		sandbox_master_wait(bin->sb);
+		const bool timedout = sandbox_master_timedwait(bin->sb, &to);
+
+		if(timedout)
+		{
+			// check if GUI still running
+			if(bin->has_gui && bin->child)
+			{
+				bool rolling = true;
+
+				int status;
+				const int res = waitpid(bin->child, &status, WUNTRACED | WNOHANG);
+				if(res < 0)
+				{
+					if(errno == ECHILD) // child not existing
+						rolling = false;
+				}
+				else if(res == bin->child)
+				{
+					if(!WIFSTOPPED(status) && !WIFCONTINUED(status)) // child exited/crashed
+						rolling = false;
+				}
+
+				if(!rolling)
+				{
+					bin->child = 0; // invalidate
+					atomic_store_explicit(&done, true, memory_order_relaxed);
+				}
+			}
+
+			// schedule next timeout
+			uint64_t nanos = to.tv_nsec + nsecs/20; // 10 Hz
+			while(nanos >= nsecs)
+			{
+				nanos -= nsecs;
+				to.tv_sec += 1;
+			}
+			to.tv_nsec = nanos;
+		}
 
 		// read events from UI shared mem
 		if(sandbox_master_recv(bin->sb))
@@ -380,6 +450,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				varchunk_read_advance(bin->app_to_log);
 			}
 		}
+
 		sched_yield();
 	}
 }
@@ -389,6 +460,12 @@ bin_stop(bin_t *bin)
 {
 	// NSM deinit
 	synthpod_nsm_free(bin->nsm);
+
+	if(bin->has_gui && bin->child)
+	{
+		kill(bin->child, SIGTERM);
+		bin->child = 0;
+	}
 
 	if(bin->path)
 		free(bin->path);

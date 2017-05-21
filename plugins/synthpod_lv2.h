@@ -30,6 +30,8 @@
 
 #include <xpress.lv2/xpress.h>
 
+#include <synthpod_common.h>
+
 #define __realtime __attribute__((annotate("realtime")))
 #define __non_realtime __attribute__((annotate("non-realtime")))
 
@@ -38,29 +40,27 @@
 #define _ATOM_ALIGNED __attribute__((aligned(8)))
 
 // bundle uri
-#define SYNTHPOD_URI						"http://open-music-kontrollers.ch/lv2/synthpod"
-#define SYNTHPOD_EVENT_URI			SYNTHPOD_URI"#event"
+#define SYNTHPOD_EVENT_URI				SYNTHPOD_PREFIX"event"
 
 extern xpress_map_t voice_map_fallback;
 
 // plugin uris
-#define SYNTHPOD_STEREO_URI						SYNTHPOD_URI"#stereo"
-#define SYNTHPOD_KEYBOARD_URI					SYNTHPOD_URI"#keyboard"
-#define SYNTHPOD_CV2CONTROL_URI				SYNTHPOD_URI"#cv2control"
-#define SYNTHPOD_CONTROL2CV_URI				SYNTHPOD_URI"#control2cv"
-#define SYNTHPOD_CV2ATOM_URI					SYNTHPOD_URI"#cv2atom"
-#define SYNTHPOD_ATOM2CV_URI					SYNTHPOD_URI"#atom2cv"
-#define SYNTHPOD_MIDISPLITTER_URI			SYNTHPOD_URI"#midisplitter"
-#define SYNTHPOD_HEAVYLOAD_URI				SYNTHPOD_URI"#heavyload"
-#define SYNTHPOD_AUDIOXFADEMONO_URI		SYNTHPOD_URI"#audioxfademono"
-#define SYNTHPOD_AUDIOXFADESTEREO_URI	SYNTHPOD_URI"#audioxfadestereo"
-#define SYNTHPOD_ATOM2CONTROL_URI			SYNTHPOD_URI"#atom2control"
-#define SYNTHPOD_MIDI2CONTROL_URI			SYNTHPOD_URI"#midi2control"
-#define SYNTHPOD_PANIC_URI						SYNTHPOD_URI"#panic"
-#define SYNTHPOD_STRING2CONTROL_URI		SYNTHPOD_URI"#string2control"
-#define SYNTHPOD_CONTROL2ATOM_URI			SYNTHPOD_URI"#control2atom"
-#define SYNTHPOD_MIXER_URI						SYNTHPOD_URI"#mixer"
-#define SYNTHPOD_ANONYMIZER_URI				SYNTHPOD_URI"#anonymizer"
+#define SYNTHPOD_KEYBOARD_URI					SYNTHPOD_PREFIX"keyboard"
+#define SYNTHPOD_CV2CONTROL_URI				SYNTHPOD_PREFIX"cv2control"
+#define SYNTHPOD_CONTROL2CV_URI				SYNTHPOD_PREFIX"control2cv"
+#define SYNTHPOD_CV2ATOM_URI					SYNTHPOD_PREFIX"cv2atom"
+#define SYNTHPOD_ATOM2CV_URI					SYNTHPOD_PREFIX"atom2cv"
+#define SYNTHPOD_MIDISPLITTER_URI			SYNTHPOD_PREFIX"midisplitter"
+#define SYNTHPOD_HEAVYLOAD_URI				SYNTHPOD_PREFIX"heavyload"
+#define SYNTHPOD_AUDIOXFADEMONO_URI		SYNTHPOD_PREFIX"audioxfademono"
+#define SYNTHPOD_AUDIOXFADESTEREO_URI	SYNTHPOD_PREFIX"audioxfadestereo"
+#define SYNTHPOD_ATOM2CONTROL_URI			SYNTHPOD_PREFIX"atom2control"
+#define SYNTHPOD_MIDI2CONTROL_URI			SYNTHPOD_PREFIX"midi2control"
+#define SYNTHPOD_PANIC_URI						SYNTHPOD_PREFIX"panic"
+#define SYNTHPOD_STRING2CONTROL_URI		SYNTHPOD_PREFIX"string2control"
+#define SYNTHPOD_CONTROL2ATOM_URI			SYNTHPOD_PREFIX"control2atom"
+#define SYNTHPOD_MIXER_URI						SYNTHPOD_PREFIX"mixer"
+#define SYNTHPOD_ANONYMIZER_URI				SYNTHPOD_PREFIX"anonymizer"
 
 extern const LV2_Descriptor synthpod_stereo;
 extern const LV2_Descriptor synthpod_keyboard;
@@ -80,15 +80,6 @@ extern const LV2_Descriptor synthpod_control2atom;
 extern const LV2_Descriptor synthpod_mixer;
 extern const LV2_Descriptor synthpod_anonymizer;
 
-// common UI uris
-#define SYNTHPOD_COMMON_UI_URI	SYNTHPOD_URI"#common_1_ui"
-#define SYNTHPOD_COMMON_KX_URI	SYNTHPOD_URI"#common_2_kx"
-#define SYNTHPOD_COMMON_EO_URI	SYNTHPOD_URI"#common_3_eo"
-#define SYNTHPOD_COMMON_NK_URI	SYNTHPOD_URI"#common_4_nk"
-
-#define SYNTHPOD_ROOT_EO_URI	  SYNTHPOD_URI"#root_3_eo"
-#define SYNTHPOD_ROOT_NK_URI	  SYNTHPOD_URI"#root_4_nk"
-
 extern const LV2UI_Descriptor synthpod_common_1_ui;
 extern const LV2UI_Descriptor synthpod_common_2_kx;
 extern const LV2UI_Descriptor synthpod_common_3_eo;
@@ -98,7 +89,7 @@ extern const LV2UI_Descriptor synthpod_root_3_eo;
 extern const LV2UI_Descriptor synthpod_root_4_nk;
 
 // keyboard UI uris
-#define SYNTHPOD_KEYBOARD_NK_URI	SYNTHPOD_URI"#keyboard_4_nk"
+#define SYNTHPOD_KEYBOARD_NK_URI	SYNTHPOD_PREFIX"keyboard_4_nk"
 
 extern const LV2UI_Descriptor synthpod_keyboard_4_nk;
 
