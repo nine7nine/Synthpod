@@ -685,6 +685,22 @@ _sp_app_state_bundle_save(sp_app_t *app, const char *bundle_path)
 			ser.buf = malloc(ser.size);
 			lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
 
+			// try to extract label from bundle path
+			char *rdfs_label = NULL;
+			const char *from = strstr(app->bundle_path, "Synthpod_Stereo");
+			const char *to = strstr(app->bundle_path, ".preset.lv2");
+			if(from && to)
+			{
+				from += 15 + 1;
+				const size_t sz = to - from;
+				rdfs_label = malloc(sz + 1);
+				if(rdfs_label)
+				{
+					strncpy(rdfs_label, from, sz);
+					rdfs_label[sz] = '\0';
+				}
+			}
+
 			if(  ser.buf
 				&& lv2_atom_forge_object(forge, &pset_frame, app->regs.synthpod.null.urid, app->regs.pset.preset.urid)
 				&& lv2_atom_forge_key(forge, app->regs.core.applies_to.urid)
@@ -693,7 +709,8 @@ _sp_app_state_bundle_save(sp_app_t *app, const char *bundle_path)
 				&& lv2_atom_forge_urid(forge, app->regs.synthpod.monoatom.urid)
 
 				&& lv2_atom_forge_key(forge, app->regs.rdfs.label.urid)
-				&& lv2_atom_forge_string(forge, app->bundle_path, strlen(app->bundle_path))
+				&& lv2_atom_forge_string(forge, rdfs_label ? rdfs_label : app->bundle_path,
+					rdfs_label ? strlen(rdfs_label) : strlen(app->bundle_path) )
 
 				&& lv2_atom_forge_key(forge, app->regs.state.state.urid)
 				&& lv2_atom_forge_object(forge, &state_frame, 0, 0) )
@@ -710,6 +727,9 @@ _sp_app_state_bundle_save(sp_app_t *app, const char *bundle_path)
 				_serialize_to_turtle(app->sratom, app->driver->unmap, atom, state_dst);
 				free(ser.buf);
 			}
+
+			if(rdfs_label)
+				free(rdfs_label);
 		}
 
 		free(manifest_dst);
