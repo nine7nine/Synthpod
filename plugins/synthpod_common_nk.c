@@ -2340,6 +2340,9 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 static void
 _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 {
+	if(mod->plug) // already initialized
+		return;
+
 	mod->plug = plug;
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 1; // + automation port
 
