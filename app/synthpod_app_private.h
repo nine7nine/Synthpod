@@ -167,9 +167,8 @@ struct _job_t {
 	union {
 		mod_t *mod;
 		int32_t status;
-		LV2_URID urn;
 	};
-	char uri [0];
+	LV2_URID urn;
 };
 
 struct _pool_t {

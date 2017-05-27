@@ -1387,9 +1387,8 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 						return false; // not fully silenced yet, wait
 
 					// send request to worker thread
-					const LV2_URID pset_urid = ((const LV2_Atom_URID *)value)->body;
-					const char *pset_uri = app->driver->unmap->unmap(app->driver->unmap->handle, pset_urid);
-					size_t size = sizeof(job_t) + strlen(pset_uri) + 1;
+					const LV2_URID pset_urn = ((const LV2_Atom_URID *)value)->body;
+					size_t size = sizeof(job_t);
 					job_t *job = _sp_app_to_worker_request(app, size);
 					if(job)
 					{
@@ -1398,7 +1397,7 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 
 						job->request = JOB_TYPE_REQUEST_PRESET_LOAD;
 						job->mod = mod;
-						memcpy(job->uri, pset_uri, strlen(pset_uri) + 1);
+						job->urn = pset_urn;
 						_sp_app_to_worker_advance(app, size);
 
 						return true; // advance
@@ -1437,8 +1436,6 @@ _sp_app_from_ui_patch_copy(sp_app_t *app, const LV2_Atom *atom)
 
 	if(!subj && dest) // save bundle to dest
 	{
-		const char *path_str = app->driver->unmap->unmap(app->driver->unmap->handle, dest); //FIXME use urn directly
-
 		if(app->block_state == BLOCKING_STATE_RUN)
 		{
 			// send request to worker thread
@@ -1456,15 +1453,15 @@ _sp_app_from_ui_patch_copy(sp_app_t *app, const LV2_Atom *atom)
 		else if(app->block_state == BLOCKING_STATE_BLOCK)
 		{
 			// send request to worker thread
-			size_t size = sizeof(job_t) + strlen(path_str) + 1;
+			size_t size = sizeof(job_t);
 			job_t *job = _sp_app_to_worker_request(app, size);
 			if(job)
 			{
 				app->block_state = BLOCKING_STATE_WAIT; // wait for job
 
 				job->request = JOB_TYPE_REQUEST_BUNDLE_SAVE;
-				job->status = -1; //FIXME what is this for again?
-				memcpy(job->uri, path_str, strlen(path_str) + 1);
+				job->status = -1; // TODO for what for?
+				job->urn = dest;
 				_sp_app_to_worker_advance(app, size);
 
 				return true; // advance
@@ -1473,8 +1470,6 @@ _sp_app_from_ui_patch_copy(sp_app_t *app, const LV2_Atom *atom)
 	}
 	else if(subj && !dest) // copy bundle from subj
 	{
-		const char *path_str = app->driver->unmap->unmap(app->driver->unmap->handle, subj); //FIXME use urn directly
-
 		if(app->block_state == BLOCKING_STATE_RUN)
 		{
 			//FIXME ramp down system outputs
@@ -1496,17 +1491,16 @@ _sp_app_from_ui_patch_copy(sp_app_t *app, const LV2_Atom *atom)
 			//FIXME ramp up system outputs
 
 			// send request to worker thread
-			size_t size = sizeof(job_t) + strlen(path_str) + 1;
-			job_t *job = _sp_app_to_worker_request(app, size);
+			job_t *job = _sp_app_to_worker_request(app, sizeof(job_t));
 			if(job)
 			{
 				app->block_state = BLOCKING_STATE_WAIT; // wait for job
 				app->load_bundle = true; // for sp_app_bypassed
 
 				job->request = JOB_TYPE_REQUEST_BUNDLE_LOAD;
-				job->status = -1; //FIXME what is this for again?
-				memcpy(job->uri, path_str, strlen(path_str) + 1);
-				_sp_app_to_worker_advance(app, size);
+				job->status = -1; // TODO for what for?
+				job->urn = subj;
+				_sp_app_to_worker_advance(app, sizeof(job_t));
 
 				return true; // advance
 			}
@@ -1945,17 +1939,16 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 __realtime static void
 _mod_list_add(sp_app_t *app, const LV2_Atom_URID *urid)
 {
-	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urid->body);
 	//printf("got patch:add for moduleList: %s\n", uri);
 
 	// send request to worker thread
-	const size_t uri_sz = strlen(uri) + 1;
-	const size_t size = sizeof(job_t) + uri_sz;
+	const size_t size = sizeof(job_t);
 	job_t *job = _sp_app_to_worker_request(app, size);
 	if(job)
 	{
 		job->request = JOB_TYPE_REQUEST_MODULE_ADD;
-		memcpy(job->uri, uri, uri_sz);
+		job->status = 0;
+		job->urn = urid->body;
 		_sp_app_to_worker_advance(app, size);
 	}
 }

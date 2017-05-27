@@ -250,6 +250,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 	{
 		case JOB_TYPE_REQUEST_MODULE_SUPPORTED:
 		{
+#if 0
 			const int32_t status= _sp_app_mod_is_supported(app, job->uri) ? 1 : 0;
 
 			// signal to app
@@ -262,22 +263,23 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				memcpy(job1->uri, job->uri, strlen(job->uri) + 1);
 				_sp_worker_to_app_advance(app, job_size);
 			}
+#endif
 			break;
 		}
 		case JOB_TYPE_REQUEST_MODULE_ADD:
 		{
-			mod_t *mod = _sp_app_mod_add(app, job->uri, 0);
+			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
+			mod_t *mod = uri ? _sp_app_mod_add(app, uri, 0) : NULL;
 			if(!mod)
 				break; //TODO report
 
 			// signal to app
-			size_t job_size = sizeof(job_t);
-			job_t *job1 = _sp_worker_to_app_request(app, job_size);
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_MODULE_ADD;
 				job1->mod = mod;
-				_sp_worker_to_app_advance(app, job_size);
+				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 
 			break;
@@ -288,83 +290,82 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			int status = _sp_app_mod_del(app, job->mod);
 
 			// signal to app
-			size_t job_size = sizeof(job_t);
-			job_t *job1 = _sp_worker_to_app_request(app, job_size);
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_MODULE_DEL;
 				job1->urn = urn;
-				_sp_worker_to_app_advance(app, job_size);
+				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 
 			break;
 		}
 		case JOB_TYPE_REQUEST_PRESET_LOAD:
 		{
-			int status = _sp_app_state_preset_load(app, job->mod, job->uri, true);
+			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
+			int status = _sp_app_state_preset_load(app, job->mod, uri, true);
 			(void)status; //FIXME check this
 
 			// signal to app
-			size_t job_size = sizeof(job_t);
-			job_t *job1 = _sp_worker_to_app_request(app, job_size);
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_PRESET_LOAD;
 				job1->mod = job->mod;
-				_sp_worker_to_app_advance(app, job_size);
+				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 
 			break;
 		}
 		case JOB_TYPE_REQUEST_PRESET_SAVE:
 		{
-			int status = _sp_app_state_preset_save(app, job->mod, job->uri);
+			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
+			int status = _sp_app_state_preset_save(app, job->mod, uri);
 			(void)status; //FIXME check this
 
 			// signal to app
-			size_t job_size = sizeof(job_t);
-			job_t *job1 = _sp_worker_to_app_request(app, job_size);
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_PRESET_SAVE;
 				job1->mod = job->mod;
-				_sp_worker_to_app_advance(app, job_size);
+				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 
 			break;
 		}
 		case JOB_TYPE_REQUEST_BUNDLE_LOAD:
 		{
-			int status = _sp_app_state_bundle_load(app, job->uri);
-			printf("loaded from: %s\n", job->uri);
+			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
+			int status = _sp_app_state_bundle_load(app, uri);
+			printf("loaded from: %s\n", uri);
 
 			// signal to app
-			size_t job_size = sizeof(job_t) + strlen(job->uri) + 1;
-			job_t *job1 = _sp_worker_to_app_request(app, job_size);
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_BUNDLE_LOAD;
 				job1->status = status;
-				strcpy(job1->uri, job->uri);
-				_sp_worker_to_app_advance(app, job_size);
+				job1->urn = job->urn;
+				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 
 			break;
 		}
 		case JOB_TYPE_REQUEST_BUNDLE_SAVE:
 		{
-			int status = _sp_app_state_bundle_save(app, job->uri);
-			printf("saved to: %s\n", job->uri);
+			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
+			int status = _sp_app_state_bundle_save(app, uri);
+			printf("saved to: %s\n", uri);
 
 			// signal to app
-			size_t job_size = sizeof(job_t) + strlen(job->uri) + 1;
-			job_t *job1 = _sp_worker_to_app_request(app, job_size);
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_BUNDLE_SAVE;
 				job1->status = status;
-				strcpy(job1->uri, job->uri);
-				_sp_worker_to_app_advance(app, job_size);
+				job1->urn = job->urn;
+				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 
 			break;
@@ -372,13 +373,12 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		case JOB_TYPE_REQUEST_DRAIN:
 		{
 			// signal to app
-			size_t job_size = sizeof(job_t);
-			job_t *job1 = _sp_worker_to_app_request(app, job_size);
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
 			if(job1)
 			{
 				job1->reply = JOB_TYPE_REPLY_DRAIN;
 				job1->status = 0;
-				_sp_worker_to_app_advance(app, job_size);
+				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 
 			break;
