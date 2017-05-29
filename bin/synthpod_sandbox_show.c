@@ -35,7 +35,7 @@ struct _app_t {
 	const LV2UI_Show_Interface *show_iface;
 };
 
-static _Atomic bool done = ATOMIC_VAR_INIT(false);
+static atomic_bool done = ATOMIC_VAR_INIT(false);
 
 static inline void
 _sig(int signum)

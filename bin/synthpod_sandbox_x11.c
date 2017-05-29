@@ -49,7 +49,7 @@ struct _app_t {
 	int h;
 };
 
-static _Atomic bool done = ATOMIC_VAR_INIT(false);
+static atomic_bool done = ATOMIC_VAR_INIT(false);
 
 static inline void
 _sig(int signum)

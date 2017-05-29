@@ -61,7 +61,7 @@ struct _prog_t {
 	LV2_URID time_framesPerSecond;
 	LV2_URID time_speed;
 
-	_Atomic int kill;
+	atomic_int kill;
 	save_state_t save_state;
 
 	uv_async_t async;
