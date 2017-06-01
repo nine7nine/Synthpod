@@ -70,7 +70,7 @@ struct _prog_t {
 	uint8_t m [MIDI_SEQ_SIZE];
 
 	save_state_t save_state;
-	_Atomic int kill;
+	atomic_int kill;
 	uv_thread_t thread;
 
 	uint32_t srate;

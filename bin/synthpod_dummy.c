@@ -33,7 +33,7 @@ struct _prog_t {
 	LV2_Atom_Forge forge;
 	
 	save_state_t save_state;
-	_Atomic int kill;
+	atomic_int kill;
 	uv_thread_t thread;
 
 	uint32_t srate;
