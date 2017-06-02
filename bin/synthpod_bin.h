@@ -43,8 +43,11 @@
 
 #define SEQ_SIZE 0x2000
 #define JAN_1970 (uint64_t)0x83aa7e80
+#define URI_POOL_SIZE 0x100000
+#define URI_POOL_MAX 32
 
 typedef enum _save_state_t save_state_t;
+typedef struct _uri_mem_t uri_mem_t;
 typedef struct _bin_t bin_t;
 
 enum _save_state_t {
@@ -53,12 +56,20 @@ enum _save_state_t {
 	SAVE_STATE_JACK
 };
 
+struct _uri_mem_t {
+	atomic_size_t offset;
+	atomic_size_t npools;
+	atomic_uintptr_t pools [URI_POOL_MAX];
+};
+
 struct _bin_t {
 	mapper_t *mapper;	
 	mapper_pool_t mapper_pool;
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 	xpress_map_t xmap;
+
+	uri_mem_t uri_mem;
 	
 	sp_app_t *app;
 	sp_app_driver_t app_driver;

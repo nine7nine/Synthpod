@@ -250,6 +250,54 @@ _sig(int sig)
 		sandbox_master_signal(bin_ptr->sb);
 }
 
+__realtime static char *
+_mapper_pool_alloc_rt(void *data, size_t size)
+{
+	bin_t *bin = data;
+
+	while(true)
+	{
+		size_t offset = atomic_fetch_add_explicit(&bin->uri_mem.offset, size, memory_order_relaxed);
+
+		const size_t idx = offset / URI_POOL_SIZE; // integer division
+		offset %= URI_POOL_SIZE; // remainder
+
+		if(offset + size > URI_POOL_SIZE) // string does not fit in pool
+			continue;
+
+		if(idx >= URI_POOL_MAX) // pool overflow
+			return NULL;
+
+		while(idx == atomic_load_explicit(&bin->uri_mem.npools, memory_order_acquire))
+		{
+			char *pool = malloc(URI_POOL_SIZE); //FIXME do this in worker thread only
+			if(!pool) // out-of-memory
+				return NULL;
+
+			const uintptr_t desired = (const uintptr_t)pool;
+			uintptr_t expected = 0;
+			const bool match = atomic_compare_exchange_strong_explicit(&bin->uri_mem.pools[idx],
+				&expected, desired, memory_order_release, memory_order_relaxed);
+
+			if(match) // we have successfully taken this slot first
+				atomic_store_explicit(&bin->uri_mem.npools, idx + 1, memory_order_release);
+			else // slot was stolen by an other thread already
+				free(pool); // free superfluous chunk
+		}
+
+		return (char *)atomic_load_explicit(&bin->uri_mem.pools[idx], memory_order_acquire) + offset;
+	}
+}
+
+__realtime static void
+_mapper_pool_free_rt(void *data, char *uri)
+{
+	(void)data;
+	(void)uri;
+
+	// nothing
+}
+
 void
 bin_init(bin_t *bin)
 {
@@ -264,8 +312,14 @@ bin_init(bin_t *bin)
 	bin->app_from_com = varchunk_new(CHUNK_SIZE, false);
 	bin->app_from_app = varchunk_new(CHUNK_SIZE, false);
 
+	atomic_init(&bin->uri_mem.offset, 0);
+	atomic_init(&bin->uri_mem.npools, 0);
+	for(size_t idx = 0; idx < URI_POOL_MAX; idx++)
+		atomic_init(&bin->uri_mem.pools[idx], 0);
+
 	bin->mapper = mapper_new(0x10000); // 64K
-	mapper_pool_init(&bin->mapper_pool, bin->mapper, NULL, NULL, NULL);
+	mapper_pool_init(&bin->mapper_pool, bin->mapper,
+		_mapper_pool_alloc_rt, _mapper_pool_free_rt, bin);
 
 	bin->map = mapper_pool_get_map(&bin->mapper_pool);
 	bin->unmap = mapper_pool_get_unmap(&bin->mapper_pool);
@@ -483,6 +537,14 @@ bin_deinit(bin_t *bin)
 	// mapper deinit
 	mapper_pool_deinit(&bin->mapper_pool);
 	mapper_free(bin->mapper);
+
+	// mapper mem free
+	for(size_t idx = 0; idx < URI_POOL_MAX; idx++)
+	{
+		char *trash = (char *)atomic_load_explicit(&bin->uri_mem.pools[idx], memory_order_acquire);
+		if(trash)
+			free(trash);
+	}
 
 	// varchunk deinit
 	varchunk_free(bin->app_to_ui);
