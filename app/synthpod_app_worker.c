@@ -178,7 +178,26 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			assert(app->block_state == BLOCKING_STATE_WAIT);
 			app->block_state = BLOCKING_STATE_RUN; // release block
 
-			//FIXME signal to UI
+			// signal to NK
+			size_t maximum;
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_copy(&app->regs, &app->forge,
+					job->mod->urn, 0, job->urn);
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
 
 			break;
 		}
@@ -329,6 +348,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			{
 				job1->reply = JOB_TYPE_REPLY_PRESET_SAVE;
 				job1->mod = job->mod;
+				job1->urn = job->urn;
 				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
 

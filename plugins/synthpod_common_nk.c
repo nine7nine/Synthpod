@@ -2288,6 +2288,47 @@ _patch_mod_preset_set(plughandle_t *handle, mod_t *mod, const LilvNode *preset)
 	}
 }
 
+static void
+_patch_mod_preset_save(plughandle_t *handle)
+{
+	mod_t *mod = handle->module_selector;
+	if(!mod)
+		return;
+
+	LilvNode *name_node = lilv_plugin_get_name(mod->plug);
+	if(!name_node)
+		return;
+
+	const char *mod_label = lilv_node_as_string(name_node);
+	const char *preset_label = _textedit_const(&handle->preset_search_edit);
+
+	// create target URI
+	char *preset_path;
+	if(asprintf(&preset_path, "file:///home/hp/.lv2/%s_%s.preset.lv2", mod_label, preset_label) == -1) //FIXME
+		preset_path = NULL;
+
+	if(preset_path)
+	{
+		// replace white space with underline
+		const char *whitespace = " \t\r\n";
+		for(char *c = strpbrk(preset_path, whitespace); c; c = strpbrk(c, whitespace))
+			*c = '_';
+
+		const LV2_URID preset_urid = handle->map->map(handle->map->handle, preset_path);
+
+		if(  _message_request(handle)
+			&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
+				mod->urn, 0, preset_urid) )
+		{
+			_message_write(handle);
+		}
+
+		free(preset_path);
+	}
+
+	lilv_node_free(name_node);
+}
+
 static mod_t *
 _mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
 {
@@ -5392,7 +5433,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
 					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->preset_search_edit, nk_filter_default);
 					_textedit_zero_terminate(&handle->preset_search_edit);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->preset_search_edit)) )
+					if(flags & NK_EDIT_COMMITED)
+						_patch_mod_preset_save(handle);
+					if(old_len != _textedit_len(&handle->preset_search_edit))
 						handle->preset_find_matches = true;
 					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 						nk_textedit_select_all(&handle->preset_search_edit);
@@ -6484,6 +6527,39 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_add_mod(handle, (const LV2_Atom_URID *)&prop->value);
 							}
+						}
+					}
+				}
+				else if(obj->body.otype == handle->regs.patch.copy.urid)
+				{
+					const LV2_Atom_URID *subject = NULL;
+					const LV2_Atom_URID *destination = NULL;
+
+					lv2_atom_object_get(obj,
+						handle->regs.patch.subject.urid, &subject,
+						handle->regs.patch.destination.urid, &destination,
+						0);
+
+					const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+						? subject->body
+						: 0;
+					const LV2_URID dest = destination && (destination->atom.type == handle->forge.URID)
+						? destination->body
+						: 0;
+
+					if(subj && dest)
+					{
+						mod_t *mod = _mod_find_by_urn(handle, subj);
+						if(mod)
+						{
+							const char *bndl = handle->unmap->unmap(handle->unmap->handle, dest);
+							bndl = !strncmp(bndl, "file://", 7)
+								? bndl + 7
+								: bndl;
+
+							// reload presets for this module
+							mod->presets = _preset_reload(handle->world, &handle->regs, mod->plug,
+								mod->presets, bndl);
 						}
 					}
 				}

@@ -286,57 +286,58 @@ _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async
 }
 
 int
-_sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
+_sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *uri)
 {
 	const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
 	if(!name_node)
 		return -1;
 
-	const char *name = lilv_node_as_string(name_node);
-	char *dir = NULL;
-	char *filename = NULL;
-	char *bndl = NULL;
+	const char *mod_label = lilv_node_as_string(name_node);
+	char *prefix_path;
+	if(asprintf(&prefix_path, "file:///home/hp/.lv2/%s_", mod_label) == -1) //FIXME
+		prefix_path = NULL;
 
-	// create bundle path
-	asprintf(&dir, "%s/.lv2/%s_%s.preset.lv2", app->dir.home, name, target);
-	if(!dir)
-		return -1;
-
-	// replace spaces with underscore
-	for(char *c = strstr(dir, ".lv2"); *c; c++)
-		if(isspace(*c))
+	if(prefix_path)
+	{
+		// replace white space with underline
+		const char *whitespace = " \t\r\n";
+		for(char *c = strpbrk(prefix_path, whitespace); c; c = strpbrk(c, whitespace))
 			*c = '_';
-
-	mkpath(dir);
-
-	// create plugin state file name
-	asprintf(&filename, "%s.ttl", target);
-	if(!filename)
-	{
-		free(dir);
-		return -1;
 	}
-	
-	// create bundle path URI
-	asprintf(&bndl, "%s/", dir);
-	if(!bndl)
+
+	const char *bndl = !strncmp(uri, "file://", 7)
+		? uri + 7
+		: uri;
+
+	const char *target = prefix_path && !strncmp(uri, prefix_path, strlen(prefix_path))
+		? uri + strlen(prefix_path)
+		: uri;
+
+	char *dest = strdup(target);
+	if(dest)
 	{
-		free(dir);
-		free(filename);
-		return -1;
+		char *term = strstr(dest, ".preset.lv2");
+		if(term)
+			*term = '\0';
+
+		const char underline = '_';
+		for(char *c = strchr(dest, underline); c; c = strchr(c, underline))
+				*c = ' ';
 	}
-	
-	//printf("preset save: %s, %s, %s\n", dir, filename, bndl);
+
+	mkpath((char *)uri);
+
+	printf("preset save: <%s> as %s\n", uri, dest ? dest : target);
 
 	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-		app->driver->map, NULL, NULL, NULL, dir,
+		app->driver->map, NULL, NULL, NULL, bndl,
 		_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
 		NULL);
 
 	if(state)
 	{
-		// actually save the state to disk
-		lilv_state_set_label(state, target);
+		// set preset label
+		lilv_state_set_label(state, dest ? dest : target);
 
 		/*FIXME for lilv 0.24
 		const char *comment = "this is a comment";
@@ -356,33 +357,22 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target)
 			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 		*/
 
+		// actually save the state to disk
 		lilv_state_save(app->world, app->driver->map, app->driver->unmap,
-			state, NULL, dir, filename);
+			state, NULL, bndl, "state.ttl");
 		lilv_state_free(state);
 
 		// reload presets for this module
 		mod->presets = _preset_reload(app->world, &app->regs, mod->plug,
 			mod->presets, bndl);
-
-#if 0
-		// signal ui to reload its presets, too
-		size_t size = sizeof(transmit_module_preset_save_t)
-								+ lv2_atom_pad_size(strlen(bndl) + 1);
-		transmit_module_preset_save_t *trans = _sp_app_to_ui_request(app, size);
-		if(trans)
-		{
-			_sp_transmit_module_preset_save_fill(&app->regs, &app->forge, trans,
-				size, mod->uid, bndl);
-			_sp_app_to_ui_advance(app, size);
-		}
-#endif
 	}
-	
-	// cleanup
-	free(dir);
-	free(filename);
-	free(bndl);
 
+	// cleanup
+	if(prefix_path)
+		free(prefix_path);
+	if(dest)
+		free(dest);
+	
 	return 0; // success
 }
 

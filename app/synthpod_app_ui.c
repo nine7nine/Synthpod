@@ -1506,6 +1506,40 @@ _sp_app_from_ui_patch_copy(sp_app_t *app, const LV2_Atom *atom)
 			}
 		}
 	}
+	else if(subj && dest) // copy preset to dest
+	{
+		mod_t *mod = _mod_find_by_urn(app, subj);
+
+		if(app->block_state == BLOCKING_STATE_RUN)
+		{
+			// send request to worker thread
+			job_t *job = _sp_app_to_worker_request(app, sizeof(job_t));
+			if(job)
+			{
+				app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+				job->request = JOB_TYPE_REQUEST_DRAIN;
+				job->status = 0;
+				_sp_app_to_worker_advance(app, sizeof(job_t));
+			}
+		}
+		else if(app->block_state == BLOCKING_STATE_BLOCK)
+		{
+			// send request to worker thread
+			job_t *job = _sp_app_to_worker_request(app, sizeof(job_t));
+			if(job)
+			{
+				app->block_state = BLOCKING_STATE_WAIT; // wait for job
+
+				job->request = JOB_TYPE_REQUEST_PRESET_SAVE;
+				job->mod = mod;
+				job->urn = dest;
+				_sp_app_to_worker_advance(app, sizeof(job_t));
+
+				return true; // advance
+			}
+		}
+	}
 
 	return advance_ui[app->block_state];
 }
