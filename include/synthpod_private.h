@@ -43,6 +43,8 @@
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/time/time.h>
 #include <lv2/lv2plug.in/ns/ext/parameters/parameters.h>
+#include <lv2/lv2plug.in/ns/ext/instance-access/instance-access.h>
+#include <lv2/lv2plug.in/ns/ext/data-access/data-access.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <zero_worker.h>
@@ -181,6 +183,8 @@ struct _reg_t {
 		reg_item_t port_subscribe;
 		reg_item_t port_index;
 		reg_item_t update_rate;
+		reg_item_t instance_access;
+		reg_item_t data_access;
 	} ui;
 
 	struct {
@@ -467,6 +471,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.port_subscribe, world, map, LV2_UI__portSubscribe);
 	_register(&regs->ui.port_index, world, map, LV2_UI__portIndex);
 	_register(&regs->ui.update_rate, world, map, LV2_UI__updateRate);
+	_register(&regs->ui.instance_access, world, map, LV2_INSTANCE_ACCESS_URI);
+	_register(&regs->ui.data_access, world, map, LV2_DATA_ACCESS_URI);
 
 #ifndef LV2_PRESETS__bank
 #	define LV2_PRESETS__bank LV2_PRESETS_PREFIX "bank"
@@ -708,6 +714,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->ui.port_subscribe);
 	_unregister(&regs->ui.port_index);
 	_unregister(&regs->ui.update_rate);
+	_unregister(&regs->ui.instance_access);
+	_unregister(&regs->ui.data_access);
 
 	_unregister(&regs->pset.preset);
 	_unregister(&regs->pset.preset_bank);

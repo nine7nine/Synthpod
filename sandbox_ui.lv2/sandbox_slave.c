@@ -28,6 +28,7 @@
 
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
+#include <lv2/lv2plug.in/ns/ext/uri-map/uri-map.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <lilv/lilv.h>
@@ -41,6 +42,7 @@ struct _sandbox_slave_t {
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
+	LV2_URI_Map_Feature uri_id;
 
 	LV2_Log_Log log;
 
@@ -169,6 +171,15 @@ _sandbox_recv_cb(LV2UI_Handle handle, uint32_t index, uint32_t size,
 		sb->desc->port_event(sb->handle, index, size, protocol, buf);
 }
 
+static uint32_t
+_sb_uri_to_id(LV2_URI_Map_Callback_Data handle, const char *map, const char *uri)
+{
+	sandbox_slave_t *sb = handle;
+	(void)map;
+
+	return sb->map->map(sb->map->handle, uri);
+}
+
 sandbox_slave_t *
 sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, void *data)
 {
@@ -257,6 +268,8 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 
 	sb->map = mapper_pool_get_map(&sb->mapper_pool);
 	sb->unmap = mapper_pool_get_unmap(&sb->mapper_pool);
+	sb->uri_id.callback_data = sb;
+	sb->uri_id.uri_to_id = _sb_uri_to_id;
 
 	if(!(sb->world = lilv_world_new()))
 	{
@@ -470,6 +483,10 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		.URI = LV2_URID__unmap,
 		.data = sb->unmap
 	};
+	const LV2_Feature uri_id_feature= {
+		.URI = LV2_URI_MAP_URI,
+		.data = &sb->uri_id
+	};
 	const LV2_Feature log_feature = {
 		.URI = LV2_LOG__log,
 		.data = &sb->log
@@ -494,6 +511,7 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 	const LV2_Feature *const features [] = {
 		&map_feature,
 		&unmap_feature,
+		&uri_id_feature,
 		&log_feature,
 		&port_map_feature,
 		&port_subscribe_feature,
@@ -502,6 +520,8 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		sb->host_resize.ui_resize && parent_feature ? parent_feature : NULL,
 		NULL
 	};
+
+	//FIXME check features
 
 	const LilvNode *ui_bundle_uri = lilv_ui_get_bundle_uri(sb->ui);
 #if defined(LILV_0_22)

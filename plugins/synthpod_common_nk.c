@@ -2042,6 +2042,8 @@ _mod_ui_run(mod_ui_t *mod_ui)
 
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);
 
+	printf("exec_uri: %s\n", exec_uri);
+
 	if(exec_uri && plugin_uri && mod_ui->sbox.bundle_path && mod_ui->uri
 		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name
 		&& mod_ui->sbox.update_rate && mod_ui->sbox.sb)
@@ -2703,6 +2705,25 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	LILV_FOREACH(uis, itr, mod->ui_nodes)
 	{
 		const LilvUI *ui = lilv_uis_get(mod->ui_nodes, itr);
+		const LilvNode *ui_uri = lilv_ui_get_uri(ui);
+
+		const bool needs_instance_access = lilv_world_ask(handle->world, ui_uri,
+			handle->regs.core.required_feature.node, handle->regs.ui.instance_access.node);
+		if(needs_instance_access)
+		{
+			fprintf(stderr, "<%s> instance-access extension not supported\n", lilv_node_as_string(ui_uri));
+			continue;
+		}
+
+		const bool needs_data_access = lilv_world_ask(handle->world, ui_uri,
+			handle->regs.core.required_feature.node, handle->regs.ui.data_access.node);
+		if(needs_data_access)
+		{
+			fprintf(stderr, "<%s> data-access extension not supported\n", lilv_node_as_string(ui_uri));
+			continue;
+		}
+
+		//FIXME check for more unsupported features
 
 		_mod_ui_add(handle, mod, ui);
 	}
