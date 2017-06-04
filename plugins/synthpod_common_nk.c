@@ -422,6 +422,10 @@ struct _plughandle_t {
 		struct nk_image plus;
 		struct nk_image download;
 		struct nk_image cancel;
+
+		struct nk_image house;
+		struct nk_image layers;
+		struct nk_image user;
 	} icon;
 };
 
@@ -3502,7 +3506,11 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 					? nk_style_item_color(nk_rgb(40, 40, 40))
 					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
 
-				if(nk_select_label(ctx, label_str, NK_TEXT_LEFT, nk_false))
+				const bool is_user_preset = !strncmp(lilv_node_as_string(preset), "file://", 7);
+
+				if(nk_select_image_label(ctx,
+					is_user_preset ? handle->icon.house: handle->icon.layers,
+					label_str, NK_TEXT_LEFT, nk_false))
 				{
 					_patch_mod_preset_set(handle, handle->module_selector, preset);
 				}
@@ -5965,6 +5973,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->icon.plus = _icon_load(handle, "plus.png");
 	handle->icon.download = _icon_load(handle, "download.png");
 	handle->icon.cancel = _icon_load(handle, "cancel.png");
+	handle->icon.house = _icon_load(handle, "house.png");
+	handle->icon.layers = _icon_load(handle, "layers.png");
+	handle->icon.user = _icon_load(handle, "user.png");
 
 	return handle;
 }
@@ -5987,6 +5998,9 @@ cleanup(LV2UI_Handle instance)
 	_icon_unload(handle, handle->icon.plus);
 	_icon_unload(handle, handle->icon.download);
 	_icon_unload(handle, handle->icon.cancel);
+	_icon_unload(handle, handle->icon.house);
+	_icon_unload(handle, handle->icon.layers);
+	_icon_unload(handle, handle->icon.user);
 
 	if(handle->win.cfg.font.face)
 		free(handle->win.cfg.font.face);
