@@ -45,6 +45,7 @@
 #define SEARCH_BUF_MAX 128
 #define ATOM_BUF_MAX 0x100000 // 1M
 #define CONTROL 14 //FIXME
+#define SPLINE_BEND 25.f
 
 #ifdef Bool
 #	undef Bool // interferes with atom forge
@@ -5164,7 +5165,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 		const float l1x = snk->pos.x - scrolling.x - snk->dim.x/2 - cs*2;
 		const float l1y = snk->pos.y - scrolling.y;
 
-		const float bend = 50.f * handle->scale;
+		const float bend = SPLINE_BEND * handle->scale;
 		nk_stroke_curve(canvas,
 			l0x, l0y,
 			l0x + bend, l0y,
