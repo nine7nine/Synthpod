@@ -4923,8 +4923,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 static void
 _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 {
-	if(!_source_type_match(handle, mod->source_type) && !_sink_type_match(handle, mod->sink_type))
-		return;
+	// we always show modules, even if port type does not match current view
 
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	const struct nk_input *in = &ctx->input;
