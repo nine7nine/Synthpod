@@ -107,7 +107,7 @@ if(BUILD_UI)
 	install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
 # font
-	install(FILES ${PROJECT_SOURCE_DIR}/nuklear/extra_font/Cousine-Regular.ttf DESTINATION ${SYNTHPOD_PLUGIN_DIR})
+	install(FILES ${PROJECT_SOURCE_DIR}/data/font/Abel-Regular.ttf DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 else()
 	set(UI_WRAP "#")
 endif()

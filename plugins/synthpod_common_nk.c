@@ -5912,9 +5912,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	cfg->data = handle;
 	cfg->expose = _expose;
 
-	if(asprintf(&cfg->font.face, "%sCousine-Regular.ttf", bundle_path) == -1)
+	if(asprintf(&cfg->font.face, "%sAbel-Regular.ttf", bundle_path) == -1)
 		cfg->font.face = NULL;
-	cfg->font.size = 13;
+	cfg->font.size = 15;
 
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
