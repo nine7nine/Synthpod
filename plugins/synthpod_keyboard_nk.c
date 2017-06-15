@@ -123,7 +123,7 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 			// send note off
 			if(!down && handle->down)
 			{
-				_midi(handle, LV2_MIDI_MSG_NOTE_OFF, handle->key, 0x7f);
+				_midi(handle, LV2_MIDI_MSG_NOTE_OFF, handle->key, 0x0);
 			}
 
 			for(unsigned o=0; o<noct; o++)
@@ -168,11 +168,13 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 						{
 							// send note off
 							if(handle->down)
-								_midi(handle, LV2_MIDI_MSG_NOTE_OFF, handle->key, 0x7f);
+								_midi(handle, LV2_MIDI_MSG_NOTE_OFF, handle->key, 0x0);
 
 							// send note on
 							handle->key = k;
 							_midi(handle, LV2_MIDI_MSG_NOTE_ON, handle->key, 0x7f);
+
+							nk_pugl_post_redisplay(&handle->win);
 						}
 
 						// send note pressure
@@ -205,11 +207,13 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 						{
 							// send note off
 							if(handle->down)
-								_midi(handle, LV2_MIDI_MSG_NOTE_OFF, handle->key, 0x7f);
+								_midi(handle, LV2_MIDI_MSG_NOTE_OFF, handle->key, 0x0);
 
 							// send note on
 							handle->key = k;
 							_midi(handle, LV2_MIDI_MSG_NOTE_ON, handle->key, 0x7f);
+
+							nk_pugl_post_redisplay(&handle->win);
 						}
 
 						// send note pressure
