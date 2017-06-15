@@ -1,7 +1,6 @@
 # synthpod
 add_library(synthpod.lv2 MODULE
 	synthpod_lv2.c
-	synthpod_stereo.c
 	synthpod_keyboard.c
 	synthpod_cv2control.c
 	synthpod_control2cv.c
@@ -17,9 +16,8 @@ add_library(synthpod.lv2 MODULE
 	synthpod_control2atom.c
 	synthpod_mixer.c
 	synthpod_panic.c
-	synthpod_anonymizer.c
-	$<TARGET_OBJECTS:synthpod.lib>)
-target_link_libraries(synthpod.lv2 ${BIN_LIBS})
+	synthpod_anonymizer.c)
+target_link_libraries(synthpod.lv2 m)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 set_target_properties(synthpod.lv2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
 set_target_properties(synthpod.lv2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto

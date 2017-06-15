@@ -45,38 +45,36 @@ lv2_descriptor(uint32_t index)
 	switch(index)
 	{
 		case 0:
-			return &synthpod_stereo;
-		case 1:
 			return &synthpod_keyboard;
-		case 2:
+		case 1:
 			return &synthpod_cv2control;
-		case 3:
+		case 2:
 			return &synthpod_control2cv;
-		case 4:
+		case 3:
 			return &synthpod_cv2atom;
-		case 5:
+		case 4:
 			return &synthpod_atom2cv;
-		case 6:
+		case 5:
 			return &synthpod_audioxfademono;
-		case 7:
+		case 6:
 			return &synthpod_audioxfadestereo;
-		case 8:
+		case 7:
 			return &synthpod_atom2control;
-		case 9:
+		case 8:
 			return &synthpod_control2atom;
-		case 10:
+		case 9:
 			return &synthpod_mixer;
-		case 11:
+		case 10:
 			return &synthpod_anonymizer;
-		case 12:
+		case 11:
 			return &synthpod_midisplitter;
-		case 13:
+		case 12:
 			return &synthpod_midi2control;
-		case 14:
+		case 13:
 			return &synthpod_string2control;
-		case 15:
+		case 14:
 			return &synthpod_panic;
-		case 16:
+		case 15:
 			return &synthpod_heavyload;
 		default:
 			return NULL;
