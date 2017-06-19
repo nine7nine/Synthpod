@@ -348,7 +348,7 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 }
 
 __realtime static inline void
-_dsp_slave_spin(dsp_master_t *dsp_master, bool is_master)
+_dsp_slave_spin(dsp_master_t *dsp_master)
 {
 	while(atomic_load_explicit(&dsp_master->ref_count, memory_order_acquire))
 	{
@@ -382,7 +382,7 @@ _dsp_slave_thread(void *data)
 	{
 		sem_wait(&dsp_slave->sem);
 
-		_dsp_slave_spin(dsp_master, false);
+		_dsp_slave_spin(dsp_master);
 		sched_yield();
 	}
 
@@ -418,7 +418,7 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 	const unsigned ref_count = num_slaves + 1; // plus master
 	atomic_store_explicit(&dsp_master->ref_count, ref_count, memory_order_release);
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
-	_dsp_slave_spin(dsp_master, true); // runs jobs itself 
+	_dsp_slave_spin(dsp_master); // runs jobs itself 
 
 	while(atomic_load_explicit(&dsp_master->ref_count, memory_order_acquire))
 	{
