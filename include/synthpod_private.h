@@ -354,6 +354,8 @@ struct _reg_t {
 		reg_item_t bundle_save;
 		reg_item_t path_get;
 		reg_item_t dsp_profiling;
+		reg_item_t cpus_available;
+		reg_item_t cpus_used;
 		reg_item_t grid_cols;
 		reg_item_t grid_rows;
 		reg_item_t pane_left;
@@ -621,6 +623,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.bundle_save, world, map, SYNTHPOD_PREFIX"bundleSave");
 	_register(&regs->synthpod.path_get, world, map, SYNTHPOD_PREFIX"pathGet");
 	_register(&regs->synthpod.dsp_profiling, world, map, SYNTHPOD_PREFIX"DSPProfiling");
+	_register(&regs->synthpod.cpus_available, world, map, SYNTHPOD_PREFIX"CPUsAvailable");
+	_register(&regs->synthpod.cpus_used, world, map, SYNTHPOD_PREFIX"CPUsUsed");
 	_register(&regs->synthpod.grid_cols, world, map, SYNTHPOD_PREFIX"gridCols");
 	_register(&regs->synthpod.grid_rows, world, map, SYNTHPOD_PREFIX"gridRows");
 	_register(&regs->synthpod.pane_left, world, map, SYNTHPOD_PREFIX"paneLeft");
@@ -854,6 +858,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.bundle_load);
 	_unregister(&regs->synthpod.bundle_save);
 	_unregister(&regs->synthpod.dsp_profiling);
+	_unregister(&regs->synthpod.cpus_available);
+	_unregister(&regs->synthpod.cpus_used);
 	_unregister(&regs->synthpod.grid_cols);
 	_unregister(&regs->synthpod.grid_rows);
 	_unregister(&regs->synthpod.pane_left);

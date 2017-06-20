@@ -1259,6 +1259,30 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				_sp_app_to_ui_overflow(app);
 			}
 		}
+		else if(prop == app->regs.synthpod.cpus_available.urid)
+		{
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const int32_t cpus_available = app->dsp_master.num_slaves + 1;
+
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, subj, sn, prop,
+					sizeof(int32_t), app->forge.Int, &cpus_available);
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
+		}
 		//TODO handle more properties
 	}
 	else if(subj)

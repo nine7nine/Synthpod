@@ -1055,6 +1055,8 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 		_sp_app_to_worker_advance(app, size);
 	}
 
+	_sp_app_order(app);
+
 #if 0
 	// signal to ui
 	size = sizeof(transmit_module_del_t);

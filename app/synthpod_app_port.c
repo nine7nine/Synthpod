@@ -158,6 +158,31 @@ _dsp_master_reorder(sp_app_t *app)
 	*/
 
 	_dsp_master_concurrent(app);
+
+	// to nk
+	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+	if(answer)
+	{
+		const int32_t cpus_used = (app->dsp_master.concurrent > app->dsp_master.num_slaves + 1)
+			? app->dsp_master.num_slaves + 1
+			: app->dsp_master.concurrent;
+
+		LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+			&app->regs, &app->forge, 0, 0, app->regs.synthpod.cpus_used.urid,
+			sizeof(int32_t), app->forge.Int, &cpus_used); //TODO subj, seqn
+		if(ref)
+		{
+			_sp_app_to_ui_advance_atom(app, answer);
+		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
+	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
 }
 
 bool

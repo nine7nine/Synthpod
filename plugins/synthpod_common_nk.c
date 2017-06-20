@@ -404,6 +404,8 @@ struct _plughandle_t {
 	bool done;
 
 	prof_t prof;
+	int32_t cpus_available;
+	int32_t cpus_used;
 
 	float sample_rate;
 	float update_rate;
@@ -5638,10 +5640,12 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 static void
 _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
-	nk_layout_row_dynamic(ctx, dy, 2);
+	nk_layout_row_dynamic(ctx, dy, 3);
 	{
-		nk_labelf(ctx, NK_TEXT_LEFT, "%.1f | %.1f | %.1f %%",
+		nk_labelf(ctx, NK_TEXT_LEFT, "DSP: %.1f | %.1f | %.1f %%",
 			handle->prof.min, handle->prof.avg, handle->prof.max);
+		nk_labelf(ctx, NK_TEXT_LEFT, "CPU: %"PRIi32"/%"PRIi32,
+			handle->cpus_used, handle->cpus_available);
 		nk_label(ctx, "Synthpod: "SYNTHPOD_VERSION, NK_TEXT_RIGHT);
 	}
 }
@@ -5707,6 +5711,14 @@ _init(plughandle_t *handle)
 	if(  _message_request(handle)
 		&& synthpod_patcher_get(&handle->regs, &handle->forge,
 			0, 0, handle->regs.synthpod.module_list.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:CPUsAvailable]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.cpus_available.urid) )
 	{
 		_message_write(handle);
 	}
@@ -6418,6 +6430,24 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 								nk_pugl_post_redisplay(&handle->win);
 							}
+						}
+						else if( (prop == handle->regs.synthpod.cpus_used.urid)
+							&& (value->type == handle->forge.Int) )
+						{
+							const LV2_Atom_Int *cpus_used = (const LV2_Atom_Int *)value;
+
+							handle->cpus_used = cpus_used->body;
+
+							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.cpus_available.urid)
+							&& (value->type == handle->forge.Int) )
+						{
+							const LV2_Atom_Int *cpus_available = (const LV2_Atom_Int *)value;
+
+							handle->cpus_available = cpus_available->body;
+
+							nk_pugl_post_redisplay(&handle->win);
 						}
 					}
 				}
