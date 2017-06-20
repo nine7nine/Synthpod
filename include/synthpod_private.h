@@ -233,6 +233,7 @@ struct _reg_t {
 
 	struct {
 		reg_item_t sample_rate;
+		reg_item_t gain;
 	} param;
 
 	struct {
@@ -517,6 +518,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->core.designation, world, map, LV2_CORE__designation);
 
 	_register(&regs->param.sample_rate, world, map, LV2_PARAMETERS__sampleRate);
+	_register(&regs->param.gain, world, map, LV2_PARAMETERS__gain);
 
 	_register(&regs->bufsz.nominal_block_length, world, map, LV2_BUF_SIZE_PREFIX "nominalBlockLength");
 	_register(&regs->bufsz.max_block_length, world, map, LV2_BUF_SIZE__maxBlockLength);
@@ -756,6 +758,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->core.designation);
 
 	_unregister(&regs->param.sample_rate);
+	_unregister(&regs->param.gain);
 
 	_unregister(&regs->bufsz.nominal_block_length);
 	_unregister(&regs->bufsz.max_block_length);

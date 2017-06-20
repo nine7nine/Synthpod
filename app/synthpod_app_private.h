@@ -329,6 +329,7 @@ struct _port_driver_t {
 
 struct _source_t {
 	port_t *port;
+	float gain;
 
 	// ramping
 	struct {
@@ -664,7 +665,7 @@ bool
 _sp_app_port_connected(port_t *src_port, port_t *snk_port);
 
 int
-_sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port);
+_sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port, float gain);
 
 int
 _sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,

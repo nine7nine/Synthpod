@@ -1105,6 +1105,11 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
 									if(ref)
 										ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.param.gain.urid);
+									if(ref)
+										ref = lv2_atom_forge_float(&app->forge, source->gain);
 								}
 								if(ref)
 									lv2_atom_forge_pop(&app->forge, &frame[2]);
@@ -1603,12 +1608,14 @@ _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom_URID *snk_module = NULL;
 	const LV2_Atom *snk_symbol = NULL;
+	const LV2_Atom_Float *link_gain = NULL;
 
 	lv2_atom_object_get(obj,
 		app->regs.synthpod.source_module.urid, &src_module,
 		app->regs.synthpod.source_symbol.urid, &src_symbol,
 		app->regs.synthpod.sink_module.urid, &snk_module,
 		app->regs.synthpod.sink_symbol.urid, &snk_symbol,
+		app->regs.param.gain.urid, &link_gain,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1619,6 +1626,8 @@ _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		? snk_module->body : 0;
 	const char *snk_sym = snk_symbol
 		? LV2_ATOM_BODY_CONST(snk_symbol) : NULL;
+	const float gain = link_gain
+		? link_gain->body : 1.f;
 
 	if(src_urn && src_sym && snk_urn && snk_sym)
 	{
@@ -1627,7 +1636,7 @@ _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 
 		if(src_port && snk_port)
 		{
-			const int32_t state = _sp_app_port_connect(app, src_port, snk_port);
+			const int32_t state = _sp_app_port_connect(app, src_port, snk_port, gain);
 			(void)state;
 
 			// signal to UI

@@ -202,7 +202,7 @@ _sp_app_port_connected(port_t *src_port, port_t *snk_port)
 }
 
 int
-_sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
+_sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port, float gain)
 {
 	if(_sp_app_port_connected(src_port, snk_port))
 		return 0;
@@ -216,6 +216,7 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 
 	source_t *source = &conn->sources[conn->num_sources];
 	source->port = src_port;;
+	source->gain = gain;
 	conn->num_sources += 1;
 
 	// only audio port connections need to be ramped to be clickless
@@ -480,17 +481,35 @@ _port_audio_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		if(source->ramp.state != RAMP_STATE_NONE)
 		{
 			const float *src = PORT_BASE_ALIGNED(source->port);
-			const float ramp_value = source->ramp.value;
-			for(uint32_t j=0; j<nsamples; j++)
-				val[j] += src[j] * ramp_value;
+			const float gain = source->gain * source->ramp.value;
+
+			if(gain == 1.f)
+			{
+				for(uint32_t j=0; j<nsamples; j++)
+					val[j] += src[j];
+			}
+			else // gain != 1.f
+			{
+				for(uint32_t j=0; j<nsamples; j++)
+					val[j] += src[j] * gain;
+			}
 
 			_update_ramp(app, source, port, nsamples);
 		}
 		else // RAMP_STATE_NONE
 		{
 			const float *src = PORT_BASE_ALIGNED(source->port);
-			for(uint32_t j=0; j<nsamples; j++)
-				val[j] += src[j];
+			const float gain = source->gain;
+			if(gain == 1.f)
+			{
+				for(uint32_t j=0; j<nsamples; j++)
+					val[j] += src[j];
+			}
+			else // gain != 1.f
+			{
+				for(uint32_t j=0; j<nsamples; j++)
+					val[j] += src[j] * gain;
+			}
 		}
 	}
 }

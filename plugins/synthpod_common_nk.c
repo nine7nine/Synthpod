@@ -256,6 +256,7 @@ struct _mod_t {
 struct _port_conn_t {
 	port_t *source_port;
 	port_t *sink_port;
+	float gain;
 };
 
 struct _mod_conn_t {
@@ -2134,13 +2135,14 @@ _port_conn_find(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
 }
 
 static port_conn_t *
-_port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
+_port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port, float gain)
 {
 	port_conn_t *port_conn = calloc(1, sizeof(port_conn_t));
 	if(port_conn)
 	{
 		port_conn->source_port = source_port;
 		port_conn->sink_port = sink_port;
+		port_conn->gain = gain;
 
 		mod_conn->source_type |= source_port->type;
 		mod_conn->sink_type |= sink_port->type;
@@ -6060,12 +6062,14 @@ _add_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom_URID *snk_module = NULL;
 	const LV2_Atom *snk_symbol = NULL;
+	const LV2_Atom_Float *link_gain = NULL;
 
 	lv2_atom_object_get(obj,
 		handle->regs.synthpod.source_module.urid, &src_module,
 		handle->regs.synthpod.source_symbol.urid, &src_symbol,
 		handle->regs.synthpod.sink_module.urid, &snk_module,
 		handle->regs.synthpod.sink_symbol.urid, &snk_symbol,
+		handle->regs.param.gain.urid, &link_gain,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -6076,6 +6080,8 @@ _add_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 		? snk_module->body : 0;
 	const char *snk_sym = snk_symbol
 		? LV2_ATOM_BODY_CONST(snk_symbol) : NULL;
+	const float gain = link_gain
+		? link_gain->body : 1.f;
 
 	if(src_urn && src_sym && snk_urn && snk_sym)
 	{
@@ -6093,7 +6099,13 @@ _add_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 				if(!mod_conn) // does not yet exist
 					mod_conn = _mod_conn_add(handle, src_mod, snk_mod);
 				if(mod_conn)
-					_port_conn_add(mod_conn, src_port, snk_port);
+				{
+					port_conn_t *port_conn = _port_conn_find(mod_conn, src_port, snk_port);
+					if(port_conn)
+						port_conn->gain = gain; // update gain only
+					else
+						port_conn = _port_conn_add(mod_conn, src_port, snk_port, gain);
+				}
 			}
 		}
 	}

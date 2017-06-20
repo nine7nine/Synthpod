@@ -397,6 +397,7 @@ synthpod_to_turtle(Sratom* sratom, LV2_URID_Unmap* unmap,
 		serd_env_set_prefix_from_strings(env, CUINT8("rdfs"), CUINT8(RDFS_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("lv2"), CUINT8(LV2_CORE_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("pset"), CUINT8(LV2_PRESETS_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("param"), CUINT8(LV2_PARAMETERS_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("state"), CUINT8(LV2_STATE_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("spod"), CUINT8(SPOD_PREFIX));
 
@@ -955,20 +956,23 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 						{
 							for(int j=0; j<conn->num_sources; j++)
 							{
-								port_t *source = conn->sources[j].port;
+								source_t *source = &conn->sources[j];
+								port_t *source_port = source->port;
 
 								LV2_Atom_Forge_Frame source_frame;
 								if(  ref
 									&& lv2_atom_forge_object(forge, &source_frame, 0, 0) )
 								{
 									ref = lv2_atom_forge_key(forge, app->regs.synthpod.source_module.urid)
-										&& lv2_atom_forge_urid(forge, source->mod->urn)
+										&& lv2_atom_forge_urid(forge, source_port->mod->urn)
 										&& lv2_atom_forge_key(forge, app->regs.synthpod.source_symbol.urid)
-										&& lv2_atom_forge_string(forge, source->symbol, strlen(source->symbol))
+										&& lv2_atom_forge_string(forge, source_port->symbol, strlen(source_port->symbol))
 										&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_module.urid)
 										&& lv2_atom_forge_urid(forge, port->mod->urn)
 										&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_symbol.urid)
-										&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol));
+										&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol))
+										&& lv2_atom_forge_key(forge, app->regs.param.gain.urid)
+										&& lv2_atom_forge_float(forge, source->gain);
 
 									if(ref)
 										lv2_atom_forge_pop(forge, &source_frame);
@@ -1400,7 +1404,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 							if(strcmp(source_symbol_str, tar->symbol))
 								continue;
 
-							_sp_app_port_connect(app, tar, port);
+							_sp_app_port_connect(app, tar, port, 1.f);
 
 							break;
 						}
