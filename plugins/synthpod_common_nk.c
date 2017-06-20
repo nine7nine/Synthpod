@@ -5722,6 +5722,14 @@ _init(plughandle_t *handle)
 	{
 		_message_write(handle);
 	}
+
+	// patch:Get [patch:property spod:CPUsUsed]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.cpus_used.urid) )
+	{
+		_message_write(handle);
+	}
 }
 
 static void
