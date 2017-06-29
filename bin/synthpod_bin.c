@@ -149,6 +149,12 @@ _atomic_spin_lock(atomic_flag *flag)
 	}
 }
 
+static inline bool
+_atomic_try_lock(atomic_flag *flag)
+{
+	return !atomic_flag_test_and_set_explicit(flag, memory_order_acquire);
+}
+
 static inline void
 _atomic_unlock(atomic_flag *flag)
 {
@@ -166,20 +172,21 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	if( (type == bin->log_trace)
 		&& !uv_thread_equal(&this, &bin->self) ) // not worker thread ID
 	{
-		_atomic_spin_lock(&bin->trace_lock); //FIXME use per-dsp-thread ringbuffer
-		char *trace;
-		if((trace = varchunk_write_request(bin->app_to_log, 1024)))
+		size_t written = -1;
+		if(_atomic_try_lock(&bin->trace_lock)) //FIXME use per-dsp-thread ringbuffer
 		{
-			vsnprintf(trace, 1024, fmt, args);
+			char *trace;
+			if((trace = varchunk_write_request(bin->app_to_log, 1024)))
+			{
+				vsnprintf(trace, 1024, fmt, args);
 
-			size_t written = strlen(trace) + 1;
-			varchunk_write_advance(bin->app_to_log, written);
-			_atomic_unlock(&bin->trace_lock);
-			sandbox_master_signal(bin->sb);
-
-			return written;
+				written = strlen(trace) + 1;
+				varchunk_write_advance(bin->app_to_log, written);
+				sandbox_master_signal(bin->sb);
+			}
 		}
 		_atomic_unlock(&bin->trace_lock);
+		return written;
 	}
 	else // !log_trace OR not DSP thread ID
 	{
