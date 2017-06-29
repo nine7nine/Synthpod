@@ -151,6 +151,30 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		}
 	}
 
+	mod_worker_t *mod_worker = &mod->mod_worker;
+	if(mod_worker->app_from_worker)
+	{
+		const void *payload;
+		size_t size;
+		while((payload = varchunk_read_request(mod_worker->app_from_worker, &size)))
+		{
+			// zero worker takes precedence over standard worker
+			if(mod->zero.iface && mod->zero.iface->response)
+			{
+				mod->zero.iface->response(mod->handle, size, payload);
+				//TODO check return status
+			}
+			else if(mod->worker.iface && mod->worker.iface->work_response)
+			{
+				mod->worker.iface->work_response(mod->handle, size, payload);
+				//TODO check return status
+			}
+
+			varchunk_read_advance(mod_worker->app_from_worker);
+		}
+	}
+
+
 	struct timespec mod_t1;
 	struct timespec mod_t2;
 	clock_gettime(CLOCK_MONOTONIC, &mod_t1);
@@ -582,29 +606,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 		{
 			del_me = mod;
 			mod->delete_request = false;
-		}
-
-		mod_worker_t *mod_worker = &mod->mod_worker;
-		if(mod_worker->app_from_worker)
-		{
-			const void *payload;
-			size_t size;
-			while((payload = varchunk_read_request(mod_worker->app_from_worker, &size)))
-			{
-				// zero worker takes precedence over standard worker
-				if(mod->zero.iface && mod->zero.iface->response)
-				{
-					mod->zero.iface->response(mod->handle, size, payload);
-					//TODO check return status
-				}
-				else if(mod->worker.iface && mod->worker.iface->work_response)
-				{
-					mod->worker.iface->work_response(mod->handle, size, payload);
-					//TODO check return status
-				}
-
-				varchunk_read_advance(mod_worker->app_from_worker);
-			}
 		}
 
 		// handle end of work
