@@ -1778,7 +1778,8 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								{
 									free(param->label);
 									param->label = strdup(LV2_ATOM_BODY_CONST(&prop->value));
-									_refresh_main_dynam_list(handle, src_mod);
+									if(src_mod == handle->module_selector)
+										_refresh_main_dynam_list(handle, src_mod);
 									_hash_sort(&src_mod->dynams, _sort_param_name);
 								}
 								else if( (prop->key == handle->regs.rdfs.comment.urid)
