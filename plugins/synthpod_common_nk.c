@@ -3543,13 +3543,21 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
 
 				const bool is_user_preset = !strncmp(lilv_node_as_string(preset), "file://", 7);
+				bool is_preset_selected;
 
-				if(nk_select_image_label(ctx,
-					is_user_preset ? handle->icon.house: handle->icon.layers,
-					label_str, NK_TEXT_LEFT, nk_false))
+				if(is_user_preset)
 				{
-					_patch_mod_preset_set(handle, handle->module_selector, preset);
+					is_preset_selected = nk_select_image_label(ctx, handle->icon.house,
+						label_str, NK_TEXT_LEFT, nk_false);
 				}
+				else
+				{
+					is_preset_selected = nk_select_label(ctx,
+						label_str, NK_TEXT_LEFT, nk_false);
+				}
+
+				if(is_preset_selected)
+					_patch_mod_preset_set(handle, handle->module_selector, preset);
 
 				nk_style_pop_style_item(ctx);
 
