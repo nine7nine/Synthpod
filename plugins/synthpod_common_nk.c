@@ -430,7 +430,13 @@ struct _plughandle_t {
 		struct nk_image house;
 		struct nk_image layers;
 		struct nk_image user;
+
+		struct nk_image settings;
+		struct nk_image menu;
 	} icon;
+
+	int show_sidebar;
+	int show_bottombar;
 };
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
@@ -2857,7 +2863,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 	nk_menubar_begin(ctx);
 	{
 		bool is_hovered;
-		nk_layout_row_static(ctx, dy, 1.2*dy, 15);
+		nk_layout_row_static(ctx, dy, 1.2*dy, 18);
 
 		{
 			if(_tooltip_visible(ctx))
@@ -3011,6 +3017,30 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 			if(nk_button_image_label(ctx, handle->icon.automaton, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_AUTOMATION;
 			if(is_automation || is_hovered)
+				nk_style_pop_color(ctx);
+		}
+
+		nk_spacing(ctx, 1);
+
+		{
+			is_hovered = nk_widget_is_hovered(ctx);
+			if(handle->show_bottombar)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
+			if(nk_button_image_label(ctx, handle->icon.menu, "", NK_TEXT_RIGHT))
+				handle->show_bottombar = !handle->show_bottombar;
+			if(handle->show_bottombar || is_hovered)
+				nk_style_pop_color(ctx);
+
+			is_hovered = nk_widget_is_hovered(ctx);
+			if(handle->show_sidebar)
+				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+			else if(is_hovered)
+				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
+			if(nk_button_image_label(ctx, handle->icon.settings, "", NK_TEXT_RIGHT))
+				handle->show_sidebar = !handle->show_sidebar;
+			if(handle->show_sidebar || is_hovered)
 				nk_style_pop_color(ctx);
 		}
 
@@ -5308,12 +5338,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 	const float vertical = total_space.h
 		- handle->dy
 		- 2*style->window.group_padding.y;
-	const float upper_h = vertical * 0.65f;
+	const float upper_h = vertical * (handle->show_bottombar ? 0.65f : 1.f);
 	const float lower_h = vertical * 0.35f
 		- 4*style->window.group_padding.y;
 
-	const float upper_ratio [2] = {0.8, 0.2};
-	nk_layout_row(ctx, NK_DYNAMIC, vertical, 4, upper_ratio);
+	const int upper_ratio_n = handle->show_sidebar ? 2 : 1;
+	const float upper_ratio [2] = {handle->show_sidebar ? 0.8f : 1.f, 0.2f};
+	nk_layout_row(ctx, NK_DYNAMIC, vertical, upper_ratio_n, upper_ratio);
 
 	struct nk_rect bb;
 	if(nk_group_begin(ctx, "left", NK_WINDOW_NO_SCROLLBAR))
@@ -5387,6 +5418,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		}
 		nk_layout_space_end(ctx);
 
+		if(handle->show_bottombar)
 		{
 			nk_layout_row_dynamic(ctx, lower_h, 4);
 
@@ -5604,39 +5636,42 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		nk_group_end(ctx);
 	}
 
-	if(_group_begin(ctx, "Controls", NK_WINDOW_TITLE, &bb))
+	if(handle->show_sidebar)
 	{
-		nk_menubar_begin(ctx);
+		if(_group_begin(ctx, "Controls", NK_WINDOW_TITLE, &bb))
 		{
-			const float dim [2] = {0.6, 0.4};
-			nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+			nk_menubar_begin(ctx);
+			{
+				const float dim [2] = {0.6, 0.4};
+				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
 
-			const size_t old_len = _textedit_len(&handle->port_search_edit);
-			const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-			const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
-			_textedit_zero_terminate(&handle->port_search_edit);
-			if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
-				handle->prop_find_matches = true;
-			if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-				nk_textedit_select_all(&handle->port_search_edit);
+				const size_t old_len = _textedit_len(&handle->port_search_edit);
+				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
+				_textedit_zero_terminate(&handle->port_search_edit);
+				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
+					handle->prop_find_matches = true;
+				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+					nk_textedit_select_all(&handle->port_search_edit);
 
-			const selector_search_t old_sel = handle->port_search_selector;
-			handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-				handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-			if(old_sel != handle->port_search_selector)
-				handle->prop_find_matches = true;
+				const selector_search_t old_sel = handle->port_search_selector;
+				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->port_search_selector)
+					handle->prop_find_matches = true;
+			}
+			nk_menubar_end(ctx);
+
+			mod_t *mod = handle->module_selector;
+			if(mod)
+			{
+				const float DY = dy*2 + 6*style->window.group_padding.y + 2*style->window.group_border;
+
+				_expose_control_list(handle, mod, ctx, DY, dy, handle->prop_find_matches);
+			}
+
+			_group_end(ctx, &bb);
 		}
-		nk_menubar_end(ctx);
-
-		mod_t *mod = handle->module_selector;
-		if(mod)
-		{
-			const float DY = dy*2 + 6*style->window.group_padding.y + 2*style->window.group_border;
-
-			_expose_control_list(handle, mod, ctx, DY, dy, handle->prop_find_matches);
-		}
-
-		_group_end(ctx, &bb);
 	}
 }
 
@@ -5999,6 +6034,11 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->icon.house = _icon_load(handle, "house.png");
 	handle->icon.layers = _icon_load(handle, "layers.png");
 	handle->icon.user = _icon_load(handle, "user.png");
+	handle->icon.settings = _icon_load(handle, "settings.png");
+	handle->icon.menu = _icon_load(handle, "menu.png");
+
+	handle->show_sidebar = 1;
+	handle->show_bottombar = 1;
 
 	return handle;
 }
@@ -6024,6 +6064,8 @@ cleanup(LV2UI_Handle instance)
 	_icon_unload(handle, handle->icon.house);
 	_icon_unload(handle, handle->icon.layers);
 	_icon_unload(handle, handle->icon.user);
+	_icon_unload(handle, handle->icon.settings);
+	_icon_unload(handle, handle->icon.menu);
 
 	if(handle->win.cfg.font.face)
 		free(handle->win.cfg.font.face);
