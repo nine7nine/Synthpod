@@ -139,16 +139,16 @@ enum _auto_type_t {
 };
 
 struct _midi_auto_t {
-	int channel;
-	int controller;
 	int a;
 	int b;
+	int channel;
+	int controller;
 };
 
 struct _osc_auto_t {
-	char *path;
-	float min;
-	float max;
+	double a;
+	double b;
+	char path [128]; //TODO how big?
 };
 
 struct _auto_t {
@@ -991,6 +991,36 @@ _patch_midi_automation_internal(plughandle_t *handle, auto_t *automation)
 	return ref;
 }
 
+static LV2_Atom_Forge_Ref
+_patch_osc_automation_internal(plughandle_t *handle, auto_t *automation)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.osc.path.urid);
+	if(ref)
+		ref = lv2_atom_forge_string(&handle->forge, automation->osc.path, strlen(automation->osc.path));
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_min.urid);
+	if(ref)
+		ref = lv2_atom_forge_double(&handle->forge, automation->osc.a);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_max.urid);
+	if(ref)
+		ref = lv2_atom_forge_double(&handle->forge, automation->osc.b);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_min.urid);
+	if(ref)
+		ref = lv2_atom_forge_double(&handle->forge, automation->c);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_max.urid);
+	if(ref)
+		ref = lv2_atom_forge_double(&handle->forge, automation->d);
+
+	return ref;
+}
+
 static void
 _patch_port_midi_automation_add(plughandle_t *handle, port_t *source_port,
 	auto_t *automation)
@@ -1019,6 +1049,24 @@ _patch_port_automation_remove(plughandle_t *handle, port_t *source_port)
 			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
 		&& _patch_port_automation_internal(handle, source_port) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_port_osc_automation_add(plughandle_t *handle, port_t *source_port,
+	auto_t *automation)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.osc.message.urid)
+		&& _patch_port_automation_internal(handle, source_port)
+		&& _patch_osc_automation_internal(handle, automation) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -1056,6 +1104,24 @@ _patch_param_midi_automation_add(plughandle_t *handle, param_t *source_param,
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.midi.Controller.urid)
 		&& _patch_param_automation_internal(handle, source_param)
 		&& _patch_midi_automation_internal(handle, automation) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_param_osc_automation_add(plughandle_t *handle, param_t *source_param,
+	auto_t *automation)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.automation_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, handle->regs.osc.message.urid)
+		&& _patch_param_automation_internal(handle, source_param)
+		&& _patch_osc_automation_internal(handle, automation) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -5569,7 +5635,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							nk_layout_row_dynamic(ctx, dy, 1);
 
 							const auto_type_t auto_type = automation->type;
-							automation->type = nk_combo(ctx, auto_labels, AUTO_MAX - 1, //FIXME enable OSC
+							automation->type = nk_combo(ctx, auto_labels, AUTO_MAX,
 								automation->type, dy, nk_vec2(nk_widget_width(ctx), dy*5));
 							if(auto_type != automation->type)
 							{
@@ -5585,7 +5651,18 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 								}
 								else if(automation->type == AUTO_OSC)
 								{
-									//FIXME initialize
+									// initialize
+									const char *label = "";
+									if(port)
+										label = port->symbol;
+									else if(param)
+										label = param->label;
+
+									snprintf(automation->osc.path, 128, "/%"PRIu32"/%s", mod->urn, label);
+									automation->osc.a = 0.0;
+									automation->osc.b = 1.0;
+									automation->c = c;
+									automation->d = d;
 								}
 							}
 						}
@@ -5609,7 +5686,18 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						}
 						else if(automation->type == AUTO_OSC)
 						{
-							//FIXME
+							nk_layout_row_dynamic(ctx, dy, 1);
+							nk_spacing(ctx, 1);
+
+							const double inc = 1.0; //FIXME
+							const float ipp = 1.f; //FIXME
+
+							nk_label(ctx, automation->osc.path, NK_TEXT_LEFT); //FIXME
+							nk_property_double(ctx, "OSC Minimum", 0.0, &automation->osc.a, 1.0, inc, ipp);
+							nk_property_double(ctx, "OSC Maximum", 0.0, &automation->osc.b, 1.0, inc, ipp);
+							nk_spacing(ctx, 1);
+							nk_property_double(ctx, "Target Minimum", c, &automation->c, d, inc, ipp);
+							nk_property_double(ctx, "Target Maximum", c, &automation->d, d, inc, ipp);
 						}
 
 						if(memcmp(&old_auto, automation, sizeof(auto_t))) // needs sync
@@ -5631,7 +5719,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							}
 							else if(automation->type == AUTO_OSC)
 							{
-								//FIXME
+								if(port)
+									_patch_port_osc_automation_add(handle, port, automation);
+								else if(param)
+									_patch_param_osc_automation_add(handle, param, automation);
 							}
 						}
 					}
@@ -6213,85 +6304,97 @@ _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 static void
 _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
-	if(obj->body.otype == handle->regs.midi.Controller.urid)
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom *src_symbol = NULL;
+	const LV2_Atom_URID *src_property = NULL;
+	const LV2_Atom_Int *midi_channel = NULL;
+	const LV2_Atom_Int *midi_controller = NULL;
+	const LV2_Atom_String *osc_path = NULL;
+	const LV2_Atom_Double *src_min = NULL;
+	const LV2_Atom_Double *src_max = NULL;
+	const LV2_Atom_Double *snk_min = NULL;
+	const LV2_Atom_Double *snk_max = NULL;
+
+	lv2_atom_object_get(obj,
+		handle->regs.synthpod.sink_module.urid, &src_module,
+		handle->regs.synthpod.sink_symbol.urid, &src_symbol,
+		handle->regs.patch.property.urid, &src_property,
+		handle->regs.midi.channel.urid, &midi_channel,
+		handle->regs.midi.controller_number.urid, &midi_controller,
+		handle->regs.osc.path.urid, &osc_path,
+		handle->regs.synthpod.source_min.urid, &src_min,
+		handle->regs.synthpod.source_max.urid, &src_max,
+		handle->regs.synthpod.sink_min.urid, &snk_min,
+		handle->regs.synthpod.sink_max.urid, &snk_max,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const char *src_sym = src_symbol
+		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+	const LV2_URID src_prop = src_property 
+		? src_property->body : 0;
+
+	auto_t *automation = NULL;
+
+	if(src_urn && src_sym)
 	{
-		const LV2_Atom_URID *src_module = NULL;
-		const LV2_Atom *src_symbol = NULL;
-		const LV2_Atom_URID *src_property = NULL;
-		const LV2_Atom_Int *midi_channel = NULL;
-		const LV2_Atom_Int *midi_controller = NULL;
-		const LV2_Atom_Double *src_min = NULL;
-		const LV2_Atom_Double *src_max = NULL;
-		const LV2_Atom_Double *snk_min = NULL;
-		const LV2_Atom_Double *snk_max = NULL;
+		mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
 
-		lv2_atom_object_get(obj,
-			handle->regs.synthpod.sink_module.urid, &src_module,
-			handle->regs.synthpod.sink_symbol.urid, &src_symbol,
-			handle->regs.patch.property.urid, &src_property,
-			handle->regs.midi.channel.urid, &midi_channel,
-			handle->regs.midi.controller_number.urid, &midi_controller,
-			handle->regs.synthpod.source_min.urid, &src_min,
-			handle->regs.synthpod.source_max.urid, &src_max,
-			handle->regs.synthpod.sink_min.urid, &snk_min,
-			handle->regs.synthpod.sink_max.urid, &snk_max,
-			0);
-
-		const LV2_URID src_urn = src_module
-			? src_module->body : 0;
-		const char *src_sym = src_symbol
-			? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
-		const LV2_URID src_prop = src_property 
-			? src_property->body : 0;
-
-		auto_t *automation = NULL;
-
-		if(src_urn && src_sym)
+		if(src_mod)
 		{
-			mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
+			port_t *src_port = _mod_port_find_by_symbol(src_mod, src_sym);
 
-			if(src_mod)
+			if(src_port && (src_port->type == PROPERTY_TYPE_CONTROL) )
 			{
-				port_t *src_port = _mod_port_find_by_symbol(src_mod, src_sym);
+				automation = &src_port->control.automation;
 
-				if(src_port && (src_port->type == PROPERTY_TYPE_CONTROL) )
-				{
-					automation = &src_port->control.automation;
-
-					control_port_t *control = &src_port->control;
-				}
+				control_port_t *control = &src_port->control;
 			}
-		}
-		else if(src_urn && src_prop)
-		{
-			mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
-
-			if(src_mod)
-			{
-				param_t *src_param = _mod_param_find_by_property(src_mod, src_prop);
-
-				if(src_param)
-				{
-					automation = &src_param->automation;
-				}
-			}
-		}
-
-		if(automation)
-		{
-			automation->type = AUTO_MIDI;
-
-			automation->midi.a = src_min ? src_min->body : 0x0;
-			automation->midi.b = src_max ? src_max->body : 0x7f;
-			automation->c = snk_min ? snk_min->body : 0.0; //FIXME
-			automation->d = snk_max ? snk_max->body : 0.0; //FIXME
-
-			midi_auto_t *mauto = &automation->midi;
-			mauto->channel = midi_channel ? midi_channel->body : -1;
-			mauto->controller = midi_controller ? midi_controller->body : -1;
 		}
 	}
-	//FIXME OSC
+	else if(src_urn && src_prop)
+	{
+		mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
+
+		if(src_mod)
+		{
+			param_t *src_param = _mod_param_find_by_property(src_mod, src_prop);
+
+			if(src_param)
+			{
+				automation = &src_param->automation;
+			}
+		}
+	}
+
+	if(!automation)
+		return;
+
+	automation->c = snk_min ? snk_min->body : 0.0; //FIXME
+	automation->d = snk_max ? snk_max->body : 0.0; //FIXME
+
+	if(obj->body.otype == handle->regs.midi.Controller.urid)
+	{
+		automation->type = AUTO_MIDI;
+		midi_auto_t *mauto = &automation->midi;
+
+		mauto->a = src_min ? src_min->body : 0x0;
+		mauto->b = src_max ? src_max->body : 0x7f;
+
+		mauto->channel = midi_channel ? midi_channel->body : -1;
+		mauto->controller = midi_controller ? midi_controller->body : -1;
+	}
+	else if(obj->body.otype == handle->regs.osc.message.urid)
+	{
+		automation->type = AUTO_OSC;
+		osc_auto_t *oauto = &automation->osc;
+
+		oauto->a = src_min ? src_min->body : 0x0;
+		oauto->b = src_max ? src_max->body : 0x7f;
+
+		strncpy(oauto->path, LV2_ATOM_BODY_CONST(osc_path), 128); //FIXME
+	}
 }
 
 static void

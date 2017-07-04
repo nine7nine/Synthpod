@@ -1071,7 +1071,49 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 						}
 						else if(automation->type == AUTO_TYPE_OSC)
 						{
-							//FIXME
+							osc_auto_t *oauto = &automation->osc;
+
+							LV2_Atom_Forge_Frame auto_frame;
+							if(  ref
+								&& lv2_atom_forge_object(forge, &auto_frame, 0, app->regs.osc.message.urid) )
+							{
+								ref = lv2_atom_forge_key(forge, app->regs.synthpod.sink_module.urid)
+									&& lv2_atom_forge_urid(forge, mod->urn)
+
+									&& lv2_atom_forge_key(forge, app->regs.osc.path.urid)
+									&& lv2_atom_forge_string(forge, oauto->path, strlen(oauto->path))
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.source_min.urid)
+									&& lv2_atom_forge_double(forge, automation->a)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.source_max.urid)
+									&& lv2_atom_forge_double(forge, automation->b)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_min.urid)
+									&& lv2_atom_forge_double(forge, automation->c)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_max.urid)
+									&& lv2_atom_forge_double(forge, automation->d);
+
+								if(ref)
+								{
+									if(automation->property)
+									{
+										ref = lv2_atom_forge_key(forge, app->regs.patch.property.urid)
+											&& lv2_atom_forge_urid(forge, automation->property)
+											&& lv2_atom_forge_key(forge, app->regs.rdfs.range.urid)
+											&& lv2_atom_forge_urid(forge, automation->range);
+									}
+									else
+									{
+										ref = lv2_atom_forge_key(forge, app->regs.synthpod.sink_symbol.urid)
+											&& lv2_atom_forge_string(forge, port->symbol, strlen(port->symbol));
+									}
+								}
+
+								if(ref)
+									lv2_atom_forge_pop(forge, &auto_frame);
+							}
 						}
 					}
 				}

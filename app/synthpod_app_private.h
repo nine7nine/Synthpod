@@ -231,7 +231,7 @@ struct _auto_t {
 
 	union {
 		midi_auto_t midi;
-		//osc_auto_t osc;
+		osc_auto_t osc;
 	};
 };
 
@@ -468,6 +468,8 @@ struct _sp_app_t {
 	float nleft;
 
 	dsp_master_t dsp_master;
+
+	LV2_OSC_URID osc_urid;
 };
 
 extern const port_driver_t control_port_driver;

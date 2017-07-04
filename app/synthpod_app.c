@@ -18,6 +18,8 @@
 #include <synthpod_app_private.h>
 #include <synthpod_patcher.h>
 
+#include <osc.lv2/util.h>
+
 // non-rt
 void
 sp_app_activate(sp_app_t *app)
@@ -122,6 +124,78 @@ _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 }
 
 __realtime static inline void
+_sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value, uint32_t nsamples)
+{
+	// linear mapping from MIDI to automation value
+	double f64 = value * automation->mul + automation->add;
+
+	// clip automation value to destination range
+	if(f64 < automation->c)
+		f64 = automation->c;
+	else if(f64 > automation->d)
+		f64 = automation->d;
+
+	port_t *port = &mod->ports[automation->index];
+	if(port->type == PORT_TYPE_CONTROL)
+	{
+		control_port_t *control = &port->control;
+
+		float *buf = PORT_BASE_ALIGNED(port);
+		*buf = control->is_integer
+			? floor(f64)
+			: f64;
+
+		//printf("control automation match: %f %f\n", rel, f32);
+	}
+	else if( (port->type == PORT_TYPE_ATOM) && automation->property )
+	{
+		LV2_Atom_Sequence *control = PORT_BASE_ALIGNED(port);
+		LV2_Atom_Event *dst = lv2_atom_sequence_end(&control->body, control->atom.size);
+		LV2_Atom_Forge_Frame obj_frame;
+
+		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)dst, PORT_SIZE(port) - control->atom.size - sizeof(LV2_Atom));
+
+		LV2_Atom_Forge_Ref ref;
+		ref = lv2_atom_forge_frame_time(&app->forge, nsamples - 1)
+			&& lv2_atom_forge_object(&app->forge, &obj_frame, 0, app->regs.patch.set.urid)
+			&& lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid)
+			&& lv2_atom_forge_urid(&app->forge, automation->property)
+			&& lv2_atom_forge_key(&app->forge, app->regs.patch.value.urid);
+		if(ref)
+		{
+			if(automation->range == app->forge.Bool)
+			{
+				ref = lv2_atom_forge_bool(&app->forge, f64 != 0.0);
+			}
+			else if(automation->range == app->forge.Int)
+			{
+				ref = lv2_atom_forge_int(&app->forge, floor(f64));
+			}
+			else if(automation->range == app->forge.Long)
+			{
+				ref = lv2_atom_forge_long(&app->forge, floor(f64));
+			}
+			else if(automation->range == app->forge.Float)
+			{
+				ref = lv2_atom_forge_float(&app->forge, f64);
+			}
+			else if(automation->range == app->forge.Double)
+			{
+				ref = lv2_atom_forge_double(&app->forge, f64);
+			}
+			//FIXME support more types
+
+			if(ref)
+				lv2_atom_forge_pop(&app->forge, &obj_frame);
+
+			control->atom.size += sizeof(LV2_Atom_Event) + dst->body.size;
+		}
+
+		//printf("parameter automation match: %f %f\n", rel, f32);
+	}
+}
+
+__realtime static inline void
 _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
 	sp_app_t *app = mod->app;
@@ -193,6 +267,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 			{
 				const int64_t frames = ev->time.frames;
 				const LV2_Atom *atom = &ev->body;
+				const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
 
 				//printf("got automation\n");
 				if(  (atom->type == app->regs.port.midi.urid)
@@ -211,80 +286,96 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 						{
 							auto_t *automation = &mod->automations[i];
 
-							if(automation->type != AUTO_TYPE_MIDI)
-								continue;
-
-							midi_auto_t *mauto = &automation->midi;
-
-							if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
-								&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
+							if(automation->type == AUTO_TYPE_MIDI)
 							{
-								// linear mapping from MIDI to automation value
-								double f64 = msg[2] * automation->mul + automation->add;
+								midi_auto_t *mauto = &automation->midi;
 
-								// clip automation value to destination range
-								if(f64 < automation->c)
-									f64 = automation->c;
-								else if(f64 > automation->d)
-									f64 = automation->d;
-
-								port_t *port = &mod->ports[automation->index];
-								if(port->type == PORT_TYPE_CONTROL)
+								if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
+									&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
 								{
-									control_port_t *control = &port->control;
-
-									float *buf = PORT_BASE_ALIGNED(port);
-									*buf = control->is_integer
-										? floor(f64)
-										: f64;
-
-									//printf("control automation match: %f %f\n", rel, f32);
+									_sp_app_automate(app, mod, automation, msg[2], nsamples);
 								}
-								else if( (port->type == PORT_TYPE_ATOM) && automation->property )
+							}
+						}
+					}
+				}
+				else if(lv2_osc_is_message_type(&app->osc_urid, obj->body.otype)) //FIXME also consider bundles
+				{
+					const LV2_Atom_String *osc_path = NULL;
+					const LV2_Atom_Tuple *osc_args = NULL;
+
+					if(lv2_osc_message_get(&app->osc_urid, obj, &osc_path, &osc_args))
+					{
+						const char *path = LV2_ATOM_BODY_CONST(osc_path);
+						double value = 0.0;
+
+						LV2_ATOM_TUPLE_FOREACH(osc_args, item)
+						{
+							switch(lv2_osc_argument_type(&app->osc_urid, item))
+							{
+								case LV2_OSC_FALSE:
+								case LV2_OSC_NIL:
 								{
-									LV2_Atom_Sequence *control = PORT_BASE_ALIGNED(port);
-									LV2_Atom_Event *dst = lv2_atom_sequence_end(&control->body, control->atom.size);
-									LV2_Atom_Forge_Frame obj_frame;
+									value = 0.0;
+								} break;
+								case LV2_OSC_TRUE:
+								{
+									value = 1.0;
+								} break;
+								case LV2_OSC_IMPULSE:
+								{
+									value = HUGE_VAL;
+								} break;
+								case LV2_OSC_INT32:
+								{
+									int32_t i32;
+									lv2_osc_int32_get(&app->osc_urid, item, &i32);
+									value = i32;
+								} break;
+								case LV2_OSC_INT64:
+								{
+									int64_t i64;
+									lv2_osc_int64_get(&app->osc_urid, item, &i64);
+									value = i64;
+								} break;
+								case LV2_OSC_FLOAT:
+								{
+									float f32;
+									lv2_osc_float_get(&app->osc_urid, item, &f32);
+									value = f32;
+								} break;
+								case LV2_OSC_DOUBLE:
+								{
+									double f64;
+									lv2_osc_double_get(&app->osc_urid, item, &f64);
+									value = f64;
+								} break;
 
-									lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)dst, PORT_SIZE(port) - control->atom.size - sizeof(LV2_Atom));
+								case LV2_OSC_SYMBOL:
+								case LV2_OSC_BLOB:
+								case LV2_OSC_CHAR:
+								case LV2_OSC_STRING:
+								case LV2_OSC_MIDI:
+								case LV2_OSC_RGBA:
+								case LV2_OSC_TIMETAG:
+								{
+									//FIXME handle other types, especially string, blob, symbol
+								}	break;
+							}
+						}
 
-									LV2_Atom_Forge_Ref ref;
-									ref = lv2_atom_forge_frame_time(&app->forge, nsamples - 1)
-										&& lv2_atom_forge_object(&app->forge, &obj_frame, 0, app->regs.patch.set.urid)
-										&& lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid)
-										&& lv2_atom_forge_urid(&app->forge, automation->property)
-										&& lv2_atom_forge_key(&app->forge, app->regs.patch.value.urid);
-									if(ref)
-									{
-										if(automation->range == app->forge.Bool)
-										{
-											ref = lv2_atom_forge_bool(&app->forge, f64 != 0.0);
-										}
-										else if(automation->range == app->forge.Int)
-										{
-											ref = lv2_atom_forge_int(&app->forge, floor(f64));
-										}
-										else if(automation->range == app->forge.Long)
-										{
-											ref = lv2_atom_forge_long(&app->forge, floor(f64));
-										}
-										else if(automation->range == app->forge.Float)
-										{
-											ref = lv2_atom_forge_float(&app->forge, f64);
-										}
-										else if(automation->range == app->forge.Double)
-										{
-											ref = lv2_atom_forge_double(&app->forge, f64);
-										}
-										//FIXME support more types
+						// iterate over automations
+						for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+						{
+							auto_t *automation = &mod->automations[i];
 
-										if(ref)
-											lv2_atom_forge_pop(&app->forge, &obj_frame);
+							if(automation->type == AUTO_TYPE_OSC)
+							{
+								osc_auto_t *oauto = &automation->osc;
 
-										control->atom.size += sizeof(LV2_Atom_Event) + dst->body.size;
-									}
-
-									//printf("parameter automation match: %f %f\n", rel, f32);
+								if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, 256) )
+								{
+									_sp_app_automate(app, mod, automation, value, nsamples);
 								}
 							}
 						}
@@ -586,6 +677,8 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		pthread_attr_init(&attr);
 		pthread_create(&dsp_slave->thread, &attr, _dsp_slave_thread, dsp_slave);
 	}
+
+	lv2_osc_urid_init(&app->osc_urid, driver->map);
 
 	return app;
 }

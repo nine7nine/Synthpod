@@ -50,6 +50,8 @@
 #include <zero_worker.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
+#include <osc.lv2/osc.h>
+
 typedef enum _port_type_t port_type_t;
 typedef enum _port_atom_type_t port_atom_type_t;
 typedef enum _port_buffer_type_t port_buffer_type_t;
@@ -143,6 +145,11 @@ struct _reg_t {
 		// properties
 		reg_item_t logarithmic;
 	} port;
+
+	struct {
+		reg_item_t message;
+		reg_item_t path;
+	} osc;
 
 	struct {
 		reg_item_t property;
@@ -427,7 +434,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->port.sequence, world, map, LV2_ATOM__Sequence);
 	_register(&regs->port.midi, world, map, LV2_MIDI__MidiEvent);
-	_register(&regs->port.osc_event, world, map, "http://open-music-kontrollers.ch/lv2/osc#Event");
+	_register(&regs->port.osc_event, world, map, LV2_OSC__Event);
 	_register(&regs->port.time_position, world, map, LV2_TIME__Position);
 
 	_register(&regs->port.integer, world, map, LV2_CORE__integer);
@@ -446,6 +453,9 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->port.logarithmic, world, map, LV2_PORT_PROPS__logarithmic);
 
 	_register(&regs->parameter.property, world, map, LV2_CORE_PREFIX"parameterProperty");
+
+	_register(&regs->osc.message, world, map, LV2_OSC__Message);
+	_register(&regs->osc.path, world, map, LV2_OSC__messagePath);
 
 	_register(&regs->work.schedule, world, map, LV2_WORKER__schedule);
 	_register(&regs->zero.schedule, world, map, ZERO_WORKER__schedule);
@@ -692,6 +702,9 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->port.logarithmic);
 
 	_unregister(&regs->parameter.property);
+
+	_unregister(&regs->osc.message);
+	_unregister(&regs->osc.path);
 
 	_unregister(&regs->work.schedule);
 	_unregister(&regs->zero.schedule);

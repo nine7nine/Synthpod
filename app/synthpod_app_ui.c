@@ -1244,7 +1244,62 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 						}
 						else if(automation->type == AUTO_TYPE_OSC)
 						{
-							//FIXME
+							osc_auto_t *oauto = &automation->osc;
+
+							if(ref)
+								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, app->regs.osc.message.urid);
+							{
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
+								if(ref)
+									ref = lv2_atom_forge_urid(&app->forge, mod->urn);
+
+								if(automation->property)
+								{
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
+									if(ref)
+										ref = lv2_atom_forge_urid(&app->forge, automation->property);
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.rdfs.range.urid);
+									if(ref)
+										ref = lv2_atom_forge_urid(&app->forge, automation->range);
+								}
+								else
+								{
+									if(ref)
+										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
+									if(ref)
+										ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+								}
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.osc.path.urid);
+								if(ref)
+									ref = lv2_atom_forge_string(&app->forge, oauto->path, strlen(oauto->path));
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_min.urid);
+								if(ref)
+									ref = lv2_atom_forge_double(&app->forge, automation->a);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_max.urid);
+								if(ref)
+									ref = lv2_atom_forge_double(&app->forge, automation->b);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_min.urid);
+								if(ref)
+									ref = lv2_atom_forge_double(&app->forge, automation->c);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
+								if(ref)
+									ref = lv2_atom_forge_double(&app->forge, automation->d);
+							}
+							if(ref)
+								lv2_atom_forge_pop(&app->forge, &frame[2]);
 						}
 					}
 				}
@@ -1938,15 +1993,18 @@ _automation_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	}
 }
 
-__realtime static void
-_midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
+__realtime void
+_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
+	//printf("got patch:add for automationList:\n");
+
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom_URID *src_property = NULL;
 	const LV2_Atom_URID *src_range = NULL;
 	const LV2_Atom_Int *src_channel = NULL;
 	const LV2_Atom_Int *src_controller = NULL;
+	const LV2_Atom_String *src_path = NULL;
 	const LV2_Atom_Double *src_min = NULL;
 	const LV2_Atom_Double *src_max = NULL;
 	const LV2_Atom_Double *snk_min = NULL;
@@ -1959,6 +2017,7 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		app->regs.rdfs.range.urid, &src_range,
 		app->regs.midi.channel.urid, &src_channel,
 		app->regs.midi.controller_number.urid, &src_controller,
+		app->regs.osc.path.urid, &src_path,
 		app->regs.synthpod.source_min.urid, &src_min,
 		app->regs.synthpod.source_max.urid, &src_max,
 		app->regs.synthpod.sink_min.urid, &snk_min,
@@ -1990,7 +2049,6 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 					continue; // search empty slot
 
 				// fill slot
-				automation->type = AUTO_TYPE_MIDI;
 				automation->index = port->index;
 				automation->property = src_prop;
 				automation->range = src_ran;
@@ -2008,8 +2066,20 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 					? (automation->c*automation->b - automation->a*automation->d) / div
 					: 0.0;
 
-				automation->midi.channel = src_channel ? src_channel->body : -1;
-				automation->midi.controller = src_controller ? src_controller->body : -1;
+				if(obj->body.otype == app->regs.midi.Controller.urid)
+				{
+					automation->type = AUTO_TYPE_MIDI;
+					automation->midi.channel = src_channel ? src_channel->body : -1;
+					automation->midi.controller = src_controller ? src_controller->body : -1;
+				}
+				else if(obj->body.otype == app->regs.osc.message.urid)
+				{
+					automation->type = AUTO_TYPE_OSC;
+					if(src_path)
+						strncpy(automation->osc.path, LV2_ATOM_BODY_CONST(src_path), 256);
+					else
+						automation->osc.path[0] = '\0';
+				}
 
 				break;
 			}
@@ -2017,17 +2087,6 @@ _midi_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	}
 }
 
-__realtime void
-_automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
-{
-	//printf("got patch:add for automationList:\n");
-
-	const LV2_URID src_proto = obj->body.otype;
-
-	if(src_proto == app->regs.midi.Controller.urid)
-		_midi_automation_list_add(app, obj);
-	//FIXME OSC
-}
 
 __realtime static void
 _mod_list_add(sp_app_t *app, const LV2_Atom_URID *urid)
