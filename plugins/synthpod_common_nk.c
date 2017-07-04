@@ -4942,7 +4942,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 	if(!name_node)
 		return;
 
-	mod->dim.x = 200.f * handle->scale;
+	mod->dim.x = 150.f * handle->scale;
 	mod->dim.y = handle->dy;
 
 	const struct nk_vec2 scrolling = handle->scrolling;
@@ -4999,7 +4999,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 		const float fy = body.y + (body.h - fh)/2;
 		{
 			const char *mod_name = lilv_node_as_string(name_node);
-			const size_t mod_name_len = strlen(mod_name);
+			const size_t mod_name_len = NK_MIN(strlen(mod_name), 24); //TODO limit to how many characters?
 			const float fw = font->width(font->userdata, font->height, mod_name, mod_name_len);
 			const struct nk_rect body2 = {
 				.x = body.x + (body.w - fw)/2,
