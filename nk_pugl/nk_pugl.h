@@ -196,10 +196,6 @@ extern C {
 #	define STB_IMAGE_IMPLEMENTATION
 #	include "nuklear/example/stb_image.h"
 
-#ifndef NK_PUGL_API
-#	define NK_PUGL_API
-#endif
-
 typedef struct _nk_pugl_vertex_t nk_pugl_vertex_t;
 
 struct _nk_pugl_vertex_t {
