@@ -541,8 +541,6 @@ netatom_new(LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 
 	netatom->MIDI_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 
-	netatom->MIDI_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
-
 	return netatom;
 }
 
