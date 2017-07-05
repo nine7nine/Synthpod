@@ -5396,6 +5396,17 @@ _group_end(struct nk_context *ctx, struct nk_rect *bb)
 	nk_stroke_rect(canvas, *bb, 0.f, style->window.group_border, style->window.group_border_color);
 }
 
+static inline int
+_osc_path_filter(const struct nk_text_edit *box, nk_rune unicode)
+{
+	if(unicode == '#')
+		return nk_false;
+	else if(unicode == ' ')
+		return nk_false;
+
+	return nk_true;
+}
+
 static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
@@ -5658,7 +5669,24 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									else if(param)
 										label = param->label;
 
-									snprintf(automation->osc.path, 128, "/%"PRIu32"/%s", mod->urn, label);
+									LilvNode *name_node = lilv_plugin_get_name(mod->plug);
+									const char *mod_name = lilv_node_as_string(name_node);
+
+									snprintf(automation->osc.path, 128, "/%s/%s", mod_name, label);
+									for(unsigned i = 0; automation->osc.path[i]; i++)
+									{
+										switch(automation->osc.path[i])
+										{
+											case ' ':
+											case '#':
+												automation->osc.path[i] = '_';
+												break;
+											default:
+												automation->osc.path[i] = tolower(automation->osc.path[i]);
+												break;
+										}
+									}
+
 									automation->osc.a = 0.0;
 									automation->osc.b = 1.0;
 									automation->c = c;
@@ -5692,7 +5720,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
-							nk_label(ctx, automation->osc.path, NK_TEXT_LEFT); //FIXME
+							const nk_flags res = nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD,
+								automation->osc.path, 128, _osc_path_filter);
+							(void)res;
+
 							nk_property_double(ctx, "OSC Minimum", 0.0, &automation->osc.a, 1.0, inc, ipp);
 							nk_property_double(ctx, "OSC Maximum", 0.0, &automation->osc.b, 1.0, inc, ipp);
 							nk_spacing(ctx, 1);
