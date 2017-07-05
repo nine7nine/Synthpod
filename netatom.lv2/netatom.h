@@ -24,11 +24,13 @@ extern "C" {
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <endian.h>
+
+#include <netatom.lv2/endian.h>
 
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
+#include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 
 typedef struct _netatom_pool_t netatom_pool_t;
 typedef union _netatom_union_t netatom_union_t;
@@ -42,6 +44,7 @@ struct _netatom_pool_t {
 		LV2_Atom *atom;
 		uint8_t *buf;
 	};
+	const uint8_t *end;
 };
 
 union _netatom_union_t {
@@ -55,6 +58,7 @@ struct _netatom_t {
 	LV2_URID_Map *map;
 	netatom_pool_t body;
 	netatom_pool_t dict;
+	uint32_t MIDI_MidiEvent;
 };
 
 static LV2_Atom_Forge_Ref
@@ -79,6 +83,7 @@ _netatom_sink(LV2_Atom_Forge_Sink_Handle handle, const void *buf, uint32_t size)
 
 	memcpy(netatom_pool->buf + netatom_pool->offset, buf, size);
 	netatom_pool->offset = new_offset;
+	netatom_pool->end = netatom_pool->buf + netatom_pool->offset;
 
 	return ref;
 }
@@ -94,17 +99,16 @@ _netatom_deref(LV2_Atom_Forge_Sink_Handle handle, LV2_Atom_Forge_Ref ref)
 }
 
 static inline void
-_netatom_ser_uri(netatom_t *netatom, uint32_t *urid)
+_netatom_ser_uri(netatom_t *netatom, uint32_t *urid, const char *uri)
 {
 	if(*urid == 0)
 		return; // ignore untyped atoms
 
 	// look for matching URID in dictionary
 	uint32_t match = 0;
-	const uint8_t *end = netatom->dict.buf + netatom->dict.offset;
 
 	for(netatom_union_t ptr = { .buf = netatom->dict.buf };
-		ptr.buf < end;
+		ptr.buf < netatom->dict.end;
 		ptr.buf += lv2_atom_pad_size(lv2_atom_total_size(ptr.atom)))
 	{
 		if(ptr.atom->type == *urid)
@@ -120,11 +124,17 @@ _netatom_ser_uri(netatom_t *netatom, uint32_t *urid)
 	}
 	else // add new URI to dictionary
 	{
-		const char *uri = netatom->unmap->unmap(netatom->unmap->handle, *urid);
-		const uint32_t size = strlen(uri) + 1;
+		if(!uri)
+			uri = netatom->unmap->unmap(netatom->unmap->handle, *urid);
+		if(!uri) // invalid urid
+			*urid = 0;
+		else
+		{
+			const uint32_t size = strlen(uri) + 1;
 
-		*urid = lv2_atom_forge_atom(&netatom->dict.forge, size, *urid);
-		lv2_atom_forge_write(&netatom->dict.forge, uri, size);
+			*urid = lv2_atom_forge_atom(&netatom->dict.forge, size, *urid);
+			lv2_atom_forge_write(&netatom->dict.forge, uri, size);
+		}
 	}
 
 	if(netatom->swap)
@@ -134,11 +144,9 @@ _netatom_ser_uri(netatom_t *netatom, uint32_t *urid)
 static inline void
 _netatom_ser_dict(netatom_t *netatom)
 {
-	const uint8_t *end = netatom->dict.buf + netatom->dict.offset;
-
 	LV2_Atom *body = NULL;
 	for(netatom_union_t ptr = { .buf = netatom->dict.buf };
-		ptr.buf < end;
+		ptr.buf < netatom->dict.end;
 		ptr.buf += lv2_atom_pad_size(lv2_atom_total_size(ptr.atom)))
 	{
 		if( netatom->swap && body)
@@ -184,36 +192,128 @@ static void
 _netatom_ser_atom(netatom_t *netatom, LV2_Atom *atom)
 {
 	LV2_Atom_Forge *forge = &netatom->dict.forge;
+	const char *uri = NULL;
 
-	if(  (atom->type == forge->Bool)
-		|| (atom->type == forge->Int)
-		|| (atom->type == forge->Float) )
+	if(atom->type == forge->Bool)
 	{
 		if(netatom->swap)
 		{
 			uint32_t *u = LV2_ATOM_BODY(atom);
 			*u = htobe32(*u);
 		}
+		uri = LV2_ATOM__Bool;
 	}
-	else if( (atom->type == forge->Long)
-		|| (atom->type == forge->Double) )
+	else if(atom->type == forge->Int)
+	{
+		if(netatom->swap)
+		{
+			uint32_t *u = LV2_ATOM_BODY(atom);
+			*u = htobe32(*u);
+		}
+		uri = LV2_ATOM__Int;
+	}
+	else if(atom->type == forge->Float)
+	{
+		if(netatom->swap)
+		{
+			uint32_t *u = LV2_ATOM_BODY(atom);
+			*u = htobe32(*u);
+		}
+		uri = LV2_ATOM__Float;
+	}
+	else if(atom->type == forge->Long)
 	{
 		if(netatom->swap)
 		{
 			uint64_t *u = LV2_ATOM_BODY(atom);
 			*u = htobe64(*u);
 		}
+		uri = LV2_ATOM__Long;
+	}
+	else if(atom->type == forge->Double)
+	{
+		if(netatom->swap)
+		{
+			uint64_t *u = LV2_ATOM_BODY(atom);
+			*u = htobe64(*u);
+		}
+		uri = LV2_ATOM__Double;
 	}
 	else if(atom->type == forge->URID)
 	{
 		uint32_t *u = LV2_ATOM_BODY(atom);
-		_netatom_ser_uri(netatom, u);
+		_netatom_ser_uri(netatom, u, NULL);
+		uri = LV2_ATOM__URID;
+	}
+	else if(atom->type == forge->String)
+	{
+		uri = LV2_ATOM__String;
+	}
+	else if(atom->type == forge->Chunk)
+	{
+		uri = LV2_ATOM__Chunk;
+	}
+	else if(atom->type == netatom->MIDI_MidiEvent)
+	{
+		uri = LV2_MIDI__MidiEvent;
 	}
 	else if(atom->type == forge->Literal)
 	{
 		LV2_Atom_Literal *lit = (LV2_Atom_Literal *)atom;
-		_netatom_ser_uri(netatom, &lit->body.datatype);
-		_netatom_ser_uri(netatom, &lit->body.lang);
+		_netatom_ser_uri(netatom, &lit->body.datatype, NULL);
+		_netatom_ser_uri(netatom, &lit->body.lang, NULL);
+		uri = LV2_ATOM__Literal;
+	}
+	else if(atom->type == forge->Object)
+	{
+		LV2_Atom_Object *obj = (LV2_Atom_Object *)atom;
+		LV2_Atom *body = NULL;
+		LV2_ATOM_OBJECT_FOREACH(obj, prop)
+		{
+			if(body)
+				_netatom_ser_atom(netatom, body);
+			body = &prop->value;
+			_netatom_ser_uri(netatom, &prop->key, NULL);
+			_netatom_ser_uri(netatom, &prop->context, NULL);
+		}
+		if(body)
+			_netatom_ser_atom(netatom, body);
+		_netatom_ser_uri(netatom, &obj->body.id, NULL);
+		_netatom_ser_uri(netatom, &obj->body.otype, NULL);
+		uri = LV2_ATOM__Object;
+	}
+	else if(atom->type == forge->Tuple)
+	{
+		LV2_Atom_Tuple *tup = (LV2_Atom_Tuple *)atom;
+		LV2_Atom *body = NULL;
+		LV2_ATOM_TUPLE_FOREACH(tup, item)
+		{
+			if(body)
+				_netatom_ser_atom(netatom, body);
+			body = item;
+		}
+		if(body)
+			_netatom_ser_atom(netatom, body);
+		uri = LV2_ATOM__Tuple;
+	}
+	else if(atom->type == forge->Sequence)
+	{
+		LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)atom;
+		LV2_Atom *body = NULL;
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+		{
+			if(body)
+				_netatom_ser_atom(netatom, body);
+			body = &ev->body;
+			if(netatom->swap)
+				ev->time.frames = htobe64(ev->time.frames);
+		}
+		if(body)
+			_netatom_ser_atom(netatom, body);
+		_netatom_ser_uri(netatom, &seq->body.unit, NULL);
+		if(netatom->swap)
+			seq->body.pad = htobe32(seq->body.pad);
+		uri = LV2_ATOM__Sequence;
 	}
 	else if(atom->type == forge->Vector)
 	{
@@ -236,60 +336,21 @@ _netatom_ser_atom(netatom_t *netatom, LV2_Atom *atom)
 			}
 			vec->body.child_size = htobe32(vec->body.child_size);
 		}
-		_netatom_ser_uri(netatom, &vec->body.child_type);
+		_netatom_ser_uri(netatom, &vec->body.child_type, NULL); //TODO set uri
+		uri = LV2_ATOM__Vector;
 	}
-	else if(atom->type == forge->Tuple)
+	else if(atom->type == forge->Path)
 	{
-		LV2_Atom_Tuple *tup = (LV2_Atom_Tuple *)atom;
-		LV2_Atom *body = NULL;
-		LV2_ATOM_TUPLE_FOREACH(tup, item)
-		{
-			if(body)
-				_netatom_ser_atom(netatom, body);
-			body = item;
-		}
-		if(body)
-			_netatom_ser_atom(netatom, body);
+		uri = LV2_ATOM__Path;
 	}
-	else if(atom->type == forge->Object)
+	else if(atom->type == forge->URI)
 	{
-		LV2_Atom_Object *obj = (LV2_Atom_Object *)atom;
-		LV2_Atom *body = NULL;
-		LV2_ATOM_OBJECT_FOREACH(obj, prop)
-		{
-			if(body)
-				_netatom_ser_atom(netatom, body);
-			body = &prop->value;
-			_netatom_ser_uri(netatom, &prop->key);
-			_netatom_ser_uri(netatom, &prop->context);
-		}
-		if(body)
-			_netatom_ser_atom(netatom, body);
-		_netatom_ser_uri(netatom, &obj->body.id);
-		_netatom_ser_uri(netatom, &obj->body.otype);
-	}
-	else if(atom->type == forge->Sequence)
-	{
-		LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)atom;
-		LV2_Atom *body = NULL;
-		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-		{
-			if(body)
-				_netatom_ser_atom(netatom, body);
-			body = &ev->body;
-			if(netatom->swap)
-				ev->time.frames = htobe64(ev->time.frames);
-		}
-		if(body)
-			_netatom_ser_atom(netatom, body);
-		_netatom_ser_uri(netatom, &seq->body.unit);
-		if(netatom->swap)
-			seq->body.pad = htobe32(seq->body.pad);
+		uri = LV2_ATOM__URI;
 	}
 
 	if(netatom->swap)
 		atom->size = htobe32(atom->size);
-	_netatom_ser_uri(netatom, &atom->type);
+	_netatom_ser_uri(netatom, &atom->type, uri);
 }
 
 static void
@@ -331,6 +392,39 @@ _netatom_deser_atom(netatom_t *netatom, LV2_Atom *atom)
 		_netatom_deser_uri(netatom, &lit->body.datatype);
 		_netatom_deser_uri(netatom, &lit->body.lang);
 	}
+	else if(atom->type == forge->Object)
+	{
+		LV2_Atom_Object *obj = (LV2_Atom_Object *)atom;
+		_netatom_deser_uri(netatom, &obj->body.id);
+		_netatom_deser_uri(netatom, &obj->body.otype);
+		LV2_ATOM_OBJECT_FOREACH(obj, prop)
+		{
+			_netatom_deser_uri(netatom, &prop->key);
+			_netatom_deser_uri(netatom, &prop->context);
+			_netatom_deser_atom(netatom, &prop->value);
+		}
+	}
+	else if(atom->type == forge->Tuple)
+	{
+		LV2_Atom_Tuple *tup = (LV2_Atom_Tuple *)atom;
+		LV2_ATOM_TUPLE_FOREACH(tup, item)
+		{
+			_netatom_deser_atom(netatom, item);
+		}
+	}
+	else if(atom->type == forge->Sequence)
+	{
+		LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)atom;
+		_netatom_deser_uri(netatom, &seq->body.unit);
+		if(netatom->swap)
+			seq->body.pad = be32toh(seq->body.pad);
+		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
+		{
+			_netatom_deser_atom(netatom, &ev->body);
+			if(netatom->swap)
+				ev->time.frames = be64toh(ev->time.frames);
+		}
+	}
 	else if(atom->type == forge->Vector)
 	{
 		LV2_Atom_Vector *vec = (LV2_Atom_Vector *)atom;
@@ -354,39 +448,6 @@ _netatom_deser_atom(netatom_t *netatom, LV2_Atom *atom)
 			}
 		}
 	}
-	else if(atom->type == forge->Tuple)
-	{
-		LV2_Atom_Tuple *tup = (LV2_Atom_Tuple *)atom;
-		LV2_ATOM_TUPLE_FOREACH(tup, item)
-		{
-			_netatom_deser_atom(netatom, item);
-		}
-	}
-	else if(atom->type == forge->Object)
-	{
-		LV2_Atom_Object *obj = (LV2_Atom_Object *)atom;
-		_netatom_deser_uri(netatom, &obj->body.id);
-		_netatom_deser_uri(netatom, &obj->body.otype);
-		LV2_ATOM_OBJECT_FOREACH(obj, prop)
-		{
-			_netatom_deser_uri(netatom, &prop->key);
-			_netatom_deser_uri(netatom, &prop->context);
-			_netatom_deser_atom(netatom, &prop->value);
-		}
-	}
-	else if(atom->type == forge->Sequence)
-	{
-		LV2_Atom_Sequence *seq = (LV2_Atom_Sequence *)atom;
-		_netatom_deser_uri(netatom, &seq->body.unit);
-		if(netatom->swap)
-			seq->body.pad = be32toh(seq->body.pad);
-		LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-		{
-			_netatom_deser_atom(netatom, &ev->body);
-			if(netatom->swap)
-				ev->time.frames = be64toh(ev->time.frames);
-		}
-	}
 }
 
 static const uint8_t *
@@ -397,7 +458,9 @@ netatom_serialize(netatom_t *netatom, const LV2_Atom *atom,
 		return NULL;
 
 	netatom->body.offset = 0;
+	netatom->body.end= 0;
 	netatom->dict.offset = 0;
+	netatom->dict.end = 0;
 
 	lv2_atom_forge_set_sink(&netatom->body.forge, _netatom_sink, _netatom_deref, &netatom->body);
 	lv2_atom_forge_set_sink(&netatom->dict.forge, _netatom_sink, _netatom_deref, &netatom->dict);
@@ -426,7 +489,9 @@ netatom_deserialize(netatom_t *netatom, const uint8_t *buf_tx, uint32_t size_tx)
 		return NULL;
 
 	netatom->body.offset = 0;
+	netatom->body.end = 0;
 	netatom->dict.offset = 0;
+	netatom->dict.end = 0;
 
 	lv2_atom_forge_set_sink(&netatom->body.forge, _netatom_sink, _netatom_deref, &netatom->body);
 	lv2_atom_forge_set_sink(&netatom->dict.forge, _netatom_sink, _netatom_deref, &netatom->dict);
@@ -466,11 +531,15 @@ netatom_new(LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	netatom->body.buf = malloc(size);
 	netatom->body.size = netatom->body.buf ? size : 0;
 	netatom->body.offset = 0;
+	netatom->body.end = 0;
 
 	lv2_atom_forge_init(&netatom->dict.forge, map);
 	netatom->dict.buf = malloc(size);
 	netatom->dict.size = netatom->dict.buf ? size : 0;
 	netatom->dict.offset = 0;
+	netatom->dict.end = 0;
+
+	netatom->MIDI_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 
 	return netatom;
 }
