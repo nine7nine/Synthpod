@@ -29,6 +29,7 @@
 
 typedef struct _rtmem_slot_t rtmem_slot_t;
 typedef struct _rtmem_t rtmem_t;
+typedef struct _nrtmem_t nrtmem_t;
 typedef struct _pool_t pool_t;
 
 // test URIs are of fixed length
@@ -38,9 +39,15 @@ struct _rtmem_slot_t {
 
 // dummy rt memory structure
 struct _rtmem_t {
-	atomic_uint nalloc; // counts number allocations
+	atomic_uint nalloc; // counts number of allocations
 	atomic_uint nfree; // counts number of frees
 	rtmem_slot_t slots [0]; // contains slots as multiple of MAX_ITEMS
+};
+
+// dummy non-rt memory structure
+struct _nrtmem_t {
+	atomic_uint nalloc; // counts number of allocations
+	atomic_uint nfree; // counts number of frees
 };
 
 // per-thread properties
@@ -90,6 +97,31 @@ _rtmem_free(void *data, char *uri)
 	memset(uri, 0x0, MAX_URI_LEN);
 }
 
+static void
+nrtmem_init(nrtmem_t *nrtmem)
+{
+	atomic_init(&nrtmem->nalloc, 0);
+	atomic_init(&nrtmem->nfree, 0);
+}
+
+static char *
+_nrtmem_alloc(void *data, size_t size)
+{
+	nrtmem_t *nrtmem = data;
+
+	atomic_fetch_add_explicit(&nrtmem->nalloc, 1, memory_order_relaxed);
+	return malloc(size);
+}
+
+static void
+_nrtmem_free(void *data, char *uri)
+{
+	nrtmem_t *nrtmem = data;
+
+	atomic_fetch_add_explicit(&nrtmem->nfree, 1, memory_order_relaxed);
+	free(uri);
+}
+
 // threads should start (un)mapping at the same time
 static atomic_bool rolling = ATOMIC_VAR_INIT(false);
 
@@ -125,6 +157,7 @@ int
 main(int argc, char **argv)
 {
 	static char zeros [MAX_URI_LEN];
+	static nrtmem_t nrtmem;
 
 	assert(mapper_is_lock_free());
 
@@ -136,6 +169,9 @@ main(int argc, char **argv)
 	// create rt memory
 	rtmem_t *rtmem = rtmem_new(r);
 	assert(rtmem);
+
+	// initialize non-rt memory
+	nrtmem_init(&nrtmem);
 
 	// create mapper
 	mapper_t *mapper = mapper_new(MAX_ITEMS);
@@ -154,7 +190,7 @@ main(int argc, char **argv)
 		if(p < r) // let thread use real-time memory
 			mapper_pool_init(mapper_pool, mapper, _rtmem_alloc, _rtmem_free, rtmem);
 		else
-			mapper_pool_init(mapper_pool, mapper, NULL, NULL, NULL); // fall-back
+			mapper_pool_init(mapper_pool, mapper, _nrtmem_alloc, _nrtmem_free, &nrtmem);
 
 		pthread_create(&pool->thread, NULL, _thread, mapper_pool);
 	}
@@ -170,9 +206,22 @@ main(int argc, char **argv)
 		pthread_join(pool->thread, NULL);
 	}
 
+	// query usage
+	const uint32_t usage = mapper_get_usage(mapper);
+	assert(usage == MAX_ITEMS/2);
+
 	// query rt memory allocations and frees
-	const uint32_t nalloc = atomic_load_explicit(&rtmem->nalloc, memory_order_relaxed);
-	const uint32_t nfree = atomic_load_explicit(&rtmem->nfree, memory_order_relaxed);
+	const uint32_t rt_nalloc = atomic_load_explicit(&rtmem->nalloc, memory_order_relaxed);
+	const uint32_t rt_nfree = atomic_load_explicit(&rtmem->nfree, memory_order_relaxed);
+
+	// query non-rt memory allocations and frees
+	const uint32_t nrt_nalloc = atomic_load_explicit(&nrtmem.nalloc, memory_order_relaxed);
+	const uint32_t nrt_nfree = atomic_load_explicit(&nrtmem.nfree, memory_order_relaxed);
+
+	// check whether combined allocations and frees match usage
+	const uint32_t tot_nalloc = rt_nalloc + nrt_nalloc;
+	const uint32_t tot_nfree = rt_nfree + nrt_nfree;
+	assert(tot_nalloc - tot_nfree == usage);
 
 	// deinit threads
 	for(uint32_t p = 0; p < n; p++)
@@ -183,6 +232,9 @@ main(int argc, char **argv)
 		mapper_pool_deinit(mapper_pool);
 	}
 
+	// query usage after freeing elements
+	assert(mapper_get_usage(mapper) == 0);
+
 	// free threads
 	free(pools);
 
@@ -190,7 +242,7 @@ main(int argc, char **argv)
 	mapper_free(mapper);
 
 	// check if all rt memory has been cleared
-	for(uint32_t i = 0; i < nalloc; i++)
+	for(uint32_t i = 0; i < rt_nalloc; i++)
 	{
 		rtmem_slot_t *slot = &rtmem->slots[i];
 
@@ -200,10 +252,14 @@ main(int argc, char **argv)
 	// free rt memory
 	rtmem_free(rtmem);
 
-	// report rt memory allocations and collisions
-	printf("\trt-allocs: %.1f%%, rt-collisions: %.1f%%\n",
-		200.f * (nalloc - nfree) / MAX_ITEMS,
-		200.f * nfree / MAX_ITEMS);
+	printf(
+		"  rt-allocs : %"PRIu32"\n"
+		"  rt-frees  : %"PRIu32"\n"
+		"  nrt-allocs: %"PRIu32"\n"
+		"  nrt-frees : %"PRIu32"\n"
+		"  collisions: %"PRIu32" (%.1f%% of total allocations -> +%.1f%% allocation overhead)\n",
+		rt_nalloc, rt_nfree, nrt_nalloc, nrt_nfree,
+		tot_nfree, 100.f * tot_nfree / tot_nalloc, 100.f * tot_nfree / usage);
 
 	return 0;
 }
