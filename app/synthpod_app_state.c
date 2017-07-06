@@ -1004,6 +1004,93 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		ser.offset = 0;
 		lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
 
+		// spod:nodeList
+		{
+			LV2_Atom_Forge_Ref ref;
+			LV2_Atom_Forge_Frame node_list_frame;
+
+			if( (ref = lv2_atom_forge_tuple(forge, &node_list_frame)) )
+			{
+				for(unsigned m1=0; m1<app->num_mods; m1++)
+				{
+					mod_t *snk_mod = app->mods[m1];
+
+					for(unsigned m2=0; m2<app->num_mods; m2++)
+					{
+						mod_t *src_mod = app->mods[m2];
+						bool mods_are_connected = false;
+						float x = 0.f;
+						float y = 0.f;
+
+						for(unsigned p=0; p<snk_mod->num_ports; p++)
+						{
+							port_t *port = &snk_mod->ports[p];
+
+							connectable_t *conn = _sp_app_port_connectable(port);
+							if(conn)
+							{
+								for(int j=0; j<conn->num_sources; j++)
+								{
+									source_t *source = &conn->sources[j];
+									port_t *src_port = source->port;
+
+									if(src_port->mod == src_mod)
+									{
+										mods_are_connected = true;
+										x = source->pos.x;
+										y = source->pos.y;
+										break;
+									}
+								}
+							}
+
+							if(mods_are_connected)
+								break;
+						}
+
+						if(mods_are_connected)
+						{
+							LV2_Atom_Forge_Frame source_frame;
+							if(  ref
+								&& lv2_atom_forge_object(forge, &source_frame, 0, 0) )
+							{
+								ref = lv2_atom_forge_key(forge, app->regs.synthpod.source_module.urid)
+									&& lv2_atom_forge_urid(forge, src_mod->urn)
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_module.urid)
+									&& lv2_atom_forge_urid(forge, snk_mod->urn)
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.node_position_x.urid)
+									&& lv2_atom_forge_float(forge, x)
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.node_position_y.urid)
+									&& lv2_atom_forge_float(forge, y);
+
+								if(ref)
+									lv2_atom_forge_pop(forge, &source_frame);
+							}
+						}
+					}
+				}
+
+				if(ref)
+					lv2_atom_forge_pop(forge, &node_list_frame);
+			}
+			else
+				fprintf(stderr, "sp_app_save: invalid spod:nodeList\n");
+
+			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
+			if(ref && atom)
+			{
+				store(hndl, app->regs.synthpod.node_list.urid,
+					LV2_ATOM_BODY_CONST(atom), atom->size, atom->type,
+					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+			}
+			else
+				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+		}
+
+		// reset ser
+		ser.offset = 0;
+		lv2_atom_forge_set_sink(forge, _sink, _deref, &ser);
+
 		// spod:automationList
 		{
 			LV2_Atom_Forge_Ref ref;
@@ -1306,6 +1393,24 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 				continue;
 
 			_connection_list_add(app, obj);
+		}
+	}
+
+	// retrieve spod:nodeList
+	const LV2_Atom_Object_Body *node_list_body = retrieve(hndl, app->regs.synthpod.node_list.urid,
+		&size, &type, &_flags);
+	if(  node_list_body
+		&& (type == app->forge.Tuple)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
+	{
+		LV2_ATOM_TUPLE_BODY_FOREACH(node_list_body, size, item)
+		{
+			const LV2_Atom_Object *obj = (const LV2_Atom_Object *)item;
+
+			if(!lv2_atom_forge_is_object_type(&app->forge, obj->atom.type))
+				continue;
+
+			_node_list_add(app, obj);
 		}
 	}
 

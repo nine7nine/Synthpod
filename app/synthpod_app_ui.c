@@ -1132,6 +1132,98 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				_sp_app_to_ui_overflow(app);
 			}
 		}
+		else if(prop == app->regs.synthpod.node_list.urid)
+		{
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				LV2_Atom_Forge_Frame frame [3];
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(
+					&app->regs, &app->forge, &frame[0], subj, sn, prop);
+				if(ref)
+					ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
+				for(unsigned m1 = 0; m1 < app->num_mods; m1++)
+				{
+					mod_t *snk_mod = app->mods[m1];
+
+					for(unsigned m2=0; m2<app->num_mods; m2++)
+					{
+						mod_t *src_mod = app->mods[m2];
+						bool mods_are_connected = false;
+						float x = 0.f;
+						float y = 0.f;
+
+						for(unsigned p=0; p<snk_mod->num_ports; p++)
+						{
+							port_t *port = &snk_mod->ports[p];
+
+							connectable_t *conn = _sp_app_port_connectable(port);
+							if(conn)
+							{
+								for(int j=0; j<conn->num_sources; j++)
+								{
+									source_t *source = &conn->sources[j];
+									port_t *src_port = source->port;
+
+									if(src_port->mod == src_mod)
+									{
+										mods_are_connected = true;
+										x = source->pos.x;
+										y = source->pos.y;
+										break;
+									}
+								}
+							}
+
+							if(mods_are_connected)
+								break;
+						}
+
+						if(mods_are_connected)
+						{
+							if(ref)
+								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, 0);
+							{
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_module.urid);
+								if(ref)
+									ref = lv2_atom_forge_urid(&app->forge, src_mod->urn);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
+								if(ref)
+									ref = lv2_atom_forge_urid(&app->forge, snk_mod->urn);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.node_position_x.urid);
+								if(ref)
+									ref = lv2_atom_forge_float(&app->forge, x);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.node_position_y.urid);
+								if(ref)
+									ref = lv2_atom_forge_float(&app->forge, y);
+							}
+							if(ref)
+								lv2_atom_forge_pop(&app->forge, &frame[2]);
+						}
+					}
+				}
+				if(ref)
+				{
+					synthpod_patcher_pop(&app->forge, frame, 2);
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
+		}
 		else if(prop == app->regs.pset.preset.urid)
 		{
 			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
@@ -1776,6 +1868,63 @@ _connection_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 	}
 }
 
+__realtime void
+_node_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
+{
+	//printf("got patch:add for nodeList:\n");
+
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom_URID *snk_module = NULL;
+	const LV2_Atom_Float *pos_x = NULL;
+	const LV2_Atom_Float *pos_y = NULL;
+
+	lv2_atom_object_get(obj,
+		app->regs.synthpod.source_module.urid, &src_module,
+		app->regs.synthpod.sink_module.urid, &snk_module,
+		app->regs.synthpod.node_position_x.urid, &pos_x,
+		app->regs.synthpod.node_position_y.urid, &pos_y,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const LV2_URID snk_urn = snk_module
+		? snk_module->body : 0;
+	const float x = pos_x 
+		? pos_x->body : 0.f;
+	const float y = pos_y 
+		? pos_y->body : 0.f;
+
+	if(src_urn && snk_urn)
+	{
+		mod_t *src_mod = _mod_find_by_urn(app, src_urn);
+		mod_t *snk_mod = _mod_find_by_urn(app, snk_urn);
+
+		if(src_mod && snk_mod)
+		{
+			for(unsigned p=0; p<snk_mod->num_ports; p++)
+			{
+				port_t *port = &snk_mod->ports[p];
+
+				connectable_t *conn = _sp_app_port_connectable(port);
+				if(conn)
+				{
+					for(int j=0; j<conn->num_sources; j++)
+					{
+						source_t *source = &conn->sources[j];
+						port_t *source_port = source->port;
+
+						if(source_port->mod == src_mod)
+						{
+							source->pos.x = x;
+							source->pos.y = y;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 //FIXME _subscription_list_clear, e.g. with patch:wildcard
 
 __realtime static void
@@ -2180,6 +2329,11 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 			{
 				_connection_list_rem(app, (const LV2_Atom_Object *)&prop->value);
 			}
+			else if(  (prop->key == app->regs.synthpod.node_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				//FIXME never reached
+			}
 			else if( (prop->key == app->regs.synthpod.subscription_list.urid)
 				&& (prop->value.type == app->forge.Object) )
 			{
@@ -2210,6 +2364,11 @@ _sp_app_from_ui_patch_patch(sp_app_t *app, const LV2_Atom *atom)
 				&& (prop->value.type == app->forge.Object) )
 			{
 				_connection_list_add(app, (const LV2_Atom_Object *)&prop->value);
+			}
+			else if(  (prop->key == app->regs.synthpod.node_list.urid)
+				&& (prop->value.type == app->forge.Object) )
+			{
+				_node_list_add(app, (const LV2_Atom_Object *)&prop->value);
 			}
 			else if(  (prop->key == app->regs.synthpod.subscription_list.urid)
 				&& (prop->value.type == app->forge.Object) )

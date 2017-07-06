@@ -259,7 +259,6 @@ struct _mod_t {
 		Zero_Worker_Schedule schedule;
 	} zero;
 
-
 	mod_worker_t mod_worker;
 
 	LV2_Worker_Schedule state_worker;
@@ -330,6 +329,10 @@ struct _port_driver_t {
 struct _source_t {
 	port_t *port;
 	float gain;
+	struct {
+		float x;
+		float y;
+	} pos;
 
 	// ramping
 	struct {
@@ -711,6 +714,9 @@ _sp_app_ui_set_modlist(sp_app_t *app, LV2_URID subj, int32_t seqn);
 
 void
 _connection_list_add(sp_app_t *app, const LV2_Atom_Object *obj);
+
+void
+_node_list_add(sp_app_t *app, const LV2_Atom_Object *obj);
 
 void
 _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj);

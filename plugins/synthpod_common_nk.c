@@ -713,6 +713,71 @@ _patch_connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink
 }
 
 static LV2_Atom_Forge_Ref
+_patch_node_internal(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod,
+	float x, float y)
+{
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, source_mod->urn);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
+	if(ref)
+		ref = lv2_atom_forge_urid(&handle->forge, sink_mod->urn);
+
+	if(x != 0.f)
+	{
+		if(ref)
+			ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.node_position_x.urid);
+		if(ref)
+			ref = lv2_atom_forge_float(&handle->forge, x);
+	}
+
+	if(y != 0.f)
+	{
+		if(ref)
+			ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.node_position_y.urid);
+		if(ref)
+			ref = lv2_atom_forge_float(&handle->forge, y);
+	}
+
+	return ref;
+}
+
+static void
+_patch_node_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod,
+	float x, float y)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.node_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& _patch_node_internal(handle, source_mod, sink_mod, x, y) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static void
+_patch_node_remove(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
+{
+	LV2_Atom_Forge_Frame frame [3];
+
+	if(  _message_request(handle)
+		&& synthpod_patcher_remove_object(&handle->regs, &handle->forge, &frame[0],
+			0, 0, handle->regs.synthpod.node_list.urid) //TODO subject
+		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
+		&& _patch_node_internal(handle, source_mod, sink_mod, 0.f, 0.f) )
+	{
+		synthpod_patcher_pop(&handle->forge, frame, 3);
+		_message_write(handle);
+	}
+}
+
+static LV2_Atom_Forge_Ref
 _patch_subscription_internal(plughandle_t *handle, port_t *source_port)
 {
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
@@ -1175,6 +1240,8 @@ _mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 		mod_conn->source_type = PROPERTY_TYPE_NONE;
 		mod_conn->sink_type = PROPERTY_TYPE_NONE;
 		_hash_add(&handle->conns, mod_conn);
+
+		_patch_node_add(handle, source_mod, sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 	}
 
 	return mod_conn;
@@ -4793,12 +4860,16 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 				{
 					mod_conn->pos.x += in->mouse.delta.x/2;
 					mod_conn->pos.y += in->mouse.delta.y/2;
+
+					_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 				}
 
 				if(mod_conn->sink_mod == mod)
 				{
 					mod_conn->pos.x += in->mouse.delta.x/2;
 					mod_conn->pos.y += in->mouse.delta.y/2;
+
+					_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 				}
 			}
 		}
@@ -5216,6 +5287,8 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 			mod_conn->pos.y += in->mouse.delta.y;
 			bounds.x += in->mouse.delta.x;
 			bounds.y += in->mouse.delta.y;
+
+			_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 		}
 	}
 	else if(is_hovering
@@ -6333,6 +6406,51 @@ _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 }
 
 static void
+_add_node(plughandle_t *handle, const LV2_Atom_Object *obj)
+{
+	const LV2_Atom_URID *src_module = NULL;
+	const LV2_Atom_URID *snk_module = NULL;
+	const LV2_Atom_Float *pos_x = NULL;
+	const LV2_Atom_Float *pos_y = NULL;
+
+	lv2_atom_object_get(obj,
+		handle->regs.synthpod.source_module.urid, &src_module,
+		handle->regs.synthpod.sink_module.urid, &snk_module,
+		handle->regs.synthpod.node_position_x.urid, &pos_x,
+		handle->regs.synthpod.node_position_y.urid, &pos_y,
+		0);
+
+	const LV2_URID src_urn = src_module
+		? src_module->body : 0;
+	const LV2_URID snk_urn = snk_module
+		? snk_module->body : 0;
+	const float x = pos_x
+		? pos_x->body : 0.f;
+	const float y = pos_y
+		? pos_y->body : 0.f;
+
+	if(src_urn && snk_urn)
+	{
+		mod_t *src_mod = _mod_find_by_urn(handle, src_urn);
+		mod_t *snk_mod = _mod_find_by_urn(handle, snk_urn);
+
+		if(src_mod && snk_mod)
+		{
+			mod_conn_t *mod_conn = _mod_conn_find(handle, src_mod, snk_mod);
+			if(!mod_conn) // does not yet exist
+				mod_conn = _mod_conn_add(handle, src_mod, snk_mod);
+			if(mod_conn)
+			{
+				if(x != 0.f)
+					mod_conn->pos.x = x;
+				if(y != 0.f)
+					mod_conn->pos.y = y;
+			}
+		}
+	}
+}
+
+static void
 _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
 	const LV2_Atom_URID *src_module = NULL;
@@ -6558,6 +6676,14 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								_message_write(handle);
 							}
 
+							// patch:Get [patch:property spod:nodeList]
+							if(  _message_request(handle)
+								&& synthpod_patcher_get(&handle->regs, &handle->forge,
+									0, 0, handle->regs.synthpod.node_list.urid) )
+							{
+								_message_write(handle);
+							}
+
 							// patch:Get [patch:property pset:preset]
 							if(  _message_request(handle)
 								&& synthpod_patcher_get(&handle->regs, &handle->forge,
@@ -6588,6 +6714,16 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							LV2_ATOM_TUPLE_FOREACH(tup, itm)
 							{
 								_add_connection(handle, (const LV2_Atom_Object *)itm);
+							}
+						}
+						else if( (prop == handle->regs.synthpod.node_list.urid)
+							&& (value->type == handle->forge.Tuple) )
+						{
+							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
+
+							LV2_ATOM_TUPLE_FOREACH(tup, itm)
+							{
+								_add_node(handle, (const LV2_Atom_Object *)itm);
 							}
 						}
 						else if( (prop == handle->regs.pset.preset.urid)
@@ -6766,6 +6902,11 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_rem_connection(handle, (const LV2_Atom_Object *)&prop->value);
 							}
+							else if(  (prop->key == handle->regs.synthpod.node_list.urid)
+								&& (prop->value.type == handle->forge.Object) )
+							{
+								//FIXME never reached
+							}
 							else if( (prop->key == handle->regs.synthpod.notification_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
 							{
@@ -6786,6 +6927,11 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								&& (prop->value.type == handle->forge.Object) )
 							{
 								_add_connection(handle, (const LV2_Atom_Object *)&prop->value);
+							}
+							else if(  (prop->key == handle->regs.synthpod.node_list.urid)
+								&& (prop->value.type == handle->forge.Object) )
+							{
+								_add_node(handle, (const LV2_Atom_Object *)&prop->value);
 							}
 							else if( (prop->key == handle->regs.synthpod.notification_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
