@@ -1226,7 +1226,7 @@ _mod_conn_find(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 }
 
 static mod_conn_t *
-_mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
+_mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod, bool sync)
 {
 	mod_conn_t *mod_conn = calloc(1, sizeof(mod_conn_t));
 	if(mod_conn)
@@ -1240,7 +1240,8 @@ _mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 		mod_conn->sink_type = PROPERTY_TYPE_NONE;
 		_hash_add(&handle->conns, mod_conn);
 
-		_patch_node_add(handle, source_mod, sink_mod, mod_conn->pos.x, mod_conn->pos.y);
+		if(sync)
+			_patch_node_add(handle, source_mod, sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 	}
 
 	return mod_conn;
@@ -4976,7 +4977,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 			{
 				mod_conn_t *mod_conn = _mod_conn_find(handle, src, mod);
 				if(!mod_conn) // does not yet exist
-					mod_conn = _mod_conn_add(handle, src, mod);
+					mod_conn = _mod_conn_add(handle, src, mod, true);
 				if(mod_conn)
 				{
 					mod_conn->source_type |= handle->type;
@@ -6322,7 +6323,7 @@ _add_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 			{
 				mod_conn_t *mod_conn = _mod_conn_find(handle, src_mod, snk_mod);
 				if(!mod_conn) // does not yet exist
-					mod_conn = _mod_conn_add(handle, src_mod, snk_mod);
+					mod_conn = _mod_conn_add(handle, src_mod, snk_mod, false);
 				if(mod_conn)
 				{
 					port_conn_t *port_conn = _port_conn_find(mod_conn, src_port, snk_port);
@@ -6417,7 +6418,7 @@ _add_node(plughandle_t *handle, const LV2_Atom_Object *obj)
 		{
 			mod_conn_t *mod_conn = _mod_conn_find(handle, src_mod, snk_mod);
 			if(!mod_conn) // does not yet exist
-				mod_conn = _mod_conn_add(handle, src_mod, snk_mod);
+				mod_conn = _mod_conn_add(handle, src_mod, snk_mod, false);
 			if(mod_conn)
 			{
 				if(x != 0.f)
