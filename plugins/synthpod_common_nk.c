@@ -89,7 +89,6 @@ enum _property_type_t {
 	PROPERTY_TYPE_TIME				= (1 << 10),
 	PROPERTY_TYPE_PATCH				= (1 << 11),
 	PROPERTY_TYPE_XPRESS			= (1 << 12),
-	PROPERTY_TYPE_AUTOMATION	= (1 << 13),
 
 	PROPERTY_TYPE_MAX
 };
@@ -339,7 +338,7 @@ struct _plughandle_t {
 		LilvNode *rdf_type;
 		LilvNode *lv2_Plugin;
 		LilvNode *midi_MidiEvent;
-		LilvNode *osc_Message;
+		LilvNode *osc_Event;
 		LilvNode *time_Position;
 		LilvNode *patch_Message;
 		LilvNode *xpress_Message;
@@ -2731,7 +2730,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 			if(lilv_port_supports_event(plug, port->port, handle->node.midi_MidiEvent))
 				port->type |= PROPERTY_TYPE_MIDI;
-			if(lilv_port_supports_event(plug, port->port, handle->node.osc_Message))
+			if(lilv_port_supports_event(plug, port->port, handle->node.osc_Event))
 				port->type |= PROPERTY_TYPE_OSC;
 			if(lilv_port_supports_event(plug, port->port, handle->node.time_Position))
 				port->type |= PROPERTY_TYPE_TIME;
@@ -2772,7 +2771,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->groups = NULL;
 			port->name = strdup("Automation");
 
-			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_AUTOMATION;
+			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC;
 
 			_hash_add(&mod->sinks, port);
 			mod->sink_type |= port->type;
@@ -2996,7 +2995,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 	nk_menubar_begin(ctx);
 	{
 		bool is_hovered;
-		nk_layout_row_static(ctx, dy, 1.2*dy, 18);
+		nk_layout_row_static(ctx, dy, 1.2*dy, 16);
 
 		{
 			if(_tooltip_visible(ctx))
@@ -3055,8 +3054,6 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 			const bool is_time = handle->type == PROPERTY_TYPE_TIME;
 			const bool is_patch = handle->type == PROPERTY_TYPE_PATCH;
 			const bool is_xpress = handle->type == PROPERTY_TYPE_XPRESS;
-
-			const bool is_automation = handle->type == PROPERTY_TYPE_AUTOMATION;
 
 			is_hovered = nk_widget_is_hovered(ctx);
 			if(is_audio)
@@ -3138,18 +3135,6 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 			if(nk_button_image_label(ctx, handle->icon.xpress, "", NK_TEXT_RIGHT))
 				handle->type = PROPERTY_TYPE_XPRESS;
 			if(is_xpress || is_hovered)
-				nk_style_pop_color(ctx);
-
-			nk_spacing(ctx, 1);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_automation)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.automaton, "", NK_TEXT_RIGHT))
-				handle->type = PROPERTY_TYPE_AUTOMATION;
-			if(is_automation || is_hovered)
 				nk_style_pop_color(ctx);
 		}
 
@@ -4058,9 +4043,8 @@ _expose_atom_port(struct nk_context *ctx, mod_t *mod, port_t *port,
 		const bool has_time = port->type & PROPERTY_TYPE_TIME;
 		const bool has_patch = port->type & PROPERTY_TYPE_PATCH;
 		const bool has_xpress = port->type & PROPERTY_TYPE_XPRESS;
-		const bool has_automation = port->type & PROPERTY_TYPE_AUTOMATION;
 
-		const unsigned n = has_midi + has_osc + has_time + has_patch + has_xpress + has_automation;
+		const unsigned n = has_midi + has_osc + has_time + has_patch + has_xpress;
 
 		nk_layout_row_dynamic(ctx, dy, 1);
 		nk_label(ctx, name_str, NK_TEXT_LEFT);
@@ -4079,8 +4063,6 @@ _expose_atom_port(struct nk_context *ctx, mod_t *mod, port_t *port,
 				nk_image(ctx, handle->icon.patch);
 			if(has_xpress)
 				nk_image(ctx, handle->icon.xpress);
-			if(has_automation)
-				nk_image(ctx, handle->icon.automaton);
 		}
 
 		nk_group_end(ctx);
@@ -4897,9 +4879,6 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 static bool
 _source_type_match(plughandle_t *handle, property_type_t source_type)
 {
-	if(handle->type == PROPERTY_TYPE_AUTOMATION)
-		return (PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC) & source_type;
-
 	return handle->type & source_type;
 }
 
@@ -5939,7 +5918,7 @@ _init(plughandle_t *handle)
 	handle->node.lv2_Plugin = lilv_new_uri(handle->world, LV2_CORE__Plugin);
 
 	handle->node.midi_MidiEvent = lilv_new_uri(handle->world, LV2_MIDI__MidiEvent);
-	handle->node.osc_Message = lilv_new_uri(handle->world, LV2_OSC__Message);
+	handle->node.osc_Event = lilv_new_uri(handle->world, LV2_OSC__Event);
 	handle->node.time_Position = lilv_new_uri(handle->world, LV2_TIME__Position);
 	handle->node.patch_Message = lilv_new_uri(handle->world, LV2_PATCH__Message);
 	handle->node.xpress_Message = lilv_new_uri(handle->world, XPRESS_PREFIX"Message");
