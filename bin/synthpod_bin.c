@@ -258,7 +258,7 @@ _sig(int sig)
 }
 
 __realtime static char *
-_mapper_pool_alloc_rt(void *data, size_t size)
+_mapper_alloc_rt(void *data, size_t size)
 {
 	bin_t *bin = data;
 
@@ -297,7 +297,7 @@ _mapper_pool_alloc_rt(void *data, size_t size)
 }
 
 __realtime static void
-_mapper_pool_free_rt(void *data, char *uri)
+_mapper_free_rt(void *data, char *uri)
 {
 	(void)data;
 	(void)uri;
@@ -324,12 +324,10 @@ bin_init(bin_t *bin)
 	for(size_t idx = 0; idx < URI_POOL_MAX; idx++)
 		atomic_init(&bin->uri_mem.pools[idx], 0);
 
-	bin->mapper = mapper_new(0x10000); // 64K
-	mapper_pool_init(&bin->mapper_pool, bin->mapper,
-		_mapper_pool_alloc_rt, _mapper_pool_free_rt, bin);
+	bin->mapper = mapper_new(0x20000, _mapper_alloc_rt, _mapper_free_rt, bin); // 128K
 
-	bin->map = mapper_pool_get_map(&bin->mapper_pool);
-	bin->unmap = mapper_pool_get_unmap(&bin->mapper_pool);
+	bin->map = mapper_get_map(bin->mapper);
+	bin->unmap = mapper_get_unmap(bin->mapper);
 
 	bin->xmap.new_uuid = _voice_map_new_uuid;
 	bin->xmap.handle = &voice_uuid;
@@ -542,7 +540,6 @@ bin_deinit(bin_t *bin)
 	sp_app_free(bin->app);
 
 	// mapper deinit
-	mapper_pool_deinit(&bin->mapper_pool);
 	mapper_free(bin->mapper);
 
 	// mapper mem free

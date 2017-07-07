@@ -64,7 +64,6 @@ struct _uri_mem_t {
 
 struct _bin_t {
 	mapper_t *mapper;	
-	mapper_pool_t mapper_pool;
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 	xpress_map_t xmap;

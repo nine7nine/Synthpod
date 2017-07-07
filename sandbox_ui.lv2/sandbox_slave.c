@@ -38,7 +38,6 @@
 
 struct _sandbox_slave_t {
 	mapper_t *mapper;
-	mapper_pool_t mapper_pool;
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
@@ -259,15 +258,14 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	sb->host_resize.handle = data;
 	sb->host_resize.ui_resize = driver->resize_cb;
 
-	if(!(sb->mapper = mapper_new(0x10000))) // 64K
+	if(!(sb->mapper = mapper_new(0x20000, NULL, NULL, NULL))) // 128K
 	{
 		fprintf(stderr, "mapper_new failed\n");
 		goto fail;
 	}
-	mapper_pool_init(&sb->mapper_pool, sb->mapper, NULL, NULL, NULL);
 
-	sb->map = mapper_pool_get_map(&sb->mapper_pool);
-	sb->unmap = mapper_pool_get_unmap(&sb->mapper_pool);
+	sb->map = mapper_get_map(sb->mapper);
+	sb->unmap = mapper_get_unmap(sb->mapper);
 	sb->uri_id.callback_data = sb;
 	sb->uri_id.uri_to_id = _sb_uri_to_id;
 
@@ -434,7 +432,6 @@ sandbox_slave_free(sandbox_slave_t *sb)
 
 	if(sb->mapper)
 	{
-		mapper_pool_deinit(&sb->mapper_pool);
 		mapper_free(sb->mapper);
 	}
 

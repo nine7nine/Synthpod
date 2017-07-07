@@ -39,7 +39,6 @@ typedef struct _prog_t prog_t;
 
 struct _prog_t {
 	mapper_t *mapper;
-	mapper_pool_t mapper_pool;
 
 	Sratom *sratom;
 
@@ -50,11 +49,10 @@ struct _prog_t {
 static inline void
 _prog_init(prog_t *prog)
 {
-	prog->mapper = mapper_new(0x10000); // 64K
-	mapper_pool_init(&prog->mapper_pool, prog->mapper, NULL, NULL, NULL);
+	prog->mapper = mapper_new(0x20000, NULL, NULL, NULL); // 128K
 
-	prog->map = mapper_pool_get_map(&prog->mapper_pool);
-	prog->unmap = mapper_pool_get_unmap(&prog->mapper_pool);
+	prog->map = mapper_get_map(prog->mapper);
+	prog->unmap = mapper_get_unmap(prog->mapper);
 
 	prog->sratom = sratom_new(prog->map);
 }
@@ -63,7 +61,6 @@ static inline void
 _prog_deinit(prog_t *prog)
 {
 	sratom_free(prog->sratom);
-	mapper_pool_deinit(&prog->mapper_pool);
 	mapper_free(prog->mapper);
 }
 
