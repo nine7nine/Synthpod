@@ -53,7 +53,6 @@ struct _nrtmem_t {
 // per-thread properties
 struct _pool_t {
 	pthread_t thread;
-	mapper_pool_t mapper_pool;
 };
 
 static rtmem_t *
@@ -128,9 +127,9 @@ static atomic_bool rolling = ATOMIC_VAR_INIT(false);
 static void *
 _thread(void *data)
 {
-	mapper_pool_t *mapper_pool = data;
-	LV2_URID_Map *map = mapper_pool_get_map(mapper_pool);
-	LV2_URID_Unmap *unmap = mapper_pool_get_unmap(mapper_pool);
+	mapper_t *mapper = data;
+	LV2_URID_Map *map = mapper_get_map(mapper);
+	LV2_URID_Unmap *unmap = mapper_get_unmap(mapper);
 
 	while(!atomic_load_explicit(&rolling, memory_order_relaxed))
 	{} // wait for go signal
@@ -163,18 +162,19 @@ main(int argc, char **argv)
 
 	assert(argc > 2);
 	const uint32_t n = atoi(argv[1]); // number of concurrent threads
-	const uint32_t r = atoi(argv[2]); // number of threads using rt memory
-	assert(r < n);
+	const bool is_rt = atoi(argv[2]); // whether to use rt-memory
 
 	// create rt memory
-	rtmem_t *rtmem = rtmem_new(r);
+	rtmem_t *rtmem = rtmem_new(n);
 	assert(rtmem);
 
 	// initialize non-rt memory
 	nrtmem_init(&nrtmem);
 
 	// create mapper
-	mapper_t *mapper = mapper_new(MAX_ITEMS);
+	mapper_t *mapper = is_rt
+		? mapper_new(MAX_ITEMS, _rtmem_alloc, _rtmem_free, rtmem)
+		: mapper_new(MAX_ITEMS, _nrtmem_alloc, _nrtmem_free, &nrtmem);
 	assert(mapper);
 
 	// create array of threads
@@ -185,14 +185,8 @@ main(int argc, char **argv)
 	for(uint32_t p = 0; p < n; p++)
 	{
 		pool_t *pool = &pools[p];
-		mapper_pool_t *mapper_pool = &pool->mapper_pool;
 
-		if(p < r) // let thread use real-time memory
-			mapper_pool_init(mapper_pool, mapper, _rtmem_alloc, _rtmem_free, rtmem);
-		else
-			mapper_pool_init(mapper_pool, mapper, _nrtmem_alloc, _nrtmem_free, &nrtmem);
-
-		pthread_create(&pool->thread, NULL, _thread, mapper_pool);
+		pthread_create(&pool->thread, NULL, _thread, mapper);
 	}
 
 	// signal rolling
@@ -223,23 +217,11 @@ main(int argc, char **argv)
 	const uint32_t tot_nfree = rt_nfree + nrt_nfree;
 	assert(tot_nalloc - tot_nfree == usage);
 
-	// deinit threads
-	for(uint32_t p = 0; p < n; p++)
-	{
-		pool_t *pool = &pools[p];
-		mapper_pool_t *mapper_pool = &pool->mapper_pool;
-
-		mapper_pool_deinit(mapper_pool);
-	}
-
-	// query usage after freeing elements
-	assert(mapper_get_usage(mapper) == 0);
+	// free mapper
+	mapper_free(mapper);
 
 	// free threads
 	free(pools);
-
-	// free mapper
-	mapper_free(mapper);
 
 	// check if all rt memory has been cleared
 	for(uint32_t i = 0; i < rt_nalloc; i++)

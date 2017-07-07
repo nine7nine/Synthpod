@@ -10,18 +10,18 @@ mapper_speed: mapper_test.c ../mapper.lv2/mapper.h
 
 test_assert: mapper_assert
 	./$< 1 0
-	./$< 2 0
-	./$< 4 1
+	./$< 2 1
+	./$< 4 0
 	./$< 8 1
-	./$< 16 2
-	./$< 32 2
+	./$< 16 0
+	./$< 32 1
 
 test_speed: mapper_speed
 	./$< 1 0
-	./$< 2 0
-	./$< 4 1
+	./$< 2 1
+	./$< 4 0
 	./$< 8 1
-	./$< 16 2
-	./$< 32 2
+	./$< 16 0
+	./$< 32 1
 
 test: test_assert test_speed
