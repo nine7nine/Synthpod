@@ -36,6 +36,7 @@
 #include <unistd.h> // fork
 #include <sys/wait.h> // waitpid
 #include <errno.h> // waitpid
+#include <time.h>
 
 #define NK_PUGL_API
 #include <nk_pugl/nk_pugl.h>
@@ -5861,12 +5862,21 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 static void
 _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
-	nk_layout_row_dynamic(ctx, dy, 3);
+	nk_layout_row_dynamic(ctx, dy, 4);
 	{
+		time_t rawtime;
+
+		time(&rawtime);
+		struct tm *timeinfo = localtime(&rawtime);
+
+		char buf [32];
+		strftime(buf, 32, "%F | %T", timeinfo);
+
 		nk_labelf(ctx, NK_TEXT_LEFT, "DSP: %.1f | %.1f | %.1f %%",
 			handle->prof.min, handle->prof.avg, handle->prof.max);
-		nk_labelf(ctx, NK_TEXT_LEFT, "CPU: %"PRIi32"/%"PRIi32,
+		nk_labelf(ctx, NK_TEXT_CENTERED, "CPU: %"PRIi32"/%"PRIi32,
 			handle->cpus_used, handle->cpus_available);
+		nk_label(ctx, buf, NK_TEXT_CENTERED);
 		nk_label(ctx, "Synthpod: "SYNTHPOD_VERSION, NK_TEXT_RIGHT);
 	}
 }
