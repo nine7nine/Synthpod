@@ -437,6 +437,8 @@ struct _plughandle_t {
 
 	int show_sidebar;
 	int show_bottombar;
+
+	time_t t0;
 };
 
 static const char *search_labels [SELECTOR_SEARCH_MAX] = {
@@ -5862,21 +5864,31 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 static void
 _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
-	nk_layout_row_dynamic(ctx, dy, 4);
+	nk_layout_row_dynamic(ctx, dy, 5);
 	{
-		time_t rawtime;
-
-		time(&rawtime);
-		struct tm *timeinfo = localtime(&rawtime);
-
-		char buf [32];
-		strftime(buf, 32, "%F | %T", timeinfo);
+		time_t t1;
+		time(&t1);
 
 		nk_labelf(ctx, NK_TEXT_LEFT, "DSP: %.1f | %.1f | %.1f %%",
 			handle->prof.min, handle->prof.avg, handle->prof.max);
-		nk_labelf(ctx, NK_TEXT_CENTERED, "CPU: %"PRIi32"/%"PRIi32,
+
+		nk_labelf(ctx, NK_TEXT_LEFT, "CPU: %"PRIi32"/%"PRIi32,
 			handle->cpus_used, handle->cpus_available);
-		nk_label(ctx, buf, NK_TEXT_CENTERED);
+
+		if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true))
+			handle->t0 = t1;
+		const uint32_t secs = difftime(t1, handle->t0);
+		const int32_t ts = secs % 60;
+		const int32_t _tm = secs / 60;
+		const int32_t tm = _tm % 60;
+		const int32_t th = _tm / 60;
+		nk_labelf(ctx, NK_TEXT_LEFT, "TIM: %02"PRIu32":%02"PRIu32":%02"PRIu32, th, tm, ts);
+
+		char buf [32];
+		struct tm *ti = localtime(&t1);
+		strftime(buf, 32, "%F | %T", ti);
+		nk_label(ctx, buf, NK_TEXT_LEFT);
+
 		nk_label(ctx, "Synthpod: "SYNTHPOD_VERSION, NK_TEXT_RIGHT);
 	}
 }
@@ -6232,6 +6244,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->show_sidebar = 1;
 	handle->show_bottombar = 1;
+
+	time(&handle->t0);
 
 	return handle;
 }
