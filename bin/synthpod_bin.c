@@ -30,6 +30,7 @@
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
+#define UI_CHUNK_SIZE 0x1000000 // 16M
 #define CHUNK_SIZE 0x100000 // 1M
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
@@ -311,8 +312,8 @@ bin_init(bin_t *bin)
 	bin_ptr = bin;
 
 	// varchunk init
-	bin->app_to_ui = varchunk_new(CHUNK_SIZE, true);
-	bin->app_from_ui = varchunk_new(CHUNK_SIZE, true);
+	bin->app_to_ui = varchunk_new(UI_CHUNK_SIZE, true);
+	bin->app_from_ui = varchunk_new(UI_CHUNK_SIZE, true);
 	bin->app_to_worker = varchunk_new(CHUNK_SIZE, true);
 	bin->app_from_worker = varchunk_new(CHUNK_SIZE, true);
 	bin->app_to_log = varchunk_new(CHUNK_SIZE, true);
