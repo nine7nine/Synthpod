@@ -88,14 +88,19 @@ _app_to_ui_advance(size_t written, void *data)
 	sandbox_master_signal(bin->sb);
 }
 
-__realtime static void *
+__non_realtime static void *
 _ui_to_app_request(size_t minimum, size_t *maximum, void *data)
 {
 	bin_t *bin = data;
 
-	return varchunk_write_request_max(bin->app_from_ui, minimum, maximum);
+	void *ptr;
+	do {
+		ptr = varchunk_write_request_max(bin->app_from_ui, minimum, maximum);
+	} while(!ptr); // wait until there is enough space
+
+	return ptr;
 }
-__realtime static void
+__non_realtime static void
 _ui_to_app_advance(size_t written, void *data)
 {
 	bin_t *bin = data;
