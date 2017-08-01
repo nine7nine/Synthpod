@@ -426,9 +426,10 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	}
 
 	const unsigned nsecs = 1000000000;
+	const unsigned nfreq = 120; // Hz
+	const unsigned nstep = nsecs / nfreq;
 	struct timespec to;
 	clock_gettime(CLOCK_REALTIME, &to);
-	unsigned count = 0;
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
@@ -462,7 +463,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 			}
 
 			// schedule next timeout
-			uint64_t nanos = to.tv_nsec + nsecs/20; // 10 Hz
+			uint64_t nanos = to.tv_nsec + nstep;
 			while(nanos >= nsecs)
 			{
 				nanos -= nsecs;
