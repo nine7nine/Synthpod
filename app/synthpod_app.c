@@ -441,7 +441,7 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 
 		int expected = 0;
 		const int desired = -1; // mark as done
-		const bool match = atomic_compare_exchange_weak(&dsp_client->ref_count,
+		const bool match = atomic_compare_exchange_strong(&dsp_client->ref_count,
 			&expected, desired); //TODO can we make this explicit?
 		if(match) // needs to run now
 		{
@@ -450,7 +450,7 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 			for(unsigned j=0; j<dsp_client->num_sinks; j++)
 			{
 				dsp_client_t *sink = dsp_client->sinks[j];
-				atomic_fetch_sub_explicit(&sink->ref_count, 1, memory_order_release);
+				atomic_fetch_sub(&sink->ref_count, 1);
 			}
 		}
 		else if(expected >= 0) // needs to run later
@@ -465,12 +465,12 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 __realtime static inline void
 _dsp_slave_spin(dsp_master_t *dsp_master)
 {
-	while(atomic_load_explicit(&dsp_master->ref_count, memory_order_acquire))
+	while(atomic_load(&dsp_master->ref_count))
 	{
 		const bool done = _dsp_slave_fetch(dsp_master);
 		if(done)
 		{
-			atomic_fetch_sub_explicit(&dsp_master->ref_count, 1, memory_order_release);
+			atomic_fetch_sub(&dsp_master->ref_count, 1);
 			break;
 		}
 	}
@@ -493,7 +493,7 @@ _dsp_slave_thread(void *data)
 	if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
 		fprintf(stderr, "pthread_setschedparam error\n");
 
-	while(!atomic_load_explicit(&dsp_master->kill, memory_order_acquire))
+	while(!atomic_load(&dsp_master->kill))
 	{
 		sem_wait(&dsp_slave->sem);
 
@@ -523,7 +523,7 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 		mod_t *mod = app->mods[m];
 		dsp_client_t *dsp_client = &mod->dsp_client;
 
-		atomic_store_explicit(&dsp_client->ref_count, dsp_client->num_sources, memory_order_release);
+		atomic_store(&dsp_client->ref_count, dsp_client->num_sources);
 	}
 
 	unsigned num_slaves = dsp_master->concurrent - 1;
@@ -531,11 +531,11 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 		num_slaves = dsp_master->num_slaves;
 	dsp_master->nsamples = nsamples;
 	const unsigned ref_count = num_slaves + 1; // plus master
-	atomic_store_explicit(&dsp_master->ref_count, ref_count, memory_order_release);
+	atomic_store(&dsp_master->ref_count, ref_count);
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
 	_dsp_slave_spin(dsp_master); // runs jobs itself 
 
-	while(atomic_load_explicit(&dsp_master->ref_count, memory_order_acquire))
+	while(atomic_load(&dsp_master->ref_count))
 	{
 		// spin
 	}
@@ -915,7 +915,7 @@ sp_app_free(sp_app_t *app)
 
 	// deinit parallel processing
 	dsp_master_t *dsp_master = &app->dsp_master;
-	atomic_store_explicit(&dsp_master->kill, true, memory_order_release);
+	atomic_store(&dsp_master->kill, true);
 	//printf("finish\n");
 	_dsp_master_post(dsp_master, dsp_master->num_slaves);
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
