@@ -246,8 +246,17 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 			varchunk_read_advance(mod_worker->app_from_worker);
 		}
-	}
 
+		// handle end of work
+		if(mod->zero.iface && mod->zero.iface->end)
+		{
+			mod->zero.iface->end(mod->handle);
+		}
+		else if(mod->worker.iface && mod->worker.iface->end_run)
+		{
+			mod->worker.iface->end_run(mod->handle);
+		}
+	}
 
 	struct timespec mod_t1;
 	struct timespec mod_t2;
@@ -700,12 +709,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 			del_me = mod;
 			mod->delete_request = false;
 		}
-
-		// handle end of work
-		if(mod->zero.iface && mod->zero.iface->end)
-			mod->zero.iface->end(mod->handle);
-		else if(mod->worker.iface && mod->worker.iface->end_run)
-			mod->worker.iface->end_run(mod->handle);
 
 		for(unsigned p=0; p<mod->num_ports; p++)
 		{
