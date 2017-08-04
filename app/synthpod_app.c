@@ -199,7 +199,6 @@ __realtime static inline void
 _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
 	sp_app_t *app = mod->app;
-
 	// multiplex multiple sources to single sink where needed
 	for(unsigned p=0; p<mod->num_ports; p++)
 	{
@@ -462,7 +461,7 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 				atomic_fetch_sub(&sink->ref_count, 1);
 			}
 		}
-		else if(expected >= 0) // needs to run later
+		else if(expected != -1) // needs to run later
 		{
 			done = false;
 		}

@@ -153,8 +153,11 @@ _dsp_master_reorder(sp_app_t *app)
 	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
-		printf("%u: %u, %u\n", mod->uid, mod->dsp_client.num_sources, mod->dsp_client.num_sinks);
+		printf("%s: %u, %u\n",
+			app->driver->unmap->unmap(app->driver->unmap->handle, mod->plug_urid),
+			mod->dsp_client.num_sources, mod->dsp_client.num_sinks);
 	}
+	printf("\n");
 	*/
 
 	_dsp_master_concurrent(app);
