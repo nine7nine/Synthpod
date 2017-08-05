@@ -53,6 +53,7 @@ struct _chan_t {
 			LV2_Atom_Forge_Frame frame;
 			LV2_Atom_Forge_Ref ref;
 			LV2_Atom_Sequence *seq_in;
+			int64_t last;
 		} midi;
 	};
 };
@@ -244,6 +245,7 @@ _process(prog_t *handle)
 						chan->midi.seq_in = seq_in; // needed for lv2_atom_sequence_clear
 						lv2_atom_forge_set_buffer(forge, seq_in, SEQ_SIZE);
 						chan->midi.ref = lv2_atom_forge_sequence_head(forge, &chan->midi.frame, 0);
+						chan->midi.last = 0;
 
 						break;
 					}
@@ -264,9 +266,7 @@ _process(prog_t *handle)
 							if(ref)
 								ref = lv2_atom_forge_frame_time(forge, 0);
 							if(ref)
-								ref = lv2_atom_forge_raw(forge, obj, size);
-							if(ref)
-								lv2_atom_forge_pad(forge, size);
+								ref = lv2_atom_forge_write(forge, obj, size);
 
 							varchunk_read_advance(bin->app_from_com);
 						}
@@ -315,8 +315,8 @@ _process(prog_t *handle)
 						{
 							LV2_Atom_Forge *forge = &chan->midi.forge;
 
-							bool is_real = snd_seq_ev_is_real(sev);
-							bool is_abs = snd_seq_ev_is_abstime(sev);
+							const bool is_real = snd_seq_ev_is_real(sev);
+							const bool is_abs = snd_seq_ev_is_abstime(sev);
 							assert(is_real);
 
 							volatile double dd = sev->time.time.tv_sec;
@@ -332,6 +332,11 @@ _process(prog_t *handle)
 							else if(frames >= nsamples)
 								frames = nsamples - 1; //TODO report this
 
+							if(frames < chan->midi.last)
+								frames = chan->midi.last; // frame time must be increasing
+							else
+								chan->midi.last = frames;
+
 							// fix up noteOn(vel=0) -> noteOff(vel=0)
 							if(  (len == 3) && ( (handle->m[0] & 0xf0) == 0x90)
 								&& (handle->m[2] == 0x0) )
@@ -345,9 +350,7 @@ _process(prog_t *handle)
 							if(chan->midi.ref)
 								chan->midi.ref = lv2_atom_forge_atom(forge, len, handle->midi_MidiEvent);
 							if(chan->midi.ref)
-								chan->midi.ref = lv2_atom_forge_raw(forge, handle->m, len);
-							if(chan->midi.ref)
-								lv2_atom_forge_pad(forge, len);
+								chan->midi.ref = lv2_atom_forge_write(forge, handle->m, len);
 						}
 						else
 						{
