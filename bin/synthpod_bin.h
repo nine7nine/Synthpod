@@ -106,6 +106,7 @@ struct _bin_t {
 	bool bad_plugins;
 	const char *socket_path;
 	int update_rate;
+	bool cpu_affinity;
 
 	sandbox_master_driver_t sb_driver;
 	sandbox_master_t *sb;
@@ -113,6 +114,7 @@ struct _bin_t {
 	pid_t child;
 
 	uv_loop_t loop;
+	bool first;
 };
 
 void

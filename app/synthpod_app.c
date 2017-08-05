@@ -495,18 +495,27 @@ _dsp_slave_thread(void *data)
 
 	struct sched_param schedp;
 	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = app->driver->audio_prio;
+	schedp.sched_priority = app->driver->audio_prio - 1;
 
 	const pthread_t self = pthread_self();
 	if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
 		fprintf(stderr, "pthread_setschedparam error\n");
+
+	if(app->driver->cpu_affinity)
+	{
+		cpu_set_t cpuset;
+		CPU_ZERO(&cpuset);
+		CPU_SET(num, &cpuset);
+		if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
+			fprintf(stderr, "pthread_setaffinity_np error\n");
+	}
 
 	while(!atomic_load(&dsp_master->kill))
 	{
 		sem_wait(&dsp_slave->sem);
 
 		_dsp_slave_spin(dsp_master);
-		sched_yield();
+		//sched_yield();
 	}
 
 	return NULL;

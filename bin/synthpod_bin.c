@@ -363,9 +363,11 @@ bin_init(bin_t *bin)
 
 	bin->app_driver.audio_prio = bin->audio_prio;
 	bin->app_driver.bad_plugins = bin->bad_plugins;
+	bin->app_driver.cpu_affinity = bin->cpu_affinity;
 	bin->app_driver.close_request = _close_request;
 
 	bin->self = uv_thread_self(); // thread ID of UI thread
+	bin->first = true;
 
 	bin->sb_driver.socket_path = bin->socket_path;
 	bin->sb_driver.map = bin->map;
@@ -517,7 +519,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 			}
 		}
 
-		sched_yield();
+		//sched_yield();
 	}
 }
 

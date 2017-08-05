@@ -116,6 +116,7 @@ struct _sp_app_driver_t {
 
 	int audio_prio;
 	bool bad_plugins;
+	bool cpu_affinity;
 
 	sp_close_request_t close_request;
 };

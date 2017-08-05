@@ -252,7 +252,7 @@ _process(prog_t *handle)
 
 		// increase cur_frames
 		handle->cycle.cur_frames = handle->cycle.ref_frames;
-		sched_yield();
+		//sched_yield();
 	}
 }
 
@@ -274,6 +274,15 @@ _rt_thread(void *data)
 			if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
 				fprintf(stderr, "pthread_setschedparam error\n");
 		}
+	}
+
+	if(handle->bin.cpu_affinity)
+	{
+		cpu_set_t cpuset;
+		CPU_ZERO(&cpuset);
+		CPU_SET(0, &cpuset);
+		if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
+			fprintf(stderr, "pthread_setaffinity_np error\n");
 	}
 
 	_process(handle);
@@ -449,6 +458,7 @@ main(int argc, char **argv)
 	bin->has_gui = false;
 	bin->socket_path = "shm:///synthpod";
 	bin->update_rate = 25;
+	bin->cpu_affinity = false;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -456,7 +466,7 @@ main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGbBy:Yw:Wl:r:p:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbBaAy:Yw:Wl:r:p:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -489,6 +499,8 @@ main(int argc, char **argv)
 					"   [-G]                 do NOT load GUI (default)\n"
 					"   [-b]                 enable bad plugins\n"
 					"   [-B]                 disable bad plugins (default)\n"
+					"   [-a]                 enable CPU affinity\n"
+					"   [-A]                 disable CPU affinity (default)\n"
 					"   [-y] audio-priority  audio thread realtime priority (70)\n"
 					"   [-Y]                 do NOT use audio thread realtime priority\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
@@ -512,6 +524,12 @@ main(int argc, char **argv)
 				break;
 			case 'B':
 				bin->bad_plugins = false;
+				break;
+			case 'a':
+				bin->cpu_affinity = true;
+				break;
+			case 'A':
+				bin->cpu_affinity = false;
 				break;
 			case 'y':
 				bin->audio_prio = atoi(optarg);

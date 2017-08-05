@@ -511,7 +511,7 @@ _process(prog_t *handle)
 
 		// increase cur_frames
 		handle->cycle.cur_frames = handle->cycle.ref_frames;
-		sched_yield();
+		//sched_yield();
 	}
 	pcmi_pcm_stop(handle->pcmi);
 	
@@ -536,6 +536,15 @@ _rt_thread(void *data)
 			if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
 				fprintf(stderr, "pthread_setschedparam error\n");
 		}
+	}
+
+	if(handle->bin.cpu_affinity)
+	{
+		cpu_set_t cpuset;
+		CPU_ZERO(&cpuset);
+		CPU_SET(0, &cpuset);
+		if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
+			fprintf(stderr, "pthread_setaffinity_np error\n");
 	}
 
 	_process(handle);
@@ -879,6 +888,7 @@ main(int argc, char **argv)
 	bin->has_gui = false;
 	bin->socket_path = "shm:///synthpod";
 	bin->update_rate = 25;
+	bin->cpu_affinity = false;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -891,7 +901,7 @@ main(int argc, char **argv)
 	*/
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGbBIOtTxXy:Yw:Wl:d:i:o:r:p:n:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbBaAIOtTxXy:Yw:Wl:d:i:o:r:p:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -924,6 +934,8 @@ main(int argc, char **argv)
 					"   [-G]                 do NOT load GUI (default)\n"
 					"   [-b]                 enable bad plugins\n"
 					"   [-B]                 disable bad plugins (default)\n"
+					"   [-a]                 enable CPU affinity\n"
+					"   [-A]                 disable CPU affinity (default)\n"
 					"   [-I]                 disable capture\n"
 					"   [-O]                 disable playback\n"
 					"   [-t]                 force 2 channel mode\n"
@@ -957,6 +969,12 @@ main(int argc, char **argv)
 				break;
 			case 'B':
 				bin->bad_plugins = false;
+				break;
+			case 'a':
+				bin->cpu_affinity = true;
+				break;
+			case 'A':
+				bin->cpu_affinity = false;
 				break;
 			case 'I':
 				handle.do_capt = false;

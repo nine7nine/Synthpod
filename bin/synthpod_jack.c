@@ -159,6 +159,22 @@ _process(jack_nframes_t nsamples, void *data)
 	bin_t *bin = &handle->bin;
 	sp_app_t *app = bin->app;
 
+	if(bin->first)
+	{
+		pthread_t self = pthread_self();
+
+		if(handle->bin.cpu_affinity)
+		{
+			cpu_set_t cpuset;
+			CPU_ZERO(&cpuset);
+			CPU_SET(0, &cpuset);
+			if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
+				fprintf(stderr, "pthread_setaffinity_np error\n");
+		}
+
+		bin->first = false;
+	}
+
 #if defined(JACK_HAS_CYCLE_TIMES)
 	clock_gettime(CLOCK_REALTIME, &handle->cur_ntp);
 	handle->cur_ntp.tv_sec += JAN_1970; // convert NTP to OSC time
@@ -958,6 +974,7 @@ main(int argc, char **argv)
 	bin->has_gui = false;
 	bin->socket_path = "shm:///synthpod";
 	bin->update_rate = 25;
+	bin->cpu_affinity = false;
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -965,7 +982,7 @@ main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGbBw:Wl:n:u:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbBaAw:Wl:n:u:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -998,6 +1015,8 @@ main(int argc, char **argv)
 					"   [-G]                 do NOT load GUI (default)\n"
 					"   [-b]                 enable bad plugins\n"
 					"   [-B]                 disable bad plugins (default)\n"
+					"   [-a]                 enable CPU affinity\n"
+					"   [-A]                 disable CPU affinity (default)\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
 					"   [-l] link-path       socket link path (shm:///synthpod)\n"
@@ -1019,6 +1038,12 @@ main(int argc, char **argv)
 				break;
 			case 'B':
 				bin->bad_plugins = false;
+				break;
+			case 'a':
+				bin->cpu_affinity = true;
+				break;
+			case 'A':
+				bin->cpu_affinity = false;
 				break;
 			case 'w':
 				bin->worker_prio = atoi(optarg);
