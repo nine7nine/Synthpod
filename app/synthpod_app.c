@@ -513,9 +513,12 @@ _dsp_slave_thread(void *data)
 			fprintf(stderr, "pthread_setaffinity_np error\n");
 	}
 
-	while(!atomic_load(&dsp_master->kill))
+	while(true)
 	{
 		sem_wait(&dsp_slave->sem);
+
+		if(atomic_load(&dsp_master->kill))
+			break;
 
 		_dsp_slave_spin(dsp_master);
 		//sched_yield();
