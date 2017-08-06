@@ -153,7 +153,7 @@ struct _dsp_client_t {
 struct _dsp_master_t {
 	dsp_slave_t dsp_slaves [MAX_SLAVES];
 	atomic_bool kill;
-	atomic_uint ref_count;
+	atomic_int ref_count;
 	unsigned concurrent;
 	unsigned num_slaves;
 	uint32_t nsamples;

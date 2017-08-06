@@ -787,7 +787,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 			control_port_t *control = &tar->control;
 			control->is_integer = lilv_port_has_property(plug, port, app->regs.port.integer.node);
 			control->is_toggled = lilv_port_has_property(plug, port, app->regs.port.toggled.node);
-			atomic_flag_clear_explicit(&control->lock, memory_order_relaxed);
+			control->lock = (atomic_flag)ATOMIC_FLAG_INIT;
 		
 			LilvNode *dflt_node;
 			LilvNode *min_node;

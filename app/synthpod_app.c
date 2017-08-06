@@ -447,8 +447,8 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 		mod_t *mod = app->mods[m];
 		dsp_client_t *dsp_client = &mod->dsp_client;
 
-		int expected = 0;
-		const int desired = -1; // mark as done
+		int32_t expected = 0;
+		const int32_t desired = -1; // mark as done
 		const bool match = atomic_compare_exchange_strong(&dsp_client->ref_count,
 			&expected, desired); //TODO can we make this explicit?
 		if(match) // needs to run now
@@ -458,7 +458,8 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 			for(unsigned j=0; j<dsp_client->num_sinks; j++)
 			{
 				dsp_client_t *sink = dsp_client->sinks[j];
-				atomic_fetch_sub(&sink->ref_count, 1);
+				const int32_t ref_count = atomic_fetch_sub(&sink->ref_count, 1);
+				assert(ref_count >= 0);
 			}
 		}
 		else if(expected != -1) // needs to run later
@@ -473,12 +474,14 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 __realtime static inline void
 _dsp_slave_spin(dsp_master_t *dsp_master)
 {
-	while(atomic_load(&dsp_master->ref_count))
+	unsigned counter = 0;
+	while(atomic_load(&dsp_master->ref_count) > 0)
 	{
 		const bool done = _dsp_slave_fetch(dsp_master);
 		if(done)
 		{
-			atomic_fetch_sub(&dsp_master->ref_count, 1);
+			const int32_t ref_count = atomic_fetch_sub(&dsp_master->ref_count, 1);
+			assert(ref_count >= 0);
 			break;
 		}
 	}
@@ -552,7 +555,7 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
 	_dsp_slave_spin(dsp_master); // runs jobs itself 
 
-	while(atomic_load(&dsp_master->ref_count))
+	while(atomic_load(&dsp_master->ref_count) > 0)
 	{
 		// spin
 	}
