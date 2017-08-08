@@ -40,7 +40,6 @@
 #define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
 #define SPOD_PREFIX "http://open-music-kontrollers.ch/lv2/synthpod#"
 
-#define URN_UUID_PREFIX "urn:uuid:"
 #define URN_UUID_LENGTH 46
 
 #define NUM_FEATURES 19

@@ -611,6 +611,8 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	if(!driver || !data)
 		return NULL;
 
+	srand(time(NULL)); // seed random number generator for UUID generator
+
 	sp_app_t *app = calloc(1, sizeof(sp_app_t));
 	if(!app)
 		return NULL;
