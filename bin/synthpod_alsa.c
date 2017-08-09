@@ -21,6 +21,11 @@
 #include <ctype.h>
 #include <math.h>
 
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#	include <pthread_np.h>
+typedef cpuset_t cpu_set_t;
+#endif
+
 #include <asoundlib.h>
 #include <pcmi.h>
 
@@ -965,7 +970,7 @@ main(int argc, char **argv)
 				bin->has_gui = true;
 				break;
 			case 'G':
-				bin->has_gui = true;
+				bin->has_gui = false;
 				break;
 			case 'b':
 				bin->bad_plugins = true;

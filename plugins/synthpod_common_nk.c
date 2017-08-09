@@ -37,6 +37,7 @@
 #include <sys/wait.h> // waitpid
 #include <errno.h> // waitpid
 #include <time.h>
+#include <signal.h> // kill
 
 #define NK_PUGL_API
 #include <nk_pugl/nk_pugl.h>
@@ -611,12 +612,21 @@ _hash_sort(hash_t *hash, int (*cmp)(const void *a, const void *b))
 }
 
 static void
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+_hash_sort_r(hash_t *hash, int (*cmp)(void *data, const void *a, const void *b),
+	void *data)
+{
+	if(hash->size)
+		qsort_r(hash->nodes, hash->size, sizeof(void *), data, cmp);
+}
+#else
 _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
 	void *data)
 {
 	if(hash->size)
 		qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
 }
+#endif
 
 static int
 _node_as_int(const LilvNode *node, int dflt)
@@ -2332,7 +2342,11 @@ dBFS(float peak)
 #endif
 
 static int
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+_sort_rdfs_label(void *data, const void *a, const void *b)
+#else
 _sort_rdfs_label(const void *a, const void *b, void *data)
+#endif
 {
 	plughandle_t *handle = data;
 

@@ -20,6 +20,11 @@
 
 #include <osc.lv2/util.h>
 
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#	include <pthread_np.h>
+typedef cpuset_t cpu_set_t;
+#endif
+
 // non-rt
 void
 sp_app_activate(sp_app_t *app)

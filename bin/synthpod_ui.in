@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/bin/sh
 
 exec ${GDB} synthpod_sandbox_x11 \
 	-p http://open-music-kontrollers.ch/lv2/synthpod#stereo \
