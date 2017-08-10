@@ -263,7 +263,7 @@ _sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 	mod->feature_list[nfeatures].URI = LV2_URID__unmap;
 	mod->feature_list[nfeatures++].data = app->driver->unmap;
 
-	mod->feature_list[nfeatures].URI = XPRESS_VOICE_MAP;
+	mod->feature_list[nfeatures].URI = XPRESS__voiceMap;
 	mod->feature_list[nfeatures++].data = app->driver->xmap;
 
 	mod->feature_list[nfeatures].URI = LV2_WORKER__schedule;
