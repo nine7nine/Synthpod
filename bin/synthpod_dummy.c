@@ -449,7 +449,6 @@ main(int argc, char **argv)
 	mlockall(MCL_CURRENT | MCL_FUTURE);
 
 	static prog_t handle;
-	mlock(&handle, sizeof(prog_t));
 	bin_t *bin = &handle.bin;
 
 	handle.srate = 48000;
@@ -614,7 +613,6 @@ main(int argc, char **argv)
 	// deinit
 	bin_deinit(bin);
 
-	munlock(&handle, sizeof(prog_t));
 	munlockall();
 
 	return 0;

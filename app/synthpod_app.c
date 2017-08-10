@@ -621,7 +621,6 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	sp_app_t *app = calloc(1, sizeof(sp_app_t));
 	if(!app)
 		return NULL;
-	mlock(app, sizeof(sp_app_t));
 
 	atomic_init(&app->dirty, false);
 
@@ -968,7 +967,6 @@ sp_app_free(sp_app_t *app)
 	if(app->sratom)
 		sratom_free(app->sratom);
 
-	munlock(app, sizeof(sp_app_t));
 	free(app);
 }
 

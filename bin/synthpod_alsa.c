@@ -586,7 +586,6 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			chan = calloc(1, sizeof(chan_t));
 			if(chan)
 			{
-				mlock(chan, sizeof(chan_t));
 				chan->type = CHAN_TYPE_PCMI;
 				//TODO
 			}
@@ -604,7 +603,6 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			chan = calloc(1, sizeof(chan_t));
 			if(chan)
 			{
-				mlock(chan, sizeof(chan_t));
 				chan->type = CHAN_TYPE_MIDI;
 				memcpy(&chan->midi.forge, &handle->forge, sizeof(LV2_Atom_Forge)); // initialize forge
 
@@ -686,7 +684,6 @@ _system_port_del(void *data, void *sys_port)
 		}
 	}
 
-	munlock(chan, sizeof(chan_t));
 	free(chan);
 }
 
@@ -872,7 +869,6 @@ main(int argc, char **argv)
 	mlockall(MCL_CURRENT | MCL_FUTURE);
 
 	static prog_t handle;
-	mlock(&handle, sizeof(prog_t));
 	bin_t *bin = &handle.bin;
 
 	handle.srate = 48000;
@@ -1105,7 +1101,6 @@ main(int argc, char **argv)
 		efreet_ini_free(ini);
 	*/
 
-	munlock(&handle, sizeof(prog_t));
 	munlockall();
 
 	return 0;

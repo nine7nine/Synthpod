@@ -159,7 +159,6 @@ _sp_app_mod_alloc_pool(pool_t *pool)
 #endif
 	if(pool->buf)
 	{
-		mlock(pool->buf, pool->size);
 		memset(pool->buf, 0x0, pool->size);
 
 		return 0;
@@ -173,7 +172,6 @@ _sp_app_mod_free_pool(pool_t *pool)
 {
 	if(pool->buf)
 	{
-		munlock(pool->buf, pool->size);
 		free(pool->buf);
 		pool->buf = NULL;
 	}
@@ -577,7 +575,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 		return NULL;
-	mlock(mod, sizeof(mod_t));
 
 	mod->needs_bypassing = false; // plugins with control ports only need no bypassing upon preset load
 	mod->bypassed = false;
@@ -705,7 +702,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		free(mod);
 		return NULL; // failed to alloc ports
 	}
-	mlock(mod->ports, mod->num_ports * sizeof(port_t));
 
 	for(unsigned i=0; i<mod->num_ports-1; i++) // - automation port
 	{
@@ -994,14 +990,12 @@ _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 	// free ports
 	if(mod->ports)
 	{
-		munlock(mod->ports, mod->num_ports * sizeof(port_t));
 		free(mod->ports);
 	}
 
 	if(mod->uri_str)
 		free(mod->uri_str);
 
-	munlock(mod, sizeof(mod_t));
 	free(mod);
 
 	return 0; //success
