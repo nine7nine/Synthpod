@@ -90,6 +90,11 @@ option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
 
 option(BUILD_UI "Build graphical user interface(s)" ON)
 
+option(USE_DYNAMIC_PARALLELIZER "Use dynamic scheduler for parallelization" OFF)
+if(USE_DYNAMIC_PARALLELIZER)
+	add_definitions("-DUSE_DYNAMIC_PARALLELIZER")
+endif()
+
 include(CMakeDependentOption)
 cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" ON "BUILD_UI" OFF)
 cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" OFF "BUILD_UI" OFF)

@@ -145,8 +145,13 @@ struct _dsp_client_t {
 	unsigned num_sinks;
 	unsigned num_sources;
 	dsp_client_t *sinks [64]; //FIXME
+
+#if defined(USE_DYNAMIC_PARALLELIZER)
+	unsigned weight;
+#else
 	int count;
 	unsigned mark;
+#endif
 };
 
 struct _dsp_master_t {

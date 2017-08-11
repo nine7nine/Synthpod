@@ -690,7 +690,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	atomic_init(&dsp_master->kill, false);
 	atomic_init(&dsp_master->ref_count, 0);
 	dsp_master->num_slaves = driver->num_slaves;
-	dsp_master->concurrent = 1; // this is a safe fallback
+	dsp_master->concurrent = dsp_master->num_slaves + 1; // this is a safe fallback
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
 	{
 		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
@@ -821,6 +821,88 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		const unsigned tot_time = (app_t2.tv_sec - app->prof.t0.tv_sec)*1000000000
 			+ app_t2.tv_nsec - app->prof.t0.tv_nsec;
 		const float tot_time_1 = 100.f / tot_time;
+
+#if defined(USE_DYNAMIC_PARALLELIZER)
+		// reset DAG weights
+		for(unsigned m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+			dsp_client_t *dsp_client = &mod->dsp_client;
+
+			dsp_client->weight = 0;
+		}
+
+		unsigned T1 = 0;
+		unsigned Tinf = 0;
+
+		// calculate DAG weights
+		for(unsigned m1=0; m1<app->num_mods; m1++)
+		{
+			mod_t *mod1 = app->mods[m1];
+			dsp_client_t *dsp_client1 = &mod1->dsp_client;
+
+			unsigned gsw = 0; // greatest sink weight
+
+			for(unsigned m2=0; m2<m1; m2++)
+			{
+				mod_t *mod2 = app->mods[m2];
+				dsp_client_t *dsp_client2 = &mod2->dsp_client;
+
+				for(unsigned s=0; s<dsp_client2->num_sinks; s++)
+				{
+					dsp_client_t *dsp_client3 = dsp_client2->sinks[s];
+
+					if(dsp_client3 == dsp_client1) // mod2 is source of mod1
+					{
+						if(dsp_client2->weight > gsw)
+							gsw = dsp_client2->weight;
+
+						break;
+					}
+				}
+			}
+
+			const unsigned w1 = mod1->prof.sum;
+
+			T1 += w1;
+			dsp_client1->weight = gsw + w1;
+
+			if(dsp_client1->weight > Tinf)
+				Tinf = dsp_client1->weight;
+		}
+
+		// derive average parallelism
+		const float parallelism = (float)T1 / Tinf; //TODO add some head-room?
+		app->dsp_master.concurrent = ceilf(parallelism);
+
+		// to nk
+		{
+			LV2_Atom *answer;
+			answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const int32_t cpus_used = (app->dsp_master.concurrent > app->dsp_master.num_slaves + 1)
+					? app->dsp_master.num_slaves + 1
+					: app->dsp_master.concurrent;
+
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, 0, 0, app->regs.synthpod.cpus_used.urid,
+					sizeof(int32_t), app->forge.Int, &cpus_used); //TODO subj, seqn
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
+		}
+#endif
 
 		for(unsigned m=0; m<app->num_mods; m++)
 		{

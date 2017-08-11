@@ -18,6 +18,7 @@
 #include <synthpod_app_private.h>
 #include <synthpod_patcher.h>
 
+#if !defined(USE_DYNAMIC_PARALLELIZER)
 __realtime static inline void
 _dsp_master_concurrent(sp_app_t *app)
 {
@@ -91,6 +92,7 @@ _dsp_master_concurrent(sp_app_t *app)
 
 	//printf("concurrent: %u\n", dsp_master->concurrent);
 }
+#endif
 
 __realtime void
 _dsp_master_reorder(sp_app_t *app)
@@ -160,6 +162,7 @@ _dsp_master_reorder(sp_app_t *app)
 	printf("\n");
 	*/
 
+#if !defined(USE_DYNAMIC_PARALLELIZER)
 	_dsp_master_concurrent(app);
 
 	// to nk
@@ -186,6 +189,7 @@ _dsp_master_reorder(sp_app_t *app)
 	{
 		_sp_app_to_ui_overflow(app);
 	}
+#endif
 }
 
 bool
