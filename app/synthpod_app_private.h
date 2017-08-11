@@ -42,7 +42,7 @@
 
 #define URN_UUID_LENGTH 46
 
-#define NUM_FEATURES 18
+#define NUM_FEATURES 17
 #define MAX_SOURCES 32 // TODO how many?
 #define MAX_MODS 512 // TODO how many?
 #define MAX_SLAVES 7 // e.g. 8-core machines

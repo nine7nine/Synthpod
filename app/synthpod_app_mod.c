@@ -273,9 +273,6 @@ _sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 	mod->feature_list[nfeatures].URI = LV2_STATE__loadDefaultState;
 	mod->feature_list[nfeatures++].data = NULL;
 
-	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
-	mod->feature_list[nfeatures++].data = app->world;
-
 	if(app->driver->system_port_add && app->driver->system_port_del)
 	{
 		mod->feature_list[nfeatures].URI = SYNTHPOD_PREFIX"systemPorts";
