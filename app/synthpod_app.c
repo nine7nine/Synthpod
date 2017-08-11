@@ -430,22 +430,23 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 	}
 }
 
-__realtime static inline bool 
-_dsp_slave_fetch(dsp_master_t *dsp_master)
+__realtime static inline int
+_dsp_slave_fetch(dsp_master_t *dsp_master, int head)
 {
 	sp_app_t *app = (void *)dsp_master - offsetof(sp_app_t, dsp_master);
 
-	bool done = true;
+	const unsigned M = head;
+	head = -1; // assume no more work left
 
-	for(unsigned m=0; m<app->num_mods; m++) // TODO remember starting position
+	for(unsigned m=M; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
 		dsp_client_t *dsp_client = &mod->dsp_client;
 
-		int32_t expected = 0;
-		const int32_t desired = -1; // mark as done
-		const bool match = atomic_compare_exchange_strong(&dsp_client->ref_count,
-			&expected, desired); //TODO can we make this explicit?
+		int expected = 0;
+		const int desired = -1; // mark as done
+		const bool match = atomic_compare_exchange_weak(&dsp_client->ref_count,
+			&expected, desired);
 		if(match) // needs to run now
 		{
 			_sp_app_process_single_run(mod, dsp_master->nsamples);
@@ -457,23 +458,27 @@ _dsp_slave_fetch(dsp_master_t *dsp_master)
 				assert(ref_count >= 0);
 			}
 		}
-		else if(expected != -1) // needs to run later
+		else if(expected >= 0) // needs to run later
 		{
-			done = false;
+			if(head == -1) // only set heading position once per loop
+			{
+				head = m;
+			}
 		}
 	}
 
-	return done;
+	return head ;
 }
 
 __realtime static inline void
 _dsp_slave_spin(dsp_master_t *dsp_master)
 {
-	unsigned counter = 0;
+	int head = 0;
+
 	while(atomic_load(&dsp_master->ref_count) > 0)
 	{
-		const bool done = _dsp_slave_fetch(dsp_master);
-		if(done)
+		head = _dsp_slave_fetch(dsp_master, head);
+		if(head == -1) // no more work left
 		{
 			const int32_t ref_count = atomic_fetch_sub(&dsp_master->ref_count, 1);
 			assert(ref_count >= 0);
@@ -488,7 +493,7 @@ _dsp_slave_thread(void *data)
 	dsp_slave_t *dsp_slave = data;
 	dsp_master_t *dsp_master = dsp_slave->dsp_master;
 	sp_app_t *app = (void *)dsp_master - offsetof(sp_app_t, dsp_master);
-	int num = dsp_slave - dsp_master->dsp_slaves + 1;
+	const int num = dsp_slave - dsp_master->dsp_slaves + 1;
 	//printf("thread: %i\n", num);
 
 	struct sched_param schedp;
