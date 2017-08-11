@@ -100,27 +100,6 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
-__realtime static void *
-_zero_sched_request(Zero_Worker_Handle handle, uint32_t minimum, size_t *maximum)
-{
-	mod_t *mod = handle;
-	mod_worker_t *mod_worker = &mod->mod_worker;
-
-	return varchunk_write_request_max(mod_worker->app_to_worker, minimum, maximum);
-}
-
-__realtime static Zero_Worker_Status
-_zero_sched_advance(Zero_Worker_Handle handle, uint32_t written)
-{
-	mod_t *mod = handle;
-	mod_worker_t *mod_worker = &mod->mod_worker;
-
-	varchunk_write_advance(mod_worker->app_to_worker, written);
-	sem_post(&mod_worker->sem);
-
-	return ZERO_WORKER_SUCCESS;
-}
-
 __non_realtime static char *
 _mod_make_path(LV2_State_Make_Path_Handle instance, const char *abstract_path)
 {
@@ -297,9 +276,6 @@ _sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 	mod->feature_list[nfeatures].URI = SYNTHPOD_WORLD;
 	mod->feature_list[nfeatures++].data = app->world;
 
-	mod->feature_list[nfeatures].URI = ZERO_WORKER__schedule;
-	mod->feature_list[nfeatures++].data = &mod->zero.schedule;
-
 	if(app->driver->system_port_add && app->driver->system_port_del)
 	{
 		mod->feature_list[nfeatures].URI = SYNTHPOD_PREFIX"systemPorts";
@@ -467,30 +443,9 @@ _sp_worker_respond_sync(LV2_Worker_Respond_Handle handle, uint32_t size, const v
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
-__non_realtime static void *
-_sp_zero_request(Zero_Worker_Handle handle, uint32_t minimum, size_t *maximum)
-{
-	mod_t *mod = handle;
-	mod_worker_t *mod_worker = &mod->mod_worker;
-
-	return varchunk_write_request_max(mod_worker->app_from_worker, minimum, maximum); 
-}
-
-__non_realtime static Zero_Worker_Status
-_sp_zero_advance(Zero_Worker_Handle handle, uint32_t written)
-{
-	mod_t *mod = handle;
-	mod_worker_t *mod_worker = &mod->mod_worker;
-
-	varchunk_write_advance(mod_worker->app_from_worker, written);
-
-	return ZERO_WORKER_SUCCESS;
-}
-
 __non_realtime LV2_Worker_Status
 _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload)
 {
-	//TODO implement zero worker
 	if(mod->worker.iface && mod->worker.iface->work)
 	{
 		return mod->worker.iface->work(mod->handle, _sp_worker_respond_sync, mod,
@@ -506,14 +461,7 @@ _sp_app_mod_worker_work_async(mod_t *mod, size_t size, const void *payload)
 {
 	//printf("_mod_worker_work: %s, %zu\n", mod->urn_uri, size);
 
-	// zero worker takes precedence over standard worker
-	if(mod->zero.iface && mod->zero.iface->work)
-	{
-		mod->zero.iface->work(mod->handle, _sp_zero_request, _sp_zero_advance,
-			mod, size, payload);
-		//TODO check return status
-	}
-	else if(mod->worker.iface && mod->worker.iface->work)
+	if(mod->worker.iface && mod->worker.iface->work)
 	{
 		mod->worker.iface->work(mod->handle, _sp_worker_respond_async, mod,
 			size, payload);
@@ -583,11 +531,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	// populate worker schedule
 	mod->worker.schedule.handle = mod;
 	mod->worker.schedule.schedule_work = _schedule_work;
-
-	// populate zero_worker schedule
-	mod->zero.schedule.handle = mod;
-	mod->zero.schedule.request = _zero_sched_request;
-	mod->zero.schedule.advance = _zero_sched_advance;
 
 	// populate log
 	mod->log.handle = mod;
@@ -674,8 +617,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	mod->handle = lilv_instance_get_handle(mod->inst);
 	mod->worker.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_WORKER__interface);
-	mod->zero.iface = lilv_instance_get_extension_data(mod->inst,
-		ZERO_WORKER__interface);
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_OPTIONS__interface);
 	mod->idisp.iface = lilv_instance_get_extension_data(mod->inst,

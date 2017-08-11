@@ -47,7 +47,6 @@
 #include <lv2/lv2plug.in/ns/ext/data-access/data-access.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
-#include <zero_worker.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
 
 #include <osc.lv2/osc.h>
@@ -158,10 +157,6 @@ struct _reg_t {
 	struct {
 		reg_item_t schedule;
 	} work;
-
-	struct {
-		reg_item_t schedule;
-	} zero;
 
 	struct {
 		reg_item_t entry;
@@ -461,7 +456,6 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->osc.path, world, map, LV2_OSC__messagePath);
 
 	_register(&regs->work.schedule, world, map, LV2_WORKER__schedule);
-	_register(&regs->zero.schedule, world, map, ZERO_WORKER__schedule);
 
 	_register(&regs->log.entry, world, map, LV2_LOG__Entry);
 	_register(&regs->log.error, world, map, LV2_LOG__Error);
@@ -713,7 +707,6 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->osc.path);
 
 	_unregister(&regs->work.schedule);
-	_unregister(&regs->zero.schedule);
 
 	_unregister(&regs->log.entry);
 	_unregister(&regs->log.error);

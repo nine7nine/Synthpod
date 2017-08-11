@@ -236,13 +236,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		size_t size;
 		while((payload = varchunk_read_request(mod_worker->app_from_worker, &size)))
 		{
-			// zero worker takes precedence over standard worker
-			if(mod->zero.iface && mod->zero.iface->response)
-			{
-				mod->zero.iface->response(mod->handle, size, payload);
-				//TODO check return status
-			}
-			else if(mod->worker.iface && mod->worker.iface->work_response)
+			if(mod->worker.iface && mod->worker.iface->work_response)
 			{
 				mod->worker.iface->work_response(mod->handle, size, payload);
 				//TODO check return status
@@ -252,11 +246,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		}
 
 		// handle end of work
-		if(mod->zero.iface && mod->zero.iface->end)
-		{
-			mod->zero.iface->end(mod->handle);
-		}
-		else if(mod->worker.iface && mod->worker.iface->end_run)
+		if(mod->worker.iface && mod->worker.iface->end_run)
 		{
 			mod->worker.iface->end_run(mod->handle);
 		}
