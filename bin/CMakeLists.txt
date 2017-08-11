@@ -148,18 +148,6 @@ if(BUILD_DUMMY)
 	install(FILES "${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz" DESTINATION share/man/man1)
 endif()
 
-if(BUILD_DOT)
-# synthpod
-	add_executable(synthpod.dot
-		synthpod_dot.c)
-	target_link_libraries(synthpod.dot
-		${SRATOM_LDFLAGS})
-	set_target_properties(synthpod.dot PROPERTIES OUTPUT_NAME "synthpod_dot")
-	set_target_properties(synthpod.dot PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIE
-	set_target_properties(synthpod.dot PROPERTIES INTERPROCEDURAL_OPTIMIZATION true) # -flto
-	install(TARGETS synthpod.dot DESTINATION bin)
-endif()
-
 if(BUILD_UI AND BUILD_SANDBOX_X11)
 	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/synthpod_ui.in
 		${PROJECT_BINARY_DIR}/bin/synthpod_ui @ONLY)

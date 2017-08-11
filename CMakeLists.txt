@@ -88,8 +88,6 @@ option(BUILD_JACK "Build JACK standalone host" ON)
 option(BUILD_ALSA "Build ALSA standalone host" ON)
 option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
 
-option(BUILD_DOT "Build Dot exporter" OFF)
-
 option(BUILD_UI "Build graphical user interface(s)" ON)
 
 include(CMakeDependentOption)
