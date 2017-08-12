@@ -690,7 +690,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	atomic_init(&dsp_master->kill, false);
 	atomic_init(&dsp_master->ref_count, 0);
 	dsp_master->num_slaves = driver->num_slaves;
-	dsp_master->concurrent = dsp_master->num_slaves + 1; // this is a safe fallback
+	dsp_master->concurrent = 1; // this is a safe fallback
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
 	{
 		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
