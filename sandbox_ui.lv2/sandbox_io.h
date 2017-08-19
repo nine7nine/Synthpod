@@ -26,6 +26,7 @@
 #include <string.h>
 #include <errno.h>
 
+#define NETATOM_IMPLEMENTATION
 #include <netatom.lv2/netatom.h>
 
 #include <varchunk.h>
@@ -42,7 +43,6 @@ extern "C" {
 
 #define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
-typedef struct _atom_ser_t atom_ser_t;
 typedef struct _sandbox_io_subscription_t sandbox_io_subscription_t;
 typedef struct _sandbox_io_shm_body_t sandbox_io_shm_body_t;
 typedef struct _sandbox_io_shm_t sandbox_io_shm_t;
@@ -52,12 +52,6 @@ typedef void (*_sandbox_io_recv_cb_t)(void *data, uint32_t index, uint32_t size,
 	uint32_t format, const void *buf);
 typedef void (*_sandbox_io_subscribe_cb_t)(void *data, uint32_t index,
 	uint32_t protocol, bool state);
-
-struct _atom_ser_t {
-	uint32_t size;
-	uint8_t *buf;
-	uint32_t offset;
-};
 
 struct _sandbox_io_subscription_t {
 	uint32_t protocol;
@@ -84,11 +78,7 @@ struct _sandbox_io_t {
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 
-	struct {
-		netatom_t *tx;
-		netatom_t *rx;
-	} netatom;
-	atom_ser_t ser;
+	netatom_t *netatom;
 	LV2_Atom_Forge_Frame frame;
 	LV2_Atom_Forge forge;
 
@@ -112,51 +102,6 @@ struct _sandbox_io_t {
 	sandbox_io_shm_t *shm;
 };
 
-static inline LV2_Atom_Forge_Ref
-_sink(LV2_Atom_Forge_Sink_Handle handle, const void *buf, uint32_t size)
-{
-	atom_ser_t *ser = handle;
-
-	const LV2_Atom_Forge_Ref ref = ser->offset + 1;
-
-	const uint32_t new_offset = ser->offset + size;
-	if(new_offset > ser->size)
-	{
-		uint32_t new_size = ser->size << 1;
-		while(new_offset > new_size)
-			new_size <<= 1;
-
-		if(!(ser->buf = realloc(ser->buf, new_size)))
-			return 0; // realloc failed
-
-		ser->size = new_size;
-	}
-
-	memcpy(ser->buf + ser->offset, buf, size);
-	ser->offset = new_offset;
-
-	return ref;
-}
-
-static inline LV2_Atom *
-_deref(LV2_Atom_Forge_Sink_Handle handle, LV2_Atom_Forge_Ref ref)
-{
-	atom_ser_t *ser = handle;
-
-	const uint32_t offset = ref - 1;
-
-	return (LV2_Atom *)(ser->buf + offset);
-}
-
-static inline void
-_sandbox_io_reset(sandbox_io_t *io)
-{
-	atom_ser_t *ser = &io->ser;
-	ser->offset = 0; //TODO free?
-
-	lv2_atom_forge_set_sink(&io->forge, _sink, _deref, ser);
-}
-
 static inline int
 _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 	_sandbox_io_subscribe_cb_t subscribe_cb, void *data)
@@ -171,7 +116,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 
 	while((buf = varchunk_read_request(&rx->varchunk, &sz)))
 	{
-		const LV2_Atom *atom = netatom_deserialize(io->netatom.rx, buf, sz);
+		const LV2_Atom *atom = netatom_deserialize(io->netatom, (uint8_t *)buf, sz);
 		if(atom)
 		{
 			if(!lv2_atom_forge_is_object_type(&io->forge, atom->type))
@@ -285,6 +230,10 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 				close_request = true;
 			}
 		}
+		else
+		{
+			fprintf(stderr, "_sandbox_io_recv: netatom_deserialize failed\n");
+		}
 
 		varchunk_read_advance(&rx->varchunk);
 	}
@@ -296,102 +245,100 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 }
 
 static inline int
-_sandbox_io_flush(sandbox_io_t *io)
-{
-	const LV2_Atom *atom = (const LV2_Atom *)io->ser.buf;
-
-	if( (io->ser.offset == 0) || (atom->size == 0) )
-		return 0; // empty atom, aka success
-
-	uint32_t sz;
-	const uint8_t *buf = netatom_serialize(io->netatom.tx, atom, &sz);
-	if(buf)
-	{
-		sandbox_io_shm_body_t *tx = io->is_master
-			? &io->shm->from_master
-			: &io->shm->to_master;
-
-		uint8_t *dst;
-		if((dst = varchunk_write_request(&tx->varchunk, sz)))
-		{
-			memcpy(dst, buf, sz);
-			varchunk_write_advance(&tx->varchunk, sz);
-			sem_post(&tx->sem);
-		}
-		else
-		{
-			//fprintf(stderr, "_sandbox_io_flush: buffer overflow\n");
-		}
-	}
-
-	_sandbox_io_reset(io);
-	return 0; // success
-}
-
-static inline bool
 _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	uint32_t size, uint32_t protocol, const void *buf)
 {
-	LV2_Atom_Forge_Frame frame;
+	sandbox_io_shm_body_t *tx = io->is_master
+		? &io->shm->from_master
+		: &io->shm->to_master;
 
-	if(protocol == 0)
-		protocol = io->float_protocol;
+	// reserve 8192 additional bytes for the parent atom and dictionary
+	const size_t req_sz = size + 8192; //FIXME is this enough?
+	size_t max_sz;
 
-	lv2_atom_forge_object(&io->forge, &frame, 0, protocol);
-
-	lv2_atom_forge_key(&io->forge, io->core_index);
-	lv2_atom_forge_int(&io->forge, index);
-
-	if(protocol == io->float_protocol)
+	uint8_t *buf_tx;
+	if((buf_tx = varchunk_write_request_max(&tx->varchunk, req_sz, &max_sz)))
 	{
-		const float *value = buf;
+		LV2_Atom_Forge_Frame frame;
 
-		lv2_atom_forge_key(&io->forge, io->rdf_value);
-		lv2_atom_forge_float(&io->forge, *value);
+		if(protocol == 0)
+			protocol = io->float_protocol;
+
+		lv2_atom_forge_set_buffer(&io->forge, buf_tx, max_sz);
+		lv2_atom_forge_object(&io->forge, &frame, 0, protocol);
+
+		lv2_atom_forge_key(&io->forge, io->core_index);
+		lv2_atom_forge_int(&io->forge, index);
+
+		if(protocol == io->float_protocol)
+		{
+			const float *value = buf;
+
+			lv2_atom_forge_key(&io->forge, io->rdf_value);
+			lv2_atom_forge_float(&io->forge, *value);
+		}
+		else if(protocol == io->peak_protocol)
+		{
+			const LV2UI_Peak_Data *peak_data = buf;
+
+			lv2_atom_forge_key(&io->forge, io->ui_period_start);
+			lv2_atom_forge_int(&io->forge, peak_data->period_start);
+
+			lv2_atom_forge_key(&io->forge, io->ui_period_size);
+			lv2_atom_forge_int(&io->forge, peak_data->period_size);
+
+			lv2_atom_forge_key(&io->forge, io->ui_peak);
+			lv2_atom_forge_float(&io->forge, peak_data->peak);
+		}
+		else if( (protocol == io->event_transfer)
+			|| (protocol == io->atom_transfer) )
+		{
+			const LV2_Atom *atom = buf;
+			LV2_Atom_Forge_Ref ref;
+
+			lv2_atom_forge_key(&io->forge, io->rdf_value);
+			ref = lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
+			lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
+
+			LV2_Atom *src= lv2_atom_forge_deref(&io->forge, ref);
+		}
+		else if(protocol == io->ui_port_subscribe)
+		{
+			const sandbox_io_subscription_t *sub = buf;
+
+			lv2_atom_forge_key(&io->forge, io->rdf_value);
+			lv2_atom_forge_bool(&io->forge, sub->state);
+
+			lv2_atom_forge_key(&io->forge, io->ui_protocol);
+			lv2_atom_forge_urid(&io->forge, protocol);
+		}
+		else if(protocol == io->ui_close_request)
+		{
+			// nothing to add
+		}
+
+		lv2_atom_forge_pop(&io->forge, &frame);
+
+		size_t wrt_sz;
+		const uint8_t *buf_rx = netatom_serialize(io->netatom, (LV2_Atom *)buf_tx, max_sz, &wrt_sz);
+		if(buf_rx)
+		{
+			varchunk_write_advance(&tx->varchunk, wrt_sz);
+			sem_post(&tx->sem);
+
+			return 0; // success
+		}
+		else
+		{
+			fprintf(stderr, "_sandbox_io_send: netatom_serialize failed\n"); //FIXME
+		}
 	}
-	else if(protocol == io->peak_protocol)
+	else
 	{
-		const LV2UI_Peak_Data *peak_data = buf;
-
-		lv2_atom_forge_key(&io->forge, io->ui_period_start);
-		lv2_atom_forge_int(&io->forge, peak_data->period_start);
-
-		lv2_atom_forge_key(&io->forge, io->ui_period_size);
-		lv2_atom_forge_int(&io->forge, peak_data->period_size);
-
-		lv2_atom_forge_key(&io->forge, io->ui_peak);
-		lv2_atom_forge_float(&io->forge, peak_data->peak);
-	}
-	else if( (protocol == io->event_transfer)
-		|| (protocol == io->atom_transfer) )
-	{
-		const LV2_Atom *atom = buf;
-		LV2_Atom_Forge_Ref ref;
-
-		lv2_atom_forge_key(&io->forge, io->rdf_value);
-		ref = lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
-		lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
-
-		LV2_Atom *src= lv2_atom_forge_deref(&io->forge, ref);
-	}
-	else if(protocol == io->ui_port_subscribe)
-	{
-		const sandbox_io_subscription_t *sub = buf;
-
-		lv2_atom_forge_key(&io->forge, io->rdf_value);
-		lv2_atom_forge_bool(&io->forge, sub->state);
-
-		lv2_atom_forge_key(&io->forge, io->ui_protocol);
-		lv2_atom_forge_urid(&io->forge, protocol);
-	}
-	else if(protocol == io->ui_close_request)
-	{
-		// nothing to add
+		fprintf(stderr, "_sandbox_io_send: buffer overflow\n"); //FIXME
 	}
 
-	lv2_atom_forge_pop(&io->forge, &frame);
-	
-	return _sandbox_io_flush(io);
+	return -1; // failed
 }
 
 static inline void
@@ -437,19 +384,11 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	io->is_master = is_master;
 	io->drop = drop_messages;
 
-	io->ser.offset = 0;
-	io->ser.size = 1024;
-	io->ser.buf = malloc(io->ser.size);
-	if(!io->ser.buf)
-		return -1;
-
 	const bool is_shm = strncmp(socket_path, "shm://", 6) == 0;
 	const bool is_tcp = strncmp(socket_path, "tcp://", 6) == 0;
 	const bool swap = is_tcp ? true : false;
 
-	if(!(io->netatom.tx = netatom_new(io->map, io->unmap, swap)))
-		return -1;
-	if(!(io->netatom.rx = netatom_new(io->map, io->unmap, swap)))
+	if(!(io->netatom = netatom_new(io->map, io->unmap, swap)))
 		return -1;
 
 	const size_t total_size = sizeof(sandbox_io_shm_t);
@@ -510,8 +449,6 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	io->ui_update_rate = map->map(map->handle, LV2_UI__updateRate);
 	io->params_sample_rate = map->map(map->handle, LV2_PARAMETERS__sampleRate);
 
-	_sandbox_io_reset(io);
-
 	return 0;
 }
 
@@ -540,13 +477,8 @@ _sandbox_io_deinit(sandbox_io_t *io, bool terminate)
 	if(io->name)
 		free(io->name);
 
-	if(io->netatom.tx)
-		netatom_free(io->netatom.tx);
-	if(io->netatom.rx)
-		netatom_free(io->netatom.rx);
-
-	if(io->ser.buf)
-		free(io->ser.buf);
+	if(io->netatom)
+		netatom_free(io->netatom);
 }
 
 #ifdef __cplusplus
