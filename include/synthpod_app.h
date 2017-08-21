@@ -175,11 +175,9 @@ SYNTHPOD_SYMBOL_EXTERN int
 sp_app_com_event(sp_app_t *app, LV2_URID otype); 
 
 SYNTHPOD_SYMBOL_EXTERN void
-sp_app_bundle_load(sp_app_t *app, const char *bundle_path,
-	sp_to_request_t req, sp_to_advance_t adv, void *data);
+sp_app_bundle_load(sp_app_t *app, LV2_URID urn);
 
 SYNTHPOD_SYMBOL_EXTERN void
-sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
-	sp_to_request_t req, sp_to_advance_t adv, void *data);
+sp_app_bundle_save(sp_app_t *app, LV2_URID urn);
 
 #endif // _SYNTHPOD_APP_H

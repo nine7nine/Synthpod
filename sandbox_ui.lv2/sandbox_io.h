@@ -365,13 +365,23 @@ _sandbox_io_timedwait(sandbox_io_t *io, const struct timespec *abs_timeout)
 }
 
 static inline void
-_sandbox_io_signal(sandbox_io_t *io)
+_sandbox_io_signal_rx(sandbox_io_t *io)
 {
 	sandbox_io_shm_body_t *rx = io->is_master
 		? &io->shm->to_master
 		: &io->shm->from_master;
 
 	sem_post(&rx->sem);
+}
+
+static inline void
+_sandbox_io_signal_tx(sandbox_io_t *io)
+{
+	sandbox_io_shm_body_t *tx = io->is_master
+		? &io->shm->from_master
+		: &io->shm->to_master;
+
+	sem_post(&tx->sem);
 }
 
 static inline int

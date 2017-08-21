@@ -41,6 +41,8 @@ static atomic_bool done = ATOMIC_VAR_INIT(false);
 
 static atomic_long voice_uuid = ATOMIC_VAR_INIT(1);
 
+static uint8_t ui_buf [CHUNK_SIZE]; //FIXME
+
 __realtime static xpress_uuid_t
 _voice_map_new_uuid(void *handle)
 {
@@ -62,50 +64,21 @@ _app_to_ui_request(size_t minimum, size_t *maximum, void *data)
 {
 	bin_t *bin = data;
 
-	return varchunk_write_request_max(bin->app_to_ui, minimum, maximum);
+	if(minimum <= CHUNK_SIZE)
+	{
+		*maximum = CHUNK_SIZE;
+		return ui_buf;
+	}
+
+	return NULL;
 }
 __realtime static void
 _app_to_ui_advance(size_t written, void *data)
 {
 	bin_t *bin = data;
 
-	/* FIXME
-	// copy com events to com buffer
-	const LV2_Atom_Object *obj = bin->app_to_ui.buf[0];
-	size_t sz;
-	if(sp_app_com_event(bin->app, obj->body.otype))
-	{
-		void *dst;
-		if((dst = varchunk_write_request(bin->app_from_com, size)))
-		{
-			memcpy(dst, src, size);
-			varchunk_write_advance(bin->app_from_com, size);
-		}
-	}
-	*/
-
-	varchunk_write_advance(bin->app_to_ui, written);
-	sandbox_master_signal(bin->sb);
-}
-
-__non_realtime static void *
-_ui_to_app_request(size_t minimum, size_t *maximum, void *data)
-{
-	bin_t *bin = data;
-
-	void *ptr;
-	do {
-		ptr = varchunk_write_request_max(bin->app_from_ui, minimum, maximum);
-	} while(!ptr); // wait until there is enough space
-
-	return ptr;
-}
-__non_realtime static void
-_ui_to_app_advance(size_t written, void *data)
-{
-	bin_t *bin = data;
-
-	varchunk_write_advance(bin->app_from_ui, written);
+	sandbox_master_send(bin->sb, NOTIFY_PORT_INDEX, written, bin->atom_eventTransfer, ui_buf);
+	sandbox_master_signal_tx(bin->sb);
 }
 
 __realtime static void *
@@ -121,7 +94,7 @@ _app_to_worker_advance(size_t written, void *data)
 	bin_t *bin = data;
 
 	varchunk_write_advance(bin->app_to_worker, written);
-	sandbox_master_signal(bin->sb);
+	sem_post(&bin->sem);
 }
 
 __non_realtime static void *
@@ -188,7 +161,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 
 				written = strlen(trace) + 1;
 				varchunk_write_advance(bin->app_to_log, written);
-				sandbox_master_signal(bin->sb);
+				sem_post(&bin->sem);
 			}
 		}
 		_atomic_unlock(&bin->trace_lock);
@@ -236,12 +209,13 @@ _sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
 
 	if(index == CONTROL_PORT_INDEX) // control for synthpod:stereo
 	{
-		void *dst;
-		if((dst = _ui_to_app_request(size, NULL, bin)))
-		{
-			memcpy(dst, buf, size);
+		const LV2_Atom *atom = buf;
 
-			_ui_to_app_advance(size, bin);
+		bin->advance_ui = sp_app_from_ui(bin->app, atom);
+		if(!bin->advance_ui)
+		{
+			//fprintf(stderr, "ui is blocked\n");
+			return; //FIXME take into account bin->advance_ui
 		}
 	}
 }
@@ -260,7 +234,7 @@ _sig(int sig)
 {
 	atomic_store_explicit(&done, true, memory_order_relaxed);
 	if(bin_ptr)
-		sandbox_master_signal(bin_ptr->sb);
+		sem_post(&bin_ptr->sem);
 }
 
 __realtime static char *
@@ -317,8 +291,7 @@ bin_init(bin_t *bin)
 	bin_ptr = bin;
 
 	// varchunk init
-	bin->app_to_ui = varchunk_new(UI_CHUNK_SIZE, true);
-	bin->app_from_ui = varchunk_new(UI_CHUNK_SIZE, true);
+	sem_init(&bin->sem, 0, 0);
 	bin->app_to_worker = varchunk_new(CHUNK_SIZE, true);
 	bin->app_from_worker = varchunk_new(CHUNK_SIZE, true);
 	bin->app_to_log = varchunk_new(CHUNK_SIZE, true);
@@ -432,6 +405,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 		}
 	}
 
+	//FIXME no timeout needed, but with yet-to-come NSM support
 	const unsigned nsecs = 1000000000;
 	const unsigned nfreq = 120; // Hz
 	const unsigned nstep = nsecs / nfreq;
@@ -440,7 +414,10 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
-		const bool timedout = sandbox_master_timedwait(bin->sb, &to);
+		bool timedout = false;
+
+		if(sem_timedwait(&bin->sem, &to) == -1)
+			timedout = (errno == ETIMEDOUT);
 
 		if(timedout)
 		{
@@ -477,23 +454,6 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				to.tv_sec += 1;
 			}
 			to.tv_nsec = nanos;
-		}
-
-		// read events from UI shared mem
-		if(sandbox_master_recv(bin->sb))
-		{
-			bin_quit(bin);
-		}
-
-		// route events from app to UI
-		{
-			size_t size;
-			const LV2_Atom_Object *obj;
-			while((obj = varchunk_read_request(bin->app_to_ui, &size)))
-			{
-				sandbox_master_send(bin->sb, NOTIFY_PORT_INDEX, size, bin->atom_eventTransfer, obj);
-				varchunk_read_advance(bin->app_to_ui);
-			}
 		}
 
 		// read events from worker
@@ -560,8 +520,7 @@ bin_deinit(bin_t *bin)
 	}
 
 	// varchunk deinit
-	varchunk_free(bin->app_to_ui);
-	varchunk_free(bin->app_from_ui);
+	sem_destroy(&bin->sem);
 	varchunk_free(bin->app_to_log);
 	varchunk_free(bin->app_to_worker);
 	varchunk_free(bin->app_from_worker);
@@ -599,21 +558,9 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, bool bypassed)
 		sp_app_run_pre(bin->app, nsamples);
 
 	// read events from UI ringbuffer
+	if(sandbox_master_recv(bin->sb))
 	{
-		size_t size;
-		const LV2_Atom *atom;
-		unsigned n = 0;
-		while((atom = varchunk_read_request(bin->app_from_ui, &size))
-			&& (n++ < MAX_MSGS) )
-		{
-			bin->advance_ui = sp_app_from_ui(bin->app, atom);
-			if(!bin->advance_ui)
-			{
-				//fprintf(stderr, "ui is blocked\n");
-				break;
-			}
-			varchunk_read_advance(bin->app_from_ui);
-		}
+		bin_quit(bin);
 	}
 
 	// read events from feedback ringbuffer
@@ -656,15 +603,21 @@ bin_bundle_new(bin_t *bin)
 void
 bin_bundle_load(bin_t *bin, const char *bundle_path)
 {
-	sp_app_bundle_load(bin->app, bundle_path,
-		_ui_to_app_request, _ui_to_app_advance, bin);
+	const LV2_URID urn = bin->map->map(bin->map->handle, bundle_path);
+	if(!urn)
+		return;
+
+	sp_app_bundle_load(bin->app, urn);
 }
 
 void
 bin_bundle_save(bin_t *bin, const char *bundle_path)
 {
-	sp_app_bundle_save(bin->app, bundle_path,
-		_ui_to_app_request, _ui_to_app_advance, bin);
+	const LV2_URID urn = bin->map->map(bin->map->handle, bundle_path);
+	if(!urn)
+		return;
+
+	sp_app_bundle_save(bin->app, urn);
 }
 
 void

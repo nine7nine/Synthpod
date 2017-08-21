@@ -265,6 +265,8 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 {
 	const job_t *job = ASSUME_ALIGNED(data);
 
+	printf("got job: %u\n", job->request);
+
 	switch(job->request)
 	{
 		case JOB_TYPE_REQUEST_MODULE_SUPPORTED:
@@ -356,37 +358,13 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		}
 		case JOB_TYPE_REQUEST_BUNDLE_LOAD:
 		{
-			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
-			int status = _sp_app_state_bundle_load(app, uri);
-			printf("loaded from: %s\n", uri);
-
-			// signal to app
-			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
-			if(job1)
-			{
-				job1->reply = JOB_TYPE_REPLY_BUNDLE_LOAD;
-				job1->status = status;
-				job1->urn = job->urn;
-				_sp_worker_to_app_advance(app, sizeof(job_t));
-			}
+			sp_app_bundle_load(app, job->urn);
 
 			break;
 		}
 		case JOB_TYPE_REQUEST_BUNDLE_SAVE:
 		{
-			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
-			int status = _sp_app_state_bundle_save(app, uri);
-			printf("saved to: %s\n", uri);
-
-			// signal to app
-			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
-			if(job1)
-			{
-				job1->reply = JOB_TYPE_REPLY_BUNDLE_SAVE;
-				job1->status = status;
-				job1->urn = job->urn;
-				_sp_worker_to_app_advance(app, sizeof(job_t));
-			}
+			sp_app_bundle_save(app, job->urn);
 
 			break;
 		}
@@ -403,5 +381,41 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 
 			break;
 		}
+	}
+}
+
+void
+sp_app_bundle_load(sp_app_t *app, LV2_URID urn)
+{
+	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
+	int status = _sp_app_state_bundle_load(app, uri);
+	printf("loaded from: %s\n", uri);
+
+	// signal to app
+	job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
+	if(job1)
+	{
+		job1->reply = JOB_TYPE_REPLY_BUNDLE_LOAD;
+		job1->status = status;
+		job1->urn = urn;
+		_sp_worker_to_app_advance(app, sizeof(job_t));
+	}
+}
+
+void
+sp_app_bundle_save(sp_app_t *app, LV2_URID urn)
+{
+	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
+	int status = _sp_app_state_bundle_save(app, uri);
+	printf("saved to: %s\n", uri);
+
+	// signal to app
+	job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
+	if(job1)
+	{
+		job1->reply = JOB_TYPE_REPLY_BUNDLE_SAVE;
+		job1->status = status;
+		job1->urn = urn;
+		_sp_worker_to_app_advance(app, sizeof(job_t));
 	}
 }

@@ -72,7 +72,8 @@ struct _bin_t {
 	
 	sp_app_t *app;
 	sp_app_driver_t app_driver;
-	
+
+	sem_t sem;
 	varchunk_t *app_to_worker;
 	varchunk_t *app_from_worker;
 	varchunk_t *app_to_log;
@@ -85,9 +86,6 @@ struct _bin_t {
 	char *path;
 	synthpod_nsm_t *nsm;
 
-	varchunk_t *app_to_ui;
-	varchunk_t *app_from_ui;
-	
 	LV2_URID log_error;
 	LV2_URID log_note;
 	LV2_URID log_trace;

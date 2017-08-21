@@ -59,7 +59,10 @@ bool
 sandbox_master_timedwait(sandbox_master_t *sb, const struct timespec *abs_timeout);
 
 void
-sandbox_master_signal(sandbox_master_t *sb);
+sandbox_master_signal_rx(sandbox_master_t *sb);
+
+void
+sandbox_master_signal_tx(sandbox_master_t *sb);
 
 #ifdef __cplusplus
 }

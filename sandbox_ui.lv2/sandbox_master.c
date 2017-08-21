@@ -96,7 +96,13 @@ sandbox_master_timedwait(sandbox_master_t *sb, const struct timespec *abs_timeou
 }
 
 void
-sandbox_master_signal(sandbox_master_t *sb)
+sandbox_master_signal_rx(sandbox_master_t *sb)
 {
-	_sandbox_io_signal(&sb->io);
+	_sandbox_io_signal_rx(&sb->io);
+}
+
+void
+sandbox_master_signal_tx(sandbox_master_t *sb)
+{
+	_sandbox_io_signal_tx(&sb->io);
 }

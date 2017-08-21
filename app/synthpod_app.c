@@ -1173,68 +1173,6 @@ sp_app_com_event(sp_app_t *app, LV2_URID otype)
 	return 1;
 }
 
-//TODO keep in-line with sp_ui_bundle_load
-void
-sp_app_bundle_load(sp_app_t *app, const char *bundle_path,
-	sp_to_request_t req, sp_to_advance_t adv, void *data)
-{
-	if(!bundle_path)
-		return;
-
-	// nk
-	LV2_Atom *answer = _sp_request_atom(app, req, data);
-	if(answer)
-	{
-		const LV2_URID bundle_urid = app->driver->map->map(app->driver->map->handle, bundle_path);
-
-		const LV2_Atom_Forge_Ref ref = synthpod_patcher_copy(
-			&app->regs, &app->forge, bundle_urid, 0, 0);
-		if(ref)
-		{
-			_sp_advance_atom(app, answer, adv, data);
-		}
-		else
-		{
-			_sp_app_to_ui_overflow(app);
-		}
-	}
-	else
-	{
-		_sp_app_to_ui_overflow(app);
-	}
-}
-
-//TODO keep in-line with sp_ui_bundle_save
-void
-sp_app_bundle_save(sp_app_t *app, const char *bundle_path,
-	sp_to_request_t req, sp_to_advance_t adv, void *data)
-{
-	if(!bundle_path)
-		return;
-
-	// nk
-	LV2_Atom *answer = _sp_request_atom(app, req, data);
-	if(answer)
-	{
-		const LV2_URID bundle_urid = app->driver->map->map(app->driver->map->handle, bundle_path);
-
-		const LV2_Atom_Forge_Ref ref = synthpod_patcher_copy(
-			&app->regs, &app->forge, 0, 0, bundle_urid);
-		if(ref)
-		{
-			_sp_advance_atom(app, answer, adv, data);
-		}
-		else
-		{
-			_sp_app_to_ui_overflow(app);
-		}
-	}
-	else
-	{
-		_sp_app_to_ui_overflow(app);
-	}
-}
-
 // sort according to position
 __realtime static void
 _sp_app_mod_qsort(mod_t **A, int n)
