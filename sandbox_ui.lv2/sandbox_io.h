@@ -63,7 +63,6 @@ struct _sandbox_io_subscription_t {
 struct _sandbox_io_shm_body_t {
 	sem_t sem;
 	varchunk_t varchunk;
-	uint8_t buf [SANDBOX_BUFFER_SIZE];
 };
 
 struct _sandbox_io_shm_t {
