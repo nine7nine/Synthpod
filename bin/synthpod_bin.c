@@ -201,7 +201,7 @@ _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 	return ret;
 }
 
-__non_realtime static void
+__realtime static bool
 _sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
 	const void *buf)
 {
@@ -215,12 +215,14 @@ _sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
 		if(!bin->advance_ui)
 		{
 			//fprintf(stderr, "ui is blocked\n");
-			return; //FIXME take into account bin->advance_ui
+			return false; // pause handling messages from UI (until fully drained)
 		}
 	}
+
+	return true; // continue handling messages from UI
 }
 
-__non_realtime static void
+__realtime static void
 _sb_subscribe_cb(void *data, uint32_t index, uint32_t protocol, bool state)
 {
 	bin_t *bin = data;

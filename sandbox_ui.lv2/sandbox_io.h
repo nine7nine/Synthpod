@@ -48,7 +48,7 @@ typedef struct _sandbox_io_shm_body_t sandbox_io_shm_body_t;
 typedef struct _sandbox_io_shm_t sandbox_io_shm_t;
 typedef struct _sandbox_io_t sandbox_io_t;
 
-typedef void (*_sandbox_io_recv_cb_t)(void *data, uint32_t index, uint32_t size,
+typedef bool (*_sandbox_io_recv_cb_t)(void *data, uint32_t index, uint32_t size,
 	uint32_t format, const void *buf);
 typedef void (*_sandbox_io_subscribe_cb_t)(void *data, uint32_t index,
 	uint32_t protocol, bool state);
@@ -100,6 +100,7 @@ struct _sandbox_io_t {
 
 	char *name;
 	sandbox_io_shm_t *shm;
+	bool again;
 };
 
 static inline int
@@ -116,7 +117,12 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 
 	while((buf = varchunk_read_request(&rx->varchunk, &sz)))
 	{
-		const LV2_Atom *atom = netatom_deserialize(io->netatom, (uint8_t *)buf, sz);
+		const LV2_Atom *atom = io->again
+			? netatom_deserialize(io->netatom, (uint8_t *)buf, sz)
+			: (const LV2_Atom *)buf; // already deserialized in previous invocation
+
+		io->again = true;
+
 		if(atom)
 		{
 			if(!lv2_atom_forge_is_object_type(&io->forge, atom->type))
@@ -141,9 +147,9 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 					&& value && (value->atom.type == io->forge.Float)
 						&& (value->atom.size == sizeof(float)) )
 				{
-					recv_cb(data, index->body,
-						sizeof(float), io->float_protocol, &value->body);
-					recv_cb(data, index->body,
+					io->again = recv_cb(data, index->body,
+						sizeof(float), io->float_protocol, &value->body)
+					&& recv_cb(data, index->body,
 						sizeof(float), 0, &value->body);
 				}
 			}
@@ -177,7 +183,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 							.period_size = period_size->body,
 							.peak = peak->body
 						};
-						recv_cb(data, index->body,
+						io->again = recv_cb(data, index->body,
 							sizeof(LV2UI_Peak_Data), io->peak_protocol, &peak_data);
 					}
 			}
@@ -198,7 +204,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 						&& (index->atom.size == sizeof(int32_t))
 					&& value)
 				{
-					recv_cb(data, index->body,
+					io->again = recv_cb(data, index->body,
 						lv2_atom_total_size(value), obj->body.otype, value);
 				}
 			}
@@ -235,7 +241,10 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 			fprintf(stderr, "_sandbox_io_recv: netatom_deserialize failed\n");
 		}
 
-		varchunk_read_advance(&rx->varchunk);
+		if(io->again)
+			varchunk_read_advance(&rx->varchunk);
+		else
+			break;
 	}
 
 	if(close_request)

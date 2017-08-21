@@ -160,7 +160,7 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	return 0;
 }
 
-static inline void
+static inline bool
 _sandbox_recv_cb(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
 {
@@ -168,6 +168,8 @@ _sandbox_recv_cb(LV2UI_Handle handle, uint32_t index, uint32_t size,
 
 	if(sb->desc && sb->desc->port_event)
 		sb->desc->port_event(sb->handle, index, size, protocol, buf);
+
+	return true; // continue handling messages
 }
 
 static uint32_t

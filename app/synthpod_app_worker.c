@@ -265,8 +265,6 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 {
 	const job_t *job = ASSUME_ALIGNED(data);
 
-	printf("got job: %u\n", job->request);
-
 	switch(job->request)
 	{
 		case JOB_TYPE_REQUEST_MODULE_SUPPORTED:

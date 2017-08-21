@@ -2013,7 +2013,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 	nk_pugl_post_redisplay(&handle->win);
 }
 
-static void
+static bool
 _mod_ui_write_function(LV2UI_Controller controller, uint32_t index,
 	uint32_t size, uint32_t protocol, const void *buffer)
 {
@@ -2057,6 +2057,8 @@ _mod_ui_write_function(LV2UI_Controller controller, uint32_t index,
 			// FIXME routing to nk not needed, will be fed back via dsp 
 		}
 	}
+
+	return true; // continue handling messages
 }
 
 static void

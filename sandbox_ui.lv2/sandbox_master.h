@@ -26,7 +26,7 @@ extern "C" {
 
 typedef struct _sandbox_master_t sandbox_master_t;
 typedef struct _sandbox_master_driver_t sandbox_master_driver_t;
-typedef void (*sandbox_master_recv_cb_t)(void *data, uint32_t index, uint32_t size,
+typedef bool (*sandbox_master_recv_cb_t)(void *data, uint32_t index, uint32_t size,
 	uint32_t format, const void *buf);
 typedef void (*sandbox_master_subscribe_cb_t)(void *data, uint32_t index,
 	uint32_t protocol, bool state);
