@@ -43,6 +43,31 @@ static atomic_long voice_uuid = ATOMIC_VAR_INIT(1);
 
 static uint8_t ui_buf [CHUNK_SIZE]; //FIXME
 
+enum {
+	COLOR_TRACE = 0,
+	COLOR_LOG,
+	COLOR_ERROR,
+	COLOR_NOTE,
+	COLOR_WARNING
+};
+
+static const char *prefix [2][5] = {
+	[0] = {
+		[COLOR_TRACE]   = "[Trace] ",
+		[COLOR_LOG]     = "[Log]   ",
+		[COLOR_ERROR]   = "[Error] ",
+		[COLOR_NOTE]    = "[Note]  ",
+		[COLOR_WARNING] = "[Warn]  "
+	},
+	[1] = {
+		[COLOR_TRACE]   = "["ANSI_COLOR_BLUE   "Trace"ANSI_COLOR_RESET"] ",
+		[COLOR_LOG]     = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]   ",
+		[COLOR_ERROR]   = "["ANSI_COLOR_RED    "Error"ANSI_COLOR_RESET"] ",
+		[COLOR_NOTE]    = "["ANSI_COLOR_GREEN  "Note"ANSI_COLOR_RESET"]  ",
+		[COLOR_WARNING] = "["ANSI_COLOR_YELLOW "Warn"ANSI_COLOR_RESET"]  "
+	}
+};
+
 __realtime static xpress_uuid_t
 _voice_map_new_uuid(void *handle)
 {
@@ -170,19 +195,20 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	}
 
 	// !log_trace OR not DSP thread ID
-	const char *prefix = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]   ";
+	int idx = COLOR_LOG;
 	if(type == bin->log_trace)
-		prefix = "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] ";
+		idx = COLOR_TRACE;
 	else if(type == bin->log_error)
-		prefix = "["ANSI_COLOR_RED"Error"ANSI_COLOR_RESET"] ";
+		idx = COLOR_ERROR;
 	else if(type == bin->log_note)
-		prefix = "["ANSI_COLOR_GREEN"Note"ANSI_COLOR_RESET"]  ";
+		idx = COLOR_NOTE;
 	else if(type == bin->log_warning)
-		prefix = "["ANSI_COLOR_YELLOW"Warn"ANSI_COLOR_RESET"]  ";
+		idx = COLOR_WARNING;
 
 	//TODO send to UI?
 
-	fprintf(stderr, "%s", prefix);
+	const int istty = isatty(STDERR_FILENO);
+	fprintf(stderr, "%s", prefix[istty][idx]);
 	return vfprintf(stderr, fmt, args);
 }
 
@@ -483,7 +509,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 			const char *trace;
 			while((trace = varchunk_read_request(bin->app_to_log, &size)))
 			{
-				fprintf(stderr, "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] %s", trace);
+				const int istty = isatty(STDERR_FILENO);
+				fprintf(stderr, "%s%s", prefix[istty][COLOR_TRACE], trace);
 
 				varchunk_read_advance(bin->app_to_log);
 			}
