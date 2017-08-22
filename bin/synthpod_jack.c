@@ -174,7 +174,7 @@ _process(jack_nframes_t nsamples, void *data)
 			CPU_ZERO(&cpuset);
 			CPU_SET(0, &cpuset);
 			if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
-				fprintf(stderr, "pthread_setaffinity_np error\n");
+				bin_log_trace(bin, "%s: pthread_setaffinity_np error\n", __func__);
 		}
 
 		bin->first = false;
@@ -501,7 +501,7 @@ _process(jack_nframes_t nsamples, void *data)
 						}
 						else
 						{
-							//fprintf(stderr, "app_from_ui ringbuffer full\n");
+							bin_log_trace(bin, "%s: app_from_app ringbuffer full\n", __func__);
 							//FIXME
 						}
 					}
@@ -588,7 +588,7 @@ _sample_rate(jack_nframes_t sample_rate, void *data)
 	bin_t *bin = &handle->bin;
 
 	if(bin->app && (sample_rate != bin->app_driver.sample_rate) )
-		fprintf(stderr, "synthpod does not support dynamic sample rate changes\n");
+		bin_log_error(bin, "%s: synthpod does not support dynamic sample rate changes\n", __func__);
 
 	return 0;
 }
@@ -771,9 +771,10 @@ __non_realtime static int
 _xrun(void *data)
 {
 	prog_t *handle = data;
+	bin_t *bin = &handle->bin;
 
 	//TODO do this asynchronously?
-	fprintf(stderr, "JACK XRun\n");
+	bin_log_warning(bin, "JACK XRun\n");
 
 	return 0;
 }

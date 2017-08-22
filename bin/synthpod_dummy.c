@@ -242,7 +242,7 @@ _process(prog_t *handle)
 								}
 								else
 								{
-									//fprintf(stderr, "app_from_ui ringbuffer full\n");
+									bin_log_trace(bin, "%s: app_from_app ringbuffer full\n", __func__);
 									//FIXME
 								}
 							}
@@ -265,6 +265,7 @@ __non_realtime static void
 _rt_thread(void *data)
 {
 	prog_t *handle = data;
+	bin_t *bin = &handle->bin;
 
 	pthread_t self = pthread_self();
 
@@ -277,7 +278,7 @@ _rt_thread(void *data)
 		if(schedp.sched_priority)
 		{
 			if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-				fprintf(stderr, "pthread_setschedparam error\n");
+				bin_log_error(bin, "%s: pthread_setschedparam error\n", __func__);
 		}
 	}
 
@@ -287,7 +288,7 @@ _rt_thread(void *data)
 		CPU_ZERO(&cpuset);
 		CPU_SET(0, &cpuset);
 		if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
-			fprintf(stderr, "pthread_setaffinity_np error\n");
+			bin_log_error(bin, "%s: pthread_setaffinity_np error\n", __func__);
 	}
 
 	_process(handle);
@@ -370,7 +371,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// alsa activate
 	atomic_init(&handle->kill, 0);
 	if(uv_thread_create(&handle->thread, _rt_thread, handle))
-		fprintf(stderr, "creation of realtime thread failed\n");
+		bin_log_error(bin, "%s: creation of realtime thread failed\n", __func__);
 
 	bin_bundle_load(bin, bin->path);
 

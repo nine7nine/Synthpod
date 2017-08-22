@@ -359,17 +359,17 @@ _process(prog_t *handle)
 						}
 						else
 						{
-							//fprintf(stderr, "event decode failed\n");
+							bin_log_trace(bin, "%s: MIDI event decode failed\n", __func__);
 						}
 					}
 					else
 					{
-						//fprintf(stderr, "no matching port for event\n");
+						bin_log_trace(bin, "%s: no matching port for MIDI event\n", __func__);
 					}
 
 					if(snd_seq_free_event(sev))
 					{
-						//fprintf(stderr, "event free failed\n");
+						bin_log_trace(bin, "%s: MIDI event free failed\n", __func__);
 					}
 				}
 			}
@@ -442,7 +442,7 @@ _process(prog_t *handle)
 							const uint8_t *buf = LV2_ATOM_BODY_CONST(atom);
 							if( (consumed = snd_midi_event_encode(chan->midi.trans, buf, atom->size, &sev)) != atom->size)
 							{
-								//fprintf(stderr, "encode event failed: %li\n", consumed);
+								bin_log_trace(bin, "%s: MIDI encode event failed: %li\n", __func__, consumed);
 								continue;
 							}
 
@@ -494,7 +494,7 @@ _process(prog_t *handle)
 								}
 								else
 								{
-									//fprintf(stderr, "app_from_ui ringbuffer full\n");
+									bin_log_trace(bin, "%s: app_from_app ringbuffer full\n", __func__);
 									//FIXME
 								}
 							}
@@ -530,6 +530,7 @@ __non_realtime static void
 _rt_thread(void *data)
 {
 	prog_t *handle = data;
+	bin_t *bin = &handle->bin;
 
 	pthread_t self = pthread_self();
 
@@ -542,7 +543,7 @@ _rt_thread(void *data)
 		if(schedp.sched_priority)
 		{
 			if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-				fprintf(stderr, "pthread_setschedparam error\n");
+				bin_log_error(bin, "%s: pthread_setschedparam failed\n", __func__);
 		}
 	}
 
@@ -552,7 +553,7 @@ _rt_thread(void *data)
 		CPU_ZERO(&cpuset);
 		CPU_SET(0, &cpuset);
 		if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
-			fprintf(stderr, "pthread_setaffinity_np error\n");
+			bin_log_error(bin, "%s: pthread_setaffinity_np failed\n", __func__);
 	}
 
 	_process(handle);
@@ -624,12 +625,12 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 				snd_seq_create_port(handle->seq, pinfo);
 				chan->midi.port = snd_seq_port_info_get_port(pinfo);
 				if(chan->midi.port < 0)
-					fprintf(stderr, "could not create port\n");
+					bin_log_error(bin, "%s: could not create MIDI port\n", __func__);
 
 				snd_seq_port_info_free(pinfo);
 
 				if(snd_midi_event_new(MIDI_SEQ_SIZE, &chan->midi.trans))
-					fprintf(stderr, "could not create event translator\n");
+					bin_log_error(bin, "%s: could not create MIDI event translator\n", __func__);
 				snd_midi_event_init(chan->midi.trans);
 				if(input)
 					snd_midi_event_reset_encode(chan->midi.trans);
@@ -709,14 +710,16 @@ _ui_saved(void *data, int status)
 static int
 _alsa_init(prog_t *handle, const char *id)
 {
+	bin_t *bin = &handle->bin;
+
 	// init alsa sequencer
 	if(snd_seq_open(&handle->seq, "hw", SND_SEQ_OPEN_DUPLEX, SND_SEQ_NONBLOCK))
-		fprintf(stderr, "could not open sequencer\n");
+		bin_log_error(bin, "%s: could not open sequencer\n", __func__);
 	if(snd_seq_set_client_name(handle->seq, id))
-		fprintf(stderr, "could not set name\n");
+		bin_log_error(bin, "%s: could not set name\n", __func__);
 	handle->queue = snd_seq_alloc_queue(handle->seq);
 	if(handle->queue < 0)
-		fprintf(stderr, "could not allocate queue\n");
+		bin_log_error(bin, "%s: could not allocate queue\n", __func__);
 	snd_seq_start_queue(handle->seq, handle->queue, NULL);
 
 	// init alsa pcm
@@ -732,6 +735,8 @@ _alsa_init(prog_t *handle, const char *id)
 static void
 _alsa_deinit(prog_t *handle)
 {
+	bin_t *bin = &handle->bin;
+
 	if(handle->thread)
 	{
 		atomic_store_explicit(&handle->kill, 1, memory_order_relaxed);
@@ -748,12 +753,12 @@ _alsa_deinit(prog_t *handle)
 	if(handle->seq)
 	{
 		if(snd_seq_drain_output(handle->seq))
-			fprintf(stderr, "draining output failed\n");
+			bin_log_error(bin, "%s: draining output failed\n", __func__);
 		snd_seq_stop_queue(handle->seq, handle->queue, NULL);
 		if(snd_seq_free_queue(handle->seq, handle->queue))
-			fprintf(stderr, "freeing queue failed\n");
+			bin_log_error(bin, "%s: freeing queue failed\n", __func__);
 		if(snd_seq_close(handle->seq))
-			fprintf(stderr, "close sequencer failed\n");
+			bin_log_error(bin, "%s: close sequencer failed\n", __func__);
 
 		handle->seq = NULL;
 		handle->queue = 0;
@@ -790,7 +795,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// alsa activate
 	atomic_init(&handle->kill, 0);
 	if(uv_thread_create(&handle->thread, _rt_thread, handle))
-		fprintf(stderr, "creation of realtime thread failed\n");
+		bin_log_error(bin, "%s: creation of realtime thread failed\n", __func__);
 
 	bin_bundle_load(bin, bin->path);
 
