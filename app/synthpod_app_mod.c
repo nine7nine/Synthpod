@@ -367,7 +367,7 @@ _sp_app_mod_is_supported(sp_app_t *app, const void *uri)
 
 		if(mixed_binary)
 		{
-			fprintf(stderr, "<%s> NOT supported: mixes DSP and UI code in same binary.\n", uri);
+			sp_app_log_error(app, "%s: <%s> NOT supported: mixes DSP and UI code in same binary.\n", __func__, uri);
 			return NULL;
 		}
 	}
@@ -398,8 +398,8 @@ _sp_app_mod_is_supported(sp_app_t *app, const void *uri)
 
 			if(missing_required_feature)
 			{
-				fprintf(stderr, "<%s> NOT supported: required feature <%s>\n",
-					uri, required_feature_uri);
+				sp_app_log_error(app, "%s: <%s> NOT supported: requires feature <%s>\n",
+					__func__, uri, required_feature_uri);
 				break;
 			}
 		}
@@ -766,7 +766,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		}
 		else
 		{
-			fprintf(stderr, "unknown port type\n"); //FIXME plugin should fail to initialize here
+			sp_app_log_warning(app, "%s: unknown port type\n", __func__); //FIXME plugin should fail to initialize here
 
 			free(mod->uri_str);
 			free(mod->ports);
@@ -878,7 +878,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 
 	// load default state
 	if(load_default_state && _sp_app_state_preset_load(app, mod, uri, false))
-		fprintf(stderr, "default state loading failed\n");
+		sp_app_log_error(app, "%s: default state loading failed\n", __func__);
 
 	// activate
 	lilv_instance_activate(mod->inst);

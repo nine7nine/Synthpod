@@ -327,7 +327,8 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *uri)
 
 	mkpath((char *)uri);
 
-	printf("preset save: <%s> as %s\n", uri, dest ? dest : target);
+	sp_app_log_note(app, "%s: preset save: <%s> as %s\n",
+		__func__, uri, dest ? dest : target);
 
 	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
 		app->driver->map, NULL, NULL, NULL, bndl,
@@ -752,12 +753,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 
 	if(!make_path)
 	{
-		fprintf(stderr, "sp_app_save: LV2_STATE__makePath not supported.");
+		sp_app_log_error(app, "%s: LV2_STATE__makePath not supported\n", __func__);
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 	if(!map_path)
 	{
-		fprintf(stderr, "sp_app_save: LV2_STATE__mapPath not supported.");
+		sp_app_log_error(app, "%s: LV2_STATE__mapPath not supported\n", __func__);
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 
@@ -875,12 +876,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 							lilv_state_free(state);
 						}
 						else
-							fprintf(stderr, "sp_app_save: invalid state\n");
+							sp_app_log_error(app, "%s: invalid state\n", __func__);
 
 						free(path);
 					}
 					else
-						fprintf(stderr, "sp_app_save: invalid path\n");
+						sp_app_log_error(app, "%s: invalid path\n", __func__);
 
 					const LV2_URID uri_urid = app->driver->map->map(app->driver->map->handle, mod->uri_str);
 
@@ -911,14 +912,14 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 							lv2_atom_forge_pop(forge, &mod_frame);
 					}
 					else
-						fprintf(stderr, "sp_app_save: invalid mod\n");
+						sp_app_log_error(app, "%s: invalid mod\n", __func__);
 				}
 
 				if(ref)
 					lv2_atom_forge_pop(forge, &mod_list_frame);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid spod:moduleList\n");
+				sp_app_log_error(app, "%s: invalid spod:moduleList\n", __func__);
 
 			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
 			if(ref && atom)
@@ -928,7 +929,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+				sp_app_log_error(app, "%s: invalid ref or atom\n", __func__);
 		}
 
 		// reset ser
@@ -987,7 +988,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					lv2_atom_forge_pop(forge, &conn_list_frame);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid spod:connectionList\n");
+				sp_app_log_error(app, "%s: invalid spod:connectionList\n", __func__);
 
 			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
 			if(ref && atom)
@@ -997,7 +998,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+				sp_app_log_error(app, "%s: invalid ref or atom\n", __func__);
 		}
 
 		// reset ser
@@ -1074,7 +1075,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					lv2_atom_forge_pop(forge, &node_list_frame);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid spod:nodeList\n");
+				sp_app_log_error(app, "%s: invalid spod:nodeList\n", __func__);
 
 			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
 			if(ref && atom)
@@ -1084,7 +1085,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+				sp_app_log_error(app, "%s: invalid ref or atom\n", __func__);
 		}
 
 		// reset ser
@@ -1209,7 +1210,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					lv2_atom_forge_pop(forge, &conn_list_frame);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid spod:automationList\n");
+				sp_app_log_error(app, "%s: invalid spod:automationList\n", __func__);
 
 			const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
 			if(ref && atom)
@@ -1219,7 +1220,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 			}
 			else
-				fprintf(stderr, "sp_app_save: invalid ref or atom\n");
+				sp_app_log_error(app, "%s: invalid ref or atom\n", __func__);
 		}
 
 		free(ser.buf);
@@ -1295,7 +1296,7 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, false));
 	}
 	else
-		fprintf(stderr, "failed to load state from file\n");
+		sp_app_log_error(app, "%s: failed to load state from file\n", __func__);
 
 	lilv_state_free(state);
 	free(path);
@@ -1315,7 +1316,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 	if(!map_path)
 	{
-		fprintf(stderr, "sp_app_restore: LV2_STATE__mapPath not supported.");
+		sp_app_log_error(app, "%s: LV2_STATE__mapPath not supported\n", __func__);
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 

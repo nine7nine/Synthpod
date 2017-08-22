@@ -502,7 +502,7 @@ _dsp_slave_thread(void *data)
 
 	const pthread_t self = pthread_self();
 	if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-		fprintf(stderr, "pthread_setschedparam error\n");
+		sp_app_log_error(app, "%s: pthread_setschedparam error\n", __func__);
 
 	if(app->driver->cpu_affinity)
 	{
@@ -510,7 +510,7 @@ _dsp_slave_thread(void *data)
 		CPU_ZERO(&cpuset);
 		CPU_SET(num, &cpuset);
 		if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
-			fprintf(stderr, "pthread_setaffinity_np error\n");
+			sp_app_log_error(app, "%s: pthread_setaffinity_np error\n", __func__);
 	}
 
 	while(true)
@@ -591,7 +591,9 @@ _sp_app_populate(sp_app_t *app)
 		app->num_mods += 1;
 	}
 	else
-		fprintf(stderr, "failed to create system source\n");
+	{
+		sp_app_log_error(app, "%s: failed to create system source\n", __func__);
+	}
 
 	// inject sink mod
 	uri_str = SYNTHPOD_PREFIX"sink";
@@ -602,7 +604,9 @@ _sp_app_populate(sp_app_t *app)
 		app->num_mods += 1;
 	}
 	else
-		fprintf(stderr, "failed to create system sink\n");
+	{
+		sp_app_log_error(app, "%s: failed to create system sink\n", __func__);
+	}
 }
 
 sp_app_t *
@@ -1126,7 +1130,7 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 
 					// notify new minimalBlockLength
 					if(mod->opts.iface->set(mod->handle, options) != LV2_OPTIONS_SUCCESS)
-						fprintf(stderr, "option setting of min_block_size failed\n");
+						sp_app_log_error(app, "%s:setting of minBlockSize failed\n", __func__);
 				}
 
 				const int32_t nominal_block_length = nsamples;
@@ -1145,7 +1149,7 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples)
 
 				// notify new nominalBlockLength
 				if(mod->opts.iface->set(mod->handle, options) != LV2_OPTIONS_SUCCESS)
-					fprintf(stderr, "option setting of min_block_size failed\n");
+					sp_app_log_error(app, "%s:setting of nominalblockSize failed\n", __func__);
 			}
 		}
 	}

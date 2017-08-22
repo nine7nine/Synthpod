@@ -387,7 +387,7 @@ sp_app_bundle_load(sp_app_t *app, LV2_URID urn)
 {
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
 	int status = _sp_app_state_bundle_load(app, uri);
-	printf("loaded from: %s\n", uri);
+	sp_app_log_note(app, "%s: <%s>\n", __func__, uri);
 
 	// signal to app
 	job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
@@ -405,7 +405,7 @@ sp_app_bundle_save(sp_app_t *app, LV2_URID urn)
 {
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
 	int status = _sp_app_state_bundle_save(app, uri);
-	printf("saved to: %s\n", uri);
+	sp_app_log_note(app, "%s: <%s>\n", __func__, uri);
 
 	// signal to app
 	job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
