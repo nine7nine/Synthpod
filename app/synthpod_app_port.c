@@ -249,10 +249,7 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 {
 	connectable_t *conn = _sp_app_port_connectable(snk_port);
 	if(!conn)
-	{
-		sp_app_log_trace(app, "%s: invalid connectable\n", __func__);
 		return;
-	}
 
 	// update sources list 
 	bool connected = false;
