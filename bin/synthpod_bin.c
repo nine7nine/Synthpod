@@ -103,7 +103,9 @@ _app_to_ui_advance(size_t written, void *data)
 {
 	bin_t *bin = data;
 
-	sandbox_master_send(bin->sb, NOTIFY_PORT_INDEX, written, bin->atom_eventTransfer, ui_buf);
+	if(sandbox_master_send(bin->sb, NOTIFY_PORT_INDEX, written, bin->atom_eventTransfer, ui_buf) == -1)
+		bin_log_trace(bin, "%s: buffer overflow\n", __func__);
+
 	sandbox_master_signal_tx(bin->sb);
 }
 

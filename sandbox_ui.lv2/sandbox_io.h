@@ -238,7 +238,7 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 		}
 		else
 		{
-			fprintf(stderr, "_sandbox_io_recv: netatom_deserialize failed\n");
+			//fprintf(stderr, "_sandbox_io_recv: netatom_deserialize failed\n");
 		}
 
 		if(io->again)
@@ -337,14 +337,6 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 
 			return 0; // success
 		}
-		else
-		{
-			fprintf(stderr, "_sandbox_io_send: netatom_serialize failed\n"); //FIXME
-		}
-	}
-	else
-	{
-		fprintf(stderr, "_sandbox_io_send: buffer overflow\n"); //FIXME
 	}
 
 	return -1; // failed
