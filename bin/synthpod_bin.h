@@ -145,4 +145,16 @@ bin_bundle_save(bin_t *bin, const char *bundle_path);
 void
 bin_quit(bin_t *bin);
 
+int
+bin_log_error(bin_t *bin, const char *fmt, ...);
+
+int
+bin_log_note(bin_t *bin, const char *fmt, ...);
+
+int
+bin_log_warning(bin_t *bin, const char *fmt, ...);
+
+int
+bin_log_trace(bin_t *bin, const char *fmt, ...);
+
 #endif // _SYNTHPOD_BIN_H

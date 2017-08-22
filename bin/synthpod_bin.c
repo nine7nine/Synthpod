@@ -70,6 +70,7 @@ _app_to_ui_request(size_t minimum, size_t *maximum, void *data)
 		return ui_buf;
 	}
 
+	bin_log_trace(bin, "%s: buffer overflow\n", __func__);
 	return NULL;
 }
 __realtime static void
@@ -167,25 +168,22 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		_atomic_unlock(&bin->trace_lock);
 		return written;
 	}
-	else // !log_trace OR not DSP thread ID
-	{
-		const char *prefix = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]   ";
-		if(type == bin->log_trace)
-			prefix = "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] ";
-		else if(type == bin->log_error)
-			prefix = "["ANSI_COLOR_RED"Error"ANSI_COLOR_RESET"] ";
-		else if(type == bin->log_note)
-			prefix = "["ANSI_COLOR_GREEN"Note"ANSI_COLOR_RESET"]  ";
-		else if(type == bin->log_warning)
-			prefix = "["ANSI_COLOR_YELLOW"Warn"ANSI_COLOR_RESET"]  ";
 
-		//TODO send to UI?
+	// !log_trace OR not DSP thread ID
+	const char *prefix = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]   ";
+	if(type == bin->log_trace)
+		prefix = "["ANSI_COLOR_BLUE"Trace"ANSI_COLOR_RESET"] ";
+	else if(type == bin->log_error)
+		prefix = "["ANSI_COLOR_RED"Error"ANSI_COLOR_RESET"] ";
+	else if(type == bin->log_note)
+		prefix = "["ANSI_COLOR_GREEN"Note"ANSI_COLOR_RESET"]  ";
+	else if(type == bin->log_warning)
+		prefix = "["ANSI_COLOR_YELLOW"Warn"ANSI_COLOR_RESET"]  ";
 
-		fprintf(stderr, "%s", prefix);
-		return vfprintf(stderr, fmt, args);
-	}
+	//TODO send to UI?
 
-	return -1;
+	fprintf(stderr, "%s", prefix);
+	return vfprintf(stderr, fmt, args);
 }
 
 __non_realtime static int
@@ -217,6 +215,10 @@ _sb_recv_cb(void *data, uint32_t index, uint32_t size, uint32_t format,
 			//fprintf(stderr, "ui is blocked\n");
 			return false; // pause handling messages from UI (until fully drained)
 		}
+	}
+	else
+	{
+		bin_log_trace(bin, "%s: unknown port index\n", __func__);
 	}
 
 	return true; // continue handling messages from UI
@@ -255,13 +257,19 @@ _mapper_alloc_rt(void *data, size_t size)
 			continue;
 
 		if(idx >= URI_POOL_MAX) // pool overflow
+		{
+			bin_log_trace(bin, "%s: pool overflow\n", __func__);
 			return NULL;
+		}
 
 		while(idx == atomic_load_explicit(&bin->uri_mem.npools, memory_order_acquire))
 		{
 			char *pool = malloc(URI_POOL_SIZE); //FIXME do this in worker thread only
 			if(!pool) // out-of-memory
+			{
+				bin_log_trace(bin, "%s: out-of-memory\n", __func__);
 				return NULL;
+			}
 
 			const uintptr_t desired = (const uintptr_t)pool;
 			uintptr_t expected = 0;
@@ -287,7 +295,7 @@ _mapper_free_rt(void *data, char *uri)
 	// nothing
 }
 
-void
+__non_realtime void
 bin_init(bin_t *bin)
 {
 	bin_ptr = bin;
@@ -384,7 +392,7 @@ bin_init(bin_t *bin)
 	uv_loop_init(&bin->loop);
 }
 
-void
+__realtime void
 bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 {
 	// NSM init
@@ -485,7 +493,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	}
 }
 
-void
+__non_realtime void
 bin_stop(bin_t *bin)
 {
 	// NSM deinit
@@ -501,7 +509,7 @@ bin_stop(bin_t *bin)
 		free(bin->path);
 }
 
-void
+__non_realtime void
 bin_deinit(bin_t *bin)
 {
 	if(bin->sb)
@@ -531,10 +539,10 @@ bin_deinit(bin_t *bin)
 
 	uv_loop_close(&bin->loop);
 
-	fprintf(stderr, "bye\n");
+	bin_log_note(bin, "bye\n");
 }
 
-void
+__realtime void
 bin_process_pre(bin_t *bin, uint32_t nsamples, bool bypassed)
 {
 	// read events from worker
@@ -588,42 +596,99 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, bool bypassed)
 		sp_app_run_post(bin->app, nsamples);
 }
 
-void
+__realtime void
 bin_process_post(bin_t *bin)
 {
 	// nothing
 }
 
-//FIXME
-void
+__non_realtime void
 bin_bundle_new(bin_t *bin)
 {
 	// simply load the default state
 	bin_bundle_load(bin, SYNTHPOD_PREFIX"stereo");
 }
 
-void
+__non_realtime void
 bin_bundle_load(bin_t *bin, const char *bundle_path)
 {
 	const LV2_URID urn = bin->map->map(bin->map->handle, bundle_path);
 	if(!urn)
+	{
+		bin_log_error(bin, "%s: invalid path: %s\n", __func__, bundle_path);
 		return;
+	}
 
 	sp_app_bundle_load(bin->app, urn);
 }
 
-void
+__non_realtime void
 bin_bundle_save(bin_t *bin, const char *bundle_path)
 {
 	const LV2_URID urn = bin->map->map(bin->map->handle, bundle_path);
 	if(!urn)
+	{
+		bin_log_error(bin, "%s: invalid path: %s\n", __func__, bundle_path);
 		return;
+	}
 
 	sp_app_bundle_save(bin->app, urn);
 }
 
-void
+__realtime void
 bin_quit(bin_t *bin)
 {
 	atomic_store_explicit(&done, true, memory_order_relaxed);
+}
+
+__non_realtime int
+bin_log_error(bin_t *bin, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(bin, bin->log_error, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+__non_realtime int
+bin_log_note(bin_t *bin, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(bin, bin->log_note, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+__non_realtime int
+bin_log_warning(bin_t *bin, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(bin, bin->log_warning, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+__realtime int
+bin_log_trace(bin_t *bin, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = _log_vprintf(bin, bin->log_trace, fmt, args);
+  va_end(args);
+
+	return ret;
 }
