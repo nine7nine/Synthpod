@@ -1230,3 +1230,55 @@ _sp_app_order(sp_app_t *app)
 
 	_dsp_master_reorder(app);
 }
+
+__non_realtime int
+sp_app_log_error(sp_app_t *app, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = app->driver->log->vprintf(app->driver->log->handle, app->regs.log.error.urid, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+__non_realtime int
+sp_app_log_note(sp_app_t *app, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = app->driver->log->vprintf(app->driver->log->handle, app->regs.log.note.urid, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+__non_realtime int
+sp_app_log_warning(sp_app_t *app, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = app->driver->log->vprintf(app->driver->log->handle, app->regs.log.warning.urid, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+__realtime int
+sp_app_log_trace(sp_app_t *app, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = app->driver->log->vprintf(app->driver->log->handle, app->regs.log.trace.urid, fmt, args);
+  va_end(args);
+
+	return ret;
+}

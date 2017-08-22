@@ -485,38 +485,17 @@ extern const port_driver_t seq_port_driver;
 /*
  * Debug
  */
-static inline int
-_sp_vprintf(sp_app_t *app, const char *fmt, va_list args)
-{
-	return vfprintf(stderr, fmt, args);
-}
+int
+sp_app_log_error(sp_app_t *app, const char *fmt, ...);
 
-static inline int
-_sp_printf(sp_app_t *app, const char *fmt, ...)
-{
-	va_list args;
-	va_start(args, fmt);
-	const int ret = _sp_vprintf(app, fmt, args);
-	va_end(args);
-	return ret;
-}
+int
+sp_app_log_note(sp_app_t *app, const char *fmt, ...);
 
-static inline int
-_sp_vprintf_rt(sp_app_t *app, const char *fmt, va_list args)
-{
-	//return vfprintf(stderr, fmt, args); FIXME
-	return 0;
-}
+int
+sp_app_log_warning(sp_app_t *app, const char *fmt, ...);
 
-static inline int
-_sp_printf_rt(sp_app_t *app, const char *fmt, ...)
-{
-	va_list args;
-	va_start(args, fmt);
-	const int ret = _sp_vprintf_rt(app, fmt, args);
-	va_end(args);
-	return ret;
-}
+int
+sp_app_log_trace(sp_app_t *app, const char *fmt, ...);
 
 /*
  * UI
@@ -526,8 +505,9 @@ __sp_app_to_ui_request(sp_app_t *app, size_t minimum, size_t *maximum)
 {
 	if(app->driver->to_ui_request)
 		return app->driver->to_ui_request(minimum, maximum, app->data);
-	else
-		return NULL;
+
+	sp_app_log_trace(app, "%s: failed to request buffer\n", __func__);
+	return NULL;
 }
 #define _sp_app_to_ui_request(APP, MINIMUM) \
 	ASSUME_ALIGNED(__sp_app_to_ui_request((APP), (MINIMUM), NULL))
@@ -539,6 +519,8 @@ _sp_app_to_ui_advance(sp_app_t *app, size_t written)
 {
 	if(app->driver->to_ui_advance)
 		app->driver->to_ui_advance(written, app->data);
+	else
+		sp_app_log_trace(app, "%s: failed to advance buffer\n", __func__);
 }
 
 static inline LV2_Atom *
@@ -546,8 +528,12 @@ _sp_app_to_ui_request_atom(sp_app_t *app)
 {
 	size_t maximum;
 	LV2_Atom *atom = _sp_app_to_ui_request_max(app, 4096, &maximum); //FIXME what should minimum be?
+
 	if(atom)
 		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)atom, maximum);
+	else
+		sp_app_log_trace(app, "%s: failed to request atom\n", __func__);
+
 	return atom;
 }
 
@@ -560,7 +546,7 @@ _sp_app_to_ui_advance_atom(sp_app_t *app, const LV2_Atom *atom)
 static inline void
 _sp_app_to_ui_overflow(sp_app_t *app)
 {
-	_sp_printf_rt(app, "app->ui buffer overflow\n");
+	sp_app_log_trace(app, "%s: buffer overflow\n", __func__);
 }
 
 static inline LV2_Atom *
@@ -568,8 +554,12 @@ _sp_request_atom(sp_app_t *app, sp_to_request_t req, void *data)
 {
 	size_t maximum;
 	LV2_Atom *atom = req(4096, &maximum, data); //FIXME what should minimum be?
+
 	if(atom)
 		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)atom, maximum);
+	else
+		sp_app_log_trace(app, "%s: failed to request atom\n", __func__);
+
 	return atom;
 }
 
@@ -588,8 +578,9 @@ __sp_app_to_worker_request(sp_app_t *app, size_t minimum, size_t *maximum)
 {
 	if(app->driver->to_worker_request)
 		return app->driver->to_worker_request(minimum, maximum, app->data);
-	else
-		return NULL;
+
+	sp_app_log_trace(app, "%s: failed to request buffer\n", __func__);
+	return NULL;
 }
 #define _sp_app_to_worker_request(APP, MINIMUM) \
 	ASSUME_ALIGNED(__sp_app_to_worker_request((APP), (MINIMUM), NULL))
@@ -601,6 +592,8 @@ _sp_app_to_worker_advance(sp_app_t *app, size_t written)
 {
 	if(app->driver->to_worker_advance)
 		app->driver->to_worker_advance(written, app->data);
+	else
+		sp_app_log_trace(app, "%s: failed to advance buffer\n", __func__);
 }
 
 void

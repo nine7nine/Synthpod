@@ -577,7 +577,7 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 			LV2_Atom_Event *ev = lv2_atom_sequence_append_event(dst, capacity, itr[nxt]);
 			if(!ev)
 			{
-				_sp_printf_rt(app, "_port_seq_multiplex: failed to append\n");
+				sp_app_log_trace(app, "%s: failed to append\n", __func__);
 			}
 
 			// advance iterator
