@@ -23,8 +23,9 @@ __sp_worker_to_app_request(sp_app_t *app, size_t minimum, size_t *maximum)
 {
 	if(app->driver->to_app_request)
 		return app->driver->to_app_request(minimum, maximum, app->data);
-	else
-		return NULL;
+
+	sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+	return NULL;
 }
 #define _sp_worker_to_app_request(APP, MINIMUM) \
 	ASSUME_ALIGNED(__sp_worker_to_app_request((APP), (MINIMUM), NULL))
@@ -36,6 +37,8 @@ _sp_worker_to_app_advance(sp_app_t *app, size_t size)
 {
 	if(app->driver->to_app_advance)
 		app->driver->to_app_advance(size, app->data);
+	else
+		sp_app_log_error(app, "%s: buffer advance failed\n", __func__);
 }
 
 bool
@@ -150,10 +153,12 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 
 					// desilence sinks
 					for(unsigned m=0; m<app->num_mods; m++)
+					{
 						for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
 						{
 							_sp_app_port_desilence(app, port, &app->mods[m]->ports[p2]);
 						}
+					}
 				}
 			}
 
@@ -300,6 +305,10 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				job1->mod = mod;
 				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
+			else
+			{
+				sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+			}
 
 			break;
 		}
@@ -315,6 +324,10 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				job1->reply = JOB_TYPE_REPLY_MODULE_DEL;
 				job1->urn = urn;
 				_sp_worker_to_app_advance(app, sizeof(job_t));
+			}
+			else
+			{
+				sp_app_log_error(app, "%s: buffer request failed\n", __func__);
 			}
 
 			break;
@@ -333,6 +346,10 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				job1->mod = job->mod;
 				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
+			else
+			{
+				sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+			}
 
 			break;
 		}
@@ -350,6 +367,10 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				job1->mod = job->mod;
 				job1->urn = job->urn;
 				_sp_worker_to_app_advance(app, sizeof(job_t));
+			}
+			else
+			{
+				sp_app_log_error(app, "%s: buffer request failed\n", __func__);
 			}
 
 			break;
@@ -376,6 +397,10 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 				job1->status = 0;
 				_sp_worker_to_app_advance(app, sizeof(job_t));
 			}
+			else
+			{
+				sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+			}
 
 			break;
 		}
@@ -398,6 +423,10 @@ sp_app_bundle_load(sp_app_t *app, LV2_URID urn)
 		job1->urn = urn;
 		_sp_worker_to_app_advance(app, sizeof(job_t));
 	}
+	else
+	{
+		sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+	}
 }
 
 void
@@ -415,5 +444,9 @@ sp_app_bundle_save(sp_app_t *app, LV2_URID urn)
 		job1->status = status;
 		job1->urn = urn;
 		_sp_worker_to_app_advance(app, sizeof(job_t));
+	}
+	else
+	{
+		sp_app_log_error(app, "%s: buffer request failed\n", __func__);
 	}
 }

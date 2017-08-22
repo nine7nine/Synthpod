@@ -216,10 +216,16 @@ _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port, float ga
 
 	connectable_t *conn = _sp_app_port_connectable(snk_port);
 	if(!conn)
+	{
+		sp_app_log_trace(app, "%s: invalid connectable\n", __func__);
 		return 0;
+	}
 
 	if(conn->num_sources >= MAX_SOURCES)
+	{
+		sp_app_log_trace(app, "%s: too many sources\n", __func__);
 		return 0;
+	}
 
 	source_t *source = &conn->sources[conn->num_sources];
 	source->port = src_port;;
@@ -243,7 +249,10 @@ _sp_app_port_disconnect(sp_app_t *app, port_t *src_port, port_t *snk_port)
 {
 	connectable_t *conn = _sp_app_port_connectable(snk_port);
 	if(!conn)
+	{
+		sp_app_log_trace(app, "%s: invalid connectable\n", __func__);
 		return;
+	}
 
 	// update sources list 
 	bool connected = false;
@@ -288,6 +297,10 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 				}
 			}
 		}
+		else
+		{
+			sp_app_log_trace(app, "%s: invalid connectable\n", __func__);
+		}
 
 		if(source)
 		{
@@ -306,6 +319,14 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 				_sp_app_port_disconnect(app, src_port, snk_port);
 			}
 		}
+		else
+		{
+			sp_app_log_trace(app, "%s invalid source\n", __func__);
+		}
+	}
+	else
+	{
+		sp_app_log_trace(app, "%s: port direction mismatch\n", __func__);
 	}
 
 	return 0; // not connected
@@ -332,6 +353,10 @@ _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port)
 				}
 			}
 		}
+		else
+		{
+			sp_app_log_trace(app, "%s: invalid connectable\n", __func__);
+		}
 
 		if(source)
 		{
@@ -345,6 +370,14 @@ _sp_app_port_desilence(sp_app_t *app, port_t *src_port, port_t *snk_port)
 				return 1; // needs ramping
 			}
 		}
+		else
+		{
+			sp_app_log_trace(app, "%s invalid source\n", __func__);
+		}
+	}
+	else
+	{
+		sp_app_log_trace(app, "%s: port direction mismatch\n", __func__);
 	}
 
 	return 0; // not connected
@@ -390,6 +423,10 @@ _sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
 				}
 			}
 		}
+		else
+		{
+			sp_app_log_trace(app, "%s: invalid connectable\n", __func__);
+		}
 
 		if(source)
 		{
@@ -403,6 +440,14 @@ _sp_app_port_silence_request(sp_app_t *app, port_t *src_port, port_t *snk_port,
 				return 1; // needs ramping
 			}
 		}
+		else
+		{
+			sp_app_log_trace(app, "%s invalid source\n", __func__);
+		}
+	}
+	else
+	{
+		sp_app_log_trace(app, "%s: port direction mismatch\n", __func__);
 	}
 
 	return 0; // not connected

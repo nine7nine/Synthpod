@@ -87,6 +87,10 @@ _preset_schedule_work_async(LV2_Worker_Schedule_Handle instance, uint32_t size, 
 
 		return LV2_WORKER_SUCCESS;
 	}
+	else
+	{
+		sp_app_log_error(mod->app, "%s: failed to request buffer\n", __func__);
+	}
 
 	return LV2_WORKER_ERR_NO_SPACE;
 }
@@ -108,15 +112,11 @@ _preset_features(mod_t *mod, bool async)
 		? _preset_schedule_work_async
 		: _preset_schedule_work_sync; // for state:loadDefaultState
 
-#if 1
 	mod->state_feature_list[0].URI = LV2_WORKER__schedule;
 	mod->state_feature_list[0].data = &mod->state_worker;
 
 	mod->state_features[0] = &mod->state_feature_list[0];
 	mod->state_features[1] = NULL;
-#else
-	mod->state_features[0] = NULL;
-#endif
 
 	return (const LV2_Feature *const *)mod->state_features;
 }
@@ -154,12 +154,18 @@ _state_set_value(const char *symbol, void *data,
 
 	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
 	if(!symbol_uri)
+	{
+		sp_app_log_error(app, "%s: invalid symbol\n", __func__);
 		return;
+	}
 
 	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
 	lilv_node_free(symbol_uri);
 	if(!port)
+	{
+		sp_app_log_error(app, "%s: failed to get port by symbol\n", __func__);
 		return;
+	}
 
 	uint32_t index = lilv_port_get_index(mod->plug, port);
 	port_t *tar = &mod->ports[index];
@@ -180,7 +186,10 @@ _state_set_value(const char *symbol, void *data,
 		else if( (type == app->forge.Bool) && (size == sizeof(int32_t)) )
 			val = *(const int32_t *)value;
 		else
-			return; //TODO warning
+		{
+			sp_app_log_error(app, "%s: value of unknown type\n", __func__);
+			return;
+		}
 
 		// FIXME not rt-safe
 		float *buf_ptr = PORT_BASE_ALIGNED(tar);
@@ -200,12 +209,18 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 	
 	LilvNode *symbol_uri = lilv_new_string(app->world, symbol);
 	if(!symbol_uri)
+	{
+		sp_app_log_error(app, "%s: failed to create symbol URI\n", __func__);
 		goto fail;
+	}
 
 	const LilvPort *port = lilv_plugin_get_port_by_symbol(mod->plug, symbol_uri);
 	lilv_node_free(symbol_uri);
 	if(!port)
+	{
+		sp_app_log_error(app, "%s: failed to get port by symbol\n", __func__);
 		goto fail;
+	}
 
 	uint32_t index = lilv_port_get_index(mod->plug, port);
 	port_t *tar = &mod->ports[index];
@@ -259,7 +274,10 @@ _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async
 	LilvNode *preset = lilv_new_uri(app->world, uri);
 
 	if(!preset) // preset not existing
+	{
+		sp_app_log_error(app, "%s: failed to create preset URI\n", __func__);
 		return -1;
+	}
 
 	// load preset resource
 	lilv_world_load_resource(app->world, preset);
@@ -275,7 +293,10 @@ _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async
 	lilv_node_free(preset);
 
 	if(!state)
+	{
+		sp_app_log_error(app, "%s: failed to get state from world\n", __func__);
 		return -1;
+	}
 
 	lilv_state_restore(state, mod->inst, _state_set_value, mod,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, async));
@@ -290,7 +311,10 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *uri)
 {
 	const LilvNode *name_node = lilv_plugin_get_name(mod->plug);
 	if(!name_node)
+	{
+		sp_app_log_error(app, "%s: failed to create preset URI\n", __func__);
 		return -1;
+	}
 
 	const char *mod_label = lilv_node_as_string(name_node);
 	char *prefix_path;
@@ -366,6 +390,10 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *uri)
 		// reload presets for this module
 		mod->presets = _preset_reload(app->world, &app->regs, mod->plug,
 			mod->presets, bndl);
+	}
+	else
+	{
+		sp_app_log_error(app, "%s: failed to create state from instance\n", __func__);
 	}
 
 	// cleanup
@@ -551,18 +579,27 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 	//printf("_bundle_load: %s\n", bundle_path);
 
 	if(!app->sratom)
+	{
+		sp_app_log_error(app, "%s: invalid sratom\n", __func__);
 		return -1;
+	}
 
 	if(app->bundle_path)
 		free(app->bundle_path);
 
 	app->bundle_path = strdup(bundle_path);
 	if(!app->bundle_path)
+	{
+		sp_app_log_error(app, "%s: path duplication failed\n", __func__);
 		return -1;
+	}
 
 	char *state_dst = _make_path(app->bundle_path, "state.ttl");
 	if(!state_dst)
+	{
+		sp_app_log_error(app, "%s: _make_path failed\n", __func__);
 		return -1;
+	}
 
 	LV2_Atom_Object *obj = _deserialize_from_turtle(app->sratom, app->driver->unmap, state_dst);
 	if(obj) // existing project
@@ -636,7 +673,10 @@ _sp_app_state_bundle_save(sp_app_t *app, const char *bundle_path)
 
 	app->bundle_path = strdup(bundle_path);
 	if(!app->bundle_path)
+	{
+		sp_app_log_error(app, "%s: path duplication failed\n", __func__);
 		return -1;
+	}
 
 	char *manifest_dst = _make_path(app->bundle_path, "manifest.ttl");
 	char *state_dst = _make_path(app->bundle_path, "state.ttl");
@@ -670,6 +710,10 @@ _sp_app_state_bundle_save(sp_app_t *app, const char *bundle_path)
 				const LV2_Atom *atom = (const LV2_Atom *)ser.buf;
 				_serialize_to_turtle(app->sratom, app->driver->unmap, atom, manifest_dst);
 				free(ser.buf);
+			}
+			else
+			{
+				sp_app_log_error(app, "%s: forge failed\n", __func__);
 			}
 
 			ser.size = 4096;
@@ -719,15 +763,27 @@ _sp_app_state_bundle_save(sp_app_t *app, const char *bundle_path)
 				_serialize_to_turtle(app->sratom, app->driver->unmap, atom, state_dst);
 				free(ser.buf);
 			}
+			else
+			{
+				sp_app_log_error(app, "%s: forge failed\n", __func__);
+			}
 
 			if(rdfs_label)
 				free(rdfs_label);
+		}
+		else
+		{
+			sp_app_log_error(app, "%s: invalid sratom\n", __func__);
 		}
 
 		free(manifest_dst);
 		free(state_dst);
 
 		return LV2_STATE_SUCCESS;
+	}
+	else
+	{
+		sp_app_log_error(app, "%s: _make_path failed\n", __func__);
 	}
 	
 	if(manifest_dst)
@@ -746,10 +802,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	const LV2_State_Map_Path *map_path = NULL;
 
 	for(int i=0; features[i]; i++)
+	{
 		if(!strcmp(features[i]->URI, LV2_STATE__makePath))
 			make_path = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_STATE__mapPath))
 			map_path = features[i]->data;
+	}
 
 	if(!make_path)
 	{
@@ -1227,6 +1285,10 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 
 		return LV2_STATE_SUCCESS;
 	}
+	else
+	{
+		sp_app_log_error(app, "%s: invalid buffer\n", __func__);
+	}
 
 	return LV2_STATE_ERR_UNKNOWN;
 }
@@ -1255,7 +1317,10 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 	const char *mod_uri_str = app->driver->unmap->unmap(app->driver->unmap->handle, mod_obj->body.otype);
 	mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn);
 	if(!mod)
+	{
+		sp_app_log_error(app, "%s: _sp_app_mod_add fialed\n", __func__);
 		return;
+	}
 
 	// inject module into module graph
 	app->mods[app->num_mods] = mod;
@@ -1280,7 +1345,11 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 
 	char *path = map_path->absolute_path(map_path->handle, dir);
 	if(!path)
+	{
+		sp_app_log_error(app, "%s: invaild path\n", __func__);
+		//TODO free mod
 		return;
+	}
 
 	// strip 'file://'
 	const char *tmp = !strncmp(path, "file://", 7)
@@ -1345,18 +1414,24 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		&size, &type, &_flags);
 	if(grid_cols && (type == app->forge.Int) && (size == sizeof(int32_t)) )
 		app->ncols = *grid_cols;
+	else
+		sp_app_log_error(app, "%s: invaild gridCols\n", __func__);
 
 	// retrieve grid rows
 	const int32_t *grid_rows = retrieve(hndl, app->regs.synthpod.grid_rows.urid,
 		&size, &type, &_flags);
 	if(grid_rows && (type == app->forge.Int) && (size == sizeof(int32_t)) )
 		app->nrows = *grid_rows;
+	else
+		sp_app_log_error(app, "%s: invaild gridRows\n", __func__);
 
-	// retrieve grid rows
+	// retrieve pane left
 	const float *pane_left = retrieve(hndl, app->regs.synthpod.pane_left.urid,
 		&size, &type, &_flags);
 	if(pane_left && (type == app->forge.Float) && (size == sizeof(float)) )
 		app->nleft = *pane_left;
+	else
+		sp_app_log_error(app, "%s: invaild paneLeft \n", __func__);
 
 	// retrieve spod:moduleList
 	const LV2_Atom_Object_Body *mod_list_body = retrieve(hndl, app->regs.synthpod.module_list.urid,
@@ -1378,6 +1453,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 		_sp_app_order(app);
 	}
+	else
+		sp_app_log_error(app, "%s: invaild moduleList\n", __func__);
 
 	// retrieve spod:connectionList
 	const LV2_Atom_Object_Body *conn_list_body = retrieve(hndl, app->regs.synthpod.connection_list.urid,
@@ -1396,6 +1473,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			_connection_list_add(app, obj);
 		}
 	}
+	else
+		sp_app_log_error(app, "%s: invaild connectionList\n", __func__);
 
 	// retrieve spod:nodeList
 	const LV2_Atom_Object_Body *node_list_body = retrieve(hndl, app->regs.synthpod.node_list.urid,
@@ -1414,6 +1493,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			_node_list_add(app, obj);
 		}
 	}
+	else
+		sp_app_log_error(app, "%s: invaild nodeList \n", __func__);
 
 	// retrieve spod:automationList
 	const LV2_Atom_Object_Body *auto_list_body = retrieve(hndl, app->regs.synthpod.automation_list.urid,
@@ -1432,6 +1513,8 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			_automation_list_add(app, obj);
 		}
 	}
+	else
+		sp_app_log_error(app, "%s: invaild automationList\n", __func__);
 
 	// retrieve spod:graph // XXX old save format
 	const LV2_Atom_Object_Body *graph_body = retrieve(hndl, app->regs.synthpod.graph.urid,
@@ -1563,6 +1646,10 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			}
 		}
 	}
+	/*
+	else
+		sp_app_log_error(app, "%s: invaild graph\n", __func__);
+	*/
 
 	_toggle_dirty(app);
 

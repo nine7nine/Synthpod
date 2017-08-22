@@ -97,6 +97,8 @@ _schedule_work(LV2_Worker_Schedule_Handle handle, uint32_t size, const void *dat
 		return LV2_WORKER_SUCCESS;
 	}
 
+	sp_app_log_trace(mod->app, "%s: failed to request buffer\n", __func__);
+
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
@@ -323,17 +325,26 @@ _sp_app_mod_is_supported(sp_app_t *app, const void *uri)
 {
 	LilvNode *uri_node = lilv_new_uri(app->world, uri);
 	if(!uri_node)
+	{
+		sp_app_log_trace(app, "%s: failed to create URI\n", __func__);
 		return NULL;
+	}
 
 	const LilvPlugin *plug = lilv_plugins_get_by_uri(app->plugs, uri_node);
 	lilv_node_free(uri_node);
 			
 	if(!plug)
+	{
+		sp_app_log_trace(app, "%s: failed to get plugin\n", __func__);
 		return NULL;
+	}
 
 	const LilvNode *library_uri= lilv_plugin_get_library_uri(plug);
 	if(!library_uri)
+	{
+		sp_app_log_trace(app, "%s: failed to get library URI\n", __func__);
 		return NULL;
+	}
 
 	if(!app->driver->bad_plugins)
 	{
@@ -426,6 +437,8 @@ _sp_worker_respond_async(LV2_Worker_Respond_Handle handle, uint32_t size, const 
 		return LV2_WORKER_SUCCESS;
 	}
 
+	sp_app_log_error(mod->app, "%s: failed to request buffer\n", __func__);
+
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
@@ -437,6 +450,8 @@ _sp_worker_respond_sync(LV2_Worker_Respond_Handle handle, uint32_t size, const v
 	if(mod->worker.iface && mod->worker.iface->work_response)
 		return mod->worker.iface->work_response(mod->handle, size, data);
 
+	sp_app_log_error(mod->app, "%s: failed to call work:response\n", __func__);
+
 	return LV2_WORKER_ERR_NO_SPACE;
 }
 
@@ -447,8 +462,9 @@ _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload)
 	{
 		return mod->worker.iface->work(mod->handle, _sp_worker_respond_sync, mod,
 			size, payload);
-		//TODO check return status
 	}
+
+	sp_app_log_error(mod->app, "%s: failed to call work:work\n", __func__);
 
 	return LV2_WORKER_ERR_NO_SPACE;
 }
@@ -463,6 +479,10 @@ _sp_app_mod_worker_work_async(mod_t *mod, size_t size, const void *payload)
 		mod->worker.iface->work(mod->handle, _sp_worker_respond_async, mod,
 			size, payload);
 		//TODO check return status
+	}
+	else
+	{
+		sp_app_log_error(mod->app, "%s: failed to call work:work\n", __func__);
 	}
 }
 
@@ -515,11 +535,17 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	const LilvPlugin *plug;
 
 	if(!(plug = _sp_app_mod_is_supported(app, uri)))
+	{
+		sp_app_log_error(app, "%s: plugin is not supported\n", __func__);
 		return NULL;
+	}
 
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
+	{
+		sp_app_log_error(app, "%s: allocation failed\n", __func__);
 		return NULL;
+	}
 
 	mod->needs_bypassing = false; // plugins with control ports only need no bypassing upon preset load
 	mod->bypassed = false;
@@ -607,6 +633,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
 	if(!mod->inst)
 	{
+		sp_app_log_error(app, "%s: instantiation failed\n", __func__);
 		free(mod);
 		return NULL;
 	}
@@ -637,6 +664,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	mod->ports = calloc(mod->num_ports, sizeof(port_t));
 	if(!mod->ports)
 	{
+		sp_app_log_error(app, "%s: pool allocation failed\n", __func__);
 		free(mod);
 		return NULL; // failed to alloc ports
 	}
@@ -824,6 +852,8 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 
 	if(alloc_failed)
 	{
+		sp_app_log_error(app, "%s: pool tiling failed\n", __func__);
+
 		for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
 			_sp_app_mod_free_pool(&mod->pools[pool]);
 
@@ -981,8 +1011,10 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 
 		// disconnect sinks
 		for(unsigned m=0; m<app->num_mods; m++)
+		{
 			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
 				_sp_app_port_disconnect(app, port, &app->mods[m]->ports[p2]);
+		}
 	}
 
 	// send request to worker thread
@@ -993,6 +1025,10 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 		job->request = JOB_TYPE_REQUEST_MODULE_DEL;
 		job->mod = mod;
 		_sp_app_to_worker_advance(app, size);
+	}
+	else
+	{
+		sp_app_log_error(app, "%s: failed requesting buffer\n", __func__);
 	}
 
 	_sp_app_order(app);
