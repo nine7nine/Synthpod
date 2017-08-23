@@ -16,11 +16,11 @@
  */
 
 #include <inttypes.h>
+#include <unistd.h>
 
 #include <synthpod_app_private.h>
 
 #define ANSI_COLOR_BOLD    "\x1b[1m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
 //tools.ietf.org/html/rfc4122 version 4
@@ -53,7 +53,10 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	char prefix [128]; //TODO how big?
 	char buf [1024]; //TODO how big?
 
-	snprintf(prefix, 128, "("ANSI_COLOR_CYAN"DSP"ANSI_COLOR_RESET") {"ANSI_COLOR_BOLD"%s"ANSI_COLOR_RESET"} ", mod->urn_uri);
+	if(isatty(STDERR_FILENO))
+		snprintf(prefix, 128, "{"ANSI_COLOR_BOLD"%s"ANSI_COLOR_RESET"} ", mod->urn_uri);
+	else
+		snprintf(prefix, 128, "{%s} ", mod->urn_uri);
 	vsnprintf(buf, 1024, fmt, args);
 
 	char *pch = strtok(buf, "\n");

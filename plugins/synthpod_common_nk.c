@@ -22,6 +22,8 @@
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
 #include "lv2/lv2plug.in/ns/ext/midi/midi.h"
+#include "lv2/lv2plug.in/ns/ext/log/log.h"
+#include "lv2/lv2plug.in/ns/ext/log/logger.h"
 #include "lv2/lv2plug.in/ns/ext/options/options.h"
 #include "lv2/lv2plug.in/ns/ext/port-groups/port-groups.h"
 #include "lv2/lv2plug.in/ns/ext/presets/presets.h"
@@ -292,6 +294,9 @@ struct _plughandle_t {
 	LilvNodes *bundles;
 
 	LV2_Atom_Forge forge;
+
+	LV2_Log_Log *log;
+	LV2_Log_Logger logger;
 
 	LV2_URID atom_eventTransfer;
 	LV2_URID bundle_urn;
@@ -2069,7 +2074,7 @@ _mod_ui_subscribe_function(LV2UI_Controller controller, uint32_t index,
 	mod_t *mod = mod_ui->mod;
 	plughandle_t *handle = mod->handle;
 
-	printf("_mod_ui_subscribe_function: %u %u %i\n", index, protocol, state);
+	//printf("_mod_ui_subscribe_function: %u %u %i\n", index, protocol, state);
 
 	// route to dsp
 	port_t *port = _mod_port_find_by_index(mod, index);
@@ -2170,6 +2175,7 @@ _mod_ui_run(mod_ui_t *mod_ui)
 
 	const LilvNode *plugin_node = lilv_plugin_get_uri(mod->plug);
 	const char *plugin_uri = plugin_node ? lilv_node_as_uri(plugin_node) : NULL;
+	const char *plugin_urn = handle->unmap->unmap(handle->unmap->handle, mod_ui->mod->urn);
 
 	const char *exec_uri = NULL;
 	if(false)
@@ -2205,9 +2211,9 @@ _mod_ui_run(mod_ui_t *mod_ui)
 
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);
 
-	printf("exec_uri: %s\n", exec_uri);
+	//printf("exec_uri: %s\n", exec_uri);
 
-	if(exec_uri && plugin_uri && mod_ui->sbox.bundle_path && mod_ui->uri
+	if(exec_uri && plugin_uri && plugin_urn && mod_ui->sbox.bundle_path && mod_ui->uri
 		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name
 		&& mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
@@ -2218,6 +2224,7 @@ _mod_ui_run(mod_ui_t *mod_ui)
 		{
 			char *const args [] = {
 				(char *)exec_uri,
+				"-n", (char *)plugin_urn,
 				"-p", (char *)plugin_uri,
 				"-b", mod_ui->sbox.bundle_path,
 				"-u", (char *)mod_ui->uri,
@@ -2879,7 +2886,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			handle->regs.core.required_feature.node, handle->regs.ui.instance_access.node);
 		if(needs_instance_access)
 		{
-			fprintf(stderr, "<%s> instance-access extension not supported\n", lilv_node_as_string(ui_uri));
+			if(handle->log)
+				lv2_log_warning(&handle->logger, "<%s> instance-access extension not supported\n", lilv_node_as_string(ui_uri));
 			continue;
 		}
 
@@ -2887,7 +2895,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			handle->regs.core.required_feature.node, handle->regs.ui.data_access.node);
 		if(needs_data_access)
 		{
-			fprintf(stderr, "<%s> data-access extension not supported\n", lilv_node_as_string(ui_uri));
+			if(handle->log)
+				lv2_log_warning(&handle->logger, "<%s> data-access extension not supported\n", lilv_node_as_string(ui_uri));
 			continue;
 		}
 
@@ -5805,7 +5814,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 						if(memcmp(&old_auto, automation, sizeof(auto_t))) // needs sync
 						{
-							printf("automation needs sync\n");
+							//printf("automation needs sync\n");
 							if(automation->type == AUTO_NONE)
 							{
 								if(port)
@@ -6126,6 +6135,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->unmap = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
 			opts = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_LOG__log))
+			handle->log = features[i]->data;
 	}
 
 	if(!parent)
@@ -6149,6 +6160,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		free(handle);
 		return NULL;
 	}
+
+	if(handle->log)
+		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
 

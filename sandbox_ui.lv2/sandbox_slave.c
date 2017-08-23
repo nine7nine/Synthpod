@@ -43,6 +43,11 @@ struct _sandbox_slave_t {
 	LV2_URID_Unmap *unmap;
 	LV2_URI_Map_Feature uri_id;
 
+	LV2_URID log_trace;
+	LV2_URID log_error;
+	LV2_URID log_warning;
+	LV2_URID log_note;
+
 	LV2_Log_Log log;
 
 	LV2UI_Port_Map port_map;
@@ -69,6 +74,7 @@ struct _sandbox_slave_t {
 	const sandbox_slave_driver_t *driver;
 	void *data;
 
+	const char *plugin_urn;
 	const char *plugin_uri;
 	const char *bundle_path;
 	const char *ui_uri;
@@ -77,13 +83,73 @@ struct _sandbox_slave_t {
 	float sample_rate;
 	float update_rate;
 };
+
+#define ANSI_COLOR_BOLD    "\x1b[1m"
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
+enum {
+	COLOR_TRACE = 0,
+	COLOR_LOG,
+	COLOR_ERROR,
+	COLOR_NOTE,
+	COLOR_WARNING,
+
+	COLOR_UI,
+	COLOR_URN1,
+	COLOR_URN2
+};
+
+static const char *prefix [2][8] = {
+	[0] = {
+		[COLOR_TRACE]   = "[Trace]",
+		[COLOR_LOG]     = "[Log]  ",
+		[COLOR_ERROR]   = "[Error]",
+		[COLOR_NOTE]    = "[Note] ",
+		[COLOR_WARNING] = "[Warn] ",
+
+		[COLOR_UI]     = "(UI) ",
+		[COLOR_URN1]   = "{",
+		[COLOR_URN2]   = "}"
+	},
+	[1] = {
+		[COLOR_TRACE]   = "["ANSI_COLOR_BLUE   "Trace"ANSI_COLOR_RESET"]",
+		[COLOR_LOG]     = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]  ",
+		[COLOR_ERROR]   = "["ANSI_COLOR_RED    "Error"ANSI_COLOR_RESET"]",
+		[COLOR_NOTE]    = "["ANSI_COLOR_GREEN  "Note"ANSI_COLOR_RESET"] ",
+		[COLOR_WARNING] = "["ANSI_COLOR_YELLOW "Warn"ANSI_COLOR_RESET"] ",
+
+		[COLOR_UI]      = "("ANSI_COLOR_MAGENTA"UI"ANSI_COLOR_RESET") ",
+		[COLOR_URN1]    = "{"ANSI_COLOR_BOLD,
+		[COLOR_URN2]    = ANSI_COLOR_RESET"}",
+	}
+};
 	
 static inline int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
 {
 	sandbox_slave_t *sb = handle;
 
-	vprintf(fmt, args);
+	int idx = COLOR_LOG;
+	if(type == sb->log_trace)
+		idx = COLOR_TRACE;
+	else if(type == sb->log_error)
+		idx = COLOR_ERROR;
+	else if(type == sb->log_note)
+		idx = COLOR_NOTE;
+	else if(type == sb->log_warning)
+		idx = COLOR_WARNING;
+
+	const int istty = isatty(STDERR_FILENO);
+	fprintf(stderr, "%s %s ", prefix[istty][COLOR_UI], prefix[istty][idx]);
+	if(sb->plugin_urn)
+		fprintf(stderr, "%s%s%s ", prefix[istty][COLOR_URN1], sb->plugin_urn, prefix[istty][COLOR_URN2]);
+	return vfprintf(stderr, fmt, args);
 
 	return 0;
 }
@@ -191,15 +257,19 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
+	sb->plugin_urn = NULL;
 	sb->window_title = "Untitled"; // fall-back
 	sb->sample_rate = 44100.f; // fall-back
 	sb->update_rate = 25.f; // fall-back
 
 	int c;
-	while((c = getopt(argc, argv, "p:b:u:s:w:r:f:")) != -1)
+	while((c = getopt(argc, argv, "n:p:b:u:s:w:r:f:")) != -1)
 	{
 		switch(c)
 		{
+			case 'n':
+				sb->plugin_urn = optarg;
+				break;
 			case 'p':
 				sb->plugin_uri = optarg;
 				break;
@@ -222,7 +292,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 				sb->update_rate = atof(optarg);
 				break;
 			case '?':
-				if( (optopt == 'p') || (optopt == 'b') || (optopt == 'u') || (optopt == 's') || (optopt == 'w') || (optopt == 'r') || (optopt == 'f') )
+				if( (optopt == 'n') || (optopt == 'p') || (optopt == 'b') || (optopt == 'u') || (optopt == 's') || (optopt == 'w') || (optopt == 'r') || (optopt == 'f') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -270,6 +340,11 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	sb->unmap = mapper_get_unmap(sb->mapper);
 	sb->uri_id.callback_data = sb;
 	sb->uri_id.uri_to_id = _sb_uri_to_id;
+
+	sb->log_trace = sb->map->map(sb->map->handle, LV2_LOG__Trace);
+	sb->log_error = sb->map->map(sb->map->handle, LV2_LOG__Error);
+	sb->log_warning = sb->map->map(sb->map->handle, LV2_LOG__Warning);
+	sb->log_note = sb->map->map(sb->map->handle, LV2_LOG__Note);
 
 	if(!(sb->world = lilv_world_new()))
 	{

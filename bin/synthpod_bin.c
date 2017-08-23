@@ -28,6 +28,7 @@
 #define ANSI_COLOR_YELLOW  "\x1b[33m"
 #define ANSI_COLOR_BLUE    "\x1b[34m"
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
 #define UI_CHUNK_SIZE 0x1000000 // 16M
@@ -48,23 +49,29 @@ enum {
 	COLOR_LOG,
 	COLOR_ERROR,
 	COLOR_NOTE,
-	COLOR_WARNING
+	COLOR_WARNING,
+
+	COLOR_DSP
 };
 
-static const char *prefix [2][5] = {
+static const char *prefix [2][6] = {
 	[0] = {
-		[COLOR_TRACE]   = "[Trace] ",
-		[COLOR_LOG]     = "[Log]   ",
-		[COLOR_ERROR]   = "[Error] ",
-		[COLOR_NOTE]    = "[Note]  ",
-		[COLOR_WARNING] = "[Warn]  "
+		[COLOR_TRACE]   = "[Trace]",
+		[COLOR_LOG]     = "[Log]  ",
+		[COLOR_ERROR]   = "[Error]",
+		[COLOR_NOTE]    = "[Note] ",
+		[COLOR_WARNING] = "[Warn] ",
+
+		[COLOR_DSP]     = "(DSP)"
 	},
 	[1] = {
-		[COLOR_TRACE]   = "["ANSI_COLOR_BLUE   "Trace"ANSI_COLOR_RESET"] ",
-		[COLOR_LOG]     = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]   ",
-		[COLOR_ERROR]   = "["ANSI_COLOR_RED    "Error"ANSI_COLOR_RESET"] ",
-		[COLOR_NOTE]    = "["ANSI_COLOR_GREEN  "Note"ANSI_COLOR_RESET"]  ",
-		[COLOR_WARNING] = "["ANSI_COLOR_YELLOW "Warn"ANSI_COLOR_RESET"]  "
+		[COLOR_TRACE]   = "["ANSI_COLOR_BLUE   "Trace"ANSI_COLOR_RESET"]",
+		[COLOR_LOG]     = "["ANSI_COLOR_MAGENTA"Log"ANSI_COLOR_RESET"]  ",
+		[COLOR_ERROR]   = "["ANSI_COLOR_RED    "Error"ANSI_COLOR_RESET"]",
+		[COLOR_NOTE]    = "["ANSI_COLOR_GREEN  "Note"ANSI_COLOR_RESET"] ",
+		[COLOR_WARNING] = "["ANSI_COLOR_YELLOW "Warn"ANSI_COLOR_RESET"] ",
+
+		[COLOR_DSP]     = "("ANSI_COLOR_CYAN "DSP"ANSI_COLOR_RESET")"
 	}
 };
 
@@ -210,7 +217,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	//TODO send to UI?
 
 	const int istty = isatty(STDERR_FILENO);
-	fprintf(stderr, "%s", prefix[istty][idx]);
+	fprintf(stderr, "%s %s ", prefix[istty][COLOR_DSP], prefix[istty][idx]);
 	return vfprintf(stderr, fmt, args);
 }
 
@@ -512,7 +519,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 			while((trace = varchunk_read_request(bin->app_to_log, &size)))
 			{
 				const int istty = isatty(STDERR_FILENO);
-				fprintf(stderr, "%s%s", prefix[istty][COLOR_TRACE], trace);
+				fprintf(stderr, "%s %s %s", prefix[istty][COLOR_DSP], prefix[istty][COLOR_TRACE], trace);
 
 				varchunk_read_advance(bin->app_to_log);
 			}
