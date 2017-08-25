@@ -197,7 +197,9 @@ _state_set_value(const char *symbol, void *data,
 		control->last = val - 0.1; // triggers notification
 		// FIXME not rt-safe
 
-		_sp_app_port_control_stash(tar); // FIXME needs blocking access
+		_sp_app_port_spin_lock(control);
+		control->stash = val;
+		_sp_app_port_unlock(control);
 	}
 }
 
@@ -222,7 +224,7 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 		goto fail;
 	}
 
-	uint32_t index = lilv_port_get_index(mod->plug, port);
+	const uint32_t index = lilv_port_get_index(mod->plug, port);
 	port_t *tar = &mod->ports[index];
 
 	if(  (tar->direction == PORT_DIRECTION_INPUT)
@@ -230,10 +232,8 @@ _state_get_value(const char *symbol, void *data, uint32_t *size, uint32_t *type)
 	{
 		control_port_t *control = &tar->control;
 
-		_sp_app_port_spin_lock(control); // concurrent acess from worker and rt threads
-
+		_sp_app_port_spin_lock(control); // concurrent acess from worker and rt thread
 		const float stash = control->stash;
-
 		_sp_app_port_unlock(control);
 
 		const void *ptr = NULL;
