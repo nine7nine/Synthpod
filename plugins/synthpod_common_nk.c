@@ -5150,7 +5150,14 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 		}
 		else
 		{
-			_patch_mod_remove(handle, mod);
+			const LilvNode *uri_node = lilv_plugin_get_uri(plug);
+			const char *mod_uri = lilv_node_as_string(uri_node);
+
+			if(  strcmp(mod_uri, SYNTHPOD_PREFIX"source")
+				&& strcmp(mod_uri, SYNTHPOD_PREFIX"sink") )
+			{
+				_patch_mod_remove(handle, mod);
+			}
 		}
 	}
 
