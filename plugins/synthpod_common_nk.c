@@ -470,6 +470,67 @@ static const char *auto_labels [] = {
 	[AUTO_OSC] = "OSC"
 };
 
+static int
+_log_error(plughandle_t *handle, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	if(handle->log)
+	ret = handle->log
+		? lv2_log_error(&handle->logger, fmt, args)
+		: vfprintf(stderr, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+static int
+_log_note(plughandle_t *handle, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = handle->log
+		? lv2_log_note(&handle->logger, fmt, args)
+		: vfprintf(stderr, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+static int
+_log_warning(plughandle_t *handle, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = handle->log
+		? lv2_log_warning(&handle->logger, fmt, args)
+		: vfprintf(stderr, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
+static int
+_log_trace(plughandle_t *handle, const char *fmt, ...)
+{
+  va_list args;
+	int ret;
+
+  va_start (args, fmt);
+	ret = handle->log
+		? lv2_log_trace(&handle->logger, fmt, args)
+		: vfprintf(stderr, fmt, args);
+  va_end(args);
+
+	return ret;
+}
+
 static inline bool
 _message_request(plughandle_t *handle)
 {
@@ -1400,6 +1461,8 @@ static void
 _mod_uis_send(mod_t *mod, uint32_t index, uint32_t size, uint32_t format,
 	const void *buf)
 {
+	plughandle_t *handle = mod->handle;
+
 	HASH_FOREACH(&mod->uis, mod_ui_itr)
 	{
 		mod_ui_t *mod_ui = *mod_ui_itr;
@@ -1407,8 +1470,9 @@ _mod_uis_send(mod_t *mod, uint32_t index, uint32_t size, uint32_t format,
 		if(!_mod_ui_is_running(mod_ui))
 			continue;
 
-		const int status = sandbox_master_send(mod_ui->sbox.sb, index, size, format, buf);
-		(void)status; //FIXME
+		if(sandbox_master_send(mod_ui->sbox.sb, index, size, format, buf) == -1)
+			_log_error(handle, "%s: buffer overflow\n", __func__);
+		sandbox_master_signal_tx(mod_ui->sbox.sb);
 	}
 }
 
@@ -2887,7 +2951,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		if(needs_instance_access)
 		{
 			if(handle->log)
-				lv2_log_warning(&handle->logger, "<%s> instance-access extension not supported\n", lilv_node_as_string(ui_uri));
+				_log_warning(handle, "<%s> instance-access extension not supported\n", lilv_node_as_string(ui_uri));
 			continue;
 		}
 
@@ -2896,7 +2960,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		if(needs_data_access)
 		{
 			if(handle->log)
-				lv2_log_warning(&handle->logger, "<%s> data-access extension not supported\n", lilv_node_as_string(ui_uri));
+				_log_warning(handle, "<%s> data-access extension not supported\n", lilv_node_as_string(ui_uri));
 			continue;
 		}
 
