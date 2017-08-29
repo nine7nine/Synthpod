@@ -4890,8 +4890,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 }
 
 static bool
-_mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
-	struct nk_rect *bounds)
+_mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct nk_rect *bounds)
 {
 	struct nk_input *in = &ctx->input;
 
@@ -4991,10 +4990,10 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 
 	const float cw = 4.f * handle->scale;
 
-	const struct nk_rect bounds = nk_rect(
-		mod->pos.x - dim.x/2, mod->pos.y - dim.y/2,
-		dim.x, dim.y
-	);
+	struct nk_rect bounds = nk_rect(
+		mod->pos.x - mod->dim.x/2 - scrolling.x,
+		mod->pos.y - mod->dim.y/2 - scrolling.y,
+		mod->dim.x, mod->dim.y);
 
 	// output connector
 	if(_source_type_match(handle, mod->source_type))
@@ -5174,7 +5173,8 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 }
 
 static void
-_expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
+_expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_bounds,
+	mod_t *mod, float dy)
 {
 	// we always show modules, even if port type does not match current view
 
@@ -5199,7 +5199,12 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 		mod->pos.y - mod->dim.y/2 - scrolling.y,
 		mod->dim.x, mod->dim.y);
 
-	if(_mod_moveable(handle, ctx, mod, &bounds))
+	const bool is_selectable = (bounds.x >= space_bounds.x)
+		&& (bounds.y >= space_bounds.y)
+		&& (bounds.x + bounds.w <= space_bounds.x + space_bounds.w)
+		&& (bounds.y + bounds.h <= space_bounds.y + space_bounds.h);
+
+	if(is_selectable && _mod_moveable(handle, ctx, mod, &bounds))
 	{
 		if(nk_input_is_key_down(in, NK_KEY_SHIFT)) //FIXME
 		{
@@ -5225,7 +5230,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 		}
 	}
 
-	const bool is_hovering = nk_input_is_mouse_hovering_rect(in, bounds);
+	const bool is_hovering = is_selectable && nk_input_is_mouse_hovering_rect(in, bounds);
 	if(  is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
 	{
@@ -5325,7 +5330,8 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, float dy)
 }
 
 static void
-_expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_conn, float dy)
+_expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_bounds,
+	mod_conn_t *mod_conn, float dy)
 {
 	if(!_source_type_match(handle, mod_conn->source_type) || !_sink_type_match(handle, mod_conn->sink_type))
 		return;
@@ -5352,9 +5358,14 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 		pw, ph
 	);
 
-	const int is_hovering = nk_input_is_mouse_hovering_rect(in, bounds);
+	const bool is_selectable = (bounds.x >= space_bounds.x)
+		&& (bounds.y >= space_bounds.y)
+		&& (bounds.x + bounds.w <= space_bounds.x + space_bounds.w)
+		&& (bounds.y + bounds.h <= space_bounds.y + space_bounds.h);
 
-	if(mod_conn->moving)
+	const int is_hovering = is_selectable && nk_input_is_mouse_hovering_rect(in, bounds);
+
+	if(is_selectable && mod_conn->moving)
 	{
 		if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
 		{
@@ -5496,7 +5507,8 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, mod_conn_t *mod_c
 
 				const struct nk_rect tile = nk_rect(x - ps/2, y - ps/2, ps, ps);
 
-				if(  nk_input_is_mouse_hovering_rect(in, tile)
+				if(  is_selectable
+					&& nk_input_is_mouse_hovering_rect(in, tile)
 					&& !mod_conn->moving)
 				{
 					const char *source_name = source_port->name;
@@ -5594,8 +5606,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			nk_push_scissor(canvas, space_bounds);
 
 			// graph content scrolling
-			if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
-				&& nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE))
+			if(nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_MIDDLE, space_bounds, nk_true))
 			{
 				handle->scrolling.x -= in->mouse.delta.x;
 				handle->scrolling.y -= in->mouse.delta.y;
@@ -5632,7 +5643,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			{
 				mod_t *mod = *mod_itr;
 
-				_expose_mod(handle, ctx, mod, dy);
+				_expose_mod(handle, ctx, space_bounds, mod, dy);
 
 				mod->hilighted = false;
 			}
@@ -5641,7 +5652,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			{
 				mod_conn_t *mod_conn = *mod_conn_itr;
 
-				_expose_mod_conn(handle, ctx, mod_conn, dy);
+				_expose_mod_conn(handle, ctx, space_bounds, mod_conn, dy);
 			}
 
 			// reset linking connection
