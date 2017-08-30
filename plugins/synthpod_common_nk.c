@@ -767,7 +767,7 @@ _node_as_bool(const LilvNode *node, int32_t dflt)
 }
 
 static LV2_Atom_Forge_Ref
-_patch_connection_internal(plughandle_t *handle, port_t *source_port, port_t *sink_port)
+_patch_connection_internal(plughandle_t *handle, port_t *source_port, port_t *sink_port, float gain)
 {
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_module.urid);
 	if(ref)
@@ -788,11 +788,16 @@ _patch_connection_internal(plughandle_t *handle, port_t *source_port, port_t *si
 	if(ref)
 		ref = lv2_atom_forge_string(&handle->forge, sink_port->symbol, strlen(sink_port->symbol));
 
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.param.gain.urid);
+	if(ref)
+		ref = lv2_atom_forge_float(&handle->forge, gain);
+
 	return ref;
 }
 
 static void
-_patch_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_port)
+_patch_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_port, float gain)
 {
 	LV2_Atom_Forge_Frame frame [3];
 
@@ -800,7 +805,7 @@ _patch_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_po
 		&& synthpod_patcher_add_object(&handle->regs, &handle->forge, &frame[0],
 			0, 0, handle->regs.synthpod.connection_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
-		&& _patch_connection_internal(handle, source_port, sink_port) )
+		&& _patch_connection_internal(handle, source_port, sink_port, gain) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -816,7 +821,7 @@ _patch_connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink
 		&& synthpod_patcher_remove_object(&handle->regs, &handle->forge, &frame[0],
 			0, 0, handle->regs.synthpod.connection_list.urid) //TODO subject
 		&& lv2_atom_forge_object(&handle->forge, &frame[2], 0, 0)
-		&& _patch_connection_internal(handle, source_port, sink_port) )
+		&& _patch_connection_internal(handle, source_port, sink_port, 0.f) )
 	{
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
@@ -5126,7 +5131,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 
 								if(i == j)
 								{
-									_patch_connection_add(handle, source_port, sink_port);
+									_patch_connection_add(handle, source_port, sink_port, 1.f);
 								}
 
 								j++;
@@ -5534,13 +5539,91 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 				if(!_sink_type_match(handle, sink_port->type))
 					continue;
 
+				const struct nk_rect tile = nk_rect(x - ps/2, y - ps/2, ps, ps);
 				port_conn_t *port_conn = _port_conn_find(mod_conn, source_port, sink_port);
+
+				if(  is_selectable
+					&& nk_input_is_mouse_hovering_rect(in, tile)
+					&& !mod_conn->moving)
+				{
+					const char *source_name = source_port->name;
+					const char *sink_name = sink_port->name;
+
+					if(source_name && sink_name)
+					{
+						if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
+						{
+							if(port_conn)
+							{
+								_patch_connection_remove(handle, source_port, sink_port);
+							}
+							else
+							{
+								_patch_connection_add(handle, source_port, sink_port, 1.f);
+							}
+						}
+						else if(in->mouse.scroll_delta != 0.f) // has scrolling
+						{
+							const float dd = in->mouse.scroll_delta * 100.f; //FIXME implement modifier
+							in->mouse.scroll_delta = 0.f;
+
+							if(is_dial)
+							{
+								if(port_conn)
+								{
+									float dBFS = 20.f * log10f(port_conn->gain);
+									int mBFS = dBFS * 100.f;
+									mBFS = NK_CLAMP(-3600, mBFS + dd, 3600);
+									dBFS = mBFS / 100.f;
+									port_conn->gain = exp10f(dBFS / 20.f);
+
+									if(dBFS <= -36.f)
+									{
+										_patch_connection_remove(handle, source_port, sink_port);
+									}
+									else
+									{
+										_patch_connection_add(handle, source_port, sink_port, port_conn->gain);
+									}
+								}
+								else if(dd > 0.f)
+								{
+									const int mBFS = NK_CLAMP(-3600, -3600 + dd, 3600);
+									const float dBFS = mBFS / 100.f;
+									const float gain = exp10f(dBFS / 20.f);
+
+									_patch_connection_add(handle, source_port, sink_port, gain);
+								}
+							}
+							else // !is_dial
+							{
+								if(port_conn)
+									_patch_connection_remove(handle, source_port, sink_port);
+								else
+									_patch_connection_add(handle, source_port, sink_port, 1.f);
+							}
+						}
+
+						char tmp [128];
+						if(is_dial && port_conn)
+						{
+							const float dBFS = 20.f * log10f(port_conn->gain); //FIXME remove duplication
+							snprintf(tmp, 128, "%s || %s || %+02.1f dBFS", source_name, sink_name, dBFS);
+						}
+						else
+						{
+							snprintf(tmp, 128, "%s || %s", source_name, sink_name);
+						}
+						nk_tooltip(ctx, tmp);
+					}
+				}
 
 				if(port_conn)
 				{
 					if(is_dial)
 					{
-						const float alpha = 1.f; //FIXME
+						const float dBFS = 20.f * log10f(port_conn->gain); //FIXME remove duplication
+						const float alpha = (dBFS + 36.f) / 72.f;
 						const float beta = NK_PI/2;
 
 						nk_stroke_arc(canvas,
@@ -5557,35 +5640,6 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 					else // !is_dial
 					{
 						nk_fill_arc(canvas, x, y, cs, 0.f, 2*NK_PI, toggle_color);
-					}
-				}
-
-				const struct nk_rect tile = nk_rect(x - ps/2, y - ps/2, ps, ps);
-
-				if(  is_selectable
-					&& nk_input_is_mouse_hovering_rect(in, tile)
-					&& !mod_conn->moving)
-				{
-					const char *source_name = source_port->name;
-					const char *sink_name = sink_port->name;
-
-					if(source_name && sink_name)
-					{
-						char tmp [128];
-						snprintf(tmp, 128, "%s || %s", source_name, sink_name);
-						nk_tooltip(ctx, tmp);
-
-						if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
-						{
-							if(port_conn)
-							{
-								_patch_connection_remove(handle, source_port, sink_port);
-							}
-							else
-							{
-								_patch_connection_add(handle, source_port, sink_port);
-							}
-						}
 					}
 				}
 

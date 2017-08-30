@@ -658,7 +658,7 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 	ramp_state_t ramp_state);
 
 bool
-_sp_app_port_connected(port_t *src_port, port_t *snk_port);
+_sp_app_port_connected(port_t *src_port, port_t *snk_port, float gain);
 
 int
 _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port, float gain);

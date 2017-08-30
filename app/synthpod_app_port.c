@@ -193,15 +193,20 @@ _dsp_master_reorder(sp_app_t *app)
 }
 
 bool
-_sp_app_port_connected(port_t *src_port, port_t *snk_port)
+_sp_app_port_connected(port_t *src_port, port_t *snk_port, float gain)
 {
 	connectable_t *conn = _sp_app_port_connectable(snk_port);
 	if(conn)
 	{
 		for(int s = 0; s < conn->num_sources; s++)
 		{
-			if(conn->sources[s].port == src_port)
+			source_t *src = &conn->sources[s];
+
+			if(src->port == src_port)
+			{
+				src->gain = gain;
 				return true;
+			}
 		}
 	}
 
@@ -211,7 +216,7 @@ _sp_app_port_connected(port_t *src_port, port_t *snk_port)
 int
 _sp_app_port_connect(sp_app_t *app, port_t *src_port, port_t *snk_port, float gain)
 {
-	if(_sp_app_port_connected(src_port, snk_port))
+	if(_sp_app_port_connected(src_port, snk_port, gain))
 		return 0;
 
 	connectable_t *conn = _sp_app_port_connectable(snk_port);
