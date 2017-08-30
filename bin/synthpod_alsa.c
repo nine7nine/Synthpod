@@ -21,7 +21,7 @@
 #include <ctype.h>
 #include <math.h>
 
-#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
 #	include <pthread_np.h>
 typedef cpuset_t cpu_set_t;
 #endif

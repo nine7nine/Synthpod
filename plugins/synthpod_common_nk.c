@@ -678,7 +678,7 @@ _hash_sort(hash_t *hash, int (*cmp)(const void *a, const void *b))
 }
 
 static void
-#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
 _hash_sort_r(hash_t *hash, int (*cmp)(void *data, const void *a, const void *b),
 	void *data)
 {
@@ -2415,7 +2415,7 @@ dBFS(float peak)
 #endif
 
 static int
-#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
 _sort_rdfs_label(void *data, const void *a, const void *b)
 #else
 _sort_rdfs_label(const void *a, const void *b, void *data)
