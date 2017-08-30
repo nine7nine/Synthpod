@@ -766,7 +766,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 			LilvNode *dflt_node;
 			LilvNode *min_node;
 			LilvNode *max_node;
-			lilv_port_get_range(mod->plug, port, &dflt_node, &min_node, &max_node);
+			lilv_port_get_range(plug, port, &dflt_node, &min_node, &max_node);
 			control->dflt = dflt_node ? lilv_node_as_float(dflt_node) : 0.f; //FIXME int, bool
 			control->min = min_node ? lilv_node_as_float(min_node) : 0.f; //FIXME int, bool
 			control->max = max_node ? lilv_node_as_float(max_node) : 1.f; //FIXME int, bool
@@ -893,7 +893,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	}
 
 	// load presets
-	mod->presets = lilv_plugin_get_related(mod->plug, app->regs.pset.preset.node);
+	mod->presets = lilv_plugin_get_related(plug, app->regs.pset.preset.node);
 	
 	// spawn worker thread
 	if(mod->worker.iface)
