@@ -56,7 +56,10 @@
 #endif
 
 typedef enum _property_type_t property_type_t;
-typedef enum _selector_search_t selector_search_t;
+typedef enum _bundle_selector_search_t bundle_selector_search_t;
+typedef enum _plugin_selector_search_t plugin_selector_search_t;
+typedef enum _preset_selector_search_t preset_selector_search_t;
+typedef enum _property_selector_search_t property_selector_search_t;
 
 typedef union _param_union_t param_union_t;
 
@@ -97,14 +100,32 @@ enum _property_type_t {
 	PROPERTY_TYPE_MAX
 };
 
-enum _selector_search_t {
-	SELECTOR_SEARCH_NAME = 0,
-	SELECTOR_SEARCH_COMMENT,
-	SELECTOR_SEARCH_AUTHOR,
-	SELECTOR_SEARCH_CLASS,
-	SELECTOR_SEARCH_PROJECT,
+enum _bundle_selector_search_t {
+	BUNDLE_SELECTOR_SEARCH_NAME = 0,
 
-	SELECTOR_SEARCH_MAX
+	BUNDLE_SELECTOR_SEARCH_MAX
+};
+
+enum _plugin_selector_search_t {
+	PLUGIN_SELECTOR_SEARCH_NAME = 0,
+	PLUGIN_SELECTOR_SEARCH_COMMENT,
+	PLUGIN_SELECTOR_SEARCH_AUTHOR,
+	PLUGIN_SELECTOR_SEARCH_CLASS,
+	PLUGIN_SELECTOR_SEARCH_PROJECT,
+
+	PLUGIN_SELECTOR_SEARCH_MAX
+};
+
+enum _preset_selector_search_t {
+	PRESET_SELECTOR_SEARCH_NAME = 0,
+
+	PRESET_SELECTOR_SEARCH_MAX
+};
+
+enum _property_selector_search_t {
+	PROPERTY_SELECTOR_SEARCH_NAME = 0,
+
+	PROPERTY_SELECTOR_SEARCH_MAX
 };
 
 struct _hash_t {
@@ -360,10 +381,10 @@ struct _plughandle_t {
 	enum nk_collapse_states plugin_info_collapse_states;
 	enum nk_collapse_states preset_info_collapse_states;
 
-	selector_search_t bundle_search_selector;
-	selector_search_t plugin_search_selector;
-	selector_search_t preset_search_selector;
-	selector_search_t port_search_selector;
+	bundle_selector_search_t bundle_search_selector;
+	plugin_selector_search_t plugin_search_selector;
+	preset_selector_search_t preset_search_selector;
+	property_selector_search_t property_search_selector;
 
 	hash_t bundle_matches;
 	hash_t plugin_matches;
@@ -447,12 +468,24 @@ struct _plughandle_t {
 	time_t t0;
 };
 
-static const char *search_labels [SELECTOR_SEARCH_MAX] = {
-	[SELECTOR_SEARCH_NAME] = "Name",
-	[SELECTOR_SEARCH_COMMENT] = "Comment",
-	[SELECTOR_SEARCH_AUTHOR] = "Author",
-	[SELECTOR_SEARCH_CLASS] = "Class",
-	[SELECTOR_SEARCH_PROJECT] = "Project"
+static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
+	[BUNDLE_SELECTOR_SEARCH_NAME] = "Name"
+};
+
+static const char *plugin_search_labels [PLUGIN_SELECTOR_SEARCH_MAX] = {
+	[PLUGIN_SELECTOR_SEARCH_NAME] = "Name",
+	[PLUGIN_SELECTOR_SEARCH_COMMENT] = "Comment",
+	[PLUGIN_SELECTOR_SEARCH_AUTHOR] = "Author",
+	[PLUGIN_SELECTOR_SEARCH_CLASS] = "Class",
+	[PLUGIN_SELECTOR_SEARCH_PROJECT] = "Project"
+};
+
+static const char *preset_search_labels [PRESET_SELECTOR_SEARCH_MAX] = {
+	[PRESET_SELECTOR_SEARCH_NAME] = "Name"
+};
+
+static const char *property_search_labels [PROPERTY_SELECTOR_SEARCH_MAX] = {
+	[PROPERTY_SELECTOR_SEARCH_NAME] = "Name"
 };
 
 static const struct nk_color grid_line_color = {40, 40, 40, 255};
@@ -3433,9 +3466,9 @@ _refresh_main_plugin_list(plughandle_t *handle)
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 
 	LilvNode *p = NULL;
-	if(handle->plugin_search_selector == SELECTOR_SEARCH_COMMENT)
+	if(handle->plugin_search_selector == PLUGIN_SELECTOR_SEARCH_COMMENT)
 		p = handle->node.rdfs_comment;
-	else if(handle->plugin_search_selector == SELECTOR_SEARCH_PROJECT)
+	else if(handle->plugin_search_selector == PLUGIN_SELECTOR_SEARCH_PROJECT)
 		p = handle->node.doap_name;
 
 	bool selector_visible = false;
@@ -3453,12 +3486,12 @@ _refresh_main_plugin_list(plughandle_t *handle)
 			{
 				switch(handle->plugin_search_selector)
 				{
-					case SELECTOR_SEARCH_NAME:
+					case PLUGIN_SELECTOR_SEARCH_NAME:
 					{
 						if(strcasestr(name_str, _textedit_const(&handle->plugin_search_edit)))
 							visible = true;
 					} break;
-					case SELECTOR_SEARCH_COMMENT:
+					case PLUGIN_SELECTOR_SEARCH_COMMENT:
 					{
 						LilvNodes *label_nodes = p ? lilv_plugin_get_value(plug, p) : NULL;
 						if(label_nodes)
@@ -3473,7 +3506,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 							lilv_nodes_free(label_nodes);
 						}
 					} break;
-					case SELECTOR_SEARCH_AUTHOR:
+					case PLUGIN_SELECTOR_SEARCH_AUTHOR:
 					{
 						LilvNode *author_node = lilv_plugin_get_author_name(plug);
 						if(author_node)
@@ -3483,7 +3516,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 							lilv_node_free(author_node);
 						}
 					} break;
-					case SELECTOR_SEARCH_CLASS:
+					case PLUGIN_SELECTOR_SEARCH_CLASS:
 					{
 						const LilvPluginClass *class = lilv_plugin_get_class(plug);
 						if(class)
@@ -3496,7 +3529,7 @@ _refresh_main_plugin_list(plughandle_t *handle)
 							}
 						}
 					} break;
-					case SELECTOR_SEARCH_PROJECT:
+					case PLUGIN_SELECTOR_SEARCH_PROJECT:
 					{
 						LilvNode *project = lilv_plugin_get_project(plug);
 						if(project)
@@ -3512,7 +3545,8 @@ _refresh_main_plugin_list(plughandle_t *handle)
 						}
 					} break;
 
-					default: break;
+					case PLUGIN_SELECTOR_SEARCH_MAX:
+						break;
 				}
 			}
 
@@ -4717,6 +4751,7 @@ _refresh_main_port_list(plughandle_t *handle, mod_t *mod)
 				if(!strcasestr(port->name, _textedit_const(&handle->port_search_edit)))
 					visible = false;
 			}
+			//FIXME support other search criteria
 		}
 
 		if(visible)
@@ -4743,6 +4778,7 @@ _refresh_main_param_list(plughandle_t *handle, mod_t *mod)
 				if(!strcasestr(param->label, _textedit_const(&handle->port_search_edit)))
 					visible = false;
 			}
+			//FIXME support other search criteria
 		}
 
 		if(visible)
@@ -5682,8 +5718,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 						nk_textedit_select_all(&handle->bundle_search_edit);
 
-					const selector_search_t old_sel = handle->bundle_search_selector;
-					handle->bundle_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					const bundle_selector_search_t old_sel = handle->bundle_search_selector;
+					handle->bundle_search_selector = nk_combo(ctx, bundle_search_labels, BUNDLE_SELECTOR_SEARCH_MAX,
 						handle->bundle_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 					if(old_sel != handle->bundle_search_selector)
 						handle->bundle_find_matches = true;
@@ -5713,8 +5749,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 						nk_textedit_select_all(&handle->plugin_search_edit);
 
-					const selector_search_t old_sel = handle->plugin_search_selector;
-					handle->plugin_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					const plugin_selector_search_t old_sel = handle->plugin_search_selector;
+					handle->plugin_search_selector = nk_combo(ctx, plugin_search_labels, PLUGIN_SELECTOR_SEARCH_MAX,
 						handle->plugin_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 					if(old_sel != handle->plugin_search_selector)
 						handle->plugin_find_matches = true;
@@ -5750,8 +5786,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 						nk_textedit_select_all(&handle->preset_search_edit);
 
-					const selector_search_t old_sel = handle->preset_search_selector;
-					handle->preset_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
+					const preset_selector_search_t old_sel = handle->preset_search_selector;
+					handle->preset_search_selector = nk_combo(ctx, preset_search_labels, PRESET_SELECTOR_SEARCH_MAX,
 						handle->preset_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 					if(old_sel != handle->preset_search_selector)
 						handle->preset_find_matches = true;
@@ -5943,10 +5979,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
 					nk_textedit_select_all(&handle->port_search_edit);
 
-				const selector_search_t old_sel = handle->port_search_selector;
-				handle->port_search_selector = nk_combo(ctx, search_labels, SELECTOR_SEARCH_MAX,
-					handle->port_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->port_search_selector)
+				const property_selector_search_t old_sel = handle->property_search_selector;
+				handle->property_search_selector = nk_combo(ctx, property_search_labels, PROPERTY_SELECTOR_SEARCH_MAX,
+					handle->property_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+				if(old_sel != handle->property_search_selector)
 					handle->prop_find_matches = true;
 			}
 			nk_menubar_end(ctx);
