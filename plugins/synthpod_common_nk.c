@@ -5368,6 +5368,8 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 	if(!_source_type_match(handle, mod_conn->source_type) || !_sink_type_match(handle, mod_conn->sink_type))
 		return;
 
+	const bool is_dial = (handle->type == PROPERTY_TYPE_AUDIO) || (handle->type == PROPERTY_TYPE_CV);
+
 	struct nk_input *in = &ctx->input;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	const struct nk_vec2 scrolling = handle->scrolling;
@@ -5381,7 +5383,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 	const unsigned nx = _mod_num_sources(mod_conn->source_mod, handle->type);
 	const unsigned ny = _mod_num_sinks(mod_conn->sink_mod, handle->type);
 
-	const float ps = 16.f * handle->scale;
+	const float ps = (is_dial ? 24.f : 16.f) * handle->scale;
 	const float pw = nx * ps;
 	const float ph = ny * ps;
 	struct nk_rect bounds = nk_rect(
@@ -5535,7 +5537,28 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 				port_conn_t *port_conn = _port_conn_find(mod_conn, source_port, sink_port);
 
 				if(port_conn)
-					nk_fill_arc(canvas, x, y, cs, 0.f, 2*NK_PI, toggle_color);
+				{
+					if(is_dial)
+					{
+						const float alpha = 1.f; //FIXME
+						const float beta = NK_PI/2;
+
+						nk_stroke_arc(canvas,
+							x, y, 10.f * handle->scale,
+							beta + 0.2f*NK_PI, beta + 1.8f*NK_PI,
+							1.f,
+							style->border_color);
+						nk_stroke_arc(canvas,
+							x, y, 7.f * handle->scale,
+							beta + 0.2f*NK_PI, beta + (0.2f + alpha*1.6f)*NK_PI,
+							2.f,
+							toggle_color);
+					}
+					else // !is_dial
+					{
+						nk_fill_arc(canvas, x, y, cs, 0.f, 2*NK_PI, toggle_color);
+					}
+				}
 
 				const struct nk_rect tile = nk_rect(x - ps/2, y - ps/2, ps, ps);
 
