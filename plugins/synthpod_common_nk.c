@@ -3853,7 +3853,7 @@ static int
 _dial_bool(struct nk_context *ctx, int32_t *val, struct nk_color color, bool editable)
 {
 	const int32_t tmp = *val;
-	struct nk_rect bounds = nk_layout_space_bounds(ctx);
+	struct nk_rect bounds;
 	const bool left_mouse_click_in_cursor = nk_widget_is_mouse_clicked(ctx, NK_BUTTON_LEFT);
 	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
 
@@ -4028,7 +4028,7 @@ _dial_double(struct nk_context *ctx, double min, double *val, double max, float 
 	struct nk_color color, bool editable)
 {
 	const double tmp = *val;
-	struct nk_rect bounds = nk_layout_space_bounds(ctx);
+	struct nk_rect bounds;
 	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
 
 	if(layout_states != NK_WIDGET_INVALID)
@@ -4064,7 +4064,7 @@ _dial_long(struct nk_context *ctx, int64_t min, int64_t *val, int64_t max, float
 	struct nk_color color, bool editable)
 {
 	const int64_t tmp = *val;
-	struct nk_rect bounds = nk_layout_space_bounds(ctx);
+	struct nk_rect bounds;
 	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
 
 	if(layout_states != NK_WIDGET_INVALID)
@@ -4120,12 +4120,11 @@ _dial_int(struct nk_context *ctx, int32_t min, int32_t *val, int32_t max, float 
 
 static void
 _expose_atom_port(struct nk_context *ctx, mod_t *mod, port_t *port,
-	float dy, const char *name_str)
+	float DY, float dy, const char *name_str)
 {
 	plughandle_t *handle = mod->handle;
 
-	const float DY = nk_window_get_content_region(ctx).h
-		- 2*ctx->style.window.group_padding.y;
+	DY -= 2*ctx->style.window.group_padding.y;
 	const float ratio [] = {0.7, 0.3};
 
 	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
@@ -4164,10 +4163,9 @@ _expose_atom_port(struct nk_context *ctx, mod_t *mod, port_t *port,
 
 static void
 _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
-	float dy, const char *name_str, bool is_cv)
+	float DY, float dy, const char *name_str, bool is_cv)
 {
-	const float DY = nk_window_get_content_region(ctx).h
-		- 2*ctx->style.window.group_padding.y;
+	DY -= 2*ctx->style.window.group_padding.y;
 	const float ratio [] = {0.7, 0.3};
 
 	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
@@ -4268,12 +4266,11 @@ const char *lab = "#"; //FIXME
 
 static bool
 _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control,
-	float dy, const char *name_str)
+	float DY, float dy, const char *name_str)
 {
 	bool changed = false;
 
-	const float DY = nk_window_get_content_region(ctx).h
-		- 2*ctx->style.window.group_padding.y;
+	DY -= 2*ctx->style.window.group_padding.y;
 	const float ratio [] = {0.7, 0.3};
 
 	nk_layout_row(ctx, NK_DYNAMIC, DY, 2, ratio);
@@ -4373,7 +4370,7 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 }
 
 static void
-_expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
+_expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float DY, float dy)
 {
 	plughandle_t *handle = mod->handle;
 
@@ -4390,16 +4387,16 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 		{
 			case PROPERTY_TYPE_AUDIO:
 			{
-				_expose_audio_port(ctx, mod, &port->audio, dy, port->name, false);
+				_expose_audio_port(ctx, mod, &port->audio, DY, dy, port->name, false);
 			} break;
 			case PROPERTY_TYPE_CV:
 			{
-				_expose_audio_port(ctx, mod, &port->audio, dy, port->name, true);
+				_expose_audio_port(ctx, mod, &port->audio, DY, dy, port->name, true);
 				//FIXME notification
 			} break;
 			case PROPERTY_TYPE_CONTROL:
 			{
-				if(_expose_control_port(ctx, mod, &port->control, dy, port->name))
+				if(_expose_control_port(ctx, mod, &port->control, DY, dy, port->name))
 				{
 					const float val = port->control.is_bool || port->control.is_int
 						? port->control.val.i
@@ -4417,7 +4414,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float dy)
 			{
 				if(port->type & PROPERTY_TYPE_ATOM)
 				{
-					_expose_atom_port(ctx, mod, port, dy, port->name);
+					_expose_atom_port(ctx, mod, port, DY, dy, port->name);
 				}
 			} break;
 		}
@@ -4467,10 +4464,9 @@ _widget_string(plughandle_t *handle, struct nk_context *ctx,
 
 static bool
 _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle,
-	float dy, const char *name_str)
+	float DY, float dy, const char *name_str)
 {
-	const float DY = nk_window_get_content_region(ctx).h
-		- 2*ctx->style.window.group_padding.y;
+	DY -= 2*ctx->style.window.group_padding.y;
 
 	bool changed = false;
 	if(param->range == handle->forge.String)
@@ -4621,7 +4617,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 }
 
 static void
-_expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t *param, float dy)
+_expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t *param, float DY, float dy)
 {
 	const char *name_str = param->label ? param->label : "Unknown";
 
@@ -4634,7 +4630,7 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 	const struct nk_rect bb = nk_widget_bounds(ctx);
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
-		if(_expose_param_inner(ctx, param, handle, dy, name_str))
+		if(_expose_param_inner(ctx, param, handle, DY, dy, name_str))
 		{
 			//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
 			if(param->range == handle->forge.Int)
@@ -4811,7 +4807,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 				}
 
 				nk_layout_row_dynamic(ctx, DY, 1);
-				_expose_port(ctx, mod, port, dy);
+				_expose_port(ctx, mod, port, DY, dy);
 			}
 
 			lilv_node_free(group_label_node);
@@ -4839,7 +4835,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			}
 
 			nk_layout_row_dynamic(ctx, DY, 1);
-			_expose_port(ctx, mod, port, dy);
+			_expose_port(ctx, mod, port, DY, dy);
 		}
 	}
 
@@ -4861,7 +4857,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			}
 
 			nk_layout_row_dynamic(ctx, DY, 1);
-			_expose_param(handle, mod, ctx, param, dy);
+			_expose_param(handle, mod, ctx, param, DY, dy);
 		}
 	}
 
@@ -4884,7 +4880,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 			}
 
 			nk_layout_row_dynamic(ctx, DY, 1);
-			_expose_param(handle, mod, ctx, param, dy);
+			_expose_param(handle, mod, ctx, param, DY, dy);
 		}
 	}
 }
