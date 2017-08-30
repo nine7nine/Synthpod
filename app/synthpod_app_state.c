@@ -879,21 +879,6 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 		&micro_version, sizeof(int32_t), app->forge.Int,
 		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 
-	// store grid cols
-	store(hndl, app->regs.synthpod.grid_cols.urid,
-		&app->ncols, sizeof(int32_t), app->forge.Int,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
-
-	// store grid rows
-	store(hndl, app->regs.synthpod.grid_rows.urid,
-		&app->nrows, sizeof(int32_t), app->forge.Int,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
-
-	// store pane left 
-	store(hndl, app->regs.synthpod.pane_left.urid,
-		&app->nleft, sizeof(float), app->forge.Float,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
-
 	// create temporary forge
 	LV2_Atom_Forge _forge;
 	LV2_Atom_Forge *forge = &_forge;
@@ -1408,30 +1393,6 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	{
 		//TODO check with running version
 	}
-
-	// retrieve grid cols
-	const int32_t *grid_cols = retrieve(hndl, app->regs.synthpod.grid_cols.urid,
-		&size, &type, &_flags);
-	if(grid_cols && (type == app->forge.Int) && (size == sizeof(int32_t)) )
-		app->ncols = *grid_cols;
-	else
-		sp_app_log_error(app, "%s: invaild gridCols\n", __func__);
-
-	// retrieve grid rows
-	const int32_t *grid_rows = retrieve(hndl, app->regs.synthpod.grid_rows.urid,
-		&size, &type, &_flags);
-	if(grid_rows && (type == app->forge.Int) && (size == sizeof(int32_t)) )
-		app->nrows = *grid_rows;
-	else
-		sp_app_log_error(app, "%s: invaild gridRows\n", __func__);
-
-	// retrieve pane left
-	const float *pane_left = retrieve(hndl, app->regs.synthpod.pane_left.urid,
-		&size, &type, &_flags);
-	if(pane_left && (type == app->forge.Float) && (size == sizeof(float)) )
-		app->nleft = *pane_left;
-	else
-		sp_app_log_error(app, "%s: invaild paneLeft \n", __func__);
 
 	// retrieve spod:moduleList
 	const LV2_Atom_Object_Body *mod_list_body = retrieve(hndl, app->regs.synthpod.module_list.urid,
