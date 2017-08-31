@@ -4026,10 +4026,8 @@ _dial_numeric_behavior(struct nk_context *ctx, struct nk_rect bounds,
 		*states = NK_WIDGET_STATE_HOVER;
 	}
 
-	if(nk_input_is_key_down(in, NK_KEY_CTRL))
-		*divider *= 4;
 	if(nk_input_is_key_down(in, NK_KEY_SHIFT))
-		*divider *= 4;
+		*divider *= 10;
 
 	return dd;
 }
@@ -5586,7 +5584,11 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 						}
 						else if(in->mouse.scroll_delta != 0.f) // has scrolling
 						{
-							const float dd = in->mouse.scroll_delta * 100.f; //FIXME implement modifier
+							float multiplier = 100.f;
+							if(nk_input_is_key_down(in, NK_KEY_SHIFT))
+								multiplier *= 0.1f;
+
+							const float dd = in->mouse.scroll_delta * multiplier;
 							in->mouse.scroll_delta = 0.f;
 
 							if(is_dial)
