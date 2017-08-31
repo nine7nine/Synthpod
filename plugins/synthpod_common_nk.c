@@ -2664,9 +2664,9 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		return;
 
 	mod->plug = plug;
-	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 1; // + automation port
+	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 2; // + automation ports
 
-	for(unsigned p=0; p<num_ports-1; p++) // - automation port
+	for(unsigned p=0; p<num_ports - 2; p++) // - automation ports
 	{
 		port_t *port = calloc(1, sizeof(port_t));
 		if(!port)
@@ -2885,6 +2885,30 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			mod->sink_type |= port->type;
 	}
 
+	// automation input port
+	{
+		const unsigned p = num_ports - 2;
+
+		port_t *port = calloc(1, sizeof(port_t));
+		if(port)
+		{
+			_hash_add(&mod->ports, port);
+
+			port->mod = mod;
+			port->index = p;
+			port->port = NULL;
+			port->symbol = "__automation__in__";
+			port->groups = NULL;
+			port->name = strdup("Automation In");
+
+			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC;
+
+			_hash_add(&mod->sinks, port);
+			mod->sink_type |= port->type;
+		}
+	}
+
+	// automation output port
 	{
 		const unsigned p = num_ports - 1;
 
@@ -2896,13 +2920,13 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->mod = mod;
 			port->index = p;
 			port->port = NULL;
-			port->symbol = "automation";
+			port->symbol = "__automation__out__";
 			port->groups = NULL;
-			port->name = strdup("Automation");
+			port->name = strdup("Automation Out");
 
 			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC;
 
-			_hash_add(&mod->sinks, port);
+			_hash_add(&mod->sources, port);
 			mod->sink_type |= port->type;
 		}
 	}
