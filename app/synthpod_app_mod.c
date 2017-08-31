@@ -897,23 +897,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
 		_sp_app_mod_slice_pool(mod, pool);
 
-	for(unsigned i=0; i<mod->num_ports; i++)
+	for(unsigned i=0; i<mod->num_ports - 2; i++)
 	{
 		port_t *tar = &mod->ports[i];
 
 		// set port buffer
 		lilv_instance_connect_port(mod->inst, i, tar->base);
-
-		// initialize atom sequence ports
-		if(  (tar->type == PORT_TYPE_ATOM)
-			&& (tar->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
-		{
-			LV2_Atom_Sequence *seq = tar->base;
-			seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-			seq->atom.type = app->forge.Sequence;
-			seq->body.unit = 0;
-			seq->body.pad = 0;
-		}
 	}
 
 	// load presets

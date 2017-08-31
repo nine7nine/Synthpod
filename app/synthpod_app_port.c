@@ -155,11 +155,11 @@ _dsp_master_reorder(sp_app_t *app)
 	for(unsigned m=0; m<app->num_mods; m++)
 	{
 		mod_t *mod = app->mods[m];
-		printf("%s: %u, %u\n",
+		sp_app_log_trace(app, "%s: %u, %u\n",
 			app->driver->unmap->unmap(app->driver->unmap->handle, mod->plug_urid),
 			mod->dsp_client.num_sources, mod->dsp_client.num_sinks);
 	}
-	printf("\n");
+	sp_app_log_trace(app, "\n");
 	*/
 
 #if !defined(USE_DYNAMIC_PARALLELIZER)

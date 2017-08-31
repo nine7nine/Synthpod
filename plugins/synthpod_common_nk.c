@@ -2927,7 +2927,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC;
 
 			_hash_add(&mod->sources, port);
-			mod->sink_type |= port->type;
+			mod->source_type |= port->type;
 		}
 	}
 

@@ -19,6 +19,7 @@
 #include <synthpod_patcher.h>
 
 #include <osc.lv2/util.h>
+#include <osc.lv2/forge.h>
 
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
 #	include <pthread_np.h>
@@ -198,12 +199,17 @@ _sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value, ui
 
 		//printf("parameter automation match: %f %f\n", rel, f32);
 	}
+	else if(port->type == PORT_TYPE_CV)
+	{
+		//FIXME does it make sense to make this automatable?
+	}
 }
 
 __realtime static inline void
 _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
 	sp_app_t *app = mod->app;
+
 	// multiplex multiple sources to single sink where needed
 	for(unsigned p=0; p<mod->num_ports; p++)
 	{
@@ -262,7 +268,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		//FIXME for para/dynameters needs to be multiplexed with patchabel events
 		// apply automation if any
 		{
-			const unsigned p = mod->num_ports - 1;
+			const unsigned p = mod->num_ports - 2;
 			port_t *auto_port = &mod->ports[p];
 			const LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(auto_port);
 
@@ -392,6 +398,80 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		if(!mod->disabled)
 		{
 			lilv_instance_run(mod->inst, nsamples);
+		}
+	}
+
+	//handle automation output
+	{
+		const unsigned p = mod->num_ports - 1;
+		port_t *auto_port = &mod->ports[p];
+		LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(auto_port);
+		//const uint32_t capacity = seq->atom.size;
+		const uint32_t capacity = PORT_SIZE(auto_port);
+		LV2_Atom_Forge_Frame frame;
+
+		LV2_Atom_Forge forge = app->forge; //FIXME do this only once
+		lv2_atom_forge_set_buffer(&forge, (uint8_t *)seq, capacity);
+		LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
+
+		// iterate over automations FIXME only do this when there have been changes
+		for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+		{
+			auto_t *automation = &mod->automations[i];
+
+			if(automation->type == AUTO_TYPE_NONE)
+				continue; // invalid entry
+
+			double val = 0.0;
+			if(automation->property)
+			{
+				//FIXME need to read patch messages
+			}
+			else // !property
+			{
+				port_t *dst_port = &mod->ports[automation->index];
+				float *buf = PORT_BASE_ALIGNED(dst_port);
+
+				val = (*buf - automation->add) / automation->mul;
+			}
+
+			if(automation->type == AUTO_TYPE_MIDI)
+			{
+				midi_auto_t *mauto = &automation->midi;
+
+				const size_t sz = 3;
+				const uint8_t channel = (mauto->channel >= 0)
+					? mauto->channel
+					: 0;
+				const uint8_t controller = (mauto->controller >= 0)
+					? mauto->controller
+					: 0;
+				const uint8_t msg [sz] = {0xb0 | channel, controller, floor(val)};
+
+				if(ref)
+					ref = lv2_atom_forge_frame_time(&forge, 0); //FIXME use correct timestamp
+				if(ref)
+					ref = lv2_atom_forge_atom(&forge, sz, app->regs.port.midi.urid);
+				if(ref)
+					ref = lv2_atom_forge_write(&forge, msg, sz);
+			}
+			else if(automation->type == AUTO_TYPE_OSC)
+			{
+				osc_auto_t *oauto = &automation->osc;
+
+				if(ref)
+					ref = lv2_atom_forge_frame_time(&forge, 0); //FIXME use correct timestamp
+				if(ref)
+					ref = lv2_osc_forge_message_vararg(&forge, &app->osc_urid, oauto->path, "d", val); //FIXME what type should be used?
+			}
+		}
+
+		if(ref)
+			lv2_atom_forge_pop(&forge, &frame);
+		else
+		{
+			lv2_atom_sequence_clear(seq);
+			sp_app_log_trace(app, "%s: automation out buffer overflow\n", __func__);
 		}
 	}
 
@@ -748,8 +828,8 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 				&& (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE) )
 			{
 				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
-				seq->atom.type = app->regs.port.sequence.urid;
 				seq->atom.size = sizeof(LV2_Atom_Sequence_Body); // empty sequence
+				seq->atom.type = app->regs.port.sequence.urid;
 				seq->body.unit = 0;
 				seq->body.pad = 0;
 			}
@@ -1088,7 +1168,7 @@ _sp_app_reinitialize(sp_app_t *app)
 	{
 		mod_t *mod = app->mods[m];
 
-		for(unsigned i=0; i<mod->num_ports; i++)
+		for(unsigned i=0; i<mod->num_ports - 2; i++)
 		{
 			port_t *tar = &mod->ports[i];
 
