@@ -210,9 +210,9 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 		{
 			//printf("app: bundle loaded\n");
 
-			assert(app->block_state == BLOCKING_STATE_WAIT);
+			//FIXME assert(app->block_state == BLOCKING_STATE_WAIT);
 			app->block_state = BLOCKING_STATE_RUN; // releae block
-			assert(app->load_bundle == true);
+			//FIXME assert(app->load_bundle == true);
 			app->load_bundle = false; // for sp_app_bypassed
 
 #if 0
