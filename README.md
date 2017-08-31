@@ -16,7 +16,6 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 * [lilv](http://drobilla.net/software/lilv/) (LV2 plugin host library)
 * [sratom](http://drobilla.net/software/sratom/) (LV2 atom serialization library)
 * [libuv](http://libuv.org) (asynchronous I/O library)
-* [libuuid](http://linux.die.net/man/3/libuuid) (universally unique identifier library)
 
 ### Optional dependencies for JACK backend
 
