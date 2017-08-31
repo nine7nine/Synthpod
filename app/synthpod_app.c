@@ -439,21 +439,20 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 			{
 				midi_auto_t *mauto = &automation->midi;
 
-				const size_t sz = 3;
 				const uint8_t channel = (mauto->channel >= 0)
 					? mauto->channel
 					: 0;
 				const uint8_t controller = (mauto->controller >= 0)
 					? mauto->controller
 					: 0;
-				const uint8_t msg [sz] = {0xb0 | channel, controller, floor(val)};
+				const uint8_t msg [3] = {0xb0 | channel, controller, floor(val)};
 
 				if(ref)
 					ref = lv2_atom_forge_frame_time(&forge, 0); //FIXME use correct timestamp
 				if(ref)
-					ref = lv2_atom_forge_atom(&forge, sz, app->regs.port.midi.urid);
+					ref = lv2_atom_forge_atom(&forge, 3, app->regs.port.midi.urid);
 				if(ref)
-					ref = lv2_atom_forge_write(&forge, msg, sz);
+					ref = lv2_atom_forge_write(&forge, msg, 3);
 			}
 			else if(automation->type == AUTO_TYPE_OSC)
 			{
