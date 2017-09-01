@@ -205,6 +205,89 @@ _sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value, ui
 	}
 }
 
+__realtime static inline bool
+_sp_app_has_automations(mod_t *mod)
+{
+	for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+	{
+		auto_t *automation = &mod->automations[i];
+
+		if(automation->type != AUTO_TYPE_NONE)
+			return true; // has automations
+	}
+
+	return false; // has no automations
+}
+
+__realtime static inline auto_t *
+_sp_app_find_automation_for_port(mod_t *mod, uint32_t index)
+{
+	for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+	{
+		auto_t *automation = &mod->automations[i];
+
+		if(automation->type == AUTO_TYPE_NONE)
+			continue; // skip empty slot
+
+		if( (automation->property == 0) && (automation->index == index) )
+			return automation; // found match
+	}
+
+	return NULL;
+}
+
+__realtime static inline auto_t *
+_sp_app_find_automation_for_property(mod_t *mod, LV2_URID property)
+{
+	for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+	{
+		auto_t *automation = &mod->automations[i];
+
+		if(automation->type == AUTO_TYPE_NONE)
+			continue; // skip empty slot
+
+		if(automation->property == property)
+			return automation; // found match
+	}
+
+	return NULL;
+}
+
+__realtime static inline LV2_Atom_Forge_Ref
+_sp_app_automation_out(sp_app_t *app, LV2_Atom_Forge *forge, auto_t *automation, uint32_t frames, double value)
+{
+	LV2_Atom_Forge_Ref ref = 0;
+
+	if(automation->type == AUTO_TYPE_MIDI)
+	{
+		midi_auto_t *mauto = &automation->midi;
+
+		const uint8_t channel = (mauto->channel >= 0)
+			? mauto->channel
+			: 0;
+		const uint8_t controller = (mauto->controller >= 0)
+			? mauto->controller
+			: 0;
+		const uint8_t msg [3] = {0xb0 | channel, controller, floor(value)};
+
+		ref = lv2_atom_forge_frame_time(forge, frames);
+		if(ref)
+			ref = lv2_atom_forge_atom(forge, 3, app->regs.port.midi.urid);
+		if(ref)
+			ref = lv2_atom_forge_write(forge, msg, 3);
+	}
+	else if(automation->type == AUTO_TYPE_OSC)
+	{
+		osc_auto_t *oauto = &automation->osc;
+
+		ref = lv2_atom_forge_frame_time(forge, frames);
+		if(ref)
+			ref = lv2_osc_forge_message_vararg(forge, &app->osc_urid, oauto->path, "d", value); //FIXME what type should be used?
+	}
+
+	return ref;
+}
+
 __realtime static inline void
 _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
@@ -403,8 +486,8 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 	//handle automation output
 	{
-		const unsigned p = mod->num_ports - 1;
-		port_t *auto_port = &mod->ports[p];
+		const unsigned ao = mod->num_ports - 1;
+		port_t *auto_port = &mod->ports[ao];
 		LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(auto_port);
 		//const uint32_t capacity = seq->atom.size;
 		const uint32_t capacity = PORT_SIZE(auto_port);
@@ -414,54 +497,84 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		lv2_atom_forge_set_buffer(&forge, (uint8_t *)seq, capacity);
 		LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
 
-		// iterate over automations FIXME only do this when there have been changes
-		for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+		if(_sp_app_has_automations(mod)) //FIXME discriminate between input/output automations
 		{
-			auto_t *automation = &mod->automations[i];
+			uint32_t t0 = 0;
 
-			if(automation->type == AUTO_TYPE_NONE)
-				continue; // invalid entry
-
-			double val = 0.0;
-			if(automation->property)
+			for(unsigned p=0; p<mod->num_ports; p++)
 			{
-				//FIXME need to read patch messages
-			}
-			else // !property
-			{
-				port_t *dst_port = &mod->ports[automation->index];
-				float *buf = PORT_BASE_ALIGNED(dst_port);
+				port_t *port = &mod->ports[p];
 
-				val = (*buf - automation->add) / automation->mul;
-			}
+				if(port->direction != PORT_DIRECTION_OUTPUT)
+					continue; // skip non-output ports
 
-			if(automation->type == AUTO_TYPE_MIDI)
-			{
-				midi_auto_t *mauto = &automation->midi;
+				if(port->type == PORT_TYPE_CONTROL)
+				{
+					const float *val = PORT_BASE_ALIGNED(port);
 
-				const uint8_t channel = (mauto->channel >= 0)
-					? mauto->channel
-					: 0;
-				const uint8_t controller = (mauto->controller >= 0)
-					? mauto->controller
-					: 0;
-				const uint8_t msg [3] = {0xb0 | channel, controller, floor(val)};
+					if(*val != port->control.last) // has changed since last cycle
+					{
+						auto_t *automation = _sp_app_find_automation_for_port(mod, p);
 
-				if(ref)
-					ref = lv2_atom_forge_frame_time(&forge, 0); //FIXME use correct timestamp
-				if(ref)
-					ref = lv2_atom_forge_atom(&forge, 3, app->regs.port.midi.urid);
-				if(ref)
-					ref = lv2_atom_forge_write(&forge, msg, 3);
-			}
-			else if(automation->type == AUTO_TYPE_OSC)
-			{
-				osc_auto_t *oauto = &automation->osc;
+						if(automation)
+						{
+							const double value = (*val - automation->add) / automation->mul;
 
-				if(ref)
-					ref = lv2_atom_forge_frame_time(&forge, 0); //FIXME use correct timestamp
-				if(ref)
-					ref = lv2_osc_forge_message_vararg(&forge, &app->osc_urid, oauto->path, "d", val); //FIXME what type should be used?
+							if(ref)
+								ref = _sp_app_automation_out(app, &forge, automation, t0, value);
+						}
+					}
+				}
+				else if( (port->type == PORT_TYPE_ATOM)
+					&& port->atom.patchable )
+				{
+					const LV2_Atom_Sequence *patch_seq = PORT_BASE_ALIGNED(port);
+
+					LV2_ATOM_SEQUENCE_FOREACH(patch_seq, ev)
+					{
+						const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
+
+						if(  lv2_atom_forge_is_object_type(&forge, obj->atom.type)
+							&& (obj->body.otype == app->regs.patch.set.urid) ) //FIXME also consider patch:Put
+						{
+							const LV2_Atom_URID *patch_property = NULL;
+							const LV2_Atom *patch_value = NULL;
+
+							lv2_atom_object_get(obj,
+								app->regs.patch.property.urid, &patch_property,
+								app->regs.patch.value.urid, &patch_value,
+								0);
+
+							if(!patch_property || (patch_property->atom.type != forge.URID) || !patch_value)
+								continue;
+
+							auto_t *automation = _sp_app_find_automation_for_property(mod, patch_property->body);
+							if(automation && (patch_value->type == automation->range))
+							{
+								double val = 0.0;
+
+								if(patch_value->type == forge.Bool)
+									val = ((const LV2_Atom_Bool *)patch_value)->body;
+								else if(patch_value->type == forge.Int)
+									val = ((const LV2_Atom_Int *)patch_value)->body;
+								else if(patch_value->type == forge.Long)
+									val = ((const LV2_Atom_Long *)patch_value)->body;
+								else if(patch_value->type == forge.Float)
+									val = ((const LV2_Atom_Float *)patch_value)->body;
+								else if(patch_value->type == forge.Double)
+									val = ((const LV2_Atom_Double *)patch_value)->body;
+								//FIXME support more types
+
+								const double value = (val - automation->add) / automation->mul;
+
+								if(ref)
+									ref = _sp_app_automation_out(app, &forge, automation, ev->time.frames, value);
+
+								t0 = ev->time.frames;
+							}
+						}
+					}
+				}
 			}
 		}
 
