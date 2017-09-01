@@ -33,7 +33,7 @@ synthpod:common_4_nk
 	] ;
 	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
-	lv2:extensionData ui:idleInterface .
+	lv2:extensionData ui:idleInterface, ui:resize .
 
 # Root UIs
 synthpod:root_4_nk
@@ -44,10 +44,10 @@ synthpod:root_4_nk
 	] ;
 	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
-	lv2:extensionData ui:idleInterface .
+	lv2:extensionData ui:idleInterface, ui:resize .
 
 # Keybaord UIs
 synthpod:keyboard_4_nk
 	lv2:optionalFeature ui:resize ;
 	lv2:requiredFeature ui:idleInterface, urid:map ;
-  lv2:extensionData ui:idleInterface .
+  lv2:extensionData ui:idleInterface, ui:resize .
