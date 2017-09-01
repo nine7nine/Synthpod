@@ -168,7 +168,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 
 						if(app->resize_iface)
 						{
-							app->resize_iface->ui_resize(app->resize_iface->handle, app->w, app->h);
+							app->resize_iface->ui_resize(app->handle, app->w, app->h);
 						}
 					}
 					break;
