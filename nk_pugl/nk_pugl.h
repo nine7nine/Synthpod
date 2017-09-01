@@ -139,6 +139,9 @@ nk_pugl_wait_for_event(nk_pugl_window_t *win);
 NK_PUGL_API int
 nk_pugl_process_events(nk_pugl_window_t *win);
 
+NK_PUGL_API int
+nk_pugl_resize(nk_pugl_window_t *win, int width, int height);
+
 NK_PUGL_API void
 nk_pugl_post_redisplay(nk_pugl_window_t *win);
 
