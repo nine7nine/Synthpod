@@ -1089,7 +1089,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	bin_init(bin);
+	bin_init(bin, 48000); //FIXME
 
 	handle.async.data = &handle;
 	uv_async_init(&bin->loop, &handle.async, _session_async); //FIXME check

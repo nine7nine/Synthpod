@@ -581,7 +581,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	bin_init(bin);
+	bin_init(bin, handle.srate);
 	
 	LV2_URID_Map *map = bin->map;
 	

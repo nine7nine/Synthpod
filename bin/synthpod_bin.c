@@ -331,7 +331,7 @@ _mapper_free_rt(void *data, char *uri)
 }
 
 __non_realtime void
-bin_init(bin_t *bin)
+bin_init(bin_t *bin, uint32_t sample_rate)
 {
 	bin_ptr = bin;
 
@@ -401,9 +401,11 @@ bin_init(bin_t *bin)
 
 	if(bin->has_gui)
 	{
+		char srate [32];
 		char urate [32];
 		char wname [128];
-		snprintf(urate, 32, "%i", bin->update_rate);
+		snprintf(srate, 32, "%"PRIu32, sample_rate);
+		snprintf(urate, 32, "%"PRIu32, bin->update_rate);
 		snprintf(wname, 128, "Synthpod - %s", bin->socket_path);
 
 		bin->child = fork();
@@ -416,7 +418,8 @@ bin_init(bin_t *bin)
 				"-u", SYNTHPOD_ROOT_NK_URI,
 				"-s", (char *)bin->socket_path,
 				"-w", wname,
-				"-r", urate,
+				"-r", srate,
+				"-f", urate,
 				NULL
 			};
 

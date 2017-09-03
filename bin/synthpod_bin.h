@@ -116,7 +116,7 @@ struct _bin_t {
 };
 
 void
-bin_init(bin_t *bin);
+bin_init(bin_t *bin, uint32_t sample_rate);
 
 void
 bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver);

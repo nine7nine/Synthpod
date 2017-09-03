@@ -306,6 +306,7 @@ struct _mod_ui_t {
 		char *socket_uri;
 		char *bundle_path;
 		char *window_name;
+		char *sample_rate;
 		char *update_rate;
 	} sbox;
 };
@@ -2250,7 +2251,8 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 		if(asprintf(&mod_ui->sbox.window_name, "%s", mod_ui->uri) == -1)
 			mod_ui->sbox.window_name = NULL;
 
-		//FIXME sample_rate
+		if(asprintf(&mod_ui->sbox.sample_rate, "%f", handle->sample_rate) == -1)
+			mod_ui->sbox.sample_rate = NULL;
 
 		if(asprintf(&mod_ui->sbox.update_rate, "%f", handle->update_rate) == -1)
 			mod_ui->sbox.update_rate = NULL;
@@ -2317,7 +2319,7 @@ _mod_ui_run(mod_ui_t *mod_ui)
 
 	if(exec_uri && plugin_uri && plugin_urn && mod_ui->sbox.bundle_path && mod_ui->uri
 		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name
-		&& mod_ui->sbox.update_rate && mod_ui->sbox.sb)
+		&& mod_ui->sbox.sample_rate && mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
 		_mod_subscribe_all(handle, mod);
 
@@ -2332,7 +2334,8 @@ _mod_ui_run(mod_ui_t *mod_ui)
 				"-u", (char *)mod_ui->uri,
 				"-s", mod_ui->sbox.socket_uri,
 				"-w", mod_ui->sbox.window_name,
-				"-r", mod_ui->sbox.update_rate,
+				"-r", mod_ui->sbox.sample_rate,
+				"-f", mod_ui->sbox.update_rate,
 				NULL
 			};
 
@@ -2381,6 +2384,9 @@ _mod_ui_free(mod_ui_t *mod_ui)
 
 	lilv_free(mod_ui->sbox.bundle_path);
 	free(mod_ui->sbox.socket_uri);
+	free(mod_ui->sbox.window_name);
+	free(mod_ui->sbox.update_rate);
+	free(mod_ui->sbox.sample_rate);
 	free(mod_ui);
 }
 
