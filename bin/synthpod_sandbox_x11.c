@@ -186,6 +186,14 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 
 		if(sandbox_slave_timedwait(sb, &to)) // timedout
 		{
+#if 0
+			struct timespec tf;
+			clock_gettime(CLOCK_REALTIME, &tf);
+			const double d0 = to.tv_sec + 1e-9*to.tv_nsec;
+			const double d1 = tf.tv_sec + 1e-9*tf.tv_nsec;
+			printf("%i, %lf, %f\n", getpid(), d0, d1);
+#endif
+
 			if(app->idle_iface->idle(app->handle))
 				atomic_store_explicit(&done, true, memory_order_relaxed);
 

@@ -349,7 +349,20 @@ _sandbox_io_wait(sandbox_io_t *io)
 		? &io->shm->to_master
 		: &io->shm->from_master;
 
-	sem_wait(&rx->sem);
+	int s;
+	while((s = sem_wait(&rx->sem)) == -1)
+	{
+		switch(errno)
+		{
+			case EINTR:
+				continue;
+
+			case EINVAL:
+				return;
+		}
+	}
+
+	return;
 }
 
 static inline bool
@@ -359,8 +372,21 @@ _sandbox_io_timedwait(sandbox_io_t *io, const struct timespec *abs_timeout)
 		? &io->shm->to_master
 		: &io->shm->from_master;
 
-	if(sem_timedwait(&rx->sem, abs_timeout) == -1)
-		return errno == ETIMEDOUT;
+	int s;
+	while((s = sem_timedwait(&rx->sem, abs_timeout)) == -1)
+	{
+		switch(errno)
+		{
+			case EINTR:
+				continue;
+
+			case EINVAL:
+				return false;
+
+			case ETIMEDOUT:
+				return true;
+		}
+	}
 
 	return false;
 }
