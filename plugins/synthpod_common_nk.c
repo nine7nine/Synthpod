@@ -3019,7 +3019,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		if(needs_instance_access)
 		{
 			if(handle->log)
-				_log_warning(handle, "<%s> instance-access extension not supported\n", lilv_node_as_string(ui_uri));
+				_log_warning(handle, "<%s> instance-access extension not supported\n", lilv_node_as_uri(ui_uri));
 			continue;
 		}
 
@@ -3028,7 +3028,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		if(needs_data_access)
 		{
 			if(handle->log)
-				_log_warning(handle, "<%s> data-access extension not supported\n", lilv_node_as_string(ui_uri));
+				_log_warning(handle, "<%s> data-access extension not supported\n", lilv_node_as_uri(ui_uri));
 			continue;
 		}
 
