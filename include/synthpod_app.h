@@ -175,9 +175,9 @@ SYNTHPOD_SYMBOL_EXTERN int
 sp_app_com_event(sp_app_t *app, LV2_URID otype); 
 
 SYNTHPOD_SYMBOL_EXTERN void
-sp_app_bundle_load(sp_app_t *app, LV2_URID urn);
+sp_app_bundle_load(sp_app_t *app, LV2_URID urn, bool via_app);
 
 SYNTHPOD_SYMBOL_EXTERN void
-sp_app_bundle_save(sp_app_t *app, LV2_URID urn);
+sp_app_bundle_save(sp_app_t *app, LV2_URID urn, bool via_app);
 
 #endif // _SYNTHPOD_APP_H

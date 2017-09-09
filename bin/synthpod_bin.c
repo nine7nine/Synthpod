@@ -658,7 +658,7 @@ bin_bundle_load(bin_t *bin, const char *bundle_path)
 		return;
 	}
 
-	sp_app_bundle_load(bin->app, urn);
+	sp_app_bundle_load(bin->app, urn, false);
 }
 
 __non_realtime void
@@ -671,7 +671,7 @@ bin_bundle_save(bin_t *bin, const char *bundle_path)
 		return;
 	}
 
-	sp_app_bundle_save(bin->app, urn);
+	sp_app_bundle_save(bin->app, urn, false);
 }
 
 __realtime void

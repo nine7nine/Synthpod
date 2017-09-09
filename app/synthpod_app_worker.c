@@ -210,9 +210,9 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 		{
 			//printf("app: bundle loaded\n");
 
-			//FIXME assert(app->block_state == BLOCKING_STATE_WAIT);
+			assert(app->block_state == BLOCKING_STATE_WAIT);
 			app->block_state = BLOCKING_STATE_RUN; // releae block
-			//FIXME assert(app->load_bundle == true);
+			assert(app->load_bundle == true);
 			app->load_bundle = false; // for sp_app_bypassed
 
 #if 0
@@ -377,13 +377,13 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		}
 		case JOB_TYPE_REQUEST_BUNDLE_LOAD:
 		{
-			sp_app_bundle_load(app, job->urn);
+			sp_app_bundle_load(app, job->urn, true);
 
 			break;
 		}
 		case JOB_TYPE_REQUEST_BUNDLE_SAVE:
 		{
-			sp_app_bundle_save(app, job->urn);
+			sp_app_bundle_save(app, job->urn, true);
 
 			break;
 		}
@@ -408,8 +408,16 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 }
 
 void
-sp_app_bundle_load(sp_app_t *app, LV2_URID urn)
+sp_app_bundle_load(sp_app_t *app, LV2_URID urn, bool via_app)
 {
+	if(!via_app) //FIXME not rt-safe
+	{
+		// manually switch to blocking state and wait for initial bundle to be loaded
+		app->block_state = BLOCKING_STATE_WAIT; // wait for job
+		app->load_bundle = true; // for sp_app_bypassed
+		// TODO keep in sync with synthpod_app_ui
+	}
+
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
 	int status = _sp_app_state_bundle_load(app, uri);
 	sp_app_log_note(app, "%s: <%s>\n", __func__, uri);
@@ -430,8 +438,15 @@ sp_app_bundle_load(sp_app_t *app, LV2_URID urn)
 }
 
 void
-sp_app_bundle_save(sp_app_t *app, LV2_URID urn)
+sp_app_bundle_save(sp_app_t *app, LV2_URID urn, bool via_app)
 {
+	if(!via_app) // FIXME not rt-safe
+	{
+		// manually switch to blocking state and wait for bundle to be saved
+		app->block_state = BLOCKING_STATE_WAIT; // wait for job
+		// TODO keep in sync with synthpod_app_ui
+	}
+
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
 	int status = _sp_app_state_bundle_save(app, uri);
 	sp_app_log_note(app, "%s: <%s>\n", __func__, uri);
