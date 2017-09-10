@@ -90,7 +90,7 @@ option(BUILD_DUMMY "Build DUMMY standalone host" OFF)
 
 option(BUILD_UI "Build graphical user interface(s)" ON)
 
-option(USE_DYNAMIC_PARALLELIZER "Use dynamic scheduler for parallelization" OFF)
+option(USE_DYNAMIC_PARALLELIZER "Use dynamic scheduler for parallelization" ON)
 if(USE_DYNAMIC_PARALLELIZER)
 	add_definitions("-DUSE_DYNAMIC_PARALLELIZER")
 endif()
