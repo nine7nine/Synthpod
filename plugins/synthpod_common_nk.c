@@ -467,6 +467,8 @@ struct _plughandle_t {
 	int show_bottombar;
 
 	time_t t0;
+
+	struct nk_image idisp;
 };
 
 static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
@@ -6091,6 +6093,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					handle->property_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
 				if(old_sel != handle->property_search_selector)
 					handle->prop_find_matches = true;
+
+				// inline display FIXME only show if preset for this module
+				nk_layout_row_static(ctx, 128, 128, 1);
+				nk_image(ctx, handle->idisp); //FIXME
 			}
 			nk_menubar_end(ctx);
 
@@ -7044,6 +7050,51 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							handle->cpus_available = cpus_available->body;
 
 							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.wildcard.urid)
+							&& (value->type == handle->forge.Vector) )
+						{
+							const LV2_Atom_Vector *vec = (const LV2_Atom_Vector *)value;
+
+							const size_t body_size = vec->atom.size - sizeof(LV2_Atom_Vector_Body);
+							const size_t nchild = body_size / vec->body.child_size;
+							if(nchild == 128*128)
+							{
+								const void *data = LV2_ATOM_CONTENTS(LV2_Atom_Vector, value);
+
+								GLuint tex = 0;
+
+								if(handle->idisp.handle.id)
+								{
+									puglEnterContext(handle->win.view);
+									{
+										glDeleteTextures(1, (const GLuint *)&handle->idisp.handle.id);
+										handle->idisp.handle.id = 0;
+									}
+									puglLeaveContext(handle->win.view, false);
+								}
+
+								puglEnterContext(handle->win.view);
+								{
+									glGenTextures(1, &tex);
+									glBindTexture(GL_TEXTURE_2D, tex);
+									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+									if(!handle->win.glGenerateMipmap) // for GL >= 1.4 && < 3.1
+										glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+									//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128, 128, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+									glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128, 128, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, data);
+									if(handle->win.glGenerateMipmap)
+										handle->win.glGenerateMipmap(GL_TEXTURE_2D);
+								}
+								puglLeaveContext(handle->win.view, false);
+
+								handle->idisp = nk_image_id(tex); //FIXME delete old texture upon exit
+
+								nk_pugl_post_redisplay(&handle->win);
+							}
 						}
 					}
 				}

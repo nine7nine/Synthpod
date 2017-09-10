@@ -620,6 +620,48 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 		if(port->driver->transfer && (port->driver->sparse_update ? sparse_update_timeout : true))
 			port->driver->transfer(app, port, nsamples);
 	}
+
+	// handle inline display
+	if(mod->idisp.iface)
+	{
+		// trylock
+		if(atomic_flag_test_and_set(&mod->idisp.lock))
+		{
+			if(atomic_exchange(&mod->idisp.rendered, false))
+			{
+				const LV2_Inline_Display_Image_Surface *surf = mod->idisp.surf;
+
+				// to nk
+				LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+				if(answer)
+				{
+					LV2_Atom_Forge_Frame frame [1];
+
+					LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(&app->regs, &app->forge, frame,
+						0, 0, app->regs.synthpod.wildcard.urid); //FIXME subject, seqn, property
+					if(ref)
+						ref = lv2_atom_forge_vector(&app->forge, sizeof(int32_t), app->forge.Int, surf->width*surf->height, surf->data);
+					if(ref)
+						synthpod_patcher_pop(&app->forge, frame, 1);
+
+					if(ref)
+					{
+						_sp_app_to_ui_advance_atom(app, answer);
+					}
+					else
+					{
+						_sp_app_to_ui_overflow(app);
+					}
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+
+			atomic_flag_clear(&mod->idisp.lock);
+		}
+	}
 }
 
 __realtime static inline int

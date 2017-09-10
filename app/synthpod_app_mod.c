@@ -517,6 +517,30 @@ _mod_worker_thread(void *data)
 
 			varchunk_read_advance(mod_worker->state_to_worker);
 		}
+
+		if(mod->idisp.iface)
+		{
+			if(atomic_exchange(&mod->idisp.draw_queued, false))
+			{
+				const uint32_t w = 128; //FIXME
+				const uint32_t h = 128; //FIXME
+
+				// lock surface
+				while(atomic_flag_test_and_set(&mod->idisp.lock))
+				{
+					// spin
+				}
+
+				if(mod->idisp.iface->render)
+					mod->idisp.surf = mod->idisp.iface->render(mod->handle, w, h);
+
+				// unlock surface
+				atomic_flag_clear(&mod->idisp.lock);
+
+				if(mod->idisp.surf)
+					atomic_store(&mod->idisp.rendered, true);
+			}
+		}
 	}
 
 	return NULL;
@@ -526,10 +550,12 @@ __realtime static void
 _mod_queue_draw(void *data)
 {
 	mod_t *mod = data;
+	mod_worker_t *mod_worker = &mod->mod_worker;
 
 	if(mod->idisp.iface)
 	{
-		//FIXME signal worker thread to call :render
+		atomic_store(&mod->idisp.draw_queued, true);
+		sem_post(&mod_worker->sem);
 	}
 }
 
@@ -569,6 +595,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 
 	mod->idisp.queue_draw.handle = mod;
 	mod->idisp.queue_draw.queue_draw = _mod_queue_draw;
+	atomic_init(&mod->idisp.draw_queued, false);
+	atomic_init(&mod->idisp.rendered, false);
+	mod->idisp.lock = (atomic_flag)ATOMIC_FLAG_INIT;
 		
 	// populate options
 	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;
@@ -909,7 +938,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	mod->presets = lilv_plugin_get_related(plug, app->regs.pset.preset.node);
 	
 	// spawn worker thread
-	if(mod->worker.iface)
+	if(mod->worker.iface || mod->idisp.iface)
 	{
 		mod_worker_t *mod_worker = &mod->mod_worker;
 
@@ -940,7 +969,7 @@ int
 _sp_app_mod_del(sp_app_t *app, mod_t *mod)
 {
 	// deinit worker thread
-	if(mod->worker.iface)
+	if(mod->worker.iface || mod->idisp.iface)
 	{
 		mod_worker_t *mod_worker = &mod->mod_worker;
 
