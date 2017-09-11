@@ -567,6 +567,44 @@ _log_trace(plughandle_t *handle, const char *fmt, ...)
 	return ret;
 }
 
+static struct nk_image
+_image_new(plughandle_t *handle, unsigned w, unsigned h, const void *data)
+{
+	GLuint tex = 0;
+
+	puglEnterContext(handle->win.view);
+	{
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		if(!handle->win.glGenerateMipmap) // for GL >= 1.4 && < 3.1
+			glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, data);
+		if(handle->win.glGenerateMipmap)
+			handle->win.glGenerateMipmap(GL_TEXTURE_2D);
+	}
+	puglLeaveContext(handle->win.view, false);
+
+	return nk_image_id(tex);
+}
+
+static void
+_image_free(plughandle_t *handle, struct nk_image *img)
+{
+	if(img->handle.id)
+	{
+		puglEnterContext(handle->win.view);
+		{
+			glDeleteTextures(1, (const GLuint *)&img->handle.id);
+			img->handle.id = 0;
+		}
+		puglLeaveContext(handle->win.view, false);
+	}
+}
+
 static inline bool
 _message_request(plughandle_t *handle)
 {
@@ -6512,6 +6550,8 @@ cleanup(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
 
+	_image_free(handle, &handle->idisp);
+
 	_icon_unload(handle, handle->icon.atom);
 	_icon_unload(handle, handle->icon.audio);
 	_icon_unload(handle, handle->icon.control);
@@ -7062,36 +7102,8 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								const void *data = LV2_ATOM_CONTENTS(LV2_Atom_Vector, value);
 
-								GLuint tex = 0;
-
-								if(handle->idisp.handle.id)
-								{
-									puglEnterContext(handle->win.view);
-									{
-										glDeleteTextures(1, (const GLuint *)&handle->idisp.handle.id);
-										handle->idisp.handle.id = 0;
-									}
-									puglLeaveContext(handle->win.view, false);
-								}
-
-								puglEnterContext(handle->win.view);
-								{
-									glGenTextures(1, &tex);
-									glBindTexture(GL_TEXTURE_2D, tex);
-									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-									glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-									if(!handle->win.glGenerateMipmap) // for GL >= 1.4 && < 3.1
-										glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
-									//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128, 128, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-									glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 128, 128, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, data);
-									if(handle->win.glGenerateMipmap)
-										handle->win.glGenerateMipmap(GL_TEXTURE_2D);
-								}
-								puglLeaveContext(handle->win.view, false);
-
-								handle->idisp = nk_image_id(tex); //FIXME delete old texture upon exit
+								_image_free(handle, &handle->idisp);
+								handle->idisp = _image_new(handle, 128, 128, data);
 
 								nk_pugl_post_redisplay(&handle->win);
 							}
