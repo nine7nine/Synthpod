@@ -716,6 +716,16 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 					}
 				}
 			}
+			else if( (prop == app->regs.synthpod.wildcard.urid) //FIXME use proper property
+				&& (value->type == app->forge.Bool) )
+			{
+				mod->idisp.subscribed = ((const LV2_Atom_Bool *)value)->body;
+
+				if(mod->idisp.iface && mod->idisp.subscribed)
+				{
+					_sp_app_mod_queue_draw(mod); // trigger update
+				}
+			}
 		}
 
 		//TODO handle more properties

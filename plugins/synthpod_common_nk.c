@@ -5255,10 +5255,26 @@ _mod_num_sinks(mod_t *mod, property_type_t type)
 }
 
 static void
+_set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
+{
+	if(  _message_request(handle)
+		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+			mod->urn, 0, handle->regs.synthpod.wildcard.urid, //FIXME use a proper property
+			sizeof(int32_t), handle->forge.Bool, &state) )
+	{
+		_message_write(handle);
+	}
+}
+
+static void
 _set_module_selector(plughandle_t *handle, mod_t *mod)
 {
 	if(handle->module_selector)
+	{
 		_mod_unsubscribe_all(handle, handle->module_selector);
+
+		_set_module_idisp_subscription(handle, handle->module_selector, 0);
+	}
 
 	if(mod)
 	{
@@ -5266,6 +5282,8 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 
 		_patch_notification_add_patch_get(handle, mod,
 			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
+
+		_set_module_idisp_subscription(handle, mod, 1);
 	}
 
 	handle->module_selector = mod;

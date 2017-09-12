@@ -546,17 +546,24 @@ _mod_worker_thread(void *data)
 	return NULL;
 }
 
-__realtime static void
-_mod_queue_draw(void *data)
+__realtime void
+_sp_app_mod_queue_draw(mod_t *mod)
 {
-	mod_t *mod = data;
 	mod_worker_t *mod_worker = &mod->mod_worker;
 
-	if(mod->idisp.iface)
+	if(mod->idisp.iface && mod->idisp.subscribed)
 	{
 		atomic_store(&mod->idisp.draw_queued, true);
 		sem_post(&mod_worker->sem);
 	}
+}
+
+__realtime static void
+_mod_queue_draw(void *data)
+{
+	mod_t *mod = data;
+
+	_sp_app_mod_queue_draw(mod);
 }
 
 mod_t *

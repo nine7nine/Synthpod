@@ -279,6 +279,7 @@ struct _mod_t {
 		atomic_bool draw_queued;
 		atomic_bool rendered;
 		atomic_flag lock;
+		bool subscribed;
 	} idisp;
 
 	// opts
@@ -646,6 +647,9 @@ _sp_app_mod_reinitialize(mod_t *mod);
 
 LV2_Worker_Status
 _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload);
+
+void
+_sp_app_mod_queue_draw(mod_t *mod);
 
 /*
  * Port
