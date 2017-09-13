@@ -275,6 +275,8 @@ struct _mod_t {
 	property_type_t sink_type;
 
 	prof_t prof;
+
+	struct nk_image idisp;
 };
 
 struct _port_conn_t {
@@ -467,8 +469,6 @@ struct _plughandle_t {
 	int show_bottombar;
 
 	time_t t0;
-
-	struct nk_image idisp;
 };
 
 static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
@@ -603,6 +603,12 @@ _image_free(plughandle_t *handle, struct nk_image *img)
 		}
 		puglLeaveContext(handle->win.view, false);
 	}
+}
+
+static bool
+_image_empty(struct nk_image *img)
+{
+	return (img->handle.id == 0);	
 }
 
 static inline bool
@@ -3153,6 +3159,8 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	}
 
 	lilv_uis_free(mod->ui_nodes);
+
+	_image_free(handle, &mod->idisp);
 }
 
 static bool
@@ -5259,7 +5267,7 @@ _set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
 {
 	if(  _message_request(handle)
 		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
-			mod->urn, 0, handle->regs.synthpod.wildcard.urid, //FIXME use a proper property
+			mod->urn, 0, handle->regs.idisp.surface.urid,
 			sizeof(int32_t), handle->forge.Bool, &state) )
 	{
 		_message_write(handle);
@@ -5274,6 +5282,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 		_mod_unsubscribe_all(handle, handle->module_selector);
 
 		_set_module_idisp_subscription(handle, handle->module_selector, 0);
+		_image_free(handle, &handle->module_selector->idisp);
 	}
 
 	if(mod)
@@ -6150,9 +6159,12 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				if(old_sel != handle->property_search_selector)
 					handle->prop_find_matches = true;
 
-				// inline display FIXME only show if preset for this module
-				nk_layout_row_static(ctx, 128, 128, 1);
-				nk_image(ctx, handle->idisp); //FIXME
+				mod_t *mod = handle->module_selector;
+				if(mod && !_image_empty(&mod->idisp))
+				{
+					nk_layout_row_static(ctx, 128, 128, 1);
+					nk_image(ctx, mod->idisp);
+				}
 			}
 			nk_menubar_end(ctx);
 
@@ -6567,8 +6579,6 @@ static void
 cleanup(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
-
-	_image_free(handle, &handle->idisp);
 
 	_icon_unload(handle, handle->icon.atom);
 	_icon_unload(handle, handle->icon.audio);
@@ -7109,21 +7119,26 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 							nk_pugl_post_redisplay(&handle->win);
 						}
-						else if( (prop == handle->regs.synthpod.wildcard.urid)
-							&& (value->type == handle->forge.Vector) )
+						else if( (prop == handle->regs.idisp.surface.urid)
+							&& (value->type == handle->forge.Vector)
+							&& subj )
 						{
 							const LV2_Atom_Vector *vec = (const LV2_Atom_Vector *)value;
 
-							const size_t body_size = vec->atom.size - sizeof(LV2_Atom_Vector_Body);
-							const size_t nchild = body_size / vec->body.child_size;
-							if(nchild == 128*128)
+							mod_t *mod = _mod_find_by_urn(handle, subj);
+							if(mod)
 							{
-								const void *data = LV2_ATOM_CONTENTS(LV2_Atom_Vector, value);
+								const size_t body_size = vec->atom.size - sizeof(LV2_Atom_Vector_Body);
+								const size_t nchild = body_size / vec->body.child_size;
+								if(nchild == 128*128)
+								{
+									const void *data = LV2_ATOM_CONTENTS(LV2_Atom_Vector, value);
 
-								_image_free(handle, &handle->idisp);
-								handle->idisp = _image_new(handle, 128, 128, data);
+									_image_free(handle, &mod->idisp);
+									mod->idisp = _image_new(handle, 128, 128, data);
 
-								nk_pugl_post_redisplay(&handle->win);
+									nk_pugl_post_redisplay(&handle->win);
+								}
 							}
 						}
 					}

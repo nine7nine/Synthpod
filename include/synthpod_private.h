@@ -48,6 +48,7 @@
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <lv2_external_ui.h> // kxstudio kx-ui extension
+#include <lv2_extensions.h> // ardour inline display
 
 #include <osc.lv2/osc.h>
 
@@ -362,7 +363,6 @@ struct _reg_t {
 		reg_item_t cpus_available;
 		reg_item_t cpus_used;
 		reg_item_t quit;
-		reg_item_t wildcard;
 
 		reg_item_t system_ports;
 		reg_item_t control_port;
@@ -394,6 +394,10 @@ struct _reg_t {
 		reg_item_t channel;
 		reg_item_t controller_number;
 	} midi;
+
+	struct {
+		reg_item_t surface;
+	} idisp;
 };
 
 static inline void
@@ -635,7 +639,6 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.cpus_available, world, map, SYNTHPOD_PREFIX"CPUsAvailable");
 	_register(&regs->synthpod.cpus_used, world, map, SYNTHPOD_PREFIX"CPUsUsed");
 	_register(&regs->synthpod.quit, world, map, SYNTHPOD_PREFIX"quit");
-	_register(&regs->synthpod.wildcard, world, map, SYNTHPOD_PREFIX"wildcard");
 	
 	_register(&regs->synthpod.system_ports, world, map, SYNTHPOD_PREFIX"systemPorts");
 	_register(&regs->synthpod.control_port, world, map, SYNTHPOD_PREFIX"ControlPort");
@@ -664,6 +667,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->midi.Controller, world, map, LV2_MIDI__Controller);
 	_register(&regs->midi.channel, world, map, LV2_MIDI__channel);
 	_register(&regs->midi.controller_number, world, map, LV2_MIDI__controllerNumber);
+
+	_register(&regs->idisp.surface, world, map, LV2_INLINEDISPLAY_PREFIX"surface");
 }
 
 static inline void
@@ -874,7 +879,6 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.cpus_available);
 	_unregister(&regs->synthpod.cpus_used);
 	_unregister(&regs->synthpod.quit);
-	_unregister(&regs->synthpod.wildcard);
 	
 	_unregister(&regs->synthpod.system_ports);
 	_unregister(&regs->synthpod.control_port);
@@ -903,6 +907,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->midi.Controller);
 	_unregister(&regs->midi.channel);
 	_unregister(&regs->midi.controller_number);
+
+	_unregister(&regs->idisp.surface);
 }
 
 #if 0

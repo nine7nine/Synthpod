@@ -638,7 +638,7 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 					LV2_Atom_Forge_Frame frame [1];
 
 					LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(&app->regs, &app->forge, frame,
-						0, 0, app->regs.synthpod.wildcard.urid); //FIXME subject, seqn, property
+						mod->urn, 0, app->regs.idisp.surface.urid); //TODO seqn
 					if(ref)
 						ref = lv2_atom_forge_vector(&app->forge, sizeof(int32_t), app->forge.Int, surf->width*surf->height, surf->data);
 					if(ref)
