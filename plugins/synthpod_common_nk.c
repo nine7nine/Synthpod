@@ -465,8 +465,8 @@ struct _plughandle_t {
 		struct nk_image menu;
 	} icon;
 
-	int show_sidebar;
-	int show_bottombar;
+	bool show_sidebar;
+	bool show_bottombar;
 
 	time_t t0;
 };
@@ -3196,6 +3196,69 @@ _tooltip_visible(struct nk_context *ctx)
 		|| (nk_widget_is_hovered(ctx) && nk_input_is_key_down(&ctx->input, NK_KEY_CTRL));
 }
 
+static bool
+_toolbar_button(struct nk_context *ctx, char key, struct nk_image icon)
+{
+	struct nk_style *style = &ctx->style;
+	bool is_hovered = nk_widget_is_hovered(ctx);
+
+	if(_tooltip_visible(ctx))
+	{
+		char tt [16];
+		snprintf(tt, 16, "Ctrl-%c", isalpha(key) ? toupper(key) : key);
+		nk_tooltip(ctx, tt);
+	}
+
+	const bool old_state = nk_pugl_is_shortcut_pressed(&ctx->input, key, true);
+
+	if(old_state || is_hovered)
+		nk_style_push_color(ctx, &style->button.border_color, toggle_color);
+
+	const bool state = nk_button_image_label(ctx, icon, "", NK_TEXT_RIGHT)
+		|| old_state;
+
+	if(old_state || is_hovered)
+		nk_style_pop_color(ctx);
+
+	return state;
+}
+
+static void
+_toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image icon)
+{
+	struct nk_style *style = &ctx->style;
+	const bool is_hovered = nk_widget_is_hovered(ctx);
+
+	if(_tooltip_visible(ctx))
+	{
+		char tt [16];
+		snprintf(tt, 16, "Ctrl-%c", isalpha(key) ? toupper(key) : key);
+		nk_tooltip(ctx, tt);
+	}
+
+	if(nk_pugl_is_shortcut_pressed(&ctx->input, key, true))
+		*state = !*state;
+
+	bool old_state = *state;
+	if(old_state)
+		nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+	else if(is_hovered)
+		nk_style_push_color(ctx, &style->button.border_color, toggle_color);
+
+	if(nk_button_image_label(ctx, icon, "", NK_TEXT_RIGHT))
+		*state = !*state;
+
+	if(old_state || is_hovered)
+		nk_style_pop_color(ctx);
+}
+
+static bool
+_toolbar_toggled(struct nk_context *ctx, bool state, char key, struct nk_image icon)
+{
+	_toolbar_toggle(ctx, &state, key, icon);
+	return state;
+}
+
 static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
@@ -3207,11 +3270,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 		nk_layout_row_static(ctx, dy, 1.2*dy, 16);
 
 		{
-			if(_tooltip_visible(ctx))
-				nk_tooltip(ctx, "Ctrl-N");
-			if((is_hovered = nk_widget_is_hovered(ctx)))
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.plus, "", NK_TEXT_RIGHT))
+			if(_toolbar_button(ctx, 'n', handle->icon.plus))
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -3220,14 +3279,8 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 					_message_write(handle);
 				}
 			}
-			if(is_hovered)
-				nk_style_pop_color(ctx);
 
-			if(_tooltip_visible(ctx))
-				nk_tooltip(ctx, "Ctrl-S");
-			if((is_hovered = nk_widget_is_hovered(ctx)))
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.download, "", NK_TEXT_RIGHT))
+			if(_toolbar_button(ctx, 's', handle->icon.download))
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -3236,139 +3289,42 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 					_message_write(handle);
 				}
 			}
-			if(is_hovered)
-				nk_style_pop_color(ctx);
 
-			if(_tooltip_visible(ctx))
-				nk_tooltip(ctx, "Ctrl-Q");
-			if((is_hovered = nk_widget_is_hovered(ctx)))
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.cancel, "", NK_TEXT_RIGHT))
+			if(_toolbar_button(ctx, 'q', handle->icon.cancel))
 			{
 				handle->done = true;
 			}
-			if(is_hovered)
-				nk_style_pop_color(ctx);
 		}
 
 		nk_spacing(ctx, 1);
 
 		{
-			const bool is_audio = handle->type == PROPERTY_TYPE_AUDIO;
-			const bool is_cv = handle->type == PROPERTY_TYPE_CV;
-			const bool is_atom = handle->type == PROPERTY_TYPE_ATOM;
-
-			const bool is_midi = handle->type == PROPERTY_TYPE_MIDI;
-			const bool is_osc = handle->type == PROPERTY_TYPE_OSC;
-			const bool is_time = handle->type == PROPERTY_TYPE_TIME;
-			const bool is_patch = handle->type == PROPERTY_TYPE_PATCH;
-			const bool is_xpress = handle->type == PROPERTY_TYPE_XPRESS;
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_audio)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.audio, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_AUDIO, 'w', handle->icon.audio))
 				handle->type = PROPERTY_TYPE_AUDIO;
-			if(is_audio || is_hovered)
-				nk_style_pop_color(ctx);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_cv)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.cv, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_CV, 'e', handle->icon.cv))
 				handle->type = PROPERTY_TYPE_CV;
-			if(is_cv || is_hovered)
-				nk_style_pop_color(ctx);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_atom)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.atom, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_ATOM, 'r', handle->icon.atom))
 				handle->type = PROPERTY_TYPE_ATOM;
-			if(is_atom || is_hovered)
-				nk_style_pop_color(ctx);
 
 			nk_spacing(ctx, 1);
 
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_midi)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.midi, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_MIDI, 't', handle->icon.midi))
 				handle->type = PROPERTY_TYPE_MIDI;
-			if(is_midi || is_hovered)
-				nk_style_pop_color(ctx);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_osc)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.osc, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_OSC, 'y', handle->icon.osc))
 				handle->type = PROPERTY_TYPE_OSC;
-			if(is_osc || is_hovered)
-				nk_style_pop_color(ctx);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_time)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.time, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_TIME, 'u', handle->icon.time))
 				handle->type = PROPERTY_TYPE_TIME;
-			if(is_time || is_hovered)
-				nk_style_pop_color(ctx);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_patch)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.patch, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_PATCH, 'o', handle->icon.patch))
 				handle->type = PROPERTY_TYPE_PATCH;
-			if(is_patch || is_hovered)
-				nk_style_pop_color(ctx);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(is_xpress)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.xpress, "", NK_TEXT_RIGHT))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_XPRESS, 'p', handle->icon.xpress))
 				handle->type = PROPERTY_TYPE_XPRESS;
-			if(is_xpress || is_hovered)
-				nk_style_pop_color(ctx);
 		}
 
 		nk_spacing(ctx, 1);
 
 		{
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(handle->show_bottombar)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.menu, "", NK_TEXT_RIGHT))
-				handle->show_bottombar = !handle->show_bottombar;
-			if(handle->show_bottombar || is_hovered)
-				nk_style_pop_color(ctx);
-
-			is_hovered = nk_widget_is_hovered(ctx);
-			if(handle->show_sidebar)
-				nk_style_push_color(ctx, &style->button.border_color, hilight_color);
-			else if(is_hovered)
-				nk_style_push_color(ctx, &style->button.border_color, toggle_color);
-			if(nk_button_image_label(ctx, handle->icon.settings, "", NK_TEXT_RIGHT))
-				handle->show_sidebar = !handle->show_sidebar;
-			if(handle->show_sidebar || is_hovered)
-				nk_style_pop_color(ctx);
+			_toolbar_toggle(ctx, &handle->show_bottombar, 'k', handle->icon.menu);
+			_toolbar_toggle(ctx, &handle->show_sidebar, 'l', handle->icon.settings);
 		}
 
 		nk_menubar_end(ctx);
