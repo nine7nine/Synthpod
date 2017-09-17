@@ -5336,9 +5336,16 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		struct nk_style_button *style = &ctx->style.button;
 		const struct nk_user_font *font = ctx->style.font;
 
-		nk_fill_rect(canvas, body, style->rounding, style->hover.data.color);
-		nk_stroke_rect(canvas, body, style->rounding, style->border,
-			is_hilighted ? hilight_color : style->border_color);
+		struct nk_color hov = style->hover.data.color;
+		struct nk_color brd = is_hilighted ? hilight_color : style->border_color;
+		if(!_source_type_match(handle, mod->source_type) && !_sink_type_match(handle, mod->sink_type))
+		{
+			hov.a = 0x3f;
+			brd.a = 0x5f;
+		}
+
+		nk_fill_rect(canvas, body, style->rounding, hov);
+		nk_stroke_rect(canvas, body, style->rounding, style->border, brd);
 
 		const float fh = font->height;
 		const float fy = body.y + (body.h - fh)/2;
