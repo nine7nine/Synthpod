@@ -225,6 +225,9 @@ struct _auto_t {
 	LV2_URID property;
 	LV2_URID range;
 
+	int src_enabled;
+	int snk_enabled;
+
 	double a;
 	double b;
 	double c;

@@ -206,14 +206,17 @@ _sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value, ui
 }
 
 __realtime static inline bool
-_sp_app_has_automations(mod_t *mod)
+_sp_app_has_source_automations(mod_t *mod)
 {
 	for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
 	{
 		auto_t *automation = &mod->automations[i];
 
-		if(automation->type != AUTO_TYPE_NONE)
+		if(  (automation->type != AUTO_TYPE_NONE)
+			&& automation->src_enabled )
+		{
 			return true; // has automations
+		}
 	}
 
 	return false; // has no automations
@@ -378,7 +381,8 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 						{
 							auto_t *automation = &mod->automations[i];
 
-							if(automation->type == AUTO_TYPE_MIDI)
+							if(  (automation->type == AUTO_TYPE_MIDI)
+								&& automation->snk_enabled )
 							{
 								midi_auto_t *mauto = &automation->midi;
 
@@ -461,7 +465,8 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 						{
 							auto_t *automation = &mod->automations[i];
 
-							if(automation->type == AUTO_TYPE_OSC)
+							if(  (automation->type == AUTO_TYPE_OSC)
+								&& automation->snk_enabled )
 							{
 								osc_auto_t *oauto = &automation->osc;
 
@@ -497,7 +502,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		lv2_atom_forge_set_buffer(&forge, (uint8_t *)seq, capacity);
 		LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
 
-		if(_sp_app_has_automations(mod)) //FIXME discriminate between input/output automations
+		if(_sp_app_has_source_automations(mod))
 		{
 			uint32_t t0 = 0;
 
@@ -516,7 +521,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 					{
 						auto_t *automation = _sp_app_find_automation_for_port(mod, p);
 
-						if(automation)
+						if(automation && automation->src_enabled)
 						{
 							const double value = (*val - automation->add) / automation->mul;
 
@@ -549,7 +554,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 								continue;
 
 							auto_t *automation = _sp_app_find_automation_for_property(mod, patch_property->body);
-							if(automation && (patch_value->type == automation->range))
+							if(automation && automation->src_enabled && (patch_value->type == automation->range))
 							{
 								double val = 0.0;
 

@@ -177,6 +177,8 @@ struct _osc_auto_t {
 
 struct _auto_t {
 	auto_type_t type;
+	int src_enabled;
+	int snk_enabled;
 
 	double c;
 	double d;
@@ -1216,6 +1218,16 @@ _patch_midi_automation_internal(plughandle_t *handle, auto_t *automation)
 	if(ref)
 		ref = lv2_atom_forge_double(&handle->forge, automation->d);
 
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_enabled.urid);
+	if(ref)
+		ref = lv2_atom_forge_bool(&handle->forge, automation->src_enabled);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_enabled.urid);
+	if(ref)
+		ref = lv2_atom_forge_bool(&handle->forge, automation->snk_enabled);
+
 	return ref;
 }
 
@@ -1245,6 +1257,16 @@ _patch_osc_automation_internal(plughandle_t *handle, auto_t *automation)
 		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_max.urid);
 	if(ref)
 		ref = lv2_atom_forge_double(&handle->forge, automation->d);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_enabled.urid);
+	if(ref)
+		ref = lv2_atom_forge_bool(&handle->forge, automation->src_enabled);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_enabled.urid);
+	if(ref)
+		ref = lv2_atom_forge_bool(&handle->forge, automation->snk_enabled);
 
 	return ref;
 }
@@ -5991,6 +6013,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									automation->midi.b = 0x7f;
 									automation->c = c;
 									automation->d = d;
+									automation->src_enabled = false;
+									automation->snk_enabled = false;
 								}
 								else if(automation->type == AUTO_OSC)
 								{
@@ -6023,6 +6047,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									automation->osc.b = 1.0;
 									automation->c = c;
 									automation->d = d;
+									automation->src_enabled = false;
+									automation->snk_enabled = false;
 								}
 							}
 						}
@@ -6036,6 +6062,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
+							nk_checkbox_label(ctx,"Source Enabled", &automation->src_enabled); //FIXME only valid for writables
+							nk_checkbox_label(ctx,"Sink Enabled", &automation->snk_enabled); //FIXME onl valid for readables
 							nk_property_int(ctx, "MIDI Channel", -1, &automation->midi.channel, 0xf, 1, ipp);
 							nk_property_int(ctx, "MIDI Controller", -1, &automation->midi.controller, 0x7f, 1, ipp);
 							nk_property_int(ctx, "MIDI Minimum", 0, &automation->midi.a, 0x7f, 1, ipp);
@@ -6051,6 +6079,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
+
+							nk_checkbox_label(ctx,"Source Enabled", &automation->src_enabled); //FIXME only valid for writables
+							nk_checkbox_label(ctx,"Sink Enabled", &automation->snk_enabled); //FIXME onl valid for readables
 
 							const nk_flags res = nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD,
 								automation->osc.path, 128, _osc_path_filter);
@@ -6755,6 +6786,8 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 	const LV2_Atom_Double *src_max = NULL;
 	const LV2_Atom_Double *snk_min = NULL;
 	const LV2_Atom_Double *snk_max = NULL;
+	const LV2_Atom_Bool *src_enabled = NULL;
+	const LV2_Atom_Bool *snk_enabled = NULL;
 
 	lv2_atom_object_get(obj,
 		handle->regs.synthpod.sink_module.urid, &src_module,
@@ -6767,6 +6800,8 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 		handle->regs.synthpod.source_max.urid, &src_max,
 		handle->regs.synthpod.sink_min.urid, &snk_min,
 		handle->regs.synthpod.sink_max.urid, &snk_max,
+		handle->regs.synthpod.source_enabled.urid, &src_enabled,
+		handle->regs.synthpod.sink_enabled.urid, &snk_enabled,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -6812,6 +6847,8 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 	if(!automation)
 		return;
 
+	automation->src_enabled = src_enabled ? src_enabled->body : false;
+	automation->snk_enabled= snk_enabled ? snk_enabled->body : false;
 	automation->c = snk_min ? snk_min->body : 0.0; //FIXME
 	automation->d = snk_max ? snk_max->body : 0.0; //FIXME
 

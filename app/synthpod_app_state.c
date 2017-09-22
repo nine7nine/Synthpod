@@ -1178,7 +1178,13 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 									&& lv2_atom_forge_double(forge, automation->c)
 
 									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_max.urid)
-									&& lv2_atom_forge_double(forge, automation->d);
+									&& lv2_atom_forge_double(forge, automation->d)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.source_enabled.urid)
+									&& lv2_atom_forge_bool(forge, automation->src_enabled)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_enabled.urid)
+									&& lv2_atom_forge_bool(forge, automation->snk_enabled);
 
 								if(ref)
 								{
@@ -1224,7 +1230,13 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 									&& lv2_atom_forge_double(forge, automation->c)
 
 									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_max.urid)
-									&& lv2_atom_forge_double(forge, automation->d);
+									&& lv2_atom_forge_double(forge, automation->d)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.source_enabled.urid)
+									&& lv2_atom_forge_bool(forge, automation->src_enabled)
+
+									&& lv2_atom_forge_key(forge, app->regs.synthpod.sink_enabled.urid)
+									&& lv2_atom_forge_bool(forge, automation->snk_enabled);
 
 								if(ref)
 								{

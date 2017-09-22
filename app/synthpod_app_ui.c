@@ -432,6 +432,16 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
 								if(ref)
 									ref = lv2_atom_forge_double(&app->forge, automation->d);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_enabled.urid);
+								if(ref)
+									ref = lv2_atom_forge_bool(&app->forge, automation->src_enabled);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_enabled.urid);
+								if(ref)
+									ref = lv2_atom_forge_bool(&app->forge, automation->snk_enabled);
 							}
 							if(ref)
 								lv2_atom_forge_pop(&app->forge, &frame[2]);
@@ -491,6 +501,16 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
 								if(ref)
 									ref = lv2_atom_forge_double(&app->forge, automation->d);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_enabled.urid);
+								if(ref)
+									ref = lv2_atom_forge_bool(&app->forge, automation->src_enabled);
+
+								if(ref)
+									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_enabled.urid);
+								if(ref)
+									ref = lv2_atom_forge_bool(&app->forge, automation->snk_enabled);
 							}
 							if(ref)
 								lv2_atom_forge_pop(&app->forge, &frame[2]);
@@ -1302,6 +1322,8 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom_Double *src_max = NULL;
 	const LV2_Atom_Double *snk_min = NULL;
 	const LV2_Atom_Double *snk_max = NULL;
+	const LV2_Atom_Bool *src_enabled = NULL;
+	const LV2_Atom_Bool *snk_enabled = NULL;
 
 	lv2_atom_object_get(obj,
 		app->regs.synthpod.sink_module.urid, &src_module,
@@ -1315,6 +1337,8 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		app->regs.synthpod.source_max.urid, &src_max,
 		app->regs.synthpod.sink_min.urid, &snk_min,
 		app->regs.synthpod.sink_max.urid, &snk_max,
+		app->regs.synthpod.source_enabled.urid, &src_enabled,
+		app->regs.synthpod.sink_enabled.urid, &snk_enabled,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1350,6 +1374,8 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				automation->b = src_max ? src_max->body : 0.0;
 				automation->c = snk_min ? snk_min->body : 0.0;
 				automation->d = snk_max ? snk_max->body : 0.0;
+				automation->src_enabled = src_enabled ? src_enabled->body : false;
+				automation->snk_enabled = snk_enabled ? snk_enabled->body : false;
 
 				const double div = automation->b - automation->a;
 				automation->mul = div
