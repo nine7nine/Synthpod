@@ -49,19 +49,19 @@ stages:
 x86_64-linux-gnu:
   before_script:
     - apt-get update
-    - apt-get install -y -q libjack-dev libasound2-dev libzita-alsa-pcmi-dev uuid-dev libxcb-icccm4-dev
+    - apt-get install -y -q libjack-dev libasound2-dev libzita-alsa-pcmi-dev libxcb-icccm4-dev
   <<: *universal_linux_definition
 
 i686-linux-gnu:
   before_script:
     - apt-get update
-    - apt-get install -y -q libjack-dev:i386 libasound2-dev:i386 libzita-alsa-pcmi-dev:i386 uuid-dev:i386 libxcb-icccm4-dev:i386
+    - apt-get install -y -q libjack-dev:i386 libasound2-dev:i386 libzita-alsa-pcmi-dev:i386 libxcb-icccm4-dev:i386
   <<: *universal_linux_definition
 
 #arm-linux-gnueabihf:
 #  before_script:
 #    - apt-get update
-#    - apt-get install -y -q libjack-dev:armhf libasound2-dev:armhf libzita-alsa-pcmi-dev:armhf uuid-dev:armhf libxcb-icccm4-dev:armhf
+#    - apt-get install -y -q libjack-dev:armhf libasound2-dev:armhf libzita-alsa-pcmi-dev:armhf libxcb-icccm4-dev:armhf
 #  <<: *arm_linux_definition
 #
 #x86_64-w64-mingw32:
