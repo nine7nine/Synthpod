@@ -5972,6 +5972,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					double c = 0.0;
 					double d = 0.0;
 
+					bool is_readonly = false;
+
 					auto_t *automation = NULL;
 					if(port && (port->type == PROPERTY_TYPE_CONTROL) )
 					{
@@ -5983,12 +5985,14 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						d = control->is_int || control->is_bool
 							? control->max.i
 							: control->max.f;
+						is_readonly = control->is_readonly;
 					}
 					else if(param)
 					{
 						automation = &param->automation;
 						c = _param_union_as_double(&handle->forge, param->range, &param->min);
 						d = _param_union_as_double(&handle->forge, param->range, &param->max);
+						is_readonly = param->is_readonly;
 					}
 
 					if(automation)
@@ -6004,6 +6008,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 								automation->type, dy, nk_vec2(nk_widget_width(ctx), dy*5));
 							if(auto_type != automation->type)
 							{
+								const int32_t src_enabled = is_readonly;
+								const int32_t snk_enabled = !is_readonly;
+
 								if(automation->type == AUTO_MIDI)
 								{
 									// initialize
@@ -6013,8 +6020,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									automation->midi.b = 0x7f;
 									automation->c = c;
 									automation->d = d;
-									automation->src_enabled = false;
-									automation->snk_enabled = false;
+									automation->src_enabled = src_enabled;
+									automation->snk_enabled = snk_enabled;
 								}
 								else if(automation->type == AUTO_OSC)
 								{
@@ -6047,8 +6054,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									automation->osc.b = 1.0;
 									automation->c = c;
 									automation->d = d;
-									automation->src_enabled = false;
-									automation->snk_enabled = false;
+									automation->src_enabled = src_enabled;
+									automation->snk_enabled = snk_enabled;
 								}
 							}
 						}
