@@ -1193,6 +1193,7 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				{
 					*buf_ptr = val;
 					src_port->control.last = *buf_ptr; // we don't want any notification
+					src_port->control.auto_dirty = true;
 					_sp_app_port_control_stash(src_port);
 				}
 				else if(src_port->type == PORT_TYPE_CV)
@@ -1220,6 +1221,8 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 					ev->time.frames = 0;
 				else
 					sp_app_log_trace(app, "%s: failed to append\n", __func__);
+
+				//FIXME handle output automation
 			}
 			else if( (src_proto == app->regs.port.atom_transfer.urid)
 				&& (src_port->type == PORT_TYPE_ATOM) )

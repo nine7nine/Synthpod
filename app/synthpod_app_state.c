@@ -194,7 +194,10 @@ _state_set_value(const char *symbol, void *data,
 		// FIXME not rt-safe
 		float *buf_ptr = PORT_BASE_ALIGNED(tar);
 		*buf_ptr = val;
-		control->last = val - 0.1; // triggers notification
+		control->last = tar->subscriptions
+			? val - 0.1 // trigger notification
+			: val; // don't trigger any notifications
+		control->auto_dirty = true; // trigger output automation
 		// FIXME not rt-safe
 
 		_sp_app_port_spin_lock(control);

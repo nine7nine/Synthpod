@@ -371,6 +371,7 @@ struct _control_port_t {
 	float last;
 	int32_t i32;
 	float f32;
+	bool auto_dirty;
 
 	float stash;
 	bool stashing;

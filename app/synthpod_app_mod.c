@@ -187,6 +187,8 @@ _sp_app_mod_slice_pool(mod_t *mod, port_type_t type)
 				float *buf_ptr = PORT_BASE_ALIGNED(tar);
 				*buf_ptr = control->dflt;
 				control->stash = control->dflt;
+				control->last = control->dflt;
+				control->auto_dirty = true;
 			}
 
 			ptr += lv2_atom_pad_size(tar->size);

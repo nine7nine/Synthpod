@@ -510,14 +510,12 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 			{
 				port_t *port = &mod->ports[p];
 
-				if(port->direction != PORT_DIRECTION_OUTPUT)
-					continue; // skip non-output ports
-
 				if(port->type == PORT_TYPE_CONTROL)
 				{
 					const float *val = PORT_BASE_ALIGNED(port);
 
-					if(*val != port->control.last) // has changed since last cycle
+					if(  (*val != port->control.last)
+						|| (port->control.auto_dirty) ) // has changed since last cycle
 					{
 						auto_t *automation = _sp_app_find_automation_for_port(mod, p);
 
@@ -528,6 +526,8 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 							if(ref)
 								ref = _sp_app_automation_out(app, &forge, automation, t0, value);
 						}
+
+						port->control.auto_dirty = false;
 					}
 				}
 				else if( (port->type == PORT_TYPE_ATOM)
