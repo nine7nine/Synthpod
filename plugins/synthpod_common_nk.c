@@ -4021,9 +4021,9 @@ _dial_bool(struct nk_context *ctx, int32_t *val, struct nk_color color, bool edi
 		const float cx = bounds.x + w2;
 		const float cy = bounds.y + h2;
 
-		nk_stroke_arc(canv, cx, cy, r2 - 1, 0.f, 2*M_PI, 2.f, fg_color);
+		nk_stroke_arc(canv, cx, cy, r2 - 0, 0.f, 2*M_PI, 2.f, fg_color);
 		if(*val)
-			nk_fill_arc(canv, cx, cy, r2 - 4, 0.f, 2*M_PI, fg_color);
+			nk_fill_arc(canv, cx, cy, r2 - 2, 0.f, 2*M_PI, fg_color);
 	}
 
 	return tmp != *val;
@@ -6062,8 +6062,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
-							nk_checkbox_label(ctx,"Source Enabled", &automation->src_enabled); //FIXME only valid for writables
-							nk_checkbox_label(ctx,"Sink Enabled", &automation->snk_enabled); //FIXME onl valid for readables
+							nk_layout_row_dynamic(ctx, dy, 4);
+							_dial_bool(ctx, &automation->snk_enabled, nk_rgb(0xff, 0xff, 0xff), true);
+								nk_label(ctx, "Input", NK_TEXT_LEFT);
+							_dial_bool(ctx, &automation->src_enabled, nk_rgb(0xff, 0xff, 0xff), true);
+								nk_label(ctx, "Output", NK_TEXT_LEFT);
+
+							nk_layout_row_dynamic(ctx, dy, 1);
 							nk_property_int(ctx, "MIDI Channel", -1, &automation->midi.channel, 0xf, 1, ipp);
 							nk_property_int(ctx, "MIDI Controller", -1, &automation->midi.controller, 0x7f, 1, ipp);
 							nk_property_int(ctx, "MIDI Minimum", 0, &automation->midi.a, 0x7f, 1, ipp);
@@ -6080,9 +6085,13 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
-							nk_checkbox_label(ctx,"Source Enabled", &automation->src_enabled); //FIXME only valid for writables
-							nk_checkbox_label(ctx,"Sink Enabled", &automation->snk_enabled); //FIXME onl valid for readables
+							nk_layout_row_dynamic(ctx, dy, 4);
+							_dial_bool(ctx, &automation->snk_enabled, nk_rgb(0xff, 0xff, 0xff), true);
+								nk_label(ctx, "Input", NK_TEXT_LEFT);
+							_dial_bool(ctx, &automation->src_enabled, nk_rgb(0xff, 0xff, 0xff), true);
+								nk_label(ctx, "Output", NK_TEXT_LEFT);
 
+							nk_layout_row_dynamic(ctx, dy, 1);
 							const nk_flags res = nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD,
 								automation->osc.path, 128, _osc_path_filter);
 							(void)res;
