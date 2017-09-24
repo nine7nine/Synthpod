@@ -50,6 +50,7 @@
 #define ATOM_BUF_MAX 0x100000 // 1M
 #define CONTROL 14 //FIXME
 #define SPLINE_BEND 25.f
+#define ALIAS_MAX 32
 
 #ifdef Bool
 #	undef Bool // interferes with atom forge
@@ -279,6 +280,7 @@ struct _mod_t {
 	prof_t prof;
 
 	struct nk_image idisp;
+	char alias [ALIAS_MAX];
 };
 
 struct _port_conn_t {
@@ -402,11 +404,13 @@ struct _plughandle_t {
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
 	char port_search_buf [SEARCH_BUF_MAX];
+	char mod_alias_buf [ALIAS_MAX];
 
 	struct nk_text_edit bundle_search_edit;
 	struct nk_text_edit plugin_search_edit;
 	struct nk_text_edit preset_search_edit;
 	struct nk_text_edit port_search_edit;
+	struct nk_text_edit mod_alias_edit;
 
 	bool first;
 
@@ -5372,7 +5376,9 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		const float fh = font->height;
 		const float fy = body.y + (body.h - fh)/2;
 		{
-			const char *mod_name = lilv_node_as_string(name_node);
+			const char *mod_name = strlen(mod->alias)
+				? mod->alias
+				: lilv_node_as_string(name_node);
 			const size_t mod_name_len = NK_MIN(strlen(mod_name), 24); //TODO limit to how many characters?
 			const float fw = font->width(font->userdata, font->height, mod_name, mod_name_len);
 			const struct nk_rect body2 = {
@@ -6151,29 +6157,56 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 		{
 			nk_menubar_begin(ctx);
 			{
-				const float dim [2] = {0.6, 0.4};
-				nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-
-				const size_t old_len = _textedit_len(&handle->port_search_edit);
 				const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-				const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
-				_textedit_zero_terminate(&handle->port_search_edit);
-				if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
-					handle->prop_find_matches = true;
-				if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-					nk_textedit_select_all(&handle->port_search_edit);
 
-				const property_selector_search_t old_sel = handle->property_search_selector;
-				handle->property_search_selector = nk_combo(ctx, property_search_labels, PROPERTY_SELECTOR_SEARCH_MAX,
-					handle->property_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-				if(old_sel != handle->property_search_selector)
-					handle->prop_find_matches = true;
+				{
+					const float dim [2] = {0.6, 0.4};
+					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+
+					const size_t old_len = _textedit_len(&handle->port_search_edit);
+					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->port_search_edit, nk_filter_default);
+					_textedit_zero_terminate(&handle->port_search_edit);
+					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->port_search_edit)) )
+						handle->prop_find_matches = true;
+					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
+						nk_textedit_select_all(&handle->port_search_edit);
+
+					const property_selector_search_t old_sel = handle->property_search_selector;
+					handle->property_search_selector = nk_combo(ctx, property_search_labels, PROPERTY_SELECTOR_SEARCH_MAX,
+						handle->property_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
+					if(old_sel != handle->property_search_selector)
+						handle->prop_find_matches = true;
+				}
 
 				mod_t *mod = handle->module_selector;
-				if(mod && !_image_empty(&mod->idisp))
+				if(mod)
 				{
-					nk_layout_row_static(ctx, 128, 128, 1);
-					nk_image(ctx, mod->idisp);
+					{
+						const float dim [2] = {0.1, 0.9};
+						nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
+
+						nk_label(ctx, "Alias", NK_TEXT_LEFT);
+
+						const size_t old_len = strlen(mod->alias);
+						const nk_flags flags = nk_edit_string_zero_terminated(ctx, args, mod->alias, ALIAS_MAX, nk_filter_default);
+						if( (flags & NK_EDIT_COMMITED) || (old_len != strlen(mod->alias)) )
+						{
+							if(  _message_request(handle)
+								&& synthpod_patcher_set(&handle->regs, &handle->forge,
+									mod->urn, 0, handle->regs.synthpod.module_alias.urid,
+									strlen(mod->alias), handle->forge.String, mod->alias) )
+							{
+								_message_write(handle);
+							}
+						}
+						//FIXME implement select-all
+					}
+
+					if(!_image_empty(&mod->idisp))
+					{
+						nk_layout_row_static(ctx, 128, 128, 1);
+						nk_image(ctx, mod->idisp);
+					}
 				}
 			}
 			nk_menubar_end(ctx);
@@ -6553,6 +6586,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	nk_textedit_init_fixed(&handle->plugin_search_edit, handle->plugin_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->preset_search_edit, handle->preset_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->port_search_edit, handle->port_search_buf, SEARCH_BUF_MAX);
+	nk_textedit_init_fixed(&handle->mod_alias_edit, handle->mod_alias_buf, ALIAS_MAX);
 
 	handle->first = true;
 
@@ -7180,11 +7214,13 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						const LV2_Atom_URID *plugin = NULL;
 						const LV2_Atom_Float *mod_pos_x = NULL;
 						const LV2_Atom_Float *mod_pos_y = NULL;
+						const LV2_Atom_String *mod_alias = NULL;
 
 						lv2_atom_object_get(body,
 							handle->regs.core.plugin.urid, &plugin,
 							handle->regs.synthpod.module_position_x.urid, &mod_pos_x,
 							handle->regs.synthpod.module_position_y.urid, &mod_pos_y,
+							handle->regs.synthpod.module_alias.urid, &mod_alias,
 							0); //FIXME query more
 
 						const LV2_URID urid = plugin
@@ -7236,6 +7272,11 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 									sizeof(float), handle->forge.Float, &mod->pos.y) )
 							{
 								_message_write(handle);
+							}
+
+							if(mod_alias && (mod_alias->atom.type == handle->forge.String) )
+							{
+								strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX);
 							}
 						}
 					}

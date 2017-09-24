@@ -353,6 +353,7 @@ struct _reg_t {
 		reg_item_t module_profiling;
 		reg_item_t module_position_x;
 		reg_item_t module_position_y;
+		reg_item_t module_alias;
 		reg_item_t node_position_x;
 		reg_item_t node_position_y;
 		reg_item_t port_refresh;
@@ -632,6 +633,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.module_profiling, world, map, SYNTHPOD_PREFIX"moduleProfiling");
 	_register(&regs->synthpod.module_position_x, world, map, SYNTHPOD_PREFIX"modulePositionX");
 	_register(&regs->synthpod.module_position_y, world, map, SYNTHPOD_PREFIX"modulePositionY");
+	_register(&regs->synthpod.module_alias, world, map, SYNTHPOD_PREFIX"moduleAlias");
 	_register(&regs->synthpod.node_position_x, world, map, SYNTHPOD_PREFIX"nodePositionX");
 	_register(&regs->synthpod.node_position_y, world, map, SYNTHPOD_PREFIX"nodePositionY");
 	_register(&regs->synthpod.port_refresh, world, map, SYNTHPOD_PREFIX"portRefresh");
@@ -876,6 +878,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.module_profiling);
 	_unregister(&regs->synthpod.module_position_x);
 	_unregister(&regs->synthpod.module_position_y);
+	_unregister(&regs->synthpod.module_alias);
 	_unregister(&regs->synthpod.node_position_x);
 	_unregister(&regs->synthpod.node_position_y);
 	_unregister(&regs->synthpod.port_refresh);

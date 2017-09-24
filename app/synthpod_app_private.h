@@ -47,6 +47,7 @@
 #define MAX_MODS 512 // TODO how many?
 #define MAX_SLAVES 7 // e.g. 8-core machines
 #define MAX_AUTOMATIONS 64
+#define ALIAS_MAX 32
 
 typedef enum _job_type_request_t job_type_request_t;
 typedef enum _job_type_reply_t job_type_reply_t;
@@ -322,6 +323,7 @@ struct _mod_t {
 		float y;
 	} pos;
 
+	char alias [ALIAS_MAX];
 	auto_t automations [MAX_AUTOMATIONS];
 };
 

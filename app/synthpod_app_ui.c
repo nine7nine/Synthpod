@@ -616,6 +616,14 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 							ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.module_position_y.urid);
 						if(ref)
 							ref = lv2_atom_forge_float(&app->forge, mod->pos.y);
+
+						if(strlen(mod->alias))
+						{
+							if(ref)
+								ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.module_alias.urid);
+							if(ref)
+								ref = lv2_atom_forge_string(&app->forge, mod->alias, strlen(mod->alias));
+						}
 					}
 					if(ref)
 					{
@@ -682,6 +690,11 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 			{
 				mod->pos.y = ((const LV2_Atom_Float *)value)->body;
 				_sp_app_order(app);
+			}
+			else if( (prop == app->regs.synthpod.module_alias.urid)
+				&& (value->type == app->forge.String) )
+			{
+				strncpy(mod->alias, LV2_ATOM_BODY_CONST(value), ALIAS_MAX);
 			}
 			else if( (prop == app->regs.pset.preset.urid)
 				&& (value->type == app->forge.URID) )

@@ -939,8 +939,17 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_x.urid)
 							&& lv2_atom_forge_float(forge, mod->pos.x);
 
-						ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_y.urid)
-							&& lv2_atom_forge_float(forge, mod->pos.y);
+						if(ref)
+						{
+							ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_position_y.urid)
+								&& lv2_atom_forge_float(forge, mod->pos.y);
+						}
+
+						if(ref && strlen(mod->alias))
+						{
+							ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_alias.urid)
+								&& lv2_atom_forge_string(forge, mod->alias, strlen(mod->alias));
+						}
 
 						if(ref && mod->visible)
 						{
@@ -1303,11 +1312,13 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 
 	const LV2_Atom_Float *mod_pos_x = NULL;
 	const LV2_Atom_Float *mod_pos_y = NULL;
+	const LV2_Atom_String *mod_alias = NULL;
 	const LV2_Atom_Bool *mod_visible = NULL;
 	const LV2_Atom_Bool *mod_disabled = NULL;
 	LV2_Atom_Object_Query mod_q[] = {
 		{ app->regs.synthpod.module_position_x.urid, (const LV2_Atom **)&mod_pos_x },
 		{ app->regs.synthpod.module_position_y.urid, (const LV2_Atom **)&mod_pos_y },
+		{ app->regs.synthpod.module_alias.urid, (const LV2_Atom **)&mod_alias },
 		{ app->regs.synthpod.module_visible.urid, (const LV2_Atom **)&mod_visible },
 		{ app->regs.synthpod.module_disabled.urid, (const LV2_Atom **)&mod_disabled },
 		{ 0, NULL }
@@ -1334,6 +1345,8 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 		? mod_visible->body : 0;
 	mod->disabled = mod_disabled && (mod_disabled->atom.type == app->forge.Bool)
 		? mod_disabled->body : false;
+	if(mod_alias)
+		strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX);
 
 	mod->uid = mod_uid;
 
