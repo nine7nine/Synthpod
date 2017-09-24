@@ -84,6 +84,7 @@ struct _sp_app_driver_t {
 	uint32_t min_block_size;
 	uint32_t max_block_size;
 	uint32_t seq_size;
+	uint32_t num_periods;
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;

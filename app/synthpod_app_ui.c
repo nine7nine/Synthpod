@@ -583,6 +583,54 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				_sp_app_to_ui_overflow(app);
 			}
 		}
+		else if(prop == app->regs.synthpod.period_size.urid)
+		{
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const int32_t period_size = app->driver->max_block_size;
+
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, subj, sn, prop,
+					sizeof(int32_t), app->forge.Int, &period_size);
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
+		}
+		else if(prop == app->regs.synthpod.num_periods.urid)
+		{
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const int32_t num_periods = app->driver->num_periods;
+
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, subj, sn, prop,
+					sizeof(int32_t), app->forge.Int, &num_periods);
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
+		}
 		//TODO handle more properties
 	}
 	else if(subj)

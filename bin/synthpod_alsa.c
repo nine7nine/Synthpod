@@ -788,6 +788,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->app_driver.max_block_size = handle->frsize;
 	bin->app_driver.min_block_size = 1;
 	bin->app_driver.seq_size = handle->seq_size;
+	bin->app_driver.num_periods = handle->nfrags;
 	
 	// app init
 	bin->app = sp_app_new(NULL, &bin->app_driver, bin);

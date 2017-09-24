@@ -443,7 +443,8 @@ struct _plughandle_t {
 	prof_t prof;
 	int32_t cpus_available;
 	int32_t cpus_used;
-
+	int32_t period_size;
+	int32_t num_periods;
 	float sample_rate;
 	float update_rate;
 
@@ -6227,15 +6228,20 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 static void
 _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
-	nk_layout_row_dynamic(ctx, dy, 5);
+	nk_layout_row_dynamic(ctx, dy, 6);
 	{
 		time_t t1;
 		time(&t1);
 
+		const float khz = handle->sample_rate * 1e-3;
+		const float ms = handle->period_size *handle->num_periods / khz;
+		nk_labelf(ctx, NK_TEXT_LEFT, "DEV: %"PRIi32" x %"PRIi32" @ %.1f kHz (%.2f ms)",
+			handle->period_size, handle->num_periods, khz, ms);
+
 		nk_labelf(ctx, NK_TEXT_LEFT, "DSP: %.1f | %.1f | %.1f %%",
 			handle->prof.min, handle->prof.avg, handle->prof.max);
 
-		nk_labelf(ctx, NK_TEXT_LEFT, "CPU: %"PRIi32"/%"PRIi32,
+		nk_labelf(ctx, NK_TEXT_LEFT, "CPU: %"PRIi32" / %"PRIi32,
 			handle->cpus_used, handle->cpus_available);
 
 		if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true))
@@ -6333,6 +6339,22 @@ _init(plughandle_t *handle)
 	if(  _message_request(handle)
 		&& synthpod_patcher_get(&handle->regs, &handle->forge,
 			0, 0, handle->regs.synthpod.cpus_used.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:periodSize]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.period_size.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:numPeriods]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.num_periods.urid) )
 	{
 		_message_write(handle);
 	}
@@ -7166,6 +7188,24 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							const LV2_Atom_Int *cpus_available = (const LV2_Atom_Int *)value;
 
 							handle->cpus_available = cpus_available->body;
+
+							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.period_size.urid)
+							&& (value->type == handle->forge.Int) )
+						{
+							const LV2_Atom_Int *period_size = (const LV2_Atom_Int *)value;
+
+							handle->period_size = period_size->body;
+
+							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.num_periods.urid)
+							&& (value->type == handle->forge.Int) )
+						{
+							const LV2_Atom_Int *num_periods = (const LV2_Atom_Int *)value;
+
+							handle->num_periods = num_periods->body;
 
 							nk_pugl_post_redisplay(&handle->win);
 						}

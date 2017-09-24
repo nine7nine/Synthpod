@@ -879,6 +879,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->app_driver.min_block_size = 1;
 	bin->app_driver.seq_size = MAX(handle->seq_size,
 		jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
+	bin->app_driver.num_periods = 1; //FIXME
 	
 	// app init
 	bin->app = sp_app_new(NULL, &bin->app_driver, bin);

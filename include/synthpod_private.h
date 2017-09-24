@@ -363,6 +363,8 @@ struct _reg_t {
 		reg_item_t dsp_profiling;
 		reg_item_t cpus_available;
 		reg_item_t cpus_used;
+		reg_item_t period_size;
+		reg_item_t num_periods;
 		reg_item_t quit;
 
 		reg_item_t system_ports;
@@ -643,6 +645,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->synthpod.dsp_profiling, world, map, SYNTHPOD_PREFIX"DSPProfiling");
 	_register(&regs->synthpod.cpus_available, world, map, SYNTHPOD_PREFIX"CPUsAvailable");
 	_register(&regs->synthpod.cpus_used, world, map, SYNTHPOD_PREFIX"CPUsUsed");
+	_register(&regs->synthpod.period_size, world, map, SYNTHPOD_PREFIX"periodSize");
+	_register(&regs->synthpod.num_periods, world, map, SYNTHPOD_PREFIX"numPeriods");
 	_register(&regs->synthpod.quit, world, map, SYNTHPOD_PREFIX"quit");
 	
 	_register(&regs->synthpod.system_ports, world, map, SYNTHPOD_PREFIX"systemPorts");
@@ -887,6 +891,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.dsp_profiling);
 	_unregister(&regs->synthpod.cpus_available);
 	_unregister(&regs->synthpod.cpus_used);
+	_unregister(&regs->synthpod.period_size);
+	_unregister(&regs->synthpod.num_periods);
 	_unregister(&regs->synthpod.quit);
 	
 	_unregister(&regs->synthpod.system_ports);

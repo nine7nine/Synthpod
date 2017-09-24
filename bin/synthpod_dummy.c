@@ -43,6 +43,7 @@ struct _prog_t {
 
 	uint32_t srate;
 	uint32_t frsize;
+	uint32_t nfrags;
 	uint32_t seq_size;
 
 	LV2_OSC_Schedule osc_sched;
@@ -104,7 +105,7 @@ _process(prog_t *handle)
 	handle->cycle.cur_frames = 0; // initialize frame counter
 	_ntp_now(&handle->nxt_ntp);
 
-	const unsigned n_period = 3; // TODO make this configurable
+	const unsigned n_period = handle->nfrags;
 
 	struct timespec sleep_to;
 	clock_gettime(CLOCK_MONOTONIC, &sleep_to);
@@ -364,6 +365,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->app_driver.max_block_size = handle->frsize;
 	bin->app_driver.min_block_size = 1;
 	bin->app_driver.seq_size = handle->seq_size;
+	bin->app_driver.num_periods = handle->nfrags;
 	
 	// app init
 	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
@@ -454,6 +456,7 @@ main(int argc, char **argv)
 
 	handle.srate = 48000;
 	handle.frsize = 1024;
+	handle.nfrags = 3; //TODO make this configurable
 	handle.seq_size = SEQ_SIZE;
 
 	bin->audio_prio = 70;
