@@ -192,7 +192,6 @@ struct _auto_t {
 
 struct _control_port_t {
 	hash_t points;
-	scale_point_t *points_ref;
 	param_union_t min;
 	param_union_t max;
 	param_union_t span;
@@ -239,6 +238,8 @@ struct _param_t {
 	LV2_URID units_unit;
 	char *units_symbol;
 	auto_t automation;
+
+	hash_t points;
 };
 
 struct _prof_t {
@@ -1604,6 +1605,22 @@ _param_update_span(plughandle_t *handle, param_t *param)
 	//FIXME more types
 }
 
+static int
+_sort_scale_point_name(const void *a, const void *b)
+{
+	const scale_point_t *scale_point_a = *(const scale_point_t **)a;
+	const scale_point_t *scale_point_b = *(const scale_point_t **)b;
+
+	const char *name_a = scale_point_a->label;
+	const char *name_b = scale_point_b->label;
+
+	const int ret = name_a && name_b
+		? strcasecmp(name_a, name_b)
+		: 0;
+
+	return ret;
+}
+
 static void
 _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 {
@@ -1704,6 +1721,50 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 		lilv_node_free(units_unit);
 	}
 
+	LilvNodes *lv2_scale_points = lilv_world_find_nodes(handle->world, param_node, handle->regs.core.scale_point.node, NULL);
+	if(lv2_scale_points)
+	{
+		LILV_FOREACH(nodes, i, lv2_scale_points)
+		{
+			const LilvNode *port_point = lilv_nodes_get(lv2_scale_points, i);
+			LilvNode *label_node = lilv_world_get(handle->world, port_point, handle->regs.rdfs.label.node, NULL);
+			LilvNode *value_node = lilv_world_get(handle->world, port_point, handle->regs.rdf.value.node, NULL);
+
+			if(label_node && value_node)
+			{
+				scale_point_t *point = calloc(1, sizeof(scale_point_t));
+				if(!point)
+					continue;
+
+				_hash_add(&param->points, point);
+
+				point->label = strdup(lilv_node_as_string(label_node));
+
+				if(  (param->range == handle->forge.Int)
+					|| (param->range == handle->forge.Long) )
+				{
+					point->val.i = _node_as_int(value_node, 0);
+				}
+				else if(param->range == handle->forge.Bool)
+				{
+					point->val.i = _node_as_bool(value_node, false);
+				}
+				else // is_float
+				{
+					point->val.f = _node_as_float(value_node, 0.f);
+				}
+				//FIXME other types
+
+				lilv_node_free(label_node);
+				lilv_node_free(value_node);
+			}
+		}
+
+		_hash_sort(&param->points, _sort_scale_point_name);
+
+		lilv_nodes_free(lv2_scale_points);
+	}
+
 	//FIXME units_symbol
 }
 
@@ -1733,6 +1794,16 @@ _param_free(plughandle_t *handle, param_t *param)
 	else if(param->range == handle->forge.Chunk)
 	{
 		free(param->val.chunk.body);
+	}
+
+	HASH_FREE(&param->points, ptr2)
+	{
+		scale_point_t *point = ptr2;
+
+		if(point->label)
+			free(point->label);
+
+		free(point);
 	}
 
 	free(param->label);
@@ -2587,22 +2658,6 @@ _sort_port_name(const void *a, const void *b)
 	return ret;
 }
 
-static int
-_sort_scale_point_name(const void *a, const void *b)
-{
-	const scale_point_t *scale_point_a = *(const scale_point_t **)a;
-	const scale_point_t *scale_point_b = *(const scale_point_t **)b;
-
-	const char *name_a = scale_point_a->label;
-	const char *name_b = scale_point_b->label;
-
-	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
-		: 0;
-
-	return ret;
-}
-
 static void
 _patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
@@ -2910,20 +2965,6 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 						{
 							point->val.f = _node_as_float(value_node, 0.f);
 						}
-					}
-				}
-
-				int32_t diff1 = INT32_MAX;
-				HASH_FOREACH(&port->control.points, itr)
-				{
-					scale_point_t *point = *itr;
-
-					const int32_t diff2 = abs(point->val.i - control->val.i); //FIXME
-
-					if(diff2 < diff1)
-					{
-						control->points_ref = point;
-						diff1 = diff2;
 					}
 				}
 
@@ -4377,7 +4418,22 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 
 		if(!_hash_empty(&control->points))
 		{
-			scale_point_t *ref = control->points_ref;
+			scale_point_t *ref = NULL;
+
+			int32_t diff1 = INT32_MAX;
+			HASH_FOREACH(&control->points, itr)
+			{
+				scale_point_t *point = *itr;
+
+				const int32_t diff2 = abs(point->val.i - control->val.i); //FIXME
+
+				if(diff2 < diff1)
+				{
+					ref = point;
+					diff1 = diff2;
+				}
+			}
+
 			if(nk_combo_begin_label(ctx, ref->label, nk_vec2(nk_widget_width(ctx), 7*dy)))
 			{
 				nk_layout_row_dynamic(ctx, dy, 1);
@@ -4387,7 +4443,6 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 
 					if(nk_combo_item_label(ctx, point->label, NK_TEXT_LEFT) && !control->is_readonly)
 					{
-						control->points_ref = point;
 						control->val = point->val;
 						changed = true;
 					}
@@ -4580,7 +4635,42 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 		nk_layout_row_dynamic(ctx, dy, 1);
 		nk_label(ctx, name_str, NK_TEXT_LEFT);
 
-		if(param->range == handle->forge.Int)
+		if(!_hash_empty(&param->points))
+		{
+			scale_point_t *ref = NULL;
+
+			int32_t diff1 = INT32_MAX;
+			HASH_FOREACH(&param->points, itr)
+			{
+				scale_point_t *point = *itr;
+
+				const int32_t diff2 = abs(point->val.i - param->val.i); //FIXME
+
+				if(diff2 < diff1)
+				{
+					ref = point;
+					diff1 = diff2;
+				}
+			}
+
+			if(nk_combo_begin_label(ctx, ref->label, nk_vec2(nk_widget_width(ctx), 7*dy)))
+			{
+				nk_layout_row_dynamic(ctx, dy, 1);
+				HASH_FOREACH(&param->points, itr)
+				{
+					scale_point_t *point = *itr;
+
+					if(nk_combo_item_label(ctx, point->label, NK_TEXT_LEFT) && !param->is_readonly)
+					{
+						param->val = point->val;
+						changed = true;
+					}
+				}
+
+				nk_combo_end(ctx);
+			}
+		}
+		else if(param->range == handle->forge.Int)
 		{
 			if(param->is_readonly)
 			{
