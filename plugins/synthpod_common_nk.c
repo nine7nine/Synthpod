@@ -224,6 +224,7 @@ struct _port_t {
 
 struct _param_t {
 	bool is_readonly;
+	bool is_bitmask;
 	LV2_URID property;
 	LV2_URID range;
 	mod_t *mod;
@@ -1719,6 +1720,20 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 		if(lilv_node_is_uri(units_unit))
 			param->units_unit = handle->map->map(handle->map->handle, lilv_node_as_uri(units_unit));
 		lilv_node_free(units_unit);
+	}
+
+	LilvNodes *param_properties = lilv_world_find_nodes(handle->world, param_node, handle->regs.parameter.property.node, NULL);
+	if(param_properties)
+	{
+		LILV_FOREACH(nodes, i, param_properties)
+		{
+			const LilvNode *param_property = lilv_nodes_get(param_properties, i);
+
+			if(lilv_node_equals(param_property, handle->regs.port.is_bitmask.node))
+				param->is_bitmask = true;
+		}
+
+		lilv_nodes_free(param_properties);
 	}
 
 	LilvNodes *lv2_scale_points = lilv_world_find_nodes(handle->world, param_node, handle->regs.core.scale_point.node, NULL);
@@ -4620,7 +4635,8 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 	DY -= 2*ctx->style.window.group_padding.y;
 
 	bool changed = false;
-	if(param->range == handle->forge.String)
+	if(  (param->range == handle->forge.String)
+		|| param->is_bitmask)
 	{
 		nk_layout_row_dynamic(ctx, DY, 1);
 	}
@@ -4668,6 +4684,36 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 				}
 
 				nk_combo_end(ctx);
+			}
+		}
+		else if(param->is_bitmask)
+		{
+			struct nk_style *style = &ctx->style;
+
+			const unsigned nbits = log2(param->max.i + 1);
+			nk_layout_row_static(ctx, dy, dy, nbits);
+			for(int i=0; i<nbits; i++)
+			{
+				const uint8_t mask = (1 << i);
+				const uint8_t has_bit = param->val.i & mask;
+				char lbl [3];
+				snprintf(lbl, 3, "%2"PRIu8, i);
+
+				if(has_bit)
+					nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+
+				if(nk_button_label(ctx, lbl))
+				{
+					if(has_bit)
+						param->val.i &= ~mask;
+					else
+						param->val.i |= mask;
+
+					changed = true;
+				}
+
+				if(has_bit)
+					nk_style_pop_color(ctx);
 			}
 		}
 		else if(param->range == handle->forge.Int)
@@ -4758,7 +4804,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 		nk_group_end(ctx);
 	}
 
-	if(param->range == handle->forge.Int)
+	if( (param->range == handle->forge.Int) && !param->is_bitmask)
 	{
 		if(_dial_int(ctx, param->min.i, &param->val.i, param->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
 		{
