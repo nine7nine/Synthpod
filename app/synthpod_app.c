@@ -709,12 +709,26 @@ _dsp_slave_fetch(dsp_master_t *dsp_master, int head)
 	return head ;
 }
 
+__realtime static bool
+_dsp_slave_has_work_to_do(dsp_master_t *dsp_master)
+{
+	struct timespec t2;
+	clock_gettime(CLOCK_MONOTONIC, &t2);
+
+	double diff = t2.tv_sec - dsp_master->t1.tv_sec;
+	diff += (t2.tv_nsec - dsp_master->t1.tv_nsec)*1e-9;
+	if(diff > 0.1)
+		return false; // skip rest of graph, as we most probably hang somewhere
+
+	return (atomic_load(&dsp_master->ref_count) > 0);
+}
+
 __realtime static inline void
 _dsp_slave_spin(dsp_master_t *dsp_master)
 {
 	int head = 0;
 
-	while(atomic_load(&dsp_master->ref_count) > 0)
+	while(_dsp_slave_has_work_to_do(dsp_master))
 	{
 		head = _dsp_slave_fetch(dsp_master, head);
 		if(head == -1) // no more work left
@@ -797,7 +811,7 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
 	_dsp_slave_spin(dsp_master); // runs jobs itself 
 
-	while(atomic_load(&dsp_master->ref_count) > 0)
+	while(_dsp_slave_has_work_to_do(dsp_master))
 	{
 		// spin
 	}
@@ -956,6 +970,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 	mod_t *del_me = NULL;
 
 	clock_gettime(CLOCK_MONOTONIC, &app->prof.t1);
+	app->dsp_master.t1 = app->prof.t1;
 
 	// iterate over all modules
 	for(unsigned m=0; m<app->num_mods; m++)

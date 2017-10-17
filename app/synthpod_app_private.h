@@ -162,6 +162,7 @@ struct _dsp_master_t {
 	unsigned concurrent;
 	unsigned num_slaves;
 	uint32_t nsamples;
+	struct timespec t1;
 };
 
 struct _job_t {
