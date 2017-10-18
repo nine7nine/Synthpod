@@ -718,7 +718,10 @@ _dsp_slave_has_work_to_do(dsp_master_t *dsp_master)
 	double diff = t2.tv_sec - dsp_master->t1.tv_sec;
 	diff += (t2.tv_nsec - dsp_master->t1.tv_nsec)*1e-9;
 	if(diff > 0.1)
+	{
+		fprintf(stderr, "%s: taking emergency exit.\n", __func__);
 		return false; // skip rest of graph, as we most probably hang somewhere
+	}
 
 	return (atomic_load(&dsp_master->ref_count) > 0);
 }
