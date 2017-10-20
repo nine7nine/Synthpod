@@ -415,6 +415,7 @@ struct _plughandle_t {
 	struct nk_text_edit mod_alias_edit;
 
 	bool first;
+	bool has_initial_focus;
 
 	reg_t regs;
 	union {
@@ -6012,6 +6013,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 					const size_t old_len = _textedit_len(&handle->bundle_search_edit);
 					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
+					if(!handle->has_initial_focus)
+					{
+						nk_edit_focus(ctx, args);
+						handle->has_initial_focus = true;
+					}
 					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->bundle_search_edit, nk_filter_default);
 					_textedit_zero_terminate(&handle->bundle_search_edit);
 					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->bundle_search_edit)) )
