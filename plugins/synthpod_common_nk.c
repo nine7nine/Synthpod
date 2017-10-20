@@ -4029,10 +4029,10 @@ _dial_bool(struct nk_context *ctx, int32_t *val, struct nk_color color, bool edi
 			}
 			else if(nk_input_is_mouse_hovering_rect(in, bounds))
 			{
-				if(in->mouse.scroll_delta != 0.f) // has scrolling
+				if(in->mouse.scroll_delta.y != 0.f) // has scrolling
 				{
 					mouse_has_scrolled = true;
-					in->mouse.scroll_delta = 0.f;
+					in->mouse.scroll_delta.y = 0.f;
 				}
 
 				states = NK_WIDGET_STATE_HOVER;
@@ -4110,10 +4110,10 @@ _dial_numeric_behavior(struct nk_context *ctx, struct nk_rect bounds,
 	}
 	else if(nk_input_is_mouse_hovering_rect(in, bounds))
 	{
-		if(in->mouse.scroll_delta != 0.f) // has scrolling
+		if(in->mouse.scroll_delta.y != 0.f) // has scrolling
 		{
-			dd = in->mouse.scroll_delta;
-			in->mouse.scroll_delta = 0.f;
+			dd = in->mouse.scroll_delta.y;
+			in->mouse.scroll_delta.y = 0.f;
 		}
 
 		*states = NK_WIDGET_STATE_HOVER;
@@ -5783,14 +5783,14 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 								_patch_connection_add(handle, source_port, sink_port, 1.f);
 							}
 						}
-						else if(in->mouse.scroll_delta != 0.f) // has scrolling
+						else if(in->mouse.scroll_delta.y != 0.f) // has scrolling
 						{
 							float multiplier = 100.f;
 							if(nk_input_is_key_down(in, NK_KEY_SHIFT))
 								multiplier *= 0.1f;
 
-							const float dd = in->mouse.scroll_delta * multiplier;
-							in->mouse.scroll_delta = 0.f;
+							const float dd = in->mouse.scroll_delta.y * multiplier;
+							in->mouse.scroll_delta.y = 0.f;
 
 							if(is_dial)
 							{
@@ -6548,9 +6548,10 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 
 	handle->has_control_a = nk_pugl_is_shortcut_pressed(&ctx->input, 'a', true);
 
-	if(nk_begin(ctx, "synthpod", wbounds, NK_WINDOW_NO_SCROLLBAR))
+	const char *window_name = "synthpod";
+	if(nk_begin(ctx, window_name, wbounds, NK_WINDOW_NO_SCROLLBAR))
 	{
-		nk_window_set_bounds(ctx, wbounds);
+		nk_window_set_bounds(ctx, window_name, wbounds);
 
 		// reduce group padding
 		nk_style_push_vec2(ctx, &ctx->style.window.group_padding, nk_vec2(2.f, 2.f));

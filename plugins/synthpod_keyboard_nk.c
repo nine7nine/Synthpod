@@ -98,9 +98,10 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 {
 	plughandle_t *handle = data;
 
-	if(nk_begin(ctx, "Keyboard", wbounds, NK_WINDOW_NO_SCROLLBAR))
+	const char *window_name = "keyboard";
+	if(nk_begin(ctx, window_name, wbounds, NK_WINDOW_NO_SCROLLBAR))
 	{
-		nk_window_set_bounds(ctx, wbounds);
+		nk_window_set_bounds(ctx, window_name, wbounds);
 		const struct nk_rect reg = nk_window_get_content_region(ctx);
 		const float dy = reg.h - 10;
 
