@@ -4692,7 +4692,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 
 			const unsigned nbits = log2(param->max.i + 1);
 			nk_layout_row_static(ctx, dy, dy, nbits);
-			for(int i=0; i<nbits; i++)
+			for(unsigned i=0; i<nbits; i++)
 			{
 				const uint8_t mask = (1 << i);
 				const uint8_t has_bit = param->val.i & mask;
