@@ -6330,7 +6330,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							if(  _message_request(handle)
 								&& synthpod_patcher_set(&handle->regs, &handle->forge,
 									mod->urn, 0, handle->regs.synthpod.module_alias.urid,
-									strlen(mod->alias), handle->forge.String, mod->alias) )
+									strlen(mod->alias) + 1, handle->forge.String, mod->alias) )
 							{
 								_message_write(handle);
 							}
