@@ -3331,6 +3331,42 @@ _toolbar_toggled(struct nk_context *ctx, bool state, char key, struct nk_image i
 }
 
 static void
+_toolbar_labeld(struct nk_context *ctx, bool *state, char key, const char *label)
+{
+	struct nk_style *style = &ctx->style;
+	const bool is_hovered = nk_widget_is_hovered(ctx);
+
+	if(_tooltip_visible(ctx))
+	{
+		char tt [16];
+		snprintf(tt, 16, "Ctrl-%c", isalpha(key) ? toupper(key) : key);
+		nk_tooltip(ctx, tt);
+	}
+
+	if(nk_pugl_is_shortcut_pressed(&ctx->input, key, true))
+		*state = !*state;
+
+	bool old_state = *state;
+	if(old_state)
+		nk_style_push_color(ctx, &style->button.border_color, hilight_color);
+	else if(is_hovered)
+		nk_style_push_color(ctx, &style->button.border_color, toggle_color);
+
+	if(nk_button_label(ctx, label))
+		*state = !*state;
+
+	if(old_state || is_hovered)
+		nk_style_pop_color(ctx);
+}
+
+static bool
+_toolbar_label(struct nk_context *ctx, bool state, char key, const char *label)
+{
+	_toolbar_labeld(ctx, &state, key, label);
+	return state ;
+}
+
+static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
 	struct nk_style *style = &ctx->style;
@@ -6362,7 +6398,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 								label = "Show";
 #endif
 
-							if(nk_button_label(ctx, label))
+							const bool is_still_running = _toolbar_label(ctx, is_running, 0x0, label);
+							if(is_still_running != is_running)
 							{
 								if(is_running)
 									_mod_ui_stop(mod_ui); // stop existing UI
