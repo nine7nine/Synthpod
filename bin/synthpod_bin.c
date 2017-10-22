@@ -540,7 +540,7 @@ bin_stop(bin_t *bin)
 
 	if(bin->has_gui && bin->child)
 	{
-		kill(bin->child, SIGTERM);
+		kill(bin->child, SIGINT);
 		bin->child = 0;
 	}
 

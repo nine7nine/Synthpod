@@ -1553,19 +1553,6 @@ _mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
 	return NULL;
 }
 
-static mod_ui_t *
-_mod_ui_get_first(mod_t *mod)
-{
-	HASH_FOREACH(&mod->uis, mod_ui_itr)
-	{
-		mod_ui_t *mod_ui = *mod_ui_itr;
-
-		return mod_ui;
-	}
-
-	return NULL;
-}
-
 static bool
 _mod_ui_is_running(mod_ui_t *mod_ui)
 {
@@ -2515,7 +2502,7 @@ _mod_ui_stop(mod_ui_t *mod_ui)
 
 	if(mod_ui->pid)
 	{
-		kill(mod_ui->pid, SIGTERM);
+		kill(mod_ui->pid, SIGINT);
 		mod_ui->pid = 0;
 	}
 
@@ -5455,27 +5442,13 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 
 	if(is_selectable && _mod_moveable(handle, ctx, mod, &bounds))
 	{
-		if(nk_input_is_key_down(in, NK_KEY_SHIFT)) //FIXME
-		{
-			mod_ui_t *mod_ui = _mod_ui_get_first(mod);
-			if(mod_ui)
-			{
-				if(_mod_ui_is_running(mod_ui))
-					_mod_ui_stop(mod_ui); // stop existing UI
-				else
-					_mod_ui_run(mod_ui); // run UI
-			}
-		}
-		else
-		{
-			const LilvNode *uri_node = lilv_plugin_get_uri(plug);
-			const char *mod_uri = lilv_node_as_string(uri_node);
+		const LilvNode *uri_node = lilv_plugin_get_uri(plug);
+		const char *mod_uri = lilv_node_as_string(uri_node);
 
-			if(  strcmp(mod_uri, SYNTHPOD_PREFIX"source")
-				&& strcmp(mod_uri, SYNTHPOD_PREFIX"sink") )
-			{
-				_patch_mod_remove(handle, mod);
-			}
+		if(  strcmp(mod_uri, SYNTHPOD_PREFIX"source")
+			&& strcmp(mod_uri, SYNTHPOD_PREFIX"sink") )
+		{
+			_patch_mod_remove(handle, mod);
 		}
 	}
 
@@ -6342,6 +6315,61 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							}
 						}
 						//FIXME implement select-all
+					}
+
+					const unsigned nuis = _hash_size(&mod->uis);
+					if(nuis)
+					{
+						nk_layout_row_dynamic(ctx, dy, nuis);
+
+						HASH_FOREACH(&mod->uis, mod_ui_itr)
+						{
+							mod_ui_t *mod_ui = *mod_ui_itr;
+							const LilvUI *ui = mod_ui->ui;
+							const LilvNode *ui_node = lilv_ui_get_uri(ui);
+
+							const bool is_running = _mod_ui_is_running(mod_ui);
+							const char *label = "UI";
+
+							if(false)
+								{} // never reached
+#if defined(SANDBOX_X11)
+							else if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+								label = "X11";
+#endif
+#if defined(SANDBOX_GTK2)
+							else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+								label = "Gtk2";
+#endif
+#if defined(SANDBOX_GTK3)
+							else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+								label = "Gtk3";
+#endif
+#if defined(SANDBOX_QT4)
+							else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+								label = "Qt4";
+#endif
+#if defined(SANDBOX_QT5)
+							else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+								label = "Qt5";
+#endif
+#if defined(SANDBOX_KX)
+							else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+								label = "KX";
+#endif
+#if defined(SANDBOX_SHOW)
+							else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
+								label = "Show";
+#endif
+
+							if(nk_button_label(ctx, label))
+							{
+								if(is_running)
+									_mod_ui_stop(mod_ui); // stop existing UI
+								else
+									_mod_ui_run(mod_ui); // run UI
+							}
+						}
 					}
 
 					if(!_image_empty(&mod->idisp))
