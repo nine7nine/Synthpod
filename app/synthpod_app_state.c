@@ -431,6 +431,7 @@ synthpod_to_turtle(Sratom* sratom, LV2_URID_Unmap* unmap,
 		serd_env_set_prefix_from_strings(env, CUINT8("pset"), CUINT8(LV2_PRESETS_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("param"), CUINT8(LV2_PARAMETERS_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("state"), CUINT8(LV2_STATE_PREFIX));
+		serd_env_set_prefix_from_strings(env, CUINT8("ui"), CUINT8(LV2_UI_PREFIX));
 		serd_env_set_prefix_from_strings(env, CUINT8("spod"), CUINT8(SPOD_PREFIX));
 
 		SerdWriter *writer = serd_writer_new(SERD_TURTLE,
@@ -951,6 +952,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 								&& lv2_atom_forge_string(forge, mod->alias, strlen(mod->alias));
 						}
 
+						if(ref && mod->ui)
+						{
+							ref = lv2_atom_forge_key(forge, app->regs.ui.ui.urid)
+								&& lv2_atom_forge_urid(forge, mod->ui);
+						}
+
 						if(ref && mod->visible)
 						{
 							ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_visible.urid)
@@ -1313,12 +1320,14 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 	const LV2_Atom_Float *mod_pos_x = NULL;
 	const LV2_Atom_Float *mod_pos_y = NULL;
 	const LV2_Atom_String *mod_alias = NULL;
+	const LV2_Atom_URID *mod_ui = NULL;
 	const LV2_Atom_Bool *mod_visible = NULL;
 	const LV2_Atom_Bool *mod_disabled = NULL;
 	LV2_Atom_Object_Query mod_q[] = {
 		{ app->regs.synthpod.module_position_x.urid, (const LV2_Atom **)&mod_pos_x },
 		{ app->regs.synthpod.module_position_y.urid, (const LV2_Atom **)&mod_pos_y },
 		{ app->regs.synthpod.module_alias.urid, (const LV2_Atom **)&mod_alias },
+		{ app->regs.ui.ui.urid, (const LV2_Atom **)&mod_ui},
 		{ app->regs.synthpod.module_visible.urid, (const LV2_Atom **)&mod_visible },
 		{ app->regs.synthpod.module_disabled.urid, (const LV2_Atom **)&mod_disabled },
 		{ 0, NULL }
@@ -1347,6 +1356,8 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 		? mod_disabled->body : false;
 	if(mod_alias)
 		strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX);
+	mod->ui = mod_ui && (mod_ui->atom.type == app->forge.URID)
+		? mod_ui->body : 0;
 
 	mod->uid = mod_uid;
 

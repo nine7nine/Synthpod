@@ -325,6 +325,7 @@ struct _mod_t {
 	} pos;
 
 	char alias [ALIAS_MAX];
+	LV2_URID ui;
 	auto_t automations [MAX_AUTOMATIONS];
 };
 

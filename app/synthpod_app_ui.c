@@ -672,6 +672,14 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 							if(ref)
 								ref = lv2_atom_forge_string(&app->forge, mod->alias, strlen(mod->alias));
 						}
+
+						if(mod->ui)
+						{
+							if(ref)
+								ref = lv2_atom_forge_key(&app->forge, app->regs.ui.ui.urid);
+							if(ref)
+								ref = lv2_atom_forge_urid(&app->forge, mod->ui);
+						}
 					}
 					if(ref)
 					{
@@ -743,6 +751,11 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 				&& (value->type == app->forge.String) )
 			{
 				strncpy(mod->alias, LV2_ATOM_BODY_CONST(value), ALIAS_MAX);
+			}
+			else if( (prop == app->regs.ui.ui.urid)
+				&& (value->type == app->forge.URID) )
+			{
+				mod->ui = ((const LV2_Atom_URID *)value)->body;
 			}
 			else if( (prop == app->regs.pset.preset.urid)
 				&& (value->type == app->forge.URID) )

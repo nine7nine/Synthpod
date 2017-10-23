@@ -188,6 +188,7 @@ struct _reg_t {
 		reg_item_t update_rate;
 		reg_item_t instance_access;
 		reg_item_t data_access;
+		reg_item_t ui;
 	} ui;
 
 	struct {
@@ -491,6 +492,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->ui.update_rate, world, map, LV2_UI__updateRate);
 	_register(&regs->ui.instance_access, world, map, LV2_INSTANCE_ACCESS_URI);
 	_register(&regs->ui.data_access, world, map, LV2_DATA_ACCESS_URI);
+	_register(&regs->ui.ui, world, map, LV2_UI__ui);
 
 #ifndef LV2_PRESETS__bank
 #	define LV2_PRESETS__bank LV2_PRESETS_PREFIX "bank"
@@ -747,6 +749,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->ui.update_rate);
 	_unregister(&regs->ui.instance_access);
 	_unregister(&regs->ui.data_access);
+	_unregister(&regs->ui.ui);
 
 	_unregister(&regs->pset.preset);
 	_unregister(&regs->pset.preset_bank);

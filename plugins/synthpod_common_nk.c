@@ -306,6 +306,7 @@ struct _mod_ui_t {
 	mod_t *mod;
 	const LilvUI *ui;
 	const char *uri;
+	LV2_URID urn;
 
 	pid_t pid;
 	struct {
@@ -2387,12 +2388,12 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 		mod_ui->mod = mod;
 		mod_ui->ui = ui;
 		mod_ui->uri = lilv_node_as_uri(ui_node);
-		const LV2_URID ui_urn = handle->map->map(handle->map->handle, mod_ui->uri);
+		mod_ui->urn = handle->map->map(handle->map->handle, mod_ui->uri);
 
 		const char *bundle_uri = bundle_node ? lilv_node_as_uri(bundle_node) : NULL;
 		mod_ui->sbox.bundle_path = lilv_file_uri_parse(bundle_uri, NULL);
 
-		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///%"PRIu32"-%"PRIu32, mod->urn, ui_urn) == -1)
+		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///%"PRIu32"-%"PRIu32, mod->urn, mod_ui->urn) == -1)
 			mod_ui->sbox.socket_uri = NULL;
 
 		if(asprintf(&mod_ui->sbox.window_name, "%s", mod_ui->uri) == -1)
@@ -2417,7 +2418,7 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 }
 
 static void
-_mod_ui_run(mod_ui_t *mod_ui)
+_mod_ui_run(mod_ui_t *mod_ui, bool sync)
 {
 	const LilvUI *ui = mod_ui->ui;
 	const LilvNode *ui_node = lilv_ui_get_uri(ui);
@@ -2491,11 +2492,22 @@ _mod_ui_run(mod_ui_t *mod_ui)
 
 		// parent
 		mod_ui->pid = pid;
+
+		if(sync)
+		{
+			if(  _message_request(handle)
+				&& synthpod_patcher_set(&handle->regs, &handle->forge,
+					mod->urn, 0, handle->regs.ui.ui.urid,
+					sizeof(uint32_t), handle->forge.URID, &mod_ui->urn) )
+			{
+				_message_write(handle);
+			}
+		}
 	}
 }
 
 static void
-_mod_ui_stop(mod_ui_t *mod_ui)
+_mod_ui_stop(mod_ui_t *mod_ui, bool sync)
 {
 	mod_t *mod = mod_ui->mod;
 	plughandle_t *handle = mod->handle;
@@ -2512,6 +2524,18 @@ _mod_ui_stop(mod_ui_t *mod_ui)
 		sandbox_master_free(mod_ui->sbox.sb);
 		mod_ui->sbox.sb = NULL;
 	}
+
+	if(sync)
+	{
+		const uint32_t dummy = 0;
+		if(  _message_request(handle)
+			&& synthpod_patcher_set(&handle->regs, &handle->forge, //FIXME or patcher_del ?
+				mod->urn, 0, handle->regs.ui.ui.urid,
+				sizeof(uint32_t), handle->forge.URID, &dummy) )
+		{
+			_message_write(handle);
+		}
+	}
 }
 
 static void
@@ -2524,7 +2548,7 @@ _mod_ui_free(mod_ui_t *mod_ui)
 	const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
 
 	if(_mod_ui_is_running(mod_ui))
-		_mod_ui_stop(mod_ui);
+		_mod_ui_stop(mod_ui, false);
 
 	lilv_world_unload_resource(handle->world, ui_node);
 	//lilv_world_unload_bundle(handle->world, (LilvNode *)bundle_node);
@@ -6402,9 +6426,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							if(is_still_running != is_running)
 							{
 								if(is_running)
-									_mod_ui_stop(mod_ui); // stop existing UI
+									_mod_ui_stop(mod_ui, true); // stop existing UI
 								else
-									_mod_ui_run(mod_ui); // run UI
+									_mod_ui_run(mod_ui, true); // run UI
 							}
 						}
 					}
@@ -7462,12 +7486,14 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						const LV2_Atom_Float *mod_pos_x = NULL;
 						const LV2_Atom_Float *mod_pos_y = NULL;
 						const LV2_Atom_String *mod_alias = NULL;
+						const LV2_Atom_URID *ui_uri = NULL;
 
 						lv2_atom_object_get(body,
 							handle->regs.core.plugin.urid, &plugin,
 							handle->regs.synthpod.module_position_x.urid, &mod_pos_x,
 							handle->regs.synthpod.module_position_y.urid, &mod_pos_y,
 							handle->regs.synthpod.module_alias.urid, &mod_alias,
+							handle->regs.ui.ui.urid, &ui_uri, //FIXME use this
 							0); //FIXME query more
 
 						const LV2_URID urid = plugin
@@ -7477,6 +7503,10 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						const char *uri = urid
 							? handle->unmap->unmap(handle->unmap->handle, urid)
 							: NULL;
+
+						const LV2_URID ui_urn = ui_uri
+							? ui_uri->body
+							: 0;
 
 						mod_t *mod = _mod_find_by_subject(handle, subj);
 						if(mod && uri)
@@ -7524,6 +7554,21 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							if(mod_alias && (mod_alias->atom.type == handle->forge.String) )
 							{
 								strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX);
+							}
+
+							if(ui_urn)
+							{
+								// look for ui, and run it
+								HASH_FOREACH(&mod->uis, mod_ui_itr)
+								{
+									mod_ui_t *mod_ui = *mod_ui_itr;
+
+									if(_mod_ui_is_running(mod_ui))
+										_mod_ui_stop(mod_ui, false);
+
+									if(mod_ui->urn == ui_urn)
+										_mod_ui_run(mod_ui, false);
+								}
 							}
 						}
 					}
@@ -7673,7 +7718,7 @@ _idle(LV2UI_Handle instance)
 
 			if(!rolling || sandbox_master_recv(mod_ui->sbox.sb))
 			{
-				_mod_ui_stop(mod_ui);
+				_mod_ui_stop(mod_ui, true);
 			}
 		}
 	}
