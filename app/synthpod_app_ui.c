@@ -128,6 +128,161 @@ _sp_app_ui_set_modlist(sp_app_t *app, LV2_URID subj, int32_t seqn)
 	}
 }
 
+__realtime LV2_Atom_Forge_Ref
+_sp_app_forge_midi_automation(sp_app_t *app, LV2_Atom_Forge_Frame *frame,
+	mod_t *mod, port_t *port, const auto_t *automation)
+{
+	const midi_auto_t *mauto = &automation->midi;
+	LV2_Atom_Forge_Ref ref;
+	
+	ref = lv2_atom_forge_object(&app->forge, frame, 0, app->regs.midi.Controller.urid);
+	if(ref)
+	{
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
+		if(ref)
+			ref = lv2_atom_forge_urid(&app->forge, mod->urn);
+
+		if(automation->property)
+		{
+			if(ref)
+				ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
+			if(ref)
+				ref = lv2_atom_forge_urid(&app->forge, automation->property);
+			if(ref)
+				ref = lv2_atom_forge_key(&app->forge, app->regs.rdfs.range.urid);
+			if(ref)
+				ref = lv2_atom_forge_urid(&app->forge, automation->range);
+		}
+		else
+		{
+			if(ref)
+				ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
+			if(ref)
+				ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+		}
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.midi.channel.urid);
+		if(ref)
+			ref = lv2_atom_forge_int(&app->forge, mauto->channel);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.midi.controller_number.urid);
+		if(ref)
+			ref = lv2_atom_forge_int(&app->forge, mauto->controller);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_min.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->a);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_max.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->b);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_min.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->c);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->d);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_enabled.urid);
+		if(ref)
+			ref = lv2_atom_forge_bool(&app->forge, automation->src_enabled);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_enabled.urid);
+		if(ref)
+			ref = lv2_atom_forge_bool(&app->forge, automation->snk_enabled);
+	}
+	if(ref)
+		lv2_atom_forge_pop(&app->forge, frame);
+
+	return ref;
+}
+
+__realtime LV2_Atom_Forge_Ref
+_sp_app_forge_osc_automation(sp_app_t *app, LV2_Atom_Forge_Frame *frame,
+	mod_t *mod, port_t *port, const auto_t *automation)
+{
+	const osc_auto_t *oauto = &automation->osc;
+	LV2_Atom_Forge_Ref ref;
+	
+	ref = lv2_atom_forge_object(&app->forge, frame, 0, app->regs.osc.message.urid);
+	if(ref)
+	{
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
+		if(ref)
+			ref = lv2_atom_forge_urid(&app->forge, mod->urn);
+
+		if(automation->property)
+		{
+			if(ref)
+				ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
+			if(ref)
+				ref = lv2_atom_forge_urid(&app->forge, automation->property);
+			if(ref)
+				ref = lv2_atom_forge_key(&app->forge, app->regs.rdfs.range.urid);
+			if(ref)
+				ref = lv2_atom_forge_urid(&app->forge, automation->range);
+		}
+		else
+		{
+			if(ref)
+				ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
+			if(ref)
+				ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
+		}
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.osc.path.urid);
+		if(ref)
+			ref = lv2_atom_forge_string(&app->forge, oauto->path, strlen(oauto->path));
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_min.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->a);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_max.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->b);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_min.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->c);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
+		if(ref)
+			ref = lv2_atom_forge_double(&app->forge, automation->d);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_enabled.urid);
+		if(ref)
+			ref = lv2_atom_forge_bool(&app->forge, automation->src_enabled);
+
+		if(ref)
+			ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_enabled.urid);
+		if(ref)
+			ref = lv2_atom_forge_bool(&app->forge, automation->snk_enabled);
+	}
+	if(ref)
+		lv2_atom_forge_pop(&app->forge, frame);
+
+	return ref;
+}
+
 __realtime static bool
 _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 {
@@ -374,146 +529,13 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 
 						if(automation->type == AUTO_TYPE_MIDI)
 						{
-							midi_auto_t *mauto = &automation->midi;
-
 							if(ref)
-								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, app->regs.midi.Controller.urid);
-							{
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
-								if(ref)
-									ref = lv2_atom_forge_urid(&app->forge, mod->urn);
-
-								if(automation->property)
-								{
-									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
-									if(ref)
-										ref = lv2_atom_forge_urid(&app->forge, automation->property);
-									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.rdfs.range.urid);
-									if(ref)
-										ref = lv2_atom_forge_urid(&app->forge, automation->range);
-								}
-								else
-								{
-									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
-									if(ref)
-										ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
-								}
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.channel.urid);
-								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->channel);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.midi.controller_number.urid);
-								if(ref)
-									ref = lv2_atom_forge_int(&app->forge, mauto->controller);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_min.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->a);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_max.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->b);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_min.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->c);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->d);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_enabled.urid);
-								if(ref)
-									ref = lv2_atom_forge_bool(&app->forge, automation->src_enabled);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_enabled.urid);
-								if(ref)
-									ref = lv2_atom_forge_bool(&app->forge, automation->snk_enabled);
-							}
-							if(ref)
-								lv2_atom_forge_pop(&app->forge, &frame[2]);
+								ref = _sp_app_forge_midi_automation(app, &frame[2], mod, port, automation);
 						}
 						else if(automation->type == AUTO_TYPE_OSC)
 						{
-							osc_auto_t *oauto = &automation->osc;
-
 							if(ref)
-								ref = lv2_atom_forge_object(&app->forge, &frame[2], 0, app->regs.osc.message.urid);
-							{
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_module.urid);
-								if(ref)
-									ref = lv2_atom_forge_urid(&app->forge, mod->urn);
-
-								if(automation->property)
-								{
-									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid);
-									if(ref)
-										ref = lv2_atom_forge_urid(&app->forge, automation->property);
-									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.rdfs.range.urid);
-									if(ref)
-										ref = lv2_atom_forge_urid(&app->forge, automation->range);
-								}
-								else
-								{
-									if(ref)
-										ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_symbol.urid);
-									if(ref)
-										ref = lv2_atom_forge_string(&app->forge, port->symbol, strlen(port->symbol));
-								}
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.osc.path.urid);
-								if(ref)
-									ref = lv2_atom_forge_string(&app->forge, oauto->path, strlen(oauto->path));
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_min.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->a);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_max.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->b);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_min.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->c);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_max.urid);
-								if(ref)
-									ref = lv2_atom_forge_double(&app->forge, automation->d);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.source_enabled.urid);
-								if(ref)
-									ref = lv2_atom_forge_bool(&app->forge, automation->src_enabled);
-
-								if(ref)
-									ref = lv2_atom_forge_key(&app->forge, app->regs.synthpod.sink_enabled.urid);
-								if(ref)
-									ref = lv2_atom_forge_bool(&app->forge, automation->snk_enabled);
-							}
-							if(ref)
-								lv2_atom_forge_pop(&app->forge, &frame[2]);
+								ref = _sp_app_forge_osc_automation(app, &frame[2], mod, port, automation);
 						}
 					}
 				}
@@ -1401,6 +1423,7 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 	const LV2_Atom_Double *snk_max = NULL;
 	const LV2_Atom_Bool *src_enabled = NULL;
 	const LV2_Atom_Bool *snk_enabled = NULL;
+	const LV2_Atom_Bool *is_learning = NULL;
 
 	lv2_atom_object_get(obj,
 		app->regs.synthpod.sink_module.urid, &src_module,
@@ -1416,6 +1439,7 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		app->regs.synthpod.sink_max.urid, &snk_max,
 		app->regs.synthpod.source_enabled.urid, &src_enabled,
 		app->regs.synthpod.sink_enabled.urid, &snk_enabled,
+		app->regs.synthpod.learning.urid, &is_learning,
 		0);
 
 	const LV2_URID src_urn = src_module
@@ -1453,6 +1477,7 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				automation->d = snk_max ? snk_max->body : 0.0;
 				automation->src_enabled = src_enabled ? src_enabled->body : false;
 				automation->snk_enabled = snk_enabled ? snk_enabled->body : false;
+				automation->learning = is_learning ? is_learning->body : false;
 
 				const double div = automation->b - automation->a;
 				automation->mul = div

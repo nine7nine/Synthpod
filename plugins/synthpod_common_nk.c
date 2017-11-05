@@ -184,6 +184,8 @@ struct _auto_t {
 	double c;
 	double d;
 
+	int learning;
+
 	union {
 		midi_auto_t midi;
 		osc_auto_t osc;
@@ -1237,6 +1239,11 @@ _patch_midi_automation_internal(plughandle_t *handle, auto_t *automation)
 	if(ref)
 		ref = lv2_atom_forge_bool(&handle->forge, automation->snk_enabled);
 
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.learning.urid);
+	if(ref)
+		ref = lv2_atom_forge_bool(&handle->forge, automation->learning);
+
 	return ref;
 }
 
@@ -1276,6 +1283,11 @@ _patch_osc_automation_internal(plughandle_t *handle, auto_t *automation)
 		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_enabled.urid);
 	if(ref)
 		ref = lv2_atom_forge_bool(&handle->forge, automation->snk_enabled);
+
+	if(ref)
+		ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.learning.urid);
+	if(ref)
+		ref = lv2_atom_forge_bool(&handle->forge, automation->learning);
 
 	return ref;
 }
@@ -6191,6 +6203,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							{
 								const int32_t src_enabled = is_readonly;
 								const int32_t snk_enabled = !is_readonly;
+								const int32_t learning = false;
 
 								if(automation->type == AUTO_MIDI)
 								{
@@ -6203,6 +6216,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									automation->d = d;
 									automation->src_enabled = src_enabled;
 									automation->snk_enabled = snk_enabled;
+									automation->learning = learning;
 								}
 								else if(automation->type == AUTO_OSC)
 								{
@@ -6237,6 +6251,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									automation->d = d;
 									automation->src_enabled = src_enabled;
 									automation->snk_enabled = snk_enabled;
+									automation->learning = learning;
 								}
 							}
 						}
@@ -6250,7 +6265,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
-							nk_layout_row_dynamic(ctx, dy, 4);
+							nk_layout_row_dynamic(ctx, dy, 6);
+							_dial_bool(ctx, &automation->learning, nk_rgb(0xff, 0xff, 0xff), true);
+								nk_label(ctx, "Learn", NK_TEXT_LEFT);
 							_dial_bool(ctx, &automation->snk_enabled, nk_rgb(0xff, 0xff, 0xff), true);
 								nk_label(ctx, "Input", NK_TEXT_LEFT);
 							_dial_bool(ctx, &automation->src_enabled, nk_rgb(0xff, 0xff, 0xff), true);
@@ -6273,7 +6290,9 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
-							nk_layout_row_dynamic(ctx, dy, 4);
+							nk_layout_row_dynamic(ctx, dy, 6);
+							_dial_bool(ctx, &automation->learning, nk_rgb(0xff, 0xff, 0xff), true);
+								nk_label(ctx, "Learn", NK_TEXT_LEFT);
 							_dial_bool(ctx, &automation->snk_enabled, nk_rgb(0xff, 0xff, 0xff), true);
 								nk_label(ctx, "Input", NK_TEXT_LEFT);
 							_dial_bool(ctx, &automation->src_enabled, nk_rgb(0xff, 0xff, 0xff), true);

@@ -238,6 +238,8 @@ struct _auto_t {
 	double mul;
 	double add;
 
+	bool learning;
+
 	union {
 		midi_auto_t midi;
 		osc_auto_t osc;
@@ -726,5 +728,13 @@ _node_list_add(sp_app_t *app, const LV2_Atom_Object *obj);
 
 void
 _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj);
+
+LV2_Atom_Forge_Ref
+_sp_app_forge_midi_automation(sp_app_t *app, LV2_Atom_Forge_Frame *frame,
+	mod_t *mod, port_t *port, const auto_t *automation);
+
+LV2_Atom_Forge_Ref
+_sp_app_forge_osc_automation(sp_app_t *app, LV2_Atom_Forge_Frame *frame,
+	mod_t *mod, port_t *port, const auto_t *automation);
 
 #endif

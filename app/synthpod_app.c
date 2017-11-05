@@ -386,6 +386,21 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 							{
 								midi_auto_t *mauto = &automation->midi;
 
+								if(automation->learning)
+								{
+									if( (mauto->channel == -1) && (mauto->controller == -1) )
+									{
+										mauto->channel = channel;
+										mauto->controller = controller;
+
+										//FIXME notify UI
+									}
+									else
+									{
+										//FIXME implement adapting range
+									}
+								}
+
 								if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
 									&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
 								{
@@ -470,7 +485,26 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 							{
 								osc_auto_t *oauto = &automation->osc;
 
-								if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, 256) )
+								if(automation->learning)
+								{
+									strncpy(oauto->path, path, 128); //FIXME
+
+									//FIXME notify UI
+#if 0	
+									LV2_Atom_Forge_Ref ref = synthpod_patcher_patch(
+									LV2_Atom_Forge_Frame frame;
+									port_t *port = &mod->ports[automation->index];
+
+									_sp_app_forge_osc_automation(app, &frame,
+										mod, port, automation);
+#endif
+								}
+								else
+								{
+									//FIXME implement range adaptation
+								}
+
+								if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, 128) ) //FIXME
 								{
 									_sp_app_automate(app, mod, automation, value, nsamples);
 								}

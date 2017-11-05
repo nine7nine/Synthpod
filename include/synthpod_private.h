@@ -394,6 +394,7 @@ struct _reg_t {
 
 		reg_item_t source_enabled;
 		reg_item_t sink_enabled;
+		reg_item_t learning;
 	} synthpod;
 
 	struct {
@@ -677,6 +678,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->synthpod.source_enabled, world, map, SYNTHPOD_PREFIX"sourceEnabled");
 	_register(&regs->synthpod.sink_enabled, world, map, SYNTHPOD_PREFIX"sinkEnabled");
+	_register(&regs->synthpod.learning, world, map, SYNTHPOD_PREFIX"learning");
 
 	_register(&regs->midi.Controller, world, map, LV2_MIDI__Controller);
 	_register(&regs->midi.channel, world, map, LV2_MIDI__channel);
@@ -924,6 +926,7 @@ sp_regs_deinit(reg_t *regs)
 
 	_unregister(&regs->synthpod.source_enabled);
 	_unregister(&regs->synthpod.sink_enabled);
+	_unregister(&regs->synthpod.learning);
 
 	_unregister(&regs->midi.Controller);
 	_unregister(&regs->midi.channel);
