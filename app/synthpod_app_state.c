@@ -1309,13 +1309,13 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	return LV2_STATE_ERR_UNKNOWN;
 }
 
-static void
+static mod_t *
 _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Object *mod_obj,
 	const LV2_State_Map_Path *map_path)
 {
 	if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
 		|| !mod_obj->body.otype)
-		return;
+		return NULL;
 
 	const LV2_Atom_Float *mod_pos_x = NULL;
 	const LV2_Atom_Float *mod_pos_y = NULL;
@@ -1339,7 +1339,7 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 	if(!mod)
 	{
 		sp_app_log_error(app, "%s: _sp_app_mod_add fialed\n", __func__);
-		return;
+		return NULL;
 	}
 
 	// inject module into module graph
@@ -1372,7 +1372,7 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 	{
 		sp_app_log_error(app, "%s: invaild path\n", __func__);
 		//TODO free mod
-		return;
+		return NULL;
 	}
 
 	// strip 'file://'
@@ -1393,6 +1393,8 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 
 	lilv_state_free(state);
 	free(path);
+
+	return mod;
 }
 
 LV2_State_Status
@@ -1446,9 +1448,18 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		{
 			const int32_t mod_index = 0;
 			const LV2_URID mod_urn = prop->key;
-			const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)&prop->value;
+			LV2_Atom_Object *mod_obj = (LV2_Atom_Object *)&prop->value;
 
-			_mod_inject(app, mod_index, mod_urn, mod_obj, map_path);
+			mod_t *mod = _mod_inject(app, mod_index, mod_urn, mod_obj, map_path);
+			if(!mod)
+			{
+				mod_obj->body.otype = app->regs.synthpod.placeholder.urid;
+				mod = _mod_inject(app, mod_index, mod_urn, mod_obj, map_path);
+				if(mod)
+				{
+					snprintf(mod->alias, sizeof(mod->alias), "%s", "!!! Failed to load !!!");
+				}
+			}
 		}
 
 		_sp_app_order(app);
@@ -1527,7 +1538,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 		LV2_ATOM_TUPLE_BODY_FOREACH(graph_body, size, mod_item)
 		{
-			const LV2_Atom_Object *mod_obj = (const LV2_Atom_Object *)mod_item;
+			LV2_Atom_Object *mod_obj = (LV2_Atom_Object *)mod_item;
 
 			if(  !lv2_atom_forge_is_object_type(&app->forge, mod_obj->atom.type)
 				|| !mod_obj->body.otype)
@@ -1544,7 +1555,16 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 				continue;
 
 			const LV2_URID mod_urn = 0;
-			_mod_inject(app, mod_index->body, mod_urn, mod_obj, map_path);
+			mod_t *mod = _mod_inject(app, mod_index->body, mod_urn, mod_obj, map_path);
+			if(!mod)
+			{
+				mod_obj->body.otype = app->regs.synthpod.placeholder.urid;
+				mod = _mod_inject(app, mod_index->body, mod_urn, mod_obj, map_path);
+				if(mod)
+				{
+					snprintf(mod->alias, sizeof(mod->alias), "%s", "!!! Failed to load !!!");
+				}
+			}
 		}
 
 		_sp_app_order(app);

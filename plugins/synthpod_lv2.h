@@ -61,6 +61,7 @@ extern xpress_map_t voice_map_fallback;
 #define SYNTHPOD_CONTROL2ATOM_URI			SYNTHPOD_PREFIX"control2atom"
 #define SYNTHPOD_MIXER_URI						SYNTHPOD_PREFIX"mixer"
 #define SYNTHPOD_ANONYMIZER_URI				SYNTHPOD_PREFIX"anonymizer"
+#define SYNTHPOD_PLACEHOLDER_URI			SYNTHPOD_PREFIX"placeholder"
 
 extern const LV2_Descriptor synthpod_stereo;
 extern const LV2_Descriptor synthpod_keyboard;
@@ -79,6 +80,7 @@ extern const LV2_Descriptor synthpod_string2control;
 extern const LV2_Descriptor synthpod_control2atom;
 extern const LV2_Descriptor synthpod_mixer;
 extern const LV2_Descriptor synthpod_anonymizer;
+extern const LV2_Descriptor synthpod_placeholder;
 
 extern const LV2UI_Descriptor synthpod_common_1_ui;
 extern const LV2UI_Descriptor synthpod_common_2_kx;
