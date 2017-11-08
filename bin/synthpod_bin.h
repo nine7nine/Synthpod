@@ -98,6 +98,7 @@ struct _bin_t {
 	atomic_flag trace_lock;
 
 	bool has_gui;
+	bool kill_gui;
 	int audio_prio;
 	int worker_prio;
 	int num_slaves;

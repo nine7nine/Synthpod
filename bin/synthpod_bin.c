@@ -490,7 +490,9 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				if(!rolling)
 				{
 					bin->child = 0; // invalidate
-					atomic_store_explicit(&done, true, memory_order_relaxed);
+
+					if(bin->kill_gui)
+						atomic_store_explicit(&done, true, memory_order_relaxed);
 				}
 			}
 
