@@ -727,6 +727,9 @@ void
 _node_list_add(sp_app_t *app, const LV2_Atom_Object *obj);
 
 void
+_automation_refresh_mul_add(auto_t *automation);
+
+void
 _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj);
 
 LV2_Atom_Forge_Ref

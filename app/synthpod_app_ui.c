@@ -1406,6 +1406,18 @@ _automation_list_rem(sp_app_t *app, const LV2_Atom_Object *obj)
 }
 
 __realtime void
+_automation_refresh_mul_add(auto_t *automation)
+{
+	const double div = automation->b - automation->a;
+	automation->mul = div
+		? (automation->d - automation->c) / div
+		: 0.0;
+	automation->add = div
+		? (automation->c*automation->b - automation->a*automation->d) / div
+		: 0.0;
+}
+
+__realtime void
 _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
 	//printf("got patch:add for automationList:\n");
@@ -1479,13 +1491,7 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				automation->snk_enabled = snk_enabled ? snk_enabled->body : false;
 				automation->learning = is_learning ? is_learning->body : false;
 
-				const double div = automation->b - automation->a;
-				automation->mul = div
-					? (automation->d - automation->c) / div
-					: 0.0;
-				automation->add = div
-					? (automation->c*automation->b - automation->a*automation->d) / div
-					: 0.0;
+				_automation_refresh_mul_add(automation);
 
 				if(obj->body.otype == app->regs.midi.Controller.urid)
 				{
@@ -1507,7 +1513,6 @@ _automation_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 		}
 	}
 }
-
 
 __realtime static void
 _mod_list_add(sp_app_t *app, const LV2_Atom_URID *urid)

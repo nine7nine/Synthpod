@@ -6259,14 +6259,18 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 						if(automation->type == AUTO_MIDI)
 						{
-							nk_layout_row_dynamic(ctx, dy, 1);
-							nk_spacing(ctx, 1);
-
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
 							nk_layout_row_dynamic(ctx, dy, 6);
-							_dial_bool(ctx, &automation->learning, nk_rgb(0xff, 0xff, 0xff), true);
+
+							if(  _dial_bool(ctx, &automation->learning, nk_rgb(0xff, 0xff, 0xff), true)
+								&& automation->learning)
+							{
+								// reset channel and controller when switching to learning mode
+								automation->midi.channel = -1;
+								automation->midi.controller = -1;
+							}
 								nk_label(ctx, "Learn", NK_TEXT_LEFT);
 							_dial_bool(ctx, &automation->snk_enabled, nk_rgb(0xff, 0xff, 0xff), true);
 								nk_label(ctx, "Input", NK_TEXT_LEFT);
@@ -6284,14 +6288,16 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						}
 						else if(automation->type == AUTO_OSC)
 						{
-							nk_layout_row_dynamic(ctx, dy, 1);
-							nk_spacing(ctx, 1);
-
 							const double inc = 1.0; //FIXME
 							const float ipp = 1.f; //FIXME
 
 							nk_layout_row_dynamic(ctx, dy, 6);
-							_dial_bool(ctx, &automation->learning, nk_rgb(0xff, 0xff, 0xff), true);
+							if(  _dial_bool(ctx, &automation->learning, nk_rgb(0xff, 0xff, 0xff), true)
+								&& automation->learning)
+							{
+								// reset path
+								automation->osc.path[0] = '\0';
+							}
 								nk_label(ctx, "Learn", NK_TEXT_LEFT);
 							_dial_bool(ctx, &automation->snk_enabled, nk_rgb(0xff, 0xff, 0xff), true);
 								nk_label(ctx, "Input", NK_TEXT_LEFT);
@@ -7614,7 +7620,8 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 					{
 						LV2_ATOM_OBJECT_FOREACH(rem, prop)
 						{
-							//printf("got patch:remove for %u\n", subj);
+							//_log_note(handle, "%s: got patch:remove for <%s>\n", __func__,
+							//	handle->unmap->unmap(handle->unmap->handle, prop->key));
 
 							if(  (prop->key == handle->regs.synthpod.connection_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
@@ -7636,11 +7643,17 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							{
 								_rem_mod(handle, (const LV2_Atom_URID *)&prop->value);
 							}
+							else if( (prop->key == handle->regs.synthpod.automation_list.urid)
+								&& (prop->value.type == handle->forge.URID) )
+							{
+								//FIXME implement
+							}
 						}
 
 						LV2_ATOM_OBJECT_FOREACH(add, prop)
 						{
-							//printf("got patch:remove for %u\n", subj);
+							//_log_note(handle, "%s: got patch:add for <%s>\n", __func__,
+							//	handle->unmap->unmap(handle->unmap->handle, prop->key));
 
 							if(  (prop->key == handle->regs.synthpod.connection_list.urid)
 								&& (prop->value.type == handle->forge.Object) )
@@ -7661,6 +7674,11 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								&& (prop->value.type == handle->forge.URID) )
 							{
 								_add_mod(handle, (const LV2_Atom_URID *)&prop->value);
+							}
+							else if( (prop->key == handle->regs.synthpod.automation_list.urid)
+								&& (prop->value.type == handle->forge.Object) )
+							{
+								_add_automation(handle, (const LV2_Atom_Object *)&prop->value);
 							}
 						}
 					}

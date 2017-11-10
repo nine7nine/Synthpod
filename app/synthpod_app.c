@@ -443,6 +443,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 					{
 						const uint8_t channel = msg[0] & 0x0f;
 						const uint8_t controller = msg[1];
+						const uint8_t val = msg[2];
 
 						// iterate over automations
 						for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
@@ -461,11 +462,32 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 										mauto->channel = channel;
 										mauto->controller = controller;
 
+										automation->a = val;
+										automation->b = val;
+										_automation_refresh_mul_add(automation);
+
 										_sync_midi_automation_to_ui(app, mod, automation);
 									}
 									else
 									{
-										//FIXME implement adapting range
+										bool needs_refresh = false;
+
+										if(val < automation->a)
+										{
+											automation->a = val;
+											needs_refresh = true;
+										}
+										else if(val > automation->b)
+										{
+											automation->b = val;
+											needs_refresh = true;
+										}
+
+										if(needs_refresh)
+										{
+											_automation_refresh_mul_add(automation);
+										}
+
 										_sync_midi_automation_to_ui(app, mod, automation);
 									}
 								}
@@ -487,7 +509,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 					if(lv2_osc_message_get(&app->osc_urid, obj, &osc_path, &osc_args))
 					{
 						const char *path = LV2_ATOM_BODY_CONST(osc_path);
-						double value = 0.0;
+						double val = 0.0;
 
 						LV2_ATOM_TUPLE_FOREACH(osc_args, item)
 						{
@@ -496,39 +518,39 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 								case LV2_OSC_FALSE:
 								case LV2_OSC_NIL:
 								{
-									value = 0.0;
+									val = 0.0;
 								} break;
 								case LV2_OSC_TRUE:
 								{
-									value = 1.0;
+									val = 1.0;
 								} break;
 								case LV2_OSC_IMPULSE:
 								{
-									value = HUGE_VAL;
+									val = HUGE_VAL;
 								} break;
 								case LV2_OSC_INT32:
 								{
 									int32_t i32;
 									lv2_osc_int32_get(&app->osc_urid, item, &i32);
-									value = i32;
+									val = i32;
 								} break;
 								case LV2_OSC_INT64:
 								{
 									int64_t i64;
 									lv2_osc_int64_get(&app->osc_urid, item, &i64);
-									value = i64;
+									val = i64;
 								} break;
 								case LV2_OSC_FLOAT:
 								{
 									float f32;
 									lv2_osc_float_get(&app->osc_urid, item, &f32);
-									value = f32;
+									val = f32;
 								} break;
 								case LV2_OSC_DOUBLE:
 								{
 									double f64;
 									lv2_osc_double_get(&app->osc_urid, item, &f64);
-									value = f64;
+									val = f64;
 								} break;
 
 								case LV2_OSC_SYMBOL:
@@ -556,19 +578,43 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 								if(automation->learning)
 								{
-									strncpy(oauto->path, path, sizeof(oauto->path));
+									if(oauto->path[0] == '\0')
+									{
+										strncpy(oauto->path, path, sizeof(oauto->path));
 
-									_sync_osc_automation_to_ui(app, mod, automation);
-								}
-								else
-								{
-									//FIXME implement range adaptation
-									_sync_osc_automation_to_ui(app, mod, automation);
+										automation->a = val;
+										automation->b = val;
+										_automation_refresh_mul_add(automation);
+
+										_sync_osc_automation_to_ui(app, mod, automation);
+									}
+									else
+									{
+										bool needs_refresh = false;
+
+										if(val < automation->a)
+										{
+											automation->a = val;
+											needs_refresh = true;
+										}
+										else if(val > automation->b)
+										{
+											automation->b = val;
+											needs_refresh = true;
+										}
+
+										if(needs_refresh)
+										{
+											_automation_refresh_mul_add(automation);
+										}
+
+										_sync_osc_automation_to_ui(app, mod, automation);
+									}
 								}
 
 								if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, sizeof(oauto->path)) )
 								{
-									_sp_app_automate(app, mod, automation, value, nsamples);
+									_sp_app_automate(app, mod, automation, val, nsamples);
 								}
 							}
 						}
