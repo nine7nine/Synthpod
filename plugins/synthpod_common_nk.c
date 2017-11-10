@@ -3312,7 +3312,7 @@ _toolbar_button(struct nk_context *ctx, char key, struct nk_image icon)
 	if(_tooltip_visible(ctx))
 	{
 		char tt [16];
-		snprintf(tt, 16, "Ctrl-%c", isalpha(key) ? toupper(key) : key);
+		snprintf(tt, sizeof(tt), "Ctrl-%c", isalpha(key) ? toupper(key) : key);
 		nk_tooltip(ctx, tt);
 	}
 
@@ -3339,7 +3339,7 @@ _toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image i
 	if(_tooltip_visible(ctx))
 	{
 		char tt [16];
-		snprintf(tt, 16, "Ctrl-%c", isalpha(key) ? toupper(key) : key);
+		snprintf(tt, sizeof(tt), "Ctrl-%c", isalpha(key) ? toupper(key) : key);
 		nk_tooltip(ctx, tt);
 	}
 
@@ -3375,7 +3375,7 @@ _toolbar_labeld(struct nk_context *ctx, bool *state, char key, const char *label
 	if(_tooltip_visible(ctx))
 	{
 		char tt [16];
-		snprintf(tt, 16, "Ctrl-%c", isalpha(key) ? toupper(key) : key);
+		snprintf(tt, sizeof(tt), "Ctrl-%c", isalpha(key) ? toupper(key) : key);
 		nk_tooltip(ctx, tt);
 	}
 
@@ -4756,7 +4756,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 				const uint8_t mask = (1 << i);
 				const uint8_t has_bit = param->val.i & mask;
 				char lbl [3];
-				snprintf(lbl, 3, "%2"PRIu8, i);
+				snprintf(lbl, sizeof(lbl), "%2"PRIu8, i);
 
 				if(has_bit)
 					nk_style_push_color(ctx, &style->button.border_color, hilight_color);
@@ -5579,7 +5579,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		if(nsources)
 		{
 			char nums [32];
-			snprintf(nums, 32, "%u", nsources);
+			snprintf(nums, sizeof(nums), "%u", nsources);
 
 			const size_t nums_len = strlen(nums);
 			const float fw = font->width(font->userdata, font->height, nums, nums_len);
@@ -5596,7 +5596,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		if(nsinks)
 		{
 			char nums [32];
-			snprintf(nums, 32, "%u", nsinks);
+			snprintf(nums, sizeof(nums), "%u", nsinks);
 
 			const size_t nums_len = strlen(nums);
 			const float fw = font->width(font->userdata, font->height, nums, nums_len);
@@ -5613,7 +5613,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		//FIXME can this be solved more elegantly
 		{
 			char load [32];
-			snprintf(load, 32, "%.1f | %.1f | %.1f %%",
+			snprintf(load, sizeof(load), "%.1f | %.1f | %.1f %%",
 				mod->prof.min, mod->prof.avg, mod->prof.max);
 
 			const size_t load_len= strlen(load);
@@ -5878,11 +5878,11 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 						if(is_dial && port_conn)
 						{
 							const float dBFS = 20.f * log10f(port_conn->gain); //FIXME remove duplication
-							snprintf(tmp, 128, "%s || %s || %+02.1f dBFS", source_name, sink_name, dBFS);
+							snprintf(tmp, sizeof(tmp), "%s || %s || %+02.1f dBFS", source_name, sink_name, dBFS);
 						}
 						else
 						{
-							snprintf(tmp, 128, "%s || %s", source_name, sink_name);
+							snprintf(tmp, sizeof(tmp), "%s || %s", source_name, sink_name);
 						}
 						nk_tooltip(ctx, tmp);
 					}
@@ -6230,7 +6230,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									LilvNode *name_node = lilv_plugin_get_name(mod->plug);
 									const char *mod_name = lilv_node_as_string(name_node);
 
-									snprintf(automation->osc.path, 128, "/%s/%s", mod_name, label);
+									snprintf(automation->osc.path, sizeof(automation->osc.path), "/%s/%s", mod_name, label);
 									for(unsigned i = 0; automation->osc.path[i]; i++)
 									{
 										switch(automation->osc.path[i])
