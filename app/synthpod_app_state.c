@@ -906,7 +906,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					mod_t *mod = app->mods[m];
 
 					char dir [128];
-					snprintf(dir, 128, "%s/", mod->urn_uri); // only save in new format
+					snprintf(dir, sizeof(dir), "%s/", mod->urn_uri); // only save in new format
 
 					char *path = make_path->path(make_path->handle, dir);
 					if(path)
@@ -1363,9 +1363,9 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 
 	char dir [128];
 	if(mod->uid) // support for old foramt
-		snprintf(dir, 128, "%"PRIi32"/state.ttl", mod->uid);
+		snprintf(dir, sizeof(dir), "%"PRIi32"/state.ttl", mod->uid);
 	else
-		snprintf(dir, 128, "%s/state.ttl", mod->urn_uri);
+		snprintf(dir, sizeof(dir), "%s/state.ttl", mod->urn_uri);
 
 	char *path = map_path->absolute_path(map_path->handle, dir);
 	if(!path)

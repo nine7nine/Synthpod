@@ -54,10 +54,10 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	char buf [1024]; //TODO how big?
 
 	if(isatty(STDERR_FILENO))
-		snprintf(prefix, 128, "{"ANSI_COLOR_BOLD"%s"ANSI_COLOR_RESET"} ", mod->urn_uri);
+		snprintf(prefix, sizeof(prefix), "{"ANSI_COLOR_BOLD"%s"ANSI_COLOR_RESET"} ", mod->urn_uri);
 	else
-		snprintf(prefix, 128, "{%s} ", mod->urn_uri);
-	vsnprintf(buf, 1024, fmt, args);
+		snprintf(prefix, sizeof(prefix), "{%s} ", mod->urn_uri);
+	vsnprintf(buf, sizeof(buf), fmt, args);
 
 	char *pch = strtok(buf, "\n");
 	while(pch)
