@@ -276,7 +276,7 @@ synthpod_patcher_remove_atom(reg_t *regs, LV2_Atom_Forge *forge,
 // patch:add aka patch:Patch
 static LV2_Atom_Forge_Ref
 synthpod_patcher_add_object(reg_t *regs, LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
-	LV2_URID subject, int32_t seqn, LV2_URID property)
+	LV2_URID subject, int32_t seqn, LV2_URID property) //FIXME add removal flag
 {
 	LV2_Atom_Forge_Ref ref = _synthpod_patcher_internal_object(regs, forge, frame,
 		regs->patch.patch.urid, subject, seqn);

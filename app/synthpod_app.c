@@ -291,6 +291,74 @@ _sp_app_automation_out(sp_app_t *app, LV2_Atom_Forge *forge, auto_t *automation,
 	return ref;
 }
 
+__realtime static void
+_sync_midi_automation_to_ui(sp_app_t *app, mod_t *mod, auto_t *automation)
+{
+	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+	if(answer)
+	{
+		const LV2_URID subj = 0; //FIXME
+		const int32_t sn = 0; //FIXME
+		const LV2_URID prop = app->regs.synthpod.automation_list.urid;
+		port_t *port = &mod->ports[automation->index]; //FIXME handle prop
+
+		LV2_Atom_Forge_Frame frame [3];
+		LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(
+			&app->regs, &app->forge, &frame[0], subj, sn, prop);
+
+		if(ref)
+			ref = _sp_app_forge_midi_automation(app, &frame[2], mod, port, automation);
+
+		if(ref)
+		{
+			synthpod_patcher_pop(&app->forge, frame, 2);
+			_sp_app_to_ui_advance_atom(app, answer);
+		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
+	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
+}
+
+__realtime static void
+_sync_osc_automation_to_ui(sp_app_t *app, mod_t *mod, auto_t *automation)
+{
+	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+	if(answer)
+	{
+		const LV2_URID subj = 0; //FIXME
+		const int32_t sn = 0; //FIXME
+		const LV2_URID prop = app->regs.synthpod.automation_list.urid;
+		port_t *port = &mod->ports[automation->index]; //FIXME handle prop
+
+		LV2_Atom_Forge_Frame frame [3];
+		LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(
+			&app->regs, &app->forge, &frame[0], subj, sn, prop);
+
+		if(ref)
+			ref = _sp_app_forge_osc_automation(app, &frame[2], mod, port, automation);
+
+		if(ref)
+		{
+			synthpod_patcher_pop(&app->forge, frame, 2);
+			_sp_app_to_ui_advance_atom(app, answer);
+		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
+	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
+}
+
 __realtime static inline void
 _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
@@ -393,11 +461,12 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 										mauto->channel = channel;
 										mauto->controller = controller;
 
-										//FIXME notify UI
+										_sync_midi_automation_to_ui(app, mod, automation);
 									}
 									else
 									{
 										//FIXME implement adapting range
+										_sync_midi_automation_to_ui(app, mod, automation);
 									}
 								}
 
@@ -487,24 +556,17 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 								if(automation->learning)
 								{
-									strncpy(oauto->path, path, 128); //FIXME
+									strncpy(oauto->path, path, sizeof(oauto->path));
 
-									//FIXME notify UI
-#if 0	
-									LV2_Atom_Forge_Ref ref = synthpod_patcher_patch(
-									LV2_Atom_Forge_Frame frame;
-									port_t *port = &mod->ports[automation->index];
-
-									_sp_app_forge_osc_automation(app, &frame,
-										mod, port, automation);
-#endif
+									_sync_osc_automation_to_ui(app, mod, automation);
 								}
 								else
 								{
 									//FIXME implement range adaptation
+									_sync_osc_automation_to_ui(app, mod, automation);
 								}
 
-								if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, 128) ) //FIXME
+								if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, sizeof(oauto->path)) )
 								{
 									_sp_app_automate(app, mod, automation, value, nsamples);
 								}
