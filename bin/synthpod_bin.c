@@ -190,9 +190,9 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		if(_atomic_try_lock(&bin->trace_lock)) //FIXME use per-dsp-thread ringbuffer
 		{
 			char *trace;
-			if((trace = varchunk_write_request(bin->app_to_log, 1024)))
+			if((trace = varchunk_write_request(bin->app_to_log, sizeof(trace))))
 			{
-				vsnprintf(trace, 1024, fmt, args);
+				vsnprintf(trace, sizeof(trace), fmt, args);
 
 				written = strlen(trace) + 1;
 				varchunk_write_advance(bin->app_to_log, written);
@@ -404,9 +404,9 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 		char srate [32];
 		char urate [32];
 		char wname [128];
-		snprintf(srate, 32, "%"PRIu32, sample_rate);
-		snprintf(urate, 32, "%"PRIu32, bin->update_rate);
-		snprintf(wname, 128, "Synthpod - %s", bin->socket_path);
+		snprintf(srate, sizeof(srate), "%"PRIu32, sample_rate);
+		snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
+		snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
 
 		bin->child = fork();
 		if(bin->child == 0) // child
