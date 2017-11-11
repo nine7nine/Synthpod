@@ -202,6 +202,7 @@ struct _control_port_t {
 	bool is_bool;
 	bool is_readonly;
 	auto_t automation;
+	char *units_symbol;
 };
 
 struct _audio_port_t {
@@ -238,7 +239,6 @@ struct _param_t {
 
 	char *label;
 	char *comment;
-	LV2_URID units_unit;
 	char *units_symbol;
 	auto_t automation;
 
@@ -1623,6 +1623,29 @@ _sort_scale_point_name(const void *a, const void *b)
 	return ret;
 }
 
+static char *
+_unit_symbol(plughandle_t *handle, const char *uri)
+{
+	char *symbol = NULL;
+
+	LilvNode *units_unit = lilv_new_uri(handle->world, uri);
+	if(units_unit)
+	{
+		LilvNode *units_symbol = lilv_world_get(handle->world, units_unit, handle->regs.units.symbol.node, NULL);
+		if(units_symbol)
+		{
+			if(lilv_node_is_string(units_symbol))
+					symbol = strdup(lilv_node_as_string(units_symbol));
+
+			lilv_node_free(units_symbol);
+		}
+
+		lilv_node_free(units_unit);
+	}
+
+	return symbol;
+}
+
 static void
 _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 {
@@ -1719,7 +1742,7 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 	if(units_unit)
 	{
 		if(lilv_node_is_uri(units_unit))
-			param->units_unit = handle->map->map(handle->map->handle, lilv_node_as_uri(units_unit));
+			param->units_symbol = _unit_symbol(handle, lilv_node_as_uri(units_unit));
 		lilv_node_free(units_unit);
 	}
 
@@ -2129,7 +2152,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								}
 								else if(prop->key == handle->regs.units.unit.urid)
 								{
-									param->units_unit = 0;
+									//FIXME
 								}
 								else if(prop->key == handle->regs.units.symbol.urid)
 								{
@@ -2245,7 +2268,9 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 								else if( (prop->key == handle->regs.units.unit.urid)
 									&& (prop->value.type == handle->forge.URID) )
 								{
-									param->units_unit = ((const LV2_Atom_URID *)&prop->value)->body;
+									const LV2_URID units_unit = ((const LV2_Atom_URID *)&prop->value)->body;
+									param->units_symbol = _unit_symbol(handle,
+										handle->unmap->unmap(handle->unmap->handle, units_unit));
 								}
 								else if( (prop->key == handle->regs.units.symbol.urid)
 									&& (prop->value.type == handle->forge.String) )
@@ -2973,6 +2998,17 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 				control->is_bool = true;
 			}
 
+			LilvNode *units_unit = lilv_port_get(plug, port->port, handle->regs.units.unit.node);
+			if(units_unit)
+			{
+				if(lilv_node_is_uri(units_unit))
+				{
+					control->units_symbol = _unit_symbol(handle, lilv_node_as_uri(units_unit));
+				}
+
+				lilv_node_free(units_unit);
+			}
+
 			LilvScalePoints *port_points = lilv_port_get_scale_points(plug, port->port);
 			if(port_points)
 			{
@@ -3196,6 +3232,11 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 static void
 _port_free(port_t *port)
 {
+	if(port->type == PROPERTY_TYPE_CONTROL)
+	{
+		free(port->control.units_symbol);
+	}
+
 	free(port->name);
 	free(port);
 }
@@ -4488,7 +4529,11 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
 		nk_layout_row_dynamic(ctx, dy, 1);
-		nk_label(ctx, name_str, NK_TEXT_LEFT);
+
+		if(control->units_symbol)
+			nk_labelf(ctx, NK_TEXT_LEFT, "%s [%s]", name_str, control->units_symbol);
+		else
+			nk_label(ctx, name_str, NK_TEXT_LEFT);
 
 		if(!_hash_empty(&control->points))
 		{
@@ -4708,7 +4753,11 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
 		nk_layout_row_dynamic(ctx, dy, 1);
-		nk_label(ctx, name_str, NK_TEXT_LEFT);
+
+		if(param->units_symbol)
+			nk_labelf(ctx, NK_TEXT_LEFT, "%s [%s]", name_str, param->units_symbol);
+		else
+			nk_label(ctx, name_str, NK_TEXT_LEFT);
 
 		if(!_hash_empty(&param->points))
 		{
