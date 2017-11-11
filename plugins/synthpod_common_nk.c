@@ -2278,6 +2278,52 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 									free(param->units_symbol);
 									param->units_symbol = strdup(LV2_ATOM_BODY_CONST(&prop->value));
 								}
+								else if( (prop->key == handle->regs.core.scale_point.urid)
+									&& (prop->value.type == handle->forge.Tuple) )
+								{
+									const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)&prop->value;
+
+									_log_note(handle, "%s: lv2:scalePoint\n");
+
+									LV2_ATOM_TUPLE_FOREACH(tup, atom)
+									{
+										if(!lv2_atom_forge_is_object_type(&handle->forge, atom->type))
+											continue;
+
+										const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+										const LV2_Atom *label = NULL;
+										const LV2_Atom *value = NULL;
+
+										lv2_atom_object_get(obj,
+											handle->regs.rdfs.label.urid, &label,
+											handle->regs.rdf.value.urid, &value,
+											NULL);
+
+										if(  !label || (label->type != handle->forge.String)
+											|| !value || (value->type != param->range) )
+											continue;
+
+										scale_point_t *point = calloc(1, sizeof(scale_point_t));
+										if(!point)
+											continue;
+
+										_hash_add(&param->points, point);
+
+										point->label = strdup(LV2_ATOM_BODY_CONST(label));
+
+										if(param->range == handle->forge.Bool)
+											point->val.i = ((const LV2_Atom_Bool *)value)->body;
+										else if(param->range == handle->forge.Int)
+											point->val.i = ((const LV2_Atom_Int *)value)->body;
+										else if(param->range == handle->forge.Float)
+											point->val.f = ((const LV2_Atom_Float *)value)->body;
+										else if(param->range == handle->forge.Double)
+											point->val.d = ((const LV2_Atom_Double *)value)->body;
+										//FIXME support more types
+									}
+
+									_hash_sort(&param->points, _sort_scale_point_name);
+								}
 							}
 						}
 					}
