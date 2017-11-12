@@ -200,6 +200,8 @@ struct _control_port_t {
 	param_union_t val;
 	bool is_int;
 	bool is_bool;
+	bool is_bitmask; //FIXME
+	bool is_logarithmic;
 	bool is_readonly;
 	auto_t automation;
 	char *units_symbol;
@@ -228,6 +230,7 @@ struct _port_t {
 struct _param_t {
 	bool is_readonly;
 	bool is_bitmask;
+	bool is_logarithmic;
 	LV2_URID property;
 	LV2_URID range;
 	mod_t *mod;
@@ -1755,6 +1758,8 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 
 			if(lilv_node_equals(param_property, handle->regs.port.is_bitmask.node))
 				param->is_bitmask = true;
+			else if(lilv_node_equals(param_property, handle->regs.port.logarithmic.node))
+				param->is_logarithmic = true;
 		}
 
 		lilv_nodes_free(param_properties);
@@ -2983,6 +2988,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			control->is_readonly = is_output;
 			control->is_int = lilv_port_has_property(plug, port->port, handle->node.lv2_integer);
 			control->is_bool = lilv_port_has_property(plug, port->port, handle->node.lv2_toggled);
+			control->is_logarithmic = lilv_port_has_property(plug, port->port, handle->regs.port.logarithmic.node);
 
 			LilvNode *val = NULL;
 			LilvNode *min = NULL;
@@ -4323,9 +4329,12 @@ _dial_numeric_draw(struct nk_context *ctx, struct nk_rect bounds,
 	nk_stroke_arc(canv, cx, cy, (r1+r2)/2, a1, a3, r1-r2, fg_color);
 }
 
+static const float exp_a = 1.0 / (M_E - 1.0);
+static const float exp_b = -1.0 / (M_E - 1.0);
+
 static int
 _dial_double(struct nk_context *ctx, double min, double *val, double max, float mul,
-	struct nk_color color, bool editable)
+	struct nk_color color, bool editable, bool logarithmic)
 {
 	const double tmp = *val;
 	struct nk_rect bounds;
@@ -4333,7 +4342,14 @@ _dial_double(struct nk_context *ctx, double min, double *val, double max, float 
 
 	if(layout_states != NK_WIDGET_INVALID)
 	{
+		double value = *val;
 		enum nk_widget_states states = NK_WIDGET_STATE_INACTIVE;
+		if(logarithmic)
+		{
+			min = log(min);
+			max = log(max);
+			value = log(value);
+		}
 		const double range = max - min;
 		struct nk_input *in = (ctx->current->layout->flags & NK_WINDOW_ROM) ? 0 : &ctx->input;
 
@@ -4345,14 +4361,19 @@ _dial_double(struct nk_context *ctx, double min, double *val, double max, float 
 			if(dd != 0.f) // update value
 			{
 				const double per_pixel_inc = mul * range / bounds.w / divider;
+				const double diff = dd * per_pixel_inc;
 
-				*val += dd * per_pixel_inc;
-				*val = NK_CLAMP(min, *val, max);
+				value += diff;
+				value = NK_CLAMP(min, value, max);
 			}
 		}
 
-		const float perc = (*val - min) / range;
+		const float perc = (value - min) / range;
 		_dial_numeric_draw(ctx, bounds, states, perc, color);
+
+		*val = logarithmic
+			? exp(value)
+			: value;
 	}
 
 	return tmp != *val;
@@ -4360,7 +4381,7 @@ _dial_double(struct nk_context *ctx, double min, double *val, double max, float 
 
 static int
 _dial_long(struct nk_context *ctx, int64_t min, int64_t *val, int64_t max, float mul,
-	struct nk_color color, bool editable)
+	struct nk_color color, bool editable, bool logarithmic)
 {
 	const int64_t tmp = *val;
 	struct nk_rect bounds;
@@ -4368,7 +4389,14 @@ _dial_long(struct nk_context *ctx, int64_t min, int64_t *val, int64_t max, float
 
 	if(layout_states != NK_WIDGET_INVALID)
 	{
+		int64_t value = *val;
 		enum nk_widget_states states = NK_WIDGET_STATE_INACTIVE;
+		if(logarithmic)
+		{
+			min = log(min);
+			max = log(max);
+			value = log(value);
+		}
 		const int64_t range = max - min;
 		struct nk_input *in = (ctx->current->layout->flags & NK_WINDOW_ROM) ? 0 : &ctx->input;
 
@@ -4380,15 +4408,19 @@ _dial_long(struct nk_context *ctx, int64_t min, int64_t *val, int64_t max, float
 			if(dd != 0.f) // update value
 			{
 				const double per_pixel_inc = mul * range / bounds.w / divider;
-
 				const double diff = dd * per_pixel_inc;
-				*val += diff < 0.0 ? floor(diff) : ceil(diff);
-				*val = NK_CLAMP(min, *val, max);
+
+				value += diff < 0.0 ? floor(diff) : ceil(diff);
+				value = NK_CLAMP(min, value, max);
 			}
 		}
 
-		const float perc = (float)(*val - min) / range;
+		const float perc = (float)(value - min) / range;
 		_dial_numeric_draw(ctx, bounds, states, perc, color);
+
+		*val = logarithmic
+			? exp(value)
+			: value;
 	}
 
 	return tmp != *val;
@@ -4396,10 +4428,10 @@ _dial_long(struct nk_context *ctx, int64_t min, int64_t *val, int64_t max, float
 
 static int
 _dial_float(struct nk_context *ctx, float min, float *val, float max, float mul,
-	struct nk_color color, bool editable)
+	struct nk_color color, bool editable, bool logarithmic)
 {
 	double tmp = *val;
-	const int res = _dial_double(ctx, min, &tmp, max, mul, color, editable);
+	const int res = _dial_double(ctx, min, &tmp, max, mul, color, editable, logarithmic);
 	*val = tmp;
 
 	return res;
@@ -4407,10 +4439,10 @@ _dial_float(struct nk_context *ctx, float min, float *val, float max, float mul,
 
 static int
 _dial_int(struct nk_context *ctx, int32_t min, int32_t *val, int32_t max, float mul,
-	struct nk_color color, bool editable)
+	struct nk_color color, bool editable, bool logarithmic)
 {
 	int64_t tmp = *val;
-	const int res = _dial_long(ctx, min, &tmp, max, mul, color, editable);
+	const int res = _dial_long(ctx, min, &tmp, max, mul, color, editable, logarithmic);
 	*val = tmp;
 
 	return res;
@@ -4662,21 +4694,24 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 	}
 	else if(control->is_int)
 	{
-		if(_dial_int(ctx, control->min.i, &control->val.i, control->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
+		if(_dial_int(ctx, control->min.i, &control->val.i, control->max.i, 1.f,
+			nk_rgb(0xff, 0xff, 0xff), !control->is_readonly, control->is_logarithmic))
 		{
 			changed = true;
 		}
 	}
 	else if(control->is_bool)
 	{
-		if(_dial_bool(ctx, &control->val.i, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
+		if(_dial_bool(ctx, &control->val.i,
+			nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
 		{
 			changed = true;
 		}
 	}
 	else // is_float
 	{
-		if(_dial_float(ctx, control->min.f, &control->val.f, control->max.f, 1.f, nk_rgb(0xff, 0xff, 0xff), !control->is_readonly))
+		if(_dial_float(ctx, control->min.f, &control->val.f, control->max.f, 1.f,
+			nk_rgb(0xff, 0xff, 0xff), !control->is_readonly, control->is_logarithmic))
 		{
 			changed = true;
 		}
@@ -4960,14 +4995,16 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 
 	if( (param->range == handle->forge.Int) && !param->is_bitmask)
 	{
-		if(_dial_int(ctx, param->min.i, &param->val.i, param->max.i, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		if(_dial_int(ctx, param->min.i, &param->val.i, param->max.i, 1.f,
+			nk_rgb(0xff, 0xff, 0xff), !param->is_readonly, param->is_logarithmic))
 		{
 			changed = true;
 		}
 	}
 	else if(param->range == handle->forge.Long)
 	{
-		if(_dial_long(ctx, param->min.h, &param->val.h, param->max.h, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		if(_dial_long(ctx, param->min.h, &param->val.h, param->max.h, 1.f,
+			nk_rgb(0xff, 0xff, 0xff), !param->is_readonly, param->is_logarithmic))
 		{
 			changed = true;
 		}
@@ -4981,14 +5018,16 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 	}
 	else if(param->range == handle->forge.Float)
 	{
-		if(_dial_float(ctx, param->min.f, &param->val.f, param->max.f, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		if(_dial_float(ctx, param->min.f, &param->val.f, param->max.f, 1.f,
+			nk_rgb(0xff, 0xff, 0xff), !param->is_readonly, param->is_logarithmic))
 		{
 			changed = true;
 		}
 	}
 	else if(param->range == handle->forge.Double)
 	{
-		if(_dial_double(ctx, param->min.d, &param->val.d, param->max.d, 1.f, nk_rgb(0xff, 0xff, 0xff), !param->is_readonly))
+		if(_dial_double(ctx, param->min.d, &param->val.d, param->max.d, 1.f,
+			nk_rgb(0xff, 0xff, 0xff), !param->is_readonly, param->is_logarithmic))
 		{
 			changed = true;
 		}
