@@ -277,6 +277,7 @@ struct _mod_t {
 	bool moving;
 	bool hovered;
 	bool hilighted;
+	bool selected;
 
 	hash_t sources;
 	hash_t sinks;
@@ -510,6 +511,7 @@ static const char *property_search_labels [PROPERTY_SELECTOR_SEARCH_MAX] = {
 static const struct nk_color grid_line_color = {40, 40, 40, 255};
 static const struct nk_color grid_background_color = {30, 30, 30, 255};
 static const struct nk_color hilight_color = {200, 100, 0, 255};
+static const struct nk_color selection_color = {0, 200, 100, 255};
 static const struct nk_color button_border_color = {100, 100, 100, 255};
 static const struct nk_color grab_handle_color = {100, 100, 100, 255};
 static const struct nk_color toggle_color = {150, 150, 150, 255};
@@ -5312,6 +5314,59 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	}
 }
 
+static void
+_set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
+{
+	if(  _message_request(handle)
+		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+			mod->urn, 0, handle->regs.idisp.surface.urid,
+			sizeof(int32_t), handle->forge.Bool, &state) )
+	{
+		_message_write(handle);
+	}
+}
+
+static void
+_set_module_selector(plughandle_t *handle, mod_t *mod)
+{
+	if(handle->module_selector)
+	{
+		_mod_unsubscribe_all(handle, handle->module_selector);
+
+		_set_module_idisp_subscription(handle, handle->module_selector, 0);
+		_image_free(handle, &handle->module_selector->idisp);
+	}
+
+	if(mod)
+	{
+		_mod_subscribe_all(handle, mod);
+
+		_patch_notification_add_patch_get(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
+
+		_set_module_idisp_subscription(handle, mod, 1);
+	}
+
+	handle->module_selector = mod;
+	handle->port_selector = NULL;
+	handle->param_selector = NULL;
+	handle->preset_find_matches = true;
+	handle->prop_find_matches = true;
+}
+
+static inline void
+_deselect_all_nodes(plughandle_t *handle)
+{
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		mod->selected = false;
+	}
+
+	//FIXME conns
+}
+
 static bool
 _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct nk_rect *bounds)
 {
@@ -5348,6 +5403,7 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct n
 			bounds->x += in->mouse.delta.x;
 			bounds->y += in->mouse.delta.y;
 
+#if 0
 			// move connections together with mod
 			HASH_FOREACH(&handle->conns, mod_conn_itr)
 			{
@@ -5369,11 +5425,18 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct n
 					_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 				}
 			}
+#endif
 		}
 	}
+#if 0
 	else if(is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT)
 		&& nk_input_is_key_down(in, NK_KEY_CTRL) )
+#else
+	else if(mod->selected
+		&& (in->keyboard.text_len == 1)
+		&& (in->keyboard.text[0] == 'g') )
+#endif
 	{
 		mod->moving = true;
 	}
@@ -5381,9 +5444,17 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct n
 	if  (is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
 	{
+#if 0
 		// consume mouse event
 		in->mouse.buttons[NK_BUTTON_RIGHT].down = nk_false;
 		in->mouse.buttons[NK_BUTTON_RIGHT].clicked = nk_false;
+#else
+		if(!nk_input_is_key_down(in, NK_KEY_SHIFT))
+			_deselect_all_nodes(handle);
+
+		mod->selected = true;
+		_set_module_selector(handle, mod); // last selected mod gets focus
+#endif
 
 		return true;
 	}
@@ -5575,46 +5646,6 @@ _mod_num_sinks(mod_t *mod, property_type_t type)
 }
 
 static void
-_set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
-{
-	if(  _message_request(handle)
-		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
-			mod->urn, 0, handle->regs.idisp.surface.urid,
-			sizeof(int32_t), handle->forge.Bool, &state) )
-	{
-		_message_write(handle);
-	}
-}
-
-static void
-_set_module_selector(plughandle_t *handle, mod_t *mod)
-{
-	if(handle->module_selector)
-	{
-		_mod_unsubscribe_all(handle, handle->module_selector);
-
-		_set_module_idisp_subscription(handle, handle->module_selector, 0);
-		_image_free(handle, &handle->module_selector->idisp);
-	}
-
-	if(mod)
-	{
-		_mod_subscribe_all(handle, mod);
-
-		_patch_notification_add_patch_get(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
-
-		_set_module_idisp_subscription(handle, mod, 1);
-	}
-
-	handle->module_selector = mod;
-	handle->port_selector = NULL;
-	handle->param_selector = NULL;
-	handle->preset_find_matches = true;
-	handle->prop_find_matches = true;
-}
-
-static void
 _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_bounds,
 	mod_t *mod, float dy)
 {
@@ -5648,6 +5679,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 
 	if(is_selectable && _mod_moveable(handle, ctx, mod, &bounds))
 	{
+#if 0
 		const LilvNode *uri_node = lilv_plugin_get_uri(plug);
 		const char *mod_uri = lilv_node_as_string(uri_node);
 
@@ -5656,17 +5688,20 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		{
 			_patch_mod_remove(handle, mod);
 		}
+#endif
 	}
 
 	const bool is_hovering = is_selectable && nk_input_is_mouse_hovering_rect(in, bounds);
 	if(  is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
 	{
+#if 0
 		_set_module_selector(handle, mod);
+#endif
 	}
 
 	mod->hovered = is_hovering;
-	const bool is_hilighted = mod->hilighted || is_hovering || mod->moving
+	const bool is_hilighted = mod->hilighted || is_hovering
 		|| (handle->module_selector == mod);
 
 	nk_layout_space_push(ctx, nk_layout_space_rect_to_local(ctx, bounds));
@@ -5679,7 +5714,12 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		const struct nk_user_font *font = ctx->style.font;
 
 		struct nk_color hov = style->hover.data.color;
-		struct nk_color brd = is_hilighted ? hilight_color : style->border_color;
+		struct nk_color brd = style->border_color;
+		if(is_hilighted)
+			brd = hilight_color;
+		else if(mod->selected)
+			brd = selection_color;
+
 		if(!_source_type_match(handle, mod->source_type) && !_sink_type_match(handle, mod->sink_type))
 		{
 			hov.a = 0x3f;
