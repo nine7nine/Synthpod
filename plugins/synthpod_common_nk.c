@@ -306,6 +306,7 @@ struct _mod_conn_t {
 
 	struct nk_vec2 pos;
 	bool moving;
+	bool selected;
 };
 
 struct _mod_ui_t {
@@ -5357,6 +5358,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 static inline void
 _deselect_all_nodes(plughandle_t *handle)
 {
+	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
 		mod_t *mod = *mod_itr;
@@ -5364,7 +5366,13 @@ _deselect_all_nodes(plughandle_t *handle)
 		mod->selected = false;
 	}
 
-	//FIXME conns
+	// deselect all module connectors
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		mod_conn->selected = false;
+	}
 }
 
 static bool
@@ -5428,35 +5436,28 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct n
 #endif
 		}
 	}
-#if 0
-	else if(is_hovering
-		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT)
-		&& nk_input_is_key_down(in, NK_KEY_CTRL) )
-#else
 	else if(mod->selected
-		&& (in->keyboard.text_len == 1)
-		&& (in->keyboard.text[0] == 'g') )
-#endif
+		&& (in->keyboard.text_len == 1) )
 	{
-		mod->moving = true;
+		switch(in->keyboard.text[0])
+		{
+			case 'g':
+			{
+				mod->moving = true;
+			}	break;
+			case 'x':
+			{
+			}	return true;
+		}
 	}
-
-	if  (is_hovering
+	else if(is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
 	{
-#if 0
-		// consume mouse event
-		in->mouse.buttons[NK_BUTTON_RIGHT].down = nk_false;
-		in->mouse.buttons[NK_BUTTON_RIGHT].clicked = nk_false;
-#else
 		if(!nk_input_is_key_down(in, NK_KEY_SHIFT))
 			_deselect_all_nodes(handle);
 
 		mod->selected = true;
 		_set_module_selector(handle, mod); // last selected mod gets focus
-#endif
-
-		return true;
 	}
 
 	return false;
@@ -5679,7 +5680,6 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 
 	if(is_selectable && _mod_moveable(handle, ctx, mod, &bounds))
 	{
-#if 0
 		const LilvNode *uri_node = lilv_plugin_get_uri(plug);
 		const char *mod_uri = lilv_node_as_string(uri_node);
 
@@ -5688,7 +5688,6 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		{
 			_patch_mod_remove(handle, mod);
 		}
-#endif
 	}
 
 	const bool is_hovering = is_selectable && nk_input_is_mouse_hovering_rect(in, bounds);
@@ -5860,41 +5859,49 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 			_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 		}
 	}
-	else if(is_hovering
-		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT)
-		&& nk_input_is_key_down(in, NK_KEY_CTRL) )
+	else if(mod_conn->selected
+		&& (in->keyboard.text_len == 1) )
 	{
-		mod_conn->moving = true;
+		switch(in->keyboard.text[0])
+		{
+			case 'g':
+			{
+				mod_conn->moving = true;
+			}	break;
+			case 'x':
+			{
+				unsigned count = 0;
+				HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+				{
+					port_conn_t *port_conn = *port_conn_itr;
+
+					if( (port_conn->source_port->type & handle->type) && (port_conn->sink_port->type & handle->type) )
+					{
+						_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
+						count += 1;
+					}
+				}
+
+				if(count == 0) // is empty matrix, demask for current type
+				{
+					mod_conn->source_type &= ~(handle->type);
+					mod_conn->sink_type &= ~(handle->type);
+				}
+			} break;
+		}
 	}
 	else if(is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
 	{
-		// consume mouse event
-		in->mouse.buttons[NK_BUTTON_RIGHT].down = nk_false;
-		in->mouse.buttons[NK_BUTTON_RIGHT].clicked = nk_false;
+		if(!nk_input_is_key_down(in, NK_KEY_SHIFT))
+			_deselect_all_nodes(handle);
 
-		unsigned count = 0;
-		HASH_FOREACH(&mod_conn->conns, port_conn_itr)
-		{
-			port_conn_t *port_conn = *port_conn_itr;
-
-			if( (port_conn->source_port->type & handle->type) && (port_conn->sink_port->type & handle->type) )
-			{
-				_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
-				count += 1;
-			}
-		}
-
-		if(count == 0) // is empty matrix, demask for current type
-		{
-			mod_conn->source_type &= ~(handle->type);
-			mod_conn->sink_type &= ~(handle->type);
-		}
+		mod_conn->selected = true;
 	}
 
 	const bool is_hilighted = mod_conn->source_mod->hovered
 		|| mod_conn->sink_mod->hovered
-		|| is_hovering || mod_conn->moving;
+		|| is_hovering || mod_conn->selected;
 
 	if(is_hilighted)
 	{
