@@ -512,7 +512,13 @@ static const char *property_search_labels [PROPERTY_SELECTOR_SEARCH_MAX] = {
 static const struct nk_color grid_line_color = {40, 40, 40, 255};
 static const struct nk_color grid_background_color = {30, 30, 30, 255};
 static const struct nk_color hilight_color = {200, 100, 0, 255};
+#if 0
 static const struct nk_color selection_color = {0, 200, 100, 255};
+static const struct nk_color focus_color = {200, 0, 100, 255};
+#else
+static const struct nk_color selection_color = {0, 20, 10, 255};
+static const struct nk_color focus_color = {20, 0, 10, 255};
+#endif
 static const struct nk_color button_border_color = {100, 100, 100, 255};
 static const struct nk_color grab_handle_color = {100, 100, 100, 255};
 static const struct nk_color toggle_color = {150, 150, 150, 255};
@@ -5700,8 +5706,8 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 	}
 
 	mod->hovered = is_hovering;
-	const bool is_hilighted = mod->hilighted || is_hovering
-		|| (handle->module_selector == mod);
+	const bool is_focused = handle->module_selector == mod;
+	const bool is_hilighted = mod->hilighted || is_hovering;
 
 	nk_layout_space_push(ctx, nk_layout_space_rect_to_local(ctx, bounds));
 
@@ -5713,11 +5719,13 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		const struct nk_user_font *font = ctx->style.font;
 
 		struct nk_color hov = style->hover.data.color;
-		struct nk_color brd = style->border_color;
-		if(is_hilighted)
-			brd = hilight_color;
+		struct nk_color brd = is_hilighted ?
+			hilight_color : style->border_color;
+
+		if(is_focused)
+			hov.b = 0x0;
 		else if(mod->selected)
-			brd = selection_color;
+			hov.r = 0x0;
 
 		if(!_source_type_match(handle, mod->source_type) && !_sink_type_match(handle, mod->sink_type))
 		{
@@ -5900,8 +5908,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 	}
 
 	const bool is_hilighted = mod_conn->source_mod->hovered
-		|| mod_conn->sink_mod->hovered
-		|| is_hovering || mod_conn->selected;
+		|| mod_conn->sink_mod->hovered || is_hovering;
 
 	if(is_hilighted)
 	{
@@ -5916,7 +5923,9 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 		const float cxr = cx + pw/2;
 		const float cy = mod_conn->pos.y - scrolling.y;
 		const float cyl = cy - ph/2;
-		const struct nk_color col = is_hilighted ? hilight_color : grab_handle_color;
+		struct nk_color col = grab_handle_color;
+		if(is_hilighted)
+			col = hilight_color;
 
 		const float l0x = src->pos.x - scrolling.x + src->dim.x/2 + cs*2;
 		const float l0y = src->pos.y - scrolling.y;
@@ -5967,8 +5976,13 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 				style->border, style->border_color);
 		}
 
-		nk_stroke_rect(canvas, body, style->rounding, style->border,
-			is_hilighted ? hilight_color : style->border_color);
+		struct nk_color col = style->border_color;
+		if(is_hilighted)
+			col = hilight_color;
+		else if(mod_conn->selected)
+			col = selection_color;
+
+		nk_stroke_rect(canvas, body, style->rounding, style->border, col);
 
 		float x = body.x + ps/2;
 		HASH_FOREACH(&mod_conn->source_mod->sources, source_port_itr)
