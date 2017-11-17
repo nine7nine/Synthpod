@@ -425,6 +425,11 @@ struct _plughandle_t {
 	bool first;
 	bool has_initial_focus;
 
+	struct {
+		bool flag;
+		struct nk_vec2 from;
+	} box;
+
 	reg_t regs;
 	union {
 		LV2_Atom atom;
@@ -511,14 +516,8 @@ static const char *property_search_labels [PROPERTY_SELECTOR_SEARCH_MAX] = {
 
 static const struct nk_color grid_line_color = {40, 40, 40, 255};
 static const struct nk_color grid_background_color = {30, 30, 30, 255};
-static const struct nk_color hilight_color = {200, 100, 0, 255};
-#if 0
-static const struct nk_color selection_color = {0, 200, 100, 255};
-static const struct nk_color focus_color = {200, 0, 100, 255};
-#else
-static const struct nk_color selection_color = {0, 20, 10, 255};
-static const struct nk_color focus_color = {20, 0, 10, 255};
-#endif
+static const struct nk_color hilight_color = {0, 200, 200, 255};
+static const struct nk_color selection_color = {0, 50, 50, 127};
 static const struct nk_color button_border_color = {100, 100, 100, 255};
 static const struct nk_color grab_handle_color = {100, 100, 100, 255};
 static const struct nk_color toggle_color = {150, 150, 150, 255};
@@ -2296,8 +2295,6 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 									&& (prop->value.type == handle->forge.Tuple) )
 								{
 									const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)&prop->value;
-
-									_log_note(handle, "%s: lv2:scalePoint\n");
 
 									LV2_ATOM_TUPLE_FOREACH(tup, atom)
 									{
@@ -5361,15 +5358,16 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 	handle->prop_find_matches = true;
 }
 
-static inline void
-_deselect_all_nodes(plughandle_t *handle)
+static inline bool
+_has_selected_nodes(plughandle_t *handle)
 {
 	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
 		mod_t *mod = *mod_itr;
 
-		mod->selected = false;
+		if(mod->selected)
+			return true;
 	}
 
 	// deselect all module connectors
@@ -5377,12 +5375,141 @@ _deselect_all_nodes(plughandle_t *handle)
 	{
 		mod_conn_t *mod_conn = *mod_conn_itr;
 
-		mod_conn->selected = false;
+		if(mod_conn->selected)
+			return true;
+	}
+
+	return false;
+}
+
+static inline void
+_set_selected_nodes(plughandle_t *handle, bool selected)
+{
+	// deselect all modules
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		mod->selected = selected;
+	}
+
+	// deselect all module connectors
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		mod_conn->selected = selected;
 	}
 }
 
-static bool
-_mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct nk_rect *bounds)
+static inline void
+_set_selected_box(plughandle_t *handle, struct nk_rect box, bool selected)
+{
+	// deselect all modules
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		if(  (mod->pos.x > box.x)
+			&& (mod->pos.x < box.x + box.w)
+			&& (mod->pos.y > box.y)
+			&& (mod->pos.y < box.y + box.h) )
+		{
+			mod->selected = selected;
+		}
+	}
+
+	// deselect all module connectors
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		if(  (mod_conn->pos.x > box.x)
+			&& (mod_conn->pos.x < box.x + box.w)
+			&& (mod_conn->pos.y > box.y)
+			&& (mod_conn->pos.y < box.y + box.h) )
+		{
+			mod_conn->selected = selected;
+		}
+	}
+}
+
+static inline void
+_set_moving_nodes(plughandle_t *handle, bool moving)
+{
+	// deselect all modules
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		if(mod->selected)
+			mod->moving = moving;
+	}
+
+	// deselect all module connectors
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		if(mod_conn->selected)
+			mod_conn->moving = moving;
+	}
+}
+
+static inline void
+_remove_selected_nodes(plughandle_t *handle)
+{
+	// deselect all modules
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		if(mod->selected)
+		{
+			const LilvPlugin *plug = mod->plug;
+			const LilvNode *uri_node = lilv_plugin_get_uri(plug);
+			const char *mod_uri = lilv_node_as_string(uri_node);
+
+			if(  strcmp(mod_uri, SYNTHPOD_PREFIX"source")
+				&& strcmp(mod_uri, SYNTHPOD_PREFIX"sink") )
+			{
+				_patch_mod_remove(handle, mod);
+			}
+		}
+	}
+
+	// deselect all module connectors
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		if(mod_conn->selected)
+		{
+			unsigned count = 0;
+
+			HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+			{
+				port_conn_t *port_conn = *port_conn_itr;
+
+				if( (port_conn->source_port->type & handle->type) && (port_conn->sink_port->type & handle->type) )
+				{
+					_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
+					count += 1;
+				}
+			}
+
+			if(count == 0) // is empty matrix, demask for current type
+			{
+				mod_conn->source_type &= ~(handle->type);
+				mod_conn->sink_type &= ~(handle->type);
+			}
+		}
+	}
+}
+
+static void
+_mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
+	struct nk_rect space_bounds, struct nk_rect *bounds)
 {
 	struct nk_input *in = &ctx->input;
 
@@ -5410,63 +5537,25 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod, struct n
 				_message_write(handle);
 			}
 		}
-		else
+		else if(!nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE))
 		{
 			mod->pos.x += in->mouse.delta.x;
 			mod->pos.y += in->mouse.delta.y;
 			bounds->x += in->mouse.delta.x;
 			bounds->y += in->mouse.delta.y;
-
-#if 0
-			// move connections together with mod
-			HASH_FOREACH(&handle->conns, mod_conn_itr)
-			{
-				mod_conn_t *mod_conn = *mod_conn_itr;
-
-				if(mod_conn->source_mod == mod)
-				{
-					mod_conn->pos.x += in->mouse.delta.x/2;
-					mod_conn->pos.y += in->mouse.delta.y/2;
-
-					_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
-				}
-
-				if(mod_conn->sink_mod == mod)
-				{
-					mod_conn->pos.x += in->mouse.delta.x/2;
-					mod_conn->pos.y += in->mouse.delta.y/2;
-
-					_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
-				}
-			}
-#endif
-		}
-	}
-	else if(mod->selected
-		&& (in->keyboard.text_len == 1) )
-	{
-		switch(in->keyboard.text[0])
-		{
-			case 'g':
-			{
-				mod->moving = true;
-			}	break;
-			case 'x':
-			{
-			}	return true;
 		}
 	}
 	else if(is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
 	{
+		const bool selected = mod->selected;
+
 		if(!nk_input_is_key_down(in, NK_KEY_SHIFT))
-			_deselect_all_nodes(handle);
+			_set_selected_nodes(handle, false);
 
-		mod->selected = true;
-		_set_module_selector(handle, mod); // last selected mod gets focus
+		mod->selected = !selected;
+		_set_module_selector(handle, mod->selected ? mod : NULL);
 	}
-
-	return false;
 }
 
 static bool
@@ -5684,27 +5773,9 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		&& (bounds.x + bounds.w <= space_bounds.x + space_bounds.w)
 		&& (bounds.y + bounds.h <= space_bounds.y + space_bounds.h);
 
-	if(is_selectable && _mod_moveable(handle, ctx, mod, &bounds))
-	{
-		const LilvNode *uri_node = lilv_plugin_get_uri(plug);
-		const char *mod_uri = lilv_node_as_string(uri_node);
-
-		if(  strcmp(mod_uri, SYNTHPOD_PREFIX"source")
-			&& strcmp(mod_uri, SYNTHPOD_PREFIX"sink") )
-		{
-			_patch_mod_remove(handle, mod);
-		}
-	}
+	_mod_moveable(handle, ctx, mod, space_bounds, &bounds);
 
 	const bool is_hovering = is_selectable && nk_input_is_mouse_hovering_rect(in, bounds);
-	if(  is_hovering
-		&& nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
-	{
-#if 0
-		_set_module_selector(handle, mod);
-#endif
-	}
-
 	mod->hovered = is_hovering;
 	const bool is_focused = handle->module_selector == mod;
 	const bool is_hilighted = mod->hilighted || is_hovering;
@@ -5719,13 +5790,8 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		const struct nk_user_font *font = ctx->style.font;
 
 		struct nk_color hov = style->hover.data.color;
-		struct nk_color brd = is_hilighted ?
-			hilight_color : style->border_color;
-
-		if(is_focused)
-			hov.b = 0x0;
-		else if(mod->selected)
-			hov.r = 0x0;
+		struct nk_color brd = is_hilighted
+			? hilight_color : style->border_color;
 
 		if(!_source_type_match(handle, mod->source_type) && !_sink_type_match(handle, mod->sink_type))
 		{
@@ -5734,6 +5800,8 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		}
 
 		nk_fill_rect(canvas, body, style->rounding, hov);
+		if(mod->selected)
+			nk_fill_rect(canvas, body, style->rounding, selection_color);
 		nk_stroke_rect(canvas, body, style->rounding, style->border, brd);
 
 		const float fh = font->height;
@@ -5857,7 +5925,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 		{
 			mod_conn->moving = false;
 		}
-		else
+		else if(!nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE))
 		{
 			mod_conn->pos.x += in->mouse.delta.x;
 			mod_conn->pos.y += in->mouse.delta.y;
@@ -5867,44 +5935,16 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 			_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 		}
 	}
-	else if(mod_conn->selected
-		&& (in->keyboard.text_len == 1) )
-	{
-		switch(in->keyboard.text[0])
-		{
-			case 'g':
-			{
-				mod_conn->moving = true;
-			}	break;
-			case 'x':
-			{
-				unsigned count = 0;
-				HASH_FOREACH(&mod_conn->conns, port_conn_itr)
-				{
-					port_conn_t *port_conn = *port_conn_itr;
-
-					if( (port_conn->source_port->type & handle->type) && (port_conn->sink_port->type & handle->type) )
-					{
-						_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
-						count += 1;
-					}
-				}
-
-				if(count == 0) // is empty matrix, demask for current type
-				{
-					mod_conn->source_type &= ~(handle->type);
-					mod_conn->sink_type &= ~(handle->type);
-				}
-			} break;
-		}
-	}
 	else if(is_hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
 	{
-		if(!nk_input_is_key_down(in, NK_KEY_SHIFT))
-			_deselect_all_nodes(handle);
+		const bool selected = mod_conn->selected;
 
-		mod_conn->selected = true;
+		if(!nk_input_is_key_down(in, NK_KEY_SHIFT))
+			_set_selected_nodes(handle, false);
+
+		mod_conn->selected = !selected;
+		_set_module_selector(handle, NULL);
 	}
 
 	const bool is_hilighted = mod_conn->source_mod->hovered
@@ -5923,9 +5963,8 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 		const float cxr = cx + pw/2;
 		const float cy = mod_conn->pos.y - scrolling.y;
 		const float cyl = cy - ph/2;
-		struct nk_color col = grab_handle_color;
-		if(is_hilighted)
-			col = hilight_color;
+		struct nk_color col = is_hilighted
+			? hilight_color : grab_handle_color;
 
 		const float l0x = src->pos.x - scrolling.x + src->dim.x/2 + cs*2;
 		const float l0y = src->pos.y - scrolling.y;
@@ -5958,7 +5997,13 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 	{
 		struct nk_style_button *style = &ctx->style.button;
 
-		nk_fill_rect(canvas, body, style->rounding, style->normal.data.color);
+		const struct nk_color hov = style->normal.data.color;
+		const struct nk_color brd = is_hilighted
+			? hilight_color : style->border_color;
+
+		nk_fill_rect(canvas, body, style->rounding, hov);
+		if(mod_conn->selected)
+			nk_fill_rect(canvas, body, style->rounding, selection_color);
 
 		for(float x = ps; x < body.w; x += ps)
 		{
@@ -5976,13 +6021,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 				style->border, style->border_color);
 		}
 
-		struct nk_color col = style->border_color;
-		if(is_hilighted)
-			col = hilight_color;
-		else if(mod_conn->selected)
-			col = selection_color;
-
-		nk_stroke_rect(canvas, body, style->rounding, style->border, col);
+		nk_stroke_rect(canvas, body, style->rounding, style->border, brd);
 
 		float x = body.x + ps/2;
 		HASH_FOREACH(&mod_conn->source_mod->sources, source_port_itr)
@@ -6150,7 +6189,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 {
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	struct nk_style *style = &ctx->style;
-	const struct nk_input *in = &ctx->input;
+	struct nk_input *in = &ctx->input;
 
 	handle->bundle_find_matches = false;
 	handle->plugin_find_matches = false;
@@ -6210,6 +6249,82 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				{
 					nk_stroke_line(canvas, ssize.x, y + ssize.y, ssize.x + ssize.w, y + ssize.y,
 						1.0f, grid_line_color);
+				}
+			}
+
+			if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
+				&& (in->keyboard.text_len == 1) )
+			{
+				switch(in->keyboard.text[0])
+				{
+					case 'a':
+					{
+						const bool has_selected_nodes = _has_selected_nodes(handle);
+						_set_selected_nodes(handle, !has_selected_nodes);
+					}	break;
+					case 'b':
+					{
+						handle->box.flag = true;
+					}	break;
+					case 'g':
+					{
+						_set_moving_nodes(handle, true);
+					} break;
+					case 'x':
+					{
+						_remove_selected_nodes(handle);
+					} break;
+				}
+
+				in->keyboard.text_len = 0; // consume character if mouse over canvas
+			}
+
+			if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
+				&& handle->box.flag)
+			{
+				if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
+				{
+					handle->box.from = in->mouse.pos;
+				}
+				else if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
+				{
+					const struct nk_vec2 to = in->mouse.pos;
+
+					const struct nk_rect box = {
+						handle->scrolling.x + NK_MIN(to.x, handle->box.from.x),
+						handle->scrolling.y + NK_MIN(to.y, handle->box.from.y),
+						fabsf(to.x - handle->box.from.x),
+						fabsf(to.y - handle->box.from.y)
+					};
+
+					_set_selected_box(handle, box, true);
+
+					handle->box.flag = false;
+				}
+				else if(nk_input_is_mouse_down(in, NK_BUTTON_LEFT))
+				{
+					const struct nk_vec2 to = in->mouse.pos;
+
+					const struct nk_rect box = {
+						NK_MIN(to.x, handle->box.from.x),
+						NK_MIN(to.y, handle->box.from.y),
+						fabsf(to.x - handle->box.from.x),
+						fabsf(to.y - handle->box.from.y)
+					};
+
+					nk_stroke_rect(canvas, box, 0.f, ctx->style.property.border, hilight_color);
+				}
+				else
+				{
+					const float x0 = space_bounds.x;
+					const float x1 = in->mouse.pos.x;
+					const float x2 = space_bounds.x + space_bounds.w;
+					const float y0 = space_bounds.y;
+					const float y1 = in->mouse.pos.y;
+					const float y2 = space_bounds.y + space_bounds.h;
+
+					nk_stroke_line(canvas, x1, y0, x1, y2, ctx->style.property.border, hilight_color);
+					nk_stroke_line(canvas, x0, y1, x2, y1, ctx->style.property.border, hilight_color);
 				}
 			}
 
