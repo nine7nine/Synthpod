@@ -524,8 +524,8 @@ _mod_worker_thread(void *data)
 		{
 			if(atomic_exchange(&mod->idisp.draw_queued, false))
 			{
-				const uint32_t w = 128; //FIXME
-				const uint32_t h = 128; //FIXME
+				const uint32_t w = 256; //FIXME
+				const uint32_t h = 256; //FIXME
 
 				// lock surface
 				while(atomic_flag_test_and_set(&mod->idisp.lock))

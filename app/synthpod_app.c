@@ -782,14 +782,27 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 				LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
 				if(answer)
 				{
-					LV2_Atom_Forge_Frame frame [1];
+					LV2_Atom_Forge_Frame frame [3];
 
-					LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(&app->regs, &app->forge, frame,
+					LV2_Atom_Forge_Ref ref = synthpod_patcher_set_object(&app->regs, &app->forge, &frame[0],
 						mod->urn, 0, app->regs.idisp.surface.urid); //TODO seqn
 					if(ref)
-						ref = lv2_atom_forge_vector(&app->forge, sizeof(int32_t), app->forge.Int, surf->width*surf->height, surf->data);
+						ref = lv2_atom_forge_tuple(&app->forge, &frame[1]);
 					if(ref)
-						synthpod_patcher_pop(&app->forge, frame, 1);
+						ref = lv2_atom_forge_int(&app->forge, surf->width);
+					if(ref)
+						ref = lv2_atom_forge_int(&app->forge, surf->height);
+					if(ref)
+						ref = lv2_atom_forge_vector_head(&app->forge, &frame[2], sizeof(int32_t), app->forge.Int);
+					for(int h = 0; h < surf->height; h++)
+					{
+						const uint8_t *row = &surf->data[surf->stride * h];
+
+						if(ref)
+							ref = lv2_atom_forge_raw(&app->forge, row, surf->width * sizeof(uint32_t));
+					}
+					if(ref)
+						synthpod_patcher_pop(&app->forge, frame, 3);
 
 					if(ref)
 					{

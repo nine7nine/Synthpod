@@ -287,7 +287,11 @@ struct _mod_t {
 
 	prof_t prof;
 
-	struct nk_image idisp;
+	struct {
+		uint32_t w;
+		uint32_t h;
+		struct nk_image img;
+	} idisp;
 	char alias [ALIAS_MAX];
 };
 
@@ -3368,7 +3372,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 
 	lilv_uis_free(mod->ui_nodes);
 
-	_image_free(handle, &mod->idisp);
+	_image_free(handle, &mod->idisp.img);
 }
 
 static bool
@@ -5366,7 +5370,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 		_mod_unsubscribe_all(handle, handle->module_selector);
 
 		_set_module_idisp_subscription(handle, handle->module_selector, 0);
-		_image_free(handle, &handle->module_selector->idisp);
+		_image_free(handle, &handle->module_selector->idisp.img);
 	}
 
 	if(mod)
@@ -6796,10 +6800,20 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						}
 					}
 
-					if(!_image_empty(&mod->idisp))
+					if(!_image_empty(&mod->idisp.img))
 					{
-						nk_layout_row_static(ctx, 128, 128, 1);
-						nk_image(ctx, mod->idisp);
+						const float w = nk_widget_width(ctx);
+
+						if(mod->idisp.w > w)
+						{
+							const float h = w * mod->idisp.h / mod->idisp.w;
+							nk_layout_row_static(ctx, h, w, 1);
+						}
+						else
+						{
+							nk_layout_row_static(ctx, mod->idisp.h, mod->idisp.w, 1);
+						}
+						nk_image(ctx, mod->idisp.img);
 					}
 				}
 			}
@@ -7804,22 +7818,30 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							nk_pugl_post_redisplay(&handle->win);
 						}
 						else if( (prop == handle->regs.idisp.surface.urid)
-							&& (value->type == handle->forge.Vector)
+							&& (value->type == handle->forge.Tuple)
 							&& subj )
 						{
-							const LV2_Atom_Vector *vec = (const LV2_Atom_Vector *)value;
+							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
+							const LV2_Atom_Int *width = (const LV2_Atom_Int *)lv2_atom_tuple_begin(tup);
+							const LV2_Atom_Int *height = (const LV2_Atom_Int *)lv2_atom_tuple_next(&width->atom);
+							const LV2_Atom_Vector *vec = (const LV2_Atom_Vector *)lv2_atom_tuple_next(&height->atom);
+
+							const uint32_t w = width ? width->body : 256;
+							const uint32_t h = height ? height->body : 256;
 
 							mod_t *mod = _mod_find_by_urn(handle, subj);
 							if(mod)
 							{
 								const size_t body_size = vec->atom.size - sizeof(LV2_Atom_Vector_Body);
 								const size_t nchild = body_size / vec->body.child_size;
-								if(nchild == 128*128)
+								if(nchild == w*h)
 								{
-									const void *data = LV2_ATOM_CONTENTS(LV2_Atom_Vector, value);
+									const void *data = LV2_ATOM_CONTENTS(LV2_Atom_Vector, vec);
 
-									_image_free(handle, &mod->idisp);
-									mod->idisp = _image_new(handle, 128, 128, data);
+									_image_free(handle, &mod->idisp.img);
+									mod->idisp.img = _image_new(handle, w, h, data);
+									mod->idisp.w = w;
+									mod->idisp.h = h;
 
 									nk_pugl_post_redisplay(&handle->win);
 								}
