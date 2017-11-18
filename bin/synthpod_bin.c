@@ -189,7 +189,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		size_t written = -1;
 		if(_atomic_try_lock(&bin->trace_lock)) //FIXME use per-dsp-thread ringbuffer
 		{
-			const size_t sz;
+			size_t sz = 0;
 			char *trace;
 			if((trace = varchunk_write_request_max(bin->app_to_log, 512, &sz)))
 			{
