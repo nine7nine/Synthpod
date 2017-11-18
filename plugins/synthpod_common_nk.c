@@ -518,11 +518,13 @@ static const struct nk_color grid_line_color = {40, 40, 40, 255};
 static const struct nk_color grid_background_color = {30, 30, 30, 255};
 static const struct nk_color hilight_color = {0, 200, 200, 255};
 static const struct nk_color selection_color = {0, 50, 50, 127};
+static const struct nk_color automation_color = {200, 0, 100, 255};
 static const struct nk_color button_border_color = {100, 100, 100, 255};
 static const struct nk_color grab_handle_color = {100, 100, 100, 255};
 static const struct nk_color toggle_color = {150, 150, 150, 255};
 static const struct nk_color head_color = {12, 12, 12, 255};
 static const struct nk_color group_color = {24, 24, 24, 255};
+static const struct nk_color invisible_color = {0, 0, 0, 0};
 
 static const char *auto_labels [] = {
 	[AUTO_NONE] = "None",
@@ -4730,16 +4732,26 @@ static void
 _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float DY, float dy)
 {
 	plughandle_t *handle = mod->handle;
+	const bool is_hovered = nk_widget_is_hovered(ctx);
 
-	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true))
+	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, nk_true))
 	{
-		handle->port_selector = port;
+		handle->port_selector = (handle->port_selector == port) ? NULL : port;
 		handle->param_selector = NULL;
 	}
+
+	nk_style_push_style_item(ctx, &ctx->style.window.fixed_background,
+		nk_style_item_color(invisible_color));
 
 	const struct nk_rect bb = nk_widget_bounds(ctx);
 	if(nk_group_begin(ctx, port->name, NK_WINDOW_NO_SCROLLBAR))
 	{
+		if(handle->port_selector == port) // mark focus
+		{
+			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+			nk_fill_rect(canvas, bb, 0.f, selection_color);
+		}
+
 		switch(port->type)
 		{
 			case PROPERTY_TYPE_AUDIO:
@@ -4778,17 +4790,20 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float DY, float d
 
 		nk_group_end(ctx);
 
-		if(handle->port_selector == port) // mark focus
+		if( (port->type == PROPERTY_TYPE_CONTROL) && (port->control.automation.type != AUTO_NONE) ) // mark automation state
 		{
 			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
-			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, hilight_color);
+			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, automation_color);
 		}
-		else if( (port->type == PROPERTY_TYPE_CONTROL) && (port->control.automation.type != AUTO_NONE) ) // mark automation state
+
+		if(is_hovered)
 		{
 			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
-			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, toggle_color);
+			nk_stroke_rect(canvas, bb, 0.f, ctx->style.property.border, hilight_color);
 		}
 	}
+
+	nk_style_pop_style_item(ctx);
 }
 
 static bool
@@ -5051,16 +5066,26 @@ static void
 _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t *param, float DY, float dy)
 {
 	const char *name_str = param->label ? param->label : "Unknown";
+	const bool is_hovered = nk_widget_is_hovered(ctx);
 
-	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true))
+	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, nk_true))
 	{
 		handle->port_selector = NULL;
-		handle->param_selector = param;
+		handle->param_selector = (handle->param_selector == param) ? NULL : param;
 	}
+
+	nk_style_push_style_item(ctx, &ctx->style.window.fixed_background,
+		nk_style_item_color(invisible_color));
 
 	const struct nk_rect bb = nk_widget_bounds(ctx);
 	if(nk_group_begin(ctx, name_str, NK_WINDOW_NO_SCROLLBAR))
 	{
+		if(handle->param_selector == param) // mark focus
+		{
+			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
+			nk_fill_rect(canvas, bb, 0.f, selection_color);
+		}
+
 		if(_expose_param_inner(ctx, param, handle, DY, dy, name_str))
 		{
 			//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
@@ -5116,17 +5141,20 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 
 		nk_group_end(ctx);
 
-		if(handle->param_selector == param) // mark focus
+		if(param->automation.type != AUTO_NONE) // mark automation state
 		{
 			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
-			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, hilight_color);
+			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, automation_color);
 		}
-		else if(param->automation.type != AUTO_NONE) // mark automation state
+
+		if(is_hovered)
 		{
 			struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
-			nk_fill_rect(canvas, nk_rect(bb.x + bb.w - 4.f, bb.y, 4.f, bb.h), 0.f, toggle_color);
+			nk_stroke_rect(canvas, bb, 0.f, ctx->style.property.border, hilight_color);
 		}
 	}
+
+	nk_style_pop_style_item(ctx);
 }
 
 static void
