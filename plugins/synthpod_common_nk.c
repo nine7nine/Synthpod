@@ -7022,8 +7022,6 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 	const char *window_name = "synthpod";
 	if(nk_begin(ctx, window_name, wbounds, NK_WINDOW_NO_SCROLLBAR))
 	{
-		nk_window_set_bounds(ctx, window_name, wbounds);
-
 		// reduce group padding
 		nk_style_push_vec2(ctx, &ctx->style.window.group_padding, nk_vec2(2.f, 2.f));
 
