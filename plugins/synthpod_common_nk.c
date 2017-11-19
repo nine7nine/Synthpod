@@ -4738,7 +4738,7 @@ _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float DY, float d
 	plughandle_t *handle = mod->handle;
 	const bool is_hovered = nk_widget_is_hovered(ctx);
 
-	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, nk_true))
+	if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
 	{
 		handle->port_selector = (handle->port_selector == port) ? NULL : port;
 		handle->param_selector = NULL;
@@ -5072,7 +5072,7 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 	const char *name_str = param->label ? param->label : "Unknown";
 	const bool is_hovered = nk_widget_is_hovered(ctx);
 
-	if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, nk_true))
+	if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_RIGHT))
 	{
 		handle->port_selector = NULL;
 		handle->param_selector = (handle->param_selector == param) ? NULL : param;
@@ -6851,7 +6851,7 @@ _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 		nk_labelf(ctx, NK_TEXT_LEFT, "CPU: %"PRIi32" / %"PRIi32,
 			handle->cpus_used, handle->cpus_available);
 
-		if(nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true))
+		if(nk_widget_is_mouse_clicked(ctx, NK_BUTTON_LEFT))
 			handle->t0 = t1;
 		const uint32_t secs = difftime(t1, handle->t0);
 		const int32_t ts = secs % 60;
