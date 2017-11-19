@@ -180,11 +180,12 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
 	bin_t *bin = data;
 
-	uv_thread_t this = uv_thread_self();
+	const uv_thread_t this = uv_thread_self();
+	const bool is_worker_thread = uv_thread_equal(&this, &bin->self);
 
 	// check for trace mode AND DSP thread ID
 	if( (type == bin->log_trace)
-		&& !uv_thread_equal(&this, &bin->self) ) // not worker thread ID
+		&& !is_worker_thread)
 	{
 		size_t written = -1;
 		if(_atomic_try_lock(&bin->trace_lock)) //FIXME use per-dsp-thread ringbuffer
@@ -203,23 +204,27 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		_atomic_unlock(&bin->trace_lock);
 		return written;
 	}
+	else if(is_worker_thread)
+	{
+		// !log_trace OR not DSP thread ID
+		int idx = COLOR_LOG;
+		if(type == bin->log_trace)
+			idx = COLOR_TRACE;
+		else if(type == bin->log_error)
+			idx = COLOR_ERROR;
+		else if(type == bin->log_note)
+			idx = COLOR_NOTE;
+		else if(type == bin->log_warning)
+			idx = COLOR_WARNING;
 
-	// !log_trace OR not DSP thread ID
-	int idx = COLOR_LOG;
-	if(type == bin->log_trace)
-		idx = COLOR_TRACE;
-	else if(type == bin->log_error)
-		idx = COLOR_ERROR;
-	else if(type == bin->log_note)
-		idx = COLOR_NOTE;
-	else if(type == bin->log_warning)
-		idx = COLOR_WARNING;
+		//TODO send to UI?
 
-	//TODO send to UI?
+		const int istty = isatty(STDERR_FILENO);
+		fprintf(stderr, "%s %s ", prefix[istty][COLOR_DSP], prefix[istty][idx]);
+		return vfprintf(stderr, fmt, args);
+	}
 
-	const int istty = isatty(STDERR_FILENO);
-	fprintf(stderr, "%s %s ", prefix[istty][COLOR_DSP], prefix[istty][idx]);
-	return vfprintf(stderr, fmt, args);
+	return 0;
 }
 
 __non_realtime static int
