@@ -5539,6 +5539,30 @@ _remove_selected_nodes(plughandle_t *handle)
 	}
 }
 
+static inline void
+_show_selected_nodes(plughandle_t *handle)
+{
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		if(mod->selected)
+		{
+			HASH_FOREACH(&mod->uis, mod_ui_itr)
+			{
+				mod_ui_t *mod_ui = *mod_ui_itr;
+
+				if(_mod_ui_is_running(mod_ui))
+					_mod_ui_stop(mod_ui, true); // stop existing UI
+				else
+					_mod_ui_run(mod_ui, true); // run UI
+
+				break; //FIXME only consider first UI
+			}
+		}
+	}
+}
+
 static void
 _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_rect space_bounds, struct nk_rect *bounds)
@@ -6301,6 +6325,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					case 'g':
 					{
 						_set_moving_nodes(handle, true);
+					} break;
+					case 'v':
+					{
+						_show_selected_nodes(handle);
 					} break;
 					case 'x':
 					{
