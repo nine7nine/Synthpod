@@ -81,6 +81,8 @@ typedef enum  _auto_type_t auto_type_t;
 typedef struct _midi_auto_t midi_auto_t;
 typedef struct _osc_auto_t osc_auto_t;
 typedef struct _auto_t auto_t;
+typedef struct _pset_group_t pset_group_t;
+typedef struct _pset_preset_t pset_preset_t;
 
 enum _property_type_t {
 	PROPERTY_TYPE_NONE				= 0,
@@ -330,6 +332,17 @@ struct _mod_ui_t {
 		char *update_rate;
 	} sbox;
 };
+
+struct _pset_group_t {
+	const LilvNode *node;
+	hash_t presets;
+}; //FIXME use this
+
+struct _pset_preset_t {
+	const LilvNode *node;
+	bool selected;
+	auto_t automation;
+}; //FIXME use this
 
 struct _plughandle_t {
 	LilvWorld *world;
