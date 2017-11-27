@@ -46,7 +46,7 @@ synthpod:root_4_nk
 	] ;
 	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe, opts:options ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
-	lv2:extensionData ui:idleInterface, ui:resize .
+	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOptions param:sampleRate, ui:updateRate .
 
 # Keybaord UIs
