@@ -1654,6 +1654,23 @@ _sort_scale_point_name(const void *a, const void *b)
 }
 
 static char *
+_unit_symbol_obj(plughandle_t *handle, LilvNode *units_unit)
+{
+	char *symbol = NULL;
+
+	LilvNode *units_symbol = lilv_world_get(handle->world, units_unit, handle->regs.units.symbol.node, NULL);
+	if(units_symbol)
+	{
+		if(lilv_node_is_string(units_symbol))
+				symbol = strdup(lilv_node_as_string(units_symbol));
+
+		lilv_node_free(units_symbol);
+	}
+
+	return symbol;
+}
+
+static char *
 _unit_symbol(plughandle_t *handle, const char *uri)
 {
 	char *symbol = NULL;
@@ -1661,14 +1678,7 @@ _unit_symbol(plughandle_t *handle, const char *uri)
 	LilvNode *units_unit = lilv_new_uri(handle->world, uri);
 	if(units_unit)
 	{
-		LilvNode *units_symbol = lilv_world_get(handle->world, units_unit, handle->regs.units.symbol.node, NULL);
-		if(units_symbol)
-		{
-			if(lilv_node_is_string(units_symbol))
-					symbol = strdup(lilv_node_as_string(units_symbol));
-
-			lilv_node_free(units_symbol);
-		}
+		symbol = _unit_symbol_obj(handle, units_unit);
 
 		lilv_node_free(units_unit);
 	}
@@ -1772,7 +1782,14 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 	if(units_unit)
 	{
 		if(lilv_node_is_uri(units_unit))
+		{
 			param->units_symbol = _unit_symbol(handle, lilv_node_as_uri(units_unit));
+		}
+		else if(lilv_world_ask(handle->world, units_unit, handle->regs.rdf.type.node, handle->regs.units.Unit.node))
+		{
+			param->units_symbol = _unit_symbol_obj(handle, units_unit);
+		}
+
 		lilv_node_free(units_unit);
 	}
 
@@ -3081,6 +3098,10 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 				if(lilv_node_is_uri(units_unit))
 				{
 					control->units_symbol = _unit_symbol(handle, lilv_node_as_uri(units_unit));
+				}
+				else if(lilv_world_ask(handle->world, units_unit, handle->regs.rdf.type.node, handle->regs.units.Unit.node))
+				{
+					control->units_symbol = _unit_symbol_obj(handle, units_unit);
 				}
 
 				lilv_node_free(units_unit);

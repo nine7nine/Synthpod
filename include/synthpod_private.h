@@ -299,6 +299,7 @@ struct _reg_t {
 		reg_item_t render;
 		reg_item_t symbol;
 		reg_item_t unit;
+		reg_item_t Unit;
 
 		// instances;
 		reg_item_t bar;
@@ -589,6 +590,7 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->units.render, world, map, LV2_UNITS__render);
 	_register(&regs->units.symbol, world, map, LV2_UNITS__symbol);
 	_register(&regs->units.unit, world, map, LV2_UNITS__unit);
+	_register(&regs->units.Unit, world, map, LV2_UNITS__Unit);
 	_register(&regs->units.bar, world, map, LV2_UNITS__bar);
 	_register(&regs->units.beat, world, map, LV2_UNITS__beat);
 	_register(&regs->units.bpm, world, map, LV2_UNITS__bpm);
@@ -843,6 +845,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->units.render);
 	_unregister(&regs->units.symbol);
 	_unregister(&regs->units.unit);
+	_unregister(&regs->units.Unit);
 	_unregister(&regs->units.bar);
 	_unregister(&regs->units.beat);
 	_unregister(&regs->units.bpm);
