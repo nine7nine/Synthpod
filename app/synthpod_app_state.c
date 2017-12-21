@@ -170,26 +170,27 @@ _state_set_value(const char *symbol, void *data,
 	uint32_t index = lilv_port_get_index(mod->plug, port);
 	port_t *tar = &mod->ports[index];
 
+	float val = 0.f;
+
+	if( (type == app->forge.Int) && (size == sizeof(int32_t)) )
+		val = *(const int32_t *)value;
+	else if( (type == app->forge.Long) && (size == sizeof(int64_t)) )
+		val = *(const int64_t *)value;
+	else if( (type == app->forge.Float) && (size == sizeof(float)) )
+		val = *(const float *)value;
+	else if( (type == app->forge.Double) && (size == sizeof(double)) )
+		val = *(const double *)value;
+	else if( (type == app->forge.Bool) && (size == sizeof(int32_t)) )
+		val = *(const int32_t *)value;
+	else
+	{
+		sp_app_log_error(app, "%s: value of unknown type\n", __func__);
+		return;
+	}
+
 	if(tar->type == PORT_TYPE_CONTROL)
 	{
 		control_port_t *control = &tar->control;
-		float val = 0.f;
-
-		if( (type == app->forge.Int) && (size == sizeof(int32_t)) )
-			val = *(const int32_t *)value;
-		else if( (type == app->forge.Long) && (size == sizeof(int64_t)) )
-			val = *(const int64_t *)value;
-		else if( (type == app->forge.Float) && (size == sizeof(float)) )
-			val = *(const float *)value;
-		else if( (type == app->forge.Double) && (size == sizeof(double)) )
-			val = *(const double *)value;
-		else if( (type == app->forge.Bool) && (size == sizeof(int32_t)) )
-			val = *(const int32_t *)value;
-		else
-		{
-			sp_app_log_error(app, "%s: value of unknown type\n", __func__);
-			return;
-		}
 
 		// FIXME not rt-safe
 		float *buf_ptr = PORT_BASE_ALIGNED(tar);
@@ -203,6 +204,18 @@ _state_set_value(const char *symbol, void *data,
 		_sp_app_port_spin_lock(control);
 		control->stash = val;
 		_sp_app_port_unlock(control);
+	}
+	else if(tar->type == PORT_TYPE_CV)
+	{
+		cv_port_t *cv = &tar->cv;
+
+		// FIXME not rt-safe
+		float *buf_ptr = PORT_BASE_ALIGNED(tar);
+		for(unsigned i=0; i<app->driver->max_block_size; i++)
+		{
+			buf_ptr[i] = val;
+		}
+		// FIXME not rt-safe
 	}
 }
 
