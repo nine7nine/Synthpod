@@ -51,6 +51,7 @@
 #define CONTROL 14 //FIXME
 #define SPLINE_BEND 25.f
 #define ALIAS_MAX 32
+#define DEFAULT_PSET_LABEL "DEFAULT"
 
 #ifdef Bool
 #	undef Bool // interferes with atom forge
@@ -2784,8 +2785,13 @@ _sort_rdfs_label(const void *a, const void *b, void *data)
 
 	if(node_a)
 		name_a = lilv_node_as_string(node_a);
+	else
+		name_a = DEFAULT_PSET_LABEL; // for default pset
+
 	if(node_b)
 		name_b = lilv_node_as_string(node_b);
+	else
+		name_b = DEFAULT_PSET_LABEL; // for default pset
 
 	const int ret = name_a && name_b
 		? strcasecmp(name_a, name_b)
@@ -3979,10 +3985,8 @@ _expose_main_plugin_info(plughandle_t *handle, struct nk_context *ctx)
 
 static void
 _refresh_main_preset_list_for_bank(plughandle_t *handle,
-	LilvNodes *presets, const LilvNode *preset_bank)
+	LilvNodes *presets, const LilvNode *preset_bank, bool search)
 {
-	bool search = _textedit_len(&handle->preset_search_edit) != 0;
-
 	LILV_FOREACH(nodes, i, presets)
 	{
 		const LilvNode *preset = lilv_nodes_get(presets, i);
@@ -4024,16 +4028,25 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 static void
 _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 {
+	bool search = _textedit_len(&handle->preset_search_edit) != 0;
 	_hash_free(&handle->preset_matches);
 
+	// handle banked presets
 	HASH_FOREACH(&mod->banks, itr)
 	{
 		const LilvNode *bank = *itr;
 
-		_refresh_main_preset_list_for_bank(handle, mod->presets, bank);
+		_refresh_main_preset_list_for_bank(handle, mod->presets, bank, search);
 	}
 
-	_refresh_main_preset_list_for_bank(handle, mod->presets, NULL);
+	// handle unbanked presets
+	_refresh_main_preset_list_for_bank(handle, mod->presets, NULL, search);
+
+	// handle default preset
+	if(!search || strcasestr(DEFAULT_PSET_LABEL, _textedit_const(&handle->preset_search_edit)))
+	{
+		_hash_add(&handle->preset_matches, (void *)lilv_plugin_get_uri(mod->plug));
+	}
 
 	_hash_sort_r(&handle->preset_matches, _sort_rdfs_label, handle);
 }
@@ -4049,8 +4062,8 @@ _tab_label(struct nk_context *ctx, const char *label)
 }
 
 static void
-_expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
-	const LilvNode *preset_bank)
+_expose_main_preset_list_for_bank(plughandle_t *handle, mod_t *mod,
+	struct nk_context *ctx, const LilvNode *preset_bank)
 {
 	bool first = true;
 	int count = 0;
@@ -4073,10 +4086,12 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 
 		if(visible)
 		{
+			const bool is_default_pset =  lilv_node_equals(preset, lilv_plugin_get_uri(mod->plug));
+
 			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
 			if(!label_node)
 				label_node = lilv_world_get(handle->world, preset, handle->node.lv2_name, NULL);
-			if(label_node)
+			if(label_node || is_default_pset)
 			{
 				if(first)
 				{
@@ -4102,7 +4117,9 @@ _expose_main_preset_list_for_bank(plughandle_t *handle, struct nk_context *ctx,
 					first = false;
 				}
 
-				const char *label_str = lilv_node_as_string(label_node);
+				const char *label_str = is_default_pset
+					? DEFAULT_PSET_LABEL
+					: lilv_node_as_string(label_node);
 
 				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
 					? nk_style_item_color(nk_rgb(40, 40, 40))
@@ -4148,10 +4165,10 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 		{
 			const LilvNode *bank = *itr;
 
-			_expose_main_preset_list_for_bank(handle, ctx, bank);
+			_expose_main_preset_list_for_bank(handle, mod, ctx, bank);
 		}
 
-		_expose_main_preset_list_for_bank(handle, ctx, NULL);
+		_expose_main_preset_list_for_bank(handle, mod, ctx, NULL);
 	}
 }
 
