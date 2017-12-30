@@ -5101,6 +5101,60 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 }
 
 static void
+_param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
+{
+	//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
+	if(param->range == handle->forge.Int)
+	{
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sizeof(int32_t), handle->forge.Int, &param->val.i);
+	}
+	else if(param->range == handle->forge.Bool)
+	{
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sizeof(int32_t), handle->forge.Bool, &param->val.i);
+	}
+	else if(param->range == handle->forge.Long)
+	{
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sizeof(int64_t), handle->forge.Long, &param->val.h);
+	}
+	else if(param->range == handle->forge.Float)
+	{
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sizeof(float), handle->forge.Float, &param->val.f);
+	}
+	else if(param->range == handle->forge.Double)
+	{
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sizeof(double), handle->forge.Double, &param->val.d);
+	}
+	else if(param->range == handle->forge.String)
+	{
+		const char *str = nk_str_get_const(&param->val.editor.string);
+		const uint32_t sz= nk_str_len_char(&param->val.editor.string) + 1;
+
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sz, handle->forge.String, str);
+	}
+	else if(param->range == handle->forge.Chunk)
+	{
+		chunk_t *chunk = &param->val.chunk;
+
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			chunk->size, handle->forge.Chunk, chunk->body);
+	}
+	//FIXME handle remaining types
+}
+
+static void
 _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t *param, float DY, float dy)
 {
 	const char *name_str = param->label ? param->label : "Unknown";
@@ -5126,55 +5180,7 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 
 		if(_expose_param_inner(ctx, param, handle, DY, dy, name_str))
 		{
-			//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
-			if(param->range == handle->forge.Int)
-			{
-				_patch_notification_add_patch_set(handle, mod,
-					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					sizeof(int32_t), handle->forge.Int, &param->val.i);
-			}
-			else if(param->range == handle->forge.Bool)
-			{
-				_patch_notification_add_patch_set(handle, mod,
-					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					sizeof(int32_t), handle->forge.Bool, &param->val.i);
-			}
-			else if(param->range == handle->forge.Long)
-			{
-				_patch_notification_add_patch_set(handle, mod,
-					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					sizeof(int64_t), handle->forge.Long, &param->val.h);
-			}
-			else if(param->range == handle->forge.Float)
-			{
-				_patch_notification_add_patch_set(handle, mod,
-					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					sizeof(float), handle->forge.Float, &param->val.f);
-			}
-			else if(param->range == handle->forge.Double)
-			{
-				_patch_notification_add_patch_set(handle, mod,
-					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					sizeof(double), handle->forge.Double, &param->val.d);
-			}
-			else if(param->range == handle->forge.String)
-			{
-				const char *str = nk_str_get_const(&param->val.editor.string);
-				const uint32_t sz= nk_str_len_char(&param->val.editor.string) + 1;
-
-				_patch_notification_add_patch_set(handle, mod,
-					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					sz, handle->forge.String, str);
-			}
-			else if(param->range == handle->forge.Chunk)
-			{
-				chunk_t *chunk = &param->val.chunk;
-
-				_patch_notification_add_patch_set(handle, mod,
-					handle->regs.port.event_transfer.urid, 0, 0, param->property,
-					chunk->size, handle->forge.Chunk, chunk->body);
-			}
-			//FIXME handle remaining types
+			_param_notification_add(handle, mod, param);
 		}
 
 		nk_group_end(ctx);
@@ -6274,6 +6280,73 @@ _osc_path_filter(const struct nk_text_edit *box, nk_rune unicode)
 	return nk_true;
 }
 
+static inline void
+_control_randomize(plughandle_t *handle, mod_t *mod, control_port_t *control)
+{
+	const float rnd = (float)rand() / RAND_MAX;
+
+	if(control->is_bool)
+		control->val.i = rnd > 0.5f ? 1 : 0;
+	else if(control->is_int)
+		control->val.i = control->min.i + control->span.i*rnd;
+	else
+		control->val.f = control->min.f + control->span.f*rnd;
+}
+
+static inline void
+_param_randomize(plughandle_t *handle, mod_t *mod, param_t *param)
+{
+	const float rnd = (float)rand() / RAND_MAX;
+
+	if(param->range == handle->forge.Bool)
+		param->val.i = rnd > 0.5f ? 1 : 0;
+	else if(param->range == handle->forge.Int)
+		param->val.i = param->min.i + param->span.i*rnd;
+	else if(param->range == handle->forge.Long)
+		param->val.h = param->min.h + param->span.h*rnd;
+	else if(param->range == handle->forge.Float)
+		param->val.f = param->min.f + param->span.f*rnd;
+	else if(param->range == handle->forge.Double)
+		param->val.d = param->min.d + param->span.d*rnd;
+	//FIXME handle other types
+}
+
+static inline void
+_mod_randomize(plughandle_t *handle, mod_t *mod)
+{
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		if(port->type == PORT_TYPE_CONTROL)
+		{
+			_control_randomize(handle, mod, &port->control);
+
+			const float val = port->control.is_bool || port->control.is_int
+				? port->control.val.i
+				: port->control.val.f;
+			_patch_notification_add(handle, port, handle->regs.port.float_protocol.urid,
+				sizeof(float), handle->forge.Float, &val);
+		}
+	}
+
+	HASH_FOREACH(&mod->params, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		_param_randomize(handle, mod, param);
+		_param_notification_add(handle, mod, param);
+	}
+
+	HASH_FOREACH(&mod->dynams, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		_param_randomize(handle, mod, param);
+		_param_notification_add(handle, mod, param);
+	}
+}
+
 static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
@@ -6862,6 +6935,14 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						}
 					}
 
+					{
+						nk_layout_row_dynamic(ctx, dy, 1);
+						if(nk_button_label(ctx, "Randomize"))
+						{
+							_mod_randomize(handle, mod);
+						}
+					}
+
 					if(!_image_empty(&mod->idisp.img))
 					{
 						const float w = nk_widget_width(ctx);
@@ -7305,6 +7386,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->show_bottombar = 1;
 
 	time(&handle->t0);
+	srand(time(NULL));
 
 	return handle;
 }
