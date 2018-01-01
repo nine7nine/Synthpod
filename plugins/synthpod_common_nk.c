@@ -6441,6 +6441,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					{
 						const bool has_selected_nodes = _has_selected_nodes(handle);
 						_set_selected_nodes(handle, !has_selected_nodes);
+						if(has_selected_nodes)
+							_set_module_selector(handle, NULL);
 					}	break;
 					case 'b':
 					{
