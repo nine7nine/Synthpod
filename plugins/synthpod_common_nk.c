@@ -6432,37 +6432,46 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				}
 			}
 
-			if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
-				&& (in->keyboard.text_len == 1) )
+			if(nk_input_is_mouse_hovering_rect(in, space_bounds))
 			{
-				switch(in->keyboard.text[0])
+				if(in->keyboard.text_len == 1)
 				{
-					case 'a':
+					switch(in->keyboard.text[0])
 					{
-						const bool has_selected_nodes = _has_selected_nodes(handle);
-						_set_selected_nodes(handle, !has_selected_nodes);
-						if(has_selected_nodes)
-							_set_module_selector(handle, NULL);
-					}	break;
-					case 'b':
-					{
-						handle->box.flag = true;
-					}	break;
-					case 'g':
-					{
-						_set_moving_nodes(handle, true);
-					} break;
-					case 'v':
-					{
-						_show_selected_nodes(handle);
-					} break;
-					case 'x':
-					{
-						_remove_selected_nodes(handle);
-					} break;
+						case 'a':
+						{
+							const bool has_selected_nodes = _has_selected_nodes(handle);
+							_set_selected_nodes(handle, !has_selected_nodes);
+							if(has_selected_nodes)
+								_set_module_selector(handle, NULL);
+						}	break;
+						case 'b':
+						{
+							handle->box.flag = true;
+						}	break;
+						case 'g':
+						{
+							_set_moving_nodes(handle, true);
+						} break;
+						case 'v':
+						{
+							_show_selected_nodes(handle);
+						} break;
+						case 'x':
+						{
+							_remove_selected_nodes(handle);
+						} break;
+					}
+
+					in->keyboard.text_len = 0; // consume character if mouse over canvas
 				}
 
-				in->keyboard.text_len = 0; // consume character if mouse over canvas
+				if(nk_input_is_key_pressed(in, NK_KEY_TEXT_RESET_MODE)) // Esape
+				{
+					handle->box.flag = false; // exit box drawing mode
+
+					_set_moving_nodes(handle, false); // exit node moving mode
+				}
 			}
 
 			if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
