@@ -46,8 +46,6 @@
 
 #define SEQ_SIZE 0x2000
 #define JAN_1970 (uint64_t)0x83aa7e80
-#define URI_POOL_SIZE 0x100000
-#define URI_POOL_MAX 32
 
 typedef enum _save_state_t save_state_t;
 typedef struct _bin_t bin_t;
