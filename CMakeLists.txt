@@ -31,6 +31,7 @@ include_directories(${PROJECT_SOURCE_DIR}/sandbox_ui.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/ui)
 include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/lfrtm)
 
 set(SYNTHPOD_BIN_DIR "bin")
 add_definitions("-DSYNTHPOD_BIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BIN_DIR}/\"")

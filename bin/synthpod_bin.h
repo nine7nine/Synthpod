@@ -24,6 +24,9 @@
 
 #include <stdatomic.h>
 
+#define LFRTM_IMPLEMENTATION
+#include <lfrtm/lfrtm.h>
+
 #define MAPPER_IMPLEMENTATION
 #include <mapper.lv2/mapper.h>
 
@@ -47,7 +50,6 @@
 #define URI_POOL_MAX 32
 
 typedef enum _save_state_t save_state_t;
-typedef struct _uri_mem_t uri_mem_t;
 typedef struct _bin_t bin_t;
 
 enum _save_state_t {
@@ -56,20 +58,14 @@ enum _save_state_t {
 	SAVE_STATE_JACK
 };
 
-struct _uri_mem_t {
-	atomic_size_t offset;
-	atomic_size_t npools;
-	atomic_uintptr_t pools [URI_POOL_MAX];
-};
-
 struct _bin_t {
+	atomic_bool inject;
+	lfrtm_t *lfrtm;
 	mapper_t *mapper;	
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
 	xpress_map_t xmap;
 
-	uri_mem_t uri_mem;
-	
 	sp_app_t *app;
 	sp_app_driver_t app_driver;
 

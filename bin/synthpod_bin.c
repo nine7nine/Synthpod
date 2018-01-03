@@ -175,13 +175,20 @@ _atomic_unlock(atomic_flag *flag)
 	atomic_flag_clear_explicit(flag, memory_order_release);
 }
 
+static inline bool
+_is_worker_thread(bin_t *bin)
+{
+	const uv_thread_t this = uv_thread_self();
+
+	return uv_thread_equal(&this, &bin->self);
+}
+
 __non_realtime static int
 _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
 	bin_t *bin = data;
 
-	const uv_thread_t this = uv_thread_self();
-	const bool is_worker_thread = uv_thread_equal(&this, &bin->self);
+	const bool is_worker_thread = _is_worker_thread(bin);
 
 	// check for trace mode AND DSP thread ID
 	if( (type == bin->log_trace)
@@ -286,45 +293,39 @@ __realtime static char *
 _mapper_alloc_rt(void *data, size_t size)
 {
 	bin_t *bin = data;
+	const bool is_worker_thread = _is_worker_thread(bin);
 
-	while(true)
+	bool more;
+	char *pool = lfrtm_alloc(bin->lfrtm, size, &more);
+
+	if(!pool)
 	{
-		size_t offset = atomic_fetch_add_explicit(&bin->uri_mem.offset, size, memory_order_relaxed);
-
-		const size_t idx = offset / URI_POOL_SIZE; // integer division
-		offset %= URI_POOL_SIZE; // remainder
-
-		if(offset + size > URI_POOL_SIZE) // string does not fit in pool
-			continue;
-
-		if(idx >= URI_POOL_MAX) // pool overflow
+		if(is_worker_thread)
 		{
-			bin_log_trace(bin, "%s: pool overflow\n", __func__);
-			return NULL;
+			bin_log_error(bin, "%s: allocation failed\n", __func__);
 		}
-
-		while(idx == atomic_load_explicit(&bin->uri_mem.npools, memory_order_acquire))
+		else
 		{
-			char *pool = malloc(URI_POOL_SIZE); //FIXME do this in worker thread only
-			if(!pool) // out-of-memory
-			{
-				bin_log_trace(bin, "%s: out-of-memory\n", __func__);
-				return NULL;
-			}
-
-			const uintptr_t desired = (const uintptr_t)pool;
-			uintptr_t expected = 0;
-			const bool match = atomic_compare_exchange_strong_explicit(&bin->uri_mem.pools[idx],
-				&expected, desired, memory_order_release, memory_order_relaxed);
-
-			if(match) // we have successfully taken this slot first
-				atomic_store_explicit(&bin->uri_mem.npools, idx + 1, memory_order_release);
-			else // slot was stolen by an other thread already
-				free(pool); // free superfluous chunk
+			bin_log_trace(bin, "%s: allocation failed\n", __func__);
 		}
-
-		return (char *)atomic_load_explicit(&bin->uri_mem.pools[idx], memory_order_acquire) + offset;
 	}
+	else if(more)
+	{
+		if(is_worker_thread)
+		{
+			if(lfrtm_inject(bin->lfrtm))
+			{
+				bin_log_error(bin, "%s: injection failed\n", __func__);
+			}
+		}
+		else
+		{
+			atomic_store(&bin->inject, true);
+			sem_post(&bin->sem);
+		}
+	}
+
+	return pool;
 }
 
 __realtime static void
@@ -349,11 +350,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->app_from_com = varchunk_new(CHUNK_SIZE, false);
 	bin->app_from_app = varchunk_new(CHUNK_SIZE, false);
 
-	atomic_init(&bin->uri_mem.offset, 0);
-	atomic_init(&bin->uri_mem.npools, 0);
-	for(size_t idx = 0; idx < URI_POOL_MAX; idx++)
-		atomic_init(&bin->uri_mem.pools[idx], 0);
-
+	bin->lfrtm = lfrtm_new(512, 0x100000); // 1M
 	bin->mapper = mapper_new(0x20000, _mapper_alloc_rt, _mapper_free_rt, bin); // 128K
 
 	bin->map = mapper_get_map(bin->mapper);
@@ -471,7 +468,9 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 		bool timedout = false;
 
 		if(sem_timedwait(&bin->sem, &to) == -1)
+		{
 			timedout = (errno == ETIMEDOUT);
+		}
 
 		if(timedout)
 		{
@@ -510,6 +509,15 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				to.tv_sec += 1;
 			}
 			to.tv_nsec = nanos;
+		}
+
+		// handle lfrtm memory injection
+		if(atomic_exchange(&bin->inject, false))
+		{
+			if(lfrtm_inject(bin->lfrtm))
+			{
+				bin_log_error(bin, "%s: injection failed\n", __func__);
+			}
 		}
 
 		// read events from worker
@@ -568,13 +576,8 @@ bin_deinit(bin_t *bin)
 	// mapper deinit
 	mapper_free(bin->mapper);
 
-	// mapper mem free
-	for(size_t idx = 0; idx < URI_POOL_MAX; idx++)
-	{
-		char *trash = (char *)atomic_load_explicit(&bin->uri_mem.pools[idx], memory_order_acquire);
-		if(trash)
-			free(trash);
-	}
+	// lfrtm deinit
+	lfrtm_free(bin->lfrtm);
 
 	// varchunk deinit
 	sem_destroy(&bin->sem);
