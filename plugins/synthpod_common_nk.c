@@ -457,7 +457,6 @@ struct _plughandle_t {
 	bool has_control_a;
 
 	struct nk_vec2 scrolling;
-	struct nk_vec2 nxt;
 	float scale;
 
 	bool bundle_find_matches;
@@ -510,6 +509,7 @@ struct _plughandle_t {
 	bool show_bottombar;
 
 	time_t t0;
+	struct nk_rect space_bounds;
 };
 
 static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
@@ -2919,39 +2919,49 @@ _mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
 	return NULL;
 }
 
-#define nxt_x0 115.f
-#define nxt_y0  50.f
-#define nxt_xm (nxt_x0 + 640.f)
-#define nxt_ym (nxt_y0 + 360.f)
-#define nxt_xd 50.f
-#define nxt_yd 50.f
-
 static void
 _mod_add(plughandle_t *handle, LV2_URID urn)
 {
+	const struct nk_vec2 scrolling = handle->scrolling;
+	const float dx = 200.f; //FIXME
+	const float dy = 50.f; //FIXME
+
+	float cx = handle->space_bounds.x + dx + scrolling.x;
+	float cy = handle->space_bounds.y + dy + scrolling.y;
+
+loop:
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		while(true)
+		{
+			if(  (cy > mod->pos.y - dy) && (cy < mod->pos.y + dy)
+				&& (cx > mod->pos.x - dx) && (cx < mod->pos.x + dx) )
+			{
+				cy += dy;
+				goto loop;
+			}
+
+			if(cy > handle->space_bounds.y + handle->space_bounds.h + scrolling.y)
+			{
+				cy = handle->space_bounds.y + dy + scrolling.y;
+				cx += dx;
+				goto loop;
+			}
+
+			break;
+		}
+	}
+
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 		return;
 
 	mod->handle = handle;
 	mod->urn = urn;
-	mod->pos = nk_vec2(handle->nxt.x, handle->nxt.y);
+	mod->pos = nk_vec2(cx, cy);
 	_hash_add(&handle->mods, mod);
-
-	// derive initial position
-	const float xmax = nxt_xm * handle->scale;
-	const float ymax = nxt_ym * handle->scale;
-	const float xd = nxt_xd * handle->scale;
-	const float yd = nxt_yd * handle->scale;
-
-	handle->nxt.y += yd;
-	handle->nxt.x += xd;
-
-	if(handle->nxt.y > ymax)
-		handle->nxt.y = nxt_y0 * handle->scale;
-
-	if(handle->nxt.x > xmax)
-		handle->nxt.x = nxt_x0 * handle->scale;
 }
 
 static void
@@ -6395,11 +6405,11 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			_hash_size(&handle->mods) + _hash_size(&handle->conns));
 		{
 			const struct nk_rect old_clip = canvas->clip;
-			const struct nk_rect space_bounds= nk_layout_space_bounds(ctx);
-			nk_push_scissor(canvas, space_bounds);
+			handle->space_bounds= nk_layout_space_bounds(ctx);
+			nk_push_scissor(canvas, handle->space_bounds);
 
 			// graph content scrolling
-			if(nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_MIDDLE, space_bounds, nk_true))
+			if(nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_MIDDLE, handle->space_bounds, nk_true))
 			{
 				handle->scrolling.x -= in->mouse.delta.x;
 				handle->scrolling.y -= in->mouse.delta.y;
@@ -6432,7 +6442,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				}
 			}
 
-			if(nk_input_is_mouse_hovering_rect(in, space_bounds))
+			if(nk_input_is_mouse_hovering_rect(in, handle->space_bounds))
 			{
 				if(in->keyboard.text_len == 1)
 				{
@@ -6474,7 +6484,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				}
 			}
 
-			if(  nk_input_is_mouse_hovering_rect(in, space_bounds)
+			if(  nk_input_is_mouse_hovering_rect(in, handle->space_bounds)
 				&& handle->box.flag)
 			{
 				if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
@@ -6511,12 +6521,12 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 				}
 				else
 				{
-					const float x0 = space_bounds.x;
+					const float x0 = handle->space_bounds.x;
 					const float x1 = in->mouse.pos.x;
-					const float x2 = space_bounds.x + space_bounds.w;
-					const float y0 = space_bounds.y;
+					const float x2 = handle->space_bounds.x + handle->space_bounds.w;
+					const float y0 = handle->space_bounds.y;
 					const float y1 = in->mouse.pos.y;
-					const float y2 = space_bounds.y + space_bounds.h;
+					const float y2 = handle->space_bounds.y + handle->space_bounds.h;
 
 					nk_stroke_line(canvas, x1, y0, x1, y2, ctx->style.property.border, hilight_color);
 					nk_stroke_line(canvas, x0, y1, x2, y1, ctx->style.property.border, hilight_color);
@@ -6527,7 +6537,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			{
 				mod_t *mod = *mod_itr;
 
-				_expose_mod(handle, ctx, space_bounds, mod, dy);
+				_expose_mod(handle, ctx, handle->space_bounds, mod, dy);
 
 				mod->hilighted = false;
 			}
@@ -6536,7 +6546,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			{
 				mod_conn_t *mod_conn = *mod_conn_itr;
 
-				_expose_mod_conn(handle, ctx, space_bounds, mod_conn, dy);
+				_expose_mod_conn(handle, ctx, handle->space_bounds, mod_conn, dy);
 			}
 
 			// reset linking connection
@@ -7832,8 +7842,6 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							&& (value->type == handle->forge.Tuple) )
 						{
 							const LV2_Atom_Tuple *tup = (const LV2_Atom_Tuple *)value;
-
-							handle->nxt = nk_vec2(nxt_x0 * handle->scale, nxt_y0 * handle->scale);
 
 							_set_module_selector(handle, NULL);
 							HASH_FREE(&handle->mods, ptr)
