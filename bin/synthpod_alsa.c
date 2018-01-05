@@ -104,9 +104,9 @@ struct _prog_t {
 };
 
 static inline void
-_ntp_now(struct timespec *ntp)
+_ntp_now(cross_clock_t *clk, struct timespec *ntp)
 {
-	clock_gettime(CLOCK_REALTIME, ntp);
+	cross_clock_gettime(clk, ntp);
 	ntp->tv_sec += JAN_1970; // convert NTP to OSC time
 }
 
@@ -154,7 +154,7 @@ _process(prog_t *handle)
 
 	const uint64_t nanos_per_period = (uint64_t)nsamples * NANO_SECONDS / handle->srate;
 	handle->cycle.cur_frames = 0; // initialize frame counter
-	_ntp_now(&handle->nxt_ntp);
+	_ntp_now(&bin->clk_real, &handle->nxt_ntp);
 
 	snd_seq_queue_status_t *stat = NULL;
 	const snd_seq_real_time_t *real_time = NULL;
@@ -171,7 +171,7 @@ _process(prog_t *handle)
 
 		// extrapolate new nxt_ntp
 		struct timespec nxt_ntp;
-		_ntp_now(&nxt_ntp);
+		_ntp_now(&bin->clk_real, &nxt_ntp);
 		_ntp_clone(&handle->nxt_ntp, &nxt_ntp);
 
 		// reset ref_frames

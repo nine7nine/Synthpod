@@ -30,6 +30,9 @@
 #define MAPPER_IMPLEMENTATION
 #include <mapper.lv2/mapper.h>
 
+#define CROSS_CLOCK_IMPLEMENTATION
+#include <cross_clock/cross_clock.h>
+
 #include <varchunk.h>
 #include <sandbox_master.h>
 
@@ -108,6 +111,9 @@ struct _bin_t {
 
 	uv_loop_t loop;
 	bool first;
+
+	cross_clock_t clk_mono;
+	cross_clock_t clk_real;
 };
 
 void

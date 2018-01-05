@@ -35,6 +35,9 @@
 
 #include <lv2_extensions.h> // ardour's inline display
 
+#define CROSS_CLOCK_IMPLEMENTATION
+#include <cross_clock/cross_clock.h>
+
 #define XSD_PREFIX "http://www.w3.org/2001/XMLSchema#"
 #define RDF_PREFIX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 #define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
@@ -485,6 +488,8 @@ struct _sp_app_t {
 	dsp_master_t dsp_master;
 
 	LV2_OSC_URID osc_urid;
+
+	cross_clock_t clk_mono;
 };
 
 extern const port_driver_t control_port_driver;

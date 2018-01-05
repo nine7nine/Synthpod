@@ -414,7 +414,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 	struct timespec mod_t1;
 	struct timespec mod_t2;
-	clock_gettime(CLOCK_MONOTONIC, &mod_t1);
+	cross_clock_gettime(&app->clk_mono, &mod_t1);
 
 	// is module currently loading a preset asynchronously?
 	if(!mod->bypassed)
@@ -734,7 +734,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		}
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &mod_t2);
+	cross_clock_gettime(&app->clk_mono, &mod_t2);
 
 	// profiling
 	const unsigned run_time = (mod_t2.tv_sec - mod_t1.tv_sec)*1000000000
@@ -865,10 +865,10 @@ _dsp_slave_fetch(dsp_master_t *dsp_master, int head)
 }
 
 __realtime static bool
-_dsp_slave_has_work_to_do(dsp_master_t *dsp_master)
+_dsp_slave_has_work_to_do(sp_app_t *app, dsp_master_t *dsp_master)
 {
 	struct timespec t2;
-	clock_gettime(CLOCK_MONOTONIC, &t2);
+	cross_clock_gettime(&app->clk_mono, &t2);
 
 	double diff = t2.tv_sec - dsp_master->t1.tv_sec;
 	diff += (t2.tv_nsec - dsp_master->t1.tv_nsec)*1e-9;
@@ -882,11 +882,11 @@ _dsp_slave_has_work_to_do(dsp_master_t *dsp_master)
 }
 
 __realtime static inline void
-_dsp_slave_spin(dsp_master_t *dsp_master)
+_dsp_slave_spin(sp_app_t *app, dsp_master_t *dsp_master)
 {
 	int head = 0;
 
-	while(_dsp_slave_has_work_to_do(dsp_master))
+	while(_dsp_slave_has_work_to_do(app, dsp_master))
 	{
 		head = _dsp_slave_fetch(dsp_master, head);
 		if(head == -1) // no more work left
@@ -931,7 +931,7 @@ _dsp_slave_thread(void *data)
 		if(atomic_load(&dsp_master->kill))
 			break;
 
-		_dsp_slave_spin(dsp_master);
+		_dsp_slave_spin(app, dsp_master);
 		//sched_yield();
 	}
 
@@ -967,9 +967,9 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 	const unsigned ref_count = num_slaves + 1; // plus master
 	atomic_store(&dsp_master->ref_count, ref_count);
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
-	_dsp_slave_spin(dsp_master); // runs jobs itself 
+	_dsp_slave_spin(app, dsp_master); // runs jobs itself 
 
-	while(_dsp_slave_has_work_to_do(dsp_master))
+	while(_dsp_slave_has_work_to_do(app, dsp_master))
 	{
 		// spin
 	}
@@ -1089,7 +1089,8 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		sratom_set_pretty_numbers(app->sratom, false);
 
 	// initialize DSP load profiler
-	clock_gettime(CLOCK_MONOTONIC, &app->prof.t0);
+	cross_clock_init(&app->clk_mono, CROSS_CLOCK_MONOTONIC);
+	cross_clock_gettime(&app->clk_mono, &app->prof.t0);
 	app->prof.min = UINT_MAX;
 	app->prof.max = 0;
 	app->prof.sum = 0;
@@ -1127,7 +1128,7 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 {
 	mod_t *del_me = NULL;
 
-	clock_gettime(CLOCK_MONOTONIC, &app->prof.t1);
+	cross_clock_gettime(&app->clk_mono, &app->prof.t1);
 	app->dsp_master.t1 = app->prof.t1;
 
 	// iterate over all modules
@@ -1220,7 +1221,7 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 	// profiling
 	struct timespec app_t2;
-	clock_gettime(CLOCK_MONOTONIC, &app_t2);
+	cross_clock_gettime(&app->clk_mono, &app_t2);
 
 	const unsigned run_time = (app_t2.tv_sec - app->prof.t1.tv_sec)*1000000000
 		+ app_t2.tv_nsec - app->prof.t1.tv_nsec;
@@ -1459,6 +1460,8 @@ sp_app_free(sp_app_t *app)
 
 	if(app->sratom)
 		sratom_free(app->sratom);
+
+	cross_clock_deinit(&app->clk_mono);
 
 	free(app);
 }

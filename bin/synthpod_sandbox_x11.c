@@ -22,6 +22,9 @@
 #include <unistd.h>
 #include <string.h>
 
+#define CROSS_CLOCK_IMPLEMENTATION
+#include <cross_clock/cross_clock.h>
+
 #include <sandbox_slave.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
@@ -47,6 +50,7 @@ struct _app_t {
  	xcb_intern_atom_reply_t* reply2;
 	int w;
 	int h;
+	cross_clock_t clk_real;
 };
 
 static atomic_bool done = ATOMIC_VAR_INIT(false);
@@ -134,6 +138,8 @@ _init(sandbox_slave_t *sb, void *data)
 	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
 	app->resize_iface = sandbox_slave_extension_data(sb, LV2_UI__resize);
 
+	cross_clock_init(&app->clk_real, CROSS_CLOCK_REALTIME);
+
 	return 0;
 }
 
@@ -143,7 +149,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 	app_t *app = data;
 	const unsigned ns = 1000000000 / update_rate;
 	struct timespec to;
-	clock_gettime(CLOCK_REALTIME, &to);
+	cross_clock_gettime(&app->clk_real, &to);
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
@@ -188,7 +194,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 		{
 #if 0
 			struct timespec tf;
-			clock_gettime(CLOCK_REALTIME, &tf);
+			cross_clock_gettime(&app->clk_real, &tf);
 			const double d0 = to.tv_sec + 1e-9*to.tv_nsec;
 			const double d1 = tf.tv_sec + 1e-9*tf.tv_nsec;
 			printf("%i, %lf, %f\n", getpid(), d0, d1);
@@ -220,6 +226,8 @@ _deinit(void *data)
 	xcb_destroy_subwindows(app->conn, app->win);
 	xcb_destroy_window(app->conn, app->win);
 	xcb_disconnect(app->conn);
+
+	cross_clock_deinit(&app->clk_real);
 }
 
 static const sandbox_slave_driver_t driver = {

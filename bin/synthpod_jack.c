@@ -181,7 +181,7 @@ _process(jack_nframes_t nsamples, void *data)
 	}
 
 #if defined(JACK_HAS_CYCLE_TIMES)
-	clock_gettime(CLOCK_REALTIME, &handle->cur_ntp);
+	cross_clock_gettime(&bin->clk_real, &handle->cur_ntp);
 	handle->cur_ntp.tv_sec += JAN_1970; // convert NTP to OSC time
 	//jack_nframes_t offset = jack_frames_since_cycle_start(handle->client);
 

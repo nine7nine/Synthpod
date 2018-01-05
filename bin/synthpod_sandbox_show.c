@@ -23,6 +23,9 @@
 #include <signal.h>
 #include <time.h>
 
+#define CROSS_CLOCK_IMPLEMENTATION
+#include <cross_clock/cross_clock.h>
+
 #include <sandbox_slave.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
@@ -33,6 +36,7 @@ struct _app_t {
 	LV2UI_Handle *handle;
 	const LV2UI_Idle_Interface *idle_iface;
 	const LV2UI_Show_Interface *show_iface;
+	cross_clock_t clk_mono;
 };
 
 static atomic_bool done = ATOMIC_VAR_INIT(false);
@@ -60,6 +64,8 @@ _init(sandbox_slave_t *sb, void *data)
 	if(app->show_iface)
 		app->show_iface->show(app->handle);
 
+	cross_clock_init(&app->clk_mono, CROSS_CLOCK_MONOTONIC);
+
 	return 0; //success
 }
 
@@ -69,7 +75,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 	app_t *app = data;
 	const unsigned ns = 1000000000 / update_rate;
 	struct timespec to;
-	clock_gettime(CLOCK_REALTIME, &to);
+	cross_clock_gettime(&app->clk_mono, &to);
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
@@ -80,7 +86,7 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 			to.tv_sec += 1;
 		}
 
-		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL);
+		cross_clock_nanosleep(&app->clk_mono, true, &to);
 
 		if(sandbox_slave_recv(sb))
 			atomic_store_explicit(&done, true, memory_order_relaxed);
@@ -95,10 +101,18 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 		app->show_iface->hide(app->handle);
 }
 
+static inline void
+_deinit(void *data)
+{
+	app_t *app = data;
+
+	cross_clock_deinit(&app->clk_mono);
+}
+
 static const sandbox_slave_driver_t driver = {
 	.init_cb = _init,
 	.run_cb = _run,
-	.deinit_cb = NULL,
+	.deinit_cb = _deinit,
 	.resize_cb = NULL
 };
 

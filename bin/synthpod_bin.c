@@ -431,6 +431,9 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	}
 
 	uv_loop_init(&bin->loop);
+
+	cross_clock_init(&bin->clk_mono, CROSS_CLOCK_MONOTONIC);
+	cross_clock_init(&bin->clk_real, CROSS_CLOCK_REALTIME);
 }
 
 __realtime void
@@ -461,7 +464,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	const unsigned nfreq = 120; // Hz
 	const unsigned nstep = nsecs / nfreq;
 	struct timespec to;
-	clock_gettime(CLOCK_REALTIME, &to);
+	cross_clock_gettime(&bin->clk_real, &to);
 
 	while(!atomic_load_explicit(&done, memory_order_relaxed))
 	{
@@ -590,6 +593,9 @@ bin_deinit(bin_t *bin)
 	uv_loop_close(&bin->loop);
 
 	bin_log_note(bin, "bye\n");
+
+	cross_clock_deinit(&bin->clk_mono);
+	cross_clock_deinit(&bin->clk_real);
 }
 
 __realtime void
