@@ -23,6 +23,8 @@ extern "C" {
 #endif
 
 #include <time.h>
+#include <stdbool.h>
+
 #ifdef __APPLE__
 #	include <mach/clock.h>
 #	include <mach/mach.h>
@@ -47,6 +49,10 @@ cross_clock_deinit(cross_clock_t *clock);
 
 CROSS_CLOCK_API int
 cross_clock_gettime(cross_clock_t *clock, struct timespec *ts);
+
+CROSS_CLOCK_API int
+cross_clock_nanosleep(cross_clock_t *clock, bool absolute,
+	const struct timespec *ts);
 
 #ifdef CROSS_CLOCK_IMPLEMENTATION
 
@@ -115,6 +121,30 @@ cross_clock_gettime(cross_clock_t *clock, struct timespec *ts)
 	}
 #else
 	res = clock_gettime(clock->id, ts);
+#endif
+
+	return res;
+}
+
+CROSS_CLOCK_API int
+cross_clock_nanosleep(cross_clock_t *clock, bool absolute,
+	const struct timespec *ts)
+{
+	int res;
+
+#ifdef __APPLE__
+	const mach_timespec_t mts = {
+		.tv_sec = ts->tv_sec,
+		.tv_nsec = ts->tv_nsec
+	};
+	const sleep_type_t flag = absolute ? TIME_ABSOLUTE : TIME_RELATIVE;
+	mach_timespec_t mrm;
+
+	res = clock_sleep(clock->serv, flag, mts, &mrm);
+#else
+	const int flag = absolute ? TIMER_ABSTIME : 0;
+
+	res = clock_nanosleep(clock->id, flag, ts, NULL);
 #endif
 
 	return res;

@@ -28,11 +28,12 @@ main(int argc, char **argv)
 
 	cross_clock_t clock;
 	struct timespec ts = {
-		.tv_sec = 0,
+		.tv_sec = 1,
 		.tv_nsec = 0
 	};
 
 	assert(cross_clock_init(&clock, CROSS_CLOCK_MONOTONIC) == 0);
+	assert(cross_clock_nanosleep(&clock, false, &ts) == 0);
 	assert(cross_clock_gettime(&clock, &ts) == 0);
 	assert( (ts.tv_sec != 0) || (ts.tv_nsec != 0) );
 	assert(cross_clock_deinit(&clock) == 0);
