@@ -2926,30 +2926,58 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 	const float dx = 200.f; //FIXME
 	const float dy = 50.f; //FIXME
 
-	float cx = handle->space_bounds.x + dx + scrolling.x;
-	float cy = handle->space_bounds.y + dy + scrolling.y;
+	const float x0 = handle->space_bounds.x + dx + scrolling.x;
+	const float y0 = handle->space_bounds.y + dy + scrolling.y;
+	const float y1 = handle->space_bounds.y + handle->space_bounds.h + scrolling.y;
+	float cx = x0;
+	float cy = y0;
 
-loop:
-	HASH_FOREACH(&handle->mods, mod_itr)
+	while(true)
 	{
-		mod_t *mod = *mod_itr;
+		bool stable = true;
 
-		while(true)
+		HASH_FOREACH(&handle->mods, mod_itr)
 		{
+			mod_t *mod = *mod_itr;
+
 			if(  (cy > mod->pos.y - dy) && (cy < mod->pos.y + dy)
 				&& (cx > mod->pos.x - dx) && (cx < mod->pos.x + dx) )
 			{
 				cy += dy;
-				goto loop;
+
+				if(cy > y1)
+				{
+					cy = y0;
+					cx += dx;
+				}
+
+				stable = false;
 			}
 
-			if(cy > handle->space_bounds.y + handle->space_bounds.h + scrolling.y)
+		}
+
+		HASH_FOREACH(&handle->conns, mod_conn_itr)
+		{
+			mod_conn_t *mod_conn = *mod_conn_itr;
+
+			if(  (cy > mod_conn->pos.y - dy) && (cy < mod_conn->pos.y + dy)
+				&& (cx > mod_conn->pos.x - dx) && (cx < mod_conn->pos.x + dx) )
 			{
-				cy = handle->space_bounds.y + dy + scrolling.y;
-				cx += dx;
-				goto loop;
+				cy += dy;
+
+				if(cy > y1)
+				{
+					cy = y0;
+					cx += dx;
+				}
+
+				stable = false;
 			}
 
+		}
+
+		if(stable)
+		{
 			break;
 		}
 	}
