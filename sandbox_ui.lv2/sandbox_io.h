@@ -135,12 +135,10 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 				const LV2_Atom_Int *index = NULL;
 				const LV2_Atom_Float *value = NULL;
 
-				LV2_Atom_Object_Query q [] = {
-					{io->core_index, (const LV2_Atom **)&index},
-					{io->rdf_value, (const LV2_Atom **)&value},
-					{0, NULL}
-				};
-				lv2_atom_object_query(obj, q);
+				lv2_atom_object_get(obj,
+					io->core_index, &index,
+					io->rdf_value, &value,
+					0);
 
 				if(  index && (index->atom.type == io->forge.Int)
 						&& (index->atom.size == sizeof(int32_t))
@@ -160,14 +158,12 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 				const LV2_Atom_Int *period_size = NULL;
 				const LV2_Atom_Float *peak= NULL;
 
-				LV2_Atom_Object_Query q [] = {
-					{io->core_index, (const LV2_Atom **)&index},
-					{io->ui_period_start, (const LV2_Atom **)&period_start},
-					{io->ui_period_size, (const LV2_Atom **)&period_size},
-					{io->ui_peak, (const LV2_Atom **)&peak},
-					{0, NULL}
-				};
-				lv2_atom_object_query(obj, q);
+				lv2_atom_object_get(obj,
+					io->core_index, &index,
+					io->ui_period_start, &period_start,
+					io->ui_period_size, &period_size,
+					io->ui_peak, &peak,
+					0);
 
 				if(  index && (index->atom.type == io->forge.Int)
 						&& (index->atom.size == sizeof(int32_t))
@@ -193,12 +189,10 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 				const LV2_Atom_Int *index = NULL;
 				const LV2_Atom *value = NULL;
 
-				LV2_Atom_Object_Query q [] = {
-					{io->core_index, (const LV2_Atom **)&index},
-					{io->rdf_value, (const LV2_Atom **)&value},
-					{0, NULL}
-				};
-				lv2_atom_object_query(obj, q);
+				lv2_atom_object_get(obj,
+					io->core_index, &index,
+					io->rdf_value, &value,
+					0);
 
 				if(  index && (index->atom.type == io->forge.Int)
 						&& (index->atom.size == sizeof(int32_t))
@@ -214,13 +208,11 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 				const LV2_Atom_URID *protocol = NULL;
 				const LV2_Atom_Bool *value = NULL;
 
-				LV2_Atom_Object_Query q [] = {
-					{io->core_index, (const LV2_Atom **)&index},
-					{io->ui_protocol, (const LV2_Atom **)&protocol},
-					{io->rdf_value, (const LV2_Atom **)&value},
-					{0, NULL}
-				};
-				lv2_atom_object_query(obj, q);
+				lv2_atom_object_get(obj,
+					io->core_index, &index,
+					io->ui_protocol, &protocol,
+					io->rdf_value, &value,
+					0);
 
 				if(  index && (index->atom.type == io->forge.Int)
 						&& (index->atom.size == sizeof(int32_t))

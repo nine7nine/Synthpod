@@ -174,24 +174,20 @@ run(LV2_Handle instance, uint32_t nsamples)
 							const LV2_Atom_Object *add = NULL;
 							const LV2_Atom_Object *remove = NULL;
 
-							LV2_Atom_Object_Query q[] = {
-								{ handle->urid.patch_add, (const LV2_Atom **)&add },
-								{ handle->urid.patch_remove, (const LV2_Atom **)&remove },
-								{ 0, NULL }
-							};
-							lv2_atom_object_query(obj, q);
+							lv2_atom_object_get(obj,
+								handle->urid.patch_add, &add,
+								handle->urid.patch_remove, &remove,
+								0);
 
 							if(add)
 							{
 								const LV2_Atom *writable = NULL;
 								const LV2_Atom *readable = NULL;
 
-								LV2_Atom_Object_Query q2[] = {
-									{ handle->urid.patch_writable, &writable },
-									{ handle->urid.patch_readable, &readable },
-									{ 0, NULL }
-								};
-								lv2_atom_object_query(add, q2);
+								lv2_atom_object_get(add,
+									handle->urid.patch_writable, &writable,
+									handle->urid.patch_readable, &readable,
+									0);
 
 								if(writable || readable)
 									continue; // strip object property
@@ -202,12 +198,10 @@ run(LV2_Handle instance, uint32_t nsamples)
 								const LV2_Atom *writable = NULL;
 								const LV2_Atom *readable = NULL;
 
-								LV2_Atom_Object_Query q2[] = {
-									{ handle->urid.patch_writable, &writable },
-									{ handle->urid.patch_readable, &readable },
-									{ 0, NULL }
-								};
-								lv2_atom_object_query(remove, q2);
+								lv2_atom_object_get(remove,
+									handle->urid.patch_writable, &writable,
+									handle->urid.patch_readable, &readable,
+									0);
 
 								if(writable || readable)
 									continue; // strip object property
