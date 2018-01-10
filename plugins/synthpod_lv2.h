@@ -35,7 +35,6 @@
 #define __realtime __attribute__((annotate("realtime")))
 #define __non_realtime __attribute__((annotate("non-realtime")))
 
-#define CHUNK_SIZE 0x10000
 #define SEQ_SIZE 0x2000
 #define _ATOM_ALIGNED __attribute__((aligned(8)))
 

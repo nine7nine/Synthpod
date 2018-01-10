@@ -32,11 +32,10 @@
 #include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
 
-#include <zero_worker.h>
 #include <osc.lv2/osc.h>
 #include <varchunk.h>
 
-#define CHUNK_SIZE 0x10000
+#define CHUNK_SIZE 0x100000
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
 typedef struct _plughandle_t plughandle_t;
@@ -46,7 +45,6 @@ struct _plughandle_t {
 	sp_app_driver_t driver;
 
 	LV2_Worker_Schedule *schedule;
-	Zero_Worker_Schedule *zero_sched;
 	LV2_Options_Option *opts;
 
 	bool dirty_in;
@@ -64,13 +62,17 @@ struct _plughandle_t {
 
 	struct {
 		LV2_Atom_Forge event_out;
+#if 0
 		LV2_Atom_Forge com_in;
+#endif
 		LV2_Atom_Forge notify;
 	} forge;
 
 	struct {
 		LV2_Atom_Forge_Ref event_out;
+#if 0
 		LV2_Atom_Forge_Ref com_in;
+#endif
 		LV2_Atom_Forge_Ref notify;
 	} ref;
 
@@ -92,7 +94,9 @@ struct _plughandle_t {
 		LV2_Atom_Sequence *event_in;
 		float *audio_in[2];
 		float *input[4];
+#if 0
 		LV2_Atom_Sequence *com_in;
+#endif
 	} source;
 
 	struct {
@@ -187,60 +191,18 @@ static const LV2_Worker_Interface work_iface = {
 	.end_run = _end_run
 };
 
-// non-rt
-static Zero_Worker_Status 
-_zero_work(LV2_Handle instance, Zero_Worker_Request_Function request,
-	Zero_Worker_Advance_Function advance, Zero_Worker_Handle target,
-	uint32_t _size, const void *_body)
-{
-	plughandle_t *handle = instance;
-	
-	//printf("_zero_work: %u\n", size);
-
-	size_t size;
-	const void *body;
-	while((body = varchunk_read_request(handle->app_to_worker, &size)))
-	{
-		sp_worker_from_app(handle->app, size, body);
-		varchunk_read_advance(handle->app_to_worker);
-	}
-	
-	return ZERO_WORKER_SUCCESS;
-}
-
-// rt-thread
-__realtime static Zero_Worker_Status
-_zero_response(LV2_Handle instance, uint32_t size,
-	const void* body)
-{
-	//plughandle_t *handle = instance;
-
-	return ZERO_WORKER_SUCCESS;
-}
-
-// rt-thread
-__realtime static Zero_Worker_Status
-_zero_end(LV2_Handle instance)
-{
-	//plughandle_t *handle = instance;
-
-	return ZERO_WORKER_SUCCESS;
-}
-
-static const Zero_Worker_Interface zero_iface = {
-	.work = _zero_work,
-	.response = _zero_response,
-	.end = _zero_end
-};
-
 __realtime static void *
 _to_ui_request(size_t minimum, size_t *maximum, void *data)
 {
 	plughandle_t *handle = data;
 
-	if(maximum)
+	if(minimum <= CHUNK_SIZE)
+	{
 		*maximum = CHUNK_SIZE;
-	return handle->buf;
+		return handle->buf;
+	}
+
+	return NULL;
 }
 __realtime static void
 _to_ui_advance(size_t written, void *data)
@@ -257,9 +219,7 @@ _to_ui_advance(size_t written, void *data)
 	if(*ref)
 		*ref = lv2_atom_forge_frame_time(forge, 0);
 	if(*ref)
-		*ref = lv2_atom_forge_raw(forge, handle->buf, written);
-	if(*ref)
-		lv2_atom_forge_pad(forge, written);
+		*ref = lv2_atom_forge_write(forge, handle->buf, written);
 }
 
 __realtime static void *
@@ -325,7 +285,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
-		else if(!strcmp(features[i]->URI, XPRESS_VOICE_MAP))
+		else if(!strcmp(features[i]->URI, XPRESS__voiceMap))
 			handle->driver.xmap = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->driver.log = (LV2_Log_Log *)features[i]->data;
@@ -335,8 +295,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->opts = (LV2_Options_Option *)features[i]->data;
 		else if(!strcmp(features[i]->URI, SYNTHPOD_PREFIX"world"))
 			world = (const LilvWorld *)features[i]->data;
-		else if(!strcmp(features[i]->URI, ZERO_WORKER__schedule))
-			handle->zero_sched = (Zero_Worker_Schedule *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_OSC__schedule))
 			handle->driver.osc_sched = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_BUF_SIZE__fixedBlockLength))
@@ -355,7 +313,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 	
-	if(!handle->schedule && !handle->zero_sched)
+	if(!handle->schedule)
 	{
 		fprintf(stderr,
 			"%s: Host does not support worker:schedule\n",
@@ -364,13 +322,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(handle->zero_sched)
-	{
-		fprintf(stderr,
-			"%s: Host supports zero-worker:schedule\n",
-			descriptor->URI);
-	}
-	
 	if(!handle->opts)
 	{
 		fprintf(stderr,
@@ -392,7 +343,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		SYNTHPOD_EVENT_URI);
 
 	lv2_atom_forge_init(&handle->forge.event_out, handle->driver.map);
+#if 0
 	lv2_atom_forge_init(&handle->forge.com_in, handle->driver.map);
+#endif
 	lv2_atom_forge_init(&handle->forge.notify, handle->driver.map);
 
 	for(LV2_Options_Option *opt = handle->opts;
@@ -522,7 +475,7 @@ _process_pre(plughandle_t *handle, uint32_t nsamples, bool bypassed)
 		while((body = varchunk_read_request(handle->app_from_worker, &size))
 			&& (n++ < MAX_MSGS) )
 		{
-			bool advance = sp_app_from_worker(handle->app, size, body);
+			const bool advance = sp_app_from_worker(handle->app, size, body);
 			if(!advance)
 			{
 				//fprintf(stderr, "plugin worker is blocked\n");
@@ -586,12 +539,14 @@ _process_pre(plughandle_t *handle, uint32_t nsamples, bool bypassed)
 			if(sp_app_com_event(handle->app, obj->body.otype))
 			{
 				uint32_t size = obj->atom.size + sizeof(LV2_Atom);
+#if 0
 				if(handle->ref.com_in)
 					handle->ref.com_in = lv2_atom_forge_frame_time(&handle->forge.com_in, ev->time.frames);
 				if(handle->ref.com_in)
 					handle->ref.com_in = lv2_atom_forge_raw(&handle->forge.com_in, obj, size);
 				if(handle->ref.com_in)
 					lv2_atom_forge_pad(&handle->forge.com_in, size);
+#endif
 			}
 
 			// try do process events directly
@@ -649,24 +604,8 @@ _process_post(plughandle_t *handle)
 	{
 		//fprintf(stderr, "work triggered\n");
 
-		if(handle->zero_sched)
-		{
-			int32_t *i;
-			if((i = handle->zero_sched->request(handle->zero_sched->handle, sizeof(int32_t), NULL)))
-			{
-				*i = 1;
-				handle->zero_sched->advance(handle->zero_sched->handle, sizeof(int32_t));
-			}
-			else
-			{
-				//FIXME
-			}
-		}
-		else // !handle->zero_sched
-		{
-			const int32_t i = 1;
-			handle->schedule->schedule_work(handle->schedule->handle, sizeof(int32_t), &i); //FIXME check
-		}
+		const int32_t i = 1;
+		handle->schedule->schedule_work(handle->schedule->handle, sizeof(int32_t), &i); //FIXME check
 
 		handle->trigger_worker = false;
 	}
@@ -708,7 +647,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 				handle->source.input[control_ptr++] = source->buf;
 				break;
 			case SYSTEM_PORT_COM:
+#if 0
 				handle->source.com_in = source->buf;
+#endif
 				break;
 
 			case SYSTEM_PORT_CV:
@@ -785,7 +726,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	struct {
 		LV2_Atom_Forge_Frame event_out;
+#if 0
 		LV2_Atom_Forge_Frame com_in;
+#endif
 		LV2_Atom_Forge_Frame notify;
 	} frame;
 
@@ -793,10 +736,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_set_buffer(&handle->forge.event_out,
 		(uint8_t *)handle->port.event_out, handle->port.event_out->atom.size);
 	handle->ref.event_out = lv2_atom_forge_sequence_head(&handle->forge.event_out, &frame.event_out, 0);
-	
+
+#if 0
 	lv2_atom_forge_set_buffer(&handle->forge.com_in,
 		(uint8_t *)handle->source.com_in, SEQ_SIZE);
 	handle->ref.com_in = lv2_atom_forge_sequence_head(&handle->forge.com_in, &frame.com_in, 0);
+#endif
 	
 	lv2_atom_forge_set_buffer(&handle->forge.notify,
 		(uint8_t *)handle->port.notify, handle->port.notify->atom.size);
@@ -823,10 +768,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 		else
 			lv2_atom_sequence_clear(handle->port.event_out);
 
+#if 0
 		if(handle->ref.com_in)
 			lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
 		else
 			lv2_atom_sequence_clear(handle->source.com_in);
+#endif
 
 		if(handle->ref.notify)
 			lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
@@ -845,10 +792,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 	else
 		lv2_atom_sequence_clear(handle->port.event_out);
 
+#if 0
 	if(handle->ref.com_in)
 		lv2_atom_forge_pop(&handle->forge.com_in, &frame.com_in);
 	else
 		lv2_atom_sequence_clear(handle->source.com_in);
+#endif
 
 	if(handle->ref.notify)
 		lv2_atom_forge_pop(&handle->forge.notify, &frame.notify);
@@ -929,12 +878,10 @@ extension_data(const char* uri)
 		return &work_iface;
 	else if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
-	else if(!strcmp(uri, ZERO_WORKER__interface))
-		return &zero_iface;
 	else if(!strcmp(uri, LV2_OPTIONS__interface))
 		return &opts_iface;
-	else
-		return NULL;
+
+	return NULL;
 }
 
 const LV2_Descriptor synthpod_stereo = {

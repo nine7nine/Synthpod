@@ -262,17 +262,19 @@ synthpod:stereo
 	] ;
 
 	state:state [
-		synthpod:graph [
+		synthpod:moduleList [
+		] ;
+		synthpod:connectionList [
 			a atom:Tuple ;
-			rdf:value (
-				[
-					a synthpod:source ;
-					lv2:index 1 ;
-				] [
-					a synthpod:sink ;
-					lv2:index 2 ;
-				]
-			)
+			rdf:value ()
+		] ;
+		synthpod:nodeList [
+			a atom:Tuple ;
+			rdf:value ()
+		] ;
+		synthpod:automationList [
+			a atom:Tuple ;
+			rdf:value ()
 		]
 	] .
 
@@ -281,9 +283,18 @@ synthpod:source
 	a rdfs:Class .
 synthpod:sink
 	a rdfs:Class .
-synthpod:graph
+synthpod:moduleList
 	a lv2:Parameter ;
-	rdfs:label "graph" .
+	rdfs:label "Module list" .
+synthpod:connectionList
+	a lv2:Parameter ;
+	rdfs:label "Connection List" .
+synthpod:nodeList
+	a lv2:Parameter ;
+	rdfs:label "Node List" .
+synthpod:automationList
+	a lv2:Parameter ;
+	rdfs:label "Automation List" .
 
 # Monoatom Plugin
 synthpod:monoatom
@@ -351,17 +362,19 @@ synthpod:monoatom
 	] ;
 
 	state:state [
-		synthpod:graph [
+		synthpod:moduleList [
+		] ;
+		synthpod:connectionList [
 			a atom:Tuple ;
-			rdf:value (
-				[
-					a synthpod:source ;
-					lv2:index 1 ;
-				] [
-					a synthpod:sink ;
-					lv2:index 2 ;
-				]
-			)
+			rdf:value ()
+		] ;
+		synthpod:nodeList [
+			a atom:Tuple ;
+			rdf:value ()
+		] ;
+		synthpod:automationList [
+			a atom:Tuple ;
+			rdf:value ()
 		]
 	] .
 

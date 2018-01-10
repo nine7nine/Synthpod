@@ -182,7 +182,6 @@ endif()
 set(BIN_LIBS
 	m rt pthread
 	${UV_LDFLAGS}
-	${UUID_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS}
 	${SRATOM_LDFLAGS})

@@ -17,7 +17,11 @@ add_library(synthpod.lv2 MODULE
 	synthpod_mixer.c
 	synthpod_panic.c
 	synthpod_anonymizer.c
-	synthpod_placeholder.c)
+	synthpod_placeholder.c
+	synthpod_stereo.c
+	$<TARGET_OBJECTS:synthpod.lib>)
+target_link_libraries(synthpod.lv2
+	${BIN_LIBS})
 target_link_libraries(synthpod.lv2 m)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 set_target_properties(synthpod.lv2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC

@@ -78,6 +78,8 @@ lv2_descriptor(uint32_t index)
 			return &synthpod_heavyload;
 		case 16:
 			return &synthpod_placeholder;
+		case 17:
+			return &synthpod_stereo;
 		default:
 			return NULL;
 	}
