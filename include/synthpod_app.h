@@ -122,63 +122,63 @@ struct _sp_app_driver_t {
 	sp_close_request_t close_request;
 };
 
-SYNTHPOD_SYMBOL_EXTERN sp_app_t *
+sp_app_t *
 sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data);
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_app_activate(sp_app_t *app);
 
-SYNTHPOD_SYMBOL_EXTERN const sp_app_system_source_t *
+const sp_app_system_source_t *
 sp_app_get_system_sources(sp_app_t *app);
 
-SYNTHPOD_SYMBOL_EXTERN const sp_app_system_sink_t *
+const sp_app_system_sink_t *
 sp_app_get_system_sinks(sp_app_t *app);
 
-SYNTHPOD_SYMBOL_EXTERN bool
+bool
 sp_app_from_ui(sp_app_t *app, const LV2_Atom *atom);
 
-SYNTHPOD_SYMBOL_EXTERN bool
+bool
 sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data);
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data);
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_app_run_pre(sp_app_t *app, uint32_t nsamples);
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_app_run_post(sp_app_t *app, uint32_t nsamples);
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_app_deactivate(sp_app_t *app);
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_app_free(sp_app_t *app);
 
-SYNTHPOD_SYMBOL_EXTERN LV2_State_Status
+LV2_State_Status
 sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
-SYNTHPOD_SYMBOL_EXTERN LV2_State_Status
+LV2_State_Status
 sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
-SYNTHPOD_SYMBOL_EXTERN bool
+bool
 sp_app_bypassed(sp_app_t *app);
 
-SYNTHPOD_SYMBOL_EXTERN uint32_t
+uint32_t
 sp_app_options_set(sp_app_t *app, const LV2_Options_Option *options);
 
-SYNTHPOD_SYMBOL_EXTERN int
+int
 sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples);
 
-SYNTHPOD_SYMBOL_EXTERN int
+int
 sp_app_com_event(sp_app_t *app, LV2_URID otype); 
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_app_bundle_load(sp_app_t *app, LV2_URID urn, bool via_app);
 
-SYNTHPOD_SYMBOL_EXTERN void
+void
 sp_app_bundle_save(sp_app_t *app, LV2_URID urn, bool via_app);
 
 #endif // _SYNTHPOD_APP_H
