@@ -125,7 +125,11 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
 
+#if 0
 	return sp_app_save(app, store, state, flags, features);
+#else
+	return LV2_STATE_SUCCESS;
+#endif
 }
 
 static LV2_State_Status
@@ -138,7 +142,11 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 
 	handle->dirty_in = true;
 
+#if 0
 	return sp_app_restore(app, retrieve, state, flags, features);
+#else
+	return LV2_STATE_SUCCESS;
+#endif
 }
 	
 static const LV2_State_Interface state_iface = {
