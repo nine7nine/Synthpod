@@ -43,6 +43,22 @@ urn_uuid_unparse_random(urn_uuid_t urn_uuid)
 		bytes[0xa], bytes[0xb], bytes[0xc], bytes[0xd], bytes[0xe], bytes[0xf]);
 }
 
+#if defined(_WIN32)
+static inline char *
+strsep(char **sp, char *sep)
+{
+	char *p, *s;
+	if(sp == NULL || *sp == NULL || **sp == '\0')
+		return(NULL);
+	s = *sp;
+	p = s + strcspn(s, sep);
+	if(*p != '\0')
+		*p++ = '\0';
+	*sp = p;
+	return(s);
+}
+#endif
+
 //FIXME is actually __realtime
 __non_realtime static int
 _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args)
@@ -59,12 +75,13 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 		snprintf(prefix, sizeof(prefix), "{%s} ", mod->urn_uri);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 
-	char *pch = strtok(buf, "\n");
-	while(pch)
+	const char *sep = "\n";
+	for(char *bufp = buf, *pch = strsep(&bufp, sep);
+		pch;
+		pch = strsep(&bufp, sep) )
 	{
-		if(app->driver->log)
+		if(strlen(pch) && app->driver->log)
 			app->driver->log->printf(app->driver->log->handle, type, "%s%s\n", prefix, pch);
-		pch = strtok(NULL, "\n");
 	}
 
 	return 0;

@@ -191,8 +191,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	const bool is_worker_thread = _is_worker_thread(bin);
 
 	// check for trace mode AND DSP thread ID
-	if( (type == bin->log_trace)
-		&& !is_worker_thread)
+	if(!is_worker_thread)
 	{
 		size_t written = -1;
 		if(_atomic_try_lock(&bin->trace_lock)) //FIXME use per-dsp-thread ringbuffer
@@ -211,7 +210,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 		_atomic_unlock(&bin->trace_lock);
 		return written;
 	}
-	else if(is_worker_thread)
+	else
 	{
 		// !log_trace OR not DSP thread ID
 		int idx = COLOR_LOG;
