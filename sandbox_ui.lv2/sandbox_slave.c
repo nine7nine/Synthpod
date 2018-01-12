@@ -145,11 +145,29 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	else if(type == sb->log_warning)
 		idx = COLOR_WARNING;
 
-	const int istty = isatty(STDERR_FILENO);
-	fprintf(stderr, "%s %s ", prefix[istty][COLOR_UI], prefix[istty][idx]);
-	if(sb->plugin_urn)
-		fprintf(stderr, "%s%s%s ", prefix[istty][COLOR_URN1], sb->plugin_urn, prefix[istty][COLOR_URN2]);
-	return vfprintf(stderr, fmt, args);
+	char *buf;
+	if(vasprintf(&buf, fmt, args) == -1)
+		buf = NULL;
+
+	if(buf)
+	{
+		const int istty = isatty(STDERR_FILENO);
+		const char *sep = "\n";
+		for(char *bufp = buf, *pch = strsep(&bufp, sep);
+			pch;
+			pch = strsep(&bufp, sep) )
+		{
+			if(strlen(pch))
+			{
+				fprintf(stderr, "%s %s ", prefix[istty][COLOR_UI], prefix[istty][idx]);
+				if(sb->plugin_urn)
+					fprintf(stderr, "%s%s%s ", prefix[istty][COLOR_URN1], sb->plugin_urn, prefix[istty][COLOR_URN2]);
+				fprintf(stderr, "%s\n", pch);
+			}
+		}
+
+		free(buf);
+	}
 
 	return 0;
 }
