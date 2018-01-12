@@ -551,16 +551,21 @@ static const char *auto_labels [] = {
 };
 
 static int
+_log_vprintf(plughandle_t *handle, LV2_URID typ, const char *fmt, va_list args)
+{
+	return handle->log
+		? lv2_log_vprintf(&handle->logger, typ, fmt, args)
+		: vfprintf(stderr, fmt, args);
+}
+
+static int
 _log_error(plughandle_t *handle, const char *fmt, ...)
 {
   va_list args;
 	int ret;
 
   va_start (args, fmt);
-	if(handle->log)
-	ret = handle->log
-		? lv2_log_error(&handle->logger, fmt, args)
-		: vfprintf(stderr, fmt, args);
+	ret = _log_vprintf(handle, handle->logger.Error, fmt, args);
   va_end(args);
 
 	return ret;
@@ -573,9 +578,7 @@ _log_note(plughandle_t *handle, const char *fmt, ...)
 	int ret;
 
   va_start (args, fmt);
-	ret = handle->log
-		? lv2_log_note(&handle->logger, fmt, args)
-		: vfprintf(stderr, fmt, args);
+	ret = _log_vprintf(handle, handle->logger.Note, fmt, args);
   va_end(args);
 
 	return ret;
@@ -588,9 +591,7 @@ _log_warning(plughandle_t *handle, const char *fmt, ...)
 	int ret;
 
   va_start (args, fmt);
-	ret = handle->log
-		? lv2_log_warning(&handle->logger, fmt, args)
-		: vfprintf(stderr, fmt, args);
+	ret = _log_vprintf(handle, handle->logger.Warning, fmt, args);
   va_end(args);
 
 	return ret;
@@ -603,9 +604,7 @@ _log_trace(plughandle_t *handle, const char *fmt, ...)
 	int ret;
 
   va_start (args, fmt);
-	ret = handle->log
-		? lv2_log_trace(&handle->logger, fmt, args)
-		: vfprintf(stderr, fmt, args);
+	ret = _log_vprintf(handle, handle->logger.Trace, fmt, args);
   va_end(args);
 
 	return ret;
