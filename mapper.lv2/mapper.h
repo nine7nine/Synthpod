@@ -174,8 +174,11 @@ static uint32_t
 _mapper_map(void *data, const char *uri)
 {
 	if(!uri) // invalid URI
+	{
 		return 0;
+	}
 
+	char *uri_clone = NULL;
 	const size_t uri_len = strlen(uri) + 1;
 	mapper_t *mapper = data;
 	const uint32_t hash = _mapper_murmur3_32(uri, uri_len - 1); // ignore zero terminator
@@ -191,38 +194,61 @@ _mapper_map(void *data, const char *uri)
 		if(val != 0) // slot is already taken
 		{
 			if(memcmp((const char *)val, uri, uri_len) == 0) // URI is already mapped, use that
+			{
+				if(uri_clone)
+				{
+					mapper->free(mapper->data, uri_clone); // free superfluous URI
+				}
+
 				return idx + 1;
+			}
 
 			// slot is already taken by another URI, try next slot
 			continue;
 		}
 
 		// clone URI for possible injection
-		char *uri_clone = mapper->alloc(mapper->data, uri_len);
-		if(!uri_clone) // allocation failed
-			return 0;
-		memcpy(uri_clone, uri, uri_len);
-		const uintptr_t desired = (uintptr_t)uri_clone;
+		if(!uri_clone)
+		{
+			uri_clone = mapper->alloc(mapper->data, uri_len);
+
+			if(!uri_clone) // out-of-memory
+			{
+				return 0;
+			}
+
+			memcpy(uri_clone, uri, uri_len);
+		}
 
 		// try to populate slot with newly mapped URI
 		uintptr_t expected = 0;
+		const uintptr_t desired = (uintptr_t)uri_clone;
 		const bool match = atomic_compare_exchange_strong_explicit(&item->val,
 			&expected, desired, memory_order_release, memory_order_relaxed);
 		if(match) // we have successfully taken this slot first
 		{
 			atomic_fetch_add_explicit(&mapper->usage, 1, memory_order_relaxed);
+
 			return idx + 1;
 		}
+		else if(memcmp((const char *)expected, uri, uri_len) == 0) // other thread stole it
+		{
+			mapper->free(mapper->data, uri_clone); // free superfluous URI
 
-		mapper->free(mapper->data, uri_clone); // free superfluous URI
-
-		if(memcmp((const char *)expected, uri, uri_len) == 0) // other thread stole it
 			return idx + 1;
+		}
 
 		// slot is already taken by another URI, try next slot
 	}
 
-	return 0; // item buffer overflow
+	// item buffer overflow
+
+	if(uri_clone)
+	{
+		mapper->free(mapper->data, uri_clone); // free superfluous URI
+	}
+
+	return 0;
 }
 
 static const char *
@@ -230,8 +256,10 @@ _mapper_unmap(void *data, uint32_t idx)
 {
 	mapper_t *mapper = data;
 
-	if( (idx == 0) || (idx > mapper->nitems)) // invalid URID
+	if( (idx == 0) || (idx > mapper->nitems) ) // invalid URID
+	{
 		return NULL;
+	}
 
 	mapper_item_t *item = &mapper->items[idx - 1];
 
@@ -244,6 +272,7 @@ static char *
 _mapper_alloc_fallback(void *data, size_t size)
 {
 	(void)data;
+
 	return malloc(size);
 }
 
@@ -251,6 +280,7 @@ static void
 _mapper_free_fallback(void *data, char *uri)
 {
 	(void)data;
+
 	free(uri);
 }
 
@@ -269,12 +299,16 @@ mapper_new(uint32_t nitems,
 	// item number needs to be a power of two
 	uint32_t power_of_two = 1;
 	while(power_of_two < nitems)
+	{
 		power_of_two <<= 1; // assure size to be a power of 2
+	}
 
 	// allocate mapper structure
 	mapper_t *mapper = calloc(1, sizeof(mapper_t) + power_of_two*sizeof(mapper_item_t));
 	if(!mapper) // allocation failed
+	{
 		return NULL;
+	}
 
 	// set mapper properties
 	mapper->nitems = power_of_two;
@@ -320,10 +354,10 @@ mapper_free(mapper_t *mapper)
 	for(uint32_t idx = 0; idx < mapper->nitems; idx++)
 	{
 		mapper_item_t *item = &mapper->items[idx];
-		const uintptr_t desired = 0;
 
 		// try to depopulate slot
 		uintptr_t expected = 0;
+		const uintptr_t desired = 0;
 		const bool match = atomic_compare_exchange_strong_explicit(&item->val,
 			&expected, desired, memory_order_release, memory_order_relaxed);
 		if(!match) // we have successfully depopulated this slot first
