@@ -41,7 +41,7 @@ struct _rtmem_slot_t {
 struct _rtmem_t {
 	atomic_uint nalloc; // counts number of allocations
 	atomic_uint nfree; // counts number of frees
-	rtmem_slot_t slots [0]; // contains slots as multiple of MAX_ITEMS
+	rtmem_slot_t slots []; // contains slots as multiple of MAX_ITEMS
 };
 
 // dummy non-rt memory structure
@@ -79,6 +79,7 @@ static char *
 _rtmem_alloc(void *data, size_t size)
 {
 	rtmem_t *rtmem = data;
+	(void)size;
 
 	// dummily just take the next slot according to allocation counter
 	const uint32_t nalloc = atomic_fetch_add_explicit(&rtmem->nalloc, 1, memory_order_relaxed);
