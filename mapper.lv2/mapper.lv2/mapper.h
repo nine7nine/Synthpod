@@ -82,7 +82,7 @@ struct _mapper_t {
 	LV2_URID_Map map;
 	LV2_URID_Unmap unmap;
 
-	mapper_item_t items [0];
+	mapper_item_t items [];
 };
 
 /*
@@ -124,7 +124,7 @@ _mapper_murmur3_32(const void *data, size_t nbytes)
 
 	const int nblocks = nbytes / 4;
 	const uint32_t *blocks = (const uint32_t *)(data);
-	const uint8_t *tail = (const uint8_t *)(data + (nblocks * 4));
+	const uint8_t *tail = (const uint8_t *)data + (nblocks * 4);
 
 	uint32_t h = 0;
 
@@ -147,8 +147,10 @@ _mapper_murmur3_32(const void *data, size_t nbytes)
 	{
 		case 3:
 			k ^= tail[2] << 16;
+			__attribute__((fallthrough));
 		case 2:
 			k ^= tail[1] << 8;
+			__attribute__((fallthrough));
 		case 1:
 			k ^= tail[0];
 			k *= c1;
