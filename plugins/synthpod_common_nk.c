@@ -2467,7 +2467,7 @@ static mod_ui_t *
 _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 {
 	const LilvNode *ui_node = lilv_ui_get_uri(ui);
-	const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
+	const LilvNode *bundle_node = lilv_ui_get_bundle_uri(ui);
 
 	//lilv_world_load_bundle(handle->world, (LilvNode *)bundle_node);
 	lilv_world_load_resource(handle->world, ui_node);
