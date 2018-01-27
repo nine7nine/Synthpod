@@ -147,10 +147,14 @@ _mapper_murmur3_32(const void *data, size_t nbytes)
 	{
 		case 3:
 			k ^= tail[2] << 16;
+#if __GNUC__ >= 7
 			__attribute__((fallthrough));
+#endif
 		case 2:
 			k ^= tail[1] << 8;
+#if __GNUC__ >= 7
 			__attribute__((fallthrough));
+#endif
 		case 1:
 			k ^= tail[0];
 			k *= c1;
