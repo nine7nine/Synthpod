@@ -2644,7 +2644,10 @@ _mod_ui_stop(mod_ui_t *mod_ui, bool sync)
 
 	if(mod_ui->pid)
 	{
+		int status;
+
 		kill(mod_ui->pid, SIGINT);
+		waitpid(mod_ui->pid, &status, WUNTRACED); // blocking waitpid
 		mod_ui->pid = 0;
 	}
 

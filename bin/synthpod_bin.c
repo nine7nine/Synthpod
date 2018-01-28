@@ -558,7 +558,10 @@ bin_stop(bin_t *bin)
 
 	if(bin->has_gui && bin->child)
 	{
+		int status;
+
 		kill(bin->child, SIGINT);
+		waitpid(bin->child, &status, WUNTRACED); // blocking waitpid
 		bin->child = 0;
 	}
 
