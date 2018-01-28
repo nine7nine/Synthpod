@@ -39,7 +39,7 @@ LFRTM_API lfrtm_t *
 lfrtm_new(unsigned num, size_t minimum);
 
 // non-rt
-LFRTM_API void
+LFRTM_API int
 lfrtm_free(lfrtm_t *lfrtm);
 
 // non-rt
@@ -102,9 +102,14 @@ lfrtm_new(unsigned num, size_t minimum)
 	return NULL;
 }
 
-LFRTM_API void
+LFRTM_API int
 lfrtm_free(lfrtm_t *lfrtm)
 {
+	if(!lfrtm)
+	{
+		return -1;
+	}
+
 	for(unsigned idx = 0; idx < lfrtm->num; idx++)
 	{
 		uintptr_t pool = atomic_exchange(&lfrtm->pools[idx], 0);
@@ -115,11 +120,17 @@ lfrtm_free(lfrtm_t *lfrtm)
 	}
 
 	free(lfrtm);
+	return 0;
 }
 
 LFRTM_API int
 lfrtm_inject(lfrtm_t *lfrtm)
 {
+	if(!lfrtm)
+	{
+		return -1;
+	}
+
 	void *pool = calloc(lfrtm->size, sizeof(uint8_t));
 	if(!pool)
 	{
@@ -150,7 +161,7 @@ lfrtm_inject(lfrtm_t *lfrtm)
 LFRTM_API void *
 lfrtm_alloc(lfrtm_t *lfrtm, size_t size, bool *more)
 {
-	if( (size > lfrtm->size) || !more)
+	if( !lfrtm || (size > lfrtm->size) || !more)
 	{
 		return NULL;
 	}

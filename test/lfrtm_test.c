@@ -16,6 +16,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -23,12 +24,15 @@
 #define LFRTM_IMPLEMENTATION
 #include <lfrtm/lfrtm.h>
 
+#define ITEM_SIZE 32
 #define NUM_POOLS 512
 #define POOL_SIZE 0x100000 // 1M
 	
 sem_t sem;
 atomic_uint done = ATOMIC_VAR_INIT(0);
 atomic_bool flag = ATOMIC_VAR_INIT(false);
+
+static const uint8_t empty [ITEM_SIZE] = { 0x0 };
 
 static void *
 _thread(void *data)
@@ -37,11 +41,14 @@ _thread(void *data)
 
 	for(unsigned i = 0; i < 0x10000; i++)
 	{
-		const size_t size = rand() % 32 + 1;
+		const size_t size = i % ITEM_SIZE + 1;
 		bool more;
+		assert(lfrtm_alloc(lfrtm, 0, NULL) == NULL);
+		assert(lfrtm_alloc(NULL, 0, &more) == NULL);
 		void *mem = lfrtm_alloc(lfrtm, size, &more);
 		assert(mem);
 
+		assert(memcmp(mem, empty, size) == 0);
 		memset(mem, 0xff, size);
 
 		if(more)
@@ -61,10 +68,17 @@ int
 main(int argc, char **argv)
 {
 	pthread_t threads [32];
-	assert(argc == 2);
+	assert(argc >= 2);
 
 	const unsigned num_threads = atoi(argv[1]);
+	const bool is_preloaded = (argc == 3) ? atoi(argv[2]) : false;
 	assert( (num_threads > 0) && (num_threads <= 32) );
+
+	if(is_preloaded)
+	{
+		// will fail on ldpreloaded calloc
+		assert(lfrtm_new(NUM_POOLS, 0) == NULL);
+	}
 
 	lfrtm_t *lfrtm = lfrtm_new(NUM_POOLS, POOL_SIZE);
 	assert(lfrtm);
@@ -86,6 +100,10 @@ main(int argc, char **argv)
 		}
 	}
 
+	// will trigger double injection
+	assert(lfrtm_inject(NULL) != 0);
+	assert(lfrtm_inject(lfrtm) != 0);
+
 	for(unsigned i = 0; i < num_threads; i++)
 	{
 		assert(pthread_join(threads[i], NULL) == 0);
@@ -93,7 +111,8 @@ main(int argc, char **argv)
 
 	assert(sem_destroy(&sem) == 0);
 
-	lfrtm_free(lfrtm);
+	assert(lfrtm_free(lfrtm) == 0);
+	assert(lfrtm_free(NULL) != 0);
 
 	return 0;
 }
