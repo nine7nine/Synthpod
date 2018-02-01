@@ -6,7 +6,6 @@ add_library(synthpod.lv2 MODULE
 	synthpod_control2cv.c
 	synthpod_midisplitter.c
 	synthpod_heavyload.c
-	synthpod_mixer.c
 	synthpod_panic.c
 	synthpod_anonymizer.c
 	synthpod_placeholder.c

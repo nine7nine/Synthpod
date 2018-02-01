@@ -51,18 +51,16 @@ lv2_descriptor(uint32_t index)
 		case 2:
 			return &synthpod_control2cv;
 		case 3:
-			return &synthpod_mixer;
-		case 4:
 			return &synthpod_anonymizer;
-		case 5:
+		case 4:
 			return &synthpod_midisplitter;
-		case 6:
+		case 5:
 			return &synthpod_panic;
-		case 7:
+		case 6:
 			return &synthpod_heavyload;
-		case 8:
+		case 7:
 			return &synthpod_placeholder;
-		case 9:
+		case 8:
 			return &synthpod_stereo;
 		default:
 			return NULL;

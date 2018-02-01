@@ -50,7 +50,6 @@ extern xpress_map_t voice_map_fallback;
 #define SYNTHPOD_MIDISPLITTER_URI			SYNTHPOD_PREFIX"midisplitter"
 #define SYNTHPOD_HEAVYLOAD_URI				SYNTHPOD_PREFIX"heavyload"
 #define SYNTHPOD_PANIC_URI						SYNTHPOD_PREFIX"panic"
-#define SYNTHPOD_MIXER_URI						SYNTHPOD_PREFIX"mixer"
 #define SYNTHPOD_ANONYMIZER_URI				SYNTHPOD_PREFIX"anonymizer"
 #define SYNTHPOD_PLACEHOLDER_URI			SYNTHPOD_PREFIX"placeholder"
 
@@ -61,7 +60,6 @@ extern const LV2_Descriptor synthpod_control2cv;
 extern const LV2_Descriptor synthpod_midisplitter;
 extern const LV2_Descriptor synthpod_heavyload;
 extern const LV2_Descriptor synthpod_panic;
-extern const LV2_Descriptor synthpod_mixer;
 extern const LV2_Descriptor synthpod_anonymizer;
 extern const LV2_Descriptor synthpod_placeholder;
 
