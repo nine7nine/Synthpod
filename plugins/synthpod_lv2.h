@@ -47,17 +47,13 @@ extern xpress_map_t voice_map_fallback;
 #define SYNTHPOD_KEYBOARD_URI					SYNTHPOD_PREFIX"keyboard"
 #define SYNTHPOD_CV2CONTROL_URI				SYNTHPOD_PREFIX"cv2control"
 #define SYNTHPOD_CONTROL2CV_URI				SYNTHPOD_PREFIX"control2cv"
-#define SYNTHPOD_CV2ATOM_URI					SYNTHPOD_PREFIX"cv2atom"
-#define SYNTHPOD_ATOM2CV_URI					SYNTHPOD_PREFIX"atom2cv"
 #define SYNTHPOD_MIDISPLITTER_URI			SYNTHPOD_PREFIX"midisplitter"
 #define SYNTHPOD_HEAVYLOAD_URI				SYNTHPOD_PREFIX"heavyload"
 #define SYNTHPOD_AUDIOXFADEMONO_URI		SYNTHPOD_PREFIX"audioxfademono"
 #define SYNTHPOD_AUDIOXFADESTEREO_URI	SYNTHPOD_PREFIX"audioxfadestereo"
-#define SYNTHPOD_ATOM2CONTROL_URI			SYNTHPOD_PREFIX"atom2control"
 #define SYNTHPOD_MIDI2CONTROL_URI			SYNTHPOD_PREFIX"midi2control"
 #define SYNTHPOD_PANIC_URI						SYNTHPOD_PREFIX"panic"
 #define SYNTHPOD_STRING2CONTROL_URI		SYNTHPOD_PREFIX"string2control"
-#define SYNTHPOD_CONTROL2ATOM_URI			SYNTHPOD_PREFIX"control2atom"
 #define SYNTHPOD_MIXER_URI						SYNTHPOD_PREFIX"mixer"
 #define SYNTHPOD_ANONYMIZER_URI				SYNTHPOD_PREFIX"anonymizer"
 #define SYNTHPOD_PLACEHOLDER_URI			SYNTHPOD_PREFIX"placeholder"
@@ -66,17 +62,13 @@ extern const LV2_Descriptor synthpod_stereo;
 extern const LV2_Descriptor synthpod_keyboard;
 extern const LV2_Descriptor synthpod_cv2control;
 extern const LV2_Descriptor synthpod_control2cv;
-extern const LV2_Descriptor synthpod_cv2atom;
-extern const LV2_Descriptor synthpod_atom2cv;
 extern const LV2_Descriptor synthpod_midisplitter;
 extern const LV2_Descriptor synthpod_heavyload;
 extern const LV2_Descriptor synthpod_audioxfademono;
 extern const LV2_Descriptor synthpod_audioxfadestereo;
-extern const LV2_Descriptor synthpod_atom2control;
 extern const LV2_Descriptor synthpod_midi2control;
 extern const LV2_Descriptor synthpod_panic;
 extern const LV2_Descriptor synthpod_string2control;
-extern const LV2_Descriptor synthpod_control2atom;
 extern const LV2_Descriptor synthpod_mixer;
 extern const LV2_Descriptor synthpod_anonymizer;
 extern const LV2_Descriptor synthpod_placeholder;

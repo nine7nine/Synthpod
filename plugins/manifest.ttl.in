@@ -78,22 +78,6 @@ synthpod:control2cv
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
-# CV2Atom
-synthpod:cv2atom
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-
-# Atom2CV
-synthpod:atom2cv
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-
 # MidiSplitter
 synthpod:midisplitter
 	a lv2:Plugin ;
@@ -126,14 +110,6 @@ synthpod:audioxfadestereo
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
-# Atom2Control
-synthpod:atom2control
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-
 # MIDI2Control
 synthpod:midi2control
 	a lv2:Plugin ;
@@ -160,14 +136,6 @@ synthpod:placeholder
 
 # String2Control
 synthpod:string2control
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-
-# Control2Atom
-synthpod:control2atom
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
