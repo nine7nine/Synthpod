@@ -8,8 +8,6 @@ add_library(synthpod.lv2 MODULE
 	synthpod_heavyload.c
 	synthpod_audioxfademono.c
 	synthpod_audioxfadestereo.c
-	synthpod_midi2control.c
-	synthpod_string2control.c
 	synthpod_mixer.c
 	synthpod_panic.c
 	synthpod_anonymizer.c

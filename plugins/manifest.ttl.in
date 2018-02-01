@@ -110,14 +110,6 @@ synthpod:audioxfadestereo
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
-# MIDI2Control
-synthpod:midi2control
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-
 # Panic 
 synthpod:panic
 	a lv2:Plugin ;
@@ -128,14 +120,6 @@ synthpod:panic
 
 # Placeholder
 synthpod:placeholder
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
-
-# String2Control
-synthpod:string2control
 	a lv2:Plugin ;
 	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;

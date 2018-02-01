@@ -51,9 +51,7 @@ extern xpress_map_t voice_map_fallback;
 #define SYNTHPOD_HEAVYLOAD_URI				SYNTHPOD_PREFIX"heavyload"
 #define SYNTHPOD_AUDIOXFADEMONO_URI		SYNTHPOD_PREFIX"audioxfademono"
 #define SYNTHPOD_AUDIOXFADESTEREO_URI	SYNTHPOD_PREFIX"audioxfadestereo"
-#define SYNTHPOD_MIDI2CONTROL_URI			SYNTHPOD_PREFIX"midi2control"
 #define SYNTHPOD_PANIC_URI						SYNTHPOD_PREFIX"panic"
-#define SYNTHPOD_STRING2CONTROL_URI		SYNTHPOD_PREFIX"string2control"
 #define SYNTHPOD_MIXER_URI						SYNTHPOD_PREFIX"mixer"
 #define SYNTHPOD_ANONYMIZER_URI				SYNTHPOD_PREFIX"anonymizer"
 #define SYNTHPOD_PLACEHOLDER_URI			SYNTHPOD_PREFIX"placeholder"
@@ -66,19 +64,15 @@ extern const LV2_Descriptor synthpod_midisplitter;
 extern const LV2_Descriptor synthpod_heavyload;
 extern const LV2_Descriptor synthpod_audioxfademono;
 extern const LV2_Descriptor synthpod_audioxfadestereo;
-extern const LV2_Descriptor synthpod_midi2control;
 extern const LV2_Descriptor synthpod_panic;
-extern const LV2_Descriptor synthpod_string2control;
 extern const LV2_Descriptor synthpod_mixer;
 extern const LV2_Descriptor synthpod_anonymizer;
 extern const LV2_Descriptor synthpod_placeholder;
 
 extern const LV2UI_Descriptor synthpod_common_1_ui;
 extern const LV2UI_Descriptor synthpod_common_2_kx;
-extern const LV2UI_Descriptor synthpod_common_3_eo;
 extern const LV2UI_Descriptor synthpod_common_4_nk;
 
-extern const LV2UI_Descriptor synthpod_root_3_eo;
 extern const LV2UI_Descriptor synthpod_root_4_nk;
 
 // keyboard UI uris
