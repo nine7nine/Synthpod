@@ -7,7 +7,6 @@ add_library(synthpod.lv2 MODULE
 	synthpod_midisplitter.c
 	synthpod_heavyload.c
 	synthpod_panic.c
-	synthpod_anonymizer.c
 	synthpod_placeholder.c
 	synthpod_stereo.c
 	$<TARGET_OBJECTS:synthpod.lib>)

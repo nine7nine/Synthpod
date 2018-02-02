@@ -109,11 +109,3 @@ synthpod:placeholder
 	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
 	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
-
-# Anonymizer
-synthpod:anonymizer
-	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
-	rdfs:seeAlso <synthpod.ttl> .
