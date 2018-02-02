@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 2.8)
 
 project(synthpod)
 
@@ -8,7 +8,6 @@ include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckSymbolExists)
 include(FindUnixCommands)
-include(CheckIPOSupported)
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
@@ -35,7 +34,12 @@ include_directories(${PROJECT_SOURCE_DIR}/xpress.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/lfrtm)
 include_directories(${PROJECT_SOURCE_DIR}/cross_clock)
 
-check_ipo_supported(RESULT IPO_SUPPORTED)
+if(${CMAKE_VERSION} VERSION_LESS "3.9.0")
+	message(NOTE "Please consider to switch to CMake 3.9.0")
+elseif()
+	include(CheckIPOSupported)
+	check_ipo_supported(RESULT IPO_SUPPORTED)
+endif()
 
 set(SYNTHPOD_BIN_DIR "bin")
 add_definitions("-DSYNTHPOD_BIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BIN_DIR}/\"")
