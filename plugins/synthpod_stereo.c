@@ -363,9 +363,12 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		if( (opt->key == handle->uri.bufsz.max_block_length)
 				&& (opt->type == handle->forge.notify.Int) )
 			handle->driver.max_block_size = *(int32_t *)opt->value;
-		else if( (opt->key == handle->uri.bufsz.sequence_size)
+		else if( (opt->key == handle->uri.bufsz.min_block_length)
 				&& (opt->type == handle->forge.notify.Int) )
 			handle->driver.min_block_size = *(int32_t *)opt->value;
+		else if( (opt->key == handle->uri.bufsz.sequence_size)
+				&& (opt->type == handle->forge.notify.Int) )
+			handle->driver.seq_size = *(int32_t *)opt->value;
 		//TODO handle more options
 	}
 

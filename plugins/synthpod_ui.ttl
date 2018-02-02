@@ -23,7 +23,6 @@
 @prefix param: <http://lv2plug.in/ns/ext/parameters#> .
 
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
-@prefix zwrite:	<http://open-music-kontrollers.ch/lv2/zero-writer#> .
 
 # Common UIs
 synthpod:common_4_nk
@@ -32,10 +31,10 @@ synthpod:common_4_nk
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
-	opts:supportedOptions param:sampleRate, ui:updateRate .
+	opts:supportedOption param:sampleRate, ui:updateRate .
 
 # Root UIs
 synthpod:root_4_nk
@@ -44,10 +43,10 @@ synthpod:root_4_nk
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature zwrite:schedule, ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
-	opts:supportedOptions param:sampleRate, ui:updateRate .
+	opts:supportedOption param:sampleRate, ui:updateRate .
 
 # Keybaord UIs
 synthpod:keyboard_4_nk
