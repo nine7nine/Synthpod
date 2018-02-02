@@ -98,11 +98,46 @@ if(USE_DYNAMIC_PARALLELIZER)
 endif()
 
 include(CMakeDependentOption)
-cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" ON "BUILD_UI" OFF)
-cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" OFF "BUILD_UI" OFF)
-cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" OFF "BUILD_UI" OFF)
-cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" OFF "BUILD_UI" OFF)
-cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" OFF "BUILD_UI" OFF)
+
+pkg_search_module(XCB OPTIONAL xcb>=1.10) # XCB
+pkg_search_module(XCB_ICCCM OPTIONAL xcb-icccm>=0.4) # XCB-ICCCM
+if(XCB_FOUND AND XCB_ICCCM_FOUND)
+	cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" ON "BUILD_UI" OFF)
+else()
+	cmake_dependent_option(BUILD_SANDBOX_X11 "Build X11 sandbox" OFF "BUILD_UI" OFF)
+endif()
+
+pkg_search_module(GTK2 OPTIONAL gtk+-2.0) # gtk+-2.0
+if(GTK2_FOUND)
+	cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" ON "BUILD_UI" OFF)
+else()
+	cmake_dependent_option(BUILD_SANDBOX_GTK2 "Build GTK-2 sandbox" OFF "BUILD_UI" OFF)
+endif()
+
+pkg_search_module(GTK3 OPTIONAL gtk+-3.0) # gtk+-3.0
+if(GTK3_FOUND)
+	cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" ON "BUILD_UI" OFF)
+else()
+	cmake_dependent_option(BUILD_SANDBOX_GTK3 "Build GTK-3 sandbox" OFF "BUILD_UI" OFF)
+endif()
+
+pkg_search_module(QT4CORE OPTIONAL QtCore) # Qt4Core
+pkg_search_module(QT4GUI OPTIONAL QtGui) # Qt4Gui
+if(QT4CORE_FOUND AND QT4GUI_FOUND)
+	cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" ON "BUILD_UI" OFF)
+else()
+	cmake_dependent_option(BUILD_SANDBOX_QT4 "Build Qt-4 sandbox" OFF "BUILD_UI" OFF)
+endif()
+
+pkg_search_module(QT5CORE OPTIONAL Qt5Core) # Qt5Core
+pkg_search_module(QT5WIDGETS OPTIONAL Qt5Widgets) # Qt5Widgets
+pkg_search_module(QT5GUI OPTIONAL Qt5Gui) # Qt5Gui
+if(QT5CORE_FOUND AND QT5WIDGETS_FOUND AND QT5GUI_FOUND)
+	cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" ON "BUILD_UI" OFF)
+else()
+	cmake_dependent_option(BUILD_SANDBOX_QT5 "Build Qt-5 sandbox" OFF "BUILD_UI" OFF)
+endif()
+
 cmake_dependent_option(BUILD_SANDBOX_SHOW "Build show-iface sandbox" ON "BUILD_UI" OFF)
 cmake_dependent_option(BUILD_SANDBOX_KX "Build external-ui sandbox" ON "BUILD_UI" OFF)
 

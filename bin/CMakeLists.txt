@@ -22,7 +22,7 @@ if(BUILD_JACK)
 	if(${JACK_HAS_METADATA_API})
 		add_definitions("-DJACK_HAS_METADATA_API")
 	endif()
-	
+
 	include(CheckLibraryExists)
 	CHECK_LIBRARY_EXISTS(jack jack_get_cycle_times "" JACK_HAS_CYCLE_TIMES)
 	if(${JACK_HAS_CYCLE_TIMES})
@@ -55,7 +55,7 @@ if(BUILD_JACK)
 	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_jack.desktop DESTINATION
 		${SYNTHPOD_DESKTOP_DIR})
 
-# man page 
+# man page
 	add_custom_command(
 		OUTPUT ${PROJECT_BINARY_DIR}/synthpod_jack.1.gz
 		COMMAND ${GZIP} ARGS
@@ -104,7 +104,7 @@ if(BUILD_ALSA)
 	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_alsa.desktop DESTINATION
 		${SYNTHPOD_DESKTOP_DIR})
 
-# man page 
+# man page
 	add_custom_command(
 		OUTPUT ${PROJECT_BINARY_DIR}/synthpod_alsa.1.gz
 		COMMAND ${GZIP} ARGS
@@ -136,7 +136,7 @@ if(BUILD_DUMMY)
 	install(FILES ${PROJECT_BINARY_DIR}/bin/synthpod_dummy.desktop DESTINATION
 		${SYNTHPOD_DESKTOP_DIR})
 
-# man page 
+# man page
 	add_custom_command(
 		OUTPUT ${PROJECT_BINARY_DIR}/synthpod_dummy.1.gz
 		COMMAND ${GZIP} ARGS
@@ -158,7 +158,7 @@ if(  BUILD_SANDBOX_X11
 	OR BUILD_SANDBOX_GTK2 OR BUILD_SANDBOX_GTK3
 	OR BUILD_SANDBOX_QT4  OR BUILD_SANDBOX_QT5
 	OR BUILD_SANDBOX_SHOW OR BUILD_SANDBOX_KX)
-# man page 
+# man page
 	add_custom_command(
 		OUTPUT ${PROJECT_BINARY_DIR}/synthpod_sandbox.1.gz
 		COMMAND ${GZIP} ARGS
@@ -171,8 +171,9 @@ if(  BUILD_SANDBOX_X11
 endif()
 
 if(BUILD_SANDBOX_X11)
-	pkg_search_module(XCB REQUIRED xcb>=1.10) # XCB
-	pkg_search_module(XCB_ICCCM REQUIRED xcb-icccm>=0.4) # XCB-ICCCM
+	if(NOT (XCB_FOUND AND XCB_ICCCM_FOUND))
+		message(FATAL_ERROR "xcb or xcb-icccm not found")
+	endif()
 
 	add_executable(synthpod.sandbox.x11
 		synthpod_sandbox_x11.c
@@ -190,7 +191,9 @@ if(BUILD_SANDBOX_X11)
 endif()
 
 if(BUILD_SANDBOX_GTK2)
-	pkg_search_module(GTK2 REQUIRED gtk+-2.0) # gtk+-2.0
+	if(NOT GTK2_FOUND)
+		message(FATAL_ERROR "gtk2 not found")
+	endif()
 
 	add_executable(synthpod.sandbox.gtk2
 		synthpod_sandbox_gtk.c
@@ -206,7 +209,9 @@ if(BUILD_SANDBOX_GTK2)
 endif()
 
 if(BUILD_SANDBOX_GTK3)
-	pkg_search_module(GTK3 REQUIRED gtk+-3.0) # gtk+-3.0
+	if(NOT GTK3_FOUND)
+		message(FATAL_ERROR "gtk3 not found")
+	endif()
 
 	add_executable(synthpod.sandbox.gtk3
 		synthpod_sandbox_gtk.c
@@ -222,8 +227,9 @@ if(BUILD_SANDBOX_GTK3)
 endif()
 
 if(BUILD_SANDBOX_QT4)
-	pkg_search_module(QT4CORE REQUIRED QtCore) # Qt4Core
-	pkg_search_module(QT4GUI REQUIRED QtGui) # Qt4Gui
+	if(NOT (QT4CORE_FOUND AND QT4GUI_FOUND))
+		message(FATAL_ERROR "qt4 not found")
+	endif()
 
 	add_executable(synthpod.sandbox.qt4
 		synthpod_sandbox_qt.cpp
@@ -243,9 +249,9 @@ if(BUILD_SANDBOX_QT4)
 endif()
 
 if(BUILD_SANDBOX_QT5)
-	pkg_search_module(QT5CORE REQUIRED Qt5Core) # Qt5Core
-	pkg_search_module(QT5WIDGETS REQUIRED Qt5Widgets) # Qt5Widgets
-	pkg_search_module(QT5GUI REQUIRED Qt5Gui) # Qt5Gui
+	if(NOT (QT5CORE_FOUND AND QT5WIDGETS_FOUND AND QT5GUI_FOUND))
+		message(FATAL_ERROR "qt5 not found")
+	endif()
 
 	add_executable(synthpod.sandbox.qt5
 		synthpod_sandbox_qt.cpp
