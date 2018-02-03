@@ -438,6 +438,9 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 __realtime void
 bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 {
+	bin->argv = argv;
+	bin->optind = optind;
+
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
@@ -545,6 +548,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				varchunk_read_advance(bin->app_to_log);
 			}
 		}
+
+		uv_run(&bin->loop, UV_RUN_NOWAIT);
 
 		//sched_yield();
 	}

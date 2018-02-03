@@ -691,12 +691,10 @@ _system_port_del(void *data, void *sys_port)
 }
 
 __non_realtime static void
-_ui_saved(void *data, int status)
+_saved(bin_t *bin, int status)
 {
-	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
-	//printf("_ui_saved: %i\n", status);
 	if(handle->save_state == SAVE_STATE_NSM)
 	{
 		synthpod_nsm_saved(bin->nsm, status);
@@ -813,6 +811,7 @@ _save(void *data)
 
 	handle->save_state = SAVE_STATE_NSM;
 	bin_bundle_save(bin, bin->path);
+	_saved(bin, 0);
 
 	return 0; // success
 }

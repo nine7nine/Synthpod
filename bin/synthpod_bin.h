@@ -114,6 +114,9 @@ struct _bin_t {
 
 	cross_clock_t clk_mono;
 	cross_clock_t clk_real;
+
+	char **argv;
+	int optind;
 };
 
 void

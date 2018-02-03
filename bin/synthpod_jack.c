@@ -156,6 +156,35 @@ _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t 
 	return ref;
 }
 
+__non_realtime static void
+_saved(bin_t *bin, int status)
+{
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+
+	if(handle->save_state == SAVE_STATE_NSM)
+	{
+		synthpod_nsm_saved(bin->nsm, status);
+	}
+	else if(handle->save_state == SAVE_STATE_JACK)
+	{
+		jack_session_event_t *ev = handle->session_event;
+		if(ev)
+		{
+			if(status != 0)
+				ev->flags |= JackSessionSaveError;
+			jack_session_reply(handle->client, ev);
+			jack_session_event_free(ev);
+		}
+		handle->session_event = NULL;
+	}
+	handle->save_state = SAVE_STATE_INTERNAL;
+
+	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
+	{
+		bin_quit(bin);
+	}
+}
+
 // rt
 __realtime static int
 _process(jack_nframes_t nsamples, void *data)
@@ -524,18 +553,52 @@ _session_async(uv_async_t* async)
 
 	jack_session_event_t *ev = handle->session_event;
 	
-	/*
-	printf("_session_async: %s %s %s\n",
-		ev->session_dir, ev->client_uuid, ev->command_line);
-	*/
+	//printf("_session_async: %s %s %s\n",
+	//	ev->session_dir, ev->client_uuid, ev->command_line);
 
-	uv_fs_t req;
-	uv_fs_realpath(&bin->loop, &req, ev->session_dir, NULL);
-	const char *realpath = req.ptr && *(char *)req.ptr
-		? req.ptr: ev->session_dir;
+	char path [PATH_MAX];
+	const char *resolvedpath = realpath(ev->session_dir, path);
+	if(!resolvedpath)
+		resolvedpath = ev->session_dir; // fall-back
 
-	asprintf(&ev->command_line, "synthpod_jack -u %s ${SESSION_DIR}",
-		ev->client_uuid);
+	// create command line
+	char *buf = NULL;
+	size_t sz = 0;
+	bool ignore = false;
+
+	for(int i=0; i<bin->optind; i++)
+	{
+		const char *arg = (i == 0)
+			? "synthpod_jack"
+			: bin->argv[i];
+
+		if(ignore)
+		{
+			ignore = false;
+			continue;
+		}
+
+		if(!strcmp(arg, "-u"))
+		{
+			ignore = true;
+			continue;
+		}
+
+		const size_t len = strlen(arg);
+		buf = realloc(buf, sz + len);
+
+		sprintf(&buf[sz], "%s ", arg);
+		sz += len + 1;
+	}
+
+	{
+		const size_t len = 32;
+		buf = realloc(buf, sz + len);
+
+		sprintf(&buf[sz], "-u %s ${SESSION_DIR}", ev->client_uuid);
+	}
+
+	ev->command_line = buf;
 
 	switch(ev->type)
 	{
@@ -544,22 +607,25 @@ _session_async(uv_async_t* async)
 			// fall-through
 		case JackSessionSave:
 			handle->save_state = SAVE_STATE_JACK;
-			bin_bundle_save(bin, realpath);
+			bin_bundle_save(bin, resolvedpath);
+			_saved(bin, 0);
 			break;
 		case JackSessionSaveTemplate:
 			handle->save_state = SAVE_STATE_JACK;
 			bin_bundle_new(bin);
-			bin_bundle_save(bin, realpath);
+			bin_bundle_save(bin, resolvedpath);
+			_saved(bin, 0);
 			break;
 	}
-
-	uv_fs_req_cleanup(&req);
 }
 
 __non_realtime static void
 _session(jack_session_event_t *ev, void *data)
 {
 	prog_t *handle = data;
+	
+	//printf("_session: %s %s %s\n",
+	//	ev->session_dir, ev->client_uuid, ev->command_line);
 
 	handle->session_event = ev;
 	uv_async_send(&handle->async);
@@ -591,37 +657,6 @@ _sample_rate(jack_nframes_t sample_rate, void *data)
 		bin_log_error(bin, "%s: synthpod does not support dynamic sample rate changes\n", __func__);
 
 	return 0;
-}
-
-__non_realtime static void
-_ui_saved(void *data, int status)
-{
-	bin_t *bin = data;
-	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
-
-	//printf("_ui_saved: %i\n", status);
-	if(handle->save_state == SAVE_STATE_NSM)
-	{
-		synthpod_nsm_saved(bin->nsm, status);
-	}
-	else if(handle->save_state == SAVE_STATE_JACK)
-	{
-		jack_session_event_t *ev = handle->session_event;
-		if(ev)
-		{
-			if(status != 0)
-				ev->flags |= JackSessionSaveError;
-			jack_session_reply(handle->client, ev);
-			jack_session_event_free(ev);
-		}
-		handle->session_event = NULL;
-	}
-	handle->save_state = SAVE_STATE_INTERNAL;
-
-	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
-	{
-		bin_quit(bin);
-	}
 }
 
 __non_realtime static void *
@@ -901,6 +936,7 @@ _save(void *data)
 
 	handle->save_state = SAVE_STATE_NSM;
 	bin_bundle_save(bin, bin->path);
+	_saved(bin, 0);
 
 	return 0; // success
 }
