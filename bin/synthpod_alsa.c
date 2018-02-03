@@ -779,6 +779,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// alsa init
 	if(_alsa_init(handle, id))
 	{
+		synthpod_nsm_opened(bin->nsm, -1);
 		return -1;
 	}
 
@@ -799,6 +800,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 		bin_log_error(bin, "%s: creation of realtime thread failed\n", __func__);
 
 	bin_bundle_load(bin, bin->path);
+	synthpod_nsm_opened(bin->nsm, 0);
 
 	return 0; // success
 }
@@ -816,11 +818,27 @@ _save(void *data)
 	return 0; // success
 }
 
+__non_realtime static int
+_show(void *data)
+{
+	bin_t *bin = data;
+
+	return bin_show(bin);
+}
+
+__non_realtime static int
+_hide(void *data)
+{
+	bin_t *bin = data;
+
+	return bin_hide(bin);
+}
+
 static const synthpod_nsm_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
-	.show = NULL,
-	.hide = NULL
+	.show = _show,
+	.hide = _hide
 };
 
 // rt

@@ -72,7 +72,7 @@ _reply(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 		lv2_osc_reader_get_string(reader, &manager);
 		lv2_osc_reader_get_string(reader, &capabilities);
 
-		//TODO, e.g. toggle SM LED
+		//TODO, e.g. toggle SM LED, check capabilities
 	}
 }
 
@@ -129,15 +129,7 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 		return;
 	}
 
-	// reply
-	LV2_OSC_Writer writer;
-	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
-	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
-
-	if(lv2_osc_writer_finalize(&writer, &nsm->written))
-		osc_stream_flush(nsm->stream);
-	else
-		fprintf(stderr, "OSC sending failed\n");
+	synthpod_nsm_shown(nsm);
 }
 
 static void
@@ -150,15 +142,7 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 		return;
 	}
 
-	// reply
-	LV2_OSC_Writer writer;
-	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
-	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
-
-	if(lv2_osc_writer_finalize(&writer, &nsm->written))
-		osc_stream_flush(nsm->stream);
-	else
-		fprintf(stderr, "OSC sending failed\n");
+	synthpod_nsm_hidden(nsm);
 }
 
 static void
@@ -185,9 +169,19 @@ _announce(synthpod_nsm_t *nsm)
 	}
 	if(has_gui)
 	{
-		lv2_osc_writer_push_item(&writer, &itm);
-		lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
-		lv2_osc_writer_pop_item(&writer, &itm);
+		// report initial gui visibility //FIXME should be saved in state somewhere
+		if(nsm->driver->show(nsm->data) == 0)
+		{
+			lv2_osc_writer_push_item(&writer, &itm);
+			lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+			lv2_osc_writer_pop_item(&writer, &itm);
+		}
+		else
+		{
+			lv2_osc_writer_push_item(&writer, &itm);
+			lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
+			lv2_osc_writer_pop_item(&writer, &itm);
+		}
 	}
 	lv2_osc_writer_pop_bundle(&writer, &bndl);
 
@@ -426,6 +420,40 @@ synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
 		ret = lv2_osc_writer_message_vararg(&writer, "/error", "sis",
 			"/nsm/client/open", 2, "opening failed");
 	}
+
+	if(lv2_osc_writer_finalize(&writer, &nsm->written))
+		osc_stream_flush(nsm->stream);
+	else
+		fprintf(stderr, "OSC sending failed\n");
+}
+
+void
+synthpod_nsm_shown(synthpod_nsm_t *nsm)
+{
+	if(!nsm)
+		return;
+
+	// reply
+	LV2_OSC_Writer writer;
+	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
+	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+
+	if(lv2_osc_writer_finalize(&writer, &nsm->written))
+		osc_stream_flush(nsm->stream);
+	else
+		fprintf(stderr, "OSC sending failed\n");
+}
+
+void
+synthpod_nsm_hidden(synthpod_nsm_t *nsm)
+{
+	if(!nsm)
+		return;
+
+	// reply
+	LV2_OSC_Writer writer;
+	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
+	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
 
 	if(lv2_osc_writer_finalize(&writer, &nsm->written))
 		osc_stream_flush(nsm->stream);

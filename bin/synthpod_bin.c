@@ -341,6 +341,8 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 {
 	bin_ptr = bin;
 
+	bin->sample_rate = sample_rate;
+
 	// varchunk init
 	sem_init(&bin->sem, 0, 0);
 	bin->app_to_worker = varchunk_new(CHUNK_SIZE, true);
@@ -403,30 +405,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 
 	if(bin->has_gui)
 	{
-		char srate [32];
-		char urate [32];
-		char wname [128];
-		snprintf(srate, sizeof(srate), "%"PRIu32, sample_rate);
-		snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
-		snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
-
-		bin->child = fork();
-		if(bin->child == 0) // child
-		{
-			char *const args [] = {
-				SYNTHPOD_BIN_DIR"synthpod_sandbox_x11",
-				"-p", SYNTHPOD_STEREO_URI,
-				"-b", SYNTHPOD_PLUGIN_DIR,
-				"-u", SYNTHPOD_ROOT_NK_URI,
-				"-s", (char *)bin->socket_path,
-				"-w", wname,
-				"-r", srate,
-				"-f", urate,
-				NULL
-			};
-
-			execvp(args[0], args);
-		}
+		bin_show(bin);
 	}
 
 	uv_loop_init(&bin->loop);
@@ -480,7 +459,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 		if(timedout)
 		{
 			// check if GUI still running
-			if(bin->has_gui && bin->child)
+			if(bin->child > 0)
 			{
 				bool rolling = true;
 
@@ -500,6 +479,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				if(!rolling)
 				{
 					bin->child = 0; // invalidate
+
+					synthpod_nsm_hidden(bin->nsm);
 
 					if(bin->kill_gui)
 						atomic_store_explicit(&done, true, memory_order_relaxed);
@@ -561,14 +542,7 @@ bin_stop(bin_t *bin)
 	// NSM deinit
 	synthpod_nsm_free(bin->nsm);
 
-	if(bin->has_gui && bin->child)
-	{
-		int status;
-
-		kill(bin->child, SIGINT);
-		waitpid(bin->child, &status, WUNTRACED); // blocking waitpid
-		bin->child = 0;
-	}
+	bin_hide(bin);
 
 	if(bin->path)
 		free(bin->path);
@@ -754,4 +728,54 @@ bin_log_trace(bin_t *bin, const char *fmt, ...)
   va_end(args);
 
 	return ret;
+}
+
+int
+bin_show(bin_t *bin)
+{
+	char srate [32];
+	char urate [32];
+	char wname [128];
+	snprintf(srate, sizeof(srate), "%"PRIu32, bin->sample_rate);
+	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
+	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
+
+	bin->child = fork();
+	if(bin->child == 0) // child
+	{
+		char *const args [] = {
+			SYNTHPOD_BIN_DIR"synthpod_sandbox_x11",
+			"-p", SYNTHPOD_STEREO_URI,
+			"-b", SYNTHPOD_PLUGIN_DIR,
+			"-u", SYNTHPOD_ROOT_NK_URI,
+			"-s", (char *)bin->socket_path,
+			"-w", wname,
+			"-r", srate,
+			"-f", urate,
+			NULL
+		};
+
+		execvp(args[0], args);
+	}
+	else if(bin->child == -1)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+bin_hide(bin_t *bin)
+{
+	if(bin->child > 0)
+	{
+		int status;
+
+		kill(bin->child, SIGINT);
+		waitpid(bin->child, &status, WUNTRACED); // blocking waitpid
+		bin->child = 0;
+	}
+
+	return 0;
 }

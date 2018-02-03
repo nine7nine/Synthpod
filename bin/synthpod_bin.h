@@ -117,6 +117,8 @@ struct _bin_t {
 
 	char **argv;
 	int optind;
+
+	uint32_t sample_rate;
 };
 
 void
@@ -160,5 +162,11 @@ bin_log_warning(bin_t *bin, const char *fmt, ...);
 
 int
 bin_log_trace(bin_t *bin, const char *fmt, ...);
+
+int
+bin_show(bin_t *bin);
+
+int
+bin_hide(bin_t *bin);
 
 #endif // _SYNTHPOD_BIN_H

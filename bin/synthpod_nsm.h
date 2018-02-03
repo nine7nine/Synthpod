@@ -44,6 +44,12 @@ void
 synthpod_nsm_opened(synthpod_nsm_t *nsm, int status);
 
 void
+synthpod_nsm_shown(synthpod_nsm_t *nsm);
+
+void
+synthpod_nsm_hidden(synthpod_nsm_t *nsm);
+
+void
 synthpod_nsm_saved(synthpod_nsm_t *nsm, int status);
 
 int
