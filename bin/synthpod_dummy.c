@@ -39,7 +39,7 @@ struct _prog_t {
 	
 	save_state_t save_state;
 	atomic_int kill;
-	uv_thread_t thread;
+	pthread_t thread;
 
 	uint32_t srate;
 	uint32_t frsize;
@@ -262,7 +262,7 @@ _process(prog_t *handle)
 	}
 }
 
-__non_realtime static void
+__non_realtime static void *
 _rt_thread(void *data)
 {
 	prog_t *handle = data;
@@ -293,6 +293,8 @@ _rt_thread(void *data)
 	}
 
 	_process(handle);
+
+	return NULL;
 }
 
 __non_realtime static void *
@@ -372,7 +374,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	// alsa activate
 	atomic_init(&handle->kill, 0);
-	if(uv_thread_create(&handle->thread, _rt_thread, handle))
+	if(pthread_create(&handle->thread, NULL, _rt_thread, handle))
 		bin_log_error(bin, "%s: creation of realtime thread failed\n", __func__);
 
 	bin_bundle_load(bin, bin->path);
@@ -620,7 +622,7 @@ main(int argc, char **argv)
 	if(handle.thread)
 	{
 		atomic_store_explicit(&handle.kill, 1, memory_order_relaxed);
-		uv_thread_join(&handle.thread);
+		pthread_join(handle.thread, NULL);
 	}
 
 	// deinit

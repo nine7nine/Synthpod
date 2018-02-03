@@ -178,9 +178,9 @@ _atomic_unlock(atomic_flag *flag)
 static inline bool
 _is_worker_thread(bin_t *bin)
 {
-	const uv_thread_t this = uv_thread_self();
+	const pthread_t this = pthread_self();
 
-	return uv_thread_equal(&this, &bin->self);
+	return pthread_equal(this, bin->self);
 }
 
 __non_realtime static int
@@ -386,7 +386,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->app_driver.cpu_affinity = bin->cpu_affinity;
 	bin->app_driver.close_request = _close_request;
 
-	bin->self = uv_thread_self(); // thread ID of UI thread
+	bin->self = pthread_self(); // thread ID of UI thread
 	bin->first = true;
 
 	bin->sb_driver.socket_path = bin->socket_path;

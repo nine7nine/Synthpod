@@ -91,7 +91,7 @@ struct _bin_t {
 
 	LV2_Log_Log log;
 
-	uv_thread_t self;
+	pthread_t self;
 	atomic_flag trace_lock;
 
 	bool has_gui;
