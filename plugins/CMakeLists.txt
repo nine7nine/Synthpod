@@ -15,7 +15,7 @@ target_link_libraries(synthpod.lv2
 target_link_libraries(synthpod.lv2 m)
 set_target_properties(synthpod.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod")
 set_target_properties(synthpod.lv2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
-set_target_properties(synthpod.lv2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION IPO_SUPPORTED) # -flto
+set_target_properties(synthpod.lv2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION ${IPO_SUPPORTED}) # -flto
 install(TARGETS synthpod.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/synthpod_ui.ttl DESTINATION ${SYNTHPOD_PLUGIN_DIR})
@@ -96,7 +96,7 @@ if(BUILD_UI)
 		rt pthread)
 	set_target_properties(synthpod_nk.lv2 PROPERTIES PREFIX "" OUTPUT_NAME "synthpod_nk")
 	set_target_properties(synthpod_nk.lv2 PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
-	set_target_properties(synthpod_nk.lv2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION IPO_SUPPORTED) # -flto
+	set_target_properties(synthpod_nk.lv2 PROPERTIES INTERPROCEDURAL_OPTIMIZATION ${IPO_SUPPORTED}) # -flto
 	install(TARGETS synthpod_nk.lv2 DESTINATION ${SYNTHPOD_PLUGIN_DIR})
 
 # font
