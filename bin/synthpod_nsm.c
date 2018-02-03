@@ -51,7 +51,7 @@ struct _synthpod_nsm_t {
 
 	uint8_t *recv;
 	uint8_t send [0x10000];
-	size_t sz;
+	size_t written;
 };
 
 static void
@@ -134,8 +134,7 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
 	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
 
-	size_t written;
-	if(lv2_osc_writer_finalize(&writer, &written))
+	if(lv2_osc_writer_finalize(&writer, &nsm->written))
 		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
@@ -156,8 +155,7 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
 	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
 
-	size_t written;
-	if(lv2_osc_writer_finalize(&writer, &written))
+	if(lv2_osc_writer_finalize(&writer, &nsm->written))
 		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
@@ -193,8 +191,7 @@ _announce(synthpod_nsm_t *nsm)
 	}
 	lv2_osc_writer_pop_bundle(&writer, &bndl);
 
-	size_t written;
-	if(lv2_osc_writer_finalize(&writer, &written))
+	if(lv2_osc_writer_finalize(&writer, &nsm->written))
 		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
@@ -283,9 +280,9 @@ _send_req(size_t *len, void *data)
 {
 	synthpod_nsm_t *nsm = data;
 
-	*len = nsm->sz;
+	*len = nsm->written;
 
-	return nsm->sz ? nsm->send : NULL;
+	return nsm->written ? nsm->send : NULL;
 }
 
 static void
@@ -293,7 +290,7 @@ _send_adv(void *data)
 {
 	synthpod_nsm_t *nsm = data;
 
-	nsm->sz = 0;
+	nsm->written = 0;
 }
 
 static void
@@ -335,13 +332,17 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 	{
 		nsm->managed = 1;
 
-		nsm->url = strdup(nsm->url);
+		nsm->url = strdup(nsm->url); //FIXME
 		if(!nsm->url)
 			return NULL;
-		
-		//printf("url: %s\n", nsm->url);
+
+		// remove trailing slash
+		if(!isdigit(nsm->url[strlen(nsm->url)-1]))
+			nsm->url[strlen(nsm->url)-1] = '\0';
 		
 		nsm->stream = osc_stream_new(nsm->loop, nsm->url, &driver, nsm);
+		if(!strncmp(nsm->url, "osc.udp", 7)) // won't get /stream/connect message
+			_announce(nsm);
 	}
 	else
 	{
@@ -426,8 +427,7 @@ synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
 			"/nsm/client/open", 2, "opening failed");
 	}
 
-	size_t written;
-	if(lv2_osc_writer_finalize(&writer, &written))
+	if(lv2_osc_writer_finalize(&writer, &nsm->written))
 		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
@@ -454,8 +454,7 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 			"/nsm/client/save", 1, "save failed");
 	}
 
-	size_t written;
-	if(lv2_osc_writer_finalize(&writer, &written))
+	if(lv2_osc_writer_finalize(&writer, &nsm->written))
 		osc_stream_flush(nsm->stream);
 	else
 		fprintf(stderr, "OSC sending failed\n");
