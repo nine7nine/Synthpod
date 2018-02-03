@@ -218,7 +218,7 @@ _process(jack_nframes_t nsamples, void *data)
 	jack_get_cycle_times(handle->client, &handle->cycle.cur_frames,
 		&handle->cycle.cur_usecs, &handle->cycle.nxt_usecs, &T);
 	(void)T;
-	
+
 	handle->cycle.ref_frames = handle->cycle.cur_frames;
 
 	// calculate apparent period
@@ -316,11 +316,14 @@ _process(jack_nframes_t nsamples, void *data)
 				if(ref && trans_changed)
 					ref = _trans_event(handle, forge, rolling, &pos);
 
-				int n = jack_midi_get_event_count(in_buf);
+				const int n = jack_midi_get_event_count(in_buf);
 				for(int i=0; i<n; i++)
 				{
 					jack_midi_event_t mev;
 					jack_midi_event_get(&mev, in_buf, i);
+
+					if( (mev.buffer[0] & 0x80) != 0x80)
+						continue; // no MIDI message
 
 					//add jack midi event to in_buf
 					if(ref)
@@ -337,15 +340,13 @@ _process(jack_nframes_t nsamples, void *data)
 							0x0
 						};
 						if(ref)
-							ref = lv2_atom_forge_raw(forge, note_off, 3);
+							ref = lv2_atom_forge_write(forge, note_off, sizeof(note_off));
 					}
 					else
 					{
 						if(ref)
-							ref = lv2_atom_forge_raw(forge, mev.buffer, mev.size);
+							ref = lv2_atom_forge_write(forge, mev.buffer, mev.size);
 					}
-					if(ref)
-						lv2_atom_forge_pad(forge, mev.size);
 				}
 				if(ref)
 					lv2_atom_forge_pop(forge, &frame);
@@ -368,11 +369,14 @@ _process(jack_nframes_t nsamples, void *data)
 				if(ref && trans_changed)
 					ref = _trans_event(handle, forge, rolling, &pos);
 
-				int n = jack_midi_get_event_count(in_buf);	
+				const int n = jack_midi_get_event_count(in_buf);
 				for(int i=0; i<n; i++)
 				{
 					jack_midi_event_t mev;
-					jack_midi_event_get(&mev, (void *)in_buf, i);
+					jack_midi_event_get(&mev, in_buf, i);
+
+					if( (mev.buffer[0] != '/') && (mev.buffer[0] != '#') )
+						continue; // no OSC message
 
 					if(ref)
 						ref = lv2_atom_forge_frame_time(forge, mev.time);
@@ -404,9 +408,7 @@ _process(jack_nframes_t nsamples, void *data)
 					if(ref)
 						ref = lv2_atom_forge_frame_time(forge, 0);
 					if(ref)
-						ref = lv2_atom_forge_raw(forge, obj, size);
-					if(ref)
-						lv2_atom_forge_pad(forge, size);
+						ref = lv2_atom_forge_write(forge, obj, size);
 
 					varchunk_read_advance(bin->app_from_com);
 				}
@@ -489,6 +491,12 @@ _process(jack_nframes_t nsamples, void *data)
 					{
 						const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 
+						if(!lv2_atom_forge_is_object_type(&handle->forge, obj->atom.type))
+							continue;
+
+						if(!lv2_osc_is_message_or_bundle_type(&handle->osc_urid, obj->body.otype))
+							continue;
+
 						LV2_OSC_Writer writer;
 						lv2_osc_writer_initialize(&writer, handle->osc_buf, OSC_SIZE);
 						lv2_osc_writer_packet(&writer, &handle->osc_urid, handle->bin.unmap,
@@ -539,7 +547,7 @@ _process(jack_nframes_t nsamples, void *data)
 			}
 		}
 	}
-	
+
 	bin_process_post(bin);
 
 	return 0;
@@ -552,7 +560,7 @@ _session_async(uv_async_t* async)
 	bin_t *bin = &handle->bin;
 
 	jack_session_event_t *ev = handle->session_event;
-	
+
 	//printf("_session_async: %s %s %s\n",
 	//	ev->session_dir, ev->client_uuid, ev->command_line);
 
@@ -623,7 +631,7 @@ __non_realtime static void
 _session(jack_session_event_t *ev, void *data)
 {
 	prog_t *handle = data;
-	
+
 	//printf("_session: %s %s %s\n",
 	//	ev->session_dir, ev->client_uuid, ev->command_line);
 
@@ -665,7 +673,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 {
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
-	
+
 	//printf("_system_port_add: %s\n", short_name);
 
 	jack_port_t *jack_port = NULL;
@@ -788,7 +796,7 @@ _system_port_del(void *data, void *sys_port)
 	if(!jack_uuid_empty(uuid))
 		jack_remove_properties(handle->client, uuid);
 #endif
-			
+
 	jack_port_unregister(handle->client, jack_port);
 }
 
@@ -890,7 +898,7 @@ _jack_deinit(prog_t *handle)
 	}
 }
 
-__non_realtime static int 
+__non_realtime static int
 _open(const char *path, const char *name, const char *id, void *data)
 {
 	bin_t *bin = data;
@@ -916,7 +924,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	bin->app_driver.seq_size = MAX(handle->seq_size,
 		jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
 	bin->app_driver.num_periods = 1; //FIXME
-	
+
 	// app init
 	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
 
@@ -1041,7 +1049,7 @@ main(int argc, char **argv)
 		"Synthpod "SYNTHPOD_VERSION"\n"
 		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
-	
+
 	int c;
 	while((c = getopt(argc, argv, "vhgGkKbBaAw:Wl:n:u:s:c:f:")) != -1)
 	{
@@ -1090,13 +1098,13 @@ main(int argc, char **argv)
 					"   [-f] update-rate     GUI update rate (25)\n\n"
 					, argv[0]);
 				return 0;
-			case 'g': 
+			case 'g':
 				bin->has_gui = true;
 				break;
 			case 'G':
 				bin->has_gui = false;
 				break;
-			case 'k': 
+			case 'k':
 				bin->kill_gui = true;
 				break;
 			case 'K':
@@ -1162,7 +1170,7 @@ main(int argc, char **argv)
 
 	lv2_atom_forge_init(&handle.forge, map);
 	lv2_osc_urid_init(&handle.osc_urid, map);
-	
+
 	handle.midi_MidiEvent = map->map(map->handle, LV2_MIDI__MidiEvent);
 
 	handle.time_position = map->map(map->handle, LV2_TIME__Position);
