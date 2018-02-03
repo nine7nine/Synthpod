@@ -36,6 +36,7 @@ include_directories(${PROJECT_SOURCE_DIR}/cross_clock)
 
 if(${CMAKE_VERSION} VERSION_LESS "3.9.0")
 	message(WARNING "Please consider to switch to CMake 3.9.0")
+	set(IPO_SUPPORTED NO)
 else()
 	cmake_minimum_required(VERSION 3.9)
 	include(CheckIPOSupported)
