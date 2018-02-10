@@ -18,11 +18,11 @@
 #ifndef _SYNTHPOD_BIN_H
 #define _SYNTHPOD_BIN_H
 
-#include <synthpod_app.h>
-
-#include <uv.h>
-
+#include <semaphore.h>
+#include <pthread.h>
 #include <stdatomic.h>
+
+#include <synthpod_app.h>
 
 #define LFRTM_IMPLEMENTATION
 #include <lfrtm/lfrtm.h>
@@ -109,7 +109,6 @@ struct _bin_t {
 
 	pid_t child;
 
-	uv_loop_t loop;
 	bool first;
 
 	cross_clock_t clk_mono;
@@ -125,7 +124,8 @@ void
 bin_init(bin_t *bin, uint32_t sample_rate);
 
 void
-bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver);
+bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
+	void (*idle)(void *data), void *data);
 
 void
 bin_stop(bin_t *bin);

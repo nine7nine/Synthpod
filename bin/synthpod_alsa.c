@@ -1119,7 +1119,7 @@ main(int argc, char **argv)
 		bin->app_driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
 
 	// run
-	bin_run(bin, argv, &nsm_driver);
+	bin_run(bin, argv, &nsm_driver, NULL, NULL);
 
 	// stop
 	bin_stop(bin);

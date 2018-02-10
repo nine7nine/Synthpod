@@ -199,10 +199,6 @@ if(NOT ${HAS_ATOMIC})
 	message(FATAL_ERROR "compiler has no support for C11 atomic operations")
 endif()
 
-# uv
-pkg_search_module(UV REQUIRED libuv>=1.0)
-include_directories(${UV_INCLUDE_DIRS})
-
 # lilv
 pkg_search_module(LILV REQUIRED lilv-0>=0.20)
 include_directories(${LILV_INCLUDE_DIRS})
@@ -225,7 +221,6 @@ endif()
 
 set(BIN_LIBS
 	m rt pthread
-	${UV_LDFLAGS}
 	${LILV_LDFLAGS}
 	${LV2_LDFLAGS}
 	${SRATOM_LDFLAGS})

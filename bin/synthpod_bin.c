@@ -408,14 +408,13 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 		bin_show(bin);
 	}
 
-	uv_loop_init(&bin->loop);
-
 	cross_clock_init(&bin->clk_mono, CROSS_CLOCK_MONOTONIC);
 	cross_clock_init(&bin->clk_real, CROSS_CLOCK_REALTIME);
 }
 
 __realtime void
-bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
+bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
+	void (*idle)(void *data), void *data)
 {
 	bin->argv = argv;
 	bin->optind = optind;
@@ -533,7 +532,11 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 		// run NSM
 		synthpod_nsm_run(bin->nsm);
 
-		uv_run(&bin->loop, UV_RUN_NOWAIT);
+		// rund idle callback
+		if(idle)
+		{
+			idle(data);
+		}
 
 		//sched_yield();
 	}
@@ -573,8 +576,6 @@ bin_deinit(bin_t *bin)
 	varchunk_free(bin->app_from_worker);
 	varchunk_free(bin->app_from_com);
 	varchunk_free(bin->app_from_app);
-
-	uv_loop_close(&bin->loop);
 
 	bin_log_note(bin, "bye\n");
 

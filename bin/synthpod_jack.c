@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
 
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
@@ -68,8 +69,7 @@ struct _prog_t {
 
 	atomic_int kill;
 	save_state_t save_state;
-
-	uv_async_t async;
+	atomic_uintptr_t async;
 
 	char *server_name;
 	char *session_id;
@@ -174,8 +174,8 @@ _saved(bin_t *bin, int status)
 				ev->flags |= JackSessionSaveError;
 			jack_session_reply(handle->client, ev);
 			jack_session_event_free(ev);
+			handle->session_event = NULL;
 		}
-		handle->session_event = NULL;
 	}
 	handle->save_state = SAVE_STATE_INTERNAL;
 
@@ -554,80 +554,6 @@ _process(jack_nframes_t nsamples, void *data)
 }
 
 __non_realtime static void
-_session_async(uv_async_t* async)
-{
-	prog_t *handle = async->data;
-	bin_t *bin = &handle->bin;
-
-	jack_session_event_t *ev = handle->session_event;
-
-	//printf("_session_async: %s %s %s\n",
-	//	ev->session_dir, ev->client_uuid, ev->command_line);
-
-	char path [PATH_MAX];
-	const char *resolvedpath = realpath(ev->session_dir, path);
-	if(!resolvedpath)
-		resolvedpath = ev->session_dir; // fall-back
-
-	// create command line
-	char *buf = NULL;
-	size_t sz = 0;
-	bool ignore = false;
-
-	for(int i=0; i<bin->optind; i++)
-	{
-		const char *arg = (i == 0)
-			? "synthpod_jack"
-			: bin->argv[i];
-
-		if(ignore)
-		{
-			ignore = false;
-			continue;
-		}
-
-		if(!strcmp(arg, "-u"))
-		{
-			ignore = true;
-			continue;
-		}
-
-		const size_t len = strlen(arg);
-		buf = realloc(buf, sz + len);
-
-		sprintf(&buf[sz], "%s ", arg);
-		sz += len + 1;
-	}
-
-	{
-		const size_t len = 32;
-		buf = realloc(buf, sz + len);
-
-		sprintf(&buf[sz], "-u %s ${SESSION_DIR}", ev->client_uuid);
-	}
-
-	ev->command_line = buf;
-
-	switch(ev->type)
-	{
-		case JackSessionSaveAndQuit:
-			atomic_store_explicit(&handle->kill, 1, memory_order_relaxed); // quit after saving
-			// fall-through
-		case JackSessionSave:
-			handle->save_state = SAVE_STATE_JACK;
-			bin_bundle_save(bin, resolvedpath);
-			_saved(bin, 0);
-			break;
-		case JackSessionSaveTemplate:
-			handle->save_state = SAVE_STATE_JACK;
-			bin_bundle_new(bin);
-			bin_bundle_save(bin, resolvedpath);
-			_saved(bin, 0);
-			break;
-	}
-}
-
-__non_realtime static void
 _session(jack_session_event_t *ev, void *data)
 {
 	prog_t *handle = data;
@@ -635,8 +561,9 @@ _session(jack_session_event_t *ev, void *data)
 	//printf("_session: %s %s %s\n",
 	//	ev->session_dir, ev->client_uuid, ev->command_line);
 
-	handle->session_event = ev;
-	uv_async_send(&handle->async);
+	jack_session_event_t *async = (void *)atomic_exchange(&handle->async, (uintptr_t)ev);
+	if(async)
+		jack_session_event_free(async);
 }
 
 // rt, but can do non-rt stuff, as process won't be called
@@ -1023,6 +950,83 @@ _osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 }
 #endif // JACK_HAS_CYCLE_TIMES
 
+static void
+_idle(void *data)
+{
+	prog_t *handle = data;
+	bin_t *bin = &handle->bin;
+
+	jack_session_event_t *async = (void *)atomic_exchange(&handle->async, 0);
+	if(!async)
+		return;
+
+	//printf("_session_async: %s %s %s\n",
+	//	async->session_dir, async->client_uuid, async->command_line);
+
+	char path [PATH_MAX];
+	const char *resolvedpath = realpath(async->session_dir, path);
+	if(!resolvedpath)
+		resolvedpath = async->session_dir; // fall-back
+
+	// create command line
+	char *buf = NULL;
+	size_t sz = 0;
+	bool ignore = false;
+
+	for(int i=0; i<bin->optind; i++)
+	{
+		const char *arg = (i == 0)
+			? "synthpod_jack"
+			: bin->argv[i];
+
+		if(ignore)
+		{
+			ignore = false;
+			continue;
+		}
+
+		if(!strcmp(arg, "-u"))
+		{
+			ignore = true;
+			continue;
+		}
+
+		const size_t len = strlen(arg);
+		buf = realloc(buf, sz + len);
+
+		sprintf(&buf[sz], "%s ", arg);
+		sz += len + 1;
+	}
+
+	{
+		const size_t len = 32;
+		buf = realloc(buf, sz + len);
+
+		sprintf(&buf[sz], "-u %s ${SESSION_DIR}", async->client_uuid);
+	}
+
+	async->command_line = buf;
+	handle->session_event = async;
+
+	switch(async->type)
+	{
+		case JackSessionSaveAndQuit:
+			atomic_store_explicit(&handle->kill, 1, memory_order_relaxed); // quit after saving
+			// fall-through
+		case JackSessionSave:
+			handle->save_state = SAVE_STATE_JACK;
+			bin_bundle_save(bin, resolvedpath);
+			_saved(bin, 0);
+			break;
+		case JackSessionSaveTemplate:
+			handle->save_state = SAVE_STATE_JACK;
+			bin_bundle_new(bin);
+			bin_bundle_save(bin, resolvedpath);
+			_saved(bin, 0);
+			break;
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1161,10 +1165,9 @@ main(int argc, char **argv)
 		}
 	}
 
-	bin_init(bin, 48000); //FIXME
+	atomic_init(&handle.async, 0);
 
-	handle.async.data = &handle;
-	uv_async_init(&bin->loop, &handle.async, _session_async); //FIXME check
+	bin_init(bin, 48000); //FIXME
 
 	LV2_URID_Map *map = bin->map;
 
@@ -1196,17 +1199,18 @@ main(int argc, char **argv)
 #endif
 	bin->app_driver.features = SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH; // always true for JACK
 
-
 	// run
-	bin_run(bin, argv, &nsm_driver);
+	bin_run(bin, argv, &nsm_driver, _idle, &handle);
 
 	// stop
 	bin_stop(bin);
 
+	jack_session_event_t *async = (void *)atomic_load(&handle.async);
+	if(async)
+		jack_session_event_free(async);
+
 	// deinit JACK
 	_jack_deinit(&handle);
-
-	uv_close((uv_handle_t *)&handle.async, NULL);
 
 	// deinit
 	bin_deinit(bin);
