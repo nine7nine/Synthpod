@@ -423,7 +423,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
-	bin->nsm = synthpod_nsm_new(exe, argv[optind], &bin->loop, nsm_driver, bin); //TODO check
+	bin->nsm = synthpod_nsm_new(exe, argv[optind], nsm_driver, bin); //TODO check
 
 	pthread_t self = pthread_self();
 
@@ -529,6 +529,9 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver)
 				varchunk_read_advance(bin->app_to_log);
 			}
 		}
+
+		// run NSM
+		synthpod_nsm_run(bin->nsm);
 
 		uv_run(&bin->loop, UV_RUN_NOWAIT);
 

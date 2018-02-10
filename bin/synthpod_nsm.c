@@ -17,12 +17,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <unistd.h> // getpid
-
-#include <osc_stream.h>
 
 #include <osc.lv2/writer.h>
 #include <osc.lv2/reader.h>
+#include <osc.lv2/stream.h>
+
+#include <varchunk.h>
 
 #include <synthpod_common.h>
 #include <synthpod_nsm.h>
@@ -45,13 +47,10 @@ struct _synthpod_nsm_t {
 	const synthpod_nsm_driver_t *driver;
 	void *data;
 
-	osc_stream_t *stream;
+	LV2_OSC_Stream stream;
 
-	uv_loop_t *loop;
-
-	uint8_t *recv;
-	uint8_t send [0x10000];
-	size_t written;
+	varchunk_t *tx;
+	varchunk_t *rx;
 };
 
 static void
@@ -101,14 +100,13 @@ _client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	lv2_osc_reader_get_string(reader, &name);
 	lv2_osc_reader_get_string(reader, &id);
 
-	uv_fs_t req;
-	uv_fs_realpath(nsm->loop, &req, dir, NULL);
-	const char *realpath = req.path && *(char *)req.path ? req.path : dir;
+	char tmp [PATH_MAX];
+	const char *resolvedpath = realpath(dir, tmp);
+	if(!resolvedpath)
+		resolvedpath = dir;
 
-	if(nsm->driver->open && nsm->driver->open(realpath, name, id, nsm->data))
+	if(nsm->driver->open && nsm->driver->open(resolvedpath, name, id, nsm->data))
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
-
-	uv_fs_req_cleanup(&req);
 }
 
 static void
@@ -156,39 +154,50 @@ _announce(synthpod_nsm_t *nsm)
 		? ":message:optional-gui:"
 		: ":message:";
 
-	LV2_OSC_Writer writer;
-	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
 
-	LV2_OSC_Writer_Frame bndl, itm;
-	lv2_osc_writer_push_bundle(&writer, &bndl, LV2_OSC_IMMEDIATE);
-	{
-		lv2_osc_writer_push_item(&writer, &itm);
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/announce", "sssiii",
-			nsm->call, capabilities, nsm->exe, 1, 2, pid);
-		lv2_osc_writer_pop_item(&writer, &itm);
-	}
-	if(has_gui)
-	{
-		// report initial gui visibility //FIXME should be saved in state somewhere
-		if(nsm->driver->show(nsm->data) == 0)
+		LV2_OSC_Writer_Frame bndl, itm;
+		lv2_osc_writer_push_bundle(&writer, &bndl, LV2_OSC_IMMEDIATE);
 		{
 			lv2_osc_writer_push_item(&writer, &itm);
-			lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+			lv2_osc_writer_message_vararg(&writer, "/nsm/server/announce", "sssiii",
+				nsm->call, capabilities, nsm->exe, 1, 2, pid);
 			lv2_osc_writer_pop_item(&writer, &itm);
+		}
+		if(has_gui)
+		{
+			// report initial gui visibility //FIXME should be saved in state somewhere
+			if(nsm->driver->show(nsm->data) == 0)
+			{
+				lv2_osc_writer_push_item(&writer, &itm);
+				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+				lv2_osc_writer_pop_item(&writer, &itm);
+			}
+			else
+			{
+				lv2_osc_writer_push_item(&writer, &itm);
+				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
+				lv2_osc_writer_pop_item(&writer, &itm);
+			}
+		}
+		lv2_osc_writer_pop_bundle(&writer, &bndl);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+			lv2_osc_stream_run(&nsm->stream);
 		}
 		else
 		{
-			lv2_osc_writer_push_item(&writer, &itm);
-			lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
-			lv2_osc_writer_pop_item(&writer, &itm);
+			fprintf(stderr, "OSC sending failed\n");
 		}
 	}
-	lv2_osc_writer_pop_bundle(&writer, &bndl);
-
-	if(lv2_osc_writer_finalize(&writer, &nsm->written))
-		osc_stream_flush(nsm->stream);
-	else
-		fprintf(stderr, "OSC sending failed\n");
 }
 
 static void
@@ -248,35 +257,27 @@ _unpack_messages(LV2_OSC_Reader *reader, size_t len, synthpod_nsm_t *nsm)
 }
 
 static void *
-_recv_req(size_t size, void *data)
+_recv_req(void *data, size_t size, size_t *max)
 {
 	synthpod_nsm_t *nsm = data;
 
-	nsm->recv = malloc(size);
-
-	return nsm->recv;
+	return varchunk_write_request_max(nsm->rx, size, max);
 }
 
 static void
-_recv_adv(size_t written, void *data)
+_recv_adv(void *data, size_t written)
 {
 	synthpod_nsm_t *nsm = data;
 
-	LV2_OSC_Reader reader;
-	lv2_osc_reader_initialize(&reader, nsm->recv, written);
-	_unpack_messages(&reader, written, nsm);
-
-	free(nsm->recv);
+	varchunk_write_advance(nsm->rx, written);
 }
 
 static const void *
-_send_req(size_t *len, void *data)
+_send_req(void *data, size_t *len)
 {
 	synthpod_nsm_t *nsm = data;
 
-	*len = nsm->written;
-
-	return nsm->written ? nsm->send : NULL;
+	return varchunk_read_request(nsm->tx, len);
 }
 
 static void
@@ -284,27 +285,18 @@ _send_adv(void *data)
 {
 	synthpod_nsm_t *nsm = data;
 
-	nsm->written = 0;
+	varchunk_read_advance(nsm->tx);
 }
 
-static void
-_free(void *data)
-{
-	synthpod_nsm_t *nsm = data;
-
-	// do nothing
-}
-
-static const osc_stream_driver_t driver = {
-	.recv_req = _recv_req,
-	.recv_adv = _recv_adv,
-	.send_req = _send_req,
-	.send_adv = _send_adv,
-	.free = _free
+static const LV2_OSC_Driver driver = {
+	.write_req = _recv_req,
+	.write_adv = _recv_adv,
+	.read_req = _send_req,
+	.read_adv = _send_adv
 };
 
 synthpod_nsm_t *
-synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
+synthpod_nsm_new(const char *exe, const char *path,
 	const synthpod_nsm_driver_t *nsm_driver, void *data)
 {
 	if(!nsm_driver)
@@ -314,13 +306,12 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 	if(!nsm)
 		return NULL;
 
-	nsm->loop = loop;
 	nsm->driver = nsm_driver;
 	nsm->data = data;
 
 	nsm->call = strdup("Synthpod");
 	nsm->exe = exe ? strdup(exe) : NULL;
-	
+
 	nsm->url = getenv("NSM_URL");
 	if(nsm->url)
 	{
@@ -333,8 +324,18 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 		// remove trailing slash
 		if(!isdigit(nsm->url[strlen(nsm->url)-1]))
 			nsm->url[strlen(nsm->url)-1] = '\0';
-		
-		nsm->stream = osc_stream_new(nsm->loop, nsm->url, &driver, nsm);
+
+		nsm->tx = varchunk_new(8192, false);
+		if(!nsm->tx)
+			return NULL;
+
+		nsm->rx = varchunk_new(8192, false);
+		if(!nsm->rx)
+			return NULL;
+
+		if(lv2_osc_stream_init(&nsm->stream, nsm->url, &driver, nsm) != 0)
+			return NULL;
+
 		if(!strncmp(nsm->url, "osc.udp", 7)) // won't get /stream/connect message
 			_announce(nsm);
 	}
@@ -344,14 +345,13 @@ synthpod_nsm_new(const char *exe, const char *path, uv_loop_t *loop,
 
 		if(path)
 		{
-			uv_fs_t req;
-			uv_fs_realpath(nsm->loop, &req, path, NULL);
-			const char *realpath = req.ptr && *(char *)req.ptr ? req.ptr : path;
+			char tmp [PATH_MAX];
+			const char *resolvedpath = realpath(path, tmp);
+			if(!resolvedpath)
+				resolvedpath = path;
 
-			if(nsm->driver->open && nsm->driver->open(realpath, nsm->call, nsm->exe, nsm->data))
+			if(nsm->driver->open && nsm->driver->open(resolvedpath, nsm->call, nsm->exe, nsm->data))
 				fprintf(stderr, "NSM load failed: '%s'\n", path);
-
-			uv_fs_req_cleanup(&req);
 		}
 		else
 		{
@@ -390,8 +390,13 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 
 		if(nsm->url)
 		{
-			if(nsm->stream)
-				osc_stream_free(nsm->stream);
+			if(nsm->rx)
+				varchunk_free(nsm->rx);
+
+			if(nsm->tx)
+				varchunk_free(nsm->tx);
+
+			lv2_osc_stream_deinit(&nsm->stream);
 
 			free(nsm->url);
 		}
@@ -401,30 +406,59 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 }
 
 void
+synthpod_nsm_run(synthpod_nsm_t *nsm)
+{
+	if(lv2_osc_stream_run(&nsm->stream) & LV2_OSC_RECV)
+	{
+		const uint8_t *rx;
+		size_t size;
+		while( (rx = varchunk_read_request(nsm->rx, &size)) )
+		{
+			LV2_OSC_Reader reader;
+
+			lv2_osc_reader_initialize(&reader, rx, size);
+			_unpack_messages(&reader, size, nsm);
+
+			varchunk_read_advance(nsm->rx);
+		}
+	}
+}
+
+void
 synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
 {
 	if(!nsm)
 		return;
 
-	LV2_OSC_Writer writer;
-	bool ret = false;
-	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
-
-	if(status == 0)
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
 	{
-		ret = lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
-			"/nsm/client/open", "opened");
-	}
-	else
-	{
-		ret = lv2_osc_writer_message_vararg(&writer, "/error", "sis",
-			"/nsm/client/open", 2, "opening failed");
-	}
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
 
-	if(lv2_osc_writer_finalize(&writer, &nsm->written))
-		osc_stream_flush(nsm->stream);
-	else
-		fprintf(stderr, "OSC sending failed\n");
+		if(status == 0)
+		{
+			lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
+				"/nsm/client/open", "opened");
+		}
+		else
+		{
+			lv2_osc_writer_message_vararg(&writer, "/error", "sis",
+				"/nsm/client/open", 2, "opening failed");
+		}
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+			lv2_osc_stream_run(&nsm->stream);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 void
@@ -433,15 +467,26 @@ synthpod_nsm_shown(synthpod_nsm_t *nsm)
 	if(!nsm)
 		return;
 
-	// reply
-	LV2_OSC_Writer writer;
-	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
-	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		// reply
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+		lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
 
-	if(lv2_osc_writer_finalize(&writer, &nsm->written))
-		osc_stream_flush(nsm->stream);
-	else
-		fprintf(stderr, "OSC sending failed\n");
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+			lv2_osc_stream_run(&nsm->stream);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 void
@@ -450,15 +495,26 @@ synthpod_nsm_hidden(synthpod_nsm_t *nsm)
 	if(!nsm)
 		return;
 
-	// reply
-	LV2_OSC_Writer writer;
-	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
-	lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		// reply
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+		lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
 
-	if(lv2_osc_writer_finalize(&writer, &nsm->written))
-		osc_stream_flush(nsm->stream);
-	else
-		fprintf(stderr, "OSC sending failed\n");
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+			lv2_osc_stream_run(&nsm->stream);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 void
@@ -467,25 +523,35 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 	if(!nsm)
 		return;
 
-	LV2_OSC_Writer writer;
-	bool ret = false;
-	lv2_osc_writer_initialize(&writer, nsm->send, sizeof(nsm->send));
-
-	if(status == 0)
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
 	{
-		ret = lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
-			"/nsm/client/save", "saved");
-	}
-	else
-	{
-		ret = lv2_osc_writer_message_vararg(&writer, "/error", "sis",
-			"/nsm/client/save", 1, "save failed");
-	}
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
 
-	if(lv2_osc_writer_finalize(&writer, &nsm->written))
-		osc_stream_flush(nsm->stream);
-	else
-		fprintf(stderr, "OSC sending failed\n");
+		if(status == 0)
+		{
+			lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
+				"/nsm/client/save", "saved");
+		}
+		else
+		{
+			lv2_osc_writer_message_vararg(&writer, "/error", "sis",
+				"/nsm/client/save", 1, "save failed");
+		}
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+			lv2_osc_stream_run(&nsm->stream);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 int
