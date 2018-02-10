@@ -18,14 +18,14 @@
 #ifndef _SYNTHPOD_APP_PRIVATE_H
 #define _SYNTHPOD_APP_PRIVATE_H
 
-#include <uv.h>
-
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdatomic.h>
 #include <ctype.h> // isspace
 #include <math.h>
+#include <semaphore.h>
+#include <pthread.h>
 
 #include <synthpod_app.h>
 #include <synthpod_private.h>
