@@ -21,6 +21,7 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <limits.h>
 
 #include <synthpod_app.h>
 
@@ -100,7 +101,7 @@ struct _bin_t {
 	int worker_prio;
 	int num_slaves;
 	bool bad_plugins;
-	const char *socket_path;
+	char socket_path [NAME_MAX];
 	int update_rate;
 	bool cpu_affinity;
 

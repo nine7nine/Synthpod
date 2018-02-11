@@ -1045,7 +1045,7 @@ main(int argc, char **argv)
 	bin->bad_plugins = false;
 	bin->has_gui = false;
 	bin->kill_gui = false;
-	bin->socket_path = "shm:///synthpod";
+	snprintf(bin->socket_path, sizeof(bin->socket_path), "shm:///synthpod-%i", getpid());
 	bin->update_rate = 25;
 	bin->cpu_affinity = false;
 
@@ -1133,7 +1133,7 @@ main(int argc, char **argv)
 				bin->worker_prio = 0;
 				break;
 			case 'l':
-				bin->socket_path = optarg;
+				snprintf(bin->socket_path, sizeof(bin->socket_path), "%s", optarg);
 				break;
 			case 'n':
 				handle.server_name = optarg;

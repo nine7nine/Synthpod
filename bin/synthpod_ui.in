@@ -1,11 +1,24 @@
 #!/bin/sh
 
+socket=$1
+
+# guess pid of running daemon
+if [ -z "${socket}" ]; then
+	pid=$(ps -A | grep synthpod | grep -v sand | head -n 1 | cut -d ' ' -f 2)
+
+	if [ -z "${pid}" ]; then
+		exit 1
+	fi
+
+	socket="shm:///synthpod-${pid}"
+fi
+
 exec ${GDB} synthpod_sandbox_x11 \
 	-p http://open-music-kontrollers.ch/lv2/synthpod#stereo \
 	-b @CMAKE_INSTALL_PREFIX@/lib/lv2/synthpod.lv2/ \
 	-u http://open-music-kontrollers.ch/lv2/synthpod#root_4_nk \
-	-s shm:///synthpod \
-	-w "Synthpod - ${SOCKET_PATH}" \
+	-s ${socket} \
+	-w "Synthpod - ${socket}" \
 	-r 48000 \
 	-f 30 \
 	$*
