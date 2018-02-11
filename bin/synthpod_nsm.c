@@ -38,7 +38,7 @@ struct _osc_msg_t {
 };
 
 struct _synthpod_nsm_t {
-	int managed;
+	bool managed;
 
 	char *url;
 	char *call;
@@ -315,7 +315,7 @@ synthpod_nsm_new(const char *exe, const char *path,
 	nsm->url = getenv("NSM_URL");
 	if(nsm->url)
 	{
-		nsm->managed = 1;
+		nsm->managed = true;
 
 		nsm->url = strdup(nsm->url); //FIXME
 		if(!nsm->url)
@@ -341,7 +341,7 @@ synthpod_nsm_new(const char *exe, const char *path,
 	}
 	else
 	{
-		nsm->managed = 0;
+		nsm->managed = false;
 
 		if(path)
 		{
@@ -408,6 +408,9 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 void
 synthpod_nsm_run(synthpod_nsm_t *nsm)
 {
+	if(!nsm)
+		return;
+
 	if(lv2_osc_stream_run(&nsm->stream) & LV2_OSC_RECV)
 	{
 		const uint8_t *rx;
@@ -554,8 +557,8 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 	}
 }
 
-int
-synthpod_nsm_managed()
+bool
+synthpod_nsm_managed(synthpod_nsm_t *nsm)
 {
-	return getenv("NSM_URL") ? 1 : 0;
+	return nsm->managed;
 }

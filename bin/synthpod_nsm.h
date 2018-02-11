@@ -53,5 +53,5 @@ synthpod_nsm_hidden(synthpod_nsm_t *nsm);
 void
 synthpod_nsm_saved(synthpod_nsm_t *nsm, int status);
 
-int
-synthpod_nsm_managed(void);
+bool
+synthpod_nsm_managed(synthpod_nsm_t *nsm);

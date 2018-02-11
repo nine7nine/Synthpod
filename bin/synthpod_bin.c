@@ -479,7 +479,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
 				{
 					bin->child = 0; // invalidate
 
-					synthpod_nsm_hidden(bin->nsm);
+					if(synthpod_nsm_managed(bin->nsm))
+						synthpod_nsm_hidden(bin->nsm);
 
 					if(bin->kill_gui)
 						atomic_store_explicit(&done, true, memory_order_relaxed);
@@ -530,7 +531,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
 		}
 
 		// run NSM
-		synthpod_nsm_run(bin->nsm);
+		if(synthpod_nsm_managed(bin->nsm))
+			synthpod_nsm_run(bin->nsm);
 
 		// rund idle callback
 		if(idle)
