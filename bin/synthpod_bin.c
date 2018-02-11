@@ -413,7 +413,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 }
 
 __realtime void
-bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
+bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
 	void (*idle)(void *data), void *data)
 {
 	bin->argv = argv;
@@ -422,7 +422,7 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
-	bin->nsm = synthpod_nsm_new(exe, argv[optind], nsm_driver, bin); //TODO check
+	bin->nsm = nsmc_new(exe, argv[optind], nsm_driver, bin); //TODO check
 
 	pthread_t self = pthread_self();
 
@@ -479,8 +479,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
 				{
 					bin->child = 0; // invalidate
 
-					if(synthpod_nsm_managed(bin->nsm))
-						synthpod_nsm_hidden(bin->nsm);
+					if(nsmc_managed(bin->nsm))
+						nsmc_hidden(bin->nsm);
 
 					if(bin->kill_gui)
 						atomic_store_explicit(&done, true, memory_order_relaxed);
@@ -531,8 +531,8 @@ bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
 		}
 
 		// run NSM
-		if(synthpod_nsm_managed(bin->nsm))
-			synthpod_nsm_run(bin->nsm);
+		if(nsmc_managed(bin->nsm))
+			nsmc_run(bin->nsm);
 
 		// rund idle callback
 		if(idle)
@@ -548,7 +548,7 @@ __non_realtime void
 bin_stop(bin_t *bin)
 {
 	// NSM deinit
-	synthpod_nsm_free(bin->nsm);
+	nsmc_free(bin->nsm);
 
 	bin_hide(bin);
 

@@ -338,7 +338,7 @@ _saved(bin_t *bin, int status)
 
 	if(handle->save_state == SAVE_STATE_NSM)
 	{
-		synthpod_nsm_saved(bin->nsm, status);
+		nsmc_saved(bin->nsm, status);
 	}
 	handle->save_state = SAVE_STATE_INTERNAL;
 
@@ -376,7 +376,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 		bin_log_error(bin, "%s: creation of realtime thread failed\n", __func__);
 
 	bin_bundle_load(bin, bin->path);
-	synthpod_nsm_opened(bin->nsm, 0);
+	nsmc_opened(bin->nsm, 0);
 
 	return 0; // success
 }
@@ -410,7 +410,7 @@ _hide(void *data)
 	return bin_hide(bin);
 }
 
-static const synthpod_nsm_driver_t nsm_driver = {
+static const nsmc_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
 	.show = _show,

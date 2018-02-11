@@ -163,7 +163,7 @@ _saved(bin_t *bin, int status)
 
 	if(handle->save_state == SAVE_STATE_NSM)
 	{
-		synthpod_nsm_saved(bin->nsm, status);
+		nsmc_saved(bin->nsm, status);
 	}
 	else if(handle->save_state == SAVE_STATE_JACK)
 	{
@@ -839,7 +839,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	// jack init
 	if(_jack_init(handle, id))
 	{
-		synthpod_nsm_opened(bin->nsm, -1);
+		nsmc_opened(bin->nsm, -1);
 		return -1;
 	}
 
@@ -860,7 +860,7 @@ _open(const char *path, const char *name, const char *id, void *data)
 	jack_activate(handle->client); //TODO check
 
 	bin_bundle_load(bin, bin->path);
-	synthpod_nsm_opened(bin->nsm, 0);
+	nsmc_opened(bin->nsm, 0);
 
 	return 0; // success
 }
@@ -894,7 +894,7 @@ _hide(void *data)
 	return bin_hide(bin);
 }
 
-static const synthpod_nsm_driver_t nsm_driver = {
+static const nsmc_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
 	.show = _show,

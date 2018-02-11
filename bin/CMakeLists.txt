@@ -5,7 +5,7 @@ if(BUILD_JACK OR BUILD_ALSA OR BUILD_DUMMY)
 
 	add_library(synthpod.bin OBJECT
 		synthpod_bin.c
-		synthpod_nsm.c)
+		nsmc.c)
 
 	set_target_properties(synthpod.bin PROPERTIES POSITION_INDEPENDENT_CODE true) # -fPIC
 	set_target_properties(synthpod.bin PROPERTIES INTERPROCEDURAL_OPTIMIZATION ${IPO_SUPPORTED}) # -flto

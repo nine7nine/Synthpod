@@ -37,7 +37,7 @@
 #include <sandbox_master.h>
 
 #include <synthpod_common.h>
-#include <synthpod_nsm.h>
+#include <nsmc.h>
 
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
@@ -81,7 +81,7 @@ struct _bin_t {
 	varchunk_t *app_from_app;
 
 	char *path;
-	synthpod_nsm_t *nsm;
+	nsmc_t *nsm;
 
 	LV2_URID log_error;
 	LV2_URID log_note;
@@ -124,7 +124,7 @@ void
 bin_init(bin_t *bin, uint32_t sample_rate);
 
 void
-bin_run(bin_t *bin, char **argv, const synthpod_nsm_driver_t *nsm_driver,
+bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
 	void (*idle)(void *data), void *data);
 
 void

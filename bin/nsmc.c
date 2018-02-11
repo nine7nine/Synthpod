@@ -27,9 +27,9 @@
 #include <varchunk.h>
 
 #include <synthpod_common.h>
-#include <synthpod_nsm.h>
+#include <nsmc.h>
 
-typedef void (*osc_cb_t)(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm);
+typedef void (*osc_cb_t)(LV2_OSC_Reader *reader, nsmc_t *nsm);
 typedef struct _osc_msg_t osc_msg_t;
 
 struct _osc_msg_t {
@@ -37,14 +37,14 @@ struct _osc_msg_t {
 	osc_cb_t cb;
 };
 
-struct _synthpod_nsm_t {
+struct _nsmc_t {
 	bool managed;
 
 	char *url;
 	char *call;
 	char *exe;
 
-	const synthpod_nsm_driver_t *driver;
+	const nsmc_driver_t *driver;
 	void *data;
 
 	LV2_OSC_Stream stream;
@@ -54,12 +54,12 @@ struct _synthpod_nsm_t {
 };
 
 static void
-_reply(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_reply(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	const char *target = NULL;
 	lv2_osc_reader_get_string(reader, &target);
 
-	//fprintf(stdout, "synthpod_nsm reply: %s\n", target);
+	//fprintf(stdout, "nsmc reply: %s\n", target);
 
 	if(target && !strcmp(target, "/nsm/server/announce"))
 	{
@@ -76,7 +76,7 @@ _reply(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 }
 
 static void
-_error(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_error(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	const char *msg = NULL;
 	int32_t code = 0;
@@ -86,11 +86,11 @@ _error(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 	lv2_osc_reader_get_int32(reader, &code);
 	lv2_osc_reader_get_string(reader, &err);
 
-	fprintf(stderr, "synthpod_nsm error: #%i in %s: %s\n", code, msg, err);
+	fprintf(stderr, "nsmc error: #%i in %s: %s\n", code, msg, err);
 }
 
 static void
-_client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_client_open(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	const char *dir = NULL;
 	const char *name = NULL;
@@ -110,7 +110,7 @@ _client_open(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 }
 
 static void
-_client_save(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_client_save(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	// save app
 	if(nsm->driver->save && nsm->driver->save(nsm->data))
@@ -118,7 +118,7 @@ _client_save(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 }
 
 static void
-_client_show_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_client_show_optional_gui(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	// show gui
 	if(nsm->driver->show && nsm->driver->show(nsm->data))
@@ -127,11 +127,11 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 		return;
 	}
 
-	synthpod_nsm_shown(nsm);
+	nsmc_shown(nsm);
 }
 
 static void
-_client_hide_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_client_hide_optional_gui(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	// hide gui
 	if(nsm->driver->hide && nsm->driver->hide(nsm->data))
@@ -140,11 +140,11 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
 		return;
 	}
 
-	synthpod_nsm_hidden(nsm);
+	nsmc_hidden(nsm);
 }
 
 static void
-_announce(synthpod_nsm_t *nsm)
+_announce(nsmc_t *nsm)
 {
 	// send announce message
 	pid_t pid = getpid();
@@ -201,13 +201,13 @@ _announce(synthpod_nsm_t *nsm)
 }
 
 static void
-_client_connect(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_client_connect(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	_announce(nsm);
 }
 
 static void
-_client_disconnect(LV2_OSC_Reader *reader, synthpod_nsm_t *nsm)
+_client_disconnect(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	// nothing
 }
@@ -228,7 +228,7 @@ static const osc_msg_t messages [] = {
 };
 
 static void
-_unpack_messages(LV2_OSC_Reader *reader, size_t len, synthpod_nsm_t *nsm)
+_unpack_messages(LV2_OSC_Reader *reader, size_t len, nsmc_t *nsm)
 {
 	if(lv2_osc_reader_is_message(reader))
 	{
@@ -259,7 +259,7 @@ _unpack_messages(LV2_OSC_Reader *reader, size_t len, synthpod_nsm_t *nsm)
 static void *
 _recv_req(void *data, size_t size, size_t *max)
 {
-	synthpod_nsm_t *nsm = data;
+	nsmc_t *nsm = data;
 
 	return varchunk_write_request_max(nsm->rx, size, max);
 }
@@ -267,7 +267,7 @@ _recv_req(void *data, size_t size, size_t *max)
 static void
 _recv_adv(void *data, size_t written)
 {
-	synthpod_nsm_t *nsm = data;
+	nsmc_t *nsm = data;
 
 	varchunk_write_advance(nsm->rx, written);
 }
@@ -275,7 +275,7 @@ _recv_adv(void *data, size_t written)
 static const void *
 _send_req(void *data, size_t *len)
 {
-	synthpod_nsm_t *nsm = data;
+	nsmc_t *nsm = data;
 
 	return varchunk_read_request(nsm->tx, len);
 }
@@ -283,7 +283,7 @@ _send_req(void *data, size_t *len)
 static void
 _send_adv(void *data)
 {
-	synthpod_nsm_t *nsm = data;
+	nsmc_t *nsm = data;
 
 	varchunk_read_advance(nsm->tx);
 }
@@ -295,14 +295,14 @@ static const LV2_OSC_Driver driver = {
 	.read_adv = _send_adv
 };
 
-synthpod_nsm_t *
-synthpod_nsm_new(const char *exe, const char *path,
-	const synthpod_nsm_driver_t *nsm_driver, void *data)
+nsmc_t *
+nsmc_new(const char *exe, const char *path,
+	const nsmc_driver_t *nsm_driver, void *data)
 {
 	if(!nsm_driver)
 		return NULL;
 
-	synthpod_nsm_t *nsm = calloc(1, sizeof(synthpod_nsm_t));
+	nsmc_t *nsm = calloc(1, sizeof(nsmc_t));
 	if(!nsm)
 		return NULL;
 
@@ -379,7 +379,7 @@ fail:
 }
 
 void
-synthpod_nsm_free(synthpod_nsm_t *nsm)
+nsmc_free(nsmc_t *nsm)
 {
 	if(nsm)
 	{
@@ -406,7 +406,7 @@ synthpod_nsm_free(synthpod_nsm_t *nsm)
 }
 
 void
-synthpod_nsm_run(synthpod_nsm_t *nsm)
+nsmc_run(nsmc_t *nsm)
 {
 	if(!nsm)
 		return;
@@ -428,7 +428,7 @@ synthpod_nsm_run(synthpod_nsm_t *nsm)
 }
 
 void
-synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
+nsmc_opened(nsmc_t *nsm, int status)
 {
 	if(!nsm)
 		return;
@@ -465,7 +465,7 @@ synthpod_nsm_opened(synthpod_nsm_t *nsm, int status)
 }
 
 void
-synthpod_nsm_shown(synthpod_nsm_t *nsm)
+nsmc_shown(nsmc_t *nsm)
 {
 	if(!nsm)
 		return;
@@ -493,7 +493,7 @@ synthpod_nsm_shown(synthpod_nsm_t *nsm)
 }
 
 void
-synthpod_nsm_hidden(synthpod_nsm_t *nsm)
+nsmc_hidden(nsmc_t *nsm)
 {
 	if(!nsm)
 		return;
@@ -521,7 +521,7 @@ synthpod_nsm_hidden(synthpod_nsm_t *nsm)
 }
 
 void
-synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
+nsmc_saved(nsmc_t *nsm, int status)
 {
 	if(!nsm)
 		return;
@@ -558,7 +558,7 @@ synthpod_nsm_saved(synthpod_nsm_t *nsm, int status)
 }
 
 bool
-synthpod_nsm_managed(synthpod_nsm_t *nsm)
+nsmc_managed(nsmc_t *nsm)
 {
 	return nsm->managed;
 }
