@@ -2523,7 +2523,7 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 		const char *bundle_uri = bundle_node ? lilv_node_as_uri(bundle_node) : NULL;
 		mod_ui->sbox.bundle_path = lilv_file_uri_parse(bundle_uri, NULL);
 
-		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///%"PRIu32"-%"PRIu32, mod->urn, mod_ui->urn) == -1)
+		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///synthpod-sandbox-%016"PRIx64, (uint64_t)mod_ui) == -1)
 			mod_ui->sbox.socket_uri = NULL;
 
 		if(asprintf(&mod_ui->sbox.window_name, "%s", mod_ui->uri) == -1)
