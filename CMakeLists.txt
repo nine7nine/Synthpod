@@ -207,7 +207,7 @@ if((${LILV_VERSION} VERSION_EQUAL "0.22.0") OR (${LILV_VERSION} VERSION_GREATER 
 endif()
 
 # lv2
-pkg_search_module(LV2 REQUIRED lv2>=1.10)
+pkg_search_module(LV2 REQUIRED lv2>=1.14)
 include_directories(${LV2_INCLUDE_DIRS})
 
 # sratom
