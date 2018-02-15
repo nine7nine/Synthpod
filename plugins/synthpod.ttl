@@ -94,6 +94,7 @@ synthpod:stereo
 		urid:map ,
 		urid:unmap ,
 		state:loadDefaultState ,
+		state:threadSafeRestore ,
 		opts:options ;
 	lv2:optionalFeature lv2:isLive ,
 		lv2:hardRTCapable ,

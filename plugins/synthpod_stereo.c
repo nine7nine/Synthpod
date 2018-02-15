@@ -38,7 +38,24 @@
 #define CHUNK_SIZE 0x100000
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
+typedef enum _job_type_t job_type_t;
+typedef struct _job_t job_t;
 typedef struct _plughandle_t plughandle_t;
+
+enum _job_type_t {
+	JOB_TYPE_NONE = 0,
+	JOB_TYPE_STASH
+};
+
+struct _job_t {
+	job_type_t type;
+	union {
+		struct {
+			char *bundle_path;
+			LV2_Atom_Object *obj;
+		} stash;
+	};
+};
 
 struct _plughandle_t {
 	sp_app_t *app;
@@ -46,8 +63,6 @@ struct _plughandle_t {
 
 	LV2_Worker_Schedule *schedule;
 	LV2_Options_Option *opts;
-
-	bool dirty_in;
 
 	struct {
 		struct {
@@ -125,11 +140,7 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
 
-#if 0
 	return sp_app_save(app, store, state, flags, features);
-#else
-	return LV2_STATE_SUCCESS;
-#endif
 }
 
 static LV2_State_Status
@@ -140,13 +151,56 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	plughandle_t *handle = instance;
 	sp_app_t *app = handle->app;
 
-	handle->dirty_in = true;
+	LV2_Worker_Schedule *schedule = NULL;
+	LV2_State_Map_Path *map_path = NULL;
 
-#if 0
-	return sp_app_restore(app, retrieve, state, flags, features);
-#else
-	return LV2_STATE_SUCCESS;
-#endif
+	for(int i=0; features[i]; i++)
+	{
+		if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
+			schedule = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_STATE__mapPath))
+			map_path = features[i]->data;
+	}
+
+	if(!schedule)
+	{
+		return LV2_STATE_ERR_UNKNOWN;
+	}
+
+	if(!map_path)
+	{
+		return LV2_STATE_ERR_UNKNOWN;
+	}
+
+	char *bundle_path = map_path->absolute_path(map_path->handle, "");
+	if(!bundle_path)
+	{
+		return LV2_STATE_ERR_UNKNOWN;
+	}
+
+	LV2_Atom_Object *obj = sp_app_stash(app, retrieve, state, flags, features);
+	if(!obj)
+	{
+
+		return LV2_STATE_ERR_UNKNOWN;
+	}
+
+	const job_t job = {
+		.type = JOB_TYPE_STASH,
+		.stash = {
+			.bundle_path = bundle_path,
+			.obj = obj
+		}
+	};
+	const LV2_Worker_Status stat = schedule->schedule_work(schedule->handle,
+		sizeof(job_t), &job);
+
+	if(stat == LV2_WORKER_SUCCESS)
+	{
+		return LV2_STATE_SUCCESS;
+	}
+
+	return LV2_STATE_ERR_UNKNOWN;
 }
 	
 static const LV2_State_Interface state_iface = {
@@ -163,16 +217,43 @@ _work(LV2_Handle instance,
 	const void *_body)
 {
 	plughandle_t *handle = instance;
-	
-	//printf("_work: %u\n", size);
-	
-	size_t size;
-	const void *body;
-	while((body = varchunk_read_request(handle->app_to_worker, &size)))
+
+	const job_t *job = _body;
+
+	switch(job->type)
 	{
-		sp_worker_from_app(handle->app, size, body);
-		varchunk_read_advance(handle->app_to_worker);
+		case JOB_TYPE_STASH:
+		{
+			fprintf(stderr, "stash: %s (%p)\n", job->stash.bundle_path,
+				job->stash.obj);
+
+			if(  job->stash.obj
+				&& job->stash.bundle_path
+				&& strlen(job->stash.bundle_path) )
+			{
+				//FIXME lock
+				sp_app_restore(handle->app, sp_app_state_retrieve, job->stash.obj,
+					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
+					sp_app_state_features(handle->app, job->stash.bundle_path));
+				//FIXME unlock
+			}
+
+			free(job->stash.bundle_path);
+			free(job->stash.obj);
+		} break;
+		case JOB_TYPE_NONE:
+		default:
+		{
+			size_t size;
+			const void *body;
+			while((body = varchunk_read_request(handle->app_to_worker, &size)))
+			{
+				sp_worker_from_app(handle->app, size, body);
+				varchunk_read_advance(handle->app_to_worker);
+			}
+		} break;
 	}
+	
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -289,6 +370,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	const LilvWorld *world = NULL;
 
 	for(int i=0; features[i]; i++)
+	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->driver.map = (LV2_URID_Map *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
@@ -309,6 +391,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->driver.features |= SP_APP_FEATURE_FIXED_BLOCK_LENGTH;
 		else if(!strcmp(features[i]->URI, LV2_BUF_SIZE__powerOf2BlockLength))
 			handle->driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
+	}
 
 	if(!handle->driver.xmap)
 		handle->driver.xmap = &voice_map_fallback;
@@ -615,8 +698,11 @@ _process_post(plughandle_t *handle)
 	{
 		//fprintf(stderr, "work triggered\n");
 
-		const int32_t i = 1;
-		handle->schedule->schedule_work(handle->schedule->handle, sizeof(int32_t), &i); //FIXME check
+		const job_t job = {
+			.type = JOB_TYPE_NONE
+		};
+		handle->schedule->schedule_work(handle->schedule->handle,
+			sizeof(job_t), &job); //FIXME check
 
 		handle->trigger_worker = false;
 	}
@@ -726,13 +812,6 @@ run(LV2_Handle instance, uint32_t nsamples)
 			case SYSTEM_PORT_NONE:
 				break;
 		}
-	}
-
-	if(handle->dirty_in)
-	{
-		//printf("dirty\n");
-		//TODO refresh UI
-		handle->dirty_in = false;
 	}
 
 	struct {

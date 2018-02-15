@@ -121,8 +121,8 @@ _preset_features(mod_t *mod, bool async)
 	return (const LV2_Feature *const *)mod->state_features;
 }
 
-static const LV2_Feature *const *
-_state_features(sp_app_t *app, void *prefix_path)
+const LV2_Feature *const *
+sp_app_state_features(sp_app_t *app, void *prefix_path)
 {
 	// construct LV2 state features
 	app->make_path.handle = prefix_path;
@@ -551,8 +551,8 @@ _state_store(LV2_State_Handle state, uint32_t key, const void *value,
 	return LV2_STATE_ERR_UNKNOWN;
 }
 
-__non_realtime static const void *
-_state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
+__non_realtime const void *
+sp_app_state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	uint32_t *type, uint32_t *flags)
 {
 	const LV2_Atom_Object *obj = state;
@@ -620,9 +620,9 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path)
 	if(obj) // existing project
 	{
 		// restore state
-		sp_app_restore(app, _state_retrieve, obj,
+		sp_app_restore(app, sp_app_state_retrieve, obj,
 			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
-			_state_features(app, app->bundle_path));
+			sp_app_state_features(app, app->bundle_path));
 
 		free(obj); // allocated by _deserialize_from_turtle
 	}
@@ -769,7 +769,7 @@ _sp_app_state_bundle_save(sp_app_t *app, const char *bundle_path)
 				// store state
 				sp_app_save(app, _state_store, forge,
 					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
-					_state_features(app, app->bundle_path));
+					sp_app_state_features(app, app->bundle_path));
 
 				lv2_atom_forge_pop(forge, &state_frame);
 				lv2_atom_forge_pop(forge, &pset_frame);
@@ -1404,6 +1404,54 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 	free(path);
 
 	return mod;
+}
+
+LV2_Atom_Object *
+sp_app_stash(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle hndl, uint32_t flags, const LV2_Feature *const *features)
+{
+	const LV2_URID keys [7] = {
+		app->regs.core.minor_version.urid,
+		app->regs.core.micro_version.urid,
+		app->regs.synthpod.module_list.urid,
+		app->regs.synthpod.connection_list.urid,
+		app->regs.synthpod.node_list.urid,
+		app->regs.synthpod.automation_list.urid,
+		app->regs.synthpod.graph.urid
+	};
+
+	uint8_t *buf = malloc(0x100000); //FIXME
+	LV2_Atom_Forge forge = app->forge;
+	lv2_atom_forge_set_buffer(&forge, buf, 0x100000);
+	LV2_Atom_Forge_Frame frame;
+	LV2_Atom_Forge_Ref ref;
+
+	ref = lv2_atom_forge_object(&forge, &frame, 0, 0);
+
+	for(int i = 0; i < 7; i++)
+	{
+		size_t size;
+		uint32_t type;
+		uint32_t _flags;
+
+		const void *data = retrieve(hndl, keys[i], &size, &type, &_flags);
+
+		if(!data)
+			continue;
+
+		if(ref)
+			ref = lv2_atom_forge_key(&forge, keys[i]);
+		if(ref)
+			ref = lv2_atom_forge_atom(&forge, size, type);
+		if(ref)
+			ref = lv2_atom_forge_write(&forge, data, size);
+	}
+
+	if(ref)
+		lv2_atom_forge_pop(&forge, &frame);
+
+
+	return (LV2_Atom_Object *)buf;
 }
 
 LV2_State_Status
