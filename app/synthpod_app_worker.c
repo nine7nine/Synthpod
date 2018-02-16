@@ -444,12 +444,41 @@ sp_app_bundle_save(sp_app_t *app, LV2_URID urn, bool via_app)
 	{
 		// manually switch to blocking state and wait for bundle to be saved
 		app->block_state = BLOCKING_STATE_WAIT; // wait for job
-		// TODO keep in sync with synthpod_app_ui
 	}
 
 	const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, urn);
-	int status = _sp_app_state_bundle_save(app, uri);
+	const int status = _sp_app_state_bundle_save(app, uri);
 	sp_app_log_note(app, "%s: <%s>\n", __func__, uri);
+
+	// signal to app
+	job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
+	if(job1)
+	{
+		job1->reply = JOB_TYPE_REPLY_BUNDLE_SAVE;
+		job1->status = status;
+		job1->urn = urn;
+		_sp_worker_to_app_advance(app, sizeof(job_t));
+	}
+	else
+	{
+		sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+	}
+}
+
+void
+sp_app_apply(sp_app_t *app, LV2_Atom_Object *obj, char *bundle_path)
+{
+	//FIXME not rt-safe
+	// manually switch to blocking state and wait for bundle to be saved
+	app->block_state = BLOCKING_STATE_WAIT; // wait for job
+
+	sp_app_restore(app, sp_app_state_retrieve, obj,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
+		sp_app_state_features(app, bundle_path));
+	sp_app_log_note(app, "%s: <%s>\n", __func__, bundle_path);
+
+	const int status = 0; //FIXME
+	const LV2_URID urn = 0; //FIXME
 
 	// signal to app
 	job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));

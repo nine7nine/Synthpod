@@ -163,6 +163,12 @@ LV2_Atom_Object *
 sp_app_stash(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
 
+void
+sp_app_apply(sp_app_t *app, LV2_Atom_Object *obj, char *bundle_path);
+
+const LV2_Feature *const *
+sp_app_state_features(sp_app_t *app, void *prefix_path);
+
 LV2_State_Status
 sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags, const LV2_Feature *const *features);
@@ -171,8 +177,8 @@ const void *
 sp_app_state_retrieve(LV2_State_Handle state, uint32_t key, size_t *size,
 	uint32_t *type, uint32_t *flags);
 
-const LV2_Feature *const *
-sp_app_state_features(sp_app_t *app, void *prefix_path);
+void
+sp_app_set_bundle_path(sp_app_t *app, const char *bundle_path);
 
 bool
 sp_app_bypassed(sp_app_t *app);

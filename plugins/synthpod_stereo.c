@@ -224,18 +224,11 @@ _work(LV2_Handle instance,
 	{
 		case JOB_TYPE_STASH:
 		{
-			fprintf(stderr, "stash: %s (%p)\n", job->stash.bundle_path,
-				job->stash.obj);
-
 			if(  job->stash.obj
 				&& job->stash.bundle_path
 				&& strlen(job->stash.bundle_path) )
 			{
-				//FIXME lock
-				sp_app_restore(handle->app, sp_app_state_retrieve, job->stash.obj,
-					LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, 
-					sp_app_state_features(handle->app, job->stash.bundle_path));
-				//FIXME unlock
+				sp_app_apply(handle->app, job->stash.obj, job->stash.bundle_path);
 			}
 
 			free(job->stash.bundle_path);
@@ -478,6 +471,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+	sp_app_set_bundle_path(handle->app, bundle_path);
 
 	return handle;
 }

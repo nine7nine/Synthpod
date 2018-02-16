@@ -1701,3 +1701,12 @@ sp_app_log_trace(sp_app_t *app, const char *fmt, ...)
 
 	return ret;
 }
+
+void
+sp_app_set_bundle_path(sp_app_t *app, const char *bundle_path)
+{
+	if(app->bundle_path)
+		free(app->bundle_path);
+
+	app->bundle_path = strdup(bundle_path);
+}
