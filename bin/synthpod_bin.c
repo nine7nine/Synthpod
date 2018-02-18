@@ -233,7 +233,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 	return 0;
 }
 
-__non_realtime static int
+__non_realtime static int __attribute__((format(printf, 3, 4)))
 _log_printf(void *data, LV2_URID type, const char *fmt, ...)
 {
   va_list args;

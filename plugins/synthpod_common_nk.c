@@ -558,7 +558,7 @@ _log_vprintf(plughandle_t *handle, LV2_URID typ, const char *fmt, va_list args)
 		: vfprintf(stderr, fmt, args);
 }
 
-static int
+static int __attribute__((format(printf, 2, 3)))
 _log_error(plughandle_t *handle, const char *fmt, ...)
 {
   va_list args;
@@ -571,7 +571,7 @@ _log_error(plughandle_t *handle, const char *fmt, ...)
 	return ret;
 }
 
-static int
+static int __attribute__((format(printf, 2, 3)))
 _log_note(plughandle_t *handle, const char *fmt, ...)
 {
   va_list args;
@@ -584,7 +584,7 @@ _log_note(plughandle_t *handle, const char *fmt, ...)
 	return ret;
 }
 
-static int
+static int __attribute__((format(printf, 2, 3)))
 _log_warning(plughandle_t *handle, const char *fmt, ...)
 {
   va_list args;
@@ -597,7 +597,7 @@ _log_warning(plughandle_t *handle, const char *fmt, ...)
 	return ret;
 }
 
-static int
+static int __attribute__((format(printf, 2, 3)))
 _log_trace(plughandle_t *handle, const char *fmt, ...)
 {
   va_list args;

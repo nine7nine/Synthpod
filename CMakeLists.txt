@@ -70,7 +70,7 @@ add_definitions("-DSYNTHPOD_MINOR_VERSION=${SYNTHPOD_MINOR_VERSION}")
 add_definitions("-DSYNTHPOD_MICRO_VERSION=${SYNTHPOD_MICRO_VERSION}")
 add_definitions("-DSYNTHPOD_VERSION=\"${SYNTHPOD_VERSION}\"")
 
-set(CMAKE_C_FLAGS "-std=gnu11 -Wextra -Wno-unused-parameter -Wno-attributes -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-std=gnu11 -Wextra -Wformat -Wno-unused-parameter -Wno-attributes -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
 set(CMAKE_C_FLAGS "-Wshadow -Wimplicit-function-declaration -Wmissing-prototypes -Wstrict-prototypes ${CMAKE_C_FLAGS}")
 
 set(CMAKE_CXX_FLAGS "-std=gnu++11 -Wextra -ffast-math -fvisibility=hidden ${CMAKE_CXX_FLAGS}")

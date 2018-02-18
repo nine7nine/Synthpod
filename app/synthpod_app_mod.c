@@ -88,7 +88,7 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 }
 
 //FIXME is actually __realtime
-__non_realtime static int
+__non_realtime static int __attribute__((format(printf, 3, 4)))
 _log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
 {
   va_list args;
@@ -343,8 +343,8 @@ _sp_app_mod_features_populate(sp_app_t *app, mod_t *mod)
 	return nfeatures;
 }
 
-const LilvPlugin *
-_sp_app_mod_is_supported(sp_app_t *app, const void *uri)
+static const LilvPlugin *
+_sp_app_mod_is_supported(sp_app_t *app, const char *uri)
 {
 	LilvNode *uri_node = lilv_new_uri(app->world, uri);
 	if(!uri_node)

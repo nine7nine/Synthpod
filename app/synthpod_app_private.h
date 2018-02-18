@@ -504,16 +504,16 @@ extern const port_driver_t seq_port_driver;
 /*
  * Debug
  */
-int
+int __attribute__((format(printf, 2, 3)))
 sp_app_log_error(sp_app_t *app, const char *fmt, ...);
 
-int
+int __attribute__((format(printf, 2, 3)))
 sp_app_log_note(sp_app_t *app, const char *fmt, ...);
 
-int
+int __attribute__((format(printf, 2, 3)))
 sp_app_log_warning(sp_app_t *app, const char *fmt, ...);
 
-int
+int __attribute__((format(printf, 2, 3)))
 sp_app_log_trace(sp_app_t *app, const char *fmt, ...);
 
 /*
@@ -642,9 +642,6 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path);
 /*
  * Mod
  */
-const LilvPlugin *
-_sp_app_mod_is_supported(sp_app_t *app, const void *uri);
-
 mod_t *
 _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn);
 

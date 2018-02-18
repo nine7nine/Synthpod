@@ -152,16 +152,16 @@ bin_bundle_save(bin_t *bin, const char *bundle_path);
 void
 bin_quit(bin_t *bin);
 
-int
+int __attribute__((format(printf, 2, 3)))
 bin_log_error(bin_t *bin, const char *fmt, ...);
 
-int
+int __attribute__((format(printf, 2, 3)))
 bin_log_note(bin_t *bin, const char *fmt, ...);
 
-int
+int __attribute__((format(printf, 2, 3)))
 bin_log_warning(bin_t *bin, const char *fmt, ...);
 
-int
+int __attribute__((format(printf, 2, 3)))
 bin_log_trace(bin_t *bin, const char *fmt, ...);
 
 int

@@ -172,7 +172,7 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 	return 0;
 }
 
-static inline int
+static inline int __attribute__((format(printf, 3, 4)))
 _log_printf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, ...)
 {
   va_list args;
