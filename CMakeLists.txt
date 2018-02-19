@@ -46,9 +46,6 @@ endif()
 set(SYNTHPOD_BIN_DIR "bin")
 add_definitions("-DSYNTHPOD_BIN_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BIN_DIR}/\"")
 
-set(SYNTHPOD_DATA_DIR "share/synthpod")
-add_definitions("-DSYNTHPOD_DATA_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_DATA_DIR}/\"")
-
 set(SYNTHPOD_BUNDLE_DIR "lib/synthpod/lv2")
 add_definitions("-DSYNTHPOD_BUNDLE_DIR=\"${CMAKE_INSTALL_PREFIX}/${SYNTHPOD_BUNDLE_DIR}/\"")
 
@@ -232,6 +229,5 @@ set(SANDBOX_LIBS
 add_subdirectory(app)
 add_subdirectory(bin)
 add_subdirectory(bundle)
-add_subdirectory(data)
 add_subdirectory(plugins)
 add_subdirectory(sandbox_ui.lv2)

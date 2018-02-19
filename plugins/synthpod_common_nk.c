@@ -363,8 +363,6 @@ struct _plughandle_t {
 	LV2UI_Write_Function writer;
 	LV2UI_Controller controller;
 	
-	const char *bundle_path;
-
 	nk_pugl_window_t win;
 
 	mod_t *module_selector;
@@ -7265,12 +7263,11 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 }
 
 static struct nk_image
-_icon_load(plughandle_t *handle, const char *file)
+_icon_load(plughandle_t *handle, const char *bundle_path, const char *file)
 {
 	struct nk_image img;
 	char *path;
-	//if(asprintf(&path, "%s%s", handle->bundle_path, file) != -1)
-	if(asprintf(&path, "%s%s", SYNTHPOD_DATA_DIR, file) != -1) //FIXME
+	if(asprintf(&path, "%s%s", bundle_path, file) != -1)
 	{
 		img = nk_pugl_icon_load(&handle->win, path);
 		free(path);
@@ -7431,24 +7428,24 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->type = PROPERTY_TYPE_AUDIO; //FIXME make configurable
 
-	handle->icon.atom = _icon_load(handle, "atom.png");
-	handle->icon.audio = _icon_load(handle, "audio.png");
-	handle->icon.control = _icon_load(handle, "control.png");
-	handle->icon.cv = _icon_load(handle, "cv.png");
-	handle->icon.midi = _icon_load(handle, "midi.png");
-	handle->icon.osc = _icon_load(handle, "osc.png");
-	handle->icon.patch = _icon_load(handle, "patch.png");
-	handle->icon.time = _icon_load(handle, "time.png");
-	handle->icon.xpress = _icon_load(handle, "xpress.png");
-	handle->icon.automaton = _icon_load(handle, "automaton.png");
-	handle->icon.plus = _icon_load(handle, "plus.png");
-	handle->icon.download = _icon_load(handle, "download.png");
-	handle->icon.cancel = _icon_load(handle, "cancel.png");
-	handle->icon.house = _icon_load(handle, "house.png");
-	handle->icon.layers = _icon_load(handle, "layers.png");
-	handle->icon.user = _icon_load(handle, "user.png");
-	handle->icon.settings = _icon_load(handle, "settings.png");
-	handle->icon.menu = _icon_load(handle, "menu.png");
+	handle->icon.atom = _icon_load(handle, bundle_path, "atom.png");
+	handle->icon.audio = _icon_load(handle, bundle_path, "audio.png");
+	handle->icon.control = _icon_load(handle, bundle_path, "control.png");
+	handle->icon.cv = _icon_load(handle, bundle_path, "cv.png");
+	handle->icon.midi = _icon_load(handle, bundle_path, "midi.png");
+	handle->icon.osc = _icon_load(handle, bundle_path, "osc.png");
+	handle->icon.patch = _icon_load(handle, bundle_path, "patch.png");
+	handle->icon.time = _icon_load(handle, bundle_path, "time.png");
+	handle->icon.xpress = _icon_load(handle, bundle_path, "xpress.png");
+	handle->icon.automaton = _icon_load(handle, bundle_path, "automaton.png");
+	handle->icon.plus = _icon_load(handle, bundle_path, "plus.png");
+	handle->icon.download = _icon_load(handle, bundle_path, "download.png");
+	handle->icon.cancel = _icon_load(handle, bundle_path, "cancel.png");
+	handle->icon.house = _icon_load(handle, bundle_path, "house.png");
+	handle->icon.layers = _icon_load(handle, bundle_path, "layers.png");
+	handle->icon.user = _icon_load(handle, bundle_path, "user.png");
+	handle->icon.settings = _icon_load(handle, bundle_path, "settings.png");
+	handle->icon.menu = _icon_load(handle, bundle_path, "menu.png");
 
 	handle->show_sidebar = 1;
 	handle->show_bottombar = 1;
