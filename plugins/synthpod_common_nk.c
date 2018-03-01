@@ -548,9 +548,14 @@ static const char *auto_labels [] = {
 	[AUTO_OSC] = "OSC"
 };
 
+#if 1
+#	define DBG fprintf(stderr, ":: %s\n", __func__)
+#endif
+
 static int
 _log_vprintf(plughandle_t *handle, LV2_URID typ, const char *fmt, va_list args)
 {
+	DBG;
 	return handle->log
 		? lv2_log_vprintf(&handle->logger, typ, fmt, args)
 		: vfprintf(stderr, fmt, args);
@@ -559,6 +564,7 @@ _log_vprintf(plughandle_t *handle, LV2_URID typ, const char *fmt, va_list args)
 static int __attribute__((format(printf, 2, 3)))
 _log_error(plughandle_t *handle, const char *fmt, ...)
 {
+	DBG;
   va_list args;
 	int ret;
 
@@ -572,6 +578,7 @@ _log_error(plughandle_t *handle, const char *fmt, ...)
 static int __attribute__((format(printf, 2, 3)))
 _log_note(plughandle_t *handle, const char *fmt, ...)
 {
+	DBG;
   va_list args;
 	int ret;
 
@@ -585,6 +592,7 @@ _log_note(plughandle_t *handle, const char *fmt, ...)
 static int __attribute__((format(printf, 2, 3)))
 _log_warning(plughandle_t *handle, const char *fmt, ...)
 {
+	DBG;
   va_list args;
 	int ret;
 
@@ -598,6 +606,7 @@ _log_warning(plughandle_t *handle, const char *fmt, ...)
 static int __attribute__((format(printf, 2, 3)))
 _log_trace(plughandle_t *handle, const char *fmt, ...)
 {
+	DBG;
   va_list args;
 	int ret;
 
@@ -611,6 +620,7 @@ _log_trace(plughandle_t *handle, const char *fmt, ...)
 static struct nk_image
 _image_new(plughandle_t *handle, unsigned w, unsigned h, const void *data)
 {
+	DBG;
 	GLuint tex = 0;
 
 	puglEnterContext(handle->win.view);
@@ -635,6 +645,7 @@ _image_new(plughandle_t *handle, unsigned w, unsigned h, const void *data)
 static void
 _image_free(plughandle_t *handle, struct nk_image *img)
 {
+	DBG;
 	if(img->handle.id)
 	{
 		puglEnterContext(handle->win.view);
@@ -649,12 +660,14 @@ _image_free(plughandle_t *handle, struct nk_image *img)
 static bool
 _image_empty(struct nk_image *img)
 {
+	DBG;
 	return (img->handle.id == 0);	
 }
 
 static inline bool
 _message_request(plughandle_t *handle)
 {
+	DBG;
 	lv2_atom_forge_set_buffer(&handle->forge, handle->buf, ATOM_BUF_MAX);
 	return true;
 }
@@ -662,6 +675,7 @@ _message_request(plughandle_t *handle)
 static inline void
 _message_write(plughandle_t *handle)
 {
+	DBG;
 	handle->writer(handle->controller, CONTROL, lv2_atom_total_size(&handle->atom),
 		handle->regs.port.event_transfer.urid, &handle->atom);
 }
@@ -669,18 +683,21 @@ _message_write(plughandle_t *handle)
 static size_t
 _textedit_len(struct nk_text_edit *edit)
 {
+	DBG;
 	return nk_str_len(&edit->string);
 }
 
 static const char *
 _textedit_const(struct nk_text_edit *edit)
 {
+	DBG;
 	return nk_str_get_const(&edit->string);
 }
 
 static void
 _textedit_zero_terminate(struct nk_text_edit *edit)
 {
+	DBG;
 	char *str = nk_str_get(&edit->string);
 	if(str)
 		str[nk_str_len(&edit->string)] = '\0';
@@ -695,18 +712,21 @@ _textedit_zero_terminate(struct nk_text_edit *edit)
 static bool
 _hash_empty(hash_t *hash)
 {
+	DBG;
 	return hash->size == 0;
 }
 
 static size_t
 _hash_size(hash_t *hash)
 {
+	DBG;
 	return hash->size;
 }
 
 static void
 _hash_add(hash_t *hash, void *node)
 {
+	DBG;
 	hash->nodes = realloc(hash->nodes, (hash->size + 1)*sizeof(void *));
 	if(hash->nodes)
 	{
@@ -718,6 +738,7 @@ _hash_add(hash_t *hash, void *node)
 static void
 _hash_remove(hash_t *hash, void *node)
 {
+	DBG;
 	void **nodes = NULL;
 	size_t size = 0;
 
@@ -744,6 +765,7 @@ _hash_remove(hash_t *hash, void *node)
 static void
 _hash_remove_cb(hash_t *hash, bool (*cb)(void *node, void *data), void *data)
 {
+	DBG;
 	void **nodes = NULL;
 	size_t size = 0;
 
@@ -770,6 +792,7 @@ _hash_remove_cb(hash_t *hash, bool (*cb)(void *node, void *data), void *data)
 static void
 _hash_free(hash_t *hash)
 {
+	DBG;
 	free(hash->nodes);
 	hash->nodes = NULL;
 	hash->size = 0;
@@ -778,6 +801,7 @@ _hash_free(hash_t *hash)
 static void *
 _hash_pop(hash_t *hash)
 {
+	DBG;
 	if(hash->size)
 	{
 		void *node = hash->nodes[--hash->size];
@@ -794,6 +818,7 @@ _hash_pop(hash_t *hash)
 static void
 _hash_sort(hash_t *hash, int (*cmp)(const void *a, const void *b))
 {
+	DBG;
 	if(hash->size)
 		qsort(hash->nodes, hash->size, sizeof(void *), cmp);
 }
@@ -803,6 +828,7 @@ static void
 _hash_sort_r(hash_t *hash, int (*cmp)(void *data, const void *a, const void *b),
 	void *data)
 {
+	DBG;
 	if(hash->size)
 		qsort_r(hash->nodes, hash->size, sizeof(void *), data, cmp);
 }
@@ -810,6 +836,7 @@ _hash_sort_r(hash_t *hash, int (*cmp)(void *data, const void *a, const void *b),
 _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
 	void *data)
 {
+	DBG;
 	if(hash->size)
 		qsort_r(hash->nodes, hash->size, sizeof(void *), cmp, data);
 }
@@ -818,6 +845,7 @@ _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
 static int
 _node_as_int(const LilvNode *node, int dflt)
 {
+	DBG;
 	if(lilv_node_is_int(node))
 		return lilv_node_as_int(node);
 	else if(lilv_node_is_float(node))
@@ -831,6 +859,7 @@ _node_as_int(const LilvNode *node, int dflt)
 static float
 _node_as_float(const LilvNode *node, float dflt)
 {
+	DBG;
 	if(lilv_node_is_int(node))
 		return lilv_node_as_int(node);
 	else if(lilv_node_is_float(node))
@@ -844,6 +873,7 @@ _node_as_float(const LilvNode *node, float dflt)
 static int32_t
 _node_as_bool(const LilvNode *node, int32_t dflt)
 {
+	DBG;
 	if(lilv_node_is_int(node))
 		return lilv_node_as_int(node) != 0;
 	else if(lilv_node_is_float(node))
@@ -857,6 +887,7 @@ _node_as_bool(const LilvNode *node, int32_t dflt)
 static LV2_Atom_Forge_Ref
 _patch_connection_internal(plughandle_t *handle, port_t *source_port, port_t *sink_port, float gain)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
@@ -887,6 +918,7 @@ _patch_connection_internal(plughandle_t *handle, port_t *source_port, port_t *si
 static void
 _patch_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_port, float gain)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -903,6 +935,7 @@ _patch_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_po
 static void
 _patch_connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink_port)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -920,6 +953,7 @@ static LV2_Atom_Forge_Ref
 _patch_node_internal(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod,
 	float x, float y)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.source_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_mod->urn);
@@ -952,6 +986,7 @@ static void
 _patch_node_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod,
 	float x, float y)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -968,6 +1003,7 @@ _patch_node_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod,
 static void
 _patch_node_remove(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -984,6 +1020,7 @@ _patch_node_remove(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 static LV2_Atom_Forge_Ref
 _patch_subscription_internal(plughandle_t *handle, port_t *source_port)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
@@ -999,6 +1036,7 @@ _patch_subscription_internal(plughandle_t *handle, port_t *source_port)
 static void
 _patch_subscription_add(plughandle_t *handle, port_t *source_port)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1015,6 +1053,7 @@ _patch_subscription_add(plughandle_t *handle, port_t *source_port)
 static void
 _patch_subscription_remove(plughandle_t *handle, port_t *source_port)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1031,6 +1070,7 @@ _patch_subscription_remove(plughandle_t *handle, port_t *source_port)
 static void
 _mod_unsubscribe_all(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	HASH_FOREACH(&mod->ports, port_itr)
 	{
 		port_t *port = *port_itr;
@@ -1042,6 +1082,7 @@ _mod_unsubscribe_all(plughandle_t *handle, mod_t *mod)
 static void
 _mod_subscribe_all(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	HASH_FOREACH(&mod->ports, port_itr)
 	{
 		port_t *port = *port_itr;
@@ -1054,6 +1095,7 @@ static LV2_Atom_Forge_Ref
 _patch_notification_internal(plughandle_t *handle, port_t *source_port,
 	uint32_t size, LV2_URID type, const void *body)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
@@ -1077,6 +1119,7 @@ static void
 _patch_notification_add(plughandle_t *handle, port_t *source_port,
 	LV2_URID proto, uint32_t size, LV2_URID type, const void *body)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1095,6 +1138,7 @@ _patch_notification_patch_set_internal(plughandle_t *handle, port_t *source_port
 	LV2_URID subject, int32_t seqn, LV2_URID property,
 	uint32_t size, LV2_URID type, const void *body)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
@@ -1118,6 +1162,7 @@ _patch_notification_add_patch_set(plughandle_t *handle, mod_t *mod,
 	LV2_URID proto, LV2_URID subject, int32_t seqn, LV2_URID property,
 	uint32_t size, LV2_URID type, const void *body)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	HASH_FOREACH(&mod->ports, port_itr)
@@ -1145,6 +1190,7 @@ static LV2_Atom_Forge_Ref
 _patch_notification_patch_get_internal(plughandle_t *handle, port_t *source_port,
 	LV2_URID subject, int32_t seqn, LV2_URID property)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
@@ -1167,6 +1213,7 @@ static void
 _patch_notification_add_patch_get(plughandle_t *handle, mod_t *mod,
 	LV2_URID proto, LV2_URID subject, int32_t seqn, LV2_URID property)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	HASH_FOREACH(&mod->ports, port_itr)
@@ -1193,6 +1240,7 @@ _patch_notification_add_patch_get(plughandle_t *handle, mod_t *mod,
 static LV2_Atom_Forge_Ref
 _patch_port_automation_internal(plughandle_t *handle, port_t *source_port)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_port->mod->urn);
@@ -1208,6 +1256,7 @@ _patch_port_automation_internal(plughandle_t *handle, port_t *source_port)
 static LV2_Atom_Forge_Ref
 _patch_param_automation_internal(plughandle_t *handle, param_t *source_param)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.synthpod.sink_module.urid);
 	if(ref)
 		ref = lv2_atom_forge_urid(&handle->forge, source_param->mod->urn);
@@ -1228,6 +1277,7 @@ _patch_param_automation_internal(plughandle_t *handle, param_t *source_param)
 static LV2_Atom_Forge_Ref
 _patch_midi_automation_internal(plughandle_t *handle, auto_t *automation)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.midi.channel.urid);
 	if(ref)
 		ref = lv2_atom_forge_int(&handle->forge, automation->midi.channel);
@@ -1278,6 +1328,7 @@ _patch_midi_automation_internal(plughandle_t *handle, auto_t *automation)
 static LV2_Atom_Forge_Ref
 _patch_osc_automation_internal(plughandle_t *handle, auto_t *automation)
 {
+	DBG;
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_key(&handle->forge, handle->regs.osc.path.urid);
 	if(ref)
 		ref = lv2_atom_forge_string(&handle->forge, automation->osc.path, strlen(automation->osc.path));
@@ -1324,6 +1375,7 @@ static void
 _patch_port_midi_automation_add(plughandle_t *handle, port_t *source_port,
 	auto_t *automation)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1341,6 +1393,7 @@ _patch_port_midi_automation_add(plughandle_t *handle, port_t *source_port,
 static void
 _patch_port_automation_remove(plughandle_t *handle, port_t *source_port)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1358,6 +1411,7 @@ static void
 _patch_port_osc_automation_add(plughandle_t *handle, port_t *source_port,
 	auto_t *automation)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1375,6 +1429,7 @@ _patch_port_osc_automation_add(plughandle_t *handle, port_t *source_port,
 static inline double
 _param_union_as_double(LV2_Atom_Forge *forge, LV2_URID range, param_union_t *pu)
 {
+	DBG;
 	if(range == forge->Bool)
 		return pu->b;
 	else if(range == forge->Int)
@@ -1395,6 +1450,7 @@ static void
 _patch_param_midi_automation_add(plughandle_t *handle, param_t *source_param,
 	auto_t *automation)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1413,6 +1469,7 @@ static void
 _patch_param_osc_automation_add(plughandle_t *handle, param_t *source_param,
 	auto_t *automation)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1430,6 +1487,7 @@ _patch_param_osc_automation_add(plughandle_t *handle, param_t *source_param,
 static void
 _patch_param_automation_remove(plughandle_t *handle, param_t *source_param)
 {
+	DBG;
 	LV2_Atom_Forge_Frame frame [3];
 
 	if(  _message_request(handle)
@@ -1449,6 +1507,7 @@ _port_conn_free(port_conn_t *port_conn);
 static mod_conn_t *
 _mod_conn_find(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 {
+	DBG;
 	HASH_FOREACH(&handle->conns, mod_conn_itr)
 	{
 		mod_conn_t *mod_conn = *mod_conn_itr;
@@ -1463,6 +1522,7 @@ _mod_conn_find(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod)
 static mod_conn_t *
 _mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod, bool sync)
 {
+	DBG;
 	mod_conn_t *mod_conn = calloc(1, sizeof(mod_conn_t));
 	if(mod_conn)
 	{
@@ -1485,6 +1545,7 @@ _mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod, bool syn
 static void
 _mod_conn_free(plughandle_t *handle, mod_conn_t *mod_conn)
 {
+	DBG;
 	HASH_FREE(&mod_conn->conns, port_conn_ptr)
 	{
 		port_conn_t *port_conn = port_conn_ptr;
@@ -1498,6 +1559,7 @@ _mod_conn_free(plughandle_t *handle, mod_conn_t *mod_conn)
 static void
 _mod_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn)
 {
+	DBG;
 	_hash_remove(&handle->conns, mod_conn);
 	_mod_conn_free(handle, mod_conn);
 }
@@ -1505,6 +1567,7 @@ _mod_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn)
 static void
 _mod_conn_refresh_type(mod_conn_t *mod_conn)
 {
+	DBG;
 	mod_conn->source_type = PROPERTY_TYPE_NONE;
 	mod_conn->sink_type = PROPERTY_TYPE_NONE;
 
@@ -1520,6 +1583,7 @@ _mod_conn_refresh_type(mod_conn_t *mod_conn)
 static port_t *
 _mod_port_find_by_symbol(mod_t *mod, const char *symbol)
 {
+	DBG;
 	HASH_FOREACH(&mod->ports, port_itr)
 	{
 		port_t *port = *port_itr;
@@ -1534,6 +1598,7 @@ _mod_port_find_by_symbol(mod_t *mod, const char *symbol)
 static port_t *
 _mod_port_find_by_index(mod_t *mod, uint32_t index)
 {
+	DBG;
 	HASH_FOREACH(&mod->ports, port_itr)
 	{
 		port_t *port = *port_itr;
@@ -1548,6 +1613,7 @@ _mod_port_find_by_index(mod_t *mod, uint32_t index)
 static param_t *
 _mod_param_find_by_property(mod_t *mod, LV2_URID property)
 {
+	DBG;
 	HASH_FOREACH(&mod->params, param_itr)
 	{
 		param_t *param = *param_itr;
@@ -1569,6 +1635,7 @@ _mod_param_find_by_property(mod_t *mod, LV2_URID property)
 static param_t *
 _mod_dynam_find_by_property(mod_t *mod, LV2_URID property)
 {
+	DBG;
 	HASH_FOREACH(&mod->dynams, param_itr)
 	{
 		param_t *param = *param_itr;
@@ -1583,6 +1650,7 @@ _mod_dynam_find_by_property(mod_t *mod, LV2_URID property)
 static mod_t *
 _mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
 {
+	DBG;
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
 		mod_t *mod = *mod_itr;
@@ -1597,6 +1665,7 @@ _mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
 static bool
 _mod_ui_is_running(mod_ui_t *mod_ui)
 {
+	DBG;
 	return (mod_ui->pid != 0) && mod_ui->sbox.sb;
 }
 
@@ -1604,6 +1673,7 @@ static void
 _mod_uis_send(mod_t *mod, uint32_t index, uint32_t size, uint32_t format,
 	const void *buf)
 {
+	DBG;
 	plughandle_t *handle = mod->handle;
 
 	HASH_FOREACH(&mod->uis, mod_ui_itr)
@@ -1622,6 +1692,7 @@ _mod_uis_send(mod_t *mod, uint32_t index, uint32_t size, uint32_t format,
 static void
 _param_update_span(plughandle_t *handle, param_t *param)
 {
+	DBG;
 	if(param->range == handle->forge.Int)
 		param->span.i = param->max.i - param->min.i;
 	else if(param->range == handle->forge.Bool)
@@ -1638,6 +1709,7 @@ _param_update_span(plughandle_t *handle, param_t *param)
 static int
 _sort_scale_point_name(const void *a, const void *b)
 {
+	DBG;
 	const scale_point_t *scale_point_a = *(const scale_point_t **)a;
 	const scale_point_t *scale_point_b = *(const scale_point_t **)b;
 
@@ -1654,6 +1726,7 @@ _sort_scale_point_name(const void *a, const void *b)
 static char *
 _unit_symbol_obj(plughandle_t *handle, LilvNode *units_unit)
 {
+	DBG;
 	char *symbol = NULL;
 
 	LilvNode *units_symbol = lilv_world_get(handle->world, units_unit, handle->regs.units.symbol.node, NULL);
@@ -1671,6 +1744,7 @@ _unit_symbol_obj(plughandle_t *handle, LilvNode *units_unit)
 static char *
 _unit_symbol(plughandle_t *handle, const char *uri)
 {
+	DBG;
 	char *symbol = NULL;
 
 	LilvNode *units_unit = lilv_new_uri(handle->world, uri);
@@ -1687,6 +1761,7 @@ _unit_symbol(plughandle_t *handle, const char *uri)
 static void
 _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 {
+	DBG;
 	param->property = handle->map->map(handle->map->handle, lilv_node_as_uri(param_node));
 
 	LilvNode *range = lilv_world_get(handle->world, param_node, handle->node.rdfs_range, NULL);
@@ -1857,6 +1932,7 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 static param_t *
 _param_add(mod_t *mod, hash_t *hash, bool is_readonly)
 {
+	DBG;
 	param_t *param = calloc(1, sizeof(param_t));
 	if(param)
 	{
@@ -1873,6 +1949,7 @@ _param_add(mod_t *mod, hash_t *hash, bool is_readonly)
 static void
 _param_free(plughandle_t *handle, param_t *param)
 {
+	DBG;
 	if(param->range == handle->forge.String)
 	{
 		nk_textedit_free(&param->val.editor);
@@ -1901,6 +1978,7 @@ _param_free(plughandle_t *handle, param_t *param)
 static void
 _set_string(struct nk_str *str, uint32_t size, const char *body)
 {
+	DBG;
 	nk_str_clear(str);
 
 	// replace tab with 2 spaces
@@ -1919,6 +1997,7 @@ _set_string(struct nk_str *str, uint32_t size, const char *body)
 static void
 _param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
 {
+	DBG;
 	if(param->range == handle->forge.Int)
 	{
 		param->val.i = ((const LV2_Atom_Int *)value)->body;
@@ -1957,6 +2036,7 @@ _param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
 static void
 _refresh_main_dynam_list(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	_hash_free(&handle->dynam_matches);
 
 	bool search = _textedit_len(&handle->port_search_edit) != 0;
@@ -1983,6 +2063,7 @@ _refresh_main_dynam_list(plughandle_t *handle, mod_t *mod)
 static int
 _sort_param_name(const void *a, const void *b)
 {
+	DBG;
 	const param_t *param_a = *(const param_t **)a;
 	const param_t *param_b = *(const param_t **)b;
 
@@ -2000,6 +2081,7 @@ static void
 _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 	uint32_t src_proto, const LV2_Atom *src_value, bool route_to_ui)
 {
+	DBG;
 	if(  (src_proto == handle->regs.port.float_protocol.urid)
 		&& (src_value->type == handle->forge.Float)
 		&& (src_port->type & PROPERTY_TYPE_CONTROL) )
@@ -2401,6 +2483,7 @@ static bool
 _mod_ui_write_function(LV2UI_Controller controller, uint32_t index,
 	uint32_t size, uint32_t protocol, const void *buffer)
 {
+	DBG;
 	mod_ui_t *mod_ui = controller;
 	mod_t *mod = mod_ui->mod;
 	plughandle_t *handle = mod->handle;
@@ -2449,6 +2532,7 @@ static void
 _mod_ui_subscribe_function(LV2UI_Controller controller, uint32_t index,
 	uint32_t protocol, bool state)
 {
+	DBG;
 	mod_ui_t *mod_ui = controller;
 	mod_t *mod = mod_ui->mod;
 	plughandle_t *handle = mod->handle;
@@ -2464,6 +2548,7 @@ _mod_ui_subscribe_function(LV2UI_Controller controller, uint32_t index,
 static mod_ui_t *
 _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 {
+	DBG;
 	const LilvNode *ui_node = lilv_ui_get_uri(ui);
 	const LilvNode *bundle_node = lilv_ui_get_bundle_uri(ui);
 
@@ -2548,6 +2633,7 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 static void
 _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 {
+	DBG;
 	const LilvUI *ui = mod_ui->ui;
 	const LilvNode *ui_node = lilv_ui_get_uri(ui);
 	mod_t *mod = mod_ui->mod;
@@ -2637,6 +2723,7 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 static void
 _mod_ui_stop(mod_ui_t *mod_ui, bool sync)
 {
+	DBG;
 	mod_t *mod = mod_ui->mod;
 	plughandle_t *handle = mod->handle;
 
@@ -2672,6 +2759,7 @@ _mod_ui_stop(mod_ui_t *mod_ui, bool sync)
 static void
 _mod_ui_free(mod_ui_t *mod_ui)
 {
+	DBG;
 	mod_t *mod = mod_ui->mod;
 	plughandle_t *handle = mod->handle;
 
@@ -2695,6 +2783,7 @@ _mod_ui_free(mod_ui_t *mod_ui)
 static port_conn_t *
 _port_conn_find(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
 {
+	DBG;
 	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
 	{
 		port_conn_t *port_conn = *port_conn_itr;
@@ -2709,6 +2798,7 @@ _port_conn_find(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port)
 static port_conn_t *
 _port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port, float gain)
 {
+	DBG;
 	port_conn_t *port_conn = calloc(1, sizeof(port_conn_t));
 	if(port_conn)
 	{
@@ -2727,12 +2817,14 @@ _port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port, flo
 static void
 _port_conn_free(port_conn_t *port_conn)
 {
+	DBG;
 	free(port_conn);
 }
 
 static void
 _port_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn, port_conn_t *port_conn)
 {
+	DBG;
 	_hash_remove(&mod_conn->conns, port_conn);
 	_port_conn_free(port_conn);
 
@@ -2745,6 +2837,7 @@ _port_conn_remove(plughandle_t *handle, mod_conn_t *mod_conn, port_conn_t *port_
 static inline float
 dBFSp6(float peak)
 {
+	DBG;
 	const float d = 6.f + 20.f * log10f(fabsf(peak) / 2.f);
 	const float e = (d + 64.f) / 70.f;
 	return NK_CLAMP(0.f, e, 1.f);
@@ -2754,6 +2847,7 @@ dBFSp6(float peak)
 static inline float
 dBFS(float peak)
 {
+	DBG;
 	const float d = 20.f * log10f(fabsf(peak));
 	const float e = (d + 70.f) / 70.f;
 	return NK_CLAMP(0.f, e, 1.f);
@@ -2808,6 +2902,7 @@ _sort_rdfs_label(const void *a, const void *b, void *data)
 static int
 _sort_port_name(const void *a, const void *b)
 {
+	DBG;
 	const port_t *port_a = *(const port_t **)a;
 	const port_t *port_b = *(const port_t **)b;
 
@@ -2824,6 +2919,7 @@ _sort_port_name(const void *a, const void *b)
 static void
 _patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 {
+	DBG;
 	const LilvNode *node= lilv_plugin_get_uri(plug);
 	const char *uri = lilv_node_as_string(node);
 	const LV2_URID urid = handle->map->map(handle->map->handle, uri);
@@ -2840,6 +2936,7 @@ _patch_mod_add(plughandle_t *handle, const LilvPlugin *plug)
 static void
 _patch_mod_remove(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	if(  _message_request(handle)
 		&& synthpod_patcher_remove(&handle->regs, &handle->forge,
 			0, 0, handle->regs.synthpod.module_list.urid, //TODO subject
@@ -2852,6 +2949,7 @@ _patch_mod_remove(plughandle_t *handle, mod_t *mod)
 static void
 _patch_mod_preset_set(plughandle_t *handle, mod_t *mod, const LilvNode *preset)
 {
+	DBG;
 	const char *preset_uri = lilv_node_as_uri(preset);
 	const LV2_URID preset_urid = handle->map->map(handle->map->handle, preset_uri);;
 
@@ -2867,6 +2965,7 @@ _patch_mod_preset_set(plughandle_t *handle, mod_t *mod, const LilvNode *preset)
 static void
 _patch_mod_preset_save(plughandle_t *handle)
 {
+	DBG;
 	mod_t *mod = handle->module_selector;
 	if(!mod)
 		return;
@@ -2908,6 +3007,7 @@ _patch_mod_preset_save(plughandle_t *handle)
 static mod_t *
 _mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
 {
+	DBG;
 	HASH_FOREACH(&handle->mods, itr)
 	{
 		mod_t *mod = *itr;
@@ -2922,6 +3022,7 @@ _mod_find_by_subject(plughandle_t *handle, LV2_URID subj)
 static void
 _mod_add(plughandle_t *handle, LV2_URID urn)
 {
+	DBG;
 	const struct nk_vec2 scrolling = handle->scrolling;
 	const float dx = 200.f; //FIXME
 	const float dy = 50.f; //FIXME
@@ -2995,6 +3096,7 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 static void
 _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 {
+	DBG;
 	if(mod->plug) // already initialized
 		return;
 
@@ -3374,6 +3476,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 static void
 _port_free(port_t *port)
 {
+	DBG;
 	if(port->type == PROPERTY_TYPE_CONTROL)
 	{
 		free(port->control.units_symbol);
@@ -3386,6 +3489,7 @@ _port_free(port_t *port)
 static void
 _mod_free(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	HASH_FREE(&mod->ports, ptr)
 	{
 		port_t *port = ptr;
@@ -3456,6 +3560,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 static bool
 _mod_remove_cb(void *node, void *data)
 {
+	DBG;
 	mod_conn_t *mod_conn = node;
 	mod_t *mod = data;
 	plughandle_t *handle = mod->handle;
@@ -3474,6 +3579,7 @@ _mod_remove_cb(void *node, void *data)
 static void
 _mod_remove(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	_hash_remove(&handle->mods, mod);
 	_hash_remove_cb(&handle->conns, _mod_remove_cb, mod);
 	_mod_free(handle, mod);
@@ -3482,6 +3588,7 @@ _mod_remove(plughandle_t *handle, mod_t *mod)
 static bool
 _tooltip_visible(struct nk_context *ctx)
 {
+	DBG;
 	return nk_widget_has_mouse_click_down(ctx, NK_BUTTON_RIGHT, nk_true)
 		|| (nk_widget_is_hovered(ctx) && nk_input_is_key_down(&ctx->input, NK_KEY_CTRL));
 }
@@ -3489,6 +3596,7 @@ _tooltip_visible(struct nk_context *ctx)
 static bool
 _toolbar_button(struct nk_context *ctx, char key, struct nk_image icon)
 {
+	DBG;
 	struct nk_style *style = &ctx->style;
 	bool is_hovered = nk_widget_is_hovered(ctx);
 
@@ -3516,6 +3624,7 @@ _toolbar_button(struct nk_context *ctx, char key, struct nk_image icon)
 static void
 _toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image icon)
 {
+	DBG;
 	struct nk_style *style = &ctx->style;
 	const bool is_hovered = nk_widget_is_hovered(ctx);
 
@@ -3545,6 +3654,7 @@ _toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image i
 static bool
 _toolbar_toggled(struct nk_context *ctx, bool state, char key, struct nk_image icon)
 {
+	DBG;
 	_toolbar_toggle(ctx, &state, key, icon);
 	return state;
 }
@@ -3552,6 +3662,7 @@ _toolbar_toggled(struct nk_context *ctx, bool state, char key, struct nk_image i
 static void
 _toolbar_labeld(struct nk_context *ctx, bool *state, char key, const char *label)
 {
+	DBG;
 	struct nk_style *style = &ctx->style;
 	const bool is_hovered = nk_widget_is_hovered(ctx);
 
@@ -3581,6 +3692,7 @@ _toolbar_labeld(struct nk_context *ctx, bool *state, char key, const char *label
 static bool
 _toolbar_label(struct nk_context *ctx, bool state, char key, const char *label)
 {
+	DBG;
 	_toolbar_labeld(ctx, &state, key, label);
 	return state ;
 }
@@ -3588,6 +3700,7 @@ _toolbar_label(struct nk_context *ctx, bool state, char key, const char *label)
 static void
 _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
+	DBG;
 	struct nk_style *style = &ctx->style;
 
 	nk_menubar_begin(ctx);
@@ -3660,6 +3773,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 static int
 _sort_plugin_name(const void *a, const void *b)
 {
+	DBG;
 	const LilvPlugin *plug_a = *(const LilvPlugin **)a;
 	const LilvPlugin *plug_b = *(const LilvPlugin **)b;
 
@@ -3689,6 +3803,7 @@ _sort_plugin_name(const void *a, const void *b)
 static void
 _discover_bundles(plughandle_t *handle)
 {
+	DBG;
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
 	if(!plugs)
 		return;
@@ -3719,6 +3834,7 @@ _discover_bundles(plughandle_t *handle)
 static void
 _undiscover_bundles(plughandle_t *handle)
 {
+	DBG;
 	if(handle->bundles)
 	{
 		LILV_FOREACH(nodes, itr, handle->bundles)
@@ -3735,6 +3851,7 @@ _undiscover_bundles(plughandle_t *handle)
 static void
 _refresh_main_bundle_list(plughandle_t *handle)
 {
+	DBG;
 	_hash_free(&handle->bundle_matches);
 
 	bool search = _textedit_len(&handle->bundle_search_edit) != 0;
@@ -3767,6 +3884,7 @@ static void
 _expose_main_bundle_list(plughandle_t *handle, struct nk_context *ctx,
 	bool find_matches)
 {
+	DBG;
 	if(_hash_empty(&handle->bundle_matches) || find_matches)
 		_refresh_main_bundle_list(handle);
 
@@ -3826,6 +3944,7 @@ _expose_main_bundle_list(plughandle_t *handle, struct nk_context *ctx,
 static void
 _refresh_main_plugin_list(plughandle_t *handle)
 {
+	DBG;
 	_hash_free(&handle->plugin_matches);
 
 	const LilvPlugins *plugs = lilv_world_get_all_plugins(handle->world);
@@ -3931,6 +4050,7 @@ static void
 _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx,
 	bool find_matches)
 {
+	DBG;
 	if(_hash_empty(&handle->plugin_matches) || find_matches)
 		_refresh_main_plugin_list(handle);
 
@@ -3968,6 +4088,7 @@ _expose_main_plugin_list(plughandle_t *handle, struct nk_context *ctx,
 static void
 _expose_main_plugin_info(plughandle_t *handle, struct nk_context *ctx)
 {
+	DBG;
 	const LilvPlugin *plug = handle->plugin_selector;
 
 	if(!plug)
@@ -4025,6 +4146,7 @@ static void
 _refresh_main_preset_list_for_bank(plughandle_t *handle,
 	LilvNodes *presets, const LilvNode *preset_bank, bool search)
 {
+	DBG;
 	LILV_FOREACH(nodes, i, presets)
 	{
 		const LilvNode *preset = lilv_nodes_get(presets, i);
@@ -4066,6 +4188,7 @@ _refresh_main_preset_list_for_bank(plughandle_t *handle,
 static void
 _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	bool search = _textedit_len(&handle->preset_search_edit) != 0;
 	_hash_free(&handle->preset_matches);
 
@@ -4092,6 +4215,7 @@ _refresh_main_preset_list(plughandle_t *handle, mod_t *mod)
 static void
 _tab_label(struct nk_context *ctx, const char *label)
 {
+	DBG;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	struct nk_rect bounds = nk_widget_bounds(ctx);
 
@@ -4103,6 +4227,7 @@ static void
 _expose_main_preset_list_for_bank(plughandle_t *handle, mod_t *mod,
 	struct nk_context *ctx, const LilvNode *preset_bank)
 {
+	DBG;
 	bool first = true;
 	int count = 0;
 	HASH_FOREACH(&handle->preset_matches, itr)
@@ -4192,6 +4317,7 @@ static void
 _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 	bool find_matches)
 {
+	DBG;
 	mod_t *mod = handle->module_selector;
 
 	if(mod && mod->presets)
@@ -4214,6 +4340,7 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 static void
 _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 {
+	DBG;
 	const LilvNode *preset = handle->preset_selector;
 
 	if(!preset)
@@ -4262,6 +4389,7 @@ _expose_main_preset_info(plughandle_t *handle, struct nk_context *ctx)
 static int
 _dial_bool(struct nk_context *ctx, int32_t *val, struct nk_color color, bool editable)
 {
+	DBG;
 	const int32_t tmp = *val;
 	struct nk_rect bounds;
 	const bool left_mouse_click_in_cursor = nk_widget_is_mouse_clicked(ctx, NK_BUTTON_LEFT);
@@ -4349,6 +4477,7 @@ static float
 _dial_numeric_behavior(struct nk_context *ctx, struct nk_rect bounds,
 	enum nk_widget_states *states, int *divider, struct nk_input *in)
 {
+	DBG;
 	const struct nk_mouse_button *btn = &in->mouse.buttons[NK_BUTTON_LEFT];;
 	const bool left_mouse_down = btn->down;
 	const bool left_mouse_click_in_cursor = nk_input_has_mouse_click_down_in_rect(in,
@@ -4384,6 +4513,7 @@ static void
 _dial_numeric_draw(struct nk_context *ctx, struct nk_rect bounds,
 	enum nk_widget_states states, float perc, struct nk_color color)
 {
+	DBG;
 	struct nk_command_buffer *canv= nk_window_get_canvas(ctx);
 	const struct nk_style_item *bg = NULL;
 	const struct nk_style_item *fg = NULL;
@@ -4437,6 +4567,7 @@ static int
 _dial_double(struct nk_context *ctx, double min, double *val, double max, float mul,
 	struct nk_color color, bool editable, bool logarithmic)
 {
+	DBG;
 	const double tmp = *val;
 	struct nk_rect bounds;
 	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
@@ -4484,6 +4615,7 @@ static int
 _dial_long(struct nk_context *ctx, int64_t min, int64_t *val, int64_t max, float mul,
 	struct nk_color color, bool editable, bool logarithmic)
 {
+	DBG;
 	const int64_t tmp = *val;
 	struct nk_rect bounds;
 	const enum nk_widget_layout_states layout_states = nk_widget(&bounds, ctx);
@@ -4531,6 +4663,7 @@ static int
 _dial_float(struct nk_context *ctx, float min, float *val, float max, float mul,
 	struct nk_color color, bool editable, bool logarithmic)
 {
+	DBG;
 	double tmp = *val;
 	const int res = _dial_double(ctx, min, &tmp, max, mul, color, editable, logarithmic);
 	*val = tmp;
@@ -4542,6 +4675,7 @@ static int
 _dial_int(struct nk_context *ctx, int32_t min, int32_t *val, int32_t max, float mul,
 	struct nk_color color, bool editable, bool logarithmic)
 {
+	DBG;
 	int64_t tmp = *val;
 	const int res = _dial_long(ctx, min, &tmp, max, mul, color, editable, logarithmic);
 	*val = tmp;
@@ -4553,6 +4687,7 @@ static void
 _expose_atom_port(struct nk_context *ctx, mod_t *mod, port_t *port,
 	float DY, float dy, const char *name_str)
 {
+	DBG;
 	plughandle_t *handle = mod->handle;
 
 	DY -= 2*ctx->style.window.group_padding.y;
@@ -4596,6 +4731,7 @@ static void
 _expose_audio_port(struct nk_context *ctx, mod_t *mod, audio_port_t *audio,
 	float DY, float dy, const char *name_str, bool is_cv)
 {
+	DBG;
 	DY -= 2*ctx->style.window.group_padding.y;
 	const float ratio [] = {0.7, 0.3};
 
@@ -4699,6 +4835,7 @@ static bool
 _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control,
 	float DY, float dy, const char *name_str)
 {
+	DBG;
 	bool changed = false;
 
 	DY -= 2*ctx->style.window.group_padding.y;
@@ -4824,6 +4961,7 @@ _expose_control_port(struct nk_context *ctx, mod_t *mod, control_port_t *control
 static void
 _expose_port(struct nk_context *ctx, mod_t *mod, port_t *port, float DY, float dy)
 {
+	DBG;
 	plughandle_t *handle = mod->handle;
 	const bool is_hovered = nk_widget_is_hovered(ctx);
 
@@ -4903,6 +5041,7 @@ static bool
 _widget_string(plughandle_t *handle, struct nk_context *ctx,
 	struct nk_text_edit *editor, bool editable)
 {
+	DBG;
 	bool commited = false;
 
 	const int old_len = nk_str_len_char(&editor->string);
@@ -4931,6 +5070,7 @@ static bool
 _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle,
 	float DY, float dy, const char *name_str)
 {
+	DBG;
 	DY -= 2*ctx->style.window.group_padding.y;
 
 	bool changed = false;
@@ -5158,6 +5298,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 static void
 _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 {
+	DBG;
 	//FIXME sandbox_master_send is not necessary, as messages should be fed back via dsp to nk
 	if(param->range == handle->forge.Int)
 	{
@@ -5212,6 +5353,7 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 static void
 _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t *param, float DY, float dy)
 {
+	DBG;
 	const char *name_str = param->label ? param->label : "Unknown";
 	const bool is_hovered = nk_widget_is_hovered(ctx);
 
@@ -5259,6 +5401,7 @@ _expose_param(plughandle_t *handle, mod_t *mod, struct nk_context *ctx, param_t 
 static void
 _refresh_main_port_list(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	_hash_free(&handle->port_matches);
 
 	bool search = _textedit_len(&handle->port_search_edit) != 0;
@@ -5286,6 +5429,7 @@ _refresh_main_port_list(plughandle_t *handle, mod_t *mod)
 static void
 _refresh_main_param_list(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	_hash_free(&handle->param_matches);
 
 	bool search = _textedit_len(&handle->port_search_edit) != 0;
@@ -5313,6 +5457,7 @@ _refresh_main_param_list(plughandle_t *handle, mod_t *mod)
 static void
 _ruler(struct nk_context *ctx)
 {
+	DBG;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 
 	struct nk_rect body;
@@ -5331,6 +5476,7 @@ static void
 _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 	float DY, float dy, bool find_matches)
 {
+	DBG;
 	if(_hash_empty(&handle->port_matches) || find_matches)
 	{
 		_refresh_main_port_list(handle, mod);
@@ -5448,6 +5594,7 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 static void
 _set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
 {
+	DBG;
 	if(  _message_request(handle)
 		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
 			mod->urn, 0, handle->regs.idisp.surface.urid,
@@ -5460,6 +5607,7 @@ _set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
 static void
 _set_module_selector(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	if(handle->module_selector)
 	{
 		_mod_unsubscribe_all(handle, handle->module_selector);
@@ -5488,6 +5636,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 static inline bool
 _has_selected_nodes(plughandle_t *handle)
 {
+	DBG;
 	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
@@ -5512,6 +5661,7 @@ _has_selected_nodes(plughandle_t *handle)
 static inline void
 _set_selected_nodes(plughandle_t *handle, bool selected)
 {
+	DBG;
 	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
@@ -5532,6 +5682,7 @@ _set_selected_nodes(plughandle_t *handle, bool selected)
 static inline void
 _set_selected_box(plughandle_t *handle, struct nk_rect box, bool selected)
 {
+	DBG;
 	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
@@ -5564,6 +5715,7 @@ _set_selected_box(plughandle_t *handle, struct nk_rect box, bool selected)
 static inline void
 _set_moving_nodes(plughandle_t *handle, bool moving)
 {
+	DBG;
 	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
@@ -5586,6 +5738,7 @@ _set_moving_nodes(plughandle_t *handle, bool moving)
 static inline void
 _remove_selected_nodes(plughandle_t *handle)
 {
+	DBG;
 	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
@@ -5637,6 +5790,7 @@ _remove_selected_nodes(plughandle_t *handle)
 static inline void
 _show_selected_nodes(plughandle_t *handle)
 {
+	DBG;
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
 		mod_t *mod = *mod_itr;
@@ -5662,6 +5816,7 @@ static void
 _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_rect space_bounds, struct nk_rect *bounds)
 {
+	DBG;
 	struct nk_input *in = &ctx->input;
 
 	const bool is_hovering = nk_input_is_mouse_hovering_rect(in, *bounds);
@@ -5712,12 +5867,14 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 static bool
 _source_type_match(plughandle_t *handle, property_type_t source_type)
 {
+	DBG;
 	return handle->type & source_type;
 }
 
 static bool
 _sink_type_match(plughandle_t *handle, property_type_t sink_type)
 {
+	DBG;
 	return handle->type & sink_type;
 }
 
@@ -5725,6 +5882,7 @@ static void
 _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_vec2 dim, bool is_hilighted)
 {
+	DBG;
 	const struct nk_input *in = &ctx->input;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	const struct nk_vec2 scrolling = handle->scrolling;
@@ -5853,6 +6011,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 static inline unsigned
 _mod_num_sources(mod_t *mod, property_type_t type)
 {
+	DBG;
 	if(mod->source_type & type)
 	{
 		unsigned num = 0;
@@ -5874,6 +6033,7 @@ _mod_num_sources(mod_t *mod, property_type_t type)
 static inline unsigned
 _mod_num_sinks(mod_t *mod, property_type_t type)
 {
+	DBG;
 	if(mod->sink_type & type)
 	{
 		unsigned num = 0;
@@ -5896,6 +6056,7 @@ static void
 _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_bounds,
 	mod_t *mod, float dy)
 {
+	DBG;
 	// we always show modules, even if port type does not match current view
 
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
@@ -6036,6 +6197,7 @@ static void
 _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_bounds,
 	mod_conn_t *mod_conn, float dy)
 {
+	DBG;
 	if(!_source_type_match(handle, mod_conn->source_type) || !_sink_type_match(handle, mod_conn->sink_type))
 		return;
 
@@ -6309,6 +6471,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 static inline int
 _group_begin(struct nk_context *ctx, const char *title, nk_flags flags, struct nk_rect *bb)
 {
+	DBG;
 	*bb = nk_widget_bounds(ctx);
 
 	return nk_group_begin(ctx, title, flags);
@@ -6317,6 +6480,7 @@ _group_begin(struct nk_context *ctx, const char *title, nk_flags flags, struct n
 static inline void
 _group_end(struct nk_context *ctx, struct nk_rect *bb)
 {
+	DBG;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	struct nk_style *style = &ctx->style;
 
@@ -6327,6 +6491,7 @@ _group_end(struct nk_context *ctx, struct nk_rect *bb)
 static inline int
 _osc_path_filter(const struct nk_text_edit *box, nk_rune unicode)
 {
+	DBG;
 	if(unicode == '#')
 		return nk_false;
 	else if(unicode == ' ')
@@ -6338,6 +6503,7 @@ _osc_path_filter(const struct nk_text_edit *box, nk_rune unicode)
 static inline void
 _control_randomize(plughandle_t *handle, mod_t *mod, control_port_t *control)
 {
+	DBG;
 	const float rnd = (float)rand() / RAND_MAX;
 
 	if(control->is_bool)
@@ -6351,6 +6517,7 @@ _control_randomize(plughandle_t *handle, mod_t *mod, control_port_t *control)
 static inline void
 _param_randomize(plughandle_t *handle, mod_t *mod, param_t *param)
 {
+	DBG;
 	const float rnd = (float)rand() / RAND_MAX;
 
 	if(param->range == handle->forge.Bool)
@@ -6369,6 +6536,7 @@ _param_randomize(plughandle_t *handle, mod_t *mod, param_t *param)
 static inline void
 _mod_randomize(plughandle_t *handle, mod_t *mod)
 {
+	DBG;
 	HASH_FOREACH(&mod->ports, port_itr)
 	{
 		port_t *port = *port_itr;
@@ -6405,6 +6573,7 @@ _mod_randomize(plughandle_t *handle, mod_t *mod)
 static void
 _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float dy)
 {
+	DBG;
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
 	struct nk_style *style = &ctx->style;
 	struct nk_input *in = &ctx->input;
@@ -7044,6 +7213,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 static void
 _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 {
+	DBG;
 	nk_layout_row_dynamic(ctx, dy, 6);
 	{
 		time_t t1;
@@ -7081,6 +7251,7 @@ _expose_main_footer(plughandle_t *handle, struct nk_context *ctx, float dy)
 static void
 _init(plughandle_t *handle)
 {
+	DBG;
 	handle->world = lilv_world_new();
 	if(!handle->world)
 		return;
@@ -7179,6 +7350,7 @@ _init(plughandle_t *handle)
 static void
 _deinit(plughandle_t *handle)
 {
+	DBG;
 	if(handle->world)
 	{
 		sp_regs_deinit(&handle->regs);
@@ -7218,6 +7390,7 @@ _deinit(plughandle_t *handle)
 static void
 _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 {
+	DBG;
 	plughandle_t *handle = data;
 	const struct nk_user_font *font = ctx->style.font;
 	const struct nk_style *style = &handle->win.ctx.style;
@@ -7265,6 +7438,7 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 static struct nk_image
 _icon_load(plughandle_t *handle, const char *bundle_path, const char *file)
 {
+	DBG;
 	struct nk_image img;
 	char *path;
 	if(asprintf(&path, "%s%s", bundle_path, file) != -1)
@@ -7281,6 +7455,7 @@ _icon_load(plughandle_t *handle, const char *bundle_path, const char *file)
 static void
 _icon_unload(plughandle_t *handle, struct nk_image img)
 {
+	DBG;
 	nk_pugl_icon_unload(&handle->win, img);
 }
 
@@ -7290,6 +7465,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	LV2UI_Controller controller, LV2UI_Widget *widget,
 	const LV2_Feature *const *features)
 {
+	DBG;
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
@@ -7459,6 +7635,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 static void
 cleanup(LV2UI_Handle instance)
 {
+	DBG;
 	plughandle_t *handle = instance;
 
 	_icon_unload(handle, handle->icon.atom);
@@ -7514,6 +7691,7 @@ cleanup(LV2UI_Handle instance)
 static void
 _add_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
+	DBG;
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom_URID *snk_module = NULL;
@@ -7570,6 +7748,7 @@ _add_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 static void
 _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
+	DBG;
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom_URID *snk_module = NULL;
@@ -7618,6 +7797,7 @@ _rem_connection(plughandle_t *handle, const LV2_Atom_Object *obj)
 static void
 _add_node(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
+	DBG;
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom_URID *snk_module = NULL;
 	const LV2_Atom_Float *pos_x = NULL;
@@ -7663,6 +7843,7 @@ _add_node(plughandle_t *handle, const LV2_Atom_Object *obj)
 static void
 _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
+	DBG;
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
 	const LV2_Atom_URID *src_property = NULL;
@@ -7765,6 +7946,7 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 static void
 _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 {
+	DBG;
 	const LV2_URID src_proto = obj->body.otype;
 	const LV2_Atom_URID *src_module = NULL;
 	const LV2_Atom *src_symbol = NULL;
@@ -7800,6 +7982,7 @@ _add_notification(plughandle_t *handle, const LV2_Atom_Object *obj)
 static void
 _add_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
 {
+	DBG;
 	mod_t *mod = _mod_find_by_urn(handle, urn->body);
 	if(!mod)
 	{
@@ -7818,6 +8001,7 @@ _add_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
 static void
 _rem_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
 {
+	DBG;
 	mod_t *mod = _mod_find_by_urn(handle, urn->body);
 	if(mod)
 	{
@@ -7832,6 +8016,7 @@ static void
 port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 	uint32_t format, const void *buffer)
 {
+	DBG;
 	plughandle_t *handle = instance;
 
 	if(port_index == 15) // notify
@@ -8289,6 +8474,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 static int
 _idle(LV2UI_Handle instance)
 {
+	DBG;
 	plughandle_t *handle = instance;
 
 	// handle communication with plugin UIs
@@ -8338,6 +8524,7 @@ static const LV2UI_Idle_Interface idle_ext = {
 static int
 _resize(LV2UI_Handle instance, int width, int height)
 {
+	DBG;
 	plughandle_t *handle = instance;
 
 	return nk_pugl_resize(&handle->win, width, height);
@@ -8350,6 +8537,7 @@ static const LV2UI_Resize resize_ext = {
 static const void *
 extension_data(const char *uri)
 {
+	DBG;
 	if(!strcmp(uri, LV2_UI__idleInterface))
 		return &idle_ext;
 	else if(!strcmp(uri, LV2_UI__resize))
