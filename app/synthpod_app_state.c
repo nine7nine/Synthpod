@@ -284,6 +284,14 @@ fail:
 	return NULL;
 }
 
+void
+_sp_app_state_preset_restore(sp_app_t *app, mod_t *mod, LilvState *const state,
+	bool async)
+{
+	lilv_state_restore(state, mod->inst, _state_set_value, mod,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, async));
+}
+
 int
 _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async)
 {
@@ -314,12 +322,22 @@ _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async
 		return -1;
 	}
 
-	lilv_state_restore(state, mod->inst, _state_set_value, mod,
-		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, async));
+	_sp_app_state_preset_restore(app, mod, state, async);
 
 	lilv_state_free(state);
 
 	return 0; // success
+}
+
+LilvState *
+_sp_app_state_preset_create(sp_app_t *app, mod_t *mod, const char *bndl)
+{
+	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
+		app->driver->map, NULL, NULL, NULL, bndl,
+		_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
+		NULL);
+
+	return state;
 }
 
 int
@@ -370,10 +388,7 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *uri)
 	sp_app_log_note(app, "%s: preset save: <%s> as %s\n",
 		__func__, uri, dest ? dest : target);
 
-	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-		app->driver->map, NULL, NULL, NULL, bndl,
-		_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
-		NULL);
+	LilvState *const state = _sp_app_state_preset_create(app, mod, bndl);
 
 	if(state)
 	{

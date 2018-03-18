@@ -2965,6 +2965,20 @@ _patch_mod_preset_set(plughandle_t *handle, mod_t *mod, const LilvNode *preset)
 }
 
 static void
+_patch_mod_reinstantiate_set(plughandle_t *handle, mod_t *mod, int32_t state)
+{
+	DBG;
+
+	if(  _message_request(handle)
+		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+			mod->urn, 0, handle->regs.synthpod.module_reinstantiate.urid,
+			sizeof(int32_t), handle->forge.Bool, &state) )
+	{
+		_message_write(handle);
+	}
+}
+
+static void
 _patch_mod_preset_save(plughandle_t *handle)
 {
 	DBG;
@@ -5790,6 +5804,30 @@ _remove_selected_nodes(plughandle_t *handle)
 }
 
 static inline void
+_reinstantiate_selected_nodes(plughandle_t *handle)
+{
+	DBG;
+	// reinstantiate all modules
+	HASH_FOREACH(&handle->mods, mod_itr)
+	{
+		mod_t *mod = *mod_itr;
+
+		if(mod->selected)
+		{
+			const LilvPlugin *plug = mod->plug;
+			const LilvNode *uri_node = lilv_plugin_get_uri(plug);
+			const char *mod_uri = lilv_node_as_string(uri_node);
+
+			if(  strcmp(mod_uri, SYNTHPOD_PREFIX"source")
+				&& strcmp(mod_uri, SYNTHPOD_PREFIX"sink") )
+			{
+				_patch_mod_reinstantiate_set(handle, mod, 1);
+			}
+		}
+	}
+}
+
+static inline void
 _show_selected_nodes(plughandle_t *handle)
 {
 	DBG;
@@ -6669,6 +6707,10 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						case 'x':
 						{
 							_remove_selected_nodes(handle);
+						} break;
+						case 'i':
+						{
+							_reinstantiate_selected_nodes(handle);
 						} break;
 					}
 

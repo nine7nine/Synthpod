@@ -226,7 +226,7 @@ _sp_app_mod_reinitialize(mod_t *mod)
 
 	// mod->features should be up-to-date
 	mod->inst = lilv_plugin_instantiate(mod->plug, app->driver->sample_rate, mod->features);
-	mod->handle = lilv_instance_get_handle(mod->inst),
+	mod->handle = lilv_instance_get_handle(mod->inst);
 
 	//TODO should we re-get extension_data?
 
@@ -1115,4 +1115,48 @@ _sp_app_mod_eject(sp_app_t *app, mod_t *mod)
 		_sp_app_to_ui_advance(app, size);
 	}
 #endif
+}
+
+static void
+_sp_app_mod_reinitialize_soft(mod_t *mod)
+{
+	sp_app_t *app = mod->app;
+
+	// reinitialize all modules,
+	lilv_instance_deactivate(mod->inst);
+	lilv_instance_free(mod->inst);
+
+	mod->inst = NULL;
+	mod->handle = NULL;
+
+	// mod->features should be up-to-date
+	mod->inst = lilv_plugin_instantiate(mod->plug, app->driver->sample_rate, mod->features);
+	mod->handle = lilv_instance_get_handle(mod->inst);
+
+	// refresh all connections
+	for(unsigned i=0; i<mod->num_ports - 2; i++)
+	{
+		port_t *tar = &mod->ports[i];
+
+		// set port buffer
+		lilv_instance_connect_port(mod->inst, i, tar->base);
+	}
+}
+
+void
+_sp_app_mod_reinstantiate(sp_app_t *app, mod_t *mod)
+{
+	LilvState *const state = _sp_app_state_preset_create(app, mod,
+		"file:///tmp/stash.preset.lv2");
+
+	if(state)
+	{
+		_sp_app_mod_reinitialize_soft(mod);
+
+		_sp_app_state_preset_restore(app, mod, state, false);
+
+		lilv_instance_activate(mod->inst);
+
+		lilv_state_free(state);
+	}
 }

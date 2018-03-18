@@ -120,6 +120,7 @@ enum _job_type_request_t {
 	JOB_TYPE_REQUEST_MODULE_SUPPORTED,
 	JOB_TYPE_REQUEST_MODULE_ADD,
 	JOB_TYPE_REQUEST_MODULE_DEL,
+	JOB_TYPE_REQUEST_MODULE_REINSTANTIATE,
 	JOB_TYPE_REQUEST_PRESET_LOAD,
 	JOB_TYPE_REQUEST_PRESET_SAVE,
 	JOB_TYPE_REQUEST_BUNDLE_LOAD,
@@ -131,6 +132,7 @@ enum _job_type_reply_t {
 	JOB_TYPE_REPLY_MODULE_SUPPORTED,
 	JOB_TYPE_REPLY_MODULE_ADD,
 	JOB_TYPE_REPLY_MODULE_DEL,
+	JOB_TYPE_REPLY_MODULE_REINSTANTIATE,
 	JOB_TYPE_REPLY_PRESET_LOAD,
 	JOB_TYPE_REPLY_PRESET_SAVE,
 	JOB_TYPE_REPLY_BUNDLE_LOAD,
@@ -627,8 +629,15 @@ _sp_app_populate(sp_app_t *app);
 /*
  * State
  */
+void
+_sp_app_state_preset_restore(sp_app_t *app, mod_t *mod, LilvState *const state,
+	bool async);
+
 int
 _sp_app_state_preset_load(sp_app_t *app, mod_t *mod, const char *uri, bool async);
+
+LilvState *
+_sp_app_state_preset_create(sp_app_t *app, mod_t *mod, const char *bndl);
 
 int
 _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *target);
@@ -662,6 +671,9 @@ _sp_app_mod_worker_work_sync(mod_t *mod, size_t size, const void *payload);
 
 void
 _sp_app_mod_queue_draw(mod_t *mod);
+
+void
+_sp_app_mod_reinstantiate(sp_app_t *app, mod_t *mod);
 
 /*
  * Port

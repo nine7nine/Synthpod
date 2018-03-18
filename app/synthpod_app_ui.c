@@ -842,6 +842,58 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 					_sp_app_mod_queue_draw(mod); // trigger update
 				}
 			}
+			else if(  (prop == app->regs.synthpod.module_reinstantiate.urid)
+				&& (value->type == app->forge.Bool) )
+			{
+				if(app->block_state == BLOCKING_STATE_RUN)
+				{
+					const bool needs_ramping = _mod_needs_ramping(mod, RAMP_STATE_DOWN_DRAIN, true);
+					app->silence_state = !needs_ramping
+						? SILENCING_STATE_RUN
+						: SILENCING_STATE_BLOCK;
+
+					// send request to worker thread
+					size_t size = sizeof(job_t);
+					job_t *job = _sp_app_to_worker_request(app, size);
+					if(job)
+					{
+						app->block_state = BLOCKING_STATE_DRAIN; // wait for drain
+
+						job->request = JOB_TYPE_REQUEST_DRAIN;
+						job->status = 0;
+						_sp_app_to_worker_advance(app, size);
+					}
+					else
+					{
+						sp_app_log_trace(app, "%s: buffer request failed\n", __func__);
+					}
+				}
+				else if(app->block_state == BLOCKING_STATE_BLOCK)
+				{
+					if(app->silence_state == SILENCING_STATE_BLOCK)
+						return false; // not fully silenced yet, wait
+
+					// send request to worker thread
+					const LV2_URID pset_urn = ((const LV2_Atom_URID *)value)->body;
+					size_t size = sizeof(job_t);
+					job_t *job = _sp_app_to_worker_request(app, size);
+					if(job)
+					{
+						app->block_state = BLOCKING_STATE_WAIT; // wait for job
+						mod->bypassed = mod->needs_bypassing;
+
+						job->request = JOB_TYPE_REQUEST_MODULE_REINSTANTIATE;
+						job->mod = mod;
+						_sp_app_to_worker_advance(app, size);
+
+						return true; // advance
+					}
+					else
+					{
+						sp_app_log_trace(app, "%s: buffer request failed\n", __func__);
+					}
+				}
+			}
 		}
 
 		//TODO handle more properties

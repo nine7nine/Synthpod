@@ -133,6 +133,38 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 
 			break;
 		}
+		case JOB_TYPE_REPLY_MODULE_REINSTANTIATE:
+		{
+			mod_t *mod = job->mod;
+
+			assert(app->block_state == BLOCKING_STATE_WAIT);
+			app->block_state = BLOCKING_STATE_RUN; // release block
+			mod->bypassed = false;
+
+			if(app->silence_state == SILENCING_STATE_WAIT)
+			{
+				app->silence_state = SILENCING_STATE_RUN;
+
+				// ramping
+				for(unsigned p1=0; p1<mod->num_ports; p1++)
+				{
+					port_t *port = &mod->ports[p1];
+
+					// desilence sinks
+					for(unsigned m=0; m<app->num_mods; m++)
+					{
+						for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
+						{
+							_sp_app_port_desilence(app, port, &app->mods[m]->ports[p2]);
+						}
+					}
+				}
+			}
+
+			//FIXME signal to ui
+
+			break;
+		}
 		case JOB_TYPE_REPLY_PRESET_LOAD:
 		{
 			//printf("app: preset loaded\n");
@@ -332,11 +364,33 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 
 			break;
 		}
+		case JOB_TYPE_REQUEST_MODULE_REINSTANTIATE:
+		{
+			mod_t *mod = job->mod;
+			if(!mod)
+				break; //TODO report
+
+			_sp_app_mod_reinstantiate(app, mod);
+
+			// signal to app
+			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
+			if(job1)
+			{
+				job1->reply = JOB_TYPE_REPLY_MODULE_REINSTANTIATE;
+				job1->mod = job->mod;
+				_sp_worker_to_app_advance(app, sizeof(job_t));
+			}
+			else
+			{
+				sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+			}
+
+			break;
+		}
 		case JOB_TYPE_REQUEST_PRESET_LOAD:
 		{
 			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
-			int status = _sp_app_state_preset_load(app, job->mod, uri, true);
-			(void)status; //FIXME check this
+			int status = _sp_app_state_preset_load(app, job->mod, uri, true); (void)status; //FIXME check this
 
 			// signal to app
 			job_t *job1 = _sp_worker_to_app_request(app, sizeof(job_t));
