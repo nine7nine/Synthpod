@@ -548,8 +548,10 @@ static const char *auto_labels [] = {
 	[AUTO_OSC] = "OSC"
 };
 
-#if 1
+#if 0
 #	define DBG fprintf(stderr, ":: %s\n", __func__)
+#else
+#	define DBG
 #endif
 
 static int
