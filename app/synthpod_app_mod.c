@@ -978,12 +978,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		pthread_create(&mod_worker->thread, &attr, _mod_worker_thread, mod);
 	}
 
+	// activate
+	lilv_instance_activate(mod->inst);
+
 	// load default state
 	if(load_default_state && _sp_app_state_preset_load(app, mod, uri, false))
 		sp_app_log_error(app, "%s: default state loading failed\n", __func__);
-
-	// activate
-	lilv_instance_activate(mod->inst);
 
 	// initialize profiling reference time
 	mod->prof.sum = 0;
@@ -1153,9 +1153,9 @@ _sp_app_mod_reinstantiate(sp_app_t *app, mod_t *mod)
 	{
 		_sp_app_mod_reinitialize_soft(mod);
 
-		_sp_app_state_preset_restore(app, mod, state, false);
-
 		lilv_instance_activate(mod->inst);
+
+		_sp_app_state_preset_restore(app, mod, state, false);
 
 		lilv_state_free(state);
 	}
