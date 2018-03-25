@@ -63,33 +63,44 @@ struct _plughandle_t {
 };
 
 static inline void
+_controller(plughandle_t *handle, LV2_Atom_Forge *forge, int64_t frames,
+	const uint8_t *m, uint32_t sz)
+{
+	if(handle->ref)
+		handle->ref = lv2_atom_forge_frame_time(forge, frames);
+	if(handle->ref)
+		handle->ref = lv2_atom_forge_atom(forge, sz, handle->midi_MidiEvent);
+	if(handle->ref)
+		handle->ref = lv2_atom_forge_write(forge, m, sz);
+}
+
+static inline void
 _trigger(plughandle_t *handle, LV2_Atom_Forge *forge, int64_t frames)
 {
-	uint8_t m [2];
+	uint8_t m [3];
 	
 	for(uint8_t i=0x0; i<0x10; i++)
 	{
+		// raise sustain pedal
+		m[0] = LV2_MIDI_MSG_CONTROLLER | i;
+		m[1] = LV2_MIDI_CTL_SUSTAIN;
+		m[2] = 0x0;
+
+		_controller(handle, forge, frames, m, sizeof(m));
+
 		// all notes off
 		m[0] = LV2_MIDI_MSG_CONTROLLER | i;
 		m[1] = LV2_MIDI_CTL_ALL_NOTES_OFF;
+		m[2] = 0x0;
 
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_frame_time(forge, frames);
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_atom(forge, sizeof(m), handle->midi_MidiEvent);
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_write(forge, m, sizeof(m));
+		_controller(handle, forge, frames, m, sizeof(m));
 
 		// all sounds off
 		m[0] = LV2_MIDI_MSG_CONTROLLER | i;
 		m[1] = LV2_MIDI_CTL_ALL_SOUNDS_OFF;
+		m[2] = 0x0;
 
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_frame_time(forge, frames);
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_atom(forge, sizeof(m), handle->midi_MidiEvent);
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_write(forge, m, sizeof(m));
+		_controller(handle, forge, frames, m, sizeof(m));
 	}
 }
 
