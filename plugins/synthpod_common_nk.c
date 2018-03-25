@@ -3110,6 +3110,19 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 }
 
 static void
+_set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
+{
+	DBG;
+	if(  _message_request(handle)
+		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+			mod->urn, 0, handle->regs.idisp.surface.urid,
+			sizeof(int32_t), handle->forge.Bool, &state) )
+	{
+		_message_write(handle);
+	}
+}
+
+static void
 _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 {
 	DBG;
@@ -3486,6 +3499,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		_mod_ui_add(handle, mod, ui);
 	}
 
+	_set_module_idisp_subscription(handle, mod, 1);
+
 	nk_pugl_post_redisplay(&handle->win); //FIXME
 }
 
@@ -3571,6 +3586,7 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	lilv_uis_free(mod->ui_nodes);
 
 	_image_free(handle, &mod->idisp.img);
+	_set_module_idisp_subscription(handle, mod, 0);
 }
 
 static bool
@@ -5608,28 +5624,12 @@ _expose_control_list(plughandle_t *handle, mod_t *mod, struct nk_context *ctx,
 }
 
 static void
-_set_module_idisp_subscription(plughandle_t *handle, mod_t *mod, int32_t state)
-{
-	DBG;
-	if(  _message_request(handle)
-		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
-			mod->urn, 0, handle->regs.idisp.surface.urid,
-			sizeof(int32_t), handle->forge.Bool, &state) )
-	{
-		_message_write(handle);
-	}
-}
-
-static void
 _set_module_selector(plughandle_t *handle, mod_t *mod)
 {
 	DBG;
 	if(handle->module_selector)
 	{
 		_mod_unsubscribe_all(handle, handle->module_selector);
-
-		_set_module_idisp_subscription(handle, handle->module_selector, 0);
-		_image_free(handle, &handle->module_selector->idisp.img);
 	}
 
 	if(mod)
@@ -5638,8 +5638,6 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 
 		_patch_notification_add_patch_get(handle, mod,
 			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
-
-		_set_module_idisp_subscription(handle, mod, 1);
 	}
 
 	handle->module_selector = mod;
@@ -6227,6 +6225,31 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 			};
 			nk_draw_text(canvas, body2, load, load_len, font,
 				style->normal.data.color, style->text_normal);
+		}
+
+		if(!_image_empty(&mod->idisp.img))
+		{
+			float w = mod->dim.x;
+			float h;
+
+			if(mod->idisp.w > w)
+			{
+				h = w * mod->idisp.h / mod->idisp.w;
+			}
+			else
+			{
+				w = mod->idisp.w;
+				h = mod->idisp.h;
+			}
+
+			const struct nk_rect body2 = {
+				.x = body.x + (body.w - w)/2,
+				.y = fy - 0.5*fh - h,
+				.w = w,
+				.h = h
+			};
+			nk_draw_image(canvas, body2, &mod->idisp.img, nk_rgb(0xff, 0xff, 0xff));
+			nk_stroke_rect(canvas, body2, style->rounding, style->border, style->border_color);
 		}
 	}
 
@@ -7220,22 +7243,6 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 						{
 							_mod_randomize(handle, mod);
 						}
-					}
-
-					if(!_image_empty(&mod->idisp.img))
-					{
-						const float w = nk_widget_width(ctx);
-
-						if(mod->idisp.w > w)
-						{
-							const float h = w * mod->idisp.h / mod->idisp.w;
-							nk_layout_row_static(ctx, h, w, 1);
-						}
-						else
-						{
-							nk_layout_row_static(ctx, mod->idisp.h, mod->idisp.w, 1);
-						}
-						nk_image(ctx, mod->idisp.img);
 					}
 				}
 			}
