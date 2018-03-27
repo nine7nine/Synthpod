@@ -31,7 +31,6 @@
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#define UI_CHUNK_SIZE 0x1000000 // 16M
 #define CHUNK_SIZE 0x100000 // 1M
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
