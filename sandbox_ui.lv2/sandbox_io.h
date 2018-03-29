@@ -260,74 +260,95 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	uint8_t *buf_tx;
 	if((buf_tx = varchunk_write_request_max(&tx->varchunk, req_sz, &max_sz)))
 	{
+		LV2_Atom_Forge_Ref ref;
 		LV2_Atom_Forge_Frame frame;
 
 		if(protocol == 0)
 			protocol = io->float_protocol;
 
 		lv2_atom_forge_set_buffer(&io->forge, buf_tx, max_sz);
-		lv2_atom_forge_object(&io->forge, &frame, 0, protocol);
+		ref = lv2_atom_forge_object(&io->forge, &frame, 0, protocol);
 
-		lv2_atom_forge_key(&io->forge, io->core_index);
-		lv2_atom_forge_int(&io->forge, index);
+		if(ref)
+			ref = lv2_atom_forge_key(&io->forge, io->core_index);
+		if(ref)
+			ref = lv2_atom_forge_int(&io->forge, index);
 
 		if(protocol == io->float_protocol)
 		{
 			const float *value = buf;
 
-			lv2_atom_forge_key(&io->forge, io->rdf_value);
-			lv2_atom_forge_float(&io->forge, *value);
+			if(ref)
+			 ref = lv2_atom_forge_key(&io->forge, io->rdf_value);
+			if(ref)
+				ref = lv2_atom_forge_float(&io->forge, *value);
 		}
 		else if(protocol == io->peak_protocol)
 		{
 			const LV2UI_Peak_Data *peak_data = buf;
 
-			lv2_atom_forge_key(&io->forge, io->ui_period_start);
-			lv2_atom_forge_int(&io->forge, peak_data->period_start);
+			if(ref)
+					ref = lv2_atom_forge_key(&io->forge, io->ui_period_start);
+			if(ref)
+				ref = lv2_atom_forge_int(&io->forge, peak_data->period_start);
 
-			lv2_atom_forge_key(&io->forge, io->ui_period_size);
-			lv2_atom_forge_int(&io->forge, peak_data->period_size);
+			if(ref)
+				ref = lv2_atom_forge_key(&io->forge, io->ui_period_size);
+			if(ref)
+				ref = lv2_atom_forge_int(&io->forge, peak_data->period_size);
 
-			lv2_atom_forge_key(&io->forge, io->ui_peak);
-			lv2_atom_forge_float(&io->forge, peak_data->peak);
+			if(ref)
+				ref = lv2_atom_forge_key(&io->forge, io->ui_peak);
+			if(ref)
+				ref = lv2_atom_forge_float(&io->forge, peak_data->peak);
 		}
 		else if( (protocol == io->event_transfer)
 			|| (protocol == io->atom_transfer) )
 		{
 			const LV2_Atom *atom = buf;
-			LV2_Atom_Forge_Ref ref;
+			LV2_Atom_Forge_Ref rel;
 
-			lv2_atom_forge_key(&io->forge, io->rdf_value);
-			ref = lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
-			lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
+			if(ref)
+				ref = lv2_atom_forge_key(&io->forge, io->rdf_value);
+			if(ref)
+				ref = rel = lv2_atom_forge_atom(&io->forge, atom->size, atom->type);
+			if(ref)
+				ref = lv2_atom_forge_write(&io->forge, LV2_ATOM_BODY_CONST(atom), atom->size);
 
-			LV2_Atom *src= lv2_atom_forge_deref(&io->forge, ref);
+			LV2_Atom *src= lv2_atom_forge_deref(&io->forge, rel);
 		}
 		else if(protocol == io->ui_port_subscribe)
 		{
 			const sandbox_io_subscription_t *sub = buf;
 
-			lv2_atom_forge_key(&io->forge, io->rdf_value);
-			lv2_atom_forge_bool(&io->forge, sub->state);
+			if(ref)
+				ref = lv2_atom_forge_key(&io->forge, io->rdf_value);
+			if(ref)
+				ref = lv2_atom_forge_bool(&io->forge, sub->state);
 
-			lv2_atom_forge_key(&io->forge, io->ui_protocol);
-			lv2_atom_forge_urid(&io->forge, protocol);
+			if(ref)
+				ref = lv2_atom_forge_key(&io->forge, io->ui_protocol);
+			if(ref)
+				ref = lv2_atom_forge_urid(&io->forge, protocol);
 		}
 		else if(protocol == io->ui_close_request)
 		{
 			// nothing to add
 		}
 
-		lv2_atom_forge_pop(&io->forge, &frame);
-
-		size_t wrt_sz;
-		const uint8_t *buf_rx = netatom_serialize(io->netatom, (LV2_Atom *)buf_tx, max_sz, &wrt_sz);
-		if(buf_rx)
+		if(ref)
 		{
-			varchunk_write_advance(&tx->varchunk, wrt_sz);
-			sem_post(&tx->sem);
+			lv2_atom_forge_pop(&io->forge, &frame);
 
-			return 0; // success
+			size_t wrt_sz;
+			const uint8_t *buf_rx = netatom_serialize(io->netatom, (LV2_Atom *)buf_tx, max_sz, &wrt_sz);
+			if(buf_rx)
+			{
+				varchunk_write_advance(&tx->varchunk, wrt_sz);
+				sem_post(&tx->sem);
+
+				return 0; // success
+			}
 		}
 	}
 
