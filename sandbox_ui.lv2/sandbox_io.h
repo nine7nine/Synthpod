@@ -58,7 +58,7 @@ struct _sandbox_io_subscription_t {
 	int32_t state;
 };
 
-#define SANDBOX_BUFFER_SIZE 0x100000 // 1M
+#define SANDBOX_BUFFER_SIZE 0x1000000 // 16M
 
 struct _sandbox_io_shm_body_t {
 	sem_t sem;
