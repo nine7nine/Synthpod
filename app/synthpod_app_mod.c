@@ -555,9 +555,6 @@ _mod_worker_thread(void *data)
 
 				// unlock surface
 				atomic_flag_clear(&mod->idisp.lock);
-
-				if(mod->idisp.surf)
-					atomic_store(&mod->idisp.rendered, true);
 			}
 		}
 	}
@@ -622,7 +619,6 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	mod->idisp.queue_draw.handle = mod;
 	mod->idisp.queue_draw.queue_draw = _mod_queue_draw;
 	atomic_init(&mod->idisp.draw_queued, false);
-	atomic_init(&mod->idisp.rendered, false);
 	mod->idisp.lock = (atomic_flag)ATOMIC_FLAG_INIT;
 		
 	// populate options

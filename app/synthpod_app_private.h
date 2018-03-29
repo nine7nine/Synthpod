@@ -289,7 +289,6 @@ struct _mod_t {
 		const LV2_Inline_Display_Image_Surface *surf;
 		LV2_Inline_Display queue_draw;
 		atomic_bool draw_queued;
-		atomic_bool rendered;
 		atomic_flag lock;
 		bool subscribed;
 	} idisp;

@@ -774,10 +774,9 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 		// trylock
 		if(atomic_flag_test_and_set(&mod->idisp.lock))
 		{
-			if(atomic_exchange(&mod->idisp.rendered, false))
+			const LV2_Inline_Display_Image_Surface *surf= mod->idisp.surf;
+			if(surf)
 			{
-				const LV2_Inline_Display_Image_Surface *surf = mod->idisp.surf;
-
 				// to nk
 				LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
 				if(answer)
@@ -817,8 +816,11 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 				{
 					_sp_app_to_ui_overflow(app);
 				}
+
+				mod->idisp.surf = NULL; // invalidate
 			}
 
+			// unlock
 			atomic_flag_clear(&mod->idisp.lock);
 		}
 	}
