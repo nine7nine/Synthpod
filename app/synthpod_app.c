@@ -801,6 +801,9 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 							ref = lv2_atom_forge_raw(&app->forge, row, surf->width * sizeof(uint32_t));
 					}
 					if(ref)
+						lv2_atom_forge_pad(&app->forge, surf->height * surf->width * sizeof(uint32_t));
+
+					if(ref)
 						synthpod_patcher_pop(&app->forge, frame, 3);
 
 					if(ref)

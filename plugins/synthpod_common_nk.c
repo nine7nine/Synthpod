@@ -625,6 +625,40 @@ _image_new(plughandle_t *handle, unsigned w, unsigned h, const void *data)
 	DBG;
 	GLuint tex = 0;
 
+#if 0
+	if(h != 256)
+	{
+		static uint32_t counter = 0;
+		char *path;
+		if(asprintf(&path, "/tmp/surface_%08u.pnm", counter++) != -1)
+		{
+			FILE *f = fopen(path, "wb");
+			if(f)
+			{
+
+				fprintf(f, "P6\n%u %u\n%u\n", w, h, 0xff);
+
+				for(int y = 0; y < h; y++)
+				{
+					const uint8_t *row = &data[w*sizeof(uint32_t)* y];
+
+					for(int x = 0; x < w; x++)
+					{
+						fwrite(&row[x*sizeof(uint32_t) + 2], sizeof(uint8_t), 1, f);
+						fwrite(&row[x*sizeof(uint32_t) + 1], sizeof(uint8_t), 1, f);
+						fwrite(&row[x*sizeof(uint32_t) + 0], sizeof(uint8_t), 1, f);
+					}
+				}
+
+				fflush(f);
+				fclose(f);
+			}
+
+			free(path);
+		}
+	}
+#endif
+
 	puglEnterContext(handle->win.view);
 	{
 		glGenTextures(1, &tex);
