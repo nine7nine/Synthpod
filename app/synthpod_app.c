@@ -772,7 +772,7 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 	if(mod->idisp.iface)
 	{
 		// trylock
-		if(atomic_flag_test_and_set(&mod->idisp.lock))
+		if(!atomic_flag_test_and_set(&mod->idisp.lock))
 		{
 			const LV2_Inline_Display_Image_Surface *surf= mod->idisp.surf;
 			if(surf)
@@ -793,15 +793,23 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 						ref = lv2_atom_forge_int(&app->forge, surf->height);
 					if(ref)
 						ref = lv2_atom_forge_vector_head(&app->forge, &frame[2], sizeof(int32_t), app->forge.Int);
-					for(int h = 0; h < surf->height; h++)
+					if(surf->stride == surf->width * sizeof(uint32_t))
 					{
-						const uint8_t *row = &surf->data[surf->stride * h];
-
 						if(ref)
-							ref = lv2_atom_forge_raw(&app->forge, row, surf->width * sizeof(uint32_t));
+							ref = lv2_atom_forge_write(&app->forge, surf->data, surf->height * surf->stride);
 					}
-					if(ref)
-						lv2_atom_forge_pad(&app->forge, surf->height * surf->width * sizeof(uint32_t));
+					else
+					{
+						for(int h = 0; h < surf->height; h++)
+						{
+							const uint8_t *row = &surf->data[surf->stride * h];
+
+							if(ref)
+								ref = lv2_atom_forge_raw(&app->forge, row, surf->width * sizeof(uint32_t));
+						}
+						if(ref)
+							lv2_atom_forge_pad(&app->forge, surf->height * surf->width * sizeof(uint32_t));
+					}
 
 					if(ref)
 						synthpod_patcher_pop(&app->forge, frame, 3);

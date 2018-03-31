@@ -537,7 +537,7 @@ _mod_worker_thread(void *data)
 			varchunk_read_advance(mod_worker->state_to_worker);
 		}
 
-		if(mod->idisp.iface)
+		if(mod->idisp.iface && mod->idisp.iface->render)
 		{
 			if(atomic_exchange(&mod->idisp.draw_queued, false))
 			{
@@ -550,8 +550,7 @@ _mod_worker_thread(void *data)
 					// spin
 				}
 
-				if(mod->idisp.iface->render)
-					mod->idisp.surf = mod->idisp.iface->render(mod->handle, w, h);
+				mod->idisp.surf = mod->idisp.iface->render(mod->handle, w, h);
 
 				// unlock surface
 				atomic_flag_clear(&mod->idisp.lock);
