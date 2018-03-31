@@ -771,6 +771,8 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 	// handle inline display
 	if(mod->idisp.iface)
 	{
+		mod->idisp.counter += nsamples;
+
 		// trylock
 		if(!atomic_flag_test_and_set(&mod->idisp.lock))
 		{

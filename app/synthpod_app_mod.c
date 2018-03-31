@@ -568,8 +568,13 @@ _sp_app_mod_queue_draw(mod_t *mod)
 
 	if(mod->idisp.iface && mod->idisp.subscribed)
 	{
-		atomic_store(&mod->idisp.draw_queued, true);
-		sem_post(&mod_worker->sem);
+		if(mod->idisp.counter >= mod->idisp.threshold)
+		{
+			mod->idisp.counter = 0;
+
+			atomic_store(&mod->idisp.draw_queued, true);
+			sem_post(&mod_worker->sem);
+		}
 	}
 }
 
@@ -619,6 +624,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 	mod->idisp.queue_draw.queue_draw = _mod_queue_draw;
 	atomic_init(&mod->idisp.draw_queued, false);
 	mod->idisp.lock = (atomic_flag)ATOMIC_FLAG_INIT;
+	mod->idisp.threshold = app->driver->sample_rate / app->driver->update_rate;
 		
 	// populate options
 	mod->opts.options[0].context = LV2_OPTIONS_INSTANCE;

@@ -291,6 +291,8 @@ struct _mod_t {
 		atomic_bool draw_queued;
 		atomic_flag lock;
 		bool subscribed;
+		uint32_t counter;
+		uint32_t threshold;
 	} idisp;
 
 	// opts
