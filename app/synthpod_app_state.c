@@ -1409,13 +1409,12 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 
 	if(state)
 	{
-		lilv_state_restore(state, mod->inst, _state_set_value, mod,
-			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, _preset_features(mod, false));
+		_sp_app_state_preset_restore(app, mod, state, false);
+		lilv_state_free(state);
 	}
 	else
 		sp_app_log_error(app, "%s: failed to load state from file\n", __func__);
 
-	lilv_state_free(state);
 	free(path);
 
 	return mod;
