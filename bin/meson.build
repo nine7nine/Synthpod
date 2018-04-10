@@ -6,12 +6,14 @@ bin_srcs = ['synthpod_bin.c',
 
 bin = static_library('synthpod_bin', bin_srcs,
 	include_directories : bin_incs,
+	c_args : c_args,
 	dependencies : bin_deps)
 
 dummy_srcs = ['synthpod_dummy.c']
 
 dummy = executable('synthpod_dummy', dummy_srcs,
 	include_directories : bin_incs,
+	c_args : c_args,
 	dependencies : bin_deps,
 	link_with : [bin, app, sbox_master],
 	install : true)
@@ -22,6 +24,7 @@ if alsa_dep.found() and zita_dep.found()
 
 	alsa = executable('synthpod_alsa', alsa_srcs,
 		include_directories : bin_incs,
+		c_args : c_args,
 		dependencies : [bin_deps, alsa_dep, zita_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
@@ -32,6 +35,7 @@ if jack_dep.found()
 
 	jack = executable('synthpod_jack', jack_srcs,
 		include_directories : bin_incs,
+		c_args : c_args,
 		dependencies : [bin_deps, jack_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
@@ -42,6 +46,7 @@ if xcb_dep.found() and xcbicccm_dep.found()
 
 	x11 = executable('synthpod_sandbox_x11', x11_srcs,
 		include_directories : bin_incs,
+		c_args : c_args,
 		dependencies : [rt_dep, thread_dep, xcb_dep, xcbicccm_dep],
 		link_with : [sbox_slave],
 		install : true)
@@ -52,6 +57,7 @@ if gtk2_dep.found()
 
 	gtk2 = executable('synthpod_sandbox_gtk2', gtk2_srcs,
 		include_directories : bin_incs,
+		c_args : c_args,
 		dependencies : [rt_dep, thread_dep, gtk2_dep],
 		link_with : [sbox_slave],
 		install : true)
@@ -62,7 +68,34 @@ if gtk3_dep.found()
 
 	gtk3 = executable('synthpod_sandbox_gtk3', gtk3_srcs,
 		include_directories : bin_incs,
+		c_args : c_args,
 		dependencies : [rt_dep, thread_dep, gtk3_dep],
+		link_with : [sbox_slave],
+		install : true)
+endif
+
+if qt4_dep.found()
+	add_languages('cpp')
+	qt4_srcs = ['synthpod_sandbox_qt.cpp']
+
+	qt4 = executable('synthpod_sandbox_qt4', qt4_srcs,
+		include_directories : bin_incs,
+		cpp_args : '-DSYNTHPOD_SANDBOX_QT=4',
+		c_args : c_args,
+		dependencies : [rt_dep, thread_dep, qt4_dep],
+		link_with : [sbox_slave],
+		install : true)
+endif
+
+if qt5_dep.found()
+	add_languages('cpp')
+	qt5_srcs = ['synthpod_sandbox_qt.cpp']
+
+	qt5 = executable('synthpod_sandbox_qt5', qt5_srcs,
+		include_directories : bin_incs,
+		cpp_args : '-DSYNTHPOD_SANDBOX_QT=5',
+		c_args : c_args,
+		dependencies : [rt_dep, thread_dep, qt5_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
@@ -72,6 +105,7 @@ if true #FIXME only build with enabled UI
 
 	gtk3 = executable('synthpod_sandbox_show', show_srcs,
 		include_directories : bin_incs,
+		c_args : c_args,
 		dependencies : [rt_dep, thread_dep],
 		link_with : [sbox_slave],
 		install : true)
@@ -82,6 +116,7 @@ if true #FIXME only build with enabled UI
 
 	gtk3 = executable('synthpod_sandbox_kx', kx_srcs,
 		include_directories : bin_incs,
+		c_args : c_args,
 		dependencies : [rt_dep, thread_dep],
 		link_with : [sbox_slave],
 		install : true)

@@ -11,4 +11,5 @@ deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
 
 app = static_library('synthpod_app', srcs,
 	include_directories : incs,
+	c_args : c_args,
 	dependencies : deps)
