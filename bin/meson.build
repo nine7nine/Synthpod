@@ -1,4 +1,4 @@
-bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs]
+bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, pugl_incs, self_incs]
 bin_deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
 
 bin_srcs = ['synthpod_bin.c',
@@ -18,8 +18,9 @@ dummy = executable('synthpod_dummy', dummy_srcs,
 	link_with : [bin, app, sbox_master],
 	install : true)
 
+install_man('synthpod_dummy.1')
+
 if alsa_dep.found() and zita_dep.found()
-	add_languages('cpp')
 	alsa_srcs = ['synthpod_alsa.c', 'pcmi.cpp']
 
 	alsa = executable('synthpod_alsa', alsa_srcs,
@@ -28,6 +29,8 @@ if alsa_dep.found() and zita_dep.found()
 		dependencies : [bin_deps, alsa_dep, zita_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
+
+	install_man('synthpod_alsa.1')
 endif
 
 if jack_dep.found()
@@ -39,6 +42,8 @@ if jack_dep.found()
 		dependencies : [bin_deps, jack_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
+
+	install_man('synthpod_jack.1')
 endif
 
 if xcb_dep.found() and xcbicccm_dep.found()
@@ -75,10 +80,11 @@ if gtk3_dep.found()
 endif
 
 if qt4_dep.found()
-	add_languages('cpp')
+	qt4_mod = import('qt4')
 	qt4_srcs = ['synthpod_sandbox_qt.cpp']
+	qt4_mocs = qt4_mod.preprocess(moc_sources : qt4_srcs)
 
-	qt4 = executable('synthpod_sandbox_qt4', qt4_srcs,
+	qt4 = executable('synthpod_sandbox_qt4', [qt4_srcs, qt4_mocs],
 		include_directories : bin_incs,
 		cpp_args : '-DSYNTHPOD_SANDBOX_QT=4',
 		c_args : c_args,
@@ -88,10 +94,11 @@ if qt4_dep.found()
 endif
 
 if qt5_dep.found()
-	add_languages('cpp')
+	qt5_mod = import('qt5')
 	qt5_srcs = ['synthpod_sandbox_qt.cpp']
+	qt5_mocs = qt5_mod.preprocess(moc_sources : qt5_srcs)
 
-	qt5 = executable('synthpod_sandbox_qt5', qt5_srcs,
+	qt5 = executable('synthpod_sandbox_qt5', [qt5_srcs, qt5_mocs],
 		include_directories : bin_incs,
 		cpp_args : '-DSYNTHPOD_SANDBOX_QT=5',
 		c_args : c_args,
@@ -103,7 +110,7 @@ endif
 if true #FIXME only build with enabled UI
 	show_srcs = ['synthpod_sandbox_show.c']
 
-	gtk3 = executable('synthpod_sandbox_show', show_srcs,
+	show = executable('synthpod_sandbox_show', show_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
 		dependencies : [rt_dep, thread_dep],
@@ -114,10 +121,12 @@ endif
 if true #FIXME only build with enabled UI
 	kx_srcs = ['synthpod_sandbox_kx.c']
 
-	gtk3 = executable('synthpod_sandbox_kx', kx_srcs,
+	kx = executable('synthpod_sandbox_kx', kx_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
 		dependencies : [rt_dep, thread_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
+
+install_man('synthpod_sandbox.1')

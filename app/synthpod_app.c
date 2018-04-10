@@ -1076,7 +1076,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 			lilv_node_free(node_false);
 		}
 		lilv_world_load_all(app->world);
-		LilvNode *synthpod_bundle = lilv_new_file_uri(app->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
+		LilvNode *synthpod_bundle = lilv_new_file_uri(app->world, NULL, SYNTHPOD_BUNDLE_DIR);
 		if(synthpod_bundle)
 		{
 			lilv_world_load_bundle(app->world, synthpod_bundle);

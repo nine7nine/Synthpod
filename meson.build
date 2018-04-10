@@ -1,4 +1,4 @@
-project('synthpod', 'c', default_options : [
+project('synthpod', ['c', 'cpp'], default_options : [
 	'buildtype=release',
 	'warning_level=1',
 	'werror=false',
@@ -19,6 +19,9 @@ lfrtm_incs = include_directories('lfrtm')
 mapper_incs = include_directories('mapper.lv2')
 sbox_incs = include_directories('sandbox_ui.lv2')
 netatom_incs = include_directories('netatom.lv2')
+props_incs = include_directories('props.lv2')
+pugl_incs = include_directories('pugl')
+self_incs = include_directories('')
 
 m_dep = cc.find_library('m')
 rt_dep = cc.find_library('rt')
@@ -47,13 +50,29 @@ conf_data.set('MAJOR_VERSION', version[0])
 conf_data.set('MINOR_VERSION', version[1])
 conf_data.set('MICRO_VERSION', version[2])
 
+prefix = get_option('prefix')
+bndl_dir = join_paths(get_option('libdir'), meson.project_name(), 'lv2')
+plug_dir = join_paths(get_option('libdir'), 'lv2', meson.project_name()+'.lv2')
+
+message(prefix)
+message(bndl_dir)
+message(plug_dir)
+
 add_project_arguments('-D_GNU_SOURCE', language : 'c')
+add_project_arguments('-DPUGL_HAVE_GL', language : 'c')
+add_project_arguments('-DSANDBOX_X11', language : 'c') #FIXME
+add_project_arguments('-DSANDBOX_SHOW', language : 'c') #FIXME
+add_project_arguments('-DSANDBOX_KX', language : 'c') #FIXME
+add_project_arguments('-DSANDBOX_GTK2', language : 'c') #FIXME
+add_project_arguments('-DSANDBOX_GTK3', language : 'c') #FIXME
+add_project_arguments('-DSANDBOX_QT4', language : 'c') #FIXME
+add_project_arguments('-DSANDBOX_QT5', language : 'c') #FIXME
 add_project_arguments('-DSYNTHPOD_VERSION="'+rawvers+'"', language : 'c')
-add_project_arguments('-DSYNTHPOD_MINOR_VERSION="'+version[1]+'"', language : 'c') #FIXME
-add_project_arguments('-DSYNTHPOD_MICRO_VERSION="'+version[2]+'"', language : 'c') #FIXME
-add_project_arguments('-DSYNTHPOD_BUNDLE_DIR="/usr/local/lib/synthpod/"', language : 'c') #FIXME
-add_project_arguments('-DSYNTHPOD_BIN_DIR="/usr/local/bin/"', language : 'c') #FIXME
-add_project_arguments('-DSYNTHPOD_PLUGIN_DIR="/usr/local/lib/lv2/"', language : 'c') #FIXME
+add_project_arguments('-DSYNTHPOD_MINOR_VERSION="'+version[1]+'"', language : 'c')
+add_project_arguments('-DSYNTHPOD_MICRO_VERSION="'+version[2]+'"', language : 'c')
+add_project_arguments('-DSYNTHPOD_BUNDLE_DIR="'+join_paths(prefix, bndl_dir, '')+'"', language : 'c')
+add_project_arguments('-DSYNTHPOD_BIN_DIR="'+join_paths(prefix, get_option('bindir'), '')+'"', language : 'c')
+add_project_arguments('-DSYNTHPOD_PLUGIN_DIR="'+join_paths(prefix, plug_dir, '')+'"', language : 'c')
 
 cp = find_program('cp')
 clone = [cp, '@INPUT@', '@OUTPUT@']
@@ -64,4 +83,5 @@ c_args = ['-fvisibility=hidden',
 subdir('sandbox_ui.lv2')
 subdir('app')
 subdir('bin')
-#subdir('plugins')
+subdir('plugins')
+subdir('bundle')

@@ -33,7 +33,7 @@
 #	include <QtWidgets/QApplication>
 #	include <QtWidgets/QMainWindow>
 #else
-#	error "SYNTHPOD_QT is invalid"
+#	error "SYNTHPOD_SANDBOX_QT is invalid"
 #endif
 
 typedef struct _app_t app_t;
@@ -181,10 +181,4 @@ main(int argc, char **argv)
 	return -1;
 }
 
-#if (SYNTHPOD_SANDBOX_QT == 4)
-#	include <synthpod_sandbox_qt4_moc.h>
-#elif (SYNTHPOD_SANDBOX_QT == 5)
-#	include <synthpod_sandbox_qt5_moc.h>
-#else
-#	error "SYNTHPOD_QT is invalid"
-#endif
+#include <synthpod_sandbox_qt.moc>

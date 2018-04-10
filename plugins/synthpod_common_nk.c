@@ -7348,7 +7348,7 @@ _init(plughandle_t *handle)
 		lilv_node_free(node_false);
 	}
 	lilv_world_load_all(handle->world);
-	LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR"/");
+	LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR);
 	if(synthpod_bundle)
 	{
 		lilv_world_load_bundle(handle->world, synthpod_bundle);

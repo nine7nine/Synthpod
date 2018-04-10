@@ -31,81 +31,81 @@ kx:Host
 # Synthpod Stereo
 synthpod:stereo
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	@UI_WRAP@ui:ui synthpod:common_4_nk ;
 	@UI_WRAP@ui:ui synthpod:root_4_nk ; #FIXME
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_4_nk
-	a ui:@NK_UI_TYPE@ ;
-	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	a ui:@UI_TYPE@ ;
+	ui:binary <synthpod_nk@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 synthpod:root_4_nk
-	a ui:@NK_UI_TYPE@ ;
-	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	a ui:@UI_TYPE@ ;
+	ui:binary <synthpod_nk@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # Synthpod Keyboard
 synthpod:keyboard
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	@UI_WRAP@ui:ui synthpod:keyboard_4_nk ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:keyboard_4_nk
-	a ui:@NK_UI_TYPE@ ;
-	ui:binary <synthpod_nk@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	a ui:@UI_TYPE@ ;
+	ui:binary <synthpod_nk@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # CV2Control
 synthpod:cv2control
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Control2CV
 synthpod:control2cv
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # MidiSplitter
 synthpod:midisplitter
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # HeavyLoad
 synthpod:heavyload
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Panic 
 synthpod:panic
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 # Placeholder
 synthpod:placeholder
 	a lv2:Plugin ;
-	lv2:minorVersion @SYNTHPOD_MINOR_VERSION@ ;
-	lv2:microVersion @SYNTHPOD_MICRO_VERSION@ ;
-	lv2:binary <synthpod@CMAKE_SHARED_MODULE_SUFFIX@> ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod.ttl> .

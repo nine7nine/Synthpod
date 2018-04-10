@@ -21,7 +21,7 @@
 
 #define NK_PUGL_IMPLEMENTATION
 #define NK_PUGL_API
-#include "nk_pugl/nk_pugl.h"
+#include <nk_pugl/nk_pugl.h>
 
 #ifdef _WIN32
 __declspec(dllexport)
