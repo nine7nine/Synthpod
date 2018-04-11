@@ -1,6 +1,3 @@
-bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, pugl_incs, self_incs]
-bin_deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
-
 bin_srcs = ['synthpod_bin.c',
 	'nsmc.c']
 
@@ -9,16 +6,23 @@ bin = static_library('synthpod_bin', bin_srcs,
 	c_args : c_args,
 	dependencies : bin_deps)
 
-dummy_srcs = ['synthpod_dummy.c']
+if true
+	dummy_srcs = ['synthpod_dummy.c']
 
-dummy = executable('synthpod_dummy', dummy_srcs,
-	include_directories : bin_incs,
-	c_args : c_args,
-	dependencies : bin_deps,
-	link_with : [bin, app, sbox_master],
-	install : true)
+	dummy = executable('synthpod_dummy', dummy_srcs,
+		include_directories : bin_incs,
+		c_args : c_args,
+		dependencies : bin_deps,
+		link_with : [bin, app, sbox_master],
+		install : true)
 
-install_man('synthpod_dummy.1')
+	configure_file(input : 'synthpod_dummy.desktop.in', output : 'synthpod_dummy.desktop',
+		configuration : conf_data,
+		install : true,
+		install_dir : desk_dir)
+
+	install_man('synthpod_dummy.1')
+endif
 
 if alsa_dep.found() and zita_dep.found()
 	alsa_srcs = ['synthpod_alsa.c', 'pcmi.cpp']
@@ -29,6 +33,11 @@ if alsa_dep.found() and zita_dep.found()
 		dependencies : [bin_deps, alsa_dep, zita_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
+
+	configure_file(input : 'synthpod_alsa.desktop.in', output : 'synthpod_alsa.desktop',
+		configuration : conf_data,
+		install : true,
+		install_dir : desk_dir)
 
 	install_man('synthpod_alsa.1')
 endif
@@ -42,6 +51,11 @@ if jack_dep.found()
 		dependencies : [bin_deps, jack_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
+
+	configure_file(input : 'synthpod_jack.desktop.in', output : 'synthpod_jack.desktop',
+		configuration : conf_data,
+		install : true,
+		install_dir : desk_dir)
 
 	install_man('synthpod_jack.1')
 endif

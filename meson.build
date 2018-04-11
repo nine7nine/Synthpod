@@ -23,6 +23,8 @@ props_incs = include_directories('props.lv2')
 pugl_incs = include_directories('pugl')
 self_incs = include_directories('')
 
+bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, pugl_incs, self_incs]
+
 m_dep = cc.find_library('m')
 rt_dep = cc.find_library('rt')
 lv2_dep = dependency('lv2', version : '>=1.14.0')
@@ -42,6 +44,8 @@ gtk3_dep = dependency('gtk+-3.0', version : '>=3.22', required : false)
 qt4_dep = dependency('qt4', modules : ['Core', 'Gui'], required : false)
 qt5_dep = dependency('qt5', modules : ['Core', 'Widgets', 'Gui'], required : false)
 
+bin_deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
+
 rawvers = run_command('cat', 'VERSION').stdout().strip()
 version = rawvers.split('.')
 
@@ -53,6 +57,7 @@ conf_data.set('MICRO_VERSION', version[2])
 prefix = get_option('prefix')
 bndl_dir = join_paths(get_option('libdir'), meson.project_name(), 'lv2')
 plug_dir = join_paths(get_option('libdir'), 'lv2', meson.project_name()+'.lv2')
+desk_dir = join_paths(get_option('datadir'), 'applications')
 
 message(prefix)
 message(bndl_dir)
@@ -82,6 +87,6 @@ c_args = ['-fvisibility=hidden',
 
 subdir('sandbox_ui.lv2')
 subdir('app')
-subdir('bin')
 subdir('plugins')
+subdir('bin')
 subdir('bundle')
