@@ -2,7 +2,7 @@ project('synthpod', ['c', 'cpp'], default_options : [
 	'buildtype=release',
 	'warning_level=1',
 	'werror=false',
-	'b_lto=true',
+	'b_lto=false',
 	'c_std=c11'])
 
 cc = meson.get_compiler('c')
@@ -37,7 +37,7 @@ jack_dep = dependency('jack', required : false)
 gl_dep = dependency('gl', required : false)
 x11_dep = dependency('x11', version : '>=1.6.0', required : false)
 xext_dep = dependency('xext', version : '>=1.3.0', required : false)
-xcb_dep = dependency('xcb', version : '>=1.13', required : false)
+xcb_dep = dependency('xcb', version : '>=1.12', required : false)
 xcbicccm_dep = dependency('xcb-icccm', version : '>=0.4.0', required : false)
 gtk2_dep = dependency('gtk+-2.0', version : '>=2.24', required : false)
 gtk3_dep = dependency('gtk+-3.0', version : '>=3.22', required : false)

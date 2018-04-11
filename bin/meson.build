@@ -51,7 +51,7 @@ if xcb_dep.found() and xcbicccm_dep.found()
 	x11 = executable('synthpod_sandbox_x11', x11_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
-		dependencies : [rt_dep, thread_dep, xcb_dep, xcbicccm_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep, xcb_dep, xcbicccm_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
@@ -62,7 +62,7 @@ if gtk2_dep.found()
 	gtk2 = executable('synthpod_sandbox_gtk2', gtk2_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
-		dependencies : [rt_dep, thread_dep, gtk2_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep, gtk2_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
@@ -73,7 +73,7 @@ if gtk3_dep.found()
 	gtk3 = executable('synthpod_sandbox_gtk3', gtk3_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
-		dependencies : [rt_dep, thread_dep, gtk3_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep, gtk3_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
@@ -87,7 +87,7 @@ if qt4_dep.found()
 		include_directories : bin_incs,
 		cpp_args : '-DSYNTHPOD_SANDBOX_QT=4',
 		c_args : c_args,
-		dependencies : [rt_dep, thread_dep, qt4_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep, qt4_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
@@ -101,7 +101,7 @@ if qt5_dep.found()
 		include_directories : bin_incs,
 		cpp_args : '-DSYNTHPOD_SANDBOX_QT=5',
 		c_args : c_args,
-		dependencies : [rt_dep, thread_dep, qt5_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep, qt5_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
@@ -112,7 +112,7 @@ if true
 	show = executable('synthpod_sandbox_show', show_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
-		dependencies : [rt_dep, thread_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
@@ -123,7 +123,7 @@ if true
 	kx = executable('synthpod_sandbox_kx', kx_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
-		dependencies : [rt_dep, thread_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif

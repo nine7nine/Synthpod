@@ -8,7 +8,7 @@ dsp_srcs = ['synthpod_lv2.c',
 	'synthpod_placeholder.c',
 	'synthpod_stereo.c']
 
-ui_deps = [m_dep, rt_dep, lv2_dep, lilv_dep]
+ui_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep]
 ui_srcs = ['synthpod_lv2_nk.c',
 	'synthpod_keyboard_nk.c',
 	'synthpod_common_nk.c']
