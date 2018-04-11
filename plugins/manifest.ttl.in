@@ -34,8 +34,8 @@ synthpod:stereo
 	lv2:minorVersion @MINOR_VERSION@ ;
 	lv2:microVersion @MICRO_VERSION@ ;
 	lv2:binary <synthpod@MODULE_SUFFIX@> ;
-	@UI_WRAP@ui:ui synthpod:common_4_nk ;
-	@UI_WRAP@ui:ui synthpod:root_4_nk ; #FIXME
+	ui:ui synthpod:common_4_nk ;
+	ui:ui synthpod:root_4_nk ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_4_nk
@@ -54,7 +54,7 @@ synthpod:keyboard
 	lv2:minorVersion @MINOR_VERSION@ ;
 	lv2:microVersion @MICRO_VERSION@ ;
 	lv2:binary <synthpod@MODULE_SUFFIX@> ;
-	@UI_WRAP@ui:ui synthpod:keyboard_4_nk ;
+	ui:ui synthpod:keyboard_4_nk ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:keyboard_4_nk

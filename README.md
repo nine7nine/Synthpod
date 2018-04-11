@@ -39,13 +39,13 @@ Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/
 	cd synthpod 
 	meson build
 	cd build
-	ninja -j8
+	ninja -j4
 	sudo ninja install
 
 #### ArchLinux
 
 	# mandatory build dependencies
-	sudo pacman -S meson ninja lv2 lilv libuv
+	sudo pacman -S meson ninja lv2 lilv
 	# optional build dependencies
 	sudo pacman -S jack alsa zita-alsa-pcmi libxcb gtk2 gtk3 qt4 qt
 

@@ -16,11 +16,6 @@ if true
 		link_with : [bin, app, sbox_master],
 		install : true)
 
-	configure_file(input : 'synthpod_dummy.desktop.in', output : 'synthpod_dummy.desktop',
-		configuration : conf_data,
-		install : true,
-		install_dir : desk_dir)
-
 	install_man('synthpod_dummy.1')
 endif
 
@@ -34,11 +29,6 @@ if alsa_dep.found() and zita_dep.found()
 		link_with : [bin, app, sbox_master],
 		install : true)
 
-	configure_file(input : 'synthpod_alsa.desktop.in', output : 'synthpod_alsa.desktop',
-		configuration : conf_data,
-		install : true,
-		install_dir : desk_dir)
-
 	install_man('synthpod_alsa.1')
 endif
 
@@ -51,11 +41,6 @@ if jack_dep.found()
 		dependencies : [bin_deps, jack_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
-
-	configure_file(input : 'synthpod_jack.desktop.in', output : 'synthpod_jack.desktop',
-		configuration : conf_data,
-		install : true,
-		install_dir : desk_dir)
 
 	install_man('synthpod_jack.1')
 endif
@@ -121,7 +106,7 @@ if qt5_dep.found()
 		install : true)
 endif
 
-if true #FIXME only build with enabled UI
+if true
 	show_srcs = ['synthpod_sandbox_show.c']
 
 	show = executable('synthpod_sandbox_show', show_srcs,
@@ -132,7 +117,7 @@ if true #FIXME only build with enabled UI
 		install : true)
 endif
 
-if true #FIXME only build with enabled UI
+if true
 	kx_srcs = ['synthpod_sandbox_kx.c']
 
 	kx = executable('synthpod_sandbox_kx', kx_srcs,

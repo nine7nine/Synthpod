@@ -370,12 +370,6 @@ nsmc_new(const char *exe, const char *path,
 	}
 
 	return nsm;
-
-fail:
-	if(nsm->url)
-		free(nsm->url);
-
-	return NULL;
 }
 
 void

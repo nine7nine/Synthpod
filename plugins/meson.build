@@ -25,8 +25,6 @@ dsp = shared_module('synthpod', dsp_srcs,
 suffix = dsp.full_path().strip().split('.')[-1]
 conf_data.set('MODULE_SUFFIX', '.' + suffix)
 	
-conf_data.set('UI_WRAP', '') #FIXME only build with enbaled UI
-
 if host_machine.system() == 'linux'
 	conf_data.set('UI_TYPE', 'X11UI')
 	ui_deps += gl_dep

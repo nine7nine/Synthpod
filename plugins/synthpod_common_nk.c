@@ -6638,7 +6638,7 @@ _mod_randomize(plughandle_t *handle, mod_t *mod)
 	{
 		port_t *port = *port_itr;
 
-		if(port->type == PORT_TYPE_CONTROL)
+		if(port->type == PROPERTY_TYPE_CONTROL)
 		{
 			_control_randomize(handle, mod, &port->control);
 

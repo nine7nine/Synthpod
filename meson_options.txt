@@ -1,0 +1,1 @@
+option('dynamic-parallelizer', type : 'boolean', value : true)

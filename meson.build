@@ -57,24 +57,55 @@ conf_data.set('MICRO_VERSION', version[2])
 prefix = get_option('prefix')
 bndl_dir = join_paths(get_option('libdir'), meson.project_name(), 'lv2')
 plug_dir = join_paths(get_option('libdir'), 'lv2', meson.project_name()+'.lv2')
-desk_dir = join_paths(get_option('datadir'), 'applications')
 
-message(prefix)
-message(bndl_dir)
-message(plug_dir)
+if get_option('dynamic-parallelizer')
+	message('using dynamic parallelizer')
+	add_project_arguments('-DUSE_DYNAMIC_PARALLELIZER', language : 'c')
+endif
+
+if gl_dep.found()
+	add_project_arguments('-DPUGL_HAVE_GL', language : 'c')
+endif
+
+if xcb_dep.found() and xcbicccm_dep.found()
+	message('building X11 sandbox')
+	add_project_arguments('-DSANDBOX_X11', language : 'c')
+endif
+
+if gtk2_dep.found()
+	message('building GTK2 sandbox')
+	add_project_arguments('-DSANDBOX_GTK2', language : 'c')
+endif
+
+if gtk3_dep.found()
+	message('building GTK3 sandbox')
+	add_project_arguments('-DSANDBOX_GTK3', language : 'c')
+endif
+
+if qt4_dep.found()
+	message('building QT4 sandbox')
+	add_project_arguments('-DSANDBOX_QT4', language : 'c')
+endif
+
+if qt5_dep.found()
+	message('building QT5 sandbox')
+	add_project_arguments('-DSANDBOX_QT5', language : 'c')
+endif
+
+add_project_arguments('-DSANDBOX_SHOW', language : 'c')
+
+add_project_arguments('-DSANDBOX_KX', language : 'c')
+
+if lilv_dep.version() >= '0.22.0'
+	message('building against recent lilv')
+	add_project_arguments('-DLILV_0_22', language : 'c')
+endif
 
 add_project_arguments('-D_GNU_SOURCE', language : 'c')
-add_project_arguments('-DPUGL_HAVE_GL', language : 'c')
-add_project_arguments('-DSANDBOX_X11', language : 'c') #FIXME
-add_project_arguments('-DSANDBOX_SHOW', language : 'c') #FIXME
-add_project_arguments('-DSANDBOX_KX', language : 'c') #FIXME
-add_project_arguments('-DSANDBOX_GTK2', language : 'c') #FIXME
-add_project_arguments('-DSANDBOX_GTK3', language : 'c') #FIXME
-add_project_arguments('-DSANDBOX_QT4', language : 'c') #FIXME
-add_project_arguments('-DSANDBOX_QT5', language : 'c') #FIXME
+add_project_arguments('-DHAS_BUILTIN_ASSUME_ALIGNED', language : 'c')
 add_project_arguments('-DSYNTHPOD_VERSION="'+rawvers+'"', language : 'c')
-add_project_arguments('-DSYNTHPOD_MINOR_VERSION="'+version[1]+'"', language : 'c')
-add_project_arguments('-DSYNTHPOD_MICRO_VERSION="'+version[2]+'"', language : 'c')
+add_project_arguments('-DSYNTHPOD_MINOR_VERSION='+version[1]+'', language : 'c')
+add_project_arguments('-DSYNTHPOD_MICRO_VERSION='+version[2]+'', language : 'c')
 add_project_arguments('-DSYNTHPOD_BUNDLE_DIR="'+join_paths(prefix, bndl_dir, '')+'"', language : 'c')
 add_project_arguments('-DSYNTHPOD_BIN_DIR="'+join_paths(prefix, get_option('bindir'), '')+'"', language : 'c')
 add_project_arguments('-DSYNTHPOD_PLUGIN_DIR="'+join_paths(prefix, plug_dir, '')+'"', language : 'c')
@@ -83,7 +114,10 @@ cp = find_program('cp')
 clone = [cp, '@INPUT@', '@OUTPUT@']
 
 c_args = ['-fvisibility=hidden',
-	'-ffast-math']
+	'-ffast-math',
+	'-Wno-attributes',
+	'-Wno-unused-function',
+	'-Wno-unused-variable']
 
 subdir('sandbox_ui.lv2')
 subdir('app')
