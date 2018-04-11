@@ -13,5 +13,6 @@ pkgconfig = '/usr/bin/pkg-config'
 
 [properties]
 c_args = ['-m32']
+cpp_args = ['-m32']
 c_link_args = ['-m32', '-Wl,-z,defs']
 needs_exe_wrapper = false
