@@ -46,6 +46,12 @@
 
 #include <lilv/lilv.h>
 
+#if defined(USE_CAIRO_CANVAS)
+#	include <canvas.lv2/canvas.h>
+#	include <canvas.lv2/forge.h>
+#	include <canvas.lv2/render.h>
+#endif
+
 #define SEARCH_BUF_MAX 128
 #define ATOM_BUF_MAX 0x100000 // 1M
 #define CONTROL 14 //FIXME
@@ -296,6 +302,13 @@ struct _mod_t {
 		struct nk_image img;
 	} idisp;
 	char alias [ALIAS_MAX];
+
+#if defined(USE_CAIRO_CANVAS)
+	struct {
+		cairo_surface_t *surface;
+		cairo_t *ctx;
+	} cairo;
+#endif
 };
 
 struct _port_conn_t {
@@ -508,6 +521,10 @@ struct _plughandle_t {
 
 	time_t t0;
 	struct nk_rect space_bounds;
+
+#if defined(USE_CAIRO_CANVAS)
+	LV2_Canvas canvas;
+#endif
 };
 
 static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
@@ -2066,7 +2083,17 @@ _param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
 		if(param->val.chunk.body)
 			memcpy(param->val.chunk.body, LV2_ATOM_BODY_CONST(value), value->size);
 	}
-	//FIXME handle remaining types
+	else if(param->range == handle->forge.Tuple)
+	{
+		_log_warning(handle, "got tuple: %s\n",
+			handle->unmap->unmap(handle->unmap->handle, param->property));
+		//FIXME render canvas
+	}
+	else
+	{
+		_log_warning(handle, "parameter range unsupported: %s\n",
+			handle->unmap->unmap(handle->unmap->handle, param->range));
+	}
 }
 
 static void
@@ -7713,6 +7740,10 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	time(&handle->t0);
 	srand(time(NULL));
+
+#if defined(USE_CAIRO_CANVAS)
+	lv2_canvas_init(&handle->canvas, handle->map);
+#endif
 
 	return handle;
 }
