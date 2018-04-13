@@ -187,9 +187,9 @@ _mapper_map(void *data, const char *uri)
 	mapper_t *mapper = data;
 	const uint32_t hash = _mapper_murmur3_32(uri, uri_len - 1); // ignore zero terminator
 
-	for(uint32_t i = 0, idx = (hash + i) & mapper->nitems_mask;
+	for(uint32_t i = 0, idx = (hash + i*i) & mapper->nitems_mask;
 		i < mapper->nitems;
-		i++, idx = (hash + i) & mapper->nitems_mask)
+		i++, idx = (hash + i*i) & mapper->nitems_mask)
 	{
 		mapper_item_t *item = &mapper->items[idx];
 
