@@ -305,6 +305,8 @@ struct _mod_t {
 
 #if defined(USE_CAIRO_CANVAS)
 	struct {
+		LV2_Inline_Display_Image_Surface image_surface;
+		float aspect_ratio;
 		cairo_surface_t *surface;
 		cairo_t *ctx;
 	} cairo;
@@ -2047,8 +2049,112 @@ _set_string(struct nk_str *str, uint32_t size, const char *body)
 	nk_str_append_text_utf8(str, from, end-from);
 }
 
+static inline LV2_Inline_Display_Image_Surface *
+_cairo_init(mod_t *mod, int w, int h)
+{
+	LV2_Inline_Display_Image_Surface *surf = &mod->cairo.image_surface;
+
+	surf->width = w;
+	surf->height = w > h ? h : w; // try to use 1:1 ratio
+	surf->stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, surf->width);
+	surf->data = realloc(surf->data, surf->stride * surf->height);
+	if(!surf->data)
+		return NULL;
+
+	mod->cairo.surface = cairo_image_surface_create_for_data(
+		surf->data, CAIRO_FORMAT_ARGB32, surf->width, surf->height, surf->stride);
+
+	if(mod->cairo.surface)
+	{
+		cairo_surface_set_device_scale(mod->cairo.surface, surf->width, surf->height);
+
+		mod->cairo.ctx = cairo_create(mod->cairo.surface);
+		if(mod->cairo.ctx)
+		{
+			cairo_select_font_face(mod->cairo.ctx, "cairo:monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+		}
+	}
+
+	return surf;
+}
+
+static inline void
+_cairo_deinit(mod_t *mod)
+{
+	LV2_Inline_Display_Image_Surface *surf = &mod->cairo.image_surface;
+
+	if(mod->cairo.ctx)
+	{
+		cairo_destroy(mod->cairo.ctx);
+		mod->cairo.ctx = NULL;
+	}
+
+	if(mod->cairo.surface)
+	{
+		cairo_surface_finish(mod->cairo.surface);
+		cairo_surface_destroy(mod->cairo.surface);
+		mod->cairo.surface = NULL;
+	}
+
+	if(surf->data)
+	{
+		free(surf->data);
+		surf->data = NULL;
+	}
+}
+
 static void
-_param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
+_render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
+	const LV2_Atom_Tuple *graph)
+{
+	LV2_Inline_Display_Image_Surface *surf = &mod->cairo.image_surface;
+
+	int W;
+	int H;
+
+	if(mod->cairo.aspect_ratio == 0.f)
+	{
+		W = w;
+		H = h;
+	}
+	else if(mod->cairo.aspect_ratio <= 1.f)
+	{
+		W = h * mod->cairo.aspect_ratio;
+		H = h;
+	}
+	else if(mod->cairo.aspect_ratio > 1.f)
+	{
+		W = w;
+		H = w / mod->cairo.aspect_ratio;
+	}
+
+	if( (surf->width != W) || (surf->height != H) || !surf->data)
+	{
+		_cairo_deinit(mod);
+		surf = _cairo_init(mod, W, H);
+	}
+
+	if(!surf)
+		return;
+
+	lv2_canvas_render(&handle->canvas, mod->cairo.ctx, graph);
+
+	// create OpenGl texture from image data
+	const void *data = mod->cairo.image_surface.data;
+	w = mod->cairo.image_surface.width;
+	h = mod->cairo.image_surface.height;
+
+	_image_free(handle, &mod->idisp.img);
+	mod->idisp.img = _image_new(handle, w, h, data);
+	mod->idisp.w = w;
+	mod->idisp.h = h;
+
+	nk_pugl_post_redisplay(&handle->win);
+}
+
+static void
+_param_set_value(plughandle_t *handle, mod_t *mod, param_t *param,
+	const LV2_Atom *value)
 {
 	DBG;
 	if(param->range == handle->forge.Int)
@@ -2085,9 +2191,10 @@ _param_set_value(plughandle_t *handle, param_t *param, const LV2_Atom *value)
 	}
 	else if(param->range == handle->forge.Tuple)
 	{
-		_log_warning(handle, "got tuple: %s\n",
-			handle->unmap->unmap(handle->unmap->handle, param->property));
-		//FIXME render canvas
+		if(param->property == handle->canvas.urid.Canvas_graph)
+		{
+			_render(handle, mod, 256, 256, (const LV2_Atom_Tuple *)value); //FIXME how big?
+		}
 	}
 	else
 	{
@@ -2219,7 +2326,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 					param_t *param = _mod_param_find_by_property(src_mod, prop);
 					if(param && (param->range == value->type) )
 					{
-						_param_set_value(handle, param, value);
+						_param_set_value(handle, src_mod, param, value);
 					}
 				}
 			}
@@ -2243,7 +2350,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 					param_t *param = _mod_param_find_by_property(src_mod, prop->key);
 					if(param && (param->range == prop->value.type) )
 					{
-						_param_set_value(handle, param, &prop->value);
+						_param_set_value(handle, src_mod, param, &prop->value);
 					}
 				}
 			}
@@ -3648,6 +3755,8 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 
 	_image_free(handle, &mod->idisp.img);
 	_set_module_idisp_subscription(handle, mod, 0);
+
+	_cairo_deinit(mod);
 }
 
 static bool
