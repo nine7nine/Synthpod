@@ -6268,7 +6268,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 	// we always show modules, even if port type does not match current view
 
 	struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
-	const struct nk_input *in = &ctx->input;
+	struct nk_input *in = &ctx->input;
 
 	const LilvPlugin *plug = mod->plug;
 	if(!plug)
@@ -6418,6 +6418,123 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 				.w = w,
 				.h = h
 			};
+
+			const bool is_prev_hov = nk_input_is_mouse_prev_hovering_rect(in, body2);
+			const bool is_hov = nk_input_is_mouse_hovering_rect(in, body2);
+			if(is_prev_hov != is_hov)
+			{
+				param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseFocus);
+				if(param)
+				{
+					param->val.i = is_hov ? 1 : 0;
+					_param_notification_add(handle, mod, param);
+				}
+			}
+
+			if(is_hov)
+			{
+				if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseButtonLeft);
+					if(param)
+					{
+						param->val.i = 1;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+				else if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseButtonLeft);
+					if(param)
+					{
+						param->val.i = 0;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+
+				if(nk_input_is_mouse_pressed(in, NK_BUTTON_MIDDLE))
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseButtonMiddle);
+					if(param)
+					{
+						param->val.i = 1;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+				else if(nk_input_is_mouse_released(in, NK_BUTTON_MIDDLE))
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseButtonMiddle);
+					if(param)
+					{
+						param->val.i = 0;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+
+				if(nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT))
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseButtonRight);
+					if(param)
+					{
+						param->val.i = 1;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+				else if(nk_input_is_mouse_released(in, NK_BUTTON_RIGHT))
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseButtonRight);
+					if(param)
+					{
+						param->val.i = 0;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+
+				if(in->mouse.delta.x != 0.f)
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mousePositionX);
+					if(param)
+					{
+						param->val.f = (in->mouse.pos.x - body2.x) / body2.w;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+
+				if(in->mouse.delta.y != 0.f)
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mousePositionY);
+					if(param)
+					{
+						param->val.f = (in->mouse.pos.y - body2.y) / body2.h;
+						_param_notification_add(handle, mod, param);
+					}
+				}
+
+				if(in->mouse.scroll_delta.x != 0.f)
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseWheelX);
+					if(param)
+					{
+						param->val.f = in->mouse.scroll_delta.x;
+						_param_notification_add(handle, mod, param);
+
+						in->mouse.scroll_delta.x = 0.f; // eat event
+					}
+				}
+
+				if(in->mouse.scroll_delta.y != 0.f)
+				{
+					param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_mouseWheelY);
+					if(param)
+					{
+						param->val.f = in->mouse.scroll_delta.y;
+						_param_notification_add(handle, mod, param);
+
+						in->mouse.scroll_delta.y = 0.f; // eat event
+					}
+				}
+			}
+
 			nk_draw_image(canvas, body2, &mod->idisp.img, nk_rgb(0xff, 0xff, 0xff));
 			nk_stroke_rect(canvas, body2, style->rounding, style->border, style->border_color);
 		}
