@@ -1147,8 +1147,16 @@ _sp_app_mod_reinitialize_soft(mod_t *mod)
 void
 _sp_app_mod_reinstantiate(sp_app_t *app, mod_t *mod)
 {
-	LilvState *const state = _sp_app_state_preset_create(app, mod,
-		"file:///tmp/stash.preset.lv2");
+	char *path;
+
+	if(asprintf(&path, "file:///tmp/%s.preset.lv2", mod->urn_uri) == -1)
+	{
+		sp_app_log_note(app, "%s: failed to create temporary path\n", __func__);
+		return;
+	}
+
+	LilvState *const state = _sp_app_state_preset_create(app, mod, path);
+	free(path);
 
 	if(state)
 	{
