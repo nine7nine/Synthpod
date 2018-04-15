@@ -306,7 +306,6 @@ struct _mod_t {
 #if defined(USE_CAIRO_CANVAS)
 	struct {
 		LV2_Inline_Display_Image_Surface image_surface;
-		float aspect_ratio;
 		cairo_surface_t *surface;
 		cairo_t *ctx;
 	} cairo;
@@ -2152,23 +2151,30 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 {
 	LV2_Inline_Display_Image_Surface *surf = &mod->cairo.image_surface;
 
+	float aspect_ratio = 0.f;
 	int W;
 	int H;
 
-	if(mod->cairo.aspect_ratio == 0.f)
+	param_t *param = _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_aspectRatio);
+	if(param)
+	{
+		aspect_ratio = param->val.f;
+	}
+
+	if(aspect_ratio == 0.f)
 	{
 		W = w;
 		H = h;
 	}
-	else if(mod->cairo.aspect_ratio <= 1.f)
+	else if(aspect_ratio <= 1.f)
 	{
-		W = h * mod->cairo.aspect_ratio;
+		W = h * aspect_ratio;
 		H = h;
 	}
-	else if(mod->cairo.aspect_ratio > 1.f)
+	else if(aspect_ratio > 1.f)
 	{
 		W = w;
-		H = w / mod->cairo.aspect_ratio;
+		H = w / aspect_ratio;
 	}
 
 	if( (surf->width != W) || (surf->height != H) || !surf->data)
@@ -2897,6 +2903,9 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 		&& mod_ui->sbox.sample_rate && mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
 		_mod_subscribe_all(handle, mod);
+
+		_patch_notification_add_patch_get(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
 
 		const pid_t pid = fork();
 		if(pid == 0) // child
@@ -3711,7 +3720,11 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	}
 
 	_set_module_idisp_subscription(handle, mod, 1);
+
 	_mod_subscribe_persistent(handle, mod); // e.g. canvas:graph
+
+	_patch_notification_add_patch_get(handle, mod,
+		handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
 
 	nk_pugl_post_redisplay(&handle->win); //FIXME
 }
