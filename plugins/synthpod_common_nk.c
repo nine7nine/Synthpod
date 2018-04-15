@@ -1122,6 +1122,49 @@ _patch_subscription_remove(plughandle_t *handle, port_t *source_port)
 	}
 }
 
+static param_t *
+_mod_param_find_by_property(mod_t *mod, LV2_URID property)
+{
+	DBG;
+	HASH_FOREACH(&mod->params, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		if(param->property == property)
+			return param;
+	}
+	HASH_FOREACH(&mod->dynams, param_itr)
+	{
+		param_t *param = *param_itr;
+
+		if(param->property == property)
+			return param;
+	}
+
+	return NULL;
+}
+
+static bool
+_mod_subscription_is_persistent(plughandle_t *handle, mod_t *mod, port_t *port)
+{
+	DBG;
+	param_t *param = NULL;
+
+	if(port->type & PROPERTY_TYPE_PATCH)
+	{
+		param = param
+			? param
+			: _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_graph);
+
+		if(param)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static void
 _mod_unsubscribe_all(plughandle_t *handle, mod_t *mod)
 {
@@ -1130,7 +1173,29 @@ _mod_unsubscribe_all(plughandle_t *handle, mod_t *mod)
 	{
 		port_t *port = *port_itr;
 
+		if(_mod_subscription_is_persistent(handle, mod, port))
+		{
+			continue; // do not subscribe
+		}
+
 		_patch_subscription_remove(handle, port);
+	}
+}
+
+static void
+_mod_subscribe_persistent(plughandle_t *handle, mod_t *mod)
+{
+	DBG;
+	HASH_FOREACH(&mod->ports, port_itr)
+	{
+		port_t *port = *port_itr;
+
+		if(!_mod_subscription_is_persistent(handle, mod, port))
+		{
+			continue; // do not subscribe
+		}
+
+		_patch_subscription_add(handle, port);
 	}
 }
 
@@ -1660,28 +1725,6 @@ _mod_port_find_by_index(mod_t *mod, uint32_t index)
 
 		if(port->index == index)
 			return port;
-	}
-
-	return NULL;
-}
-
-static param_t *
-_mod_param_find_by_property(mod_t *mod, LV2_URID property)
-{
-	DBG;
-	HASH_FOREACH(&mod->params, param_itr)
-	{
-		param_t *param = *param_itr;
-
-		if(param->property == property)
-			return param;
-	}
-	HASH_FOREACH(&mod->dynams, param_itr)
-	{
-		param_t *param = *param_itr;
-
-		if(param->property == property)
-			return param;
 	}
 
 	return NULL;
@@ -3668,6 +3711,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	}
 
 	_set_module_idisp_subscription(handle, mod, 1);
+	_mod_subscribe_persistent(handle, mod); // e.g. canvas:graph
 
 	nk_pugl_post_redisplay(&handle->win); //FIXME
 }
