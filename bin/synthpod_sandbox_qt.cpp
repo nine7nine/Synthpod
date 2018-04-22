@@ -67,7 +67,7 @@ static QApplication *a;
 static std::atomic<bool> done = ATOMIC_VAR_INIT(false);
 
 MyWindow::MyWindow(sandbox_slave_t *_sb)
-	: sb(_sb), QMainWindow()
+	: QMainWindow(), sb(_sb)
 {
 }
 
