@@ -2097,7 +2097,7 @@ _cairo_init(mod_t *mod, int w, int h)
 	LV2_Inline_Display_Image_Surface *surf = &mod->cairo.image_surface;
 
 	surf->width = w;
-	surf->height = w > h ? h : w; // try to use 1:1 ratio
+	surf->height = h;
 	surf->stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, surf->width);
 	surf->data = realloc(surf->data, surf->stride * surf->height);
 	if(!surf->data)
@@ -2151,7 +2151,7 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 {
 	LV2_Inline_Display_Image_Surface *surf = &mod->cairo.image_surface;
 
-	float aspect_ratio = 0.f;
+	float aspect_ratio = 1.f;
 	int W;
 	int H;
 
@@ -2161,12 +2161,7 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 		aspect_ratio = param->val.f;
 	}
 
-	if(aspect_ratio == 0.f)
-	{
-		W = w;
-		H = h;
-	}
-	else if(aspect_ratio <= 1.f)
+	if(aspect_ratio < 1.f)
 	{
 		W = h * aspect_ratio;
 		H = h;
@@ -2175,6 +2170,11 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 	{
 		W = w;
 		H = w / aspect_ratio;
+	}
+	else // aspect_ratio == 1.f
+	{
+		W = w;
+		H = h;
 	}
 
 	if( (surf->width != W) || (surf->height != H) || !surf->data)
@@ -2190,8 +2190,8 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 
 	// create OpenGl texture from image data
 	const void *data = mod->cairo.image_surface.data;
-	w = mod->cairo.image_surface.width;
-	h = mod->cairo.image_surface.height;
+	w = surf->width;
+	h = surf->height;
 
 	_image_free(handle, &mod->idisp.img);
 	mod->idisp.img = _image_new(handle, w, h, data);
@@ -6456,17 +6456,24 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 
 		if(!_image_empty(&mod->idisp.img))
 		{
-			float w = mod->dim.x;
+			const float aspect = (float)mod->idisp.w / mod->idisp.h;
+			float w;
 			float h;
 
-			if(mod->idisp.w > w)
+			if(aspect < 1.f)
 			{
-				h = w * mod->idisp.h / mod->idisp.w;
+				h = mod->dim.x;
+				w = h * aspect;
 			}
-			else
+			else if(aspect > 1.f)
 			{
-				w = mod->idisp.w;
-				h = mod->idisp.h;
+				w = mod->dim.x;
+				h = w  / aspect;
+			}
+			else // aspect == 1.f
+			{
+				w = mod->dim.x;
+				h = mod->dim.x;
 			}
 
 			const struct nk_rect body2 = {
