@@ -33,11 +33,21 @@ if alsa_dep.found() and zita_dep.found()
 endif
 
 if jack_dep.found()
+
 	jack_srcs = ['synthpod_jack.c']
+	jack_c_args = []
+
+	if cc.has_header('jack/metadata.h')
+		jack_c_args += '-DJACK_HAS_METADATA_API'
+	endif
+
+	if cc.has_function('jack_get_cycle_times', prefix : '#include <jack/jack.h>')
+		jack_c_args += '-DJACK_HAS_CYCLE_TIMES'
+	endif
 
 	jack = executable('synthpod_jack', jack_srcs,
 		include_directories : bin_incs,
-		c_args : c_args,
+		c_args : c_args + jack_c_args,
 		dependencies : [bin_deps, jack_dep],
 		link_with : [bin, app, sbox_master],
 		install : true)
