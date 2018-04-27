@@ -740,7 +740,7 @@ bin_show(bin_t *bin)
 {
 	char srate [32];
 	char urate [32];
-	char wname [128];
+	char wname [384];
 	snprintf(srate, sizeof(srate), "%"PRIu32, bin->sample_rate);
 	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
 	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);

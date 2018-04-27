@@ -232,8 +232,8 @@ _unpack_messages(LV2_OSC_Reader *reader, size_t len, nsmc_t *nsm)
 {
 	if(lv2_osc_reader_is_message(reader))
 	{
-		const char *path;
-		const char *fmt;
+		const char *path = NULL;
+		const char *fmt = NULL;
 		lv2_osc_reader_get_string(reader, &path);
 		lv2_osc_reader_get_string(reader, &fmt);
 		for(const osc_msg_t *msg = messages; msg->cb; msg++)
