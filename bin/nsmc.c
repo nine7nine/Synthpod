@@ -161,7 +161,7 @@ _announce(nsmc_t *nsm)
 		LV2_OSC_Writer writer;
 		lv2_osc_writer_initialize(&writer, tx, max);
 
-		LV2_OSC_Writer_Frame bndl, itm;
+		LV2_OSC_Writer_Frame bndl = {0}, itm = {0};
 		lv2_osc_writer_push_bundle(&writer, &bndl, LV2_OSC_IMMEDIATE);
 		{
 			lv2_osc_writer_push_item(&writer, &itm);
