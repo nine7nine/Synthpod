@@ -306,7 +306,7 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 			|| (protocol == io->atom_transfer) )
 		{
 			const LV2_Atom *atom = buf;
-			LV2_Atom_Forge_Ref rel;
+			LV2_Atom_Forge_Ref rel = 0;
 
 			if(ref)
 				ref = lv2_atom_forge_key(&io->forge, io->rdf_value);
