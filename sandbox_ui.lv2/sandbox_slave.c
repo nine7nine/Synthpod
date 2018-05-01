@@ -56,7 +56,8 @@ struct _sandbox_slave_t {
 	LV2UI_Resize host_resize;
 
 	LilvWorld *world;
-	LilvNode *bundle_node;
+	LilvNode *plugin_bundle_node;
+	LilvNode *ui_bundle_node;
 	LilvNode *plugin_node;
 	LilvNode *ui_node;
 
@@ -76,8 +77,9 @@ struct _sandbox_slave_t {
 
 	const char *plugin_urn;
 	const char *plugin_uri;
-	const char *bundle_path;
+	const char *plugin_bundle_path;
 	const char *ui_uri;
+	const char *ui_bundle_path;
 	const char *socket_path;
 	const char *window_title;
 	float sample_rate;
@@ -281,7 +283,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	sb->update_rate = 25.f; // fall-back
 
 	int c;
-	while((c = getopt(argc, argv, "n:p:b:u:s:w:r:f:")) != -1)
+	while((c = getopt(argc, argv, "n:p:P:u:U:s:w:r:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -291,11 +293,14 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 			case 'p':
 				sb->plugin_uri = optarg;
 				break;
-			case 'b':
-				sb->bundle_path = optarg;
+			case 'P':
+				sb->plugin_bundle_path = optarg;
 				break;
 			case 'u':
 				sb->ui_uri = optarg;
+				break;
+			case 'U':
+				sb->ui_bundle_path = optarg;
 				break;
 			case 's':
 				sb->socket_path = optarg;
@@ -310,7 +315,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 				sb->update_rate = atof(optarg);
 				break;
 			case '?':
-				if( (optopt == 'n') || (optopt == 'p') || (optopt == 'b') || (optopt == 'u') || (optopt == 's') || (optopt == 'w') || (optopt == 'r') || (optopt == 'f') )
+				if( (optopt == 'n') || (optopt == 'p') || (optopt == 'P') || (optopt == 'u') || (optopt == 'U') || (optopt == 's') || (optopt == 'w') || (optopt == 'r') || (optopt == 'f') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -323,8 +328,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	}
 
 	if(  !sb->plugin_uri
-		|| !sb->bundle_path
+		|| !sb->plugin_bundle_path
 		|| !sb->ui_uri
+		|| !sb->ui_bundle_path
 		|| !sb->socket_path)
 	{
 		fprintf(stderr, "not enough arguments\n");
@@ -370,17 +376,28 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
-	sb->bundle_node = lilv_new_file_uri(sb->world, NULL, sb->bundle_path);
+	sb->plugin_bundle_node = lilv_new_file_uri(sb->world, NULL, sb->plugin_bundle_path);
+	if(strcmp(sb->plugin_bundle_path, sb->ui_bundle_path))
+	{
+		sb->ui_bundle_node = lilv_new_file_uri(sb->world, NULL, sb->ui_bundle_path);
+	}
+
 	sb->plugin_node = lilv_new_uri(sb->world, sb->plugin_uri);
 	sb->ui_node = lilv_new_uri(sb->world, sb->ui_uri);
 
-	if(!sb->bundle_node || !sb->plugin_node || !sb->ui_node)
+	if(!sb->plugin_bundle_node || !sb->plugin_node || !sb->ui_node)
 	{
 		fprintf(stderr, "lilv_new_uri failed\n");
 		goto fail;
 	}
 
-	lilv_world_load_bundle(sb->world, sb->bundle_node);
+	lilv_world_load_bundle(sb->world, sb->plugin_bundle_node);
+	if(sb->ui_bundle_node)
+	{
+		lilv_world_load_bundle(sb->world, sb->ui_bundle_node);
+	}
+
+	lilv_world_load_resource(sb->world, sb->plugin_node);
 	lilv_world_load_resource(sb->world, sb->ui_node);
 
 	const LilvPlugins *plugins = lilv_world_get_all_plugins(sb->world);
@@ -513,14 +530,23 @@ sandbox_slave_free(sandbox_slave_t *sb)
 			lilv_node_free(sb->ui_node);
 		}
 
-		if(sb->bundle_node)
+		if(sb->plugin_node)
 		{
-			lilv_world_unload_bundle(sb->world, sb->bundle_node);
-			lilv_node_free(sb->bundle_node);
+			lilv_world_unload_resource(sb->world, sb->plugin_node);
+			lilv_node_free(sb->plugin_node);
 		}
 
-		if(sb->plugin_node)
-			lilv_node_free(sb->plugin_node);
+		if(sb->ui_bundle_node)
+		{
+			lilv_world_unload_bundle(sb->world, sb->ui_bundle_node);
+			lilv_node_free(sb->ui_bundle_node);
+		}
+
+		if(sb->plugin_bundle_node)
+		{
+			lilv_world_unload_bundle(sb->world, sb->plugin_bundle_node);
+			lilv_node_free(sb->plugin_bundle_node);
+		}
 
 		lilv_world_free(sb->world);
 	}
@@ -617,19 +643,19 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 
 	const LilvNode *ui_bundle_uri = lilv_ui_get_bundle_uri(sb->ui);
 #if defined(LILV_0_22)
-	char *ui_bundle_path = lilv_file_uri_parse(lilv_node_as_string(ui_bundle_uri), NULL);
+	char *ui_plugin_bundle_path = lilv_file_uri_parse(lilv_node_as_string(ui_bundle_uri), NULL);
 #else
-	const char *ui_bundle_path = lilv_uri_to_path(lilv_node_as_string(ui_bundle_uri));
+	const char *ui_plugin_bundle_path = lilv_uri_to_path(lilv_node_as_string(ui_bundle_uri));
 #endif
 
 	if(sb->desc && sb->desc->instantiate)
 	{
 		sb->handle = sb->desc->instantiate(sb->desc, sb->plugin_uri,
-			ui_bundle_path, _write_function, sb, widget, features);
+			ui_plugin_bundle_path, _write_function, sb, widget, features);
 	}
 
 #if defined(LILV_0_22)
-	lilv_free(ui_bundle_path);
+	lilv_free(ui_plugin_bundle_path);
 #endif
 
 	if(sb->handle)

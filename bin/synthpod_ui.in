@@ -15,8 +15,9 @@ fi
 
 exec ${GDB} synthpod_sandbox_x11 \
 	-p http://open-music-kontrollers.ch/lv2/synthpod#stereo \
-	-b @CMAKE_INSTALL_PREFIX@/lib/lv2/synthpod.lv2/ \
+	-P @prefix@/lib/lv2/synthpod.lv2/ \
 	-u http://open-music-kontrollers.ch/lv2/synthpod#root_4_nk \
+	-U @prefix@/lib/lv2/synthpod.lv2/ \
 	-s ${socket} \
 	-w "Synthpod - ${socket}" \
 	-r 48000 \

@@ -751,8 +751,9 @@ bin_show(bin_t *bin)
 		char *const args [] = {
 			SYNTHPOD_BIN_DIR"synthpod_sandbox_x11",
 			"-p", SYNTHPOD_STEREO_URI,
-			"-b", SYNTHPOD_PLUGIN_DIR,
+			"-P", SYNTHPOD_PLUGIN_DIR,
 			"-u", SYNTHPOD_ROOT_NK_URI,
+			"-U", SYNTHPOD_PLUGIN_DIR,
 			"-s", (char *)bin->socket_path,
 			"-w", wname,
 			"-r", srate,

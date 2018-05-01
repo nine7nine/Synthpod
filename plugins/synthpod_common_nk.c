@@ -341,7 +341,8 @@ struct _mod_ui_t {
 		sandbox_master_driver_t driver;
 		sandbox_master_t *sb;
 		char *socket_uri;
-		char *bundle_path;
+		char *plugin_bundle_path;
+		char *ui_bundle_path;
 		char *window_name;
 		char *sample_rate;
 		char *update_rate;
@@ -2769,7 +2770,8 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 {
 	DBG;
 	const LilvNode *ui_node = lilv_ui_get_uri(ui);
-	const LilvNode *bundle_node = lilv_ui_get_bundle_uri(ui);
+	const LilvNode *plugin_bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
+	const LilvNode *ui_bundle_node = lilv_ui_get_bundle_uri(ui);
 
 	//lilv_world_load_bundle(handle->world, (LilvNode *)bundle_node);
 	lilv_world_load_resource(handle->world, ui_node);
@@ -2822,8 +2824,15 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 		mod_ui->uri = lilv_node_as_uri(ui_node);
 		mod_ui->urn = handle->map->map(handle->map->handle, mod_ui->uri);
 
-		const char *bundle_uri = bundle_node ? lilv_node_as_uri(bundle_node) : NULL;
-		mod_ui->sbox.bundle_path = lilv_file_uri_parse(bundle_uri, NULL);
+		const char *plugin_bundle_uri = plugin_bundle_node
+			? lilv_node_as_uri(plugin_bundle_node)
+			: NULL;
+		mod_ui->sbox.plugin_bundle_path = lilv_file_uri_parse(plugin_bundle_uri, NULL);
+
+		const char *ui_bundle_uri = ui_bundle_node
+			? lilv_node_as_uri(ui_bundle_node)
+			: NULL;
+		mod_ui->sbox.ui_bundle_path = lilv_file_uri_parse(ui_bundle_uri, NULL);
 
 		if(asprintf(&mod_ui->sbox.socket_uri, "shm:///synthpod-sandbox-%016"PRIx64, (uint64_t)mod_ui) == -1)
 			mod_ui->sbox.socket_uri = NULL;
@@ -2898,7 +2907,8 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 
 	//printf("exec_uri: %s\n", exec_uri);
 
-	if(exec_uri && plugin_uri && plugin_urn && mod_ui->sbox.bundle_path && mod_ui->uri
+	if(exec_uri && plugin_uri && plugin_urn && mod_ui->sbox.plugin_bundle_path
+		&& mod_ui->sbox.ui_bundle_path && mod_ui->uri
 		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name
 		&& mod_ui->sbox.sample_rate && mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
@@ -2914,8 +2924,9 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 				(char *)exec_uri,
 				"-n", (char *)plugin_urn,
 				"-p", (char *)plugin_uri,
-				"-b", mod_ui->sbox.bundle_path,
+				"-P", mod_ui->sbox.plugin_bundle_path,
 				"-u", (char *)mod_ui->uri,
+				"-U", mod_ui->sbox.ui_bundle_path,
 				"-s", mod_ui->sbox.socket_uri,
 				"-w", mod_ui->sbox.window_name,
 				"-r", mod_ui->sbox.sample_rate,
@@ -2994,7 +3005,8 @@ _mod_ui_free(mod_ui_t *mod_ui)
 	lilv_world_unload_resource(handle->world, ui_node);
 	//lilv_world_unload_bundle(handle->world, (LilvNode *)bundle_node);
 
-	lilv_free(mod_ui->sbox.bundle_path);
+	lilv_free(mod_ui->sbox.plugin_bundle_path);
+	lilv_free(mod_ui->sbox.ui_bundle_path);
 	free(mod_ui->sbox.socket_uri);
 	free(mod_ui->sbox.window_name);
 	free(mod_ui->sbox.update_rate);
