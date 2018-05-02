@@ -138,4 +138,7 @@ if true
 		install : true)
 endif
 
+install_data('synthpod_ui',
+	install_dir : get_option('bindir'),
+	install_mode : 'rwxr-xr-x')
 install_man('synthpod_sandbox.1')
