@@ -284,11 +284,53 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	sb->sample_rate = 44100.f; // fall-back
 	sb->update_rate = 25.f; // fall-back
 
+	fprintf(stderr,
+		"Synthpod "SYNTHPOD_VERSION"\n"
+		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
+
 	int c;
-	while((c = getopt(argc, argv, "n:p:P:u:U:s:w:r:f:")) != -1)
+	while((c = getopt(argc, argv, "vhn:p:P:u:U:s:w:r:f:")) != -1)
 	{
 		switch(c)
 		{
+			case 'v':
+				fprintf(stderr,
+					"--------------------------------------------------------------------\n"
+					"This is free software: you can redistribute it and/or modify\n"
+					"it under the terms of the Artistic License 2.0 as published by\n"
+					"The Perl Foundation.\n"
+					"\n"
+					"This source is distributed in the hope that it will be useful,\n"
+					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
+					"Artistic License 2.0 for more details.\n"
+					"\n"
+					"You should have received a copy of the Artistic License 2.0\n"
+					"along the source as a COPYING file. If not, obtain it from\n"
+					"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
+				return 0;
+			case 'h':
+				//FIXME
+				fprintf(stderr,
+					"--------------------------------------------------------------------\n"
+					"USAGE\n"
+					"   %s [OPTIONS]\n"
+					"\n"
+					"OPTIONS\n"
+					"   [-v]                 print version and full license information\n"
+					"   [-h]                 print usage information\n"
+					"   [-n] plugin-urn      Plugin URN\n"
+					"   [-p] plugin-uri      Plugin URI\n"
+					"   [-P] plugin-bundle   Plugin bundle path\n"
+					"   [-u] ui-uri          Plugin UI URI\n"
+					"   [-U] ui-bundle       Plugin UI bundle path\n"
+					"   [-s] socket-path     Socket path\n"
+					"   [-w] window-title    Window title\n"
+					"   [-r] sample-rate     Sample rate\n"
+					"   [-f] update-rate     GUI update rate (25)\n\n"
+					, argv[0]);
+				return 0;
 			case 'n':
 				sb->plugin_urn = optarg;
 				break;
