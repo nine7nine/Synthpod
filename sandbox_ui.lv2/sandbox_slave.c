@@ -75,6 +75,8 @@ struct _sandbox_slave_t {
 	const sandbox_slave_driver_t *driver;
 	void *data;
 
+	bool initialized;
+
 	const char *plugin_urn;
 	const char *plugin_uri;
 	const char *plugin_bundle_path;
@@ -483,7 +485,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 
 	if(_sandbox_io_init(&sb->io, sb->map, sb->unmap, sb->socket_path, false, false))
 	{
-		fprintf(stderr, "_sandbox_io_init failed\n");
+		fprintf(stderr, "_sandbox_io_init failed: are you sure that the host is running?\n");
 		goto fail;
 	}
 
@@ -493,6 +495,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
+	sb->initialized = true;
 	return sb; // success
 
 fail:
@@ -506,10 +509,10 @@ sandbox_slave_free(sandbox_slave_t *sb)
 	if(!sb)
 		return;
 
-	if(sb->desc && sb->desc->cleanup)
+	if(sb->desc && sb->desc->cleanup && sb->handle)
 		sb->desc->cleanup(sb->handle);
 
-	if(sb->driver && sb->driver->deinit_cb)
+	if(sb->driver && sb->driver->deinit_cb && sb->initialized)
 		sb->driver->deinit_cb(sb->data);
 
 	_sandbox_io_deinit(&sb->io, false);

@@ -7861,7 +7861,9 @@ _icon_load(plughandle_t *handle, const char *bundle_path, const char *file)
 		free(path);
 	}
 	else
+	{
 		img = nk_image_id(0);
+	}
 
 	return img;
 }
@@ -7870,7 +7872,10 @@ static void
 _icon_unload(plughandle_t *handle, struct nk_image img)
 {
 	DBG;
-	nk_pugl_icon_unload(&handle->win, img);
+	if(img.handle.id != 0)
+	{
+		nk_pugl_icon_unload(&handle->win, img);
+	}
 }
 
 static LV2UI_Handle
