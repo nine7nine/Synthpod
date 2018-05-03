@@ -311,7 +311,6 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 					"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
 				return 0;
 			case 'h':
-				//FIXME
 				fprintf(stderr,
 					"--------------------------------------------------------------------\n"
 					"USAGE\n"
