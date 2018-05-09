@@ -109,13 +109,26 @@ if lilv_dep.version() >= '0.22.0'
 endif
 
 add_project_arguments('-D_GNU_SOURCE', language : 'c')
-add_project_arguments('-DHAS_BUILTIN_ASSUME_ALIGNED', language : 'c')
 add_project_arguments('-DSYNTHPOD_VERSION="'+rawvers+'"', language : 'c')
 add_project_arguments('-DSYNTHPOD_MINOR_VERSION='+version[1]+'', language : 'c')
 add_project_arguments('-DSYNTHPOD_MICRO_VERSION='+version[2]+'', language : 'c')
 add_project_arguments('-DSYNTHPOD_BUNDLE_DIR="'+join_paths(prefix, bndl_dir, '')+'"', language : 'c')
 add_project_arguments('-DSYNTHPOD_BIN_DIR="'+join_paths(prefix, get_option('bindir'), '')+'"', language : 'c')
 add_project_arguments('-DSYNTHPOD_PLUGIN_DIR="'+join_paths(prefix, plug_dir, '')+'"', language : 'c')
+
+builtin_assume_aligned = '''
+int main(int argc, char **argv)
+{
+	void *src;
+	void *dst = __builtin_assume_aligned(src, 16);
+
+	return 0;
+}
+'''
+
+if cc.compiles(builtin_assume_aligned, name : 'builtin_assume_aligned')
+	add_project_arguments('-DHAS_BUILTIN_ASSUME_ALIGNED', language : 'c')
+endif
 
 cp = find_program('cp')
 clone = [cp, '@INPUT@', '@OUTPUT@']
@@ -125,6 +138,18 @@ c_args = ['-fvisibility=hidden',
 	'-Wno-attributes',
 	'-Wno-unused-function',
 	'-Wno-unused-variable']
+
+if cc.has_argument('-ftree-vectorize')
+	c_args += '-ftree-vectorize'
+endif
+
+if cc.has_argument('-ftree-vectorizer-verbose=1')
+	c_args += '-ftree-vectorizer-verbose=1'
+endif
+
+if cc.has_argument('-Rpass=loop-vectorize')
+	c_args += '-Rpass=loop-vectorize'
+endif
 
 subdir('sandbox_ui.lv2')
 subdir('app')
