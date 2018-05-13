@@ -897,8 +897,8 @@ _hash_sort_r(hash_t *hash, int (*cmp)(const void *a, const void *b, void *data),
 }
 #endif
 
-static int
-_node_as_int(const LilvNode *node, int dflt)
+static int64_t
+_node_as_long(const LilvNode *node, int64_t dflt)
 {
 	DBG;
 	if(lilv_node_is_int(node))
@@ -911,8 +911,14 @@ _node_as_int(const LilvNode *node, int dflt)
 		return dflt;
 }
 
-static float
-_node_as_float(const LilvNode *node, float dflt)
+static int32_t
+_node_as_int(const LilvNode *node, int32_t dflt)
+{
+	return _node_as_long(node, dflt);
+}
+
+static double
+_node_as_double(const LilvNode *node, double dflt)
 {
 	DBG;
 	if(lilv_node_is_int(node))
@@ -920,9 +926,15 @@ _node_as_float(const LilvNode *node, float dflt)
 	else if(lilv_node_is_float(node))
 		return lilv_node_as_float(node);
 	else if(lilv_node_is_bool(node))
-		return lilv_node_as_bool(node) ? 1.f : 0.f;
+		return lilv_node_as_bool(node) ? 1.0 : 0.0;
 	else
 		return dflt;
+}
+
+static float
+_node_as_float(const LilvNode *node, float dflt)
+{
+	return _node_as_double(node, dflt);
 }
 
 static int32_t
@@ -1801,6 +1813,8 @@ _param_update_span(plughandle_t *handle, param_t *param)
 		param->span.f = param->max.f - param->min.f;
 	else if(param->range == handle->forge.Double)
 		param->span.d = param->max.d - param->min.d;
+	else if(param->range == handle->forge.URID)
+		param->span.u = UINT32_MAX;
 	//FIXME more types
 }
 
@@ -1866,8 +1880,12 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 	if(range)
 	{
 		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
-		if(param->range == handle->forge.String)
+		if(  (param->range == handle->forge.String)
+			|| (param->range == handle->forge.URI)
+			|| (param->range == handle->forge.URID) )
+		{
 			nk_textedit_init_default(&param->val.editor);
+		}
 		lilv_node_free(range);
 	}
 
@@ -1887,11 +1905,11 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 			else if(param->range == handle->forge.Bool)
 				param->min.i = _node_as_bool(min, false);
 			else if(param->range == handle->forge.Long)
-				param->min.h = _node_as_int(min, 0);
+				param->min.h = _node_as_long(min, 0);
 			else if(param->range == handle->forge.Float)
 				param->min.f = _node_as_float(min, 0.f);
 			else if(param->range == handle->forge.Double)
-				param->min.d = _node_as_float(min, 0.f);
+				param->min.d = _node_as_double(min, 0.0);
 			//FIXME
 			lilv_node_free(min);
 		}
@@ -1904,30 +1922,13 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 			else if(param->range == handle->forge.Bool)
 				param->max.i = _node_as_bool(max, true);
 			else if(param->range == handle->forge.Long)
-				param->max.h = _node_as_int(max, 1);
+				param->max.h = _node_as_long(max, 1);
 			else if(param->range == handle->forge.Float)
 				param->max.f = _node_as_float(max, 1.f);
 			else if(param->range == handle->forge.Double)
-				param->max.d = _node_as_float(max, 1.f);
+				param->max.d = _node_as_double(max, 1.0);
 			//FIXME
 			lilv_node_free(max);
-		}
-
-		LilvNode *val = lilv_world_get(handle->world, param_node, handle->node.lv2_default, NULL);
-		if(val)
-		{
-			if(param->range == handle->forge.Int)
-				param->val.i = _node_as_int(val, 0);
-			else if(param->range == handle->forge.Bool)
-				param->val.i = _node_as_bool(min, false);
-			else if(param->range == handle->forge.Long)
-				param->val.h = _node_as_int(min, 0);
-			else if(param->range == handle->forge.Float)
-				param->val.f = _node_as_float(min, 0.f);
-			else if(param->range == handle->forge.Double)
-				param->val.d = _node_as_float(min, 0.f);
-			//FIXME
-			lilv_node_free(val);
 		}
 
 		_param_update_span(handle, param);
@@ -1999,18 +2000,25 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 
 				point->label = strdup(lilv_node_as_string(label_node));
 
-				if(  (param->range == handle->forge.Int)
-					|| (param->range == handle->forge.Long) )
+				if(param->range == handle->forge.Int)
 				{
 					point->val.i = _node_as_int(value_node, 0);
+				}
+				else if(param->range == handle->forge.Long)
+				{
+					point->val.h = _node_as_long(value_node, 0);
 				}
 				else if(param->range == handle->forge.Bool)
 				{
 					point->val.i = _node_as_bool(value_node, false);
 				}
-				else // is_float
+				else if(param->range == handle->forge.Float)
 				{
 					point->val.f = _node_as_float(value_node, 0.f);
+				}
+				else if(param->range == handle->forge.Double)
+				{
+					point->val.d = _node_as_double(value_node, 0.0);
 				}
 				//FIXME other types
 
@@ -2048,7 +2056,9 @@ static void
 _param_free(plughandle_t *handle, param_t *param)
 {
 	DBG;
-	if(param->range == handle->forge.String)
+	if(  (param->range == handle->forge.String)
+		|| (param->range == handle->forge.URI)
+		|| (param->range == handle->forge.URID) )
 	{
 		nk_textedit_free(&param->val.editor);
 	}
@@ -2231,6 +2241,18 @@ _param_set_value(plughandle_t *handle, mod_t *mod, param_t *param,
 	{
 		struct nk_str *str = &param->val.editor.string;
 		_set_string(str, value->size, LV2_ATOM_BODY_CONST(value));
+	}
+	else if(param->range == handle->forge.URI)
+	{
+		struct nk_str *str = &param->val.editor.string;
+		_set_string(str, value->size, LV2_ATOM_BODY_CONST(value));
+	}
+	else if(param->range == handle->forge.URID)
+	{
+		struct nk_str *str = &param->val.editor.string;
+		const LV2_URID urid = ((const LV2_Atom_URID *)value)->body;
+		const char *uri = handle->unmap->unmap(handle->unmap->handle, urid);
+		_set_string(str, strlen(uri) + 1, uri);
 	}
 	else if(param->range == handle->forge.Chunk)
 	{
@@ -2557,8 +2579,12 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 									&& (prop->value.type == handle->forge.URID) )
 								{
 									param->range = ((const LV2_Atom_URID *)&prop->value)->body;
-									if(param->range == handle->forge.String)
+									if(  (param->range == handle->forge.String)
+										|| (param->range == handle->forge.URI)
+										|| (param->range == handle->forge.URID) )
+									{
 										nk_textedit_init_default(&param->val.editor);
+									}
 									else if(param->range == handle->forge.Bool)
 									{
 										param->min.b = 0;
@@ -5347,6 +5373,8 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 
 	bool changed = false;
 	if(  (param->range == handle->forge.String)
+		|| (param->range == handle->forge.URI)
+		|| (param->range == handle->forge.URID)
 		|| param->is_bitmask)
 	{
 		nk_layout_row_dynamic(ctx, DY, 1);
@@ -5505,6 +5533,18 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 			if(_widget_string(handle, ctx, &param->val.editor, !param->is_readonly))
 				changed = true;
 		}
+		else if(param->range == handle->forge.URI)
+		{
+			nk_layout_row_dynamic(ctx, dy*1.2, 1); // editor field needs to be heigher
+			if(_widget_string(handle, ctx, &param->val.editor, !param->is_readonly))
+				changed = true;
+		}
+		else if(param->range == handle->forge.URID)
+		{
+			nk_layout_row_dynamic(ctx, dy*1.2, 1); // editor field needs to be heigher
+			if(_widget_string(handle, ctx, &param->val.editor, !param->is_readonly))
+				changed = true;
+		}
 		else if(param->range == handle->forge.Chunk)
 		{
 			nk_labelf(ctx, NK_TEXT_RIGHT, "%"PRIu32" bytes", param->val.chunk.size);
@@ -5610,6 +5650,28 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 		_patch_notification_add_patch_set(handle, mod,
 			handle->regs.port.event_transfer.urid, 0, 0, param->property,
 			sz, handle->forge.String, str);
+	}
+	else if(param->range == handle->forge.URI)
+	{
+		const char *str = nk_str_get_const(&param->val.editor.string);
+		const uint32_t sz= nk_str_len_char(&param->val.editor.string) + 1;
+
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sz, handle->forge.URI, str);
+	}
+	else if(param->range == handle->forge.URID)
+	{
+		const char *str = nk_str_get_const(&param->val.editor.string);
+		const uint32_t sz= nk_str_len_char(&param->val.editor.string);
+		char *uri = alloca(sz+1);
+		strncpy(uri, str, sz);
+		uri[sz] = '\0';
+		const uint32_t urid = handle->map->map(handle->map->handle, uri);
+
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			sizeof(uint32_t), handle->forge.URID, &urid);
 	}
 	else if(param->range == handle->forge.Chunk)
 	{
