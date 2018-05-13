@@ -41,6 +41,8 @@ stages:
 
 # building in docker
 x86_64-linux-gnu:
+  before_script:
+    - apt-get install -y libjack-dev
   <<: *universal_linux_definition
 
 i686-linux-gnu:
