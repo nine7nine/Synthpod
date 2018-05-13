@@ -137,7 +137,8 @@ c_args = ['-fvisibility=hidden',
 	'-ffast-math',
 	'-Wno-attributes',
 	'-Wno-unused-function',
-	'-Wno-unused-variable']
+	'-Wno-unused-variable',
+	'-Wno-stringop-overflow']
 
 if cc.has_argument('-ftree-vectorize')
 	c_args += '-ftree-vectorize'

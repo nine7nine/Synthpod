@@ -772,7 +772,7 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 			else if( (prop == app->regs.synthpod.module_alias.urid)
 				&& (value->type == app->forge.String) )
 			{
-				strncpy(mod->alias, LV2_ATOM_BODY_CONST(value), ALIAS_MAX);
+				strncpy(mod->alias, LV2_ATOM_BODY_CONST(value), ALIAS_MAX - 1);
 			}
 			else if( (prop == app->regs.ui.ui.urid)
 				&& (value->type == app->forge.URID) )

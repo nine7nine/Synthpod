@@ -1379,7 +1379,7 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 	mod->disabled = mod_disabled && (mod_disabled->atom.type == app->forge.Bool)
 		? mod_disabled->body : false;
 	if(mod_alias)
-		strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX);
+		strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX - 1);
 	mod->ui = mod_ui && (mod_ui->atom.type == app->forge.URID)
 		? mod_ui->body : 0;
 

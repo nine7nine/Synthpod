@@ -4184,22 +4184,23 @@ _expose_main_bundle_list(plughandle_t *handle, struct nk_context *ctx,
 					char *bundle_path = lilv_node_get_path(bundle, NULL);
 					if(bundle_path)
 					{
-						//FIXME make this more robust, maybe?
-						const size_t len = strlen(bundle_path);
-						char tmp [len];
-						strncpy(tmp, bundle_path, len);
-						char *end = strrchr(tmp, '/');
-						if(end)
-							*end = '\0';
-
-						const LV2_URID bundle_urid = handle->map->map(handle->map->handle, tmp);
-						if(  _message_request(handle)
-							&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
-								bundle_urid, 0, 0) )
+						char *tmp = strdup(bundle_path);
+						if(tmp)
 						{
-							_message_write(handle);
-						}
+							char *end = strrchr(tmp, '/');
+							if(end)
+								*end = '\0';
 
+							const LV2_URID bundle_urid = handle->map->map(handle->map->handle, tmp);
+							if(  _message_request(handle)
+								&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
+									bundle_urid, 0, 0) )
+							{
+								_message_write(handle);
+							}
+
+							free(tmp);
+						}
 						lilv_free(bundle_path);
 					}
 				}
@@ -8751,7 +8752,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 							if(mod_alias && (mod_alias->atom.type == handle->forge.String) )
 							{
-								strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX);
+								strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX-1);
 							}
 
 							if(ui_urn)
