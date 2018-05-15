@@ -23,7 +23,7 @@
 static atomic_long voice_uuid = ATOMIC_VAR_INIT(INT64_MAX / UINT16_MAX * 3LL);
 
 static xpress_uuid_t
-_voice_map_new_uuid(void *handle)
+_voice_map_new_uuid(void *handle, uint32_t flag __attribute__((unused)))
 {
 	atomic_long *uuid = handle;
 	return atomic_fetch_add_explicit(uuid, 1, memory_order_relaxed);
