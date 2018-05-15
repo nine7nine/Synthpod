@@ -75,7 +75,7 @@ static const char *prefix [2][6] = {
 };
 
 __realtime static xpress_uuid_t
-_voice_map_new_uuid(void *handle)
+_voice_map_new_uuid(void *handle, uint32_t flag __attribute__((unused)))
 {
 	atomic_long *uuid = handle;
 
