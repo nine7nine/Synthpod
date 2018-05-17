@@ -594,6 +594,23 @@ _sample_rate(jack_nframes_t sample_rate, void *data)
 	return 0;
 }
 
+void
+_replace(char* str, const char* a, const char* b)
+{
+	const size_t len = strlen(str);
+	const size_t lena = strlen(a);
+	const size_t lenb = strlen(b);
+
+	for(char *p = str; (p = strstr(p, a)); ++p)
+	{
+		if(lena != lenb) // shift end as needed
+		{
+			memmove(p+lenb, p+lena, len - (p - str) + lenb);
+		}
+		memcpy(p, b, lenb);
+	}
+}
+
 __non_realtime static void *
 _system_port_add(void *data, system_port_t type, const char *short_name,
 	const char *pretty_name, const char *designation, bool input, uint32_t order)
@@ -602,6 +619,15 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
 	//printf("_system_port_add: %s\n", short_name);
+
+	const size_t len = jack_port_name_size();
+	char *name = alloca(len);
+	strncpy(name, short_name, len);
+
+	if(strstr(name, "sink"))
+		_replace(name, "sink", "source");
+	else if(strstr(name, "source"))
+		_replace(name, "source", "sink");
 
 	jack_port_t *jack_port = NULL;
 
@@ -623,13 +649,13 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 
 		case SYSTEM_PORT_AUDIO:
 		{
-			jack_port = jack_port_register(handle->client, short_name,
+			jack_port = jack_port_register(handle->client, name,
 				JACK_DEFAULT_AUDIO_TYPE, flags, 0);
 			break;
 		}
 		case SYSTEM_PORT_CV:
 		{
-			jack_port = jack_port_register(handle->client, short_name,
+			jack_port = jack_port_register(handle->client, name,
 				JACK_DEFAULT_AUDIO_TYPE, flags, 0);
 
 #if defined(JACK_HAS_METADATA_API)
@@ -648,13 +674,13 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 
 		case SYSTEM_PORT_MIDI:
 		{
-			jack_port = jack_port_register(handle->client, short_name,
+			jack_port = jack_port_register(handle->client, name,
 				JACK_DEFAULT_MIDI_TYPE, flags, 0);
 			break;
 		}
 		case SYSTEM_PORT_OSC:
 		{
-			jack_port = jack_port_register(handle->client, short_name,
+			jack_port = jack_port_register(handle->client, name,
 				JACK_DEFAULT_MIDI_TYPE, flags, 0);
 
 #if defined(JACK_HAS_METADATA_API)
