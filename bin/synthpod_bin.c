@@ -39,8 +39,6 @@
 
 static atomic_bool done = ATOMIC_VAR_INIT(false);
 
-static atomic_long voice_uuid = ATOMIC_VAR_INIT(1);
-
 static uint8_t ui_buf [CHUNK_SIZE]; //FIXME
 
 enum {
@@ -73,14 +71,6 @@ static const char *prefix [2][6] = {
 		[COLOR_DSP]     = "("ANSI_COLOR_CYAN "DSP"ANSI_COLOR_RESET")"
 	}
 };
-
-__realtime static xpress_uuid_t
-_voice_map_new_uuid(void *handle, uint32_t flag __attribute__((unused)))
-{
-	atomic_long *uuid = handle;
-
-	return atomic_fetch_add_explicit(uuid, 1, memory_order_relaxed);
-}
 
 __realtime static void
 _close_request(void *data)
@@ -335,6 +325,14 @@ _mapper_free_rt(void *data, char *uri)
 	// nothing
 }
 
+__realtime static uint32_t
+_voice_map_new_uuid(void *data, uint32_t flags __attribute__((unused)))
+{
+	xpress_t *xpress = data;
+
+	return xpress_map(xpress);
+}
+
 __non_realtime void
 bin_init(bin_t *bin, uint32_t sample_rate)
 {
@@ -356,8 +354,10 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->map = mapper_get_map(bin->mapper);
 	bin->unmap = mapper_get_unmap(bin->mapper);
 
+	xpress_init(&bin->xpress, 0, bin->map, NULL,
+		XPRESS_EVENT_NONE, NULL, NULL, NULL);
 	bin->xmap.new_uuid = _voice_map_new_uuid;
-	bin->xmap.handle = &voice_uuid;
+	bin->xmap.handle = &bin->xpress;
 
 	bin->log_error = bin->map->map(bin->map->handle, LV2_LOG__Error);
 	bin->log_note = bin->map->map(bin->map->handle, LV2_LOG__Note);
@@ -582,6 +582,8 @@ bin_deinit(bin_t *bin)
 
 	cross_clock_deinit(&bin->clk_mono);
 	cross_clock_deinit(&bin->clk_real);
+
+	xpress_deinit(&bin->xpress);
 }
 
 __realtime void

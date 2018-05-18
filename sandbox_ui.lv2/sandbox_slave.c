@@ -26,6 +26,8 @@
 #include <sandbox_slave.h>
 #include <sandbox_io.h>
 
+#include <xpress.lv2/xpress.h>
+
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
 #include <lv2/lv2plug.in/ns/ext/uri-map/uri-map.h>
@@ -52,6 +54,8 @@ struct _sandbox_slave_t {
 
 	LV2UI_Port_Map port_map;
 	LV2UI_Port_Subscribe port_subscribe;
+	xpress_map_t xmap;
+	xpress_t xpress;
 
 	LV2UI_Resize host_resize;
 
@@ -269,6 +273,14 @@ _sb_uri_to_id(LV2_URI_Map_Callback_Data handle, const char *map, const char *uri
 	return sb->map->map(sb->map->handle, uri);
 }
 
+static uint32_t
+_voice_map_new_uuid(void *data, uint32_t flags __attribute__((unused)))
+{
+	xpress_t *xpress = data;
+
+	return xpress_map(xpress);
+}
+
 sandbox_slave_t *
 sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, void *data)
 {
@@ -413,6 +425,11 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	sb->log_warning = sb->map->map(sb->map->handle, LV2_LOG__Warning);
 	sb->log_note = sb->map->map(sb->map->handle, LV2_LOG__Note);
 
+	xpress_init(&sb->xpress, 0, sb->map, NULL,
+		XPRESS_EVENT_NONE, NULL, NULL, NULL);
+	sb->xmap.new_uuid = _voice_map_new_uuid;
+	sb->xmap.handle = &sb->xpress;
+
 	if(!(sb->world = lilv_world_new()))
 	{
 		fprintf(stderr, "lilv_world_new failed\n");
@@ -550,6 +567,8 @@ sandbox_slave_free(sandbox_slave_t *sb)
 	if(!sb)
 		return;
 
+	xpress_deinit(&sb->xpress);
+
 	if(sb->desc && sb->desc->cleanup && sb->handle)
 		sb->desc->cleanup(sb->handle);
 
@@ -665,6 +684,10 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		.URI = LV2_OPTIONS__options,
 		.data = options
 	};
+	const LV2_Feature voice_map_feature = {
+		.URI = XPRESS__voiceMap,
+		.data = &sb->xmap
+	};
 	const LV2_Feature resize_feature = {
 		.URI = LV2_UI__resize,
 		.data = &sb->host_resize
@@ -678,6 +701,7 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		&port_map_feature,
 		&port_subscribe_feature,
 		&options_feature,
+		&voice_map_feature,
 		sb->host_resize.ui_resize ? &resize_feature : parent_feature,
 		sb->host_resize.ui_resize && parent_feature ? parent_feature : NULL,
 		NULL

@@ -130,6 +130,9 @@ struct _plughandle_t {
 	varchunk_t *app_from_worker;
 	varchunk_t *app_from_ui;
 	varchunk_t *app_from_app;
+
+	xpress_t xpress;
+	xpress_map_t xmap;
 };
 
 static LV2_State_Status
@@ -342,6 +345,14 @@ _to_app_advance(size_t written, void *data)
 	varchunk_write_advance(handle->app_from_worker, written);
 }
 
+__realtime static uint32_t
+_voice_map_new_uuid(void *data, uint32_t flags __attribute__((unused)))
+{
+	xpress_t *xpress = data;
+
+	return xpress_map(xpress);
+}
+
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
@@ -361,6 +372,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->driver.bad_plugins = false; //FIXME
 
 	const LilvWorld *world = NULL;
+	xpress_map_t *voice_map = NULL;
 
 	for(int i=0; features[i]; i++)
 	{
@@ -369,7 +381,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->driver.unmap = (LV2_URID_Unmap *)features[i]->data;
 		else if(!strcmp(features[i]->URI, XPRESS__voiceMap))
-			handle->driver.xmap = features[i]->data;
+			voice_map = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->driver.log = (LV2_Log_Log *)features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
@@ -385,9 +397,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		else if(!strcmp(features[i]->URI, LV2_BUF_SIZE__powerOf2BlockLength))
 			handle->driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
 	}
-
-	if(!handle->driver.xmap)
-		handle->driver.xmap = &voice_map_fallback;
 
 	if(!handle->driver.map)
 	{
@@ -414,6 +423,12 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
+	xpress_init(&handle->xpress, 0, handle->driver.map, voice_map,
+		XPRESS_EVENT_NONE, NULL, NULL, NULL);
+	handle->xmap.new_uuid = _voice_map_new_uuid;
+	handle->xmap.handle = &handle->xpress;
+	handle->driver.xmap = &handle->xmap;
 
 	// map URIs
 	handle->uri.bufsz.max_block_length = handle->driver.map->map(handle->driver.map->handle,
@@ -928,6 +943,7 @@ cleanup(LV2_Handle instance)
 	varchunk_free(handle->app_from_worker);
 	varchunk_free(handle->app_from_ui);
 	varchunk_free(handle->app_from_app);
+	xpress_deinit(&handle->xpress);
 
 	munlock(handle, sizeof(plughandle_t));
 	free(handle);

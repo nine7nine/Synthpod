@@ -41,8 +41,6 @@
 // bundle uri
 #define SYNTHPOD_EVENT_URI				SYNTHPOD_PREFIX"event"
 
-extern xpress_map_t voice_map_fallback;
-
 // plugin uris
 #define SYNTHPOD_KEYBOARD_URI					SYNTHPOD_PREFIX"keyboard"
 #define SYNTHPOD_CV2CONTROL_URI				SYNTHPOD_PREFIX"cv2control"

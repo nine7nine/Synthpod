@@ -527,6 +527,8 @@ struct _plughandle_t {
 #if defined(USE_CAIRO_CANVAS)
 	LV2_Canvas canvas;
 #endif
+
+	xpress_t xpress;
 };
 
 static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
@@ -7955,6 +7957,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	void *parent = NULL;
 	LV2UI_Resize *host_resize = NULL;
 	LV2_Options_Option *opts = NULL;
+	xpress_map_t *voice_map = NULL;
+
 	for(int i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_UI__parent))
@@ -7965,6 +7969,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->map = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
 			handle->unmap = features[i]->data;
+		else if(!strcmp(features[i]->URI, XPRESS__voiceMap))
+			voice_map = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
 			opts = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
@@ -7992,6 +7998,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		free(handle);
 		return NULL;
 	}
+
+	xpress_init(&handle->xpress, 0, handle->map, voice_map,
+		XPRESS_EVENT_NONE, NULL, NULL, NULL); //FIXME use xpress_map()
 
 	if(handle->log)
 		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
@@ -8169,6 +8178,7 @@ cleanup(LV2UI_Handle instance)
 	_hash_free(&handle->param_matches);
 	_hash_free(&handle->dynam_matches);
 
+	xpress_deinit(&handle->xpress);
 	_deinit(handle);
 
 	free(handle);
