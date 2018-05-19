@@ -9,6 +9,19 @@
 * Is rt-safe
 * Uses a simplistic API
 
+### Build Status
+
+[![build status](https://gitlab.com/OpenMusicKontrollers/lfrtm/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/lfrtm/commits/master)
+
+### Build / test
+
+	git clone https://git.open-music-kontrollers.ch/lv2/lfrtm
+	cd lfrtm
+	meson build
+	cd build
+	ninja -j4
+	ninja test
+
 ### License
 
 Copyright (c) 2018 Hanspeter Portner (dev@open-music-kontrollers.ch)
