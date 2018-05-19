@@ -42,7 +42,7 @@ _thread(void *data)
 	for(unsigned i = 0; i < 0x10000; i++)
 	{
 		const size_t size = i % ITEM_SIZE + 1;
-		bool more;
+		bool more = false;
 		assert(lfrtm_alloc(lfrtm, 0, NULL) == NULL);
 		assert(lfrtm_alloc(NULL, 0, &more) == NULL);
 		void *mem = lfrtm_alloc(lfrtm, size, &more);
