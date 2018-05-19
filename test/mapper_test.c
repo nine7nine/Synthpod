@@ -23,6 +23,7 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <assert.h>
+#include <time.h>
 #include <math.h>
 
 #include "random.c"
