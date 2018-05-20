@@ -35,7 +35,7 @@ struct _sandbox_master_t {
 };
 
 sandbox_master_t *
-sandbox_master_new(sandbox_master_driver_t *driver, void *data)
+sandbox_master_new(sandbox_master_driver_t *driver, void *data, size_t minimum)
 {
 	sandbox_master_t *sb = calloc(1, sizeof(sandbox_master_t));
 	if(!sb)
@@ -44,7 +44,7 @@ sandbox_master_new(sandbox_master_driver_t *driver, void *data)
 	sb->driver = driver;
 	sb->data = data;
 
-	if(_sandbox_io_init(&sb->io, driver->map, driver->unmap, driver->socket_path, true, true))
+	if(_sandbox_io_init(&sb->io, driver->map, driver->unmap, driver->socket_path, true, true, minimum))
 		goto fail;
 
 	return sb;

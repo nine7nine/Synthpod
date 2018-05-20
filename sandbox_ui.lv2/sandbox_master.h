@@ -40,7 +40,7 @@ struct _sandbox_master_driver_t {
 };
 
 sandbox_master_t *
-sandbox_master_new(sandbox_master_driver_t *driver, void *data);
+sandbox_master_new(sandbox_master_driver_t *driver, void *data, size_t minimum);
 
 void
 sandbox_master_free(sandbox_master_t *sb);

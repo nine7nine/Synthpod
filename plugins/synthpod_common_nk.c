@@ -310,6 +310,8 @@ struct _mod_t {
 		cairo_t *ctx;
 	} cairo;
 #endif
+
+	size_t minimum;
 };
 
 struct _port_conn_t {
@@ -344,6 +346,7 @@ struct _mod_ui_t {
 		char *plugin_bundle_path;
 		char *ui_bundle_path;
 		char *window_name;
+		char *minimum;
 		char *sample_rate;
 		char *update_rate;
 	} sbox;
@@ -2868,6 +2871,9 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 		if(asprintf(&mod_ui->sbox.window_name, "%s", mod_ui->uri) == -1)
 			mod_ui->sbox.window_name = NULL;
 
+		if(asprintf(&mod_ui->sbox.minimum, "%zu", mod->minimum) == -1)
+			mod_ui->sbox.minimum= NULL;
+
 		if(asprintf(&mod_ui->sbox.sample_rate, "%f", handle->sample_rate) == -1)
 			mod_ui->sbox.sample_rate = NULL;
 
@@ -2931,13 +2937,13 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_show";
 #endif
 
-	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui);
+	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui, mod->minimum);
 
 	//printf("exec_uri: %s\n", exec_uri);
 
 	if(exec_uri && plugin_uri && plugin_urn && mod_ui->sbox.plugin_bundle_path
 		&& mod_ui->sbox.ui_bundle_path && mod_ui->uri
-		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name
+		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name && mod_ui->sbox.minimum
 		&& mod_ui->sbox.sample_rate && mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
 		_mod_subscribe_all(handle, mod);
@@ -2957,6 +2963,7 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 				"-U", mod_ui->sbox.ui_bundle_path,
 				"-s", mod_ui->sbox.socket_uri,
 				"-w", mod_ui->sbox.window_name,
+				"-m", mod_ui->sbox.minimum,
 				"-r", mod_ui->sbox.sample_rate,
 				"-f", mod_ui->sbox.update_rate,
 				NULL
@@ -3037,6 +3044,7 @@ _mod_ui_free(mod_ui_t *mod_ui)
 	lilv_free(mod_ui->sbox.ui_bundle_path);
 	free(mod_ui->sbox.socket_uri);
 	free(mod_ui->sbox.window_name);
+	free(mod_ui->sbox.minimum);
 	free(mod_ui->sbox.update_rate);
 	free(mod_ui->sbox.sample_rate);
 	free(mod_ui);
@@ -3392,6 +3400,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	mod->plug = plug;
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 2; // + automation ports
 
+	mod->minimum = 0;
+
 	for(unsigned p=0; p<num_ports - 2; p++) // - automation ports
 	{
 		port_t *port = calloc(1, sizeof(port_t));
@@ -3447,6 +3457,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			audio->peak = dBFSp6(0.f);
 			audio->gain = 0.f;
 			//TODO
+
+			mod->minimum += sizeof(LV2UI_Peak_Data);
 		}
 		else if(is_cv)
 		{
@@ -3456,6 +3468,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			audio->peak = dBFSp6(0.f);
 			audio->gain = 0.f;
 			//TODO
+
+			mod->minimum += sizeof(LV2UI_Peak_Data);
 		}
 		else if(is_control)
 		{
@@ -3580,6 +3594,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 				lilv_scale_points_free(port_points);
 			}
+
+			mod->minimum += sizeof(float);
 		}
 		else if(is_atom)
 		{
@@ -3596,6 +3612,17 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			if(lilv_port_supports_event(plug, port->port, handle->node.xpress_Message))
 				port->type |= PROPERTY_TYPE_XPRESS;
 
+
+			LilvNode *min_size= lilv_port_get(plug, port->port, handle->regs.port.minimum_size.node);
+			if(min_size)
+			{
+				mod->minimum += lilv_node_as_int(min_size);
+				lilv_node_free(min_size);
+			}
+			else
+			{
+				mod->minimum += 0x10000; //FIXME use sequence size from dsp
+			}
 			//TODO
 		}
 
@@ -3612,6 +3639,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		else
 			mod->sink_type |= port->type;
 	}
+
+	mod->minimum *= 4; // to be on the safe side
 
 	// automation input port
 	{

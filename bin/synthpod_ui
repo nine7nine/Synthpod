@@ -24,6 +24,7 @@ exec ${GDB} synthpod_sandbox_x11 \
 	-U ${bundle} \
 	-s ${socket} \
 	-w "Synthpod - ${socket}" \
+	-m $((0x1000000)) \
 	-r 48000 \
 	-f 30 \
 	$*

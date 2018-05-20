@@ -247,7 +247,7 @@ synthpod:stereo
 		lv2:index 14 ;
 		lv2:symbol "control" ;
 		lv2:name "Control" ;
-		rsz:minimumSize 65536;
+		rsz:minimumSize 4194304 ;
 		lv2:designation lv2:control ;
 	] , [
 		# notify event port
@@ -259,7 +259,7 @@ synthpod:stereo
 		lv2:index 15 ;
 		lv2:symbol "notify" ;
 		lv2:name "Notify" ;
-		rsz:minimumSize 65536;
+		rsz:minimumSize 4194304 ;
 		lv2:designation lv2:control ;
 	] ;
 

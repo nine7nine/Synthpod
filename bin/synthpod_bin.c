@@ -31,6 +31,7 @@
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
+#define SBOX_BUF_SIZE (size_t)0x1000000 // 16M
 #define CHUNK_SIZE 0x100000 // 1M
 #define MAX_MSGS 10 //FIXME limit to how many events?
 
@@ -396,7 +397,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->sb_driver.recv_cb = _sb_recv_cb;
 	bin->sb_driver.subscribe_cb = _sb_subscribe_cb;
 
-	bin->sb = sandbox_master_new(&bin->sb_driver, bin); //FIXME check
+	bin->sb = sandbox_master_new(&bin->sb_driver, bin, SBOX_BUF_SIZE);
 
 	signal(SIGTERM, _sig);
 	signal(SIGQUIT, _sig);
@@ -743,9 +744,11 @@ bin_show(bin_t *bin)
 	char srate [32];
 	char urate [32];
 	char wname [384];
+	char minimum [32];
 	snprintf(srate, sizeof(srate), "%"PRIu32, bin->sample_rate);
 	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
 	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
+	snprintf(minimum, sizeof(minimum), "%zu", SBOX_BUF_SIZE);
 
 	bin->child = fork();
 	if(bin->child == 0) // child
@@ -758,6 +761,7 @@ bin_show(bin_t *bin)
 			"-U", SYNTHPOD_PLUGIN_DIR,
 			"-s", (char *)bin->socket_path,
 			"-w", wname,
+			"-m", minimum,
 			"-r", srate,
 			"-f", urate,
 			NULL

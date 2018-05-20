@@ -88,6 +88,7 @@ struct _sandbox_slave_t {
 	const char *ui_bundle_path;
 	const char *socket_path;
 	const char *window_title;
+	uint32_t minimum;
 	float sample_rate;
 	float update_rate;
 };
@@ -293,6 +294,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 
 	sb->plugin_urn = NULL;
 	sb->window_title = "Untitled"; // fall-back
+	sb->minimum = 0x100000; // fall-back
 	sb->sample_rate = 44100.f; // fall-back
 	sb->update_rate = 25.f; // fall-back
 
@@ -302,7 +304,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhn:p:P:u:U:s:w:r:f:")) != -1)
+	while((c = getopt(argc, argv, "vhn:p:P:u:U:s:w:m:r:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -338,7 +340,8 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 					"   [-U] ui-bundle       Plugin UI bundle path\n"
 					"   [-s] socket-path     Socket path\n"
 					"   [-w] window-title    Window title\n"
-					"   [-r] sample-rate     Sample rate\n"
+					"   [-m] minimum-size    Minimum ringbuffer size\n"
+					"   [-r] sample-rate     Sample rate (44100)\n"
 					"   [-f] update-rate     GUI update rate (25)\n\n"
 					, argv[0]);
 				return 0;
@@ -363,6 +366,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 			case 'w':
 				sb->window_title = optarg;
 				break;
+			case 'm':
+				sb->minimum = atoi(optarg);
+				break;
 			case 'r':
 				sb->sample_rate = atof(optarg);
 				break;
@@ -370,7 +376,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 				sb->update_rate = atof(optarg);
 				break;
 			case '?':
-				if( (optopt == 'n') || (optopt == 'p') || (optopt == 'P') || (optopt == 'u') || (optopt == 'U') || (optopt == 's') || (optopt == 'w') || (optopt == 'r') || (optopt == 'f') )
+				if( (optopt == 'n') || (optopt == 'p') || (optopt == 'P') || (optopt == 'u') || (optopt == 'U') || (optopt == 's') || (optopt == 'w') || (optopt == 'm') || (optopt == 'r') || (optopt == 'f') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -541,7 +547,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 		goto fail;
 	}
 
-	if(_sandbox_io_init(&sb->io, sb->map, sb->unmap, sb->socket_path, false, false))
+	if(_sandbox_io_init(&sb->io, sb->map, sb->unmap, sb->socket_path, false, false, sb->minimum))
 	{
 		fprintf(stderr, "_sandbox_io_init failed: are you sure that the host is running?\n");
 		goto fail;

@@ -58,17 +58,13 @@ struct _sandbox_io_subscription_t {
 	int32_t state;
 };
 
-#define SANDBOX_BUFFER_SIZE 0x1000000 // 16M
-
 struct _sandbox_io_shm_body_t {
 	sem_t sem;
 	varchunk_t varchunk;
-	uint8_t buf [SANDBOX_BUFFER_SIZE];
 };
 
 struct _sandbox_io_shm_t {
-	sandbox_io_shm_body_t to_master;
-	sandbox_io_shm_body_t from_master;
+	atomic_size_t minimum;
 };
 
 struct _sandbox_io_t {
@@ -100,6 +96,8 @@ struct _sandbox_io_t {
 
 	char *name;
 	sandbox_io_shm_t *shm;
+	sandbox_io_shm_body_t *from_master;
+	sandbox_io_shm_body_t *to_master;
 	bool again;
 };
 
@@ -112,8 +110,8 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 	bool close_request = false;
 
 	sandbox_io_shm_body_t *rx = io->is_master
-		? &io->shm->to_master
-		: &io->shm->from_master;
+		? io->to_master
+		: io->from_master;
 
 	while((buf = varchunk_read_request(&rx->varchunk, &sz)))
 	{
@@ -250,8 +248,8 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	uint32_t size, uint32_t protocol, const void *buf)
 {
 	sandbox_io_shm_body_t *tx = io->is_master
-		? &io->shm->from_master
-		: &io->shm->to_master;
+		? io->from_master
+		: io->to_master;
 
 	// reserve 8192 additional bytes for the parent atom and dictionary
 	const size_t req_sz = size + 8192; //FIXME is this enough?
@@ -359,8 +357,8 @@ static inline void
 _sandbox_io_wait(sandbox_io_t *io)
 {
 	sandbox_io_shm_body_t *rx = io->is_master
-		? &io->shm->to_master
-		: &io->shm->from_master;
+		? io->to_master
+		: io->from_master;
 
 	int s;
 	while((s = sem_wait(&rx->sem)) == -1)
@@ -382,8 +380,8 @@ static inline bool
 _sandbox_io_timedwait(sandbox_io_t *io, const struct timespec *abs_timeout)
 {
 	sandbox_io_shm_body_t *rx = io->is_master
-		? &io->shm->to_master
-		: &io->shm->from_master;
+		? io->to_master
+		: io->from_master;
 
 	int s;
 	while((s = sem_timedwait(&rx->sem, abs_timeout)) == -1)
@@ -408,8 +406,8 @@ static inline void
 _sandbox_io_signal_rx(sandbox_io_t *io)
 {
 	sandbox_io_shm_body_t *rx = io->is_master
-		? &io->shm->to_master
-		: &io->shm->from_master;
+		? io->to_master
+		: io->from_master;
 
 	sem_post(&rx->sem);
 }
@@ -418,15 +416,15 @@ static inline void
 _sandbox_io_signal_tx(sandbox_io_t *io)
 {
 	sandbox_io_shm_body_t *tx = io->is_master
-		? &io->shm->from_master
-		: &io->shm->to_master;
+		? io->from_master
+		: io->to_master;
 
 	sem_post(&tx->sem);
 }
 
 static inline int
 _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
-	const char *socket_path, bool is_master, bool drop_messages)
+	const char *socket_path, bool is_master, bool drop_messages, size_t minimum)
 {
 	io->map = map;
 	io->unmap = unmap;
@@ -441,7 +439,9 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	if(!(io->netatom = netatom_new(io->map, io->unmap, swap)))
 		return -1;
 
-	const size_t total_size = sizeof(sandbox_io_shm_t);
+	minimum = varchunk_body_size(minimum);
+	const size_t body_size = sizeof(sandbox_io_shm_body_t) + minimum;
+	const size_t total_size = sizeof(sandbox_io_shm_t) + 2*body_size;
 
 	const char *name = is_shm
 		? &socket_path[6]
@@ -470,15 +470,21 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	}
 	close(fd);
 
+	fprintf(stderr, "%i %p\n", io->is_master, io->shm);
+
+	void *offset = (void *)io->shm + sizeof(sandbox_io_shm_t);
+	io->from_master = offset;
+	io->to_master = offset + body_size;
+
 	if(io->is_master)
 	{
-		if(sem_init(&io->shm->from_master.sem, 1, 0) == -1)
+		if(sem_init(&io->from_master->sem, 1, 0) == -1)
 			return -1;
-		if(sem_init(&io->shm->to_master.sem, 1, 0) == -1)
+		if(sem_init(&io->to_master->sem, 1, 0) == -1)
 			return -1;
 
-		varchunk_init(&io->shm->from_master.varchunk, SANDBOX_BUFFER_SIZE, true);
-		varchunk_init(&io->shm->to_master.varchunk, SANDBOX_BUFFER_SIZE, true);
+		varchunk_init(&io->from_master->varchunk, minimum, true);
+		varchunk_init(&io->to_master->varchunk, minimum, true);
 	}
 
 	lv2_atom_forge_init(&io->forge, map);
@@ -516,8 +522,8 @@ _sandbox_io_deinit(sandbox_io_t *io, bool terminate)
 	{
 		if(io->is_master)
 		{
-			sem_destroy(&io->shm->from_master.sem);
-			sem_destroy(&io->shm->to_master.sem);
+			sem_destroy(&io->from_master->sem);
+			sem_destroy(&io->to_master->sem);
 		}
 
 		munmap(io->shm, total_size);
