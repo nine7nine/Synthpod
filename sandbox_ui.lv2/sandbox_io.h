@@ -470,8 +470,6 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	}
 	close(fd);
 
-	fprintf(stderr, "%i %p\n", io->is_master, io->shm);
-
 	void *offset = (void *)io->shm + sizeof(sandbox_io_shm_t);
 	io->from_master = offset;
 	io->to_master = offset + body_size;
