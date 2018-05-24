@@ -1824,6 +1824,47 @@ _param_update_span(plughandle_t *handle, param_t *param)
 }
 
 static int
+strcasenumcmp(const char *s1, const char *s2)
+{
+	static const char *digits = "1234567890";
+	const char *d1 = strpbrk(s1, digits);
+	const char *d2 = strpbrk(s2, digits);
+
+	// do both s1 and s2 contain digits?
+	if(d1 && d2)
+	{
+		const size_t l1 = d1 - s1;
+		const size_t l2 = d2 - s2;
+
+		// do both s1 and s2 match up to the first digit?
+		if( (l1 == l2) && (strncmp(s1, s2, l1) == 0) )
+		{
+			char *e1 = NULL;
+			char *e2 = NULL;
+
+			const int n1 = strtol(d1, &e1, 10);
+			const int n2 = strtol(d2, &e2, 10);
+
+			// do both d1 and d2 contain a valid number?
+			if(e1 && e2)
+			{
+				// are the numbers equal? do the same for the substring
+				if(n1 == n2)
+				{
+					return strcasenumcmp(e1, e2);
+				}
+
+				// the numbers differ, e.g. return their ordering
+				return (n1 < n2) ? -1 : 1;
+			}
+		}
+	}
+
+	// no digits in either s1 or s2, do normal comparison
+	return strcasecmp(s1, s2);
+}
+
+static int
 _sort_scale_point_name(const void *a, const void *b)
 {
 	DBG;
@@ -1834,7 +1875,7 @@ _sort_scale_point_name(const void *a, const void *b)
 	const char *name_b = scale_point_b->label;
 
 	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
+		? strcasenumcmp(name_a, name_b)
 		: 0;
 
 	return ret;
@@ -2318,7 +2359,7 @@ _sort_param_name(const void *a, const void *b)
 	const char *name_b = param_b->label;
 
 	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
+		? strcasenumcmp(name_a, name_b)
 		: 0;
 
 	return ret;
@@ -3158,7 +3199,7 @@ _sort_rdfs_label(const void *a, const void *b, void *data)
 		name_b = DEFAULT_PSET_LABEL; // for default pset
 
 	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
+		? strcasenumcmp(name_a, name_b)
 		: 0;
 
 	if(node_a)
@@ -3180,7 +3221,7 @@ _sort_port_name(const void *a, const void *b)
 	const char *name_b = port_b->name;
 
 	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
+		? strcasenumcmp(name_a, name_b)
 		: 0;
 
 	return ret;
@@ -4117,7 +4158,7 @@ _sort_plugin_name(const void *a, const void *b)
 		name_b = lilv_node_as_string(node_b);
 
 	const int ret = name_a && name_b
-		? strcasecmp(name_a, name_b)
+		? strcasenumcmp(name_a, name_b)
 		: 0;
 
 	if(node_a)
