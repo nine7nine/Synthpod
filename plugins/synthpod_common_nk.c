@@ -267,6 +267,7 @@ struct _mod_t {
 	plughandle_t *handle;
 
 	LV2_URID urn;
+	LV2_URID subj;
 	const LilvPlugin *plug;
 	LilvUIs *ui_nodes;
 	hash_t uis;
@@ -2596,7 +2597,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 
 								// patch:Get [patch:property property]
 								_patch_notification_add_patch_get(handle, src_mod,
-									handle->regs.port.event_transfer.urid, 0, 0, property);
+									handle->regs.port.event_transfer.urid, src_mod->subj, 0, property);
 							}
 						}
 						else if( (prop->key == handle->regs.patch.readable.urid)
@@ -2613,7 +2614,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 
 								// patch:Get [patch:property property]
 								_patch_notification_add_patch_get(handle, src_mod,
-									handle->regs.port.event_transfer.urid, 0, 0, property);
+									handle->regs.port.event_transfer.urid, src_mod->subj, 0, property);
 							}
 						}
 						else if(subj)
@@ -2990,7 +2991,7 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 		_mod_subscribe_all(handle, mod);
 
 		_patch_notification_add_patch_get(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
+			handle->regs.port.event_transfer.urid, mod->subj, 0, 0); // patch:Get []
 
 		const pid_t pid = fork();
 		if(pid == 0) // child
@@ -3438,7 +3439,11 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	if(mod->plug) // already initialized
 		return;
 
+	const LilvNode *uri_node = lilv_plugin_get_uri(plug);
+	const char *mod_uri = lilv_node_as_string(uri_node);
+
 	mod->plug = plug;
+	mod->subj = handle->map->map(handle->map->handle, mod_uri);
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 2; // + automation ports
 
 	mod->minimum = 0;
@@ -3834,7 +3839,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	_mod_subscribe_persistent(handle, mod); // e.g. canvas:graph
 
 	_patch_notification_add_patch_get(handle, mod,
-		handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
+		handle->regs.port.event_transfer.urid, mod->subj, 0, 0); // patch:Get []
 
 	nk_pugl_post_redisplay(&handle->win); //FIXME
 }
@@ -5687,31 +5692,31 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 	if(param->range == handle->forge.Int)
 	{
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sizeof(int32_t), handle->forge.Int, &param->val.i);
 	}
 	else if(param->range == handle->forge.Bool)
 	{
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sizeof(int32_t), handle->forge.Bool, &param->val.i);
 	}
 	else if(param->range == handle->forge.Long)
 	{
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sizeof(int64_t), handle->forge.Long, &param->val.h);
 	}
 	else if(param->range == handle->forge.Float)
 	{
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sizeof(float), handle->forge.Float, &param->val.f);
 	}
 	else if(param->range == handle->forge.Double)
 	{
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sizeof(double), handle->forge.Double, &param->val.d);
 	}
 	else if(param->range == handle->forge.String)
@@ -5720,7 +5725,7 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 		const uint32_t sz= nk_str_len_char(&param->val.editor.string) + 1;
 
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sz, handle->forge.String, str);
 	}
 	else if(param->range == handle->forge.URI)
@@ -5729,7 +5734,7 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 		const uint32_t sz= nk_str_len_char(&param->val.editor.string) + 1;
 
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sz, handle->forge.URI, str);
 	}
 	else if(param->range == handle->forge.URID)
@@ -5742,7 +5747,7 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 		const uint32_t urid = handle->map->map(handle->map->handle, uri);
 
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sizeof(uint32_t), handle->forge.URID, &urid);
 	}
 	else if(param->range == handle->forge.Chunk)
@@ -5750,7 +5755,7 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 		chunk_t *chunk = &param->val.chunk;
 
 		_patch_notification_add_patch_set(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, param->property,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			chunk->size, handle->forge.Chunk, chunk->body);
 	}
 	//FIXME handle remaining types
@@ -6011,7 +6016,7 @@ _set_module_selector(plughandle_t *handle, mod_t *mod)
 		_mod_subscribe_all(handle, mod);
 
 		_patch_notification_add_patch_get(handle, mod,
-			handle->regs.port.event_transfer.urid, 0, 0, 0); // patch:Get []
+			handle->regs.port.event_transfer.urid, mod->subj, 0, 0); // patch:Get []
 	}
 
 	handle->module_selector = mod;
