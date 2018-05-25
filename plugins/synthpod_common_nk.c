@@ -3980,7 +3980,8 @@ _tooltip_visible(struct nk_context *ctx)
 }
 
 static bool
-_toolbar_button(struct nk_context *ctx, char key, struct nk_image icon)
+_toolbar_button(struct nk_context *ctx, char key, struct nk_image icon,
+	const char *label)
 {
 	DBG;
 	struct nk_style *style = &ctx->style;
@@ -3991,6 +3992,10 @@ _toolbar_button(struct nk_context *ctx, char key, struct nk_image icon)
 		char tt [16];
 		snprintf(tt, sizeof(tt), "Ctrl-%c", isalpha(key) ? toupper(key) : key);
 		nk_tooltip(ctx, tt);
+	}
+	else if(is_hovered)
+	{
+		nk_tooltip(ctx, label);
 	}
 
 	const bool old_state = nk_pugl_is_shortcut_pressed(&ctx->input, key, true);
@@ -4008,7 +4013,8 @@ _toolbar_button(struct nk_context *ctx, char key, struct nk_image icon)
 }
 
 static void
-_toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image icon)
+_toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image icon,
+	const char *label)
 {
 	DBG;
 	struct nk_style *style = &ctx->style;
@@ -4019,6 +4025,10 @@ _toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image i
 		char tt [16];
 		snprintf(tt, sizeof(tt), "Ctrl-%c", isalpha(key) ? toupper(key) : key);
 		nk_tooltip(ctx, tt);
+	}
+	else if(is_hovered)
+	{
+		nk_tooltip(ctx, label);
 	}
 
 	if(nk_pugl_is_shortcut_pressed(&ctx->input, key, true))
@@ -4038,10 +4048,11 @@ _toolbar_toggle(struct nk_context *ctx, bool *state, char key, struct nk_image i
 }
 
 static bool
-_toolbar_toggled(struct nk_context *ctx, bool state, char key, struct nk_image icon)
+_toolbar_toggled(struct nk_context *ctx, bool state, char key, struct nk_image icon,
+	const char *label)
 {
 	DBG;
-	_toolbar_toggle(ctx, &state, key, icon);
+	_toolbar_toggle(ctx, &state, key, icon, label);
 	return state;
 }
 
@@ -4095,7 +4106,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 		nk_layout_row_static(ctx, dy, 1.2*dy, 16);
 
 		{
-			if(_toolbar_button(ctx, 'n', handle->icon.plus))
+			if(_toolbar_button(ctx, 'n', handle->icon.plus, "New"))
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -4105,7 +4116,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 				}
 			}
 
-			if(_toolbar_button(ctx, 's', handle->icon.download))
+			if(_toolbar_button(ctx, 's', handle->icon.download, "Save"))
 			{
 				if(  _message_request(handle)
 					&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
@@ -4115,7 +4126,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 				}
 			}
 
-			if(_toolbar_button(ctx, 'q', handle->icon.cancel))
+			if(_toolbar_button(ctx, 'q', handle->icon.cancel, "Quit"))
 			{
 				handle->done = true;
 			}
@@ -4124,32 +4135,32 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 		nk_spacing(ctx, 1);
 
 		{
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_AUDIO, 'w', handle->icon.audio))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_AUDIO, 'w', handle->icon.audio, "Audio"))
 				handle->type = PROPERTY_TYPE_AUDIO;
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_CV, 'e', handle->icon.cv))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_CV, 'e', handle->icon.cv, "CV"))
 				handle->type = PROPERTY_TYPE_CV;
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_ATOM, 'r', handle->icon.atom))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_ATOM, 'r', handle->icon.atom, "Atom"))
 				handle->type = PROPERTY_TYPE_ATOM;
 
 			nk_spacing(ctx, 1);
 
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_MIDI, 't', handle->icon.midi))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_MIDI, 't', handle->icon.midi, "MIDI"))
 				handle->type = PROPERTY_TYPE_MIDI;
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_OSC, 'y', handle->icon.osc))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_OSC, 'y', handle->icon.osc, "OSC"))
 				handle->type = PROPERTY_TYPE_OSC;
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_TIME, 'u', handle->icon.time))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_TIME, 'u', handle->icon.time, "Time"))
 				handle->type = PROPERTY_TYPE_TIME;
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_PATCH, 'o', handle->icon.patch))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_PATCH, 'o', handle->icon.patch, "Patch"))
 				handle->type = PROPERTY_TYPE_PATCH;
-			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_XPRESS, 'p', handle->icon.xpress))
+			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_XPRESS, 'p', handle->icon.xpress, "Xpress"))
 				handle->type = PROPERTY_TYPE_XPRESS;
 		}
 
 		nk_spacing(ctx, 1);
 
 		{
-			_toolbar_toggle(ctx, &handle->show_bottombar, 'k', handle->icon.menu);
-			_toolbar_toggle(ctx, &handle->show_sidebar, 'l', handle->icon.settings);
+			_toolbar_toggle(ctx, &handle->show_bottombar, 'k', handle->icon.settings, "Settings");
+			_toolbar_toggle(ctx, &handle->show_sidebar, 'l', handle->icon.menu, "Controls");
 		}
 
 		nk_menubar_end(ctx);
