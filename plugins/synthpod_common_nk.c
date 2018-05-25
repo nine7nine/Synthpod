@@ -2259,6 +2259,18 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 	nk_pugl_post_redisplay(&handle->win);
 }
 
+static inline bool
+_param_matches_type(plughandle_t *handle, param_t *param, LV2_URID type)
+{
+	if(!param)
+		return false;
+
+	if( (param->range + type) == (handle->forge.Int + handle->forge.Bool) )
+		return true;
+
+	return (param->range == type);
+}
+
 static void
 _param_set_value(plughandle_t *handle, mod_t *mod, param_t *param,
 	const LV2_Atom *value)
@@ -2443,7 +2455,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 				if(prop && value)
 				{
 					param_t *param = _mod_param_find_by_property(src_mod, prop);
-					if(param && (param->range == value->type) )
+					if(param && _param_matches_type(handle, param, value->type))
 					{
 						_param_set_value(handle, src_mod, param, value);
 					}
@@ -2467,7 +2479,7 @@ _mod_nk_write_function(plughandle_t *handle, mod_t *src_mod, port_t *src_port,
 				LV2_ATOM_OBJECT_FOREACH(body, prop)
 				{
 					param_t *param = _mod_param_find_by_property(src_mod, prop->key);
-					if(param && (param->range == prop->value.type) )
+					if(param && _param_matches_type(handle, param, prop->value.type))
 					{
 						_param_set_value(handle, src_mod, param, &prop->value);
 					}
