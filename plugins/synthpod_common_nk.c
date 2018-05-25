@@ -229,6 +229,7 @@ struct _port_t {
 	mod_t *mod;
 	const LilvPort *port;
 	LilvNodes *groups;
+	bool automation;
 
 	union {
 		control_port_t control;
@@ -487,6 +488,7 @@ struct _plughandle_t {
 	} linking;
 
 	property_type_t type;
+	bool show_automation;
 
 	bool done;
 
@@ -3715,6 +3717,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->symbol = "__automation__in__";
 			port->groups = NULL;
 			port->name = strdup("Automation In");
+			port->automation = true;
 
 			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC;
 
@@ -3738,6 +3741,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->symbol = "__automation__out__";
 			port->groups = NULL;
 			port->name = strdup("Automation Out");
+			port->automation = true;
 
 			port->type = PROPERTY_TYPE_ATOM | PROPERTY_TYPE_MIDI | PROPERTY_TYPE_OSC;
 
@@ -4103,7 +4107,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 	nk_menubar_begin(ctx);
 	{
 		bool is_hovered;
-		nk_layout_row_static(ctx, dy, 1.2*dy, 16);
+		nk_layout_row_static(ctx, dy, 1.2*dy, 18);
 
 		{
 			if(_toolbar_button(ctx, 'n', handle->icon.plus, "New"))
@@ -4141,6 +4145,10 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 				handle->type = PROPERTY_TYPE_CV;
 			if(_toolbar_toggled(ctx, handle->type == PROPERTY_TYPE_ATOM, 'r', handle->icon.atom, "Atom"))
 				handle->type = PROPERTY_TYPE_ATOM;
+
+			nk_spacing(ctx, 1);
+
+			_toolbar_toggle(ctx, &handle->show_automation, 'd', handle->icon.automaton, "Automation");
 
 			nk_spacing(ctx, 1);
 
@@ -6151,6 +6159,104 @@ _set_moving_nodes(plughandle_t *handle, bool moving)
 	}
 }
 
+static bool
+_type_match(plughandle_t *handle, port_t *port)
+{
+	DBG;
+	if(!handle->show_automation && port->automation)
+		return false;
+
+	return handle->type & port->type;
+}
+
+static bool
+_source_type_match(plughandle_t *handle, port_t *source_port)
+{
+	DBG;
+	return _type_match(handle, source_port);
+}
+
+static bool
+_sink_type_match(plughandle_t *handle, port_t *sink_port)
+{
+	DBG;
+	return _type_match(handle, sink_port);
+}
+
+static inline unsigned
+_mod_num_sources(mod_t *mod, property_type_t type)
+{
+	DBG;
+	if(mod->source_type & type)
+	{
+		unsigned num = 0;
+
+		HASH_FOREACH(&mod->sources, port_itr)
+		{
+			port_t *port = *port_itr;
+
+			if(!mod->handle->show_automation && port->automation)
+				continue;
+
+			if(port->type & type)
+				num += 1;
+		}
+
+		return num;
+	}
+
+	return 0;
+}
+
+static inline unsigned
+_mod_num_sinks(mod_t *mod, property_type_t type)
+{
+	DBG;
+	if(mod->sink_type & type)
+	{
+		unsigned num = 0;
+
+		HASH_FOREACH(&mod->sinks, port_itr)
+		{
+			port_t *port = *port_itr;
+
+			if(!mod->handle->show_automation && port->automation)
+				continue;
+
+			if(port->type & type)
+				num += 1;
+		}
+
+		return num;
+	}
+
+	return 0;
+}
+
+static inline unsigned
+_mod_conn_num_connections(plughandle_t *handle, mod_conn_t *mod_conn)
+{
+	if( (mod_conn->source_type & handle->type) && (mod_conn->sink_type & handle->type) )
+	{
+		unsigned num = 0;
+
+		HASH_FOREACH(&mod_conn->conns, conn_itr)
+		{
+			port_conn_t *conn = *conn_itr;
+
+			if(  _source_type_match(handle, conn->source_port)
+				&& _sink_type_match(handle, conn->sink_port) )
+			{
+				num += 1;
+			}
+		}
+
+		return num;
+	}
+
+	return 0;
+}
+
 static inline void
 _remove_selected_nodes(plughandle_t *handle)
 {
@@ -6187,18 +6293,21 @@ _remove_selected_nodes(plughandle_t *handle)
 			{
 				port_conn_t *port_conn = *port_conn_itr;
 
-				if( (port_conn->source_port->type & handle->type) && (port_conn->sink_port->type & handle->type) )
+				if(  _source_type_match(handle, port_conn->source_port)
+					&& _sink_type_match(handle, port_conn->sink_port) )
 				{
 					_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
 					count += 1;
 				}
 			}
 
-			if(count == 0) // is empty matrix, demask for current type
+			if(count == 0) // is empty matrix, demask for current type and deselect
 			{
 				mod_conn->source_type &= ~(handle->type);
 				mod_conn->sink_type &= ~(handle->type);
 			}
+
+			mod_conn->selected = false;
 		}
 	}
 }
@@ -6304,20 +6413,6 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	}
 }
 
-static bool
-_source_type_match(plughandle_t *handle, property_type_t source_type)
-{
-	DBG;
-	return handle->type & source_type;
-}
-
-static bool
-_sink_type_match(plughandle_t *handle, property_type_t sink_type)
-{
-	DBG;
-	return handle->type & sink_type;
-}
-
 static void
 _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_vec2 dim, bool is_hilighted)
@@ -6335,7 +6430,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 		mod->dim.x, mod->dim.y);
 
 	// output connector
-	if(_source_type_match(handle, mod->source_type))
+	if(_mod_num_sources(mod, handle->type))
 	{
 		const float cx = mod->pos.x - scrolling.x + dim.x/2 + 2*cw;
 		const float cy = mod->pos.y - scrolling.y;
@@ -6375,7 +6470,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	}
 
 	// input connector
-	if(_sink_type_match(handle, mod->sink_type))
+	if(_mod_num_sinks(mod, handle->type))
 	{
 		const float cx = mod->pos.x - scrolling.x - dim.x/2 - 2*cw;
 		const float cy = mod->pos.y - scrolling.y;
@@ -6420,7 +6515,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 						{
 							port_t *source_port = *source_port_itr;
 
-							if(!_source_type_match(handle, source_port->type))
+							if(!_source_type_match(handle, source_port))
 								continue;
 
 							unsigned j = 0;
@@ -6428,7 +6523,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 							{
 								port_t *sink_port = *sink_port_itr;
 
-								if(!_sink_type_match(handle, sink_port->type))
+								if(!_sink_type_match(handle, sink_port))
 									continue;
 
 								if(i == j)
@@ -6446,50 +6541,6 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 			}
 		}
 	}
-}
-
-static inline unsigned
-_mod_num_sources(mod_t *mod, property_type_t type)
-{
-	DBG;
-	if(mod->source_type & type)
-	{
-		unsigned num = 0;
-
-		HASH_FOREACH(&mod->sources, port_itr)
-		{
-			port_t *port = *port_itr;
-
-			if(port->type & type)
-				num += 1;
-		}
-
-		return num;
-	}
-
-	return 0;
-}
-
-static inline unsigned
-_mod_num_sinks(mod_t *mod, property_type_t type)
-{
-	DBG;
-	if(mod->sink_type & type)
-	{
-		unsigned num = 0;
-
-		HASH_FOREACH(&mod->sinks, port_itr)
-		{
-			port_t *port = *port_itr;
-
-			if(port->type & type)
-				num += 1;
-		}
-
-		return num;
-	}
-
-	return 0;
 }
 
 static void
@@ -6545,7 +6596,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 		struct nk_color brd = is_hilighted
 			? hilight_color : style->border_color;
 
-		if(!_source_type_match(handle, mod->source_type) && !_sink_type_match(handle, mod->sink_type))
+		if(!_mod_num_sources(mod, handle->type) && !_mod_num_sinks(mod, handle->type))
 		{
 			hov.a = 0x3f;
 			brd.a = 0x5f;
@@ -6787,7 +6838,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 	mod_conn_t *mod_conn, float dy)
 {
 	DBG;
-	if(!_source_type_match(handle, mod_conn->source_type) || !_sink_type_match(handle, mod_conn->sink_type))
+	if(!_mod_conn_num_connections(handle, mod_conn))
 		return;
 
 	const bool is_dial = (handle->type == PROPERTY_TYPE_AUDIO) || (handle->type == PROPERTY_TYPE_CV);
@@ -6930,7 +6981,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 		{
 			port_t *source_port = *source_port_itr;
 
-			if(!_source_type_match(handle, source_port->type))
+			if(!_source_type_match(handle, source_port))
 				continue;
 
 			float y = body.y + ps/2;
@@ -6938,7 +6989,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 			{
 				port_t *sink_port = *sink_port_itr;
 
-				if(!_sink_type_match(handle, sink_port->type))
+				if(!_sink_type_match(handle, sink_port))
 					continue;
 
 				const struct nk_rect tile = nk_rect(x - ps/2, y - ps/2, ps, ps);
