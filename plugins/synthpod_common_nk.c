@@ -332,6 +332,7 @@ struct _mod_conn_t {
 
 	struct nk_vec2 pos;
 	bool moving;
+	bool hovering;
 	bool selected;
 };
 
@@ -1006,6 +1007,8 @@ _patch_connection_add(plughandle_t *handle, port_t *source_port, port_t *sink_po
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
 	}
+
+	nk_pugl_post_redisplay(&handle->win);
 }
 
 static void
@@ -1023,6 +1026,8 @@ _patch_connection_remove(plughandle_t *handle, port_t *source_port, port_t *sink
 		synthpod_patcher_pop(&handle->forge, frame, 3);
 		_message_write(handle);
 	}
+
+	nk_pugl_post_redisplay(&handle->win);
 }
 
 static LV2_Atom_Forge_Ref
@@ -6262,6 +6267,34 @@ _mod_conn_num_connections(plughandle_t *handle, mod_conn_t *mod_conn)
 }
 
 static inline void
+_remove_visible_ports_from_mod_conn(plughandle_t *handle, mod_conn_t *mod_conn)
+{
+	DBG;
+	unsigned count = 0;
+
+	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
+	{
+		port_conn_t *port_conn = *port_conn_itr;
+
+		if(  _source_type_match(handle, port_conn->source_port)
+			&& _sink_type_match(handle, port_conn->sink_port) )
+		{
+			_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
+			count += 1;
+		}
+	}
+
+	if(count == 0) // is empty matrix, demask for current type and deselect
+	{
+		mod_conn->source_type &= ~(handle->type);
+		mod_conn->sink_type &= ~(handle->type);
+	}
+
+	mod_conn->on_hold = false;
+	mod_conn->selected = false;
+}
+
+static inline void
 _remove_selected_nodes(plughandle_t *handle)
 {
 	DBG;
@@ -6291,28 +6324,7 @@ _remove_selected_nodes(plughandle_t *handle)
 
 		if(mod_conn->selected)
 		{
-			unsigned count = 0;
-
-			HASH_FOREACH(&mod_conn->conns, port_conn_itr)
-			{
-				port_conn_t *port_conn = *port_conn_itr;
-
-				if(  _source_type_match(handle, port_conn->source_port)
-					&& _sink_type_match(handle, port_conn->sink_port) )
-				{
-					_patch_connection_remove(handle, port_conn->source_port, port_conn->sink_port);
-					count += 1;
-				}
-			}
-
-			if(count == 0) // is empty matrix, demask for current type and deselect
-			{
-				mod_conn->source_type &= ~(handle->type);
-				mod_conn->sink_type &= ~(handle->type);
-			}
-
-			mod_conn->on_hold = false;
-			mod_conn->selected = false;
+			_remove_visible_ports_from_mod_conn(handle, mod_conn);
 		}
 	}
 }
@@ -6367,6 +6379,55 @@ _show_selected_nodes(plughandle_t *handle)
 }
 
 static void
+_link_modules(plughandle_t *handle, struct nk_context *ctx, mod_t *src, mod_t *mod)
+{
+	DBG;
+	const struct nk_input *in = &ctx->input;
+	mod_conn_t *mod_conn = _mod_conn_find(handle, src, mod);
+	if(!mod_conn) // does not yet exist
+		mod_conn = _mod_conn_add(handle, src, mod, true);
+	if(mod_conn)
+	{
+		mod_conn->source_type |= handle->type;
+		mod_conn->sink_type |= handle->type;
+
+		if(nk_input_is_key_down(in, NK_KEY_CTRL)) // automatic connection
+		{
+			unsigned i = 0;
+			HASH_FOREACH(&src->sources, source_port_itr)
+			{
+				port_t *source_port = *source_port_itr;
+
+				if(!_source_type_match(handle, source_port))
+					continue;
+
+				unsigned j = 0;
+				HASH_FOREACH(&mod->sinks, sink_port_itr)
+				{
+					port_t *sink_port = *sink_port_itr;
+
+					if(!_sink_type_match(handle, sink_port))
+						continue;
+
+					if(i == j)
+					{
+						_patch_connection_add(handle, source_port, sink_port, 1.f);
+					}
+
+					j++;
+				}
+
+				i++;
+			}
+		}
+		else
+		{
+			mod_conn->on_hold = true;
+		}
+	}
+}
+
+static void
 _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 	struct nk_rect space_bounds, struct nk_rect *bounds)
 {
@@ -6380,6 +6441,23 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 		if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
 		{
 			mod->moving = false;
+
+			HASH_FOREACH(&handle->conns, mod_conn_itr)
+			{
+				mod_conn_t *mod_conn = *mod_conn_itr;
+
+				// if hovering over a mod_conf, insert it there, replacing the connection
+				if(!mod_conn->moving && mod_conn->hovering)
+				{
+					mod_t *src_mod = mod_conn->source_mod;
+					mod_t *snk_mod = mod_conn->sink_mod;
+
+					_remove_visible_ports_from_mod_conn(handle, mod_conn);
+					_link_modules(handle, ctx, src_mod, mod);
+					_link_modules(handle, ctx, mod, snk_mod);
+					break; // only consider first mod hovering over
+				}
+			}
 
 			if(  _message_request(handle)
 				&&  synthpod_patcher_set(&handle->regs, &handle->forge,
@@ -6505,48 +6583,7 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 			mod_t *src = handle->linking.source_mod;
 			if(src)
 			{
-				mod_conn_t *mod_conn = _mod_conn_find(handle, src, mod);
-				if(!mod_conn) // does not yet exist
-					mod_conn = _mod_conn_add(handle, src, mod, true);
-				if(mod_conn)
-				{
-					mod_conn->source_type |= handle->type;
-					mod_conn->sink_type |= handle->type;
-
-					if(nk_input_is_key_down(in, NK_KEY_CTRL)) // automatic connection
-					{
-						unsigned i = 0;
-						HASH_FOREACH(&src->sources, source_port_itr)
-						{
-							port_t *source_port = *source_port_itr;
-
-							if(!_source_type_match(handle, source_port))
-								continue;
-
-							unsigned j = 0;
-							HASH_FOREACH(&mod->sinks, sink_port_itr)
-							{
-								port_t *sink_port = *sink_port_itr;
-
-								if(!_sink_type_match(handle, sink_port))
-									continue;
-
-								if(i == j)
-								{
-									_patch_connection_add(handle, source_port, sink_port, 1.f);
-								}
-
-								j++;
-							}
-
-							i++;
-						}
-					}
-					else
-					{
-						mod_conn->on_hold = true;
-					}
-				}
+				_link_modules(handle, ctx, src, mod);
 			}
 		}
 	}
@@ -6847,6 +6884,8 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 	mod_conn_t *mod_conn, float dy)
 {
 	DBG;
+	mod_conn->hovering = false;
+
 	if(!_mod_conn_num_connections(handle, mod_conn))
 		return;
 
@@ -6879,7 +6918,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 		&& (bounds.x + bounds.w <= space_bounds.x + space_bounds.w)
 		&& (bounds.y + bounds.h <= space_bounds.y + space_bounds.h);
 
-	const int is_hovering = is_selectable && nk_input_is_mouse_hovering_rect(in, bounds);
+	mod_conn->hovering = is_selectable && nk_input_is_mouse_hovering_rect(in, bounds);
 
 	if(is_selectable && mod_conn->moving)
 	{
@@ -6897,7 +6936,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 			_patch_node_add(handle, mod_conn->source_mod, mod_conn->sink_mod, mod_conn->pos.x, mod_conn->pos.y);
 		}
 	}
-	else if(is_hovering
+	else if(mod_conn->hovering
 		&& nk_input_is_mouse_pressed(in, NK_BUTTON_RIGHT) )
 	{
 		const bool selected = mod_conn->selected;
@@ -6910,7 +6949,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 	}
 
 	const bool is_hilighted = mod_conn->source_mod->hovered
-		|| mod_conn->sink_mod->hovered || is_hovering;
+		|| mod_conn->sink_mod->hovered || mod_conn->hovering;
 
 	if(is_hilighted)
 	{
