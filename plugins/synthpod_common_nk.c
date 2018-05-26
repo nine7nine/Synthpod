@@ -328,6 +328,7 @@ struct _mod_conn_t {
 	property_type_t source_type;
 	property_type_t sink_type;
 	hash_t conns;
+	bool on_hold;
 
 	struct nk_vec2 pos;
 	bool moving;
@@ -1673,6 +1674,7 @@ _mod_conn_add(plughandle_t *handle, mod_t *source_mod, mod_t *sink_mod, bool syn
 			(source_mod->pos.y + sink_mod->pos.y)/2);
 		mod_conn->source_type = PROPERTY_TYPE_NONE;
 		mod_conn->sink_type = PROPERTY_TYPE_NONE;
+		mod_conn->on_hold = false;
 		_hash_add(&handle->conns, mod_conn);
 
 		if(sync)
@@ -1710,6 +1712,7 @@ _mod_conn_refresh_type(mod_conn_t *mod_conn)
 	DBG;
 	mod_conn->source_type = PROPERTY_TYPE_NONE;
 	mod_conn->sink_type = PROPERTY_TYPE_NONE;
+	mod_conn->on_hold = false;
 
 	HASH_FOREACH(&mod_conn->conns, port_conn_itr)
 	{
@@ -3134,6 +3137,7 @@ _port_conn_add(mod_conn_t *mod_conn, port_t *source_port, port_t *sink_port, flo
 
 		mod_conn->source_type |= source_port->type;
 		mod_conn->sink_type |= sink_port->type;
+		mod_conn->on_hold = false;
 		_hash_add(&mod_conn->conns, port_conn);
 	}
 
@@ -6233,7 +6237,7 @@ _mod_num_sinks(mod_t *mod, property_type_t type)
 	return 0;
 }
 
-static inline unsigned
+static inline bool
 _mod_conn_num_connections(plughandle_t *handle, mod_conn_t *mod_conn)
 {
 	if( (mod_conn->source_type & handle->type) && (mod_conn->sink_type & handle->type) )
@@ -6251,10 +6255,10 @@ _mod_conn_num_connections(plughandle_t *handle, mod_conn_t *mod_conn)
 			}
 		}
 
-		return num;
+		return (num > 0) || mod_conn->on_hold;
 	}
 
-	return 0;
+	return false;
 }
 
 static inline void
@@ -6307,6 +6311,7 @@ _remove_selected_nodes(plughandle_t *handle)
 				mod_conn->sink_type &= ~(handle->type);
 			}
 
+			mod_conn->on_hold = false;
 			mod_conn->selected = false;
 		}
 	}
@@ -6536,6 +6541,10 @@ _mod_connectors(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 
 							i++;
 						}
+					}
+					else
+					{
+						mod_conn->on_hold = true;
 					}
 				}
 			}
