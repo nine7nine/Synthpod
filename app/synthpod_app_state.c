@@ -350,9 +350,16 @@ _sp_app_state_preset_save(sp_app_t *app, mod_t *mod, const char *uri)
 		return -1;
 	}
 
+	const char *home = getenv("HOME");
+	if(!home)
+	{
+		sp_app_log_error(app, "%s: failed to get HOME from environment\n", __func__);
+		return -1;
+	}
+
 	const char *mod_label = lilv_node_as_string(name_node);
 	char *prefix_path;
-	if(asprintf(&prefix_path, "file:///home/hp/.lv2/%s_", mod_label) == -1) //FIXME
+	if(asprintf(&prefix_path, "file://%s/.lv2/%s_", home, mod_label) == -1)
 		prefix_path = NULL;
 
 	if(prefix_path)

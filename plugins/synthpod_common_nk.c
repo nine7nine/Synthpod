@@ -3321,14 +3321,24 @@ _patch_mod_preset_save(plughandle_t *handle)
 
 	LilvNode *name_node = lilv_plugin_get_name(mod->plug);
 	if(!name_node)
+	{
+		_log_error(handle, "%s: lilv_plugin_get_name failed\n", __func__);
 		return;
+	}
+
+	const char *home = getenv("HOME");
+	if(!home)
+	{
+		_log_error(handle, "%s: failed to get HOME from environment\n", __func__);
+		return;
+	}
 
 	const char *mod_label = lilv_node_as_string(name_node);
 	const char *preset_label = _textedit_const(&handle->preset_search_edit);
 
 	// create target URI
 	char *preset_path;
-	if(asprintf(&preset_path, "file:///home/hp/.lv2/%s_%s.preset.lv2", mod_label, preset_label) == -1) //FIXME
+	if(asprintf(&preset_path, "file://%s/.lv2/%s_%s.preset.lv2", home, mod_label, preset_label) == -1)
 		preset_path = NULL;
 
 	if(preset_path)
