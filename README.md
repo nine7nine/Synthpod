@@ -10,6 +10,41 @@
 
 Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/#](http://open-music-kontrollers.ch/lv2/synthpod/#).
 
+### Usage
+
+#### Server - client
+
+Synthpod comes as server - client combo, e.g. the server doing the DSP side of things runs in its own
+process and the client showing the GUI side of things runs in its own process.
+
+By default, synthpod just runs the server. There's a command line argument to automatically run the GUI,
+if you want. Please consult the manual page to find out more.
+
+#### GUI
+
+##### Mouse actions
+
+* Plugin actions:
+	* Mouse-over: show connections
+	* Right-click: toggle selection
+	* Left-click-down: start connecting
+	* Left-click-up: end connecting
+
+* Connection matrix actions:
+	* Mouse-over: show connections
+	* Right-click: toggle selection
+	* Left-click: toggle connection
+	* Mouse-wheel: toggle connection
+
+#### Key actions
+
+* a: (de)select all nodes
+* b: start drawing selection box
+* g: start moving selected nodes
+* v: toggle plugin GUIs of selected nodes
+* x: remove selected nodes
+* i: reinstantiate selected nodes
+
 ### Mandatory dependencies
 
 * [LV2](http://lv2plug.in) (LV2 plugin specification)
