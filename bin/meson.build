@@ -41,10 +41,6 @@ if jack_dep.found()
 		jack_c_args += '-DJACK_HAS_METADATA_API'
 	endif
 
-	if cc.has_function('jack_get_cycle_times', prefix : '#include <jack/jack.h>')
-		jack_c_args += '-DJACK_HAS_CYCLE_TIMES'
-	endif
-
 	jack = executable('synthpod_jack', jack_srcs,
 		include_directories : bin_incs,
 		c_args : c_args + jack_c_args,

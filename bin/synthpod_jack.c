@@ -86,7 +86,6 @@ struct _prog_t {
 		double beats_per_minute;
 	} trans;
 
-#if defined(JACK_HAS_CYCLE_TIMES)
 	LV2_OSC_Schedule osc_sched;
 	struct timespec cur_ntp;
 	struct {
@@ -97,7 +96,6 @@ struct _prog_t {
 		double dT;
 		double dTm1;
 	} cycle;
-#endif
 };
 
 static LV2_Atom_Forge_Ref
@@ -209,7 +207,6 @@ _process(jack_nframes_t nsamples, void *data)
 		bin->first = false;
 	}
 
-#if defined(JACK_HAS_CYCLE_TIMES)
 	cross_clock_gettime(&bin->clk_real, &handle->cur_ntp);
 	handle->cur_ntp.tv_sec += JAN_1970; // convert NTP to OSC time
 	//jack_nframes_t offset = jack_frames_since_cycle_start(handle->client);
@@ -227,7 +224,6 @@ _process(jack_nframes_t nsamples, void *data)
 	// calculate apparent samples per period
 	handle->cycle.dT = nsamples / diff;
 	handle->cycle.dTm1 = 1.0 / handle->cycle.dT;
-#endif
 
 	// get transport position
 	jack_position_t pos;
@@ -927,7 +923,6 @@ static const nsmc_driver_t nsm_driver = {
 	.hide = _hide
 };
 
-#if defined(JACK_HAS_CYCLE_TIMES)
 // rt
 __realtime static double
 _osc_schedule_osc2frames(LV2_OSC_Schedule_Handle instance, uint64_t timestamp)
@@ -974,7 +969,6 @@ _osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 
 	return timestamp;
 }
-#endif // JACK_HAS_CYCLE_TIMES
 
 static void
 _idle(void *data)
@@ -1215,14 +1209,11 @@ main(int argc, char **argv)
 	bin->app_driver.system_port_add = _system_port_add;
 	bin->app_driver.system_port_del = _system_port_del;
 
-#if defined(JACK_HAS_CYCLE_TIMES)
 	handle.osc_sched.osc2frames = _osc_schedule_osc2frames;
 	handle.osc_sched.frames2osc = _osc_schedule_frames2osc;
 	handle.osc_sched.handle = &handle;
 	bin->app_driver.osc_sched = &handle.osc_sched;
-#else
-	bin->app_driver.osc_sched = NULL;
-#endif
+
 	bin->app_driver.features = SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH; // always true for JACK
 
 	// run
