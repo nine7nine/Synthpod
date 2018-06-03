@@ -20,6 +20,7 @@
 #include <unistd.h> // fork
 #include <sys/wait.h> // waitpid
 #include <errno.h> // waitpid
+#include <signal.h>
 
 #include <synthpod_bin.h>
 
