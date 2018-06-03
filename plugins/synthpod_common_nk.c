@@ -537,6 +537,8 @@ struct _plughandle_t {
 #endif
 
 	xpress_t xpress;
+
+	unsigned mods_moving;
 };
 
 static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
@@ -6455,6 +6457,8 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 
 	if(mod->moving)
 	{
+		handle->mods_moving += 1;
+
 		if(nk_input_is_mouse_released(in, NK_BUTTON_LEFT))
 		{
 			mod->moving = false;
@@ -6463,7 +6467,7 @@ _mod_moveable(plughandle_t *handle, struct nk_context *ctx, mod_t *mod,
 			{
 				mod_conn_t *mod_conn = *mod_conn_itr;
 
-				// if hovering over a mod_conf, insert it there, replacing the connection
+				// if hovering over a mod_conn, insert it there, replacing the connection
 				if(!mod_conn->moving && mod_conn->hovering)
 				{
 					mod_t *src_mod = mod_conn->source_mod;
@@ -6943,6 +6947,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 		{
 			mod_conn->moving = false;
 		}
+		//XXX
 		else if(!nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE))
 		{
 			mod_conn->pos.x += in->mouse.delta.x;
@@ -7067,7 +7072,7 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 					const char *source_name = source_port->name;
 					const char *sink_name = sink_port->name;
 
-					if(source_name && sink_name)
+					if(!handle->mods_moving && source_name && sink_name)
 					{
 						if(nk_input_is_mouse_pressed(in, NK_BUTTON_LEFT))
 						{
@@ -7438,6 +7443,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					nk_stroke_line(canvas, x0, y1, x2, y1, ctx->style.property.border, hilight_color);
 				}
 			}
+
+			handle->mods_moving = 0;
 
 			HASH_FOREACH(&handle->mods, mod_itr)
 			{
