@@ -555,6 +555,52 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 				_sp_app_to_ui_overflow(app);
 			}
 		}
+		else if(prop == app->regs.synthpod.graph_position_x.urid)
+		{
+			//printf("patch:Get for spod:graphPositionX\n");
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, subj, sn, prop,
+					sizeof(float), app->forge.Float, &app->pos.x);
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
+		}
+		else if(prop == app->regs.synthpod.graph_position_y.urid)
+		{
+			//printf("patch:Get for spod:graphPositionY\n");
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, subj, sn, prop,
+					sizeof(float), app->forge.Float, &app->pos.y);
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
+		}
 		else if(prop == app->regs.synthpod.cpus_available.urid)
 		{
 			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
@@ -897,6 +943,19 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 		}
 
 		//TODO handle more properties
+	}
+	else if(prop && value)// is for host
+	{
+		if(  (prop == app->regs.synthpod.graph_position_x.urid)
+			&& (value->type == app->forge.Float) )
+		{
+			app->pos.x = ((const LV2_Atom_Float *)value)->body;
+		}
+		else if(  (prop == app->regs.synthpod.graph_position_y.urid)
+			&& (value->type == app->forge.Float) )
+		{
+			app->pos.y = ((const LV2_Atom_Float *)value)->body;
+		}
 	}
 
 	return advance_ui[app->block_state];

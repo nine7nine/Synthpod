@@ -1332,6 +1332,16 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 
 		free(ser.buf);
 
+		// spod:graphPosotionX
+		store(hndl, app->regs.synthpod.graph_position_x.urid,
+			&app->pos.x, sizeof(float), app->forge.Float,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+		// spod:graphPosotionY
+		store(hndl, app->regs.synthpod.graph_position_y.urid,
+			&app->pos.y, sizeof(float), app->forge.Float,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
 		return LV2_STATE_SUCCESS;
 	}
 	else
@@ -1431,14 +1441,16 @@ LV2_Atom_Object *
 sp_app_stash(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle hndl, uint32_t flags, const LV2_Feature *const *features)
 {
-	const LV2_URID keys [7] = {
+	const LV2_URID keys [9] = {
 		app->regs.core.minor_version.urid,
 		app->regs.core.micro_version.urid,
 		app->regs.synthpod.module_list.urid,
 		app->regs.synthpod.connection_list.urid,
 		app->regs.synthpod.node_list.urid,
 		app->regs.synthpod.automation_list.urid,
-		app->regs.synthpod.graph.urid
+		app->regs.synthpod.graph.urid,
+		app->regs.synthpod.graph_position_x.urid,
+		app->regs.synthpod.graph_position_y.urid
 	};
 
 	uint8_t *buf = malloc(0x100000); //FIXME
@@ -1604,6 +1616,30 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	}
 	else
 		sp_app_log_error(app, "%s: invaild automationList\n", __func__);
+
+	// retrieve spod:graphPositionX
+	const float *graph_position_x_body = retrieve(hndl, app->regs.synthpod.graph_position_x.urid,
+		&size, &type, &_flags);
+	if(  graph_position_x_body
+		&& (type == app->forge.Float)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
+	{
+		app->pos.x = *graph_position_x_body;
+	}
+	else
+		sp_app_log_error(app, "%s: invaild graphPositionX\n", __func__);
+
+	// retrieve spod:graphPositionY
+	const float *graph_position_y_body = retrieve(hndl, app->regs.synthpod.graph_position_y.urid,
+		&size, &type, &_flags);
+	if(  graph_position_y_body
+		&& (type == app->forge.Float)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
+	{
+		app->pos.y = *graph_position_y_body;
+	}
+	else
+		sp_app_log_error(app, "%s: invaild graphPositionY\n", __func__);
 
 	// retrieve spod:graph // XXX old save format
 	const LV2_Atom_Object_Body *graph_body = retrieve(hndl, app->regs.synthpod.graph.urid,

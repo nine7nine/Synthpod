@@ -493,6 +493,11 @@ struct _sp_app_t {
 	LV2_OSC_URID osc_urid;
 
 	cross_clock_t clk_mono;
+
+	struct {
+		float x;
+		float y;
+	} pos;
 };
 
 extern const port_driver_t control_port_driver;

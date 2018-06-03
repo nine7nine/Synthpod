@@ -7320,6 +7320,24 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 			{
 				handle->scrolling.x -= in->mouse.delta.x;
 				handle->scrolling.y -= in->mouse.delta.y;
+
+				const LV2_URID subj = 0; // aka host
+
+				if(  _message_request(handle)
+					&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+						subj, 0, handle->regs.synthpod.graph_position_x.urid,
+						sizeof(float), handle->forge.Float, &handle->scrolling.x) )
+				{
+					_message_write(handle);
+				}
+
+				if(  _message_request(handle)
+					&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+						subj, 0, handle->regs.synthpod.graph_position_y.urid,
+						sizeof(float), handle->forge.Float, &handle->scrolling.y) )
+				{
+					_message_write(handle);
+				}
 			}
 
 			const struct nk_vec2 scrolling = handle->scrolling;
@@ -8042,6 +8060,22 @@ _init(plughandle_t *handle)
 	if(  _message_request(handle)
 		&& synthpod_patcher_get(&handle->regs, &handle->forge,
 			0, 0, handle->regs.synthpod.num_periods.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:graphPositionX]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.graph_position_x.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:graphPositionY]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.graph_position_y.urid) )
 	{
 		_message_write(handle);
 	}
@@ -8887,6 +8921,24 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 								nk_pugl_post_redisplay(&handle->win);
 							}
+						}
+						else if( (prop == handle->regs.synthpod.graph_position_x.urid)
+							&& (value->type == handle->forge.Float) )
+						{
+							const LV2_Atom_Float *graph_position_x = (const LV2_Atom_Float *)value;
+
+							handle->scrolling.x = graph_position_x->body;
+
+							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.graph_position_y.urid)
+							&& (value->type == handle->forge.Float) )
+						{
+							const LV2_Atom_Float *graph_position_y = (const LV2_Atom_Float *)value;
+
+							handle->scrolling.y = graph_position_y->body;
+
+							nk_pugl_post_redisplay(&handle->win);
 						}
 						else if( (prop == handle->regs.synthpod.cpus_used.urid)
 							&& (value->type == handle->forge.Int) )
