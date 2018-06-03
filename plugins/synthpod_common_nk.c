@@ -2123,6 +2123,13 @@ _param_free(plughandle_t *handle, param_t *param)
 	{
 		free(param->val.chunk.body);
 	}
+	else if(param->range == handle->forge.Tuple)
+	{
+		if(param->property == handle->canvas.urid.Canvas_graph)
+		{
+			_image_free(handle, &param->mod->idisp.img);
+		}
+	}
 
 	HASH_FREE(&param->points, ptr2)
 	{
