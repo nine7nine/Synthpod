@@ -4195,8 +4195,36 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 		nk_spacing(ctx, 1);
 
 		{
+			const bool show_bottombar = handle->show_bottombar;
 			_toolbar_toggle(ctx, &handle->show_bottombar, 'k', handle->icon.settings, "Settings");
+			if(show_bottombar != handle->show_bottombar)
+			{
+				const LV2_URID subj = 0; // aka host
+
+				if(  _message_request(handle)
+					&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+						subj, 0, handle->regs.synthpod.row_enabled.urid,
+						sizeof(int32_t), handle->forge.Bool, &handle->show_bottombar) )
+				{
+					_message_write(handle);
+				}
+			}
+
+			const bool show_sidebar = handle->show_sidebar;
 			_toolbar_toggle(ctx, &handle->show_sidebar, 'l', handle->icon.menu, "Controls");
+
+			if(show_sidebar != handle->show_sidebar)
+			{
+				const LV2_URID subj = 0; // aka host
+
+				if(  _message_request(handle)
+					&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+						subj, 0, handle->regs.synthpod.column_enabled.urid,
+						sizeof(int32_t), handle->forge.Bool, &handle->show_sidebar) )
+				{
+					_message_write(handle);
+				}
+			}
 		}
 
 		nk_menubar_end(ctx);
@@ -8079,6 +8107,22 @@ _init(plughandle_t *handle)
 	{
 		_message_write(handle);
 	}
+
+	// patch:Get [patch:property spod:columnEnabled]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.column_enabled.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:rowEnabled]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.row_enabled.urid) )
+	{
+		_message_write(handle);
+	}
 }
 
 static void
@@ -8937,6 +8981,24 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							const LV2_Atom_Float *graph_position_y = (const LV2_Atom_Float *)value;
 
 							handle->scrolling.y = graph_position_y->body;
+
+							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.column_enabled.urid)
+							&& (value->type == handle->forge.Bool) )
+						{
+							const LV2_Atom_Bool *column_enabled = (const LV2_Atom_Bool *)value;
+
+							handle->show_sidebar = column_enabled->body;
+
+							nk_pugl_post_redisplay(&handle->win);
+						}
+						else if( (prop == handle->regs.synthpod.row_enabled.urid)
+							&& (value->type == handle->forge.Bool) )
+						{
+							const LV2_Atom_Bool *row_enabled = (const LV2_Atom_Bool *)value;
+
+							handle->show_bottombar = row_enabled->body;
 
 							nk_pugl_post_redisplay(&handle->win);
 						}

@@ -1332,14 +1332,24 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 
 		free(ser.buf);
 
-		// spod:graphPosotionX
+		// spod:graphPositionX
 		store(hndl, app->regs.synthpod.graph_position_x.urid,
 			&app->pos.x, sizeof(float), app->forge.Float,
 			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 
-		// spod:graphPosotionY
+		// spod:graphPositionY
 		store(hndl, app->regs.synthpod.graph_position_y.urid,
 			&app->pos.y, sizeof(float), app->forge.Float,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+		// spod:columnEnabled
+		store(hndl, app->regs.synthpod.column_enabled.urid,
+			&app->column_enabled, sizeof(int32_t), app->forge.Bool,
+			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
+		// spod:rowEnabled
+		store(hndl, app->regs.synthpod.row_enabled.urid,
+			&app->row_enabled, sizeof(int32_t), app->forge.Bool,
 			LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
 
 		return LV2_STATE_SUCCESS;
@@ -1441,7 +1451,7 @@ LV2_Atom_Object *
 sp_app_stash(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle hndl, uint32_t flags, const LV2_Feature *const *features)
 {
-	const LV2_URID keys [9] = {
+	const LV2_URID keys [11] = {
 		app->regs.core.minor_version.urid,
 		app->regs.core.micro_version.urid,
 		app->regs.synthpod.module_list.urid,
@@ -1450,7 +1460,9 @@ sp_app_stash(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->regs.synthpod.automation_list.urid,
 		app->regs.synthpod.graph.urid,
 		app->regs.synthpod.graph_position_x.urid,
-		app->regs.synthpod.graph_position_y.urid
+		app->regs.synthpod.graph_position_y.urid,
+		app->regs.synthpod.column_enabled.urid,
+		app->regs.synthpod.row_enabled.urid
 	};
 
 	uint8_t *buf = malloc(0x100000); //FIXME
@@ -1627,7 +1639,7 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->pos.x = *graph_position_x_body;
 	}
 	else
-		sp_app_log_error(app, "%s: invaild graphPositionX\n", __func__);
+		sp_app_log_error(app, "%s: invalid graphPositionX\n", __func__);
 
 	// retrieve spod:graphPositionY
 	const float *graph_position_y_body = retrieve(hndl, app->regs.synthpod.graph_position_y.urid,
@@ -1639,7 +1651,31 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->pos.y = *graph_position_y_body;
 	}
 	else
-		sp_app_log_error(app, "%s: invaild graphPositionY\n", __func__);
+		sp_app_log_error(app, "%s: invalid graphPositionY\n", __func__);
+
+	// retrieve spod:columnEnabled
+	const int32_t *column_enabled = retrieve(hndl, app->regs.synthpod.column_enabled.urid,
+		&size, &type, &_flags);
+	if(  column_enabled
+		&& (type == app->forge.Bool)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
+	{
+		app->column_enabled = *column_enabled;
+	}
+	else
+		sp_app_log_error(app, "%s: invalid columnEnabled\n", __func__);
+
+	// retrieve spod:rowEnabled
+	const int32_t *row_enabled = retrieve(hndl, app->regs.synthpod.row_enabled.urid,
+		&size, &type, &_flags);
+	if(  row_enabled
+		&& (type == app->forge.Bool)
+		&& (_flags & (LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE)) )
+	{
+		app->row_enabled = *row_enabled;
+	}
+	else
+		sp_app_log_error(app, "%s: invalid rowEnabled\n", __func__);
 
 	// retrieve spod:graph // XXX old save format
 	const LV2_Atom_Object_Body *graph_body = retrieve(hndl, app->regs.synthpod.graph.urid,
