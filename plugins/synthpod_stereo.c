@@ -135,6 +135,20 @@ struct _plughandle_t {
 	xpress_map_t xmap;
 };
 
+static void
+_apply_job(plughandle_t *handle, const job_t *job)
+{
+	if(  job->stash.obj
+		&& job->stash.bundle_path
+		&& strlen(job->stash.bundle_path) )
+	{
+		sp_app_apply(handle->app, job->stash.obj, job->stash.bundle_path);
+	}
+
+	free(job->stash.bundle_path);
+	free(job->stash.obj);
+}
+
 static LV2_State_Status
 _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
@@ -165,11 +179,6 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 			map_path = features[i]->data;
 	}
 
-	if(!schedule)
-	{
-		return LV2_STATE_ERR_UNKNOWN;
-	}
-
 	if(!map_path)
 	{
 		return LV2_STATE_ERR_UNKNOWN;
@@ -184,7 +193,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	LV2_Atom_Object *obj = sp_app_stash(app, retrieve, state, flags, features);
 	if(!obj)
 	{
-
+		free(bundle_path);
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 
@@ -195,13 +204,23 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 			.obj = obj
 		}
 	};
-	const LV2_Worker_Status stat = schedule->schedule_work(schedule->handle,
-		sizeof(job_t), &job);
 
-	if(stat == LV2_WORKER_SUCCESS)
+	if(schedule)
 	{
-		return LV2_STATE_SUCCESS;
+		const LV2_Worker_Status stat = schedule->schedule_work(schedule->handle,
+			sizeof(job_t), &job);
+
+		if(stat == LV2_WORKER_SUCCESS)
+		{
+			return LV2_STATE_SUCCESS;	
+		}
 	}
+	else
+	{
+		_apply_job(handle, &job);
+		return LV2_STATE_SUCCESS;	
+	}
+
 
 	return LV2_STATE_ERR_UNKNOWN;
 }
@@ -227,15 +246,7 @@ _work(LV2_Handle instance,
 	{
 		case JOB_TYPE_STASH:
 		{
-			if(  job->stash.obj
-				&& job->stash.bundle_path
-				&& strlen(job->stash.bundle_path) )
-			{
-				sp_app_apply(handle->app, job->stash.obj, job->stash.bundle_path);
-			}
-
-			free(job->stash.bundle_path);
-			free(job->stash.obj);
+			_apply_job(handle, job);
 		} break;
 		case JOB_TYPE_NONE:
 		default:
