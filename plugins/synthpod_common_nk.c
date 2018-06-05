@@ -6345,6 +6345,17 @@ static inline void
 _remove_selected_nodes(plughandle_t *handle)
 {
 	DBG;
+	// deselect all module connectors
+	HASH_FOREACH(&handle->conns, mod_conn_itr)
+	{
+		mod_conn_t *mod_conn = *mod_conn_itr;
+
+		if(mod_conn->selected)
+		{
+			_remove_visible_ports_from_mod_conn(handle, mod_conn);
+		}
+	}
+
 	// deselect all modules
 	HASH_FOREACH(&handle->mods, mod_itr)
 	{
@@ -6361,17 +6372,6 @@ _remove_selected_nodes(plughandle_t *handle)
 			{
 				_patch_mod_remove(handle, mod);
 			}
-		}
-	}
-
-	// deselect all module connectors
-	HASH_FOREACH(&handle->conns, mod_conn_itr)
-	{
-		mod_conn_t *mod_conn = *mod_conn_itr;
-
-		if(mod_conn->selected)
-		{
-			_remove_visible_ports_from_mod_conn(handle, mod_conn);
 		}
 	}
 }

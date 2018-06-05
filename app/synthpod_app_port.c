@@ -302,7 +302,7 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 
 		if(source)
 		{
-			if(src_port->type == PORT_TYPE_AUDIO)
+			if( (src_port->type == PORT_TYPE_AUDIO) && (source->ramp.state == RAMP_STATE_NONE) )
 			{
 				// only audio output ports need to be ramped to be clickless
 				source->ramp.samples = app->ramp_samples;
