@@ -1464,6 +1464,7 @@ sp_app_stash(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		app->regs.synthpod.column_enabled.urid,
 		app->regs.synthpod.row_enabled.urid
 	};
+	const unsigned num_keys = sizeof(keys) / sizeof(LV2_URID);
 
 	uint8_t *buf = malloc(0x100000); //FIXME
 	LV2_Atom_Forge forge = app->forge;
@@ -1473,7 +1474,7 @@ sp_app_stash(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 
 	ref = lv2_atom_forge_object(&forge, &frame, 0, 0);
 
-	for(int i = 0; i < 7; i++)
+	for(unsigned i = 0; i < num_keys; i++)
 	{
 		size_t size;
 		uint32_t type;
