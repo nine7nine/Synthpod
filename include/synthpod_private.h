@@ -915,6 +915,7 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->synthpod.port_refresh);
 	_unregister(&regs->synthpod.bundle_load);
 	_unregister(&regs->synthpod.bundle_save);
+	_unregister(&regs->synthpod.path_get);
 	_unregister(&regs->synthpod.dsp_profiling);
 	_unregister(&regs->synthpod.cpus_available);
 	_unregister(&regs->synthpod.cpus_used);

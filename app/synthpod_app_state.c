@@ -545,6 +545,8 @@ _deserialize_from_turtle(Sratom *sratom, LV2_URID_Unmap *unmap, const char *path
 
 			free(ttl);
 		}
+
+		fclose(f);
 	}
 
 	return obj;
