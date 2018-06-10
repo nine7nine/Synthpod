@@ -7159,17 +7159,22 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 							}
 						}
 
-						char tmp [128];
-						if(is_dial && port_conn)
+						if(  !nk_input_is_mouse_down(in, NK_BUTTON_LEFT)
+							&& !nk_input_is_mouse_down(in, NK_BUTTON_MIDDLE)
+							&& !nk_input_is_mouse_down(in, NK_BUTTON_RIGHT) )
 						{
-							const float dBFS = 20.f * log10f(port_conn->gain); //FIXME remove duplication
-							snprintf(tmp, sizeof(tmp), "%s || %s || %+02.1f dBFS", source_name, sink_name, dBFS);
+							char tmp [128];
+							if(is_dial && port_conn)
+							{
+								const float dBFS = 20.f * log10f(port_conn->gain); //FIXME remove duplication
+								snprintf(tmp, sizeof(tmp), "%s || %s || %+02.1f dBFS", source_name, sink_name, dBFS);
+							}
+							else
+							{
+								snprintf(tmp, sizeof(tmp), "%s || %s", source_name, sink_name);
+							}
+							nk_tooltip(ctx, tmp);
 						}
-						else
-						{
-							snprintf(tmp, sizeof(tmp), "%s || %s", source_name, sink_name);
-						}
-						nk_tooltip(ctx, tmp);
 					}
 				}
 
