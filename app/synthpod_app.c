@@ -364,6 +364,10 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
 	sp_app_t *app = mod->app;
 
+	struct timespec mod_t1;
+	struct timespec mod_t2;
+	cross_clock_gettime(&app->clk_mono, &mod_t1);
+
 	// multiplex multiple sources to single sink where needed
 	for(unsigned p=0; p<mod->num_ports; p++)
 	{
@@ -411,10 +415,6 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 			mod->worker.iface->end_run(mod->handle);
 		}
 	}
-
-	struct timespec mod_t1;
-	struct timespec mod_t2;
-	cross_clock_gettime(&app->clk_mono, &mod_t1);
 
 	// is module currently loading a preset asynchronously?
 	if(!mod->bypassed)
