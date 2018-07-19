@@ -27,11 +27,13 @@ self_incs = include_directories('')
 
 bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, pugl_incs, jackey_incs, self_incs]
 
+static_link = meson.is_cross_build() and false #FIXME
+
 m_dep = cc.find_library('m')
 rt_dep = cc.find_library('rt')
 lv2_dep = dependency('lv2', version : '>=1.14.0')
 thread_dep = dependency('threads')
-lilv_dep = dependency('lilv-0', version : '>=0.24.0', static : meson.is_cross_build() and false) #FIXME
+lilv_dep = dependency('lilv-0', version : '>=0.24.0', static : static_link)
 alsa_dep = dependency('alsa', version : '>=1.1.0', required : false)
 zita_dep = cc.find_library('zita-alsa-pcmi', required : false)
 jack_dep = dependency('jack', required : false)
@@ -44,7 +46,7 @@ gtk2_dep = dependency('gtk+-2.0', version : '>=2.24', required : false)
 gtk3_dep = dependency('gtk+-3.0', version : '>=3.22', required : false)
 qt4_dep = dependency('qt4', modules : ['Core', 'Gui'], required : false)
 qt5_dep = dependency('qt5', modules : ['Core', 'Widgets', 'Gui'], required : false)
-cairo_dep = dependency('cairo', static : meson.is_cross_build() and false, required : false) #FIXME
+cairo_dep = dependency('cairo', static : static_link, required : false)
 
 bin_deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
 

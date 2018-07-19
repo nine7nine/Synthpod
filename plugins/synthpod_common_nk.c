@@ -2240,8 +2240,8 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 
 	if(aspect_ratio < 1.f)
 	{
-		W = h * aspect_ratio;
-		H = h;
+		W = w;
+		H = w / aspect_ratio;
 	}
 	else if(aspect_ratio > 1.f)
 	{
@@ -6783,8 +6783,8 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 
 			if(aspect < 1.f)
 			{
-				h = mod->dim.x;
-				w = h * aspect;
+				w = mod->dim.x;
+				h = w  / aspect;
 			}
 			else if(aspect > 1.f)
 			{
