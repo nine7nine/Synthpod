@@ -672,6 +672,18 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 		{
 			jack_port = jack_port_register(handle->client, name,
 				JACK_DEFAULT_MIDI_TYPE, flags, 0);
+
+#if defined(JACK_HAS_METADATA_API)
+			if(jack_port)
+			{
+				jack_uuid_t uuid = jack_port_uuid(jack_port);
+				if(!jack_uuid_empty(uuid))
+				{
+					jack_set_property(handle->client, uuid,
+						JACKEY_EVENT_TYPES, "MIDI", "text/plain");
+				}
+			}
+#endif
 			break;
 		}
 		case SYSTEM_PORT_OSC:
