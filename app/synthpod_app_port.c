@@ -302,12 +302,16 @@ _sp_app_port_disconnect_request(sp_app_t *app, port_t *src_port, port_t *snk_por
 
 		if(source)
 		{
-			if( (src_port->type == PORT_TYPE_AUDIO) && (source->ramp.state == RAMP_STATE_NONE) )
+			if(src_port->type == PORT_TYPE_AUDIO)
 			{
 				// only audio output ports need to be ramped to be clickless
-				source->ramp.samples = app->ramp_samples;
-				source->ramp.state = ramp_state;
-				source->ramp.value = 1.f;
+
+				if(source->ramp.state == RAMP_STATE_NONE)
+				{
+					source->ramp.samples = app->ramp_samples;
+					source->ramp.state = ramp_state;
+					source->ramp.value = 1.f;
+				}
 
 				return 1; // needs ramping
 			}
@@ -432,8 +436,8 @@ _update_ramp(sp_app_t *app, source_t *source, port_t *port, uint32_t nsamples)
 		}
 		else if(source->ramp.state == RAMP_STATE_DOWN_DEL)
 		{
-			_sp_app_port_disconnect(app, source->port, port);
 			source->port->mod->delete_request = true; // mark module for removal
+			_sp_app_port_disconnect(app, source->port, port);
 		}
 		else if(source->ramp.state == RAMP_STATE_DOWN_DRAIN)
 		{

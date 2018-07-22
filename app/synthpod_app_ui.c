@@ -1731,11 +1731,13 @@ _mod_list_rem(sp_app_t *app, const LV2_Atom_URID *urn)
 
 		// disconnect sinks
 		for(unsigned m=0; m<app->num_mods; m++)
+		{
 			for(unsigned p2=0; p2<app->mods[m]->num_ports; p2++)
 			{
 				needs_ramping += _sp_app_port_disconnect_request(app,
 					port, &app->mods[m]->ports[p2], RAMP_STATE_DOWN_DEL);
 			}
+		}
 	}
 	if(needs_ramping == 0)
 		_sp_app_mod_eject(app, mod);
