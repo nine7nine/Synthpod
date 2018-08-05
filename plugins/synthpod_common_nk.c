@@ -7173,7 +7173,9 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 							{
 								snprintf(tmp, sizeof(tmp), "%s || %s", source_name, sink_name);
 							}
+#if 0 //FIXME
 							nk_tooltip(ctx, tmp);
+#endif
 						}
 					}
 				}
