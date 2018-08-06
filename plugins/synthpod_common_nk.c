@@ -7173,9 +7173,22 @@ _expose_mod_conn(plughandle_t *handle, struct nk_context *ctx, struct nk_rect sp
 							{
 								snprintf(tmp, sizeof(tmp), "%s || %s", source_name, sink_name);
 							}
-#if 0 //FIXME
-							nk_tooltip(ctx, tmp);
-#endif
+
+							const size_t tmp_len = strlen(tmp);
+
+							const struct nk_user_font *font = ctx->style.font;
+
+							const float fh = font->height;
+							const float fy = body.y + body.h + fh/2;
+							const float fw = font->width(font->userdata, font->height, tmp, tmp_len);
+							const struct nk_rect body2 = {
+								.x = body.x + (body.w - fw)/2,
+								.y = fy,
+								.w = fw,
+								.h = fh
+							};
+							nk_draw_text(canvas, body2, tmp, tmp_len, font,
+								style->normal.data.color, style->text_normal);
 						}
 					}
 				}
