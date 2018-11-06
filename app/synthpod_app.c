@@ -890,6 +890,7 @@ _dsp_slave_has_work_to_do(sp_app_t *app, dsp_master_t *dsp_master)
 	if(diff > 0.1)
 	{
 		fprintf(stderr, "%s: taking emergency exit.\n", __func__);
+		app->emergency_exit = true;
 		return false; // skip rest of graph, as we most probably hang somewhere
 	}
 
@@ -1121,7 +1122,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	atomic_init(&dsp_master->kill, false);
 	atomic_init(&dsp_master->ref_count, 0);
 	dsp_master->num_slaves = driver->num_slaves;
-	dsp_master->concurrent = 1; // this is a safe fallback
+	dsp_master->concurrent = dsp_master->num_slaves; // this is a safe fallback
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
 	{
 		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
@@ -1233,6 +1234,12 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		_sp_app_process_parallel(app, nsamples, sparse_update_timeout);
 	else
 		_sp_app_process_serial(app, nsamples, sparse_update_timeout);
+
+	if(app->emergency_exit)
+	{
+		app->dsp_master.concurrent = dsp_master->num_slaves; // spin up all cores
+		app->emergency_exit = false;
+	}
 
 	// profiling
 	struct timespec app_t2;

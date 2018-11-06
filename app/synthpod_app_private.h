@@ -501,6 +501,8 @@ struct _sp_app_t {
 
 	int32_t column_enabled;
 	int32_t row_enabled;
+
+	bool emergency_exit;
 };
 
 extern const port_driver_t control_port_driver;
