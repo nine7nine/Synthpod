@@ -383,8 +383,7 @@ _sandbox_io_timedwait(sandbox_io_t *io, const struct timespec *abs_timeout)
 		? io->to_master
 		: io->from_master;
 
-	int s;
-	while((s = sem_timedwait(&rx->sem, abs_timeout)) == -1)
+	while(sem_timedwait(&rx->sem, abs_timeout) == -1)
 	{
 		switch(errno)
 		{

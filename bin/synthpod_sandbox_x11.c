@@ -192,16 +192,21 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 
 		if(sandbox_slave_timedwait(sb, &to)) // timedout
 		{
-#if 0
 			struct timespec tf;
+
 			cross_clock_gettime(&app->clk_real, &tf);
-			const double d0 = to.tv_sec + 1e-9*to.tv_nsec;
-			const double d1 = tf.tv_sec + 1e-9*tf.tv_nsec;
-			printf("%i, %lf, %f\n", getpid(), d0, d1);
+			const uint64_t dd = (tf.tv_sec - to.tv_sec) * 1000000000
+				 + (tf.tv_nsec - to.tv_nsec);
+
+#if 0
+			printf(":: %i, %lums\n", getpid(), dd/1000000);
 #endif
 
-			if(app->idle_iface->idle(app->handle))
-				atomic_store_explicit(&done, true, memory_order_relaxed);
+			if(dd <= ns)
+			{
+				if(app->idle_iface->idle(app->handle))
+					atomic_store_explicit(&done, true, memory_order_relaxed);
+			}
 
 			to.tv_nsec += ns;
 			while(to.tv_nsec >= 1000000000)
