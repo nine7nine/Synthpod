@@ -47,14 +47,23 @@ elif host_machine.system() == 'darwin'
 	#ui_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_osx.m')
 endif
 
-ui = shared_module('synthpod_nk', ui_srcs,
-	c_args : c_args,
-	include_directories : bin_incs,
-	name_prefix : '',
-	dependencies : ui_deps,
-	link_with : [sbox_master],
-	install : true,
-	install_dir : plug_dir)
+if use_x11
+	ui = shared_module('synthpod_nk', ui_srcs,
+		c_args : c_args,
+		include_directories : bin_incs,
+		name_prefix : '',
+		dependencies : ui_deps,
+		link_with : [sbox_master],
+		install : true,
+		install_dir : plug_dir)
+
+	custom_target('synthpod_ui_ttl',
+		input : 'synthpod_ui.ttl',
+		output : 'synthpod_ui.ttl',
+		command : clone,
+		install : true,
+		install_dir : plug_dir)
+endif
 
 configure_file(input : 'manifest.ttl.in', output : 'manifest.ttl',
 	configuration : conf_data,
@@ -64,13 +73,6 @@ configure_file(input : 'manifest.ttl.in', output : 'manifest.ttl',
 custom_target('synthpod_ttl',
 	input : 'synthpod.ttl',
 	output : 'synthpod.ttl',
-	command : clone,
-	install : true,
-	install_dir : plug_dir)
-
-custom_target('synthpod_ui_ttl',
-	input : 'synthpod_ui.ttl',
-	output : 'synthpod_ui.ttl',
 	command : clone,
 	install : true,
 	install_dir : plug_dir)

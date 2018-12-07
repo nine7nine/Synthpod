@@ -29,23 +29,32 @@ bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, 
 
 static_link = meson.is_cross_build() and false #FIXME
 
+use_jack = get_option('use-jack')
+use_alsa = get_option('use-alsa')
+use_dummy = get_option('use-dummy')
+use_x11 = get_option('use-x11')
+use_gtk2 = get_option('use-gtk2')
+use_gtk3 = get_option('use-gtk3')
+use_qt4 = get_option('use-qt4')
+use_qt5 = get_option('use-qt5')
+
 m_dep = cc.find_library('m')
 rt_dep = cc.find_library('rt')
 lv2_dep = dependency('lv2', version : '>=1.14.0')
 thread_dep = dependency('threads')
 lilv_dep = dependency('lilv-0', version : '>=0.24.0', static : static_link)
-alsa_dep = dependency('alsa', version : '>=1.1.0', required : false)
-zita_dep = cc.find_library('zita-alsa-pcmi', required : false)
-jack_dep = dependency('jack', required : false)
-gl_dep = dependency('gl', required : false)
-x11_dep = dependency('x11', version : '>=1.6.0', required : false)
-xext_dep = dependency('xext', version : '>=1.3.0', required : false)
-xcb_dep = dependency('xcb', version : '>=1.12', required : false)
-xcbicccm_dep = dependency('xcb-icccm', version : '>=0.4.0', required : false)
-gtk2_dep = dependency('gtk+-2.0', version : '>=2.24', required : false)
-gtk3_dep = dependency('gtk+-3.0', version : '>=3.22', required : false)
-qt4_dep = dependency('qt4', modules : ['Core', 'Gui'], required : false)
-qt5_dep = dependency('qt5', modules : ['Core', 'Widgets', 'Gui'], required : false)
+alsa_dep = dependency('alsa', version : '>=1.1.0', required : use_alsa)
+zita_dep = cc.find_library('zita-alsa-pcmi', required : use_alsa)
+jack_dep = dependency('jack', required : use_jack)
+gl_dep = dependency('gl', required : use_x11)
+x11_dep = dependency('x11', version : '>=1.6.0', required : use_x11)
+xext_dep = dependency('xext', version : '>=1.3.0', required : use_x11)
+xcb_dep = dependency('xcb', version : '>=1.12', required : use_x11)
+xcbicccm_dep = dependency('xcb-icccm', version : '>=0.4.0', required : use_x11)
+gtk2_dep = dependency('gtk+-2.0', version : '>=2.24', required : use_gtk2)
+gtk3_dep = dependency('gtk+-3.0', version : '>=3.22', required : use_gtk3)
+qt4_dep = dependency('qt4', modules : ['Core', 'Gui'], required : use_qt4)
+qt5_dep = dependency('qt5', modules : ['Core', 'Widgets', 'Gui'], required : use_qt5)
 cairo_dep = dependency('cairo', static : static_link, required : false)
 
 bin_deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
@@ -67,36 +76,36 @@ if get_option('dynamic-parallelizer')
 	add_project_arguments('-DUSE_DYNAMIC_PARALLELIZER', language : 'c')
 endif
 
-if gl_dep.found()
+if use_x11 and gl_dep.found()
 	add_project_arguments('-DPUGL_HAVE_GL', language : 'c')
 endif
 
-if xcb_dep.found() and xcbicccm_dep.found()
+if use_x11 and xcb_dep.found() and xcbicccm_dep.found()
 	message('building X11 sandbox')
 	add_project_arguments('-DSANDBOX_X11', language : 'c')
 endif
 
-if gtk2_dep.found()
+if use_gtk2 and gtk2_dep.found()
 	message('building GTK2 sandbox')
 	add_project_arguments('-DSANDBOX_GTK2', language : 'c')
 endif
 
-if gtk3_dep.found()
+if use_gtk3 and gtk3_dep.found()
 	message('building GTK3 sandbox')
 	add_project_arguments('-DSANDBOX_GTK3', language : 'c')
 endif
 
-if qt4_dep.found()
+if use_qt4 and qt4_dep.found()
 	message('building QT4 sandbox')
 	add_project_arguments('-DSANDBOX_QT4', language : 'c')
 endif
 
-if qt5_dep.found()
+if use_qt5 and qt5_dep.found()
 	message('building QT5 sandbox')
 	add_project_arguments('-DSANDBOX_QT5', language : 'c')
 endif
 
-if cairo_dep.found()
+if use_x11 and cairo_dep.found()
 	message('using cairo canvas')
 	add_project_arguments('-DUSE_CAIRO_CANVAS', language : 'c')
 endif
