@@ -1940,6 +1940,7 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 	{
 		param->range = handle->map->map(handle->map->handle, lilv_node_as_uri(range));
 		if(  (param->range == handle->forge.String)
+			|| (param->range == handle->forge.Path)
 			|| (param->range == handle->forge.URI)
 			|| (param->range == handle->forge.URID) )
 		{
@@ -2116,6 +2117,7 @@ _param_free(plughandle_t *handle, param_t *param)
 {
 	DBG;
 	if(  (param->range == handle->forge.String)
+		|| (param->range == handle->forge.Path)
 		|| (param->range == handle->forge.URI)
 		|| (param->range == handle->forge.URID) )
 	{
@@ -2316,6 +2318,11 @@ _param_set_value(plughandle_t *handle, mod_t *mod, param_t *param,
 		param->val.d = ((const LV2_Atom_Double *)value)->body;
 	}
 	else if(param->range == handle->forge.String)
+	{
+		struct nk_str *str = &param->val.editor.string;
+		_set_string(str, value->size, LV2_ATOM_BODY_CONST(value));
+	}
+	else if(param->range == handle->forge.Path)
 	{
 		struct nk_str *str = &param->val.editor.string;
 		_set_string(str, value->size, LV2_ATOM_BODY_CONST(value));
@@ -5537,6 +5544,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 
 	bool changed = false;
 	if(  (param->range == handle->forge.String)
+		|| (param->range == handle->forge.Path)
 		|| (param->range == handle->forge.URI)
 		|| (param->range == handle->forge.URID)
 		|| param->is_bitmask)
@@ -5697,6 +5705,12 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 			if(_widget_string(handle, ctx, &param->val.editor, !param->is_readonly))
 				changed = true;
 		}
+		else if(param->range == handle->forge.Path)
+		{
+			nk_layout_row_dynamic(ctx, dy*1.2, 1); // editor field needs to be heigher
+			if(_widget_string(handle, ctx, &param->val.editor, !param->is_readonly))
+				changed = true;
+		}
 		else if(param->range == handle->forge.URI)
 		{
 			nk_layout_row_dynamic(ctx, dy*1.2, 1); // editor field needs to be heigher
@@ -5814,6 +5828,15 @@ _param_notification_add(plughandle_t *handle, mod_t *mod, param_t *param)
 		_patch_notification_add_patch_set(handle, mod,
 			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
 			sz, handle->forge.String, str);
+	}
+	else if(param->range == handle->forge.Path)
+	{
+		const char *str = nk_str_get_const(&param->val.editor.string);
+		const uint32_t sz= nk_str_len_char(&param->val.editor.string) + 1;
+
+		_patch_notification_add_patch_set(handle, mod,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, param->property,
+			sz, handle->forge.Path, str);
 	}
 	else if(param->range == handle->forge.URI)
 	{
