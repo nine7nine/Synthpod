@@ -333,7 +333,7 @@ LilvState *
 _sp_app_state_preset_create(sp_app_t *app, mod_t *mod, const char *bndl)
 {
 	LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-		app->driver->map, NULL, NULL, NULL, bndl,
+		app->driver->map, bndl, bndl, bndl, bndl,
 		_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
 		NULL);
 
@@ -947,7 +947,7 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 					if(path)
 					{
 						LilvState *const state = lilv_state_new_from_instance(mod->plug, mod->inst,
-							app->driver->map, NULL, NULL, NULL, path,
+							app->driver->map, path, path, path, path,
 							_state_get_value, mod, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE, NULL);
 
 						if(state)
