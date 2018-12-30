@@ -755,7 +755,7 @@ bin_show(bin_t *bin)
 	if(bin->child == 0) // child
 	{
 		char *const args [] = {
-			SYNTHPOD_BIN_DIR"synthpod_sandbox_x11",
+			"synthpod_sandbox_x11",
 			"-p", SYNTHPOD_STEREO_URI,
 			"-P", SYNTHPOD_PLUGIN_DIR,
 			"-u", SYNTHPOD_ROOT_NK_URI,

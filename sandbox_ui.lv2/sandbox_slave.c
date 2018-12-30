@@ -283,7 +283,8 @@ _voice_map_new_uuid(void *data, uint32_t flags __attribute__((unused)))
 }
 
 sandbox_slave_t *
-sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, void *data)
+sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
+	void *data, int *res)
 {
 	sandbox_slave_t *sb = calloc(1, sizeof(sandbox_slave_t));
 	if(!sb)
@@ -323,7 +324,8 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 					"You should have received a copy of the Artistic License 2.0\n"
 					"along the source as a COPYING file. If not, obtain it from\n"
 					"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
-				return 0;
+				*res = EXIT_SUCCESS;
+				return NULL;
 			case 'h':
 				fprintf(stderr,
 					"--------------------------------------------------------------------\n"
@@ -344,7 +346,8 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 					"   [-r] sample-rate     Sample rate (44100)\n"
 					"   [-f] update-rate     GUI update rate (25)\n\n"
 					, argv[0]);
-				return 0;
+				*res = EXIT_SUCCESS;
+				return NULL;
 			case 'n':
 				sb->plugin_urn = optarg;
 				break;
@@ -560,10 +563,12 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, v
 	}
 
 	sb->initialized = true;
+	*res = EXIT_SUCCESS;
 	return sb; // success
 
 fail:
 	sandbox_slave_free(sb);
+	*res = EXIT_FAILURE;
 	return NULL;
 }
 

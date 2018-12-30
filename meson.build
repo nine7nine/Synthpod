@@ -82,37 +82,28 @@ endif
 
 if use_x11 and xcb_dep.found() and xcbicccm_dep.found()
 	message('building X11 sandbox')
-	add_project_arguments('-DSANDBOX_X11', language : 'c')
 endif
 
 if use_gtk2 and gtk2_dep.found()
 	message('building GTK2 sandbox')
-	add_project_arguments('-DSANDBOX_GTK2', language : 'c')
 endif
 
 if use_gtk3 and gtk3_dep.found()
 	message('building GTK3 sandbox')
-	add_project_arguments('-DSANDBOX_GTK3', language : 'c')
 endif
 
 if use_qt4 and qt4_dep.found()
 	message('building QT4 sandbox')
-	add_project_arguments('-DSANDBOX_QT4', language : 'c')
 endif
 
 if use_qt5 and qt5_dep.found()
 	message('building QT5 sandbox')
-	add_project_arguments('-DSANDBOX_QT5', language : 'c')
 endif
 
 if use_x11 and cairo_dep.found()
 	message('using cairo canvas')
 	add_project_arguments('-DUSE_CAIRO_CANVAS', language : 'c')
 endif
-
-add_project_arguments('-DSANDBOX_SHOW', language : 'c')
-
-add_project_arguments('-DSANDBOX_KX', language : 'c')
 
 if lilv_dep.version() >= '0.22.0'
 	message('building against recent lilv')
@@ -124,7 +115,6 @@ add_project_arguments('-DSYNTHPOD_VERSION="'+rawvers+'"', language : 'c')
 add_project_arguments('-DSYNTHPOD_MINOR_VERSION='+version[1]+'', language : 'c')
 add_project_arguments('-DSYNTHPOD_MICRO_VERSION='+version[2]+'', language : 'c')
 add_project_arguments('-DSYNTHPOD_BUNDLE_DIR="'+join_paths(prefix, bndl_dir, '')+'"', language : 'c')
-add_project_arguments('-DSYNTHPOD_BIN_DIR="'+join_paths(prefix, get_option('bindir'), '')+'"', language : 'c')
 add_project_arguments('-DSYNTHPOD_PLUGIN_DIR="'+join_paths(prefix, plug_dir, '')+'"', language : 'c')
 
 builtin_assume_aligned = '''
@@ -148,8 +138,7 @@ c_args = ['-fvisibility=hidden',
 	'-ffast-math',
 	'-Wno-attributes',
 	'-Wno-unused-function',
-	'-Wno-unused-variable',
-	'-Wno-stringop-overflow']
+	'-Wno-unused-variable']
 
 if cc.has_argument('-ftree-vectorize')
 	c_args += '-ftree-vectorize'

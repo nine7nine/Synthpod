@@ -40,7 +40,8 @@ struct _sandbox_slave_driver_t {
 };
 
 sandbox_slave_t *
-sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver, void *data);
+sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
+	void *data, int *res);
 
 void
 sandbox_slave_free(sandbox_slave_t *sb);

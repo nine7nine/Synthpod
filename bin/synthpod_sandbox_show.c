@@ -120,14 +120,15 @@ int
 main(int argc, char **argv)
 {
 	static app_t app;
+	int res;
 	
-	app.sb = sandbox_slave_new(argc, argv, &driver, &app);
+	app.sb = sandbox_slave_new(argc, argv, &driver, &app, &res);
 	if(app.sb)
 	{
 		sandbox_slave_run(app.sb);
 		sandbox_slave_free(app.sb);
-		return 0;
+		return res;
 	}
 
-	return -1;
+	return res;
 }

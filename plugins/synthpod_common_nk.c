@@ -539,6 +539,14 @@ struct _plughandle_t {
 	xpress_t xpress;
 
 	unsigned mods_moving;
+
+	bool supports_x11;
+	bool supports_gtk2;
+	bool supports_gtk3;
+	bool supports_qt4;
+	bool supports_qt5;
+	bool supports_kx;
+	bool supports_show;
 };
 
 static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
@@ -2888,36 +2896,20 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 	lilv_world_load_resource(handle->world, ui_node);
 
 	bool supported = false;
-	if(false)
-		{} // never reached
-#if defined(SANDBOX_X11)
-	else if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+	if(handle->supports_x11 && lilv_ui_is_a(ui, handle->regs.ui.x11.node))
 		supported = true;
-#endif
-#if defined(SANDBOX_GTK2)
-	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+	else if(handle->supports_gtk2 && lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
 		supported = true;
-#endif
-#if defined(SANDBOX_GTK3)
-	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+	else if(handle->supports_gtk3 && lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
 		supported = true;
-#endif
-#if defined(SANDBOX_QT4)
-	else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+	else if(handle->supports_qt4 && lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
 		supported = true;
-#endif
-#if defined(SANDBOX_QT5)
-	else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+	else if(handle->supports_qt5 && lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
 		supported = true;
-#endif
-#if defined(SANDBOX_KX)
-	else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+	else if(handle->supports_kx && lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
 		supported = true;
-#endif
-#if defined(SANDBOX_SHOW)
-	else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
+	else if(handle->supports_show && lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
 		supported = true;
-#endif
 
 	if(!supported)
 	{
@@ -2972,6 +2964,21 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 	return mod_ui;
 }
 
+static bool
+_check_support_for_ui(const char *exec_uri)
+{
+	char *cmd = NULL;
+	if(asprintf(&cmd, "%s -v", exec_uri) == -1)
+	{
+		return false;
+	}
+
+	const int res = system(cmd);
+	free(cmd);
+
+	return (res == 0);
+}
+
 static void
 _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 {
@@ -2986,36 +2993,20 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 	const char *plugin_urn = handle->unmap->unmap(handle->unmap->handle, mod_ui->mod->urn);
 
 	const char *exec_uri = NULL;
-	if(false)
-		{} // never reached
-#if defined(SANDBOX_X11)
-	else if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
-		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_x11";
-#endif
-#if defined(SANDBOX_GTK2)
+	if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+		exec_uri = "synthpod_sandbox_x11";
 	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
-		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_gtk2";
-#endif
-#if defined(SANDBOX_GTK3)
+		exec_uri = "synthpod_sandbox_gtk2";
 	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
-		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_gtk3";
-#endif
-#if defined(SANDBOX_QT4)
+		exec_uri = "synthpod_sandbox_gtk3";
 	else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
-		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_qt4";
-#endif
-#if defined(SANDBOX_QT5)
+		exec_uri = "synthpod_sandbox_qt4";
 	else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
-		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_qt5";
-#endif
-#if defined(SANDBOX_KX)
+		exec_uri = "synthpod_sandbox_qt5";
 	else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
-		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_kx";
-#endif
-#if defined(SANDBOX_SHOW)
+		exec_uri = "synthpod_sandbox_kx";
 	else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
-		exec_uri = SYNTHPOD_BIN_DIR"synthpod_sandbox_show";
-#endif
+		exec_uri = "synthpod_sandbox_show";
 
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui, mod->minimum);
 
@@ -7933,36 +7924,20 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const bool is_running = _mod_ui_is_running(mod_ui);
 							const char *label = "UI";
 
-							if(false)
-								{} // never reached
-#if defined(SANDBOX_X11)
-							else if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+							if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
 								label = "X11";
-#endif
-#if defined(SANDBOX_GTK2)
 							else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
 								label = "Gtk2";
-#endif
-#if defined(SANDBOX_GTK3)
 							else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
 								label = "Gtk3";
-#endif
-#if defined(SANDBOX_QT4)
 							else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
 								label = "Qt4";
-#endif
-#if defined(SANDBOX_QT5)
 							else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
 								label = "Qt5";
-#endif
-#if defined(SANDBOX_KX)
 							else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
 								label = "KX";
-#endif
-#if defined(SANDBOX_SHOW)
 							else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
 								label = "Show";
-#endif
 
 							const bool is_still_running = _toolbar_label(ctx, is_running, 0x0, label);
 							if(is_still_running != is_running)
@@ -8465,6 +8440,14 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 #if defined(USE_CAIRO_CANVAS)
 	lv2_canvas_init(&handle->canvas, handle->map);
 #endif
+
+	handle->supports_x11 = _check_support_for_ui("synthpod_sandbox_x11");
+	handle->supports_gtk2 = _check_support_for_ui("synthpod_sandbox_gtk2");
+	handle->supports_gtk3= _check_support_for_ui("synthpod_sandbox_gtk3");
+	handle->supports_qt4 = _check_support_for_ui("synthpod_sandbox_qt4");
+	handle->supports_qt5 = _check_support_for_ui("synthpod_sandbox_qt5");
+	handle->supports_kx = _check_support_for_ui("synthpod_sandbox_kx");
+	handle->supports_show = _check_support_for_ui("synthpod_sandbox_show");
 
 	return handle;
 }
