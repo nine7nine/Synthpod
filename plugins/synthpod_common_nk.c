@@ -2968,7 +2968,7 @@ static bool
 _check_support_for_ui(const char *exec_uri)
 {
 	char *cmd = NULL;
-	if(asprintf(&cmd, "%s -v", exec_uri) == -1)
+	if(asprintf(&cmd, "%s -v &>/dev/null", exec_uri) == -1)
 	{
 		return false;
 	}
