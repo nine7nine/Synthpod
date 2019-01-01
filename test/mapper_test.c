@@ -30,6 +30,11 @@
 
 #define MAX_URI_LEN 46
 #define MAX_ITEMS 0x100000 // 1M
+#define USE_STATS
+
+#if defined(USE_STATS)
+#	include <lv2/lv2plug.in/ns/ext/atom/atom.h>
+#endif
 
 typedef struct _rtmem_slot_t rtmem_slot_t;
 typedef struct _rtmem_t rtmem_t;
@@ -59,6 +64,34 @@ struct _pool_t {
 	mapper_t *mapper;
 	pthread_t thread;
 	MT mersenne;
+};
+
+enum {
+	lv2_invalid = 0,
+
+#if defined(USE_STATS)
+	lv2_atom_Atom,
+	lv2_atom_AtomPort,
+	lv2_atom_Blank,
+	lv2_atom_Bool,
+	lv2_atom_Chunk,
+	lv2_atom_Double,
+#endif
+
+	nstats	
+};
+
+static const char *stats [nstats]  = {
+	[lv2_invalid]         = NULL,
+
+#if defined(USE_STATS)
+	[lv2_atom_Atom]       = LV2_ATOM__Atom,
+	[lv2_atom_AtomPort]   = LV2_ATOM__AtomPort,
+	[lv2_atom_Blank]      = LV2_ATOM__Blank,
+	[lv2_atom_Bool]       = LV2_ATOM__Bool,
+	[lv2_atom_Chunk]      = LV2_ATOM__Chunk,
+	[lv2_atom_Double]     = LV2_ATOM__Double
+#endif
 };
 
 static rtmem_t *
@@ -144,6 +177,20 @@ _thread(void *data)
 	while(!atomic_load_explicit(&rolling, memory_order_relaxed))
 	{} // wait for go signal
 
+	// test static URIDs
+	for(uint32_t i = 1; i < nstats; i++)
+	{
+		const char *uri = stats[i];
+
+		const uint32_t urid = map->map(map->handle, uri);
+		assert(urid);
+		assert(urid == i);
+
+		const char *dst = unmap->unmap(unmap->handle, i);
+		assert(dst);
+		assert(strcmp(dst, uri) == 0);
+	}
+
 	char uri [MAX_URI_LEN];
 	for(uint32_t i = 0; i < MAX_ITEMS/2; i++)
 	{
@@ -209,8 +256,8 @@ main(int argc, char **argv)
 
 	// create mapper
 	mapper_t *mapper = is_rt
-		? mapper_new(MAX_ITEMS, _rtmem_alloc, _rtmem_free, rtmem)
-		: mapper_new(MAX_ITEMS, _nrtmem_alloc, _nrtmem_free, &nrtmem);
+		? mapper_new(MAX_ITEMS, nstats, stats, _rtmem_alloc, _rtmem_free, rtmem)
+		: mapper_new(MAX_ITEMS, nstats, stats, _nrtmem_alloc, _nrtmem_free, &nrtmem);
 	assert(mapper);
 
 	// create array of threads
@@ -242,7 +289,7 @@ main(int argc, char **argv)
 
 	// query usage
 	const uint32_t usage = mapper_get_usage(mapper);
-	assert(usage == MAX_ITEMS/2);
+	assert(usage == MAX_ITEMS/2 + (nstats - 1));
 
 	// query rt memory allocations and frees
 	const uint32_t rt_nalloc = atomic_load_explicit(&rtmem->nalloc, memory_order_relaxed);

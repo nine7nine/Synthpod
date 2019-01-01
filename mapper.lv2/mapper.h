@@ -34,6 +34,10 @@ extern "C" {
 #	define MAPPER_API static
 #endif
 
+#if !defined(MAPPER_SEED)
+#	define MAPPER_SEED 12345
+#endif
+
 typedef struct _mapper_t mapper_t;
 
 typedef char *(*mapper_alloc_t)(void *data, size_t size);
@@ -43,7 +47,7 @@ MAPPER_API bool
 mapper_is_lock_free(void);
 
 MAPPER_API mapper_t *
-mapper_new(uint32_t nitems,
+mapper_new(uint32_t nitems, uint32_t nstats, const char **stats,
 	mapper_alloc_t mapper_alloc_cb, mapper_free_t mapper_free_cb, void *data);
 
 MAPPER_API void
@@ -60,6 +64,8 @@ mapper_get_unmap(mapper_t *mapper);
 
 #ifdef MAPPER_IMPLEMENTATION
 
+#include <mapper.lv2/mum.h>
+
 #if !defined(_WIN32)
 #	include <sys/mman.h> // mlock
 #endif
@@ -68,6 +74,7 @@ typedef struct _mapper_item_t mapper_item_t;
 
 struct _mapper_item_t {
 	atomic_uintptr_t val;
+	uint32_t stat;
 };
 
 struct _mapper_t {
@@ -82,97 +89,11 @@ struct _mapper_t {
 	LV2_URID_Map map;
 	LV2_URID_Unmap unmap;
 
+	uint32_t nstats;
+	const char **stats;
+
 	mapper_item_t items [];
 };
-
-/*
- * MurmurHash3 was created by Austin Appleby  in 2008. The initial
- * implementation was published in C++ and placed in the public.
- *   https://sites.google.com/site/murmurhash/
- * Seungyoung Kim has ported its implementation into C language
- * in 2012 and published it as a part of qLibc component.
- *
- * Copyright (c) 2010-2015 Seungyoung Kim.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *****************************************************************************/
-static inline uint32_t
-_mapper_murmur3_32(const void *data, size_t nbytes)
-{
-	const uint32_t c1 = 0xcc9e2d51;
-	const uint32_t c2 = 0x1b873593;
-
-	const int nblocks = nbytes / 4;
-	const uint32_t *blocks = (const uint32_t *)(data);
-	const uint8_t *tail = (const uint8_t *)data + (nblocks * 4);
-
-	uint32_t h = 0;
-
-	uint32_t k;
-	for(int i = 0; i < nblocks; i++)
-	{
-		k = blocks[i];
-
-		k *= c1;
-		k = (k << 15) | (k >> (32 - 15));
-		k *= c2;
-
-		h ^= k;
-		h = (h << 13) | (h >> (32 - 13));
-		h = (h * 5) + 0xe6546b64;
-	}
-
-	k = 0;
-	switch(nbytes & 3)
-	{
-		case 3:
-			k ^= tail[2] << 16;
-#if __GNUC__ >= 7
-			__attribute__((fallthrough));
-#endif
-		case 2:
-			k ^= tail[1] << 8;
-#if __GNUC__ >= 7
-			__attribute__((fallthrough));
-#endif
-		case 1:
-			k ^= tail[0];
-			k *= c1;
-			k = (k << 15) | (k >> (32 - 15));
-			k *= c2;
-			h ^= k;
-	};
-
-	h ^= nbytes;
-
-	h ^= h >> 16;
-	h *= 0x85ebca6b;
-	h ^= h >> 13;
-	h *= 0xc2b2ae35;
-	h ^= h >> 16;
-
-	return h;
-}
 
 static uint32_t
 _mapper_map(void *data, const char *uri)
@@ -185,7 +106,7 @@ _mapper_map(void *data, const char *uri)
 	char *uri_clone = NULL;
 	const size_t uri_len = strlen(uri) + 1;
 	mapper_t *mapper = data;
-	const uint32_t hash = _mapper_murmur3_32(uri, uri_len - 1); // ignore zero terminator
+	const uint32_t hash = mum_hash(uri, uri_len - 1, MAPPER_SEED); // ignore zero terminator
 
 	for(uint32_t i = 0, idx = (hash + i*i) & mapper->nitems_mask;
 		i < mapper->nitems;
@@ -204,7 +125,7 @@ _mapper_map(void *data, const char *uri)
 					mapper->free(mapper->data, uri_clone); // free superfluous URI
 				}
 
-				return idx + 1;
+				return item->stat ? item->stat : idx + mapper->nstats;
 			}
 
 			// slot is already taken by another URI, try next slot
@@ -233,13 +154,13 @@ _mapper_map(void *data, const char *uri)
 		{
 			atomic_fetch_add_explicit(&mapper->usage, 1, memory_order_relaxed);
 
-			return idx + 1;
+			return item->stat ? item->stat : idx + mapper->nstats;
 		}
 		else if(memcmp((const char *)expected, uri, uri_len) == 0) // other thread stole it
 		{
 			mapper->free(mapper->data, uri_clone); // free superfluous URI
 
-			return idx + 1;
+			return item->stat ? item->stat : idx + mapper->nstats;
 		}
 
 		// slot is already taken by another URI, try next slot
@@ -256,16 +177,28 @@ _mapper_map(void *data, const char *uri)
 }
 
 static const char *
-_mapper_unmap(void *data, uint32_t idx)
+_mapper_unmap(void *data, uint32_t urid)
 {
 	mapper_t *mapper = data;
 
-	if( (idx == 0) || (idx > mapper->nitems) ) // invalid URID
+	if(urid == 0) // invalid URID
 	{
 		return NULL;
 	}
 
-	mapper_item_t *item = &mapper->items[idx - 1];
+	if(urid < mapper->nstats)
+	{
+		return mapper->stats[urid];
+	}
+
+	urid -= mapper->nstats;
+
+	if(urid > mapper->nitems) // invalid URID
+	{
+		return NULL;
+	}
+
+	mapper_item_t *item = &mapper->items[urid];
 
 	const uintptr_t val = atomic_load_explicit(&item->val, memory_order_relaxed);
 
@@ -297,7 +230,7 @@ mapper_is_lock_free(void)
 }
 
 MAPPER_API mapper_t *
-mapper_new(uint32_t nitems,
+mapper_new(uint32_t nitems, uint32_t nstats, const char **stats,
 	mapper_alloc_t mapper_alloc_cb, mapper_free_t mapper_free_cb, void *data)
 {
 	// item number needs to be a power of two
@@ -317,6 +250,9 @@ mapper_new(uint32_t nitems,
 	// set mapper properties
 	mapper->nitems = power_of_two;
 	mapper->nitems_mask = power_of_two - 1;
+
+	mapper->nstats = nstats;
+	mapper->stats = stats;
 
 	mapper->alloc = mapper_alloc_cb
 		? mapper_alloc_cb
@@ -341,12 +277,24 @@ mapper_new(uint32_t nitems,
 		mapper_item_t *item = &mapper->items[idx];
 
 		atomic_init(&item->val, 0);
+		item->stat = 0;
 	}
 
 #if !defined(_WIN32)
 	// lock memory
 	mlock(mapper, sizeof(mapper_t) + mapper->nitems*sizeof(mapper_item_t));
 #endif
+
+	// populate static URIDs
+	for(uint32_t i = 1; i < mapper->nstats; i++)
+	{
+		const char *uri = mapper->stats[i];
+
+		const uint32_t urid = _mapper_map(mapper, uri);
+		mapper_item_t *item = &mapper->items[urid - mapper->nstats];
+
+		item->stat = i;
+	}
 
 	return mapper;
 }
