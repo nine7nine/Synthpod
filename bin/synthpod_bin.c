@@ -351,7 +351,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->app_from_app = varchunk_new(CHUNK_SIZE, false);
 
 	bin->lfrtm = lfrtm_new(512, 0x100000); // 1M
-	bin->mapper = mapper_new(0x20000, _mapper_alloc_rt, _mapper_free_rt, bin); // 128K
+	bin->mapper = mapper_new(0x20000, 0, NULL, _mapper_alloc_rt, _mapper_free_rt, bin); // 128K
 
 	bin->map = mapper_get_map(bin->mapper);
 	bin->unmap = mapper_get_unmap(bin->mapper);

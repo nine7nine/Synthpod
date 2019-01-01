@@ -418,7 +418,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	sb->host_resize.handle = data;
 	sb->host_resize.ui_resize = driver->resize_cb;
 
-	if(!(sb->mapper = mapper_new(0x1000000, NULL, NULL, NULL))) // 16M
+	if(!(sb->mapper = mapper_new(0x1000000, 0, NULL, NULL, NULL, NULL))) // 16M
 	{
 		fprintf(stderr, "mapper_new failed\n");
 		goto fail;
