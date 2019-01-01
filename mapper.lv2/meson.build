@@ -17,32 +17,34 @@ lv2_dep = dependency('lv2')
 thread_dep = dependency('threads')
 deps = [m_dep, lv2_dep, thread_dep,]
 
-mapper_test = executable('mapper_test',
-	join_paths('test', 'mapper_test.c'),
-	dependencies : deps,
-	install : false)
+if host_machine.system() != 'darwin'
+	mapper_test = executable('mapper_test',
+		join_paths('test', 'mapper_test.c'),
+		dependencies : deps,
+		install : false)
 
-nonrt = '0'
-rt = '1'
-seed = '1234567890'
+	nonrt = '0'
+	rt = '1'
+	seed = '1234567890'
 
-test(' 1 threads non-rt', mapper_test,
-	args : ['1', nonrt, seed],
-	timeout : 360)
-test(' 2 threads rt', mapper_test,
-	args : ['2', rt, seed],
-	timeout : 360)
-test(' 4 threads non-rt', mapper_test,
-	args : ['4', nonrt, seed],
-	timeout : 360)
-test(' 8 threads rt', mapper_test,
-	args : ['8', rt, seed],
-	timeout : 360)
-if host_machine.system() == 'linux'
-	test('16 threads non-rt', mapper_test,
-		args : ['16', nonrt, seed],
+	test(' 1 threads non-rt', mapper_test,
+		args : ['1', nonrt, seed],
 		timeout : 360)
-	test('32 threads rt', mapper_test,
-		args : ['32', rt, seed],
+	test(' 2 threads rt', mapper_test,
+		args : ['2', rt, seed],
 		timeout : 360)
+	test(' 4 threads non-rt', mapper_test,
+		args : ['4', nonrt, seed],
+		timeout : 360)
+	test(' 8 threads rt', mapper_test,
+		args : ['8', rt, seed],
+		timeout : 360)
+	if host_machine.system() == 'linux'
+		test('16 threads non-rt', mapper_test,
+			args : ['16', nonrt, seed],
+			timeout : 360)
+		test('32 threads rt', mapper_test,
+			args : ['32', rt, seed],
+			timeout : 360)
+	endif
 endif
