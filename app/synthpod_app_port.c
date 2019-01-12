@@ -15,8 +15,12 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <inttypes.h>
+
 #include <synthpod_app_private.h>
 #include <synthpod_patcher.h>
+
+#include <osc.lv2/util.h>
 
 #if !defined(USE_DYNAMIC_PARALLELIZER)
 __realtime static inline void
@@ -553,9 +557,301 @@ _port_cv_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 	}
 }
 
+__realtime static inline int
+_sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value,
+	int64_t frames, bool pre)
+{
+	int do_route = 0;
+
+	// linear mapping from MIDI to automation value
+	double f64 = value * automation->mul + automation->add;
+
+	// clip automation value to destination range
+	if(f64 < automation->c)
+		f64 = automation->c;
+	else if(f64 > automation->d)
+		f64 = automation->d;
+
+	port_t *port = &mod->ports[automation->index];
+	if(port->type == PORT_TYPE_CONTROL)
+	{
+		if(pre)
+		{
+			control_port_t *control = &port->control;
+
+			float *buf = PORT_BASE_ALIGNED(port);
+			*buf = control->is_integer
+				? floor(f64)
+				: f64;
+		}
+	}
+	else if( (port->type == PORT_TYPE_ATOM) && automation->property )
+	{
+		if(!pre)
+		{
+			LV2_Atom_Sequence *control = PORT_BASE_ALIGNED(port);
+			LV2_Atom_Event *dst = lv2_atom_sequence_end(&control->body, control->atom.size);
+			LV2_Atom_Forge_Frame obj_frame;
+
+			lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)dst, PORT_SIZE(port) - control->atom.size - sizeof(LV2_Atom));
+
+			LV2_Atom_Forge_Ref ref;
+			ref = lv2_atom_forge_frame_time(&app->forge, frames)
+				&& lv2_atom_forge_object(&app->forge, &obj_frame, 0, app->regs.patch.set.urid)
+				&& lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid)
+				&& lv2_atom_forge_urid(&app->forge, automation->property)
+				&& lv2_atom_forge_key(&app->forge, app->regs.patch.value.urid);
+			if(ref)
+			{
+				if(automation->range == app->forge.Bool)
+				{
+					ref = lv2_atom_forge_bool(&app->forge, f64 != 0.0);
+				}
+				else if(automation->range == app->forge.Int)
+				{
+					ref = lv2_atom_forge_int(&app->forge, floor(f64));
+				}
+				else if(automation->range == app->forge.Long)
+				{
+					ref = lv2_atom_forge_long(&app->forge, floor(f64));
+				}
+				else if(automation->range == app->forge.Float)
+				{
+					ref = lv2_atom_forge_float(&app->forge, f64);
+				}
+				else if(automation->range == app->forge.Double)
+				{
+					ref = lv2_atom_forge_double(&app->forge, f64);
+				}
+				//FIXME support more types
+
+				if(ref)
+					lv2_atom_forge_pop(&app->forge, &obj_frame);
+
+				control->atom.size += sizeof(LV2_Atom_Event) + dst->body.size;
+			}
+		}
+
+		do_route += 1;
+	}
+	else if(port->type == PORT_TYPE_CV)
+	{
+		//FIXME does it make sense to make this automatable?
+	}
+
+	return do_route;
+}
+
+__realtime static inline int
+_sp_app_automate_event(sp_app_t *app, mod_t *mod, const LV2_Atom_Event *ev,
+	bool pre)
+{
+	const int64_t frames = ev->time.frames;
+	const LV2_Atom *atom = &ev->body;
+	const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
+
+	int do_route = 0;
+
+	//printf("got automation\n");
+	if(  (atom->type == app->regs.port.midi.urid)
+		&& (atom->size == 3) ) // we're only interested in controller events
+	{
+		const uint8_t *msg = LV2_ATOM_BODY_CONST(atom);
+		const uint8_t cmd = msg[0] & 0xf0;
+
+		if(cmd == 0xb0) // Controller
+		{
+			const uint8_t channel = msg[0] & 0x0f;
+			const uint8_t controller = msg[1];
+			const uint8_t val = msg[2];
+
+			// iterate over automations
+			for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+			{
+				auto_t *automation = &mod->automations[i];
+
+				if(  (automation->type == AUTO_TYPE_MIDI)
+					&& automation->snk_enabled )
+				{
+					midi_auto_t *mauto = &automation->midi;
+
+					if(pre && automation->learning)
+					{
+						if( (mauto->channel == -1) && (mauto->controller == -1) )
+						{
+							mauto->channel = channel;
+							mauto->controller = controller;
+
+							automation->a = val;
+							automation->b = val;
+							_automation_refresh_mul_add(automation);
+
+							automation->sync = true;
+						}
+						else
+						{
+							bool needs_refresh = false;
+
+							if(val < automation->a)
+							{
+								automation->a = val;
+								needs_refresh = true;
+							}
+							else if(val > automation->b)
+							{
+								automation->b = val;
+								needs_refresh = true;
+							}
+
+							if(needs_refresh)
+							{
+								_automation_refresh_mul_add(automation);
+							}
+
+							automation->sync = true;
+						}
+					}
+
+					if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
+						&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
+					{
+						do_route += _sp_app_automate(app, mod, automation, msg[2], frames, pre);
+					}
+				}
+			}
+		}
+	}
+	else if(lv2_osc_is_message_type(&app->osc_urid, obj->body.otype)) //FIXME also consider bundles
+	{
+		const LV2_Atom_String *osc_path = NULL;
+		const LV2_Atom_Tuple *osc_args = NULL;
+
+		if(lv2_osc_message_get(&app->osc_urid, obj, &osc_path, &osc_args))
+		{
+			const char *path = LV2_ATOM_BODY_CONST(osc_path);
+			double val = 0.0;
+
+			LV2_ATOM_TUPLE_FOREACH(osc_args, item)
+			{
+				switch(lv2_osc_argument_type(&app->osc_urid, item))
+				{
+					case LV2_OSC_FALSE:
+					case LV2_OSC_NIL:
+					{
+						val = 0.0;
+					} break;
+					case LV2_OSC_TRUE:
+					{
+						val = 1.0;
+					} break;
+					case LV2_OSC_IMPULSE:
+					{
+						val = HUGE_VAL;
+					} break;
+					case LV2_OSC_INT32:
+					{
+						int32_t i32;
+						lv2_osc_int32_get(&app->osc_urid, item, &i32);
+						val = i32;
+					} break;
+					case LV2_OSC_INT64:
+					{
+						int64_t i64;
+						lv2_osc_int64_get(&app->osc_urid, item, &i64);
+						val = i64;
+					} break;
+					case LV2_OSC_FLOAT:
+					{
+						float f32;
+						lv2_osc_float_get(&app->osc_urid, item, &f32);
+						val = f32;
+					} break;
+					case LV2_OSC_DOUBLE:
+					{
+						double f64;
+						lv2_osc_double_get(&app->osc_urid, item, &f64);
+						val = f64;
+					} break;
+
+					case LV2_OSC_SYMBOL:
+					case LV2_OSC_BLOB:
+					case LV2_OSC_CHAR:
+					case LV2_OSC_STRING:
+					case LV2_OSC_MIDI:
+					case LV2_OSC_RGBA:
+					case LV2_OSC_TIMETAG:
+					{
+						//FIXME handle other types, especially string, blob, symbol
+					}	break;
+				}
+			}
+
+			// iterate over automations
+			for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+			{
+				auto_t *automation = &mod->automations[i];
+
+				if(  (automation->type == AUTO_TYPE_OSC)
+					&& automation->snk_enabled )
+				{
+					osc_auto_t *oauto = &automation->osc;
+
+					if(pre && automation->learning)
+					{
+						if(oauto->path[0] == '\0')
+						{
+							strncpy(oauto->path, path, sizeof(oauto->path));
+
+							automation->a = val;
+							automation->b = val;
+							_automation_refresh_mul_add(automation);
+
+							automation->sync = true;
+						}
+						else
+						{
+							bool needs_refresh = false;
+
+							if(val < automation->a)
+							{
+								automation->a = val;
+								needs_refresh = true;
+							}
+							else if(val > automation->b)
+							{
+								automation->b = val;
+								needs_refresh = true;
+							}
+
+							if(needs_refresh)
+							{
+								_automation_refresh_mul_add(automation);
+							}
+
+							automation->sync = true;
+						}
+					}
+
+					if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, sizeof(oauto->path)) )
+					{
+						do_route += _sp_app_automate(app, mod, automation, val, frames, pre);
+					}
+				}
+			}
+		}
+	}
+	//FIXME handle other events
+	
+	return do_route;
+}
+
 __realtime static inline void
 _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 {
+	mod_t *mod = port->mod;
+	const unsigned p = mod->num_ports - 2;
+	port_t *auto_port = &mod->ports[p];
+
 	// create forge to append to sequence (may contain events from UI)
 	const uint32_t capacity = PORT_SIZE(port);
 	LV2_Atom_Sequence *dst = PORT_BASE_ALIGNED(port);
@@ -569,13 +865,24 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 		itr[s] = lv2_atom_sequence_begin(&seq[s]->body);
 	}
 
+	int num_sources = conn->num_sources;
+
+	// if destination port is patchable, also read events from automation input
+	if(port->atom.patchable && (port != auto_port) )
+	{
+		seq[num_sources] = PORT_BASE_ALIGNED(auto_port);
+		itr[num_sources] = lv2_atom_sequence_begin(&seq[num_sources]->body);
+
+		num_sources++;
+	}
+
 	while(true)
 	{
 		int nxt = -1;
 		int64_t frames = nsamples;
 
 		// search for next event in timeline accross source ports
-		for(int s=0; s<conn->num_sources; s++)
+		for(int s=0; s<num_sources; s++)
 		{
 			if(lv2_atom_sequence_is_end(&seq[s]->body, seq[s]->atom.size, itr[s]))
 				continue; // reached sequence end
@@ -589,14 +896,34 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 
 		if(nxt >= 0) // next event found
 		{
-			LV2_Atom_Event *ev = lv2_atom_sequence_append_event(dst, capacity, itr[nxt]);
-			if(!ev)
+			const LV2_Atom_Event *ev = itr[nxt];
+
+			if(nxt == conn->num_sources) // event from automation port
 			{
-				sp_app_log_trace(app, "%s: failed to append\n", __func__);
+				_sp_app_automate_event(app, mod, ev, false);
+			}
+			else
+			{
+				int do_route = 0;
+
+				if(port == auto_port)
+				{
+					// directly apply control automation, only route param automation
+					do_route += _sp_app_automate_event(app, mod, ev, true);
+				}
+
+				if(do_route)
+				{
+					LV2_Atom_Event *ev2 = lv2_atom_sequence_append_event(dst, capacity, ev);
+					if(!ev2)
+					{
+						sp_app_log_trace(app, "%s: failed to append\n", __func__);
+					}
+				}
 			}
 
 			// advance iterator
-			itr[nxt] = lv2_atom_sequence_next(itr[nxt]);
+			itr[nxt] = lv2_atom_sequence_next(ev);
 		}
 		else
 			break; // no more events to process

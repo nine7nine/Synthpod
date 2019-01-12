@@ -243,6 +243,7 @@ struct _auto_t {
 	double mul;
 	double add;
 
+	bool sync;
 	bool learning;
 
 	union {

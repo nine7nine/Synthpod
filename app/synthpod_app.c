@@ -129,82 +129,6 @@ _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 	return map->map(map->handle, uri);
 }
 
-__realtime static inline void
-_sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value, uint32_t nsamples)
-{
-	// linear mapping from MIDI to automation value
-	double f64 = value * automation->mul + automation->add;
-
-	// clip automation value to destination range
-	if(f64 < automation->c)
-		f64 = automation->c;
-	else if(f64 > automation->d)
-		f64 = automation->d;
-
-	port_t *port = &mod->ports[automation->index];
-	if(port->type == PORT_TYPE_CONTROL)
-	{
-		control_port_t *control = &port->control;
-
-		float *buf = PORT_BASE_ALIGNED(port);
-		*buf = control->is_integer
-			? floor(f64)
-			: f64;
-
-		//printf("control automation match: %f %f\n", rel, f32);
-	}
-	else if( (port->type == PORT_TYPE_ATOM) && automation->property )
-	{
-		LV2_Atom_Sequence *control = PORT_BASE_ALIGNED(port);
-		LV2_Atom_Event *dst = lv2_atom_sequence_end(&control->body, control->atom.size);
-		LV2_Atom_Forge_Frame obj_frame;
-
-		lv2_atom_forge_set_buffer(&app->forge, (uint8_t *)dst, PORT_SIZE(port) - control->atom.size - sizeof(LV2_Atom));
-
-		LV2_Atom_Forge_Ref ref;
-		ref = lv2_atom_forge_frame_time(&app->forge, nsamples - 1)
-			&& lv2_atom_forge_object(&app->forge, &obj_frame, 0, app->regs.patch.set.urid)
-			&& lv2_atom_forge_key(&app->forge, app->regs.patch.property.urid)
-			&& lv2_atom_forge_urid(&app->forge, automation->property)
-			&& lv2_atom_forge_key(&app->forge, app->regs.patch.value.urid);
-		if(ref)
-		{
-			if(automation->range == app->forge.Bool)
-			{
-				ref = lv2_atom_forge_bool(&app->forge, f64 != 0.0);
-			}
-			else if(automation->range == app->forge.Int)
-			{
-				ref = lv2_atom_forge_int(&app->forge, floor(f64));
-			}
-			else if(automation->range == app->forge.Long)
-			{
-				ref = lv2_atom_forge_long(&app->forge, floor(f64));
-			}
-			else if(automation->range == app->forge.Float)
-			{
-				ref = lv2_atom_forge_float(&app->forge, f64);
-			}
-			else if(automation->range == app->forge.Double)
-			{
-				ref = lv2_atom_forge_double(&app->forge, f64);
-			}
-			//FIXME support more types
-
-			if(ref)
-				lv2_atom_forge_pop(&app->forge, &obj_frame);
-
-			control->atom.size += sizeof(LV2_Atom_Event) + dst->body.size;
-		}
-
-		//printf("parameter automation match: %f %f\n", rel, f32);
-	}
-	else if(port->type == PORT_TYPE_CV)
-	{
-		//FIXME does it make sense to make this automatable?
-	}
-}
-
 __realtime static inline bool
 _sp_app_has_source_automations(mod_t *mod)
 {
@@ -291,74 +215,6 @@ _sp_app_automation_out(sp_app_t *app, LV2_Atom_Forge *forge, auto_t *automation,
 	return ref;
 }
 
-__realtime static void
-_sync_midi_automation_to_ui(sp_app_t *app, mod_t *mod, auto_t *automation)
-{
-	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
-	if(answer)
-	{
-		const LV2_URID subj = 0; //FIXME
-		const int32_t sn = 0; //FIXME
-		const LV2_URID prop = app->regs.synthpod.automation_list.urid;
-		port_t *port = &mod->ports[automation->index]; //FIXME handle prop
-
-		LV2_Atom_Forge_Frame frame [3];
-		LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(
-			&app->regs, &app->forge, &frame[0], subj, sn, prop);
-
-		if(ref)
-			ref = _sp_app_forge_midi_automation(app, &frame[2], mod, port, automation);
-
-		if(ref)
-		{
-			synthpod_patcher_pop(&app->forge, frame, 2);
-			_sp_app_to_ui_advance_atom(app, answer);
-		}
-		else
-		{
-			_sp_app_to_ui_overflow(app);
-		}
-	}
-	else
-	{
-		_sp_app_to_ui_overflow(app);
-	}
-}
-
-__realtime static void
-_sync_osc_automation_to_ui(sp_app_t *app, mod_t *mod, auto_t *automation)
-{
-	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
-	if(answer)
-	{
-		const LV2_URID subj = 0; //FIXME
-		const int32_t sn = 0; //FIXME
-		const LV2_URID prop = app->regs.synthpod.automation_list.urid;
-		port_t *port = &mod->ports[automation->index]; //FIXME handle prop
-
-		LV2_Atom_Forge_Frame frame [3];
-		LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(
-			&app->regs, &app->forge, &frame[0], subj, sn, prop);
-
-		if(ref)
-			ref = _sp_app_forge_osc_automation(app, &frame[2], mod, port, automation);
-
-		if(ref)
-		{
-			synthpod_patcher_pop(&app->forge, frame, 2);
-			_sp_app_to_ui_advance_atom(app, answer);
-		}
-		else
-		{
-			_sp_app_to_ui_overflow(app);
-		}
-	}
-	else
-	{
-		_sp_app_to_ui_overflow(app);
-	}
-}
-
 __realtime static inline void
 _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 {
@@ -369,7 +225,7 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 	cross_clock_gettime(&app->clk_mono, &mod_t1);
 
 	// multiplex multiple sources to single sink where needed
-	for(unsigned p=0; p<mod->num_ports; p++)
+	for(int p=mod->num_ports-1; p>=0; p--)
 	{
 		port_t *port = &mod->ports[p];
 
@@ -419,211 +275,6 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 	// is module currently loading a preset asynchronously?
 	if(!mod->bypassed)
 	{
-		//FIXME for para/dynameters needs to be multiplexed with patchabel events
-		// apply automation if any
-		{
-			const unsigned p = mod->num_ports - 2;
-			port_t *auto_port = &mod->ports[p];
-			const LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(auto_port);
-
-			LV2_ATOM_SEQUENCE_FOREACH(seq, ev)
-			{
-				const int64_t frames = ev->time.frames;
-				const LV2_Atom *atom = &ev->body;
-				const LV2_Atom_Object *obj = (const LV2_Atom_Object *)atom;
-
-				//printf("got automation\n");
-				if(  (atom->type == app->regs.port.midi.urid)
-					&& (atom->size == 3) ) // we're only interested in controller events
-				{
-					const uint8_t *msg = LV2_ATOM_BODY_CONST(atom);
-					const uint8_t cmd = msg[0] & 0xf0;
-
-					if(cmd == 0xb0) // Controller
-					{
-						const uint8_t channel = msg[0] & 0x0f;
-						const uint8_t controller = msg[1];
-						const uint8_t val = msg[2];
-
-						// iterate over automations
-						for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
-						{
-							auto_t *automation = &mod->automations[i];
-
-							if(  (automation->type == AUTO_TYPE_MIDI)
-								&& automation->snk_enabled )
-							{
-								midi_auto_t *mauto = &automation->midi;
-
-								if(automation->learning)
-								{
-									if( (mauto->channel == -1) && (mauto->controller == -1) )
-									{
-										mauto->channel = channel;
-										mauto->controller = controller;
-
-										automation->a = val;
-										automation->b = val;
-										_automation_refresh_mul_add(automation);
-
-										_sync_midi_automation_to_ui(app, mod, automation);
-									}
-									else
-									{
-										bool needs_refresh = false;
-
-										if(val < automation->a)
-										{
-											automation->a = val;
-											needs_refresh = true;
-										}
-										else if(val > automation->b)
-										{
-											automation->b = val;
-											needs_refresh = true;
-										}
-
-										if(needs_refresh)
-										{
-											_automation_refresh_mul_add(automation);
-										}
-
-										_sync_midi_automation_to_ui(app, mod, automation);
-									}
-								}
-
-								if(  ( (mauto->channel == -1) || (mauto->channel == channel) )
-									&& ( (mauto->controller == -1) || (mauto->controller == controller) ) )
-								{
-									_sp_app_automate(app, mod, automation, msg[2], nsamples);
-								}
-							}
-						}
-					}
-				}
-				else if(lv2_osc_is_message_type(&app->osc_urid, obj->body.otype)) //FIXME also consider bundles
-				{
-					const LV2_Atom_String *osc_path = NULL;
-					const LV2_Atom_Tuple *osc_args = NULL;
-
-					if(lv2_osc_message_get(&app->osc_urid, obj, &osc_path, &osc_args))
-					{
-						const char *path = LV2_ATOM_BODY_CONST(osc_path);
-						double val = 0.0;
-
-						LV2_ATOM_TUPLE_FOREACH(osc_args, item)
-						{
-							switch(lv2_osc_argument_type(&app->osc_urid, item))
-							{
-								case LV2_OSC_FALSE:
-								case LV2_OSC_NIL:
-								{
-									val = 0.0;
-								} break;
-								case LV2_OSC_TRUE:
-								{
-									val = 1.0;
-								} break;
-								case LV2_OSC_IMPULSE:
-								{
-									val = HUGE_VAL;
-								} break;
-								case LV2_OSC_INT32:
-								{
-									int32_t i32;
-									lv2_osc_int32_get(&app->osc_urid, item, &i32);
-									val = i32;
-								} break;
-								case LV2_OSC_INT64:
-								{
-									int64_t i64;
-									lv2_osc_int64_get(&app->osc_urid, item, &i64);
-									val = i64;
-								} break;
-								case LV2_OSC_FLOAT:
-								{
-									float f32;
-									lv2_osc_float_get(&app->osc_urid, item, &f32);
-									val = f32;
-								} break;
-								case LV2_OSC_DOUBLE:
-								{
-									double f64;
-									lv2_osc_double_get(&app->osc_urid, item, &f64);
-									val = f64;
-								} break;
-
-								case LV2_OSC_SYMBOL:
-								case LV2_OSC_BLOB:
-								case LV2_OSC_CHAR:
-								case LV2_OSC_STRING:
-								case LV2_OSC_MIDI:
-								case LV2_OSC_RGBA:
-								case LV2_OSC_TIMETAG:
-								{
-									//FIXME handle other types, especially string, blob, symbol
-								}	break;
-							}
-						}
-
-						// iterate over automations
-						for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
-						{
-							auto_t *automation = &mod->automations[i];
-
-							if(  (automation->type == AUTO_TYPE_OSC)
-								&& automation->snk_enabled )
-							{
-								osc_auto_t *oauto = &automation->osc;
-
-								if(automation->learning)
-								{
-									if(oauto->path[0] == '\0')
-									{
-										strncpy(oauto->path, path, sizeof(oauto->path));
-
-										automation->a = val;
-										automation->b = val;
-										_automation_refresh_mul_add(automation);
-
-										_sync_osc_automation_to_ui(app, mod, automation);
-									}
-									else
-									{
-										bool needs_refresh = false;
-
-										if(val < automation->a)
-										{
-											automation->a = val;
-											needs_refresh = true;
-										}
-										else if(val > automation->b)
-										{
-											automation->b = val;
-											needs_refresh = true;
-										}
-
-										if(needs_refresh)
-										{
-											_automation_refresh_mul_add(automation);
-										}
-
-										_sync_osc_automation_to_ui(app, mod, automation);
-									}
-								}
-
-								if( (oauto->path[0] == '\0') || !strncmp(oauto->path, path, sizeof(oauto->path)) )
-								{
-									_sp_app_automate(app, mod, automation, val, nsamples);
-								}
-							}
-						}
-					}
-				}
-				//FIXME handle other events
-			}
-		}
-
 		// run plugin
 		if(!mod->disabled)
 		{
@@ -747,6 +398,74 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		mod->prof.max = run_time;
 }
 
+__realtime static void
+_sync_midi_automation_to_ui(sp_app_t *app, mod_t *mod, auto_t *automation)
+{
+	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+	if(answer)
+	{
+		const LV2_URID subj = 0; //FIXME
+		const int32_t sn = 0; //FIXME
+		const LV2_URID prop = app->regs.synthpod.automation_list.urid;
+		port_t *port = &mod->ports[automation->index]; //FIXME handle prop
+
+		LV2_Atom_Forge_Frame frame [3];
+		LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(
+			&app->regs, &app->forge, &frame[0], subj, sn, prop);
+
+		if(ref)
+			ref = _sp_app_forge_midi_automation(app, &frame[2], mod, port, automation);
+
+		if(ref)
+		{
+			synthpod_patcher_pop(&app->forge, frame, 2);
+			_sp_app_to_ui_advance_atom(app, answer);
+		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
+	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
+}
+
+__realtime static void
+_sync_osc_automation_to_ui(sp_app_t *app, mod_t *mod, auto_t *automation)
+{
+	LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+	if(answer)
+	{
+		const LV2_URID subj = 0; //FIXME
+		const int32_t sn = 0; //FIXME
+		const LV2_URID prop = app->regs.synthpod.automation_list.urid;
+		port_t *port = &mod->ports[automation->index]; //FIXME handle prop
+
+		LV2_Atom_Forge_Frame frame [3];
+		LV2_Atom_Forge_Ref ref = synthpod_patcher_add_object(
+			&app->regs, &app->forge, &frame[0], subj, sn, prop);
+
+		if(ref)
+			ref = _sp_app_forge_osc_automation(app, &frame[2], mod, port, automation);
+
+		if(ref)
+		{
+			synthpod_patcher_pop(&app->forge, frame, 2);
+			_sp_app_to_ui_advance_atom(app, answer);
+		}
+		else
+		{
+			_sp_app_to_ui_overflow(app);
+		}
+	}
+	else
+	{
+		_sp_app_to_ui_overflow(app);
+	}
+}
+
 __realtime static inline void
 _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_timeout)
 {
@@ -835,6 +554,26 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 
 			// unlock
 			atomic_flag_clear(&mod->idisp.lock);
+		}
+	}
+
+	// handle automation learn
+	for(unsigned i = 0; i < MAX_AUTOMATIONS; i++)
+	{
+		auto_t *automation = &mod->automations[i];
+
+		if(automation->sync)
+		{
+			if(automation->type == AUTO_TYPE_MIDI)
+			{
+				_sync_midi_automation_to_ui(app, mod, automation);
+			}
+			else if(automation->type == AUTO_TYPE_OSC)
+			{
+				_sync_osc_automation_to_ui(app, mod, automation);
+			}
+
+			automation->sync = false;
 		}
 	}
 }
