@@ -39,6 +39,8 @@ struct _osc_msg_t {
 
 struct _nsmc_t {
 	bool managed;
+	bool connected;
+	bool connectionless;
 
 	char *url;
 	char *call;
@@ -191,25 +193,12 @@ _announce(nsmc_t *nsm)
 		if(lv2_osc_writer_finalize(&writer, &written))
 		{
 			varchunk_write_advance(nsm->tx, written);
-			lv2_osc_stream_run(&nsm->stream);
 		}
 		else
 		{
 			fprintf(stderr, "OSC sending failed\n");
 		}
 	}
-}
-
-static void
-_client_connect(LV2_OSC_Reader *reader, nsmc_t *nsm)
-{
-	_announce(nsm);
-}
-
-static void
-_client_disconnect(LV2_OSC_Reader *reader, nsmc_t *nsm)
-{
-	// nothing
 }
 
 static const osc_msg_t messages [] = {
@@ -220,9 +209,6 @@ static const osc_msg_t messages [] = {
 	{"/nsm/client/save", _client_save},
 	{"/nsm/client/show_optional_gui", _client_show_optional_gui},
 	{"/nsm/client/hide_optional_gui", _client_hide_optional_gui},
-
-	{"/stream/connect", _client_connect},
-	{"/stream/dicsonnect", _client_disconnect},
 
 	{NULL, NULL}
 };
@@ -316,6 +302,7 @@ nsmc_new(const char *exe, const char *path,
 	if(nsm->url)
 	{
 		nsm->managed = true;
+		nsm->connectionless = !strncmp(nsm->url, "osc.udp", 7) ? true : false;
 
 		nsm->url = strdup(nsm->url); //FIXME
 		if(!nsm->url)
@@ -335,9 +322,6 @@ nsmc_new(const char *exe, const char *path,
 
 		if(lv2_osc_stream_init(&nsm->stream, nsm->url, &driver, nsm) != 0)
 			return NULL;
-
-		if(!strncmp(nsm->url, "osc.udp", 7)) // won't get /stream/connect message
-			_announce(nsm);
 	}
 	else
 	{
@@ -405,7 +389,24 @@ nsmc_run(nsmc_t *nsm)
 	if(!nsm)
 		return;
 
-	if(lv2_osc_stream_run(&nsm->stream) & LV2_OSC_RECV)
+	const LV2_OSC_Enum ev = lv2_osc_stream_run(&nsm->stream);
+
+	if(ev & LV2_OSC_ERR)
+	{
+		fprintf(stderr, "%s: %s\n", __func__, strerror(ev & LV2_OSC_ERR));
+		nsm->connected = false;
+	}
+
+	if(nsm->connectionless || (ev & LV2_OSC_CONN) )
+	{
+		if(!nsm->connected)
+		{
+			_announce(nsm); // initial announcement
+			nsm->connected = true;
+		}
+	}
+
+	if(ev & LV2_OSC_RECV)
 	{
 		const uint8_t *rx;
 		size_t size;
@@ -449,7 +450,6 @@ nsmc_opened(nsmc_t *nsm, int status)
 		if(lv2_osc_writer_finalize(&writer, &written))
 		{
 			varchunk_write_advance(nsm->tx, written);
-			lv2_osc_stream_run(&nsm->stream);
 		}
 		else
 		{
@@ -477,7 +477,6 @@ nsmc_shown(nsmc_t *nsm)
 		if(lv2_osc_writer_finalize(&writer, &written))
 		{
 			varchunk_write_advance(nsm->tx, written);
-			lv2_osc_stream_run(&nsm->stream);
 		}
 		else
 		{
@@ -505,7 +504,6 @@ nsmc_hidden(nsmc_t *nsm)
 		if(lv2_osc_writer_finalize(&writer, &written))
 		{
 			varchunk_write_advance(nsm->tx, written);
-			lv2_osc_stream_run(&nsm->stream);
 		}
 		else
 		{
@@ -542,7 +540,6 @@ nsmc_saved(nsmc_t *nsm, int status)
 		if(lv2_osc_writer_finalize(&writer, &written))
 		{
 			varchunk_write_advance(nsm->tx, written);
-			lv2_osc_stream_run(&nsm->stream);
 		}
 		else
 		{
