@@ -911,6 +911,10 @@ _port_seq_multiplex(sp_app_t *app, port_t *port, uint32_t nsamples)
 					// directly apply control automation, only route param automation
 					do_route += _sp_app_automate_event(app, mod, ev, true);
 				}
+				else
+				{
+					do_route += 1;
+				}
 
 				if(do_route)
 				{
