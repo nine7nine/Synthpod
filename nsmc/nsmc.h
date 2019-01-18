@@ -383,7 +383,7 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 		if(!resolvedfallback_path)
 			resolvedfallback_path = fallback_path;
 
-		if(nsm->driver->open && nsm->driver->open(resolvedfallback_path, nsm->call, nsm->exe, nsm->data))
+		if(nsm->driver->open && nsm->driver->open(resolvedfallback_path, "unmanaged", nsm->call, nsm->data))
 			fprintf(stderr, "NSM load failed: '%s'\n", fallback_path);
 	}
 
