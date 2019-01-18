@@ -26,6 +26,8 @@ extern "C" {
 #	define NSMC_API static
 #endif
 
+#include <stdbool.h>
+
 typedef struct _nsmc_t nsmc_t;
 typedef struct _nsmc_driver_t nsmc_driver_t;
 	
@@ -43,7 +45,7 @@ struct _nsmc_driver_t {
 };
 
 NSMC_API nsmc_t *
-nsmc_new(const char *exe, const char *path,
+nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	const nsmc_driver_t *driver, void *data);
 
 NSMC_API void
@@ -333,7 +335,7 @@ static const LV2_OSC_Driver driver = {
 };
 
 NSMC_API nsmc_t *
-nsmc_new(const char *exe, const char *path,
+nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	const nsmc_driver_t *nsm_driver, void *data)
 {
 	if(!nsm_driver)
@@ -346,7 +348,7 @@ nsmc_new(const char *exe, const char *path,
 	nsm->driver = nsm_driver;
 	nsm->data = data;
 
-	nsm->call = strdup("Synthpod");
+	nsm->call = call ? strdup(call) : NULL;
 	nsm->exe = exe ? strdup(exe) : NULL;
 
 	nsm->url = getenv("NSM_URL");
@@ -374,34 +376,15 @@ nsmc_new(const char *exe, const char *path,
 		if(lv2_osc_stream_init(&nsm->stream, nsm->url, &driver, nsm) != 0)
 			return NULL;
 	}
-	else
+	else if(fallback_path)
 	{
-		nsm->managed = false;
+		char tmp [PATH_MAX];
+		const char *resolvedfallback_path = realpath(fallback_path, tmp);
+		if(!resolvedfallback_path)
+			resolvedfallback_path = fallback_path;
 
-		if(path)
-		{
-			char tmp [PATH_MAX];
-			const char *resolvedpath = realpath(path, tmp);
-			if(!resolvedpath)
-				resolvedpath = path;
-
-			if(nsm->driver->open && nsm->driver->open(resolvedpath, nsm->call, nsm->exe, nsm->data))
-				fprintf(stderr, "NSM load failed: '%s'\n", path);
-		}
-		else
-		{
-			const char *home_dir = getenv("HOME");
-
-			char *synthpod_dir = NULL;
-			asprintf(&synthpod_dir, "%s/.lv2/Synthpod_default.preset.lv2", home_dir);
-			if(synthpod_dir)
-			{
-				if(nsm->driver->open && nsm->driver->open(synthpod_dir, nsm->call, nsm->exe, nsm->data))
-					fprintf(stderr, "NSM load failed: '%s'\n", synthpod_dir);
-
-				free(synthpod_dir);
-			}
-		}
+		if(nsm->driver->open && nsm->driver->open(resolvedfallback_path, nsm->call, nsm->exe, nsm->data))
+			fprintf(stderr, "NSM load failed: '%s'\n", fallback_path);
 	}
 
 	return nsm;

@@ -417,13 +417,31 @@ __realtime void
 bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
 	void (*idle)(void *data), void *data)
 {
+	char *fallback_path = NULL;
+
 	bin->argv = argv;
 	bin->optind = optind;
+
+	if(!argv[optind])
+	{
+		const char *home_dir = getenv("HOME");
+
+		if(asprintf(&fallback_path, "%s/.lv2/Synthpod_default.preset.lv2/", home_dir) == -1)
+		{
+			fallback_path = NULL;
+		}
+	}
 
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
-	bin->nsm = nsmc_new(exe, argv[optind], nsm_driver, bin); //TODO check
+	bin->nsm = nsmc_new("Synthpod", exe, fallback_path ? fallback_path : argv[optind],
+		nsm_driver, bin); //TODO check
+
+	if(fallback_path)
+	{
+		free(fallback_path);
+	}
 
 	pthread_t self = pthread_self();
 
