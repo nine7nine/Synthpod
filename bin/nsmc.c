@@ -26,7 +26,6 @@
 
 #include <varchunk.h>
 
-#include <synthpod_common.h>
 #include <nsmc.h>
 
 typedef void (*osc_cb_t)(LV2_OSC_Reader *reader, nsmc_t *nsm);
