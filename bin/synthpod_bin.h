@@ -38,6 +38,8 @@
 #include <sandbox_master.h>
 
 #include <synthpod_common.h>
+
+#define NSMC_IMPLEMENTATION
 #include <nsmc.h>
 
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>

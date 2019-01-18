@@ -15,6 +15,60 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#ifndef _NSMC_H
+#define _NSMC_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef NSMC_API
+#	define NSMC_API static
+#endif
+
+typedef struct _nsmc_t nsmc_t;
+typedef struct _nsmc_driver_t nsmc_driver_t;
+	
+typedef int (*nsmc_open_t)(const char *path, const char *name,
+	const char *id, void *data);
+typedef int (*nsmc_save_t)(void *data);
+typedef int (*nsmc_show_t)(void *data);
+typedef int (*nsmc_hide_t)(void *data);
+
+struct _nsmc_driver_t {
+	nsmc_open_t open;
+	nsmc_save_t save;
+	nsmc_show_t show;
+	nsmc_hide_t hide;
+};
+
+NSMC_API nsmc_t *
+nsmc_new(const char *exe, const char *path,
+	const nsmc_driver_t *driver, void *data);
+
+NSMC_API void
+nsmc_free(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_run(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_opened(nsmc_t *nsm, int status);
+
+NSMC_API void
+nsmc_shown(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_hidden(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_saved(nsmc_t *nsm, int status);
+
+NSMC_API bool
+nsmc_managed(nsmc_t *nsm);
+
+#ifdef NSMC_IMPLEMENTATION
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -25,8 +79,6 @@
 #include <osc.lv2/stream.h>
 
 #include <varchunk.h>
-
-#include <nsmc.h>
 
 typedef void (*osc_cb_t)(LV2_OSC_Reader *reader, nsmc_t *nsm);
 typedef struct _osc_msg_t osc_msg_t;
@@ -280,7 +332,7 @@ static const LV2_OSC_Driver driver = {
 	.read_adv = _send_adv
 };
 
-nsmc_t *
+NSMC_API nsmc_t *
 nsmc_new(const char *exe, const char *path,
 	const nsmc_driver_t *nsm_driver, void *data)
 {
@@ -355,7 +407,7 @@ nsmc_new(const char *exe, const char *path,
 	return nsm;
 }
 
-void
+NSMC_API void
 nsmc_free(nsmc_t *nsm)
 {
 	if(nsm)
@@ -382,7 +434,7 @@ nsmc_free(nsmc_t *nsm)
 	}
 }
 
-void
+NSMC_API void
 nsmc_run(nsmc_t *nsm)
 {
 	if(!nsm)
@@ -421,7 +473,7 @@ nsmc_run(nsmc_t *nsm)
 	}
 }
 
-void
+NSMC_API void
 nsmc_opened(nsmc_t *nsm, int status)
 {
 	if(!nsm)
@@ -457,7 +509,7 @@ nsmc_opened(nsmc_t *nsm, int status)
 	}
 }
 
-void
+NSMC_API void
 nsmc_shown(nsmc_t *nsm)
 {
 	if(!nsm)
@@ -484,7 +536,7 @@ nsmc_shown(nsmc_t *nsm)
 	}
 }
 
-void
+NSMC_API void
 nsmc_hidden(nsmc_t *nsm)
 {
 	if(!nsm)
@@ -511,7 +563,7 @@ nsmc_hidden(nsmc_t *nsm)
 	}
 }
 
-void
+NSMC_API void
 nsmc_saved(nsmc_t *nsm, int status)
 {
 	if(!nsm)
@@ -547,8 +599,16 @@ nsmc_saved(nsmc_t *nsm, int status)
 	}
 }
 
-bool
+NSMC_API bool
 nsmc_managed(nsmc_t *nsm)
 {
 	return nsm->managed;
 }
+
+#endif /* NSMC_IMPLEMENTATION */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /*_NSMC_H */

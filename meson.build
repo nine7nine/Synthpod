@@ -23,9 +23,10 @@ netatom_incs = include_directories('netatom.lv2')
 props_incs = include_directories('props.lv2')
 pugl_incs = include_directories('pugl')
 jackey_incs = include_directories('jackey')
+nsmc_incs = include_directories('nsmc')
 self_incs = include_directories('')
 
-bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, pugl_incs, jackey_incs, self_incs]
+bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, pugl_incs, jackey_incs, nsmc_incs, self_incs]
 
 static_link = meson.is_cross_build() and false #FIXME
 

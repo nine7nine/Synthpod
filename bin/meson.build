@@ -1,5 +1,4 @@
-bin_srcs = ['synthpod_bin.c',
-	'nsmc.c']
+bin_srcs = ['synthpod_bin.c']
 
 bin = static_library('synthpod_bin', bin_srcs,
 	include_directories : bin_incs,
