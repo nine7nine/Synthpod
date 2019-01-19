@@ -163,11 +163,11 @@ struct _dsp_client_t {
 struct _dsp_master_t {
 	dsp_slave_t dsp_slaves [MAX_SLAVES];
 	atomic_bool kill;
-	atomic_int ref_count;
+	atomic_bool emergency_exit;
+	sem_t sem;
 	unsigned concurrent;
 	unsigned num_slaves;
 	uint32_t nsamples;
-	struct timespec t1;
 };
 
 struct _job_t {
@@ -494,6 +494,7 @@ struct _sp_app_t {
 	LV2_OSC_URID osc_urid;
 
 	cross_clock_t clk_mono;
+	cross_clock_t clk_real;
 
 	struct {
 		float x;
@@ -502,8 +503,6 @@ struct _sp_app_t {
 
 	int32_t column_enabled;
 	int32_t row_enabled;
-
-	bool emergency_exit;
 };
 
 extern const port_driver_t control_port_driver;

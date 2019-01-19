@@ -618,39 +618,21 @@ _dsp_slave_fetch(dsp_master_t *dsp_master, int head)
 	return head ;
 }
 
-__realtime static bool
-_dsp_slave_has_work_to_do(sp_app_t *app, dsp_master_t *dsp_master)
-{
-	struct timespec t2;
-	cross_clock_gettime(&app->clk_mono, &t2);
-
-	double diff = t2.tv_sec - dsp_master->t1.tv_sec;
-	diff += (t2.tv_nsec - dsp_master->t1.tv_nsec)*1e-9;
-	if(diff > 0.1)
-	{
-		fprintf(stderr, "%s: taking emergency exit.\n", __func__);
-		app->emergency_exit = true;
-		return false; // skip rest of graph, as we most probably hang somewhere
-	}
-
-	return (atomic_load(&dsp_master->ref_count) > 0);
-}
-
 __realtime static inline void
 _dsp_slave_spin(sp_app_t *app, dsp_master_t *dsp_master)
 {
 	int head = 0;
 
-	while(_dsp_slave_has_work_to_do(app, dsp_master))
+	while(!atomic_load(&dsp_master->emergency_exit))
 	{
 		head = _dsp_slave_fetch(dsp_master, head);
 		if(head == -1) // no more work left
 		{
-			const int32_t ref_count = atomic_fetch_sub(&dsp_master->ref_count, 1);
-			assert(ref_count >= 0);
 			break;
 		}
 	}
+
+	sem_post(&dsp_master->sem);
 }
 
 __non_realtime static void *
@@ -720,14 +702,37 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 		num_slaves = dsp_master->num_slaves;
 	dsp_master->nsamples = nsamples;
 	const unsigned ref_count = num_slaves + 1; // plus master
-	atomic_store(&dsp_master->ref_count, ref_count);
+	sem_init(&dsp_master->sem, 0, dsp_master->concurrent);
 	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
 	_dsp_slave_spin(app, dsp_master); // runs jobs itself 
 
-	while(_dsp_slave_has_work_to_do(app, dsp_master))
+	// derive timeout
+	struct timespec to;
+	cross_clock_gettime(&app->clk_real, &to);
+	to.tv_sec += 1; // if workers have not finished in due 1s, do emergency exit!
+
+	// wait for worker threads to have finished
+	for(unsigned c = 0; c < dsp_master->concurrent; )
 	{
-		// spin
+		if(sem_timedwait(&dsp_master->sem, &to) == -1)
+		{
+			switch(errno)
+			{
+				case ETIMEDOUT:
+				{
+					atomic_store(&dsp_master->emergency_exit, true);
+				} continue;
+				case EINTR:
+				{
+					// nothing
+				} continue;
+			}
+		}
+
+		c++;
 	}
+
+	sem_destroy(&dsp_master->sem);
 }
 
 void
@@ -845,6 +850,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 
 	// initialize DSP load profiler
 	cross_clock_init(&app->clk_mono, CROSS_CLOCK_MONOTONIC);
+	cross_clock_init(&app->clk_real, CROSS_CLOCK_REALTIME);
 	cross_clock_gettime(&app->clk_mono, &app->prof.t0);
 	app->prof.min = UINT_MAX;
 	app->prof.max = 0;
@@ -859,7 +865,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	// initialize parallel processing
 	dsp_master_t *dsp_master = &app->dsp_master;
 	atomic_init(&dsp_master->kill, false);
-	atomic_init(&dsp_master->ref_count, 0);
+	atomic_init(&dsp_master->emergency_exit, false);
 	dsp_master->num_slaves = driver->num_slaves;
 	dsp_master->concurrent = dsp_master->num_slaves; // this is a safe fallback
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
@@ -884,7 +890,6 @@ sp_app_run_pre(sp_app_t *app, uint32_t nsamples)
 	mod_t *del_me = NULL;
 
 	cross_clock_gettime(&app->clk_mono, &app->prof.t1);
-	app->dsp_master.t1 = app->prof.t1;
 
 	// iterate over all modules
 	for(unsigned m=0; m<app->num_mods; m++)
@@ -974,10 +979,10 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	else
 		_sp_app_process_serial(app, nsamples, sparse_update_timeout);
 
-	if(app->emergency_exit)
+	if(atomic_exchange(&dsp_master->emergency_exit, false))
 	{
 		app->dsp_master.concurrent = dsp_master->num_slaves; // spin up all cores
-		app->emergency_exit = false;
+		sp_app_log_trace(app, "%s: had to take emergency exit\n", __func__);
 	}
 
 	// profiling
@@ -1223,6 +1228,7 @@ sp_app_free(sp_app_t *app)
 		sratom_free(app->sratom);
 
 	cross_clock_deinit(&app->clk_mono);
+	cross_clock_deinit(&app->clk_real);
 
 	free(app);
 }
