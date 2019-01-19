@@ -615,11 +615,11 @@ _dsp_slave_fetch(dsp_master_t *dsp_master, int head)
 		}
 	}
 
-	return head ;
+	return head;
 }
 
 __realtime static inline void
-_dsp_slave_spin(sp_app_t *app, dsp_master_t *dsp_master)
+_dsp_slave_spin(sp_app_t *app, dsp_master_t *dsp_master, bool post)
 {
 	int head = 0;
 
@@ -632,7 +632,10 @@ _dsp_slave_spin(sp_app_t *app, dsp_master_t *dsp_master)
 		}
 	}
 
-	sem_post(&dsp_master->sem);
+	if(post)
+	{
+		sem_post(&dsp_master->sem);
+	}
 }
 
 __non_realtime static void *
@@ -665,10 +668,11 @@ _dsp_slave_thread(void *data)
 	{
 		sem_wait(&dsp_slave->sem);
 
+		_dsp_slave_spin(app, dsp_master, true);
+
 		if(atomic_load(&dsp_master->kill))
 			break;
 
-		_dsp_slave_spin(app, dsp_master);
 		//sched_yield();
 	}
 
@@ -687,32 +691,15 @@ _dsp_master_post(dsp_master_t *dsp_master, unsigned num)
 }
 
 __realtime static inline void
-_dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
+_dsp_master_wait(sp_app_t *app, dsp_master_t *dsp_master, unsigned num)
 {
-	for(unsigned m=0; m<app->num_mods; m++)
-	{
-		mod_t *mod = app->mods[m];
-		dsp_client_t *dsp_client = &mod->dsp_client;
-
-		atomic_store(&dsp_client->ref_count, dsp_client->num_sources);
-	}
-
-	unsigned num_slaves = dsp_master->concurrent - 1;
-	if(num_slaves > dsp_master->num_slaves)
-		num_slaves = dsp_master->num_slaves;
-	dsp_master->nsamples = nsamples;
-	const unsigned ref_count = num_slaves + 1; // plus master
-	sem_init(&dsp_master->sem, 0, dsp_master->concurrent);
-	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
-	_dsp_slave_spin(app, dsp_master); // runs jobs itself 
-
 	// derive timeout
 	struct timespec to;
 	cross_clock_gettime(&app->clk_real, &to);
 	to.tv_sec += 1; // if workers have not finished in due 1s, do emergency exit!
 
 	// wait for worker threads to have finished
-	for(unsigned c = 0; c < dsp_master->concurrent; )
+	for(unsigned c = 0; c < num; )
 	{
 		if(sem_timedwait(&dsp_master->sem, &to) == -1)
 		{
@@ -720,6 +707,7 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 			{
 				case ETIMEDOUT:
 				{
+					fprintf(stderr, "%s: taking emergency exit\n", __func__);
 					atomic_store(&dsp_master->emergency_exit, true);
 				} continue;
 				case EINTR:
@@ -731,8 +719,28 @@ _dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
 
 		c++;
 	}
+}
 
-	sem_destroy(&dsp_master->sem);
+__realtime static inline void
+_dsp_master_process(sp_app_t *app, dsp_master_t *dsp_master, unsigned nsamples)
+{
+	for(unsigned m=0; m<app->num_mods; m++)
+	{
+		mod_t *mod = app->mods[m];
+		dsp_client_t *dsp_client = &mod->dsp_client;
+
+		atomic_store(&dsp_client->ref_count, dsp_client->num_sources);
+	}
+
+	dsp_master->nsamples = nsamples;
+
+	unsigned num_slaves = dsp_master->concurrent - 1;
+	if(num_slaves > dsp_master->num_slaves)
+		num_slaves = dsp_master->num_slaves;
+
+	_dsp_master_post(dsp_master, num_slaves); // wake up other slaves
+	_dsp_slave_spin(app, dsp_master, false); // runs jobs itself 
+	_dsp_master_wait(app, dsp_master, num_slaves);
 }
 
 void
@@ -866,6 +874,7 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	dsp_master_t *dsp_master = &app->dsp_master;
 	atomic_init(&dsp_master->kill, false);
 	atomic_init(&dsp_master->emergency_exit, false);
+	sem_init(&dsp_master->sem, 0, 0);
 	dsp_master->num_slaves = driver->num_slaves;
 	dsp_master->concurrent = dsp_master->num_slaves; // this is a safe fallback
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
@@ -1201,6 +1210,8 @@ sp_app_free(sp_app_t *app)
 	atomic_store(&dsp_master->kill, true);
 	//printf("finish\n");
 	_dsp_master_post(dsp_master, dsp_master->num_slaves);
+	_dsp_master_wait(app, dsp_master, dsp_master->num_slaves);
+
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
 	{
 		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
@@ -1209,6 +1220,7 @@ sp_app_free(sp_app_t *app)
 		pthread_join(dsp_slave->thread, &ret);
 		sem_destroy(&dsp_slave->sem);
 	}
+	sem_destroy(&dsp_master->sem);
 
 	// free mods
 	for(unsigned m=0; m<app->num_mods; m++)
