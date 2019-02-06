@@ -43,7 +43,10 @@ struct _sandbox_slave_t {
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 	LV2_URI_Map_Feature uri_id;
+#pragma GCC diagnostic pop
 
 	LV2_URID log_trace;
 	LV2_URID log_error;
@@ -265,6 +268,8 @@ _sandbox_recv_cb(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	return true; // continue handling messages
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 static uint32_t
 _sb_uri_to_id(LV2_URI_Map_Callback_Data handle, const char *map, const char *uri)
 {
@@ -273,6 +278,7 @@ _sb_uri_to_id(LV2_URI_Map_Callback_Data handle, const char *map, const char *uri
 
 	return sb->map->map(sb->map->handle, uri);
 }
+#pragma GCC diagnostic pop
 
 static uint32_t
 _voice_map_new_uuid(void *data, uint32_t flags __attribute__((unused)))

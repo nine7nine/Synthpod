@@ -119,6 +119,8 @@ sp_app_get_system_sinks(sp_app_t *app)
 	return app->system_sinks;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 __non_realtime static uint32_t
 _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 {
@@ -128,6 +130,7 @@ _uri_to_id(LV2_URI_Map_Callback_Data handle, const char *_, const char *uri)
 
 	return map->map(map->handle, uri);
 }
+#pragma GCC diagnostic pop
 
 __realtime static inline bool
 _sp_app_has_source_automations(mod_t *mod)

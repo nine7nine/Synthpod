@@ -468,7 +468,10 @@ struct _sp_app_t {
 	LV2_State_Map_Path map_path;
 	LV2_Feature state_feature_list [2];
 	LV2_Feature *state_features [3];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 	LV2_URI_Map_Feature uri_to_id;
+#pragma GCC diagnostic pop
 
 	char *bundle_path;
 	char *bundle_filename;
