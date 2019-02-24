@@ -3026,6 +3026,9 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 		if(pid == 0) // child
 		{
 			char *const args [] = {
+#if 0
+				"gdb", "--args",
+#endif
 				(char *)exec_uri,
 				"-n", (char *)plugin_urn,
 				"-p", (char *)plugin_uri,

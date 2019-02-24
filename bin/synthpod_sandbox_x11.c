@@ -138,6 +138,12 @@ _init(sandbox_slave_t *sb, void *data)
 	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
 	app->resize_iface = sandbox_slave_extension_data(sb, LV2_UI__resize);
 
+	// work-around for broken lsp-plugins
+	if((uintptr_t)app->resize_iface == (uintptr_t)app->idle_iface)
+	{
+		app->resize_iface = NULL;
+	}
+
 	cross_clock_init(&app->clk_real, CROSS_CLOCK_REALTIME);
 
 	return 0;
@@ -204,8 +210,11 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 
 			if(dd <= ns)
 			{
-				if(app->idle_iface->idle(app->handle))
-					atomic_store_explicit(&done, true, memory_order_relaxed);
+				if(app->idle_iface)
+				{
+					if(app->idle_iface->idle(app->handle))
+						atomic_store_explicit(&done, true, memory_order_relaxed);
+				}
 			}
 
 			to.tv_nsec += ns;
