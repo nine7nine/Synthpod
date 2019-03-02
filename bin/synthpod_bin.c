@@ -167,11 +167,11 @@ _atomic_unlock(atomic_flag *flag)
 }
 
 static inline bool
-_is_worker_thread(bin_t *bin)
+_is_dsp_thread(bin_t *bin)
 {
 	const pthread_t this = pthread_self();
 
-	return pthread_equal(this, bin->self);
+	return pthread_equal(this, bin->dsp_thread);
 }
 
 __non_realtime static int
@@ -179,7 +179,7 @@ _log_vprintf(void *data, LV2_URID type, const char *fmt, va_list args)
 {
 	bin_t *bin = data;
 
-	const bool is_worker_thread = _is_worker_thread(bin);
+	const bool is_worker_thread = !_is_dsp_thread(bin);
 
 	// check for trace mode AND DSP thread ID
 	if(!is_worker_thread)
@@ -283,7 +283,7 @@ __realtime static char *
 _mapper_alloc_rt(void *data, size_t size)
 {
 	bin_t *bin = data;
-	const bool is_worker_thread = _is_worker_thread(bin);
+	const bool is_worker_thread = !_is_dsp_thread(bin);
 
 	bool more;
 	char *pool = lfrtm_alloc(bin->lfrtm, size, &more);
@@ -389,7 +389,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->app_driver.cpu_affinity = bin->cpu_affinity;
 	bin->app_driver.close_request = _close_request;
 
-	bin->self = pthread_self(); // thread ID of UI thread
+	bin->worker_thread = pthread_self(); // thread ID of UI thread
 	bin->first = true;
 
 	bin->sb_driver.socket_path = bin->socket_path;

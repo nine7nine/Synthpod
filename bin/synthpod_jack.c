@@ -193,14 +193,14 @@ _process(jack_nframes_t nsamples, void *data)
 
 	if(bin->first)
 	{
-		pthread_t self = pthread_self();
+		bin->dsp_thread = pthread_self();
 
 		if(handle->bin.cpu_affinity)
 		{
 			cpu_set_t cpuset;
 			CPU_ZERO(&cpuset);
 			CPU_SET(0, &cpuset);
-			if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
+			if(pthread_setaffinity_np(bin->dsp_thread, sizeof(cpu_set_t), &cpuset))
 				bin_log_trace(bin, "%s: pthread_setaffinity_np error\n", __func__);
 		}
 

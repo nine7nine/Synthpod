@@ -532,7 +532,7 @@ _rt_thread(void *data)
 	prog_t *handle = data;
 	bin_t *bin = &handle->bin;
 
-	pthread_t self = pthread_self();
+	bin->dsp_thread = pthread_self();
 
 	if(handle->bin.audio_prio)
 	{
@@ -542,7 +542,7 @@ _rt_thread(void *data)
 
 		if(schedp.sched_priority)
 		{
-			if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
+			if(pthread_setschedparam(bin->dsp_thread, SCHED_FIFO, &schedp))
 				bin_log_error(bin, "%s: pthread_setschedparam failed\n", __func__);
 		}
 	}
@@ -552,7 +552,7 @@ _rt_thread(void *data)
 		cpu_set_t cpuset;
 		CPU_ZERO(&cpuset);
 		CPU_SET(0, &cpuset);
-		if(pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset))
+		if(pthread_setaffinity_np(bin->dsp_thread, sizeof(cpu_set_t), &cpuset))
 			bin_log_error(bin, "%s: pthread_setaffinity_np failed\n", __func__);
 	}
 
