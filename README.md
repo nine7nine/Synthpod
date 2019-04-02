@@ -4,38 +4,38 @@
 
 #### Build status
 
-[![build status](https://gitlab.com/OpenMusicKontrollers/synthpod.lv2/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/synthpod.lv2/commits/master)
+[![build status](https://gitlab.com/OpenMusicKontrollers/synthpod/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/synthpod/commits/master)
 
 ### Binaries
 
 For GNU/Linux (64-bit, 32-bit, armv7), Windows (64-bit, 32-bit) and MacOS
 (64/32-bit univeral).
 
-To install the plugin bundle on your system, simply copy the __synthpod.lv2__
+To install the plugin bundle on your system, simply copy the __synthpod__
 folder out of the platform folder of the downloaded package into your
 [LV2 path](http://lv2plug.in/pages/filesystem-hierarchy-standard.html).
 
 <!--
 #### Stable release
 
-* [synthpod.lv2-0.16.0.zip](https://dl.open-music-kontrollers.ch/synthpod.lv2/stable/synthpod.lv2-0.16.0.zip) ([sig](https://dl.open-music-kontrollers.ch/synthpod.lv2/stable/synthpod.lv2-0.16.0.zip.sig))
+* [synthpod-0.16.0.zip](https://dl.open-music-kontrollers.ch/synthpod/stable/synthpod-0.16.0.zip) ([sig](https://dl.open-music-kontrollers.ch/synthpod/stable/synthpod-0.16.0.zip.sig))
 -->
 
 #### Unstable (nightly) release
 
-* [synthpod.lv2-latest-unstable.zip](https://dl.open-music-kontrollers.ch/synthpod.lv2/unstable/synthpod.lv2-latest-unstable.zip) ([sig](https://dl.open-music-kontrollers.ch/synthpod.lv2/unstable/synthpod.lv2-latest-unstable.zip.sig))
+* [synthpod-latest-unstable.zip](https://dl.open-music-kontrollers.ch/synthpod/unstable/synthpod-latest-unstable.zip) ([sig](https://dl.open-music-kontrollers.ch/synthpod/unstable/synthpod-latest-unstable.zip.sig))
 
 ### Sources
 
 <!--
 #### Stable release
 
-* [synthpod.lv2-0.16.0.tar.xz](https://git.open-music-kontrollers.ch/lv2/synthpod.lv2/snapshot/synthpod.lv2-0.16.0.tar.xz)
+* [synthpod-0.16.0.tar.xz](https://git.open-music-kontrollers.ch/lv2/synthpod/snapshot/synthpod-0.16.0.tar.xz)
 -->
 
 #### Git repository
 
-* <https://git.open-music-kontrollers.ch/lv2/synthpod.lv2>
+* <https://git.open-music-kontrollers.ch/lv2/synthpod>
 
 ### Packages
 
@@ -43,8 +43,8 @@ folder out of the platform folder of the downloaded package into your
 
 ### Bugs and feature requests
 
-* [Gitlab](https://gitlab.com/OpenMusicKontrollers/synthpod.lv2)
-* [Github](https://github.com/OpenMusicKontrollers/synthpod.lv2)
+* [Gitlab](https://gitlab.com/OpenMusicKontrollers/synthpod)
+* [Github](https://github.com/OpenMusicKontrollers/synthpod)
 
 ### About
 
@@ -86,7 +86,7 @@ When paired with realtime scripting via [Moony](/lv2/moony/#),
 it turns Synthpod into a versatile realtime programmable, remote controllable
 LV2 host framework.
 
-![Synthpod screenshot](https://git.open-music-kontrollers.ch/lv2/synthpod.lv2/plain/screenshots/screenshot_1.png)
+![Synthpod screenshot](https://git.open-music-kontrollers.ch/lv2/synthpod/plain/screenshots/screenshot_1.png)
 
 ### LV2 specifications support status
 
