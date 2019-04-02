@@ -1,14 +1,330 @@
-# Synthpod
+## Synthpod
 
-## Lightweight Nonlinear LV2 Plugin Container
+### Lightweight Nonlinear LV2 Plugin Container
 
-### Build status
+#### Build status
 
-[![build status](https://gitlab.com/OpenMusicKontrollers/synthpod/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/synthpod/commits/master)
+[![build status](https://gitlab.com/OpenMusicKontrollers/synthpod.lv2/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/synthpod.lv2/commits/master)
+
+### Binaries
+
+For GNU/Linux (64-bit, 32-bit, armv7), Windows (64-bit, 32-bit) and MacOS
+(64/32-bit univeral).
+
+To install the plugin bundle on your system, simply copy the __synthpod.lv2__
+folder out of the platform folder of the downloaded package into your
+[LV2 path](http://lv2plug.in/pages/filesystem-hierarchy-standard.html).
+
+<!--
+#### Stable release
+
+* [synthpod.lv2-0.16.0.zip](https://dl.open-music-kontrollers.ch/synthpod.lv2/stable/synthpod.lv2-0.16.0.zip) ([sig](https://dl.open-music-kontrollers.ch/synthpod.lv2/stable/synthpod.lv2-0.16.0.zip.sig))
+-->
+
+#### Unstable (nightly) release
+
+* [synthpod.lv2-latest-unstable.zip](https://dl.open-music-kontrollers.ch/synthpod.lv2/unstable/synthpod.lv2-latest-unstable.zip) ([sig](https://dl.open-music-kontrollers.ch/synthpod.lv2/unstable/synthpod.lv2-latest-unstable.zip.sig))
+
+### Sources
+
+<!--
+#### Stable release
+
+* [synthpod.lv2-0.16.0.tar.xz](https://git.open-music-kontrollers.ch/lv2/synthpod.lv2/snapshot/synthpod.lv2-0.16.0.tar.xz)
+-->
+
+#### Git repository
+
+* <https://git.open-music-kontrollers.ch/lv2/synthpod.lv2>
+
+### Packages
+
+* [ArchLinux](https://aur.archlinux.org/packages/synthpod-git/)
+
+### Bugs and feature requests
+
+* [Gitlab](https://gitlab.com/OpenMusicKontrollers/synthpod.lv2)
+* [Github](https://github.com/OpenMusicKontrollers/synthpod.lv2)
 
 ### About
 
-Get more detailed information at [http://open-music-kontrollers.ch/lv2/synthpod/#](http://open-music-kontrollers.ch/lv2/synthpod/#).
+Synthpod is an LV2 host. It can be run as a standalone app
+and be used as a tool for live performances or general audio and event filtering. 
+
+It was conceptualized to fill the gap between pure textual 
+(e.g. [SuperCollider](http://supercollider.github.io)) and
+pure visual flow (e.g. [Pure Data](http://puredata.info))
+audio programming paradigms.
+
+Potential fields of application may include:
+
+* Live audio synthesis
+* Real-time event scripting
+* Non-linear signal routing
+* Advanced control automation
+* Advanced event filtering
+* Live mixing
+* Live coding
+* Algorithmic composition
+* Interfacing to expressive controllers
+
+The standalone host saves its state in the same format as an LV2 plugin instance,
+
+It may be run on top of an audio system (JACK or ALSA) and
+on top of an event system (MIDI and OSC). It can be run with a GUI or
+headless. You can e.g. prepare a patch on your desktop machine and then
+transfer it to a wearable synth.
+
+Synthpod takes a totally modular approach whereby it provides only the
+minimal necessary host infrastructure expected by a given plugin.
+
+All additional, non strictly necessary glue shall be implemented with
+plugins. Synthpod e.g. can be extended with [OSC](http://opensoundcontrol.org)
+via [Eteroj](/lv2/eteroj/#). Sequencing and looping may be added via
+plugins from the [Orbit](/lv2/orbit/#) bundle.
+When paired with realtime scripting via [Moony](/lv2/moony/#),
+it turns Synthpod into a versatile realtime programmable, remote controllable
+LV2 host framework.
+
+![Synthpod screenshot](/pix/lv2/synthpod_screeny.png)
+
+### LV2 specifications support status
+
+As Synthpod tries to be a lightweight LV2 host, it may not (fully) support
+the more exotic extensions.
+Get an up-to-date overview of current extensions support for Synthpod
+in the table below.
+
+The full LV2 specification is located at <http://lv2plug.in/ns/>.
+
+<table>
+	<tr>
+		<th>Specification</th>
+		<th>API</th>
+		<th>Description</th>
+		<th>Support status</th>
+		<th>Notes</th>
+	</tr><tr>
+		<td>Atom</td>
+		<td>atom</td>
+		<td>A generic value container and several data types.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>Buf Size</td>
+		<td>buf-size	</td>
+		<td>Access to, and restrictions on, buffer sizes.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>Data Access</td>
+		<td>data-access</td>
+		<td>Provides access to LV2_Descriptor::extension_data().</td>
+		<td style="color:#b00;">No</td>
+		<td>won't, ever</td>
+	</tr><tr>
+		<td>Dynamic Manifest</td>
+		<td>dynmanifest</td>
+		<td>Support for dynamic data generation.</td>
+		<td style="color:#b00;">No</td>
+		<td></td>
+	</tr><tr>
+		<td>Event</td>
+		<td>event</td>
+		<td>A port-based real-time generic event interface.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>Instance Access</td>
+		<td>instance-access</td>
+		<td>Provides access to the LV2_Handle of a plugin.</td>
+		<td style="color:#b00;">No</td>
+		<td>won't, ever</td>
+	</tr><tr>
+		<td>Log</td>
+		<td>log</td>
+		<td>A feature for writing log messages.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>LV2</td>
+		<td>lv2core</td>
+		<td>An audio plugin interface specification.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>MIDI</td>
+		<td>midi</td>
+		<td>A normalised definition of raw MIDI.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>Morph</td>
+		<td>morph</td>
+		<td>Ports that can dynamically change type.</td>
+		<td style="color:#b00;">No</td>
+		<td></td>
+	</tr><tr>
+		<td>Options</td>
+		<td>options</td>
+		<td>Instantiation time options.</td>
+		<td style="color:#0b0;">Yes</td> 
+		<td></td>
+	</tr><tr>
+		<td>Parameters</td>
+		<td>parameters</td>
+		<td>Common parameters for audio processing.</td>
+		<td style="color:#b00;"></td>
+		<td>data-only</td>
+	</tr><tr>
+		<td>Patch</td>
+		<td>patch</td>
+		<td>Messages for accessing and manipulating properties.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>Port Groups</td>
+		<td>port-groups</td>
+		<td>Multi-channel groups of LV2 ports.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>Port Properties</td>
+		<td>port-props</td>
+		<td>Various port properties.</td>
+		<td style="color:#b00;"></td>
+		<td>data-only</td>
+	</tr><tr>
+		<td>Presets</td>
+		<td>presets</td>
+		<td>Presets for LV2 plugins.</td>
+		<td style="color:#0b0;">Yes</td> 
+		<td></td>
+	</tr><tr>
+		<td>Resize Port</td>
+		<td>resize-port</td>
+		<td>Dynamically sized LV2 port buffers.</td>
+		<td style="color:#00b;">Partial</td> 
+		<td>no dynamic resize</td>
+	</tr><tr>
+		<td>State</td>
+		<td>state</td>
+		<td>An interface for LV2 plugins to save and restore state.</td>
+		<td style="color:#0b0;">Yes</td> 
+		<td></td>
+	</tr><tr>
+		<td>Time</td>
+		<td>time</td>
+		<td>Properties for describing time.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>UI</td>
+		<td>ui</td>
+		<td>LV2 plugin UIs of any type.</td>
+		<td style="color:#0b0;">Yes</td> 
+		<td>X11UI, Gt2kUI, Gtk3UI, Qt4UI, Qt5UI, Show/Idle-Interface, external-ui</td>
+	</tr><tr>
+		<td>Units</td>
+		<td>units</td>
+		<td>Units for LV2 values.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>URI Map</td>
+		<td>uri-map</td>
+		<td>A feature for mapping URIs to integers.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>URID</td>
+		<td>urid</td>
+		<td>Features for mapping URIs to and from integers.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr><tr>
+		<td>Worker</td>
+		<td>worker</td>
+		<td>Support for a non-realtime plugin worker method.</td>
+		<td style="color:#0b0;">Yes</td>
+		<td></td>
+	</tr>
+</table>
+
+### Hosts
+
+Currently the following hosts are contained in this software bundle:
+
+* JACK
+* ALSA
+* DUMMY
+
+#### JACK
+
+Synthpod as host built on top of [JACK](http://jackaudio.org)
+with support for native JACK audio, MIDI, OSC and CV in/out ports.
+The right choice on GNU/Linux for modular setups.
+
+This standalone host supports
+[NON session management](http://non.tuxfamily.org/nsm/API.html) and
+[JACK session management](http://jackaudio.org/files/docs/html/group__SessionClientFunctions.html)
+to neatly integrate into modular setups.
+
+#### ALSA
+
+Synthpod as host built on top of [ALSA](http://alsa-project.org)
+with support for native ALSA audio and MIDI sequencer in/out ports.
+The right choice on GNU/Linux for live setups, embedded devices or
+when you don't need audio routing to other apps.
+
+This standalone host supports
+[NON session management](http://non.tuxfamily.org/nsm/API.html)
+to neatly integrate into modular setups.
+
+#### DUMMY
+
+Synthpod as host built on top of a dummy driver, mainly useful for
+debugging purposes.
+
+This standalone host supports
+[NON session management](http://non.tuxfamily.org/nsm/API.html)
+to neatly integrate into modular setups.
+
+### Plugins
+	
+#### Control to CV
+
+Convert between Control Voltage and control ports.
+	
+#### CV to Control
+
+Convert between Control Voltage and control ports.
+
+#### Heavyload
+
+Just burn CPU cycles away for debugging.
+
+#### Keyboard
+
+A rudimentary graphical keyboard with a 2 octave range, mainly meant for
+simple test cases.
+
+#### MIDI splitter
+
+Split MIDI events based on their channel.
+
+#### Panic
+
+Silence MIDI downstream plugins upon panic.
+
+#### Stereo
+
+The Synthpod LV2 non-linear plugin container run as a plugin itself in an
+other host or itself. It features stereo audio in/out ports, atom event
+in/out ports and 4 control in/out ports.
+
+Use this to add support for non-linear plugin routing in a strictly
+linear host.
 
 ### Usage
 
@@ -76,13 +392,6 @@ if you want. Please consult the manual page to find out more.
 	cd build
 	ninja -j4
 	sudo ninja install
-
-#### ArchLinux
-
-	# mandatory build dependencies
-	sudo pacman -S meson ninja lv2 lilv
-	# optional build dependencies
-	sudo pacman -S jack alsa zita-alsa-pcmi libxcb gtk2 gtk3 qt4 qt
 
 ### License (everything but synthpod\_alsa)
 
