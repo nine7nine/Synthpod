@@ -51,6 +51,7 @@
 #include <lv2_extensions.h> // ardour inline display
 
 #include <osc.lv2/osc.h>
+#include <canvas.lv2/canvas.h>
 
 typedef enum _port_type_t port_type_t;
 typedef enum _port_atom_type_t port_atom_type_t;
@@ -275,6 +276,10 @@ struct _reg_t {
 	struct {
 		reg_item_t message;
 	} xpress;
+
+	struct {
+		reg_item_t graph;
+	} canvas;
 
 	struct {
 		reg_item_t group;
@@ -576,6 +581,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 
 	_register(&regs->xpress.message, world, map, "http://open-music-kontrollers.ch/lv2/xpress#Message");
 
+	_register(&regs->canvas.graph, world, map, CANVAS__graph);
+
 	_register(&regs->group.group, world, map, LV2_PORT_GROUPS__group);
 	_register(&regs->group.left, world, map, LV2_PORT_GROUPS__left);
 	_register(&regs->group.right, world, map, LV2_PORT_GROUPS__right);
@@ -835,6 +842,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->patch.ack);
 
 	_unregister(&regs->xpress.message);
+
+	_unregister(&regs->canvas.graph);
 
 	_unregister(&regs->group.group);
 	_unregister(&regs->group.left);

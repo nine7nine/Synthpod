@@ -703,8 +703,21 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		LV2_WORKER__interface);
 	mod->opts.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_OPTIONS__interface);
-	mod->idisp.iface = lilv_instance_get_extension_data(mod->inst,
-		LV2_INLINEDISPLAY__interface);
+	const bool has_ro_canvas_graph = lilv_world_ask(app->world,
+		lilv_plugin_get_uri(mod->plug), app->regs.patch.readable.node,
+		app->regs.canvas.graph.node);
+	const bool has_rw_canvas_graph = lilv_world_ask(app->world,
+		lilv_plugin_get_uri(mod->plug), app->regs.patch.writable.node,
+		app->regs.canvas.graph.node);
+	if(has_ro_canvas_graph || has_rw_canvas_graph)
+	{
+		//sp_app_log_note(app, "%s: detected canvas:graph parameter\n", __func__);
+	}
+	else
+	{
+		mod->idisp.iface = lilv_instance_get_extension_data(mod->inst,
+			LV2_INLINEDISPLAY__interface);
+	}
 	mod->state.iface = lilv_instance_get_extension_data(mod->inst,
 		LV2_STATE__interface);
 	mod->system_ports = lilv_plugin_has_feature(plug, app->regs.synthpod.system_ports.node);
