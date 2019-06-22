@@ -3,7 +3,7 @@ project('synthpod', ['c', 'cpp'], default_options : [
 	'warning_level=1',
 	'werror=false',
 	'b_lto=false',
-	'c_std=c11'])
+	'c_std=gnu11'])
 
 cc = meson.get_compiler('c')
 
