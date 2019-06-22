@@ -45,14 +45,17 @@ x86_64-linux-gnu:
   <<: *universal_linux_definition
 
 i686-linux-gnu:
+  before_script:
     - apt-get install -y libjack-dev:i386
   <<: *universal_linux_definition
 
 arm-linux-gnueabihf:
+  before_script:
     - apt-get install -y libjack-dev:armhf
   <<: *arm_linux_definition
 
 aarch64-linux-gnu:
+  before_script:
     - apt-get install -y libjack-dev:arm64
   <<: *arm_linux_definition
 
