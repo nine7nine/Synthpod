@@ -26,7 +26,7 @@
 typedef cpuset_t cpu_set_t;
 #endif
 
-#include <asoundlib.h>
+#include <alsa/asoundlib.h>
 #include <pcmi.h>
 
 #include <synthpod_bin.h>
