@@ -17,7 +17,7 @@
 
 #include <getopt.h>
 #include <inttypes.h>
-#include <unistd.h> // fork
+#include <unistd.h> // vfork
 #include <sys/wait.h> // waitpid
 #include <errno.h> // waitpid
 #include <signal.h>
@@ -769,7 +769,7 @@ bin_show(bin_t *bin)
 	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
 	snprintf(minimum, sizeof(minimum), "%zu", SBOX_BUF_SIZE);
 
-	bin->child = fork();
+	bin->child = vfork();
 	if(bin->child == 0) // child
 	{
 		char *const args [] = {

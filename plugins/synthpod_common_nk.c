@@ -35,7 +35,7 @@
 #include <sandbox_master.h>
 
 #include <math.h>
-#include <unistd.h> // fork
+#include <unistd.h> // vfork
 #include <sys/wait.h> // waitpid
 #include <errno.h> // waitpid
 #include <time.h>
@@ -3022,7 +3022,7 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 		_patch_notification_add_patch_get(handle, mod,
 			handle->regs.port.event_transfer.urid, mod->subj, 0, 0); // patch:Get []
 
-		const pid_t pid = fork();
+		const pid_t pid = vfork();
 		if(pid == 0) // child
 		{
 			char *const args [] = {
