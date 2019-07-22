@@ -29,8 +29,12 @@
 #define SYNTHPOD_PREFIX					"http://open-music-kontrollers.ch/lv2/synthpod#"
 
 #define SYNTHPOD_STEREO_URI			SYNTHPOD_PREFIX"stereo"
+
 #define SYNTHPOD_COMMON_NK_URI	SYNTHPOD_PREFIX"common_4_nk"
 #define SYNTHPOD_ROOT_NK_URI	  SYNTHPOD_PREFIX"root_4_nk"
+
+#define SYNTHPOD_COMMON_D2TK_URI	SYNTHPOD_PREFIX"common_5_d2tk"
+#define SYNTHPOD_ROOT_D2TK_URI	  SYNTHPOD_PREFIX"root_5_d2tk"
 
 #ifdef _WIN32
 #	define mlock(...)

@@ -8,10 +8,14 @@ dsp_srcs = ['synthpod_lv2.c',
 	'synthpod_placeholder.c',
 	'synthpod_stereo.c']
 
-ui_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, cairo_dep]
-ui_srcs = ['synthpod_lv2_nk.c',
+nk_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, cairo_dep]
+nk_srcs = ['synthpod_lv2_nk.c',
 	'synthpod_keyboard_nk.c',
 	'synthpod_common_nk.c']
+
+ui_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, d2tk_dep]
+ui_srcs = ['synthpod_lv2_d2tk.c',
+	'synthpod_common_d2tk.c']
 
 dsp = shared_module('synthpod', dsp_srcs,
 	c_args : c_args,
@@ -27,33 +31,49 @@ conf_data.set('MODULE_SUFFIX', '.' + suffix)
 	
 if host_machine.system() == 'linux'
 	conf_data.set('UI_TYPE', 'X11UI')
-	ui_deps += gl_dep
-	ui_deps += x11_dep
-	ui_deps += xext_dep
-	ui_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_x11.c')
+	nk_deps += gl_dep
+	nk_deps += x11_dep
+	nk_deps += xext_dep
+	nk_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_x11.c')
 elif host_machine.system() == 'windows'
 	add_languages('cpp')
 	conf_data.set('UI_TYPE', 'WindowsUI')
-	ui_deps += cc.find_library('opengl32')
-	ui_deps += cc.find_library('gdi32')
-	ui_deps += cc.find_library('user32')
-	ui_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_win.cpp')
+	nk_deps += cc.find_library('opengl32')
+	nk_deps += cc.find_library('gdi32')
+	nk_deps += cc.find_library('user32')
+	nk_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_win.cpp')
 elif host_machine.system() == 'darwin'
 	#add_languages('objc')
 	conf_data.set('UI_TYPE', 'CocoaUI')
-	#ui_deps += cc.find_library('Cocoa')
-	#ui_deps += cc.find_library('gl')
-	#ui_deps += dependency('appleframeworks', modules : 'cocoa')
-	#ui_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_osx.m')
+	#nk_deps += cc.find_library('Cocoa')
+	#nk_deps += cc.find_library('gl')
+	#nk_deps += dependency('appleframeworks', modules : 'cocoa')
+	#nk_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_osx.m')
 endif
 
 if use_x11
-	ui = shared_module('synthpod_nk', ui_srcs,
+	nk = shared_module('synthpod_nk', nk_srcs,
+		c_args : c_args,
+		include_directories : bin_incs,
+		name_prefix : '',
+		dependencies : nk_deps,
+		link_with : [sbox_master],
+		install : true,
+		install_dir : plug_dir)
+
+	ui = shared_module('synthpod_ui', ui_srcs,
 		c_args : c_args,
 		include_directories : bin_incs,
 		name_prefix : '',
 		dependencies : ui_deps,
 		link_with : [sbox_master],
+		install : true,
+		install_dir : plug_dir)
+
+	configure_file(
+		input : join_paths('..', 'subprojects', 'd2tk', 'nanovg', 'example', 'Roboto-Bold.ttf'),
+		output : 'Roboto-Bold.ttf',
+		copy : true,
 		install : true,
 		install_dir : plug_dir)
 

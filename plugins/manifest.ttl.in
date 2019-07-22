@@ -36,16 +36,26 @@ synthpod:stereo
 	lv2:binary <synthpod@MODULE_SUFFIX@> ;
 	ui:ui synthpod:common_4_nk ;
 	ui:ui synthpod:root_4_nk ;
+	ui:ui synthpod:common_5_d2tk ;
+	ui:ui synthpod:root_5_d2tk ;
 	rdfs:seeAlso <synthpod.ttl> .
 
 synthpod:common_4_nk
 	a ui:@UI_TYPE@ ;
 	ui:binary <synthpod_nk@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
-
 synthpod:root_4_nk
 	a ui:@UI_TYPE@ ;
 	ui:binary <synthpod_nk@MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod_ui.ttl> .
+
+synthpod:root_5_d2tk
+	a ui:@UI_TYPE@ ;
+	ui:binary <synthpod_ui@MODULE_SUFFIX@> ;
+	rdfs:seeAlso <synthpod_ui.ttl> .
+synthpod:common_5_d2tk
+	a ui:@UI_TYPE@ ;
+	ui:binary <synthpod_ui@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <synthpod_ui.ttl> .
 
 # Synthpod Keyboard

@@ -5605,7 +5605,7 @@ _expose_param_inner(struct nk_context *ctx, param_t *param, plughandle_t *handle
 			{
 				const uint8_t mask = (1 << i);
 				const uint8_t has_bit = param->val.i & mask;
-				char lbl [3];
+				char lbl [11];
 				snprintf(lbl, sizeof(lbl), "%2"PRIu8, i);
 
 				if(has_bit)

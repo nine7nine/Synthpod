@@ -59,11 +59,11 @@ extern const LV2_Descriptor synthpod_heavyload;
 extern const LV2_Descriptor synthpod_panic;
 extern const LV2_Descriptor synthpod_placeholder;
 
-extern const LV2UI_Descriptor synthpod_common_1_ui;
-extern const LV2UI_Descriptor synthpod_common_2_kx;
 extern const LV2UI_Descriptor synthpod_common_4_nk;
-
 extern const LV2UI_Descriptor synthpod_root_4_nk;
+
+extern const LV2UI_Descriptor synthpod_common_5_d2tk;
+extern const LV2UI_Descriptor synthpod_root_5_d2tk;
 
 // keyboard UI uris
 #define SYNTHPOD_KEYBOARD_NK_URI	SYNTHPOD_PREFIX"keyboard_4_nk"

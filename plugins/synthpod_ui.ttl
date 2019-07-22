@@ -24,7 +24,7 @@
 
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
 
-# Common UIs
+# NK UIs
 synthpod:common_4_nk
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
@@ -35,9 +35,29 @@ synthpod:common_4_nk
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
-
-# Root UIs
 synthpod:root_4_nk
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
+	lv2:extensionData ui:idleInterface, ui:resize ;
+	opts:supportedOption param:sampleRate, ui:updateRate .
+
+# D2TK UIs
+synthpod:common_5_d2tk
+	ui:portNotification [
+		ui:plugin synthpod:stereo ;
+		lv2:symbol "notify" ;
+		ui:protocol atom:eventTransfer ;
+	] ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
+	lv2:extensionData ui:idleInterface, ui:resize ;
+	opts:supportedOption param:sampleRate, ui:updateRate .
+synthpod:root_5_d2tk
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
 		lv2:symbol "notify" ;
