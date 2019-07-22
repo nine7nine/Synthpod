@@ -5,6 +5,17 @@ project('synthpod', ['c', 'cpp'], default_options : [
 	'b_lto=false',
 	'c_std=gnu11'])
 
+d2tk = subproject('d2tk')
+
+use_backend = get_option('ui-backend')
+if use_backend == 'nanovg'
+	d2tk_dep = d2tk.get_variable('d2tk_nanovg')
+elif use_backend == 'cairo'
+	d2tk_dep = d2tk.get_variable('d2tk_cairo')
+else
+	error('no valid UI backend given')
+endif
+
 cc = meson.get_compiler('c')
 
 inc_incs = include_directories('include')
