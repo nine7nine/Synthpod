@@ -18,6 +18,8 @@
 #include "lv2/lv2plug.in/ns/ext/log/log.h"
 #include "lv2/lv2plug.in/ns/ext/log/logger.h"
 
+#include <lilv/lilv.h>
+
 #include <synthpod_lv2.h>
 #include <synthpod_common.h>
 
@@ -26,6 +28,11 @@
 typedef struct _plughandle_t plughandle_t;
 
 struct _plughandle_t {
+	LilvWorld *world;
+	const LilvPlugins *plugs;
+	unsigned nplugs;
+	const LilvPlugin **hplugs;
+
 	LV2_URID_Map *map;
 	LV2_Atom_Forge forge;
 
@@ -104,7 +111,44 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 				D2TK_BASE_PANE(base, vrect, D2TK_ID, D2TK_FLAG_PANE_X,
 					0.05f, 0.95f, 0.05f, hpane)
 				{
-					//FIXME
+					const d2tk_rect_t *prect =  d2tk_pane_get_rect(hpane);
+					const uint32_t px = d2tk_pane_get_index(hpane);
+
+					switch(px)
+					{
+						case 0:
+						{
+							const unsigned n = lilv_plugins_size(handle->plugs);
+							const unsigned dn = 40;
+
+							D2TK_BASE_SCROLLBAR(base, prect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
+								0, n, 0, dn, vscroll)
+							{
+								const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
+								const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
+
+								D2TK_BASE_TABLE(col, 1, dn, trow)
+								{
+									const d2tk_rect_t *row = d2tk_table_get_rect(trow);
+									const unsigned k = d2tk_table_get_index_y(trow) + voffset;
+									const d2tk_id_t id = D2TK_ID_IDX(k);
+
+									const LilvPlugin *plug = handle->hplugs[k];
+									LilvNode *plug_name = lilv_plugin_get_name(plug);
+									const char *plug_name_str = lilv_node_as_string(plug_name);
+
+									if(d2tk_base_button_label_is_changed(base, id, -1, plug_name_str, row))
+									{
+										//FIXME
+									}
+								}
+							}
+						} break;
+						case 1:
+						{
+							//FIXME
+						} break;
+					}
 				}
 			} break;
 			case 2:
@@ -116,6 +160,23 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 	}
 
 	return 0;
+}
+
+static int
+_plug_cmp_name(const void *a, const void *b)
+{
+	const LilvPlugin **plug_a = (const LilvPlugin **)a;
+	const LilvPlugin **plug_b = (const LilvPlugin **)b;
+
+	LilvNode *name_a = lilv_plugin_get_name(*plug_a);
+	LilvNode *name_b = lilv_plugin_get_name(*plug_b);
+
+	const int res = strcasecmp(lilv_node_as_string(name_a), lilv_node_as_string(name_b));
+
+	lilv_node_free(name_a);
+	lilv_node_free(name_b);
+
+	return res;
 }
 
 static LV2UI_Handle
@@ -192,6 +253,30 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		host_resize->ui_resize(host_resize->handle, w, h);
 	}
 
+	handle->world = lilv_world_new();
+
+	LilvNode *node_false = lilv_new_bool(handle->world, false);
+	if(node_false)
+	{
+		lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
+		lilv_node_free(node_false);
+	}
+	lilv_world_load_all(handle->world);
+
+	handle->plugs = lilv_world_get_all_plugins(handle->world);
+	handle->nplugs = lilv_plugins_size(handle->plugs);
+	handle->hplugs = calloc(1, handle->nplugs * sizeof(LilvPlugin *));
+	const LilvPlugin **hplug = handle->hplugs;
+
+	LILV_FOREACH(plugins, i, handle->plugs)
+	{
+		const LilvPlugin *plug = lilv_plugins_get(handle->plugs, i);
+
+		*hplug++ = plug;
+	}
+
+	qsort(handle->hplugs, handle->nplugs, sizeof(LilvPlugin *), _plug_cmp_name);
+
 	return handle;
 }
 
@@ -201,6 +286,10 @@ cleanup(LV2UI_Handle instance)
 	plughandle_t *handle = instance;
 
 	d2tk_pugl_free(handle->dpugl);
+
+	free(handle->hplugs);
+
+	lilv_world_free(handle->world);
 
 	free(handle);
 }
