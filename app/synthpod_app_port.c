@@ -563,6 +563,11 @@ _sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value,
 {
 	int do_route = 0;
 
+	if(automation->logarithmic)
+	{
+		value = log(value + 1.0) / M_LN2;
+	}
+
 	// linear mapping from MIDI to automation value
 	double f64 = value * automation->mul + automation->add;
 

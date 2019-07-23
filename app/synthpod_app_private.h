@@ -245,6 +245,7 @@ struct _auto_t {
 
 	bool sync;
 	bool learning;
+	bool logarithmic;
 
 	union {
 		midi_auto_t midi;
