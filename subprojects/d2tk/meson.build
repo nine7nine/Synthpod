@@ -67,7 +67,10 @@ bin_srcs = [
 ]
 
 pugl_srcs = [
-	join_paths('src', 'frontend_pugl.c'),
+	join_paths('src', 'frontend_pugl.c')
+]
+
+pugl_bin_srcs = [
 	join_paths('example', 'd2tk_pugl.c')
 ]
 
@@ -82,7 +85,10 @@ cairo_srcs = [
 ]
 
 fbdev_srcs = [
-	join_paths('src', 'frontend_fbdev.c'),
+	join_paths('src', 'frontend_fbdev.c')
+]
+
+fbdev_bin_srcs = [
 	join_paths('example', 'd2tk_fbdev.c')
 ]
 
@@ -126,7 +132,7 @@ if freetype_dep.found() and pixman_dep.found() and cairo_dep.found() and (host_m
 		link_args : links,
 		sources : [lib_srcs, cairo_srcs, pugl_srcs])
 
-	executable('d2tk.cairo', [bin_srcs],
+	executable('d2tk.cairo', [bin_srcs, pugl_bin_srcs],
 		c_args : c_args,
 		include_directories : inc_dir,
 		dependencies: d2tk_cairo,
@@ -139,7 +145,7 @@ if freetype_dep.found() and pixman_dep.found() and cairo_dep.found() and (host_m
 			link_args : links,
 			sources : [lib_srcs, cairo_srcs, fbdev_srcs])
 
-		executable('d2tk.fbdev', [bin_srcs],
+		executable('d2tk.fbdev', [bin_srcs, fbdev_bin_srcs],
 			c_args : c_args,
 			include_directories : inc_dir,
 			dependencies: d2tk_fbdev,
@@ -153,7 +159,7 @@ d2tk_nanovg = declare_dependency(
 	link_args : links,
 	sources : [lib_srcs, nanovg_srcs, pugl_srcs])
 
-executable('d2tk.nanovg', [bin_srcs],
+executable('d2tk.nanovg', [bin_srcs, pugl_bin_srcs],
 	c_args : c_args,
 	include_directories : inc_dir,
 	dependencies: d2tk_nanovg,
