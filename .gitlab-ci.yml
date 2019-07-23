@@ -41,22 +41,22 @@ stages:
 # building in docker
 x86_64-linux-gnu:
   before_script:
-    - apt-get install -y libjack-dev
+    - apt-get install -y libjack-dev libglu1-mesa-dev libevdev-dev
   <<: *universal_linux_definition
 
 i686-linux-gnu:
   before_script:
-    - apt-get install -y libjack-dev:i386
+    - apt-get install -y libjack-dev:i386 libglu1-mesa-dev:i386 libevdev-dev:i386
   <<: *universal_linux_definition
 
 arm-linux-gnueabihf:
   before_script:
-    - apt-get install -y libjack-dev:armhf
+    - apt-get install -y libjack-dev:armhf libglu1-mesa-dev:armhf libevdev-dev:armhf
   <<: *arm_linux_definition
 
 aarch64-linux-gnu:
   before_script:
-    - apt-get install -y libjack-dev:arm64
+    - apt-get install -y libjack-dev:arm64 libglu1-mesa-dev:arm64 libevdev-dev:arm64
   <<: *arm_linux_definition
 
 #x86_64-w64-mingw32:
