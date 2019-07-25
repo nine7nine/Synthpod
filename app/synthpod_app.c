@@ -198,7 +198,7 @@ _sp_app_automation_out(sp_app_t *app, LV2_Atom_Forge *forge, auto_t *automation,
 		const uint8_t controller = (mauto->controller >= 0)
 			? mauto->controller
 			: 0;
-		const uint8_t msg [3] = {0xb0 | channel, controller, floor(value)};
+		const uint8_t msg [3] = {0xb0 | channel, controller, round(value)};
 
 		ref = lv2_atom_forge_frame_time(forge, frames);
 		if(ref)
