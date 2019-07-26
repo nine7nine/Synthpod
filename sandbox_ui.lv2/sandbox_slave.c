@@ -299,6 +299,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 		goto fail;
 	}
 
+	bool testing = false;
 	sb->plugin_urn = NULL;
 	sb->window_title = "Untitled"; // fall-back
 	sb->minimum = 0x100000; // fall-back
@@ -311,7 +312,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhn:p:P:u:U:s:w:m:r:f:")) != -1)
+	while((c = getopt(argc, argv, "vhtn:p:P:u:U:s:w:m:r:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -339,8 +340,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 					"   %s [OPTIONS]\n"
 					"\n"
 					"OPTIONS\n"
-					"   [-v]                 print version and full license information\n"
-					"   [-h]                 print usage information\n"
+					"   [-v]                 Print version and full license information\n"
+					"   [-h]                 Print usage information\n"
+					"   [-t]                 Testing mode\n\n"
 					"   [-n] plugin-urn      Plugin URN\n"
 					"   [-p] plugin-uri      Plugin URI\n"
 					"   [-P] plugin-bundle   Plugin bundle path\n"
@@ -354,6 +356,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 					, argv[0]);
 				*res = EXIT_SUCCESS;
 				return NULL;
+			case 't':
+				testing = true;
+				break;
 			case 'n':
 				sb->plugin_urn = optarg;
 				break;
@@ -556,7 +561,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 		goto fail;
 	}
 
-	if(_sandbox_io_init(&sb->io, sb->map, sb->unmap, sb->socket_path, false, false, sb->minimum))
+	if(_sandbox_io_init(&sb->io, sb->map, sb->unmap, sb->socket_path, testing, false, sb->minimum))
 	{
 		fprintf(stderr, "_sandbox_io_init failed: are you sure that the host is running?\n");
 		goto fail;

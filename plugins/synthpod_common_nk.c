@@ -3043,6 +3043,21 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 				NULL
 			};
 
+#if 1
+			fprintf(stderr, "%s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s\n",
+				(char *)exec_uri,
+				"-n", (char *)plugin_urn,
+				"-p", (char *)plugin_uri,
+				"-P", mod_ui->sbox.plugin_bundle_path,
+				"-u", (char *)mod_ui->uri,
+				"-U", mod_ui->sbox.ui_bundle_path,
+				"-s", mod_ui->sbox.socket_uri,
+				"-w", mod_ui->sbox.window_name,
+				"-m", mod_ui->sbox.minimum,
+				"-r", mod_ui->sbox.sample_rate,
+				"-f", mod_ui->sbox.update_rate);
+#endif
+
 			execvp(args[0], args);
 		}
 
