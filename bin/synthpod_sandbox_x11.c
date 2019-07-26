@@ -132,6 +132,17 @@ _init(sandbox_slave_t *sb, void *data)
 		app->widget, XCB_ATOM_WM_NORMAL_HINTS);
 	xcb_size_hints_t size_hints;
 	xcb_icccm_get_wm_size_hints_reply(app->conn, reply, &size_hints, NULL);
+
+	// XXX workaround for zyn fusion's garbage size hints
+	if(  (size_hints.min_width == 1) && (size_hints.min_height == 1)
+		&& (size_hints.max_width == 1) && (size_hints.max_height == 1) )
+	{
+		size_hints.min_width = 0;
+		size_hints.min_height = 0;
+		size_hints.max_width = 0;
+		size_hints.max_height = 0;
+	}
+
 	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &size_hints);
   xcb_flush(app->conn);
 
