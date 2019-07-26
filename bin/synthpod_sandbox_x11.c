@@ -131,6 +131,7 @@ _init(sandbox_slave_t *sb, void *data)
 	xcb_get_property_cookie_t reply = xcb_icccm_get_wm_size_hints(app->conn,
 		app->widget, XCB_ATOM_WM_NORMAL_HINTS);
 	xcb_size_hints_t size_hints;
+	memset(&size_hints, 0, sizeof(size_hints));
 	xcb_icccm_get_wm_size_hints_reply(app->conn, reply, &size_hints, NULL);
 
 	// XXX workaround for zyn fusion's garbage size hints
