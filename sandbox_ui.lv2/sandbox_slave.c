@@ -57,6 +57,7 @@ struct _sandbox_slave_t {
 
 	LV2UI_Port_Map port_map;
 	LV2UI_Port_Subscribe port_subscribe;
+	LV2UI_Touch touch;
 	xpress_map_t xmap;
 	xpress_t xpress;
 
@@ -222,6 +223,8 @@ _write_function(LV2UI_Controller controller, uint32_t index,
 {
 	sandbox_slave_t *sb = controller;
 
+	//fprintf(stderr, " [%s] %u %u %u\n", __func__, index, size, protocol);
+
 	const int status = _sandbox_io_send(&sb->io, index, size, protocol, buf);
 	(void)status; //TODO
 }
@@ -254,6 +257,18 @@ _port_unsubscribe(LV2UI_Feature_Handle handle, uint32_t index, uint32_t protocol
 	_write_function(handle, index, sizeof(sandbox_io_subscription_t), sb->io.ui_port_subscribe, &sub);
 
 	return 0;
+}
+
+static inline void
+_touch(LV2UI_Feature_Handle handle, uint32_t index, bool grabbed)
+{
+	(void)handle; //FIXME
+	(void)index; //FIXME
+	(void)grabbed; //FIXME
+
+	//FIXME do something here
+
+	return;
 }
 
 static inline bool
@@ -425,6 +440,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	sb->port_subscribe.handle = sb;
 	sb->port_subscribe.subscribe = _port_subscribe;
 	sb->port_subscribe.unsubscribe = _port_unsubscribe;
+
+	sb->touch.handle = sb;
+	sb->touch.touch = _touch;
 
 	sb->host_resize.handle = data;
 	sb->host_resize.ui_resize = driver->resize_cb;
@@ -702,6 +720,10 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		.URI = LV2_UI__portSubscribe,
 		.data = &sb->port_subscribe
 	};
+	const LV2_Feature touch_feature = {
+		.URI = LV2_UI__touch,
+		.data = &sb->touch
+	};
 	const LV2_Feature options_feature = {
 		.URI = LV2_OPTIONS__options,
 		.data = options
@@ -722,6 +744,7 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		&log_feature,
 		&port_map_feature,
 		&port_subscribe_feature,
+		&touch_feature,
 		&options_feature,
 		&voice_map_feature,
 		sb->host_resize.ui_resize ? &resize_feature : parent_feature,
