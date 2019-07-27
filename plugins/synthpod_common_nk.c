@@ -3043,7 +3043,7 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 				NULL
 			};
 
-#if 1
+#if 0
 			fprintf(stderr, "%s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s\n",
 				(char *)exec_uri,
 				"-n", (char *)plugin_urn,

@@ -77,6 +77,34 @@ _resize(void *data, int w, int h)
 	return 0;
 }
 
+static inline void
+_clone_size_hints(app_t *app)
+{
+	// clone size hints from widget to parent window
+	xcb_get_property_cookie_t reply = xcb_icccm_get_wm_size_hints(app->conn,
+		app->widget, XCB_ATOM_WM_NORMAL_HINTS);
+	xcb_size_hints_t size_hints;
+	memset(&size_hints, 0, sizeof(size_hints));
+	xcb_icccm_get_wm_size_hints_reply(app->conn, reply, &size_hints, NULL);
+
+#if 0
+	fprintf(stderr, "%u, (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), %u\n",
+			size_hints.flags,
+			size_hints.x, size_hints.y,
+			size_hints.width, size_hints.height,
+			size_hints.min_width, size_hints.min_height,
+			size_hints.max_width, size_hints.max_height,
+			size_hints.width_inc, size_hints.height_inc,
+			size_hints.min_aspect_num, size_hints.min_aspect_den,
+			size_hints.max_aspect_num, size_hints.max_aspect_den,
+			size_hints.base_width, size_hints.base_height,
+			size_hints.win_gravity);
+#endif
+
+	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &size_hints);
+  xcb_flush(app->conn);
+}
+
 static inline int
 _init(sandbox_slave_t *sb, void *data)
 {
@@ -127,25 +155,7 @@ _init(sandbox_slave_t *sb, void *data)
 	if(!app->widget)
 		return -1;
 
-	// clone size hints from widget to parent window
-	xcb_get_property_cookie_t reply = xcb_icccm_get_wm_size_hints(app->conn,
-		app->widget, XCB_ATOM_WM_NORMAL_HINTS);
-	xcb_size_hints_t size_hints;
-	memset(&size_hints, 0, sizeof(size_hints));
-	xcb_icccm_get_wm_size_hints_reply(app->conn, reply, &size_hints, NULL);
-
-	// XXX workaround for zyn fusion's garbage size hints
-	if(  (size_hints.min_width == 1) && (size_hints.min_height == 1)
-		&& (size_hints.max_width == 1) && (size_hints.max_height == 1) )
-	{
-		size_hints.min_width = 0;
-		size_hints.min_height = 0;
-		size_hints.max_width = 0;
-		size_hints.max_height = 0;
-	}
-
-	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &size_hints);
-  xcb_flush(app->conn);
+	_clone_size_hints(app);
 
 	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
 	app->resize_iface = sandbox_slave_extension_data(sb, LV2_UI__resize);
@@ -197,6 +207,10 @@ _run(sandbox_slave_t *sb, float update_rate, void *data)
 					}
 					break;
 				}
+				case XCB_REPARENT_NOTIFY:
+				{
+					_clone_size_hints(app);
+				} break;
 				case XCB_CLIENT_MESSAGE:
 				{
 					const xcb_client_message_event_t *ev = (const xcb_client_message_event_t *)e;
