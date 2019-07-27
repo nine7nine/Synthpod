@@ -45,9 +45,9 @@ struct _app_t {
 	xcb_drawable_t win;
 	xcb_drawable_t widget;
 	xcb_intern_atom_cookie_t cookie;
- 	xcb_intern_atom_reply_t* reply;
+	xcb_intern_atom_reply_t* reply;
 	xcb_intern_atom_cookie_t cookie2;
- 	xcb_intern_atom_reply_t* reply2;
+	xcb_intern_atom_reply_t* reply2;
 	int w;
 	int h;
 	cross_clock_t clk_real;
@@ -102,7 +102,7 @@ _clone_size_hints(app_t *app)
 #endif
 
 	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &size_hints);
-  xcb_flush(app->conn);
+	xcb_flush(app->conn);
 }
 
 static inline int
@@ -112,18 +112,18 @@ _init(sandbox_slave_t *sb, void *data)
 
 	signal(SIGINT, _sig);
 
-  app->conn = xcb_connect(NULL, NULL);
-  app->screen = xcb_setup_roots_iterator(xcb_get_setup(app->conn)).data;
-  app->win = xcb_generate_id(app->conn);
-  const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-  const uint32_t values [2] = {
+	app->conn = xcb_connect(NULL, NULL);
+	app->screen = xcb_setup_roots_iterator(xcb_get_setup(app->conn)).data;
+	app->win = xcb_generate_id(app->conn);
+	const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+	const uint32_t values [2] = {
 		app->screen->white_pixel,
 		XCB_EVENT_MASK_STRUCTURE_NOTIFY
 	};
 
 	app->w = 640;
 	app->h = 360;
-  xcb_create_window(app->conn, XCB_COPY_FROM_PARENT, app->win, app->screen->root,
+	xcb_create_window(app->conn, XCB_COPY_FROM_PARENT, app->win, app->screen->root,
 		0, 0, app->w, app->h, 0,
 		XCB_WINDOW_CLASS_INPUT_OUTPUT, app->screen->root_visual, mask, values);
 
@@ -134,16 +134,16 @@ _init(sandbox_slave_t *sb, void *data)
 			strlen(title), title);
 
 	app->cookie = xcb_intern_atom(app->conn, 1, 12, "WM_PROTOCOLS");
- 	app->reply = xcb_intern_atom_reply(app->conn, app->cookie, 0);
+	app->reply = xcb_intern_atom_reply(app->conn, app->cookie, 0);
 
 	app->cookie2 = xcb_intern_atom(app->conn, 0, 16, "WM_DELETE_WINDOW");
 	app->reply2 = xcb_intern_atom_reply(app->conn, app->cookie2, 0);
 
 	xcb_change_property(app->conn,
 		XCB_PROP_MODE_REPLACE, app->win, (*app->reply).atom, 4, 32, 1, &(*app->reply2).atom);
- 
-  xcb_map_window(app->conn, app->win);
-  xcb_flush(app->conn);
+
+	xcb_map_window(app->conn, app->win);
+	xcb_flush(app->conn);
 
 	const LV2_Feature parent_feature = {
 		.URI = LV2_UI__parent,
