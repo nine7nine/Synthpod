@@ -588,6 +588,8 @@ _sp_app_automate(sp_app_t *app, mod_t *mod, auto_t *automation, double value,
 			*buf = control->is_integer
 				? floor(f64)
 				: f64;
+
+			_sp_app_port_control_stash(port);
 		}
 	}
 	else if( (port->type == PORT_TYPE_ATOM) && automation->property )
