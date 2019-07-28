@@ -3504,7 +3504,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	mod->subj = handle->map->map(handle->map->handle, mod_uri);
 	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 2; // + automation ports
 
-	mod->minimum = 0;
+	mod->minimum = sizeof(LV2_Atom_Object);
 
 	for(unsigned p=0; p<num_ports - 2; p++) // - automation ports
 	{
@@ -3562,7 +3562,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			audio->gain = 0.f;
 			//TODO
 
-			mod->minimum += sizeof(LV2UI_Peak_Data);
+			mod->minimum += 3*(sizeof(LV2_Atom_Property) + sizeof(LV2_Atom_Float));
 		}
 		else if(is_cv)
 		{
@@ -3573,7 +3573,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			audio->gain = 0.f;
 			//TODO
 
-			mod->minimum += sizeof(LV2UI_Peak_Data);
+			mod->minimum += 3*(sizeof(LV2_Atom_Property) + sizeof(LV2_Atom_Float));
 		}
 		else if(is_control)
 		{
@@ -3699,7 +3699,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 				lilv_scale_points_free(port_points);
 			}
 
-			mod->minimum += sizeof(float);
+			mod->minimum += sizeof(LV2_Atom_Property) + sizeof(LV2_Atom_Float);
 		}
 		else if(is_atom)
 		{
@@ -3720,7 +3720,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			LilvNode *min_size= lilv_port_get(plug, port->port, handle->regs.port.minimum_size.node);
 			if(min_size)
 			{
-				mod->minimum += lilv_node_as_int(min_size);
+				mod->minimum += sizeof(LV2_Atom_Property) + sizeof(LV2_Atom) + lilv_node_as_int(min_size);
 				lilv_node_free(min_size);
 			}
 			else
@@ -3744,7 +3744,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			mod->sink_type |= port->type;
 	}
 
-	mod->minimum *= 4; // to be on the safe side
+	mod->minimum *= 8; // to be on the safe side
 
 	// automation input port
 	{

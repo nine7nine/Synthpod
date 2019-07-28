@@ -251,8 +251,10 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 		? io->from_master
 		: io->to_master;
 
-	// reserve 8192 additional bytes for the parent atom and dictionary
-	const size_t req_sz = size + 8192; //FIXME is this enough?
+	// reserve additional bytes for the parent atom and dictionary
+	const size_t add_sz = sizeof(LV2_Atom_Object) + 3*(sizeof(LV2_Atom_Property) + sizeof(LV2_Atom_Int));
+	const size_t dict_sz = 1024; //FIXME how big ?
+	const size_t req_sz = size + add_sz + dict_sz;
 	size_t max_sz;
 
 	uint8_t *buf_tx;
