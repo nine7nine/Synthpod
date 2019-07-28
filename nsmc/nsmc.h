@@ -42,6 +42,7 @@ struct _nsmc_driver_t {
 	nsmc_save_t save;
 	nsmc_show_t show;
 	nsmc_hide_t hide;
+	bool supports_switch;
 };
 
 NSMC_API nsmc_t *
@@ -67,7 +68,7 @@ NSMC_API void
 nsmc_saved(nsmc_t *nsm, int status);
 
 NSMC_API bool
-nsmc_managed(nsmc_t *nsm);
+nsmc_managed();
 
 #ifdef NSMC_IMPLEMENTATION
 
@@ -91,7 +92,6 @@ struct _osc_msg_t {
 };
 
 struct _nsmc_t {
-	bool managed;
 	bool connected;
 	bool connectionless;
 
@@ -201,13 +201,22 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, nsmc_t *nsm)
 static void
 _announce(nsmc_t *nsm)
 {
+	char capabilities [64] = ":message:";
+
 	// send announce message
 	pid_t pid = getpid();
 
-	int has_gui = nsm->driver->show && nsm->driver->hide;
-	const char *capabilities = has_gui
-		? ":message:optional-gui:"
-		: ":message:";
+	const bool has_gui = nsm->driver->show && nsm->driver->hide;
+
+	if(has_gui)
+	{
+		strcat(capabilities, "optional-gui:");
+	}
+
+	if(nsm->driver->supports_switch)
+	{
+		strcat(capabilities, "switch:");
+	}
 
 	uint8_t *tx;
 	size_t max;
@@ -354,7 +363,6 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	nsm->url = getenv("NSM_URL");
 	if(nsm->url)
 	{
-		nsm->managed = true;
 		nsm->connectionless = !strncmp(nsm->url, "osc.udp", 7) ? true : false;
 
 		nsm->url = strdup(nsm->url); //FIXME
@@ -420,7 +428,7 @@ nsmc_free(nsmc_t *nsm)
 NSMC_API void
 nsmc_run(nsmc_t *nsm)
 {
-	if(!nsm)
+	if(!nsm || !nsm->tx)
 		return;
 
 	const LV2_OSC_Enum ev = lv2_osc_stream_run(&nsm->stream);
@@ -459,7 +467,7 @@ nsmc_run(nsmc_t *nsm)
 NSMC_API void
 nsmc_opened(nsmc_t *nsm, int status)
 {
-	if(!nsm)
+	if(!nsm || !nsm->tx)
 		return;
 
 	uint8_t *tx;
@@ -495,7 +503,7 @@ nsmc_opened(nsmc_t *nsm, int status)
 NSMC_API void
 nsmc_shown(nsmc_t *nsm)
 {
-	if(!nsm)
+	if(!nsm || !nsm->tx)
 		return;
 
 	uint8_t *tx;
@@ -522,7 +530,7 @@ nsmc_shown(nsmc_t *nsm)
 NSMC_API void
 nsmc_hidden(nsmc_t *nsm)
 {
-	if(!nsm)
+	if(!nsm || !nsm->tx)
 		return;
 
 	uint8_t *tx;
@@ -549,7 +557,7 @@ nsmc_hidden(nsmc_t *nsm)
 NSMC_API void
 nsmc_saved(nsmc_t *nsm, int status)
 {
-	if(!nsm)
+	if(!nsm || !nsm->tx)
 		return;
 
 	uint8_t *tx;
@@ -583,9 +591,12 @@ nsmc_saved(nsmc_t *nsm, int status)
 }
 
 NSMC_API bool
-nsmc_managed(nsmc_t *nsm)
+nsmc_managed()
 {
-	return nsm->managed;
+	if(getenv("NSM_URL"))
+		return true;
+
+	return false;
 }
 
 #endif /* NSMC_IMPLEMENTATION */

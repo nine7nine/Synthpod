@@ -266,8 +266,7 @@ with support for native JACK audio, MIDI, OSC and CV in/out ports.
 The right choice on GNU/Linux for modular setups.
 
 This standalone host supports
-[NON session management](http://non.tuxfamily.org/nsm/API.html) and
-[JACK session management](http://jackaudio.org/files/docs/html/group__SessionClientFunctions.html)
+[NON session management](http://non.tuxfamily.org/nsm/API.html)
 to neatly integrate into modular setups.
 
 #### ALSA

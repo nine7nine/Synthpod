@@ -37,7 +37,6 @@ struct _prog_t {
 	
 	LV2_Atom_Forge forge;
 	
-	save_state_t save_state;
 	atomic_int kill;
 	pthread_t thread;
 
@@ -331,23 +330,6 @@ _system_port_del(void *data, void *sys_port)
 	// unsupported, skip
 }
 
-__non_realtime static void
-_saved(bin_t *bin, int status)
-{
-	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
-
-	if(handle->save_state == SAVE_STATE_NSM)
-	{
-		nsmc_saved(bin->nsm, status);
-	}
-	handle->save_state = SAVE_STATE_INTERNAL;
-
-	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
-	{
-		bin_quit(bin);
-	}
-}
-
 __non_realtime static int 
 _open(const char *path, const char *name, const char *id, void *data)
 {
@@ -355,28 +337,32 @@ _open(const char *path, const char *name, const char *id, void *data)
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 	(void)name;
 
+	const bool switch_over = bin->app ? true : false;
+
 	if(bin->path)
 		free(bin->path);
 	bin->path = strdup(path);
 
-	// synthpod init
-	bin->app_driver.sample_rate = handle->srate;
-	bin->app_driver.update_rate = handle->bin.update_rate;
-	bin->app_driver.max_block_size = handle->frsize;
-	bin->app_driver.min_block_size = 1;
-	bin->app_driver.seq_size = handle->seq_size;
-	bin->app_driver.num_periods = handle->nfrags;
-	
-	// app init
-	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
+	if(!switch_over)
+	{
+		// synthpod init
+		bin->app_driver.sample_rate = handle->srate;
+		bin->app_driver.update_rate = handle->bin.update_rate;
+		bin->app_driver.max_block_size = handle->frsize;
+		bin->app_driver.min_block_size = 1;
+		bin->app_driver.seq_size = handle->seq_size;
+		bin->app_driver.num_periods = handle->nfrags;
+		
+		// app init
+		bin->app = sp_app_new(NULL, &bin->app_driver, bin);
 
-	// alsa activate
-	atomic_init(&handle->kill, 0);
-	if(pthread_create(&handle->thread, NULL, _rt_thread, handle))
-		bin_log_error(bin, "%s: creation of realtime thread failed\n", __func__);
+		// dummy activate
+		atomic_init(&handle->kill, 0);
+		if(pthread_create(&handle->thread, NULL, _rt_thread, handle))
+			bin_log_error(bin, "%s: creation of realtime thread failed\n", __func__);
+	}
 
 	bin_bundle_load(bin, bin->path);
-	nsmc_opened(bin->nsm, 0);
 
 	return 0; // success
 }
@@ -387,9 +373,7 @@ _save(void *data)
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
-	handle->save_state = SAVE_STATE_NSM;
 	bin_bundle_save(bin, bin->path);
-	_saved(bin, 0);
 
 	return 0; // success
 }
@@ -414,7 +398,8 @@ static const nsmc_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
 	.show = _show,
-	.hide = _hide
+	.hide = _hide,
+	.supports_switch = true
 };
 
 // rt
@@ -629,7 +614,7 @@ main(int argc, char **argv)
 		bin->app_driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
 
 	// run
-	bin_run(bin, argv, &nsm_driver, NULL, NULL);
+	bin_run(bin, "Synthpod-DUMMY", argv, &nsm_driver);
 
 	// stop
 	bin_stop(bin);

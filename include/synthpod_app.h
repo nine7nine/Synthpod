@@ -51,6 +51,9 @@ typedef void (*sp_system_port_del)(void *data, void *sys_port);
 
 typedef void (*sp_close_request_t)(void *data);
 
+typedef void (*sp_opened_t)(void *data, int status);
+typedef void (*sp_saved_t)(void *data, int status);
+
 enum _sp_app_features_t {
 	SP_APP_FEATURE_FIXED_BLOCK_LENGTH				= (1 << 0),
 	SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH	= (1 << 1)
@@ -120,6 +123,8 @@ struct _sp_app_driver_t {
 	bool cpu_affinity;
 
 	sp_close_request_t close_request;
+	sp_opened_t opened;
+	sp_saved_t saved;
 };
 
 sp_app_t *
@@ -191,6 +196,9 @@ sp_app_nominal_block_length(sp_app_t *app, uint32_t nsamples);
 
 int
 sp_app_com_event(sp_app_t *app, LV2_URID otype); 
+
+void
+sp_app_bundle_reset(sp_app_t *app);
 
 void
 sp_app_bundle_load(sp_app_t *app, LV2_URID urn, bool via_app);

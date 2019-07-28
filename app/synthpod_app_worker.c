@@ -247,6 +247,19 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			assert(app->load_bundle == true);
 			app->load_bundle = false; // for sp_app_bypassed
 
+			// signal to worker
+			job_t *job1 = _sp_app_to_worker_request(app, sizeof(job_t));
+			if(job1)
+			{
+				job1->reply = JOB_TYPE_REQUEST_BUNDLE_LOAD_STATUS;
+				job1->status = job->status;
+				_sp_app_to_worker_advance(app, sizeof(job_t));
+			}
+			else
+			{
+				sp_app_log_trace(app, "%s: buffer request failed\n", __func__);
+			}
+
 #if 0
 			// signal to UI
 			size_t size = sizeof(transmit_bundle_load_t)
@@ -269,6 +282,19 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			assert(app->block_state == BLOCKING_STATE_WAIT);
 			app->block_state = BLOCKING_STATE_RUN; // release block
 			assert(app->load_bundle == false);
+
+			// signal to worker
+			job_t *job1 = _sp_app_to_worker_request(app, sizeof(job_t));
+			if(job1)
+			{
+				job1->reply = JOB_TYPE_REQUEST_BUNDLE_SAVE_STATUS;
+				job1->status = job->status;
+				_sp_app_to_worker_advance(app, sizeof(job_t));
+			}
+			else
+			{
+				sp_app_log_trace(app, "%s: buffer request failed\n", __func__);
+			}
 
 #if 0
 			// signal to UI
@@ -438,6 +464,24 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		case JOB_TYPE_REQUEST_BUNDLE_SAVE:
 		{
 			sp_app_bundle_save(app, job->urn, true);
+
+			break;
+		}
+		case JOB_TYPE_REQUEST_BUNDLE_LOAD_STATUS:
+		{
+			if(app->driver->opened)
+			{
+				app->driver->opened(app->data, job->status);
+			}
+
+			break;
+		}
+		case JOB_TYPE_REQUEST_BUNDLE_SAVE_STATUS:
+		{
+			if(app->driver->saved)
+			{
+				app->driver->saved(app->data, job->status);
+			}
 
 			break;
 		}

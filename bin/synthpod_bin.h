@@ -53,14 +53,7 @@
 #define SEQ_SIZE 0x2000
 #define JAN_1970 (uint64_t)0x83aa7e80
 
-typedef enum _save_state_t save_state_t;
 typedef struct _bin_t bin_t;
-
-enum _save_state_t {
-	SAVE_STATE_INTERNAL = 0,
-	SAVE_STATE_NSM,
-	SAVE_STATE_JACK
-};
 
 struct _bin_t {
 	atomic_bool inject;
@@ -129,8 +122,7 @@ void
 bin_init(bin_t *bin, uint32_t sample_rate);
 
 void
-bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
-	void (*idle)(void *data), void *data);
+bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driver);
 
 void
 bin_stop(bin_t *bin);
@@ -146,6 +138,9 @@ bin_process_post(bin_t *bin);
 
 void
 bin_bundle_new(bin_t *bin);
+
+void
+bin_bundle_reset(bin_t *bin);
 
 void
 bin_bundle_load(bin_t *bin, const char *bundle_path);

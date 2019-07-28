@@ -32,7 +32,6 @@ typedef cpuset_t cpu_set_t;
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include <jack/transport.h>
-#include <jack/session.h>
 #if defined(JACK_HAS_METADATA_API)
 #	include <jack/metadata.h>
 #	include <jack/uuid.h>
@@ -68,13 +67,10 @@ struct _prog_t {
 	LV2_URID time_speed;
 
 	atomic_int kill;
-	save_state_t save_state;
-	atomic_uintptr_t async;
 
 	char *server_name;
 	char *session_id;
 	jack_client_t *client;
-	jack_session_event_t *session_event;
 	uint32_t seq_size;
 
 	struct {
@@ -154,35 +150,6 @@ _trans_event(prog_t *prog,  LV2_Atom_Forge *forge, int rolling, jack_position_t 
 	return ref;
 }
 
-__non_realtime static void
-_saved(bin_t *bin, int status)
-{
-	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
-
-	if(handle->save_state == SAVE_STATE_NSM)
-	{
-		nsmc_saved(bin->nsm, status);
-	}
-	else if(handle->save_state == SAVE_STATE_JACK)
-	{
-		jack_session_event_t *ev = handle->session_event;
-		if(ev)
-		{
-			if(status != 0)
-				ev->flags |= JackSessionSaveError;
-			jack_session_reply(handle->client, ev);
-			jack_session_event_free(ev);
-			handle->session_event = NULL;
-		}
-	}
-	handle->save_state = SAVE_STATE_INTERNAL;
-
-	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
-	{
-		bin_quit(bin);
-	}
-}
-
 // rt
 __realtime static int
 _process(jack_nframes_t nsamples, void *data)
@@ -190,6 +157,11 @@ _process(jack_nframes_t nsamples, void *data)
 	prog_t *handle = data;
 	bin_t *bin = &handle->bin;
 	sp_app_t *app = bin->app;
+
+	if(atomic_load_explicit(&handle->kill, memory_order_relaxed))
+	{
+		return 0;
+	}
 
 	if(bin->first)
 	{
@@ -549,19 +521,6 @@ _process(jack_nframes_t nsamples, void *data)
 	return 0;
 }
 
-__non_realtime static void
-_session(jack_session_event_t *ev, void *data)
-{
-	prog_t *handle = data;
-
-	//printf("_session: %s %s %s\n",
-	//	ev->session_dir, ev->client_uuid, ev->command_line);
-
-	jack_session_event_t *async = (void *)atomic_exchange(&handle->async, (uintptr_t)ev);
-	if(async)
-		jack_session_event_free(async);
-}
-
 // rt, but can do non-rt stuff, as process won't be called
 __non_realtime static int
 _buffer_size(jack_nframes_t block_size, void *data)
@@ -822,8 +781,6 @@ _jack_init(prog_t *handle, const char *id)
 	// set client process callback
 	if(jack_set_process_callback(handle->client, _process, handle))
 		return -1;
-	if(jack_set_session_callback(handle->client, _session, handle))
-		return -1;
 	if(jack_set_sample_rate_callback(handle->client, _sample_rate, handle))
 		return -1;
 	if(jack_set_buffer_size_callback(handle->client, _buffer_size, handle))
@@ -839,6 +796,8 @@ _jack_deinit(prog_t *handle)
 {
 	if(handle->client)
 	{
+		atomic_store_explicit(&handle->kill, 1, memory_order_relaxed);
+
 		// remove client properties
 #if defined(JACK_HAS_METADATA_API)
 		jack_uuid_t uuid;
@@ -866,9 +825,20 @@ _open(const char *path, const char *name, const char *id, void *data)
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 	(void)name;
 
+	const bool switch_over = bin->app ? true : false;
+
 	if(bin->path)
 		free(bin->path);
 	bin->path = strdup(path);
+
+	if(switch_over)
+	{
+		// deregister system ports
+		bin_bundle_reset(bin);
+
+		// jack deinit
+		_jack_deinit(handle);
+	}
 
 	// jack init
 	if(_jack_init(handle, id))
@@ -877,24 +847,31 @@ _open(const char *path, const char *name, const char *id, void *data)
 		return -1;
 	}
 
-	// synthpod init
-	bin->app_driver.sample_rate = jack_get_sample_rate(handle->client);
-	bin->app_driver.update_rate = handle->bin.update_rate;
-	bin->app_driver.max_block_size = jack_get_buffer_size(handle->client);
-	bin->app_driver.min_block_size = 1;
-	bin->app_driver.seq_size = MAX(handle->seq_size,
-		jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
-	bin->app_driver.num_periods = 1; //FIXME
+	if(!switch_over)
+	{
+		// synthpod init
+		bin->app_driver.sample_rate = jack_get_sample_rate(handle->client);
+		bin->app_driver.update_rate = handle->bin.update_rate;
+		bin->app_driver.max_block_size = jack_get_buffer_size(handle->client);
+		bin->app_driver.min_block_size = 1;
+		bin->app_driver.seq_size = MAX(handle->seq_size,
+			jack_port_type_get_buffer_size(handle->client, JACK_DEFAULT_MIDI_TYPE));
+		bin->app_driver.num_periods = 1; //FIXME
 
-	// app init
-	bin->app = sp_app_new(NULL, &bin->app_driver, bin);
+		// app init
+		bin->app = sp_app_new(NULL, &bin->app_driver, bin);
 
-	// jack activate
-	atomic_init(&handle->kill, 0);
+		// jack activate
+		atomic_init(&handle->kill, 0);
+	}
+	else
+	{
+		atomic_store_explicit(&handle->kill, 0, memory_order_relaxed);
+	}
+
 	jack_activate(handle->client); //TODO check
 
 	bin_bundle_load(bin, bin->path);
-	nsmc_opened(bin->nsm, 0);
 
 	return 0; // success
 }
@@ -905,9 +882,7 @@ _save(void *data)
 	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 
-	handle->save_state = SAVE_STATE_NSM;
 	bin_bundle_save(bin, bin->path);
-	_saved(bin, 0);
 
 	return 0; // success
 }
@@ -932,7 +907,8 @@ static const nsmc_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
 	.show = _show,
-	.hide = _hide
+	.hide = _hide,
+	.supports_switch = true
 };
 
 // rt
@@ -980,83 +956,6 @@ _osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 	uint64_t timestamp = (time_sec << 32) | time_frac;
 
 	return timestamp;
-}
-
-static void
-_idle(void *data)
-{
-	prog_t *handle = data;
-	bin_t *bin = &handle->bin;
-
-	jack_session_event_t *async = (void *)atomic_exchange(&handle->async, 0);
-	if(!async)
-		return;
-
-	//printf("_session_async: %s %s %s\n",
-	//	async->session_dir, async->client_uuid, async->command_line);
-
-	char path [PATH_MAX];
-	const char *resolvedpath = realpath(async->session_dir, path);
-	if(!resolvedpath)
-		resolvedpath = async->session_dir; // fall-back
-
-	// create command line
-	char *buf = NULL;
-	size_t sz = 0;
-	bool ignore = false;
-
-	for(int i=0; i<bin->optind; i++)
-	{
-		const char *arg = (i == 0)
-			? "synthpod_jack"
-			: bin->argv[i];
-
-		if(ignore)
-		{
-			ignore = false;
-			continue;
-		}
-
-		if(!strcmp(arg, "-u"))
-		{
-			ignore = true;
-			continue;
-		}
-
-		const size_t len = strlen(arg);
-		buf = realloc(buf, sz + len);
-
-		sprintf(&buf[sz], "%s ", arg);
-		sz += len + 1;
-	}
-
-	{
-		const size_t len = 32;
-		buf = realloc(buf, sz + len);
-
-		sprintf(&buf[sz], "-u %s ${SESSION_DIR}", async->client_uuid);
-	}
-
-	async->command_line = buf;
-	handle->session_event = async;
-
-	switch(async->type)
-	{
-		case JackSessionSaveAndQuit:
-			atomic_store_explicit(&handle->kill, 1, memory_order_relaxed); // quit after saving
-			// fall-through
-		case JackSessionSave:
-			handle->save_state = SAVE_STATE_JACK;
-			bin_bundle_save(bin, resolvedpath);
-			_saved(bin, 0);
-			break;
-		case JackSessionSaveTemplate:
-			handle->save_state = SAVE_STATE_JACK;
-			bin_bundle_new(bin);
-			bin_bundle_save(bin, resolvedpath);
-			_saved(bin, 0);
-			break;
-	}
 }
 
 int
@@ -1197,8 +1096,6 @@ main(int argc, char **argv)
 		}
 	}
 
-	atomic_init(&handle.async, 0);
-
 	bin_init(bin, 48000); //FIXME
 
 	LV2_URID_Map *map = bin->map;
@@ -1229,14 +1126,10 @@ main(int argc, char **argv)
 	bin->app_driver.features = SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH; // always true for JACK
 
 	// run
-	bin_run(bin, argv, &nsm_driver, _idle, &handle);
+	bin_run(bin, "Synthpod-JACK", argv, &nsm_driver);
 
 	// stop
 	bin_stop(bin);
-
-	jack_session_event_t *async = (void *)atomic_load(&handle.async);
-	if(async)
-		jack_session_event_free(async);
 
 	// deinit JACK
 	_jack_deinit(&handle);

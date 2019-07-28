@@ -82,6 +82,22 @@ _close_request(void *data)
 	bin_quit(bin);
 }
 
+__non_realtime static void
+_opened(void *data, int status)
+{
+	bin_t *bin = data;
+
+	nsmc_opened(bin->nsm, status);
+}
+
+__non_realtime static void
+_saved(void *data, int status)
+{
+	bin_t *bin = data;
+
+	nsmc_saved(bin->nsm, status);
+}
+
 __realtime static void *
 _app_to_ui_request(size_t minimum, size_t *maximum, void *data)
 {
@@ -388,6 +404,8 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->app_driver.bad_plugins = bin->bad_plugins;
 	bin->app_driver.cpu_affinity = bin->cpu_affinity;
 	bin->app_driver.close_request = _close_request;
+	bin->app_driver.opened = _opened;
+	bin->app_driver.saved = _saved;
 
 	bin->worker_thread = pthread_self(); // thread ID of UI thread
 	bin->first = true;
@@ -404,9 +422,12 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	signal(SIGQUIT, _sig);
 	signal(SIGINT, _sig);
 
-	if(bin->has_gui)
+	if(!nsmc_managed())
 	{
-		bin_show(bin);
+		if(bin->has_gui)
+		{
+			bin_show(bin);
+		}
 	}
 
 	cross_clock_init(&bin->clk_mono, CROSS_CLOCK_MONOTONIC);
@@ -414,8 +435,7 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 }
 
 __realtime void
-bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
-	void (*idle)(void *data), void *data)
+bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driver)
 {
 	char *fallback_path = NULL;
 
@@ -435,7 +455,7 @@ bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
 	// NSM init
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
-	bin->nsm = nsmc_new("Synthpod", exe, fallback_path ? fallback_path : argv[optind],
+	bin->nsm = nsmc_new(name, exe, fallback_path ? fallback_path : argv[optind],
 		nsm_driver, bin); //TODO check
 
 	if(fallback_path)
@@ -498,7 +518,7 @@ bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
 				{
 					bin->child = 0; // invalidate
 
-					if(nsmc_managed(bin->nsm))
+					if(nsmc_managed())
 						nsmc_hidden(bin->nsm);
 
 					if(bin->kill_gui)
@@ -550,14 +570,8 @@ bin_run(bin_t *bin, char **argv, const nsmc_driver_t *nsm_driver,
 		}
 
 		// run NSM
-		if(nsmc_managed(bin->nsm))
+		if(nsmc_managed())
 			nsmc_run(bin->nsm);
-
-		// rund idle callback
-		if(idle)
-		{
-			idle(data);
-		}
 
 		//sched_yield();
 	}
@@ -684,6 +698,12 @@ bin_bundle_load(bin_t *bin, const char *bundle_path)
 	}
 
 	sp_app_bundle_load(bin->app, urn, false);
+}
+
+__non_realtime void
+bin_bundle_reset(bin_t *bin)
+{
+	sp_app_bundle_reset(bin->app);
 }
 
 __non_realtime void

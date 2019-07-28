@@ -1492,3 +1492,9 @@ sp_app_set_bundle_path(sp_app_t *app, const char *bundle_path)
 
 	app->bundle_path = strdup(bundle_path);
 }
+
+void
+sp_app_bundle_reset(sp_app_t *app)
+{
+	_sp_app_reset(app);
+}
