@@ -4702,91 +4702,53 @@ _tab_label(struct nk_context *ctx, const char *label)
 }
 
 static void
-_expose_main_preset_list_for_bank(plughandle_t *handle, mod_t *mod,
-	struct nk_context *ctx, const LilvNode *preset_bank)
+_expose_main_preset_list_wo_banks(plughandle_t *handle, mod_t *mod,
+	struct nk_context *ctx)
 {
 	DBG;
-	bool first = true;
 	int count = 0;
+
+	nk_layout_row_dynamic(ctx, handle->dy2, 1);
+
 	HASH_FOREACH(&handle->preset_matches, itr)
 	{
 		const LilvNode *preset = *itr;
 
-		bool visible = false;
+		const bool is_default_pset = lilv_node_equals(preset, lilv_plugin_get_uri(mod->plug));
 
-		LilvNode *bank = lilv_world_get(handle->world, preset, handle->node.pset_bank, NULL);
-		if(bank)
+		LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
+		if(!label_node)
+			label_node = lilv_world_get(handle->world, preset, handle->node.lv2_name, NULL);
+		if(label_node || is_default_pset)
 		{
-			if(lilv_node_equals(preset_bank, bank))
-				visible = true;
+			const char *label_str = is_default_pset
+				? DEFAULT_PSET_LABEL
+				: lilv_node_as_string(label_node);
 
-			lilv_node_free(bank);
-		}
-		else if(!preset_bank)
-			visible = true;
+			nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
+				? nk_style_item_color(nk_rgb(40, 40, 40))
+				: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
 
-		if(visible)
-		{
-			const bool is_default_pset =  lilv_node_equals(preset, lilv_plugin_get_uri(mod->plug));
+			const bool is_user_preset = !strncmp(lilv_node_as_string(preset), "file://", 7);
+			bool is_preset_selected;
 
-			LilvNode *label_node = lilv_world_get(handle->world, preset, handle->node.rdfs_label, NULL);
-			if(!label_node)
-				label_node = lilv_world_get(handle->world, preset, handle->node.lv2_name, NULL);
-			if(label_node || is_default_pset)
+			if(is_user_preset)
 			{
-				if(first)
-				{
-					LilvNode *bank_label_node = NULL;
-					if(preset_bank)
-					{
-						bank_label_node = lilv_world_get(handle->world, preset_bank, handle->node.rdfs_label, NULL);
-						if(!bank_label_node)
-							bank_label_node = lilv_world_get(handle->world, preset_bank, handle->node.lv2_name, NULL);
-					}
-					const char *bank_label = bank_label_node
-						? lilv_node_as_string(bank_label_node)
-						: "Unbanked";
-
-					nk_layout_row_dynamic(ctx, handle->dy2, 1);
-					_tab_label(ctx, bank_label);
-
-					nk_layout_row_dynamic(ctx, handle->dy2, 1);
-
-					if(bank_label_node)
-						lilv_node_free(bank_label_node);
-
-					first = false;
-				}
-
-				const char *label_str = is_default_pset
-					? DEFAULT_PSET_LABEL
-					: lilv_node_as_string(label_node);
-
-				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
-					? nk_style_item_color(nk_rgb(40, 40, 40))
-					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
-
-				const bool is_user_preset = !strncmp(lilv_node_as_string(preset), "file://", 7);
-				bool is_preset_selected;
-
-				if(is_user_preset)
-				{
-					is_preset_selected = nk_select_image_label(ctx, handle->icon.house,
-						label_str, NK_TEXT_LEFT, nk_false);
-				}
-				else
-				{
-					is_preset_selected = nk_select_label(ctx,
-						label_str, NK_TEXT_LEFT, nk_false);
-				}
-
-				if(is_preset_selected)
-					_patch_mod_preset_set(handle, handle->module_selector, preset);
-
-				nk_style_pop_style_item(ctx);
-
-				lilv_node_free(label_node);
+				is_preset_selected = nk_select_image_label(ctx, handle->icon.house,
+					label_str, NK_TEXT_LEFT, nk_false);
 			}
+			else
+			{
+				is_preset_selected = nk_select_label(ctx,
+					label_str, NK_TEXT_LEFT, nk_false);
+			}
+
+			if(is_preset_selected)
+				_patch_mod_preset_set(handle, handle->module_selector, preset);
+
+			nk_style_pop_style_item(ctx);
+
+			lilv_node_free(label_node);
 		}
 	}
 }
@@ -4803,14 +4765,7 @@ _expose_main_preset_list(plughandle_t *handle, struct nk_context *ctx,
 		if(_hash_empty(&handle->preset_matches) || find_matches)
 			_refresh_main_preset_list(handle, mod);
 
-		HASH_FOREACH(&mod->banks, itr)
-		{
-			const LilvNode *bank = *itr;
-
-			_expose_main_preset_list_for_bank(handle, mod, ctx, bank);
-		}
-
-		_expose_main_preset_list_for_bank(handle, mod, ctx, NULL);
+		_expose_main_preset_list_wo_banks(handle, mod, ctx);
 	}
 }
 
