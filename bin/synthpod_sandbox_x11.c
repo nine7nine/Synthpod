@@ -88,7 +88,7 @@ _clone_size_hints(app_t *app)
 	xcb_icccm_get_wm_size_hints_reply(app->conn, reply, &size_hints, NULL);
 
 #if 0
-	fprintf(stderr, "%u, (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), %u\n",
+	fprintf(stdout, "%u, (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), (%i, %i), %u\n",
 			size_hints.flags,
 			size_hints.x, size_hints.y,
 			size_hints.width, size_hints.height,
@@ -100,6 +100,14 @@ _clone_size_hints(app_t *app)
 			size_hints.base_width, size_hints.base_height,
 			size_hints.win_gravity);
 #endif
+
+	// quirk for invalid min/max size hints reported by e.g. zyn
+	if(  (size_hints.flags & (XCB_ICCCM_SIZE_HINT_P_MIN_SIZE | XCB_ICCCM_SIZE_HINT_P_MAX_SIZE) )
+		&& (size_hints.min_width == 1) && (size_hints.min_height == 1)
+		&& (size_hints.max_width == 1) && (size_hints.max_height == 1) )
+	{
+		return;
+	}
 
 	xcb_icccm_set_wm_size_hints(app->conn, app->win, XCB_ATOM_WM_NORMAL_HINTS, &size_hints);
 	xcb_flush(app->conn);
