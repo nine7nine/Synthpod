@@ -15,6 +15,8 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
+#include <fnmatch.h>
+
 #include "lv2/lv2plug.in/ns/ext/log/log.h"
 #include "lv2/lv2plug.in/ns/ext/log/logger.h"
 
@@ -25,13 +27,35 @@
 
 #include <d2tk/frontend_pugl.h>
 
+typedef enum _view_type_t {
+	VIEW_TYPE_PLUGIN_LIST = 0,
+	VIEW_TYPE_PRESET_LIST,
+	VIEW_TYPE_PATCH_BAY,
+
+	VIEW_TYPE_MAX
+} view_type_t;
+
+typedef struct _entry_t entry_t;
+typedef struct _view_t view_t;
 typedef struct _plughandle_t plughandle_t;
+
+struct _entry_t {
+	const void *data;
+	const char *label;
+};
+
+struct _view_t {
+	view_type_t type;
+	bool selector [VIEW_TYPE_MAX];
+};
 
 struct _plughandle_t {
 	LilvWorld *world;
+
 	const LilvPlugins *plugs;
 	unsigned nplugs;
-	const LilvPlugin **hplugs;
+	entry_t *lplugs;
+	char pplugs[32];
 
 	LV2_URID_Map *map;
 	LV2_Atom_Forge forge;
@@ -44,7 +68,159 @@ struct _plughandle_t {
 
 	LV2UI_Controller *controller;
 	LV2UI_Write_Function writer;
+
+	unsigned nviews;
+	view_t views [32];
 };
+
+static int
+_plug_cmp_name(const void *a, const void *b)
+{
+	const entry_t *entry_a = (const entry_t *)a;
+	const entry_t *entry_b = (const entry_t *)b;
+
+	return strcasecmp(entry_a->label, entry_b->label);
+}
+
+static int
+_plug_populate(plughandle_t *handle, const char *pattern)
+{
+	pattern = pattern ? pattern : "**";
+	handle->nplugs = 0;
+
+	LILV_FOREACH(plugins, i, handle->plugs)
+	{
+		const LilvPlugin *plug = lilv_plugins_get(handle->plugs, i);
+		LilvNode *node = lilv_plugin_get_name(plug);
+		const char *label = lilv_node_as_string(node);
+
+		if(fnmatch(pattern, label, FNM_CASEFOLD | FNM_EXTMATCH) == 0)
+		{
+			entry_t *entry = &handle->lplugs[handle->nplugs++];
+			entry->data = plug;
+			entry->label = label;
+		}
+	}
+
+	qsort(handle->lplugs, handle->nplugs, sizeof(entry_t), _plug_cmp_name);
+
+	return 0;
+}
+
+static int
+_expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
+{
+	d2tk_pugl_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	view_t *view = &handle->views[iview];
+
+	static const d2tk_coord_t vfrac [3] = { 24, 0, 16 };
+	D2TK_BASE_LAYOUT(rect, 3, vfrac, D2TK_FLAG_LAYOUT_Y_ABS, vlay)
+	{
+		const d2tk_rect_t *vrect = d2tk_layout_get_rect(vlay);
+		const uint32_t vy = d2tk_layout_get_index(vlay);
+
+		switch(vy)
+		{
+			case 0:
+			{
+				d2tk_base_label(base, -1, "View", 1.f, vrect,
+					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+
+				if(d2tk_base_text_field_is_changed(base, D2TK_ID_IDX(iview), vrect,
+					sizeof(handle->pplugs), handle->pplugs,
+					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, NULL))
+				{
+					_plug_populate(handle, handle->pplugs);
+				}
+			} break;
+			case 1:
+			{
+				switch(view->type)
+				{
+					case VIEW_TYPE_PLUGIN_LIST:
+					{
+						const unsigned dn = 25;
+
+						D2TK_BASE_SCROLLBAR(base, vrect, D2TK_ID_IDX(iview), D2TK_FLAG_SCROLL_Y,
+							0, handle->nplugs, 0, dn, vscroll)
+						{
+							const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
+							const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
+
+							D2TK_BASE_TABLE(col, 1, dn, trow)
+							{
+								const unsigned k = d2tk_table_get_index_y(trow) + voffset;
+
+								if(k >= handle->nplugs)
+								{
+									break;
+								}
+
+								const d2tk_rect_t *row = d2tk_table_get_rect(trow);
+								const d2tk_id_t id = D2TK_ID_IDX(iview*dn + k);
+
+								if(d2tk_base_button_label_is_changed(base, id,
+									-1, handle->lplugs[k].label, row))
+								{
+									//FIXME
+								}
+							}
+						}
+					} break;
+					case VIEW_TYPE_PRESET_LIST:
+					{
+						//FIXME
+					} break;
+					case VIEW_TYPE_PATCH_BAY:
+					{
+						//FIXME
+					} break;
+
+					case VIEW_TYPE_MAX:
+					{
+						// never reached
+					} break;
+				}
+			} break;
+			case 2:
+			{
+				static const d2tk_coord_t hfrac [VIEW_TYPE_MAX + 1] = {
+					16, 16, 16,
+					0
+				};
+
+				D2TK_BASE_LAYOUT(vrect, VIEW_TYPE_MAX + 1, hfrac, D2TK_FLAG_LAYOUT_X_ABS, hlay)
+				{
+					const d2tk_rect_t *hrect = d2tk_layout_get_rect(hlay);
+					const uint32_t vx = d2tk_layout_get_index(hlay);
+					const d2tk_id_t id = D2TK_ID_IDX(iview*VIEW_TYPE_MAX + vx);
+
+					switch(vx)
+					{
+						case VIEW_TYPE_PLUGIN_LIST:
+							// fall-through
+						case VIEW_TYPE_PRESET_LIST:
+							// fall-through
+						case VIEW_TYPE_PATCH_BAY:
+						{
+							if(d2tk_base_toggle_is_changed(base, id, hrect, &view->selector[vx]))
+							{
+								//FIXME
+							}
+						} break;
+						case VIEW_TYPE_MAX:
+						{
+							// never reached
+						} break;
+					}
+				}
+			} break;
+		}
+	}
+
+	return 0;
+}
 
 static int
 _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
@@ -65,46 +241,8 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 		{
 			case 0:
 			{
-				static const d2tk_coord_t hfrac [17] = {
-					24, 24, 24, 24,
-					24, 24, 24, 24,
-					24, 24, 24, 24,
-					24, 24, 24, 24,
-					0
-				};
-
-				D2TK_BASE_LAYOUT(vrect, 17, hfrac, D2TK_FLAG_LAYOUT_X_ABS, hlay)
-				{
-					const d2tk_rect_t *hrect = d2tk_layout_get_rect(hlay);
-					const uint32_t vx = d2tk_layout_get_index(hlay);
-					const d2tk_id_t id = D2TK_ID_IDX(vx);
-
-					switch(vx)
-					{
-						case 0:
-						case 1:
-						case 2:
-						case 3:
-						case 4:
-						case 5:
-						case 6:
-						case 7:
-						case 8:
-						case 9:
-						case 10:
-						case 11:
-						case 12:
-						case 13:
-						case 14:
-						case 15:
-						{
-							if(d2tk_base_button_is_changed(base, id, hrect))
-							{
-								//FIXME
-							}
-						} break;
-					}
-				}
+				d2tk_base_label(base, -1, "Menu", 1.f, vrect,
+					D2TK_ALIGN_MIDDLE| D2TK_ALIGN_LEFT);
 			} break;
 			case 1:
 			{
@@ -114,41 +252,7 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 					const d2tk_rect_t *prect =  d2tk_pane_get_rect(hpane);
 					const uint32_t px = d2tk_pane_get_index(hpane);
 
-					switch(px)
-					{
-						case 0:
-						{
-							const unsigned n = lilv_plugins_size(handle->plugs);
-							const unsigned dn = 40;
-
-							D2TK_BASE_SCROLLBAR(base, prect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
-								0, n, 0, dn, vscroll)
-							{
-								const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
-								const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
-
-								D2TK_BASE_TABLE(col, 1, dn, trow)
-								{
-									const d2tk_rect_t *row = d2tk_table_get_rect(trow);
-									const unsigned k = d2tk_table_get_index_y(trow) + voffset;
-									const d2tk_id_t id = D2TK_ID_IDX(k);
-
-									const LilvPlugin *plug = handle->hplugs[k];
-									LilvNode *plug_name = lilv_plugin_get_name(plug);
-									const char *plug_name_str = lilv_node_as_string(plug_name);
-
-									if(d2tk_base_button_label_is_changed(base, id, -1, plug_name_str, row))
-									{
-										//FIXME
-									}
-								}
-							}
-						} break;
-						case 1:
-						{
-							//FIXME
-						} break;
-					}
+					_expose_view(handle, px, prect);
 				}
 			} break;
 			case 2:
@@ -160,23 +264,6 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 	}
 
 	return 0;
-}
-
-static int
-_plug_cmp_name(const void *a, const void *b)
-{
-	const LilvPlugin **plug_a = (const LilvPlugin **)a;
-	const LilvPlugin **plug_b = (const LilvPlugin **)b;
-
-	LilvNode *name_a = lilv_plugin_get_name(*plug_a);
-	LilvNode *name_b = lilv_plugin_get_name(*plug_b);
-
-	const int res = strcasecmp(lilv_node_as_string(name_a), lilv_node_as_string(name_b));
-
-	lilv_node_free(name_a);
-	lilv_node_free(name_b);
-
-	return res;
 }
 
 static LV2UI_Handle
@@ -265,17 +352,11 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->plugs = lilv_world_get_all_plugins(handle->world);
 	handle->nplugs = lilv_plugins_size(handle->plugs);
-	handle->hplugs = calloc(1, handle->nplugs * sizeof(LilvPlugin *));
-	const LilvPlugin **hplug = handle->hplugs;
+	handle->lplugs = calloc(1, handle->nplugs * sizeof(entry_t));
 
-	LILV_FOREACH(plugins, i, handle->plugs)
-	{
-		const LilvPlugin *plug = lilv_plugins_get(handle->plugs, i);
 
-		*hplug++ = plug;
-	}
-
-	qsort(handle->hplugs, handle->nplugs, sizeof(LilvPlugin *), _plug_cmp_name);
+	strncpy(handle->pplugs, "*", sizeof(handle->plugs));
+	_plug_populate(handle, handle->pplugs);
 
 	return handle;
 }
@@ -287,7 +368,7 @@ cleanup(LV2UI_Handle instance)
 
 	d2tk_pugl_free(handle->dpugl);
 
-	free(handle->hplugs);
+	free(handle->lplugs);
 
 	lilv_world_free(handle->world);
 
