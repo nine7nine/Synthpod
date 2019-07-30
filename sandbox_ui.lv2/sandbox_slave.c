@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <string.h>
 #include <ctype.h>
+#include <pthread.h>
 
 #include <sandbox_slave.h>
 #include <sandbox_io.h>
@@ -425,6 +426,17 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	{
 		fprintf(stderr, "not enough arguments\n");
 		goto fail;
+	}
+
+	{
+		struct sched_param schedp;
+		memset(&schedp, 0, sizeof(struct sched_param));
+		schedp.sched_priority = 0; // the only valid value for SCHED_OTHER
+
+		if(pthread_setschedparam(pthread_self(), SCHED_OTHER, &schedp))
+		{
+			fprintf(stderr, "pthread_setschedparam error\n");
+		}
 	}
 
 	sb->driver = driver;
