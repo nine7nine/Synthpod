@@ -242,11 +242,21 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 		{
 			case 0:
 			{
+				if(!handle->world)
+				{
+					break;
+				}
+
 				d2tk_base_label(base, -1, "Menu", 1.f, vrect,
-					D2TK_ALIGN_MIDDLE| D2TK_ALIGN_LEFT);
+					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
 			} break;
 			case 1:
 			{
+				if(!handle->world)
+				{
+					break;
+				}
+
 				D2TK_BASE_PANE(base, vrect, D2TK_ID, D2TK_FLAG_PANE_X,
 					0.05f, 0.95f, 0.05f, hpane)
 				{
@@ -260,6 +270,12 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 			{
 				d2tk_base_label(base, -1, "Synthpod "SYNTHPOD_VERSION, 1.f, vrect,
 					D2TK_ALIGN_MIDDLE| D2TK_ALIGN_RIGHT);
+
+				if(!handle->world)
+				{
+					d2tk_base_label(base, -1, "Loading...", 1.f, vrect,
+						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+				}
 			} break;
 		}
 	}
@@ -341,23 +357,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		host_resize->ui_resize(host_resize->handle, w, h);
 	}
 
-	handle->world = lilv_world_new();
-
-	LilvNode *node_false = lilv_new_bool(handle->world, false);
-	if(node_false)
-	{
-		lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
-		lilv_node_free(node_false);
-	}
-	lilv_world_load_all(handle->world);
-
-	handle->plugs = lilv_world_get_all_plugins(handle->world);
-	handle->nplugs = lilv_plugins_size(handle->plugs);
-	handle->lplugs = calloc(1, handle->nplugs * sizeof(entry_t));
-
-
-	strncpy(handle->pplugs, "*", sizeof(handle->plugs));
-	_plug_populate(handle, handle->pplugs);
+	strncpy(handle->pplugs, "*", sizeof(handle->pplugs));
 
 	return handle;
 }
@@ -385,12 +385,39 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 	d2tk_pugl_redisplay(handle->dpugl);
 }
 
+static void
+_init(plughandle_t *handle)
+{
+	handle->world = lilv_world_new();
+
+	LilvNode *node_false = lilv_new_bool(handle->world, false);
+	if(node_false)
+	{
+		lilv_world_set_option(handle->world, LILV_OPTION_DYN_MANIFEST, node_false);
+		lilv_node_free(node_false);
+	}
+	lilv_world_load_all(handle->world);
+
+	handle->plugs = lilv_world_get_all_plugins(handle->world);
+	const unsigned nplugs = lilv_plugins_size(handle->plugs);
+	handle->lplugs = calloc(1, nplugs * sizeof(entry_t));
+
+	_plug_populate(handle, handle->pplugs);
+}
+
 static int
 _idle(LV2UI_Handle instance)
 {
 	plughandle_t *handle = instance;
 
-	return d2tk_pugl_step(handle->dpugl);
+	const int res = d2tk_pugl_step(handle->dpugl);
+
+	if(!handle->world)
+	{
+		_init(handle);
+	}
+
+	return res;
 }
 
 static const LV2UI_Idle_Interface idle_ext = {
