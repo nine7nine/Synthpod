@@ -161,7 +161,8 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 								const d2tk_id_t id = D2TK_ID_IDX(iview*dn + k);
 
 								if(d2tk_base_button_label_is_changed(base, id,
-									-1, handle->lplugs[k].label, row))
+									-1, handle->lplugs[k].label,
+									D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, row))
 								{
 									//FIXME
 								}
