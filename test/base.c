@@ -1282,7 +1282,7 @@ _test_button_label_image()
 	assert(base);
 
 	const d2tk_state_t state = d2tk_base_button_label_image(base, D2TK_ID,
-		-1, "label", -1, "image.png", &rect);
+		-1, "label", D2TK_ALIGN_CENTERED, -1, "image.png", &rect);
 	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
 		 |D2TK_STATE_OVER) );
 
@@ -1301,7 +1301,7 @@ _test_button_label()
 	assert(base);
 
 	const d2tk_state_t state = d2tk_base_button_label(base, D2TK_ID,
-		-1, "label", &rect);
+		-1, "label", D2TK_ALIGN_CENTERED, &rect);
 	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
 		| D2TK_STATE_OVER) );
 
@@ -1358,7 +1358,7 @@ _test_toggle_label()
 
 	bool val = false;
 	const d2tk_state_t state = d2tk_base_toggle_label(base, D2TK_ID,
-		-1, "label", &rect, &val);
+		-1, "label", D2TK_ALIGN_CENTERED, &rect, &val);
 	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
 		| D2TK_STATE_OVER) );
 	assert(val == false);
