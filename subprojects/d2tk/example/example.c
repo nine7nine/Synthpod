@@ -108,7 +108,7 @@ _render_c_mix(d2tk_base_t *base, const d2tk_rect_t *rect)
 				const size_t lbl_len = snprintf(lbl, sizeof(lbl), "%03X", k);
 
 				if(d2tk_base_toggle_label_is_changed(
-					base, id, lbl_len, lbl, bnd, &val->b))
+					base, id, lbl_len, lbl, D2TK_ALIGN_CENTERED, bnd, &val->b))
 				{
 					fprintf(stdout, "toggle %016"PRIx64" %s\n", id, val->b ? "ON" : "OFF");
 				};
@@ -119,7 +119,7 @@ _render_c_mix(d2tk_base_t *base, const d2tk_rect_t *rect)
 				const size_t lbl_len = snprintf(lbl, sizeof(lbl), "%03X", k);
 
 				if(d2tk_base_button_label_is_changed(
-					base, id, lbl_len, lbl, bnd))
+					base, id, lbl_len, lbl, D2TK_ALIGN_CENTERED, bnd))
 				{
 					fprintf(stdout, "button %016"PRIx64" DOWN\n", id);
 				}
@@ -421,6 +421,7 @@ _render_c_scroll(d2tk_base_t *base, const d2tk_rect_t *rect)
 					char lbl [32];
 					const size_t lbl_len = snprintf(lbl, sizeof(lbl), "%u-%03u", j, k);
 					if(d2tk_base_button_label_image_is_changed( base, id, lbl_len, lbl,
+						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT,
 						-1, "libre-arrow-circle-right.png", bnd))
 					{
 						fprintf(stdout, "button %016"PRIx64" DOWN\n", id);
@@ -448,7 +449,8 @@ _render_c_pane(d2tk_base_t *base, const d2tk_rect_t *rect)
 		// 1st
 		if(x == 0)
 		{
-			if(d2tk_base_button_label_is_changed(base, D2TK_ID, -1, "1st", hrect))
+			if(d2tk_base_button_label_is_changed(base, D2TK_ID, -1, "1st",
+				D2TK_ALIGN_CENTERED, hrect))
 			{
 				fprintf(stdout, "button 1st DOWN\n");
 			}
@@ -466,7 +468,8 @@ _render_c_pane(d2tk_base_t *base, const d2tk_rect_t *rect)
 			// 1st
 			if(y == 0)
 			{
-				if(d2tk_base_button_label_is_changed(base, D2TK_ID, -1, "2nd", vrect))
+				if(d2tk_base_button_label_is_changed(base, D2TK_ID, -1, "2nd",
+					D2TK_ALIGN_CENTERED, vrect))
 				{
 					fprintf(stdout, "button 2nd DOWN\n");
 				}
@@ -475,7 +478,8 @@ _render_c_pane(d2tk_base_t *base, const d2tk_rect_t *rect)
 			}
 
 			// 2nd
-			if(d2tk_base_button_label_is_changed(base, D2TK_ID, -1, "3rd", vrect))
+			if(d2tk_base_button_label_is_changed(base, D2TK_ID, -1, "3rd",
+				D2TK_ALIGN_CENTERED, vrect))
 			{
 				fprintf(stdout, "button 3rd DOWN\n");
 			}
@@ -507,7 +511,7 @@ _render_c_layout(d2tk_base_t *base, const d2tk_rect_t *rect)
 					const ssize_t lbl_len = snprintf(lbl, sizeof(lbl), "%"PRIu32, vfrac[y]);
 
 					if(d2tk_base_button_label_is_changed(base, D2TK_ID_IDX(x*N + y),
-						lbl_len, lbl, vrect))
+						lbl_len, lbl, D2TK_ALIGN_CENTERED, vrect))
 					{
 						fprintf(stdout, "button DOWN\n");
 					}
@@ -520,7 +524,7 @@ _render_c_layout(d2tk_base_t *base, const d2tk_rect_t *rect)
 				const ssize_t lbl_len = snprintf(lbl, sizeof(lbl), "%"PRIu32, hfrac[x]);
 
 				if(d2tk_base_button_label_is_changed(base, D2TK_ID_IDX(x*N + 0),
-					lbl_len, lbl, hrect))
+					lbl_len, lbl, D2TK_ALIGN_CENTERED, hrect))
 				{
 					fprintf(stdout, "button DOWN\n");
 				}
@@ -611,7 +615,8 @@ _render_c_flowmatrix(d2tk_base_t *base, const d2tk_rect_t *rect)
 				const d2tk_id_t id = D2TK_ID_IDX(i);
 				bool *val = &toggle[i];
 
-				state = d2tk_base_toggle_label(base, id, lbl_len, lbl, bnd, val);
+				state = d2tk_base_toggle_label(base, id, lbl_len, lbl,
+					D2TK_ALIGN_CENTERED, bnd, val);
 				if(d2tk_state_is_active(state))
 				{
 					d2tk_flowmatrix_set_src(flowm, id, &pos_nodes[i]);
@@ -886,7 +891,8 @@ _render_c_browser(d2tk_base_t *base, const d2tk_rect_t *rect)
 						const char *icon = "libre-gui-folder.png";
 
 						if(d2tk_base_button_label_image_is_changed(base,
-							D2TK_ID_IDX(k), nxt - ptr, ptr, -1, icon, bnd))
+							D2TK_ID_IDX(k), nxt - ptr, ptr,
+							D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, -1, icon, bnd))
 						{
 							*nxt = '\0';
 						}
@@ -930,7 +936,8 @@ _render_c_browser(d2tk_base_t *base, const d2tk_rect_t *rect)
 							: "libre-gui-file.png";
 
 						if(d2tk_base_button_label_image_is_changed(base,
-							D2TK_ID_IDX(k), -1, itm->d_name, -1, icon, bnd))
+							D2TK_ID_IDX(k), -1, itm->d_name,
+							D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, -1, icon, bnd))
 						{
 							if(is_dir)
 							{
@@ -1434,7 +1441,7 @@ _render_c_keyboard(d2tk_base_t *base, const d2tk_rect_t *rect)
 			: keybtn->name;
 
 		const d2tk_state_t state = d2tk_base_button_label(base,
-			D2TK_ID_IDX(keybtn-keybtns), -1, lbl, &bnd);
+			D2TK_ID_IDX(keybtn-keybtns), -1, lbl, D2TK_ALIGN_CENTERED, &bnd);
 
 		if(d2tk_state_is_down(state))
 		{
@@ -1517,7 +1524,8 @@ d2tk_example_run(d2tk_base_t *base, d2tk_coord_t w, d2tk_coord_t h)
 					const unsigned b = d2tk_table_get_index(tab);
 
 					bool val = (b == bar);
-					d2tk_base_toggle_label(base, D2TK_ID_IDX(b), -1, bar_lbl[b], hrect, &val);
+					d2tk_base_toggle_label(base, D2TK_ID_IDX(b), -1, bar_lbl[b],
+						D2TK_ALIGN_CENTERED, hrect, &val);
 					if(val)
 					{
 						bar = b;

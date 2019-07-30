@@ -331,14 +331,15 @@ d2tk_base_cursor(d2tk_base_t *base, const d2tk_rect_t *rect);
 
 D2TK_API d2tk_state_t
 d2tk_base_button_label_image(d2tk_base_t *base, d2tk_id_t id, ssize_t lbl_len,
-	const char *lbl, ssize_t path_len, const char *path, const d2tk_rect_t *rect);
+	const char *lbl, d2tk_align_t align, ssize_t path_len, const char *path, 
+	const d2tk_rect_t *rect);
 
 #define d2tk_base_button_label_image_is_changed(...) \
 	d2tk_state_is_changed(d2tk_base_button_label_image(__VA_ARGS__))
 
 D2TK_API d2tk_state_t
 d2tk_base_button_label(d2tk_base_t *base, d2tk_id_t id, ssize_t lbl_len,
-	const char *lbl, const d2tk_rect_t *rect);
+	const char *lbl, d2tk_align_t align, const d2tk_rect_t *rect);
 
 #define d2tk_base_button_label_is_changed(...) \
 	d2tk_state_is_changed(d2tk_base_button_label(__VA_ARGS__))
@@ -370,7 +371,7 @@ d2tk_base_button(d2tk_base_t *base, d2tk_id_t id, const d2tk_rect_t *rect);
 
 D2TK_API d2tk_state_t
 d2tk_base_toggle_label(d2tk_base_t *base, d2tk_id_t id, ssize_t lbl_len,
-	const char *lbl, const d2tk_rect_t *rect, bool *value);
+	const char *lbl, d2tk_align_t align, const d2tk_rect_t *rect, bool *value);
 
 #define d2tk_base_toggle_label_is_changed(...) \
 	d2tk_state_is_changed(d2tk_base_toggle_label(__VA_ARGS__))
