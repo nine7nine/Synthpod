@@ -77,23 +77,25 @@ if use_x11
 		install : true,
 		install_dir : plug_dir)
 
-	custom_target('synthpod_ui_ttl',
+	configure_file (
 		input : 'synthpod_ui.ttl',
 		output : 'synthpod_ui.ttl',
-		command : clone,
+		copy : true,
 		install : true,
 		install_dir : plug_dir)
 endif
 
-configure_file(input : 'manifest.ttl.in', output : 'manifest.ttl',
+configure_file(
+	input : 'manifest.ttl.in',
+	output : 'manifest.ttl',
 	configuration : conf_data,
 	install : true,
 	install_dir : plug_dir)
 
-custom_target('synthpod_ttl',
+configure_file(
 	input : 'synthpod.ttl',
 	output : 'synthpod.ttl',
-	command : clone,
+	copy : true,
 	install : true,
 	install_dir : plug_dir)
 

@@ -7,14 +7,16 @@ bndl = shared_module('synthpod_bundle', bndl_srcs,
 	install : true,
 	install_dir : bndl_dir)
 
-configure_file(input : 'manifest.ttl.in', output : 'manifest.ttl',
+configure_file(
+	input : 'manifest.ttl.in',
+	output : 'manifest.ttl',
 	configuration : conf_data,
 	install : true,
 	install_dir : bndl_dir)
 
-custom_target('synthpod_bundle_ttl',
+configure_file(
 	input : 'synthpod_bundle.ttl',
 	output : 'synthpod_bundle.ttl',
-	command : clone,
+	copy : true,
 	install : true,
 	install_dir : bndl_dir)

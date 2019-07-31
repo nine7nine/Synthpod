@@ -144,9 +144,6 @@ if cc.compiles(builtin_assume_aligned, name : 'builtin_assume_aligned')
 	add_project_arguments('-DHAS_BUILTIN_ASSUME_ALIGNED', language : 'c')
 endif
 
-cp = find_program('cp')
-clone = [cp, '@INPUT@', '@OUTPUT@']
-
 c_args = ['-fvisibility=hidden',
 	'-ffast-math',
 	'-Wno-attributes',
