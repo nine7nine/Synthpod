@@ -51,6 +51,8 @@ elif host_machine.system() == 'darwin'
 	#nk_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_osx.m')
 endif
 
+ttls = []
+
 if use_x11
 	nk = shared_module('synthpod_nk', nk_srcs,
 		c_args : c_args,
@@ -77,27 +79,30 @@ if use_x11
 		install : true,
 		install_dir : plug_dir)
 
-	configure_file (
+	ui_ttl = configure_file (
 		input : 'synthpod_ui.ttl',
 		output : 'synthpod_ui.ttl',
 		copy : true,
 		install : true,
 		install_dir : plug_dir)
+	ttls += ui_ttl
 endif
 
-configure_file(
+manifest_ttl = configure_file(
 	input : 'manifest.ttl.in',
 	output : 'manifest.ttl',
 	configuration : conf_data,
 	install : true,
 	install_dir : plug_dir)
+ttls += manifest_ttl
 
-configure_file(
+dsp_ttl = configure_file(
 	input : 'synthpod.ttl',
 	output : 'synthpod.ttl',
 	copy : true,
 	install : true,
 	install_dir : plug_dir)
+ttls += dsp_ttl
 
 #FIXME paths
 install_data('../data/font/Abel-Regular.ttf', install_dir : plug_dir)
@@ -125,3 +130,21 @@ install_data('../data/png/layers.png', install_dir : plug_dir )
 install_data('../data/png/user.png', install_dir : plug_dir )
 install_data('../data/png/settings.png', install_dir : plug_dir )
 install_data('../data/png/menu.png', install_dir : plug_dir )
+
+if lv2_validate.found() and sord_validate.found()
+	test('LV2 validate', lv2_validate,
+		args : ttls)
+endif
+
+if lv2lint.found()
+	test('LV2 lint', lv2lint,
+		args : ['-Ewarn',
+			'http://open-music-kontrollers.ch/lv2/synthpod#control2cv',
+			'http://open-music-kontrollers.ch/lv2/synthpod#cv2control',
+			'http://open-music-kontrollers.ch/lv2/synthpod#heavyload',
+			'http://open-music-kontrollers.ch/lv2/synthpod#keyboard',
+			'http://open-music-kontrollers.ch/lv2/synthpod#midisplitter',
+			'http://open-music-kontrollers.ch/lv2/synthpod#panic',
+			'http://open-music-kontrollers.ch/lv2/synthpod#placeholder',
+			'http://open-music-kontrollers.ch/lv2/synthpod#stereo'])
+endif

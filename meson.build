@@ -17,6 +17,9 @@ else
 endif
 
 cc = meson.get_compiler('c')
+lv2_validate = find_program('lv2_validate', native : true, required : false)
+sord_validate = find_program('sord_validate', native : true, required : false)
+lv2lint = find_program('lv2lint', required : false)
 
 inc_incs = include_directories('include')
 app_incs = include_directories('app')
