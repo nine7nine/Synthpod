@@ -32,6 +32,7 @@ typedef cpuset_t cpu_set_t;
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include <jack/transport.h>
+#include <jack/thread.h>
 #if defined(JACK_HAS_METADATA_API)
 #	include <jack/metadata.h>
 #	include <jack/uuid.h>
@@ -69,7 +70,6 @@ struct _prog_t {
 	atomic_int kill;
 
 	char *server_name;
-	char *session_id;
 	jack_client_t *client;
 	uint32_t seq_size;
 
@@ -743,18 +743,49 @@ _xrun(void *data)
 }
 
 static int
+_jack_probe_prio(prog_t *handle)
+{
+	jack_options_t opts = JackNullOption | JackNoStartServer;
+	if(handle->server_name)
+		opts |= JackServerName;
+
+	const pid_t pid = getpid();
+
+	char id [32];
+	snprintf(id, sizeof(id), "Syntphod-JACK-%i", pid);
+
+	jack_client_t *client;
+	jack_status_t status;
+	if(!(client = jack_client_open(id, opts, &status,
+		handle->server_name ? handle->server_name : NULL)))
+	{
+		return -1;
+	}
+
+	const int audio_prio = jack_client_real_time_priority(client);
+
+	jack_client_close(client);
+
+	if(audio_prio != -1) // is JACK running with realtime priorities ?
+	{
+		// overwrite audio/worker priorities
+		handle->bin.audio_prio = audio_prio;
+		handle->bin.worker_prio = (audio_prio >= 10) ? (audio_prio - 10) : 0;
+	}
+
+	return 0;
+}
+
+static int
 _jack_init(prog_t *handle, const char *id)
 {
 	jack_options_t opts = JackNullOption | JackNoStartServer;
 	if(handle->server_name)
 		opts |= JackServerName;
-	if(handle->session_id)
-		opts |= JackSessionID;
 
 	jack_status_t status;
 	if(!(handle->client = jack_client_open(id, opts, &status,
-		handle->server_name ? handle->server_name : handle->session_id,
-		handle->server_name ? handle->session_id : NULL)))
+		handle->server_name ? handle->server_name : NULL)))
 	{
 		return -1;
 	}
@@ -967,11 +998,10 @@ main(int argc, char **argv)
 	bin_t *bin = &handle.bin;
 
 	handle.server_name = NULL;
-	handle.session_id = NULL;
 	handle.seq_size = SEQ_SIZE;
 
-	bin->audio_prio = 70; // not used
-	bin->worker_prio = 60;
+	bin->audio_prio = 0; // disabled by default
+	bin->worker_prio = 0; // disabled by default
 	bin->num_slaves = sysconf(_SC_NPROCESSORS_ONLN) - 1;
 	bin->bad_plugins = false;
 	bin->has_gui = false;
@@ -986,7 +1016,7 @@ main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGkKbBaAw:Wl:n:u:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGkKbBaAl:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -1057,20 +1087,11 @@ main(int argc, char **argv)
 			case 'A':
 				bin->cpu_affinity = false;
 				break;
-			case 'w':
-				bin->worker_prio = atoi(optarg);
-				break;
-			case 'W':
-				bin->worker_prio = 0;
-				break;
 			case 'l':
 				snprintf(bin->socket_path, sizeof(bin->socket_path), "%s", optarg);
 				break;
 			case 'n':
 				handle.server_name = optarg;
-				break;
-			case 'u':
-				handle.session_id = optarg;
 				break;
 			case 's':
 				handle.seq_size = MAX(SEQ_SIZE, atoi(optarg));
@@ -1083,7 +1104,7 @@ main(int argc, char **argv)
 				bin->update_rate = atoi(optarg);
 				break;
 			case '?':
-				if(  (optopt == 'n') || (optopt == 'u') || (optopt == 's') || (optopt == 'c')
+				if(  (optopt == 'n') || (optopt == 's') || (optopt == 'c')
 					|| (optopt == 'l') || (optopt == 'f') )
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				else if(isprint(optopt))
@@ -1094,6 +1115,12 @@ main(int argc, char **argv)
 			default:
 				return -1;
 		}
+	}
+
+	if(_jack_probe_prio(&handle))
+	{
+		fprintf(stderr, "Unable to probe JACK for thread priorities\n");
+		return -1;
 	}
 
 	bin_init(bin, 48000); //FIXME

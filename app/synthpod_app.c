@@ -650,13 +650,17 @@ _dsp_slave_thread(void *data)
 	const int num = dsp_slave - dsp_master->dsp_slaves + 1;
 	//printf("thread: %i\n", num);
 
-	struct sched_param schedp;
-	memset(&schedp, 0, sizeof(struct sched_param));
-	schedp.sched_priority = app->driver->audio_prio - 1;
-
 	const pthread_t self = pthread_self();
-	if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
-		sp_app_log_error(app, "%s: pthread_setschedparam error\n", __func__);
+
+	if(app->driver->audio_prio)
+	{
+		struct sched_param schedp;
+		memset(&schedp, 0, sizeof(struct sched_param));
+		schedp.sched_priority = app->driver->audio_prio - 1;
+
+		if(pthread_setschedparam(self, SCHED_FIFO, &schedp))
+			sp_app_log_error(app, "%s: pthread_setschedparam error\n", __func__);
+	}
 
 	if(app->driver->cpu_affinity)
 	{
