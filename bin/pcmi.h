@@ -61,6 +61,9 @@ pcmi_capt_chan(pcmi_t *pcmi, uint32_t channel, float *dst, uint32_t frsize);
 void
 pcmi_capt_done(pcmi_t *pcmi, uint32_t frsize);
 
+float
+pcmi_capt_xrun(pcmi_t *pcmi);
+
 void
 pcmi_play_init(pcmi_t *pcmi, uint32_t frsize);
 
@@ -72,6 +75,9 @@ pcmi_play_chan(pcmi_t *pcmi, uint32_t channel, const float *src, uint32_t frsize
 
 void
 pcmi_play_done(pcmi_t *pcmi, uint32_t frsize);
+
+float
+pcmi_play_xrun(pcmi_t *pcmi);
 
 #ifdef __cplusplus
 }

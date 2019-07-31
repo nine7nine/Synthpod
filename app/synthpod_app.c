@@ -26,6 +26,8 @@
 typedef cpuset_t cpu_set_t;
 #endif
 
+#define REWEIGHT_S 4
+
 // non-rt
 void
 sp_app_activate(sp_app_t *app)
@@ -714,7 +716,6 @@ _dsp_master_wait(sp_app_t *app, dsp_master_t *dsp_master, unsigned num)
 			{
 				case ETIMEDOUT:
 				{
-					fprintf(stderr, "%s: taking emergency exit\n", __func__);
 					atomic_store(&dsp_master->emergency_exit, true);
 				} continue;
 				case EINTR:
@@ -881,9 +882,10 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	dsp_master_t *dsp_master = &app->dsp_master;
 	atomic_init(&dsp_master->kill, false);
 	atomic_init(&dsp_master->emergency_exit, false);
+	atomic_init(&dsp_master->xrun_report, false);
 	sem_init(&dsp_master->sem, 0, 0);
 	dsp_master->num_slaves = driver->num_slaves;
-	dsp_master->concurrent = dsp_master->num_slaves; // this is a safe fallback
+	dsp_master->concurrent = dsp_master->num_slaves + 1; // this is a safe fallback
 	for(unsigned i=0; i<dsp_master->num_slaves; i++)
 	{
 		dsp_slave_t *dsp_slave = &dsp_master->dsp_slaves[i];
@@ -894,6 +896,8 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 		pthread_attr_init(&attr);
 		pthread_create(&dsp_slave->thread, &attr, _dsp_slave_thread, dsp_slave);
 	}
+
+	app->skip_reweighting = REWEIGHT_S; // this is a safe fallback
 
 	lv2_osc_urid_init(&app->osc_urid, driver->map);
 
@@ -991,14 +995,12 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 
 	dsp_master_t *dsp_master = &app->dsp_master;
 	if( (dsp_master->num_slaves > 0) && (dsp_master->concurrent > 1) ) // parallel processing makes sense here
-		_sp_app_process_parallel(app, nsamples, sparse_update_timeout);
-	else
-		_sp_app_process_serial(app, nsamples, sparse_update_timeout);
-
-	if(atomic_exchange(&dsp_master->emergency_exit, false))
 	{
-		app->dsp_master.concurrent = dsp_master->num_slaves; // spin up all cores
-		sp_app_log_trace(app, "%s: had to take emergency exit\n", __func__);
+		_sp_app_process_parallel(app, nsamples, sparse_update_timeout);
+	}
+	else
+	{
+		_sp_app_process_serial(app, nsamples, sparse_update_timeout);
 	}
 
 	// profiling
@@ -1015,6 +1017,40 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 	else if(run_time > app->prof.max)
 		app->prof.max = run_time;
 
+	bool reset_parallelizer = false;
+
+	if(atomic_exchange(&dsp_master->emergency_exit, false))
+	{
+		sp_app_log_trace(app, "%s: had to take emergency exit\n", __func__);
+		reset_parallelizer = true;
+	}
+
+	if(atomic_exchange(&dsp_master->xrun_report, false))
+	{
+		sp_app_log_trace(app, "%s: Xruns reported\n", __func__);
+		reset_parallelizer = true;
+	}
+
+	if(reset_parallelizer)
+	{
+		app->dsp_master.concurrent = dsp_master->num_slaves + 1; // spin up all cores
+		app->skip_reweighting = REWEIGHT_S;
+
+		app->prof.min = 0;
+		app->prof.sum = 0;
+		app->prof.max = 0;
+		app->prof.count = 0;
+
+		for(unsigned m=0; m<app->num_mods; m++)
+		{
+			mod_t *mod = app->mods[m];
+
+			mod->prof.min = 0;
+			mod->prof.sum= 0;
+			mod->prof.max= 0;
+		}
+	}
+
 	if(app_t2.tv_sec > app->prof.t0.tv_sec) // a second has passed
 	{
 		const unsigned tot_time = (app_t2.tv_sec - app->prof.t0.tv_sec)*1000000000
@@ -1022,57 +1058,64 @@ sp_app_run_post(sp_app_t *app, uint32_t nsamples)
 		const float tot_time_1 = 100.f / tot_time;
 
 #if defined(USE_DYNAMIC_PARALLELIZER)
-		// reset DAG weights
-		for(unsigned m=0; m<app->num_mods; m++)
+		if(app->skip_reweighting > 0)
 		{
-			mod_t *mod = app->mods[m];
-			dsp_client_t *dsp_client = &mod->dsp_client;
-
-			dsp_client->weight = 0;
+			app->skip_reweighting -= 1;
 		}
-
-		unsigned T1 = 0;
-		unsigned Tinf = 0;
-
-		// calculate DAG weights
-		for(unsigned m1=0; m1<app->num_mods; m1++)
+		else
 		{
-			mod_t *mod1 = app->mods[m1];
-			dsp_client_t *dsp_client1 = &mod1->dsp_client;
-
-			unsigned gsw = 0; // greatest sink weight
-
-			for(unsigned m2=0; m2<m1; m2++)
+			// reset DAG weights
+			for(unsigned m=0; m<app->num_mods; m++)
 			{
-				mod_t *mod2 = app->mods[m2];
-				dsp_client_t *dsp_client2 = &mod2->dsp_client;
+				mod_t *mod = app->mods[m];
+				dsp_client_t *dsp_client = &mod->dsp_client;
 
-				for(unsigned s=0; s<dsp_client2->num_sinks; s++)
-				{
-					dsp_client_t *dsp_client3 = dsp_client2->sinks[s];
-
-					if(dsp_client3 == dsp_client1) // mod2 is source of mod1
-					{
-						if(dsp_client2->weight > gsw)
-							gsw = dsp_client2->weight;
-
-						break;
-					}
-				}
+				dsp_client->weight = 0;
 			}
 
-			const unsigned w1 = mod1->prof.sum;
+			unsigned T1 = 0;
+			unsigned Tinf = 0;
 
-			T1 += w1;
-			dsp_client1->weight = gsw + w1;
+			// calculate DAG weights
+			for(unsigned m1=0; m1<app->num_mods; m1++)
+			{
+				mod_t *mod1 = app->mods[m1];
+				dsp_client_t *dsp_client1 = &mod1->dsp_client;
 
-			if(dsp_client1->weight > Tinf)
-				Tinf = dsp_client1->weight;
+				unsigned gsw = 0; // greatest sink weight
+
+				for(unsigned m2=0; m2<m1; m2++)
+				{
+					mod_t *mod2 = app->mods[m2];
+					dsp_client_t *dsp_client2 = &mod2->dsp_client;
+
+					for(unsigned s=0; s<dsp_client2->num_sinks; s++)
+					{
+						dsp_client_t *dsp_client3 = dsp_client2->sinks[s];
+
+						if(dsp_client3 == dsp_client1) // mod2 is source of mod1
+						{
+							if(dsp_client2->weight > gsw)
+								gsw = dsp_client2->weight;
+
+							break;
+						}
+					}
+				}
+
+				const unsigned w1 = mod1->prof.sum;
+
+				T1 += w1;
+				dsp_client1->weight = gsw + w1;
+
+				if(dsp_client1->weight > Tinf)
+					Tinf = dsp_client1->weight;
+			}
+
+			// derive average parallelism
+			const float parallelism = (float)T1 / Tinf; //TODO add some head-room?
+			app->dsp_master.concurrent = ceilf(parallelism);
 		}
-
-		// derive average parallelism
-		const float parallelism = (float)T1 / Tinf; //TODO add some head-room?
-		app->dsp_master.concurrent = ceilf(parallelism);
 
 		// to nk
 		{
@@ -1501,4 +1544,12 @@ void
 sp_app_bundle_reset(sp_app_t *app)
 {
 	_sp_app_reset(app);
+}
+
+void
+sp_app_xrun_report(sp_app_t *app)
+{
+	dsp_master_t *dsp_master = &app->dsp_master;
+
+	atomic_store(&dsp_master->xrun_report, true);
 }

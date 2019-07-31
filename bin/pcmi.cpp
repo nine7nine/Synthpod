@@ -127,6 +127,14 @@ pcmi_capt_done(pcmi_t *pcmi, uint32_t frsize)
 	_pcmi->capt_done(frsize);
 }
 
+float
+pcmi_capt_xrun(pcmi_t *pcmi)
+{
+	Alsa_pcmi *_pcmi = (Alsa_pcmi *)pcmi;
+
+	return _pcmi->capt_xrun();
+}
+
 void
 pcmi_play_init(pcmi_t *pcmi, uint32_t frsize)
 {
@@ -157,4 +165,12 @@ pcmi_play_done(pcmi_t *pcmi, uint32_t frsize)
 	Alsa_pcmi *_pcmi = (Alsa_pcmi *)pcmi;
 
 	_pcmi->play_done(frsize);
+}
+
+float
+pcmi_play_xrun(pcmi_t *pcmi)
+{
+	Alsa_pcmi *_pcmi = (Alsa_pcmi *)pcmi;
+
+	return _pcmi->play_xrun();
 }

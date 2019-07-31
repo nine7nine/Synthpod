@@ -160,10 +160,29 @@ _process(prog_t *handle)
 	snd_seq_real_time_t ref_time;
 	snd_seq_queue_status_malloc(&stat);
 
+	float last_capt_xrun = 0.f;
+	float last_play_xrun = 0.f;
+
 	pcmi_pcm_start(handle->pcmi);
 	while(!atomic_load_explicit(&handle->kill, memory_order_relaxed))
 	{
 		uint32_t na = pcmi_pcm_wait(pcmi);
+
+		// detect Xruns
+		const float capt_xrun = pcmi_capt_xrun(pcmi);
+		const float play_xrun = pcmi_play_xrun(pcmi);
+
+		if(capt_xrun != last_capt_xrun)
+		{
+			sp_app_xrun_report(app);
+			last_capt_xrun = capt_xrun;
+		}
+
+		if(play_xrun != last_play_xrun)
+		{
+			sp_app_xrun_report(app);
+			last_play_xrun = play_xrun;
+		}
 
 		// current time is next time from last cycle
 		_ntp_clone(&handle->cur_ntp, &handle->nxt_ntp);

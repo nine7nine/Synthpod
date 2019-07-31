@@ -166,6 +166,7 @@ struct _dsp_master_t {
 	dsp_slave_t dsp_slaves [MAX_SLAVES];
 	atomic_bool kill;
 	atomic_bool emergency_exit;
+	atomic_bool xrun_report;
 	sem_t sem;
 	unsigned concurrent;
 	unsigned num_slaves;
@@ -445,6 +446,7 @@ struct _sp_app_t {
 	void *data;
 
 	atomic_bool dirty;
+	unsigned skip_reweighting;
 
 	blocking_state_t block_state;
 	silencing_state_t silence_state;

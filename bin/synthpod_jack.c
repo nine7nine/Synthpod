@@ -735,9 +735,9 @@ _xrun(void *data)
 {
 	prog_t *handle = data;
 	bin_t *bin = &handle->bin;
+	sp_app_t *app = bin->app;
 
-	//TODO do this asynchronously?
-	bin_log_warning(bin, "JACK XRun\n");
+	sp_app_xrun_report(app);
 
 	return 0;
 }
