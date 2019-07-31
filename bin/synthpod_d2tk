@@ -1,0 +1,29 @@
+#!/bin/sh
+
+set -e
+set -u
+
+# guess pid of running daemon
+pid=$( pgrep synthpod | grep -v sand | head -n 1 | awk '{print $1}' )
+
+if [ -z "${pid}" ]; then
+	exit 1
+fi
+
+socket="shm:///synthpod-${pid}"
+
+uri='http://open-music-kontrollers.ch/lv2/synthpod#stereo'
+ui='http://open-music-kontrollers.ch/lv2/synthpod#root_5_d2tk'
+bundle=$( lv2info ${uri} | grep Bundle | head -n1 | sed -e 's/.*file:\/\///g' )
+
+exec ${GDB:-} synthpod_sandbox_x11 \
+	-p "${uri}" \
+	-P "${bundle}" \
+	-u "${ui}" \
+	-U "${bundle}" \
+	-s "${socket}" \
+	-w "Synthpod - ${socket}" \
+	-m $(( 0x1000000 )) \
+	-r 48000 \
+	-f 30 \
+	"$@"
