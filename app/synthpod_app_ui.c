@@ -929,10 +929,7 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 			{
 				mod->idisp.subscribed = ((const LV2_Atom_Bool *)value)->body;
 
-				if(mod->idisp.iface && mod->idisp.subscribed)
-				{
-					_sp_app_mod_queue_draw(mod); // trigger update
-				}
+				_sp_app_mod_queue_draw(mod); // trigger update
 			}
 			else if(  (prop == app->regs.synthpod.module_reinstantiate.urid)
 				&& (value->type == app->forge.Bool) )
