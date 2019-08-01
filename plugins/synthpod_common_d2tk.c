@@ -90,6 +90,36 @@ struct _plughandle_t {
 	view_t views [32];
 };
 
+static inline void
+_status_message_set(plughandle_t *handle, const char *message)
+{
+	handle->message.len = snprintf(handle->message.buf, sizeof(handle->message.buf),
+		"%s ...", message);
+
+	if(handle->message.len < 0)
+	{
+		handle->message.len = 0;
+	}
+}
+
+static inline void
+_status_message_clear(plughandle_t *handle)
+{
+	handle->message.len = 0;
+}
+
+static inline bool
+_initializing(plughandle_t *handle)
+{
+	return handle->world ? false : true;
+}
+
+static inline bool
+_lazy_loading(plughandle_t *handle)
+{
+	return handle->iplugs ? true : false;
+}
+
 static int
 _plug_cmp_name(const void *a, const void *b)
 {
@@ -102,7 +132,7 @@ _plug_cmp_name(const void *a, const void *b)
 static int
 _plug_populate(plughandle_t *handle, const char *pattern)
 {
-	if(handle->iplugs) // initial lazy loading
+	if(_lazy_loading(handle)) // initial lazy loading
 	{
 		for(unsigned i = 0;
 				(i < 600/25/4) && !lilv_plugins_is_end(handle->plugs, handle->iplugs);
@@ -121,7 +151,7 @@ _plug_populate(plughandle_t *handle, const char *pattern)
 		if(lilv_plugins_is_end(handle->plugs, handle->iplugs))
 		{
 			handle->iplugs = NULL; // initial lazy loading is done
-			handle->message.len = 0;
+			_status_message_clear(handle);
 		}
 		else
 		{
@@ -171,8 +201,10 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 		{
 			case 0:
 			{
-				d2tk_base_label(base, -1, "View", 1.f, vrect,
-					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+				if(_initializing(handle) || _lazy_loading(handle)) // still loading ?
+				{
+					break;
+				}
 
 				if(d2tk_base_text_field_is_changed(base, D2TK_ID_IDX(iview), vrect,
 					sizeof(handle->pplugs), handle->pplugs,
@@ -189,7 +221,7 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 					{
 						const unsigned dn = 25;
 
-						if(handle->iplugs)
+						if(_lazy_loading(handle))
 						{
 							_plug_populate(handle, handle->pplugs);
 						}
@@ -406,8 +438,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	strncpy(handle->pplugs, "*", sizeof(handle->pplugs));
 
-	handle->message.len = snprintf(handle->message.buf, sizeof(handle->message.buf),
-		"%s ...", "Scanning for plugins");
+	_status_message_set(handle, "Scanning for plugins");
 
 	handle->button_style[0] = *d2tk_base_get_default_style();
 	handle->button_style[0].fill_color[D2TK_TRIPLE_NONE] =
@@ -469,7 +500,7 @@ _idle(LV2UI_Handle instance)
 
 	const int res = d2tk_pugl_step(handle->dpugl);
 
-	if(!handle->world)
+	if(_initializing(handle))
 	{
 		_init(handle);
 	}
