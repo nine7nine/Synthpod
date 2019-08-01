@@ -48,18 +48,9 @@
 #	define DBG
 #endif
 
-typedef enum _view_type_t {
-	VIEW_TYPE_PLUGIN_LIST = 0,
-	VIEW_TYPE_PRESET_LIST,
-	VIEW_TYPE_PATCH_BAY,
-
-	VIEW_TYPE_MAX
-} view_type_t;
-
 typedef struct _dyn_label_t dyn_label_t;
 typedef struct _stat_label_t stat_label_t;
 typedef struct _entry_t entry_t;
-typedef struct _view_t view_t;
 typedef struct _status_t status_t;
 typedef struct _prof_t prof_t;
 typedef struct _plughandle_t plughandle_t;
@@ -77,11 +68,6 @@ struct _stat_label_t {
 struct _entry_t {
 	const void *data;
 	dyn_label_t name;
-};
-
-struct _view_t {
-	view_type_t type;
-	bool selector [VIEW_TYPE_MAX];
 };
 
 struct _status_t {
@@ -130,9 +116,6 @@ struct _plughandle_t {
 	stat_label_t message;
 
 	d2tk_style_t button_style [2];
-
-	unsigned nviews;
-	view_t views [32];
 
 	status_t status;
 	prof_t prof;
@@ -221,7 +204,7 @@ _lazy_loading(plughandle_t *handle)
 	return handle->iplugs ? true : false;
 }
 
-static int
+static inline int
 _plug_cmp_name(const void *a, const void *b)
 {
 	DBG;
@@ -231,7 +214,7 @@ _plug_cmp_name(const void *a, const void *b)
 	return strcasecmp(entry_a->name.buf, entry_b->name.buf);
 }
 
-static int
+static inline void
 _plug_populate(plughandle_t *handle, const char *pattern)
 {
 	DBG;
@@ -283,20 +266,79 @@ _plug_populate(plughandle_t *handle, const char *pattern)
 	}
 
 	qsort(handle->lplugs, handle->nplugs, sizeof(entry_t), _plug_cmp_name);
-
-	return 0;
 }
 
-static int
-_expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
+static inline void
+_expose_plugin_list_header(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
 	d2tk_pugl_t *dpugl = handle->dpugl;
 	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
-	view_t *view = &handle->views[iview];
 
-	static const d2tk_coord_t vfrac [3] = { 24, 0, 16 };
-	D2TK_BASE_LAYOUT(rect, 3, vfrac, D2TK_FLAG_LAYOUT_Y_ABS, vlay)
+	if(_initializing(handle) || _lazy_loading(handle)) // still loading ?
+	{
+		return;
+	}
+
+	if(d2tk_base_text_field_is_changed(base, D2TK_ID, rect,
+		sizeof(handle->pplugs), handle->pplugs,
+		D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, NULL))
+	{
+		_plug_populate(handle, handle->pplugs);
+	}
+}
+
+static inline void
+_expose_plugin_list_body(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	DBG;
+	d2tk_pugl_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+
+	const unsigned dn = rect->h / 24;
+
+	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
+		0, handle->nplugs, 0, dn, vscroll)
+	{
+		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
+		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
+
+		D2TK_BASE_TABLE(col, 1, dn, trow)
+		{
+			const unsigned k = d2tk_table_get_index_y(trow) + voffset;
+
+			if(k >= handle->nplugs)
+			{
+				break;
+			}
+
+			const d2tk_rect_t *row = d2tk_table_get_rect(trow);
+			const d2tk_id_t id = D2TK_ID_IDX(k);
+			entry_t *entry = &handle->lplugs[k];
+
+			d2tk_base_set_style(base, &handle->button_style[k % 2]);
+
+			if(d2tk_base_button_label_is_changed(base, id,
+				entry->name.len, entry->name.buf,
+				D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, row))
+			{
+				//FIXME
+			}
+		}
+
+		d2tk_base_set_style(base, NULL);
+	}
+}
+
+static inline void
+_expose_plugin_list(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	DBG;
+	d2tk_pugl_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+
+	static const d2tk_coord_t vfrac [3] = { 24, 0 };
+	D2TK_BASE_LAYOUT(rect, 2, vfrac, D2TK_FLAG_LAYOUT_Y_ABS, vlay)
 	{
 		const d2tk_rect_t *vrect = d2tk_layout_get_rect(vlay);
 		const uint32_t vy = d2tk_layout_get_index(vlay);
@@ -305,119 +347,61 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 		{
 			case 0:
 			{
-				if(_initializing(handle) || _lazy_loading(handle)) // still loading ?
-				{
-					break;
-				}
-
-				if(d2tk_base_text_field_is_changed(base, D2TK_ID_IDX(iview), vrect,
-					sizeof(handle->pplugs), handle->pplugs,
-					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, NULL))
-				{
-					_plug_populate(handle, handle->pplugs);
-				}
+				_expose_plugin_list_header(handle, vrect);
 			} break;
 			case 1:
 			{
-				switch(view->type)
-				{
-					case VIEW_TYPE_PLUGIN_LIST:
-					{
-						const unsigned dn = 25;
-
-						if(_lazy_loading(handle))
-						{
-							_plug_populate(handle, handle->pplugs);
-						}
-
-						D2TK_BASE_SCROLLBAR(base, vrect, D2TK_ID_IDX(iview), D2TK_FLAG_SCROLL_Y,
-							0, handle->nplugs, 0, dn, vscroll)
-						{
-							const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
-							const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
-
-							D2TK_BASE_TABLE(col, 1, dn, trow)
-							{
-								const unsigned k = d2tk_table_get_index_y(trow) + voffset;
-
-								if(k >= handle->nplugs)
-								{
-									break;
-								}
-
-								const d2tk_rect_t *row = d2tk_table_get_rect(trow);
-								const d2tk_id_t id = D2TK_ID_IDX(iview*dn + k);
-								entry_t *entry = &handle->lplugs[k];
-
-								d2tk_base_set_style(base, &handle->button_style[k % 2]);
-
-								if(d2tk_base_button_label_is_changed(base, id,
-									entry->name.len, entry->name.buf,
-									D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, row))
-								{
-									//FIXME
-								}
-							}
-
-							d2tk_base_set_style(base, NULL);
-						}
-					} break;
-					case VIEW_TYPE_PRESET_LIST:
-					{
-						//FIXME
-					} break;
-					case VIEW_TYPE_PATCH_BAY:
-					{
-						//FIXME
-					} break;
-
-					case VIEW_TYPE_MAX:
-					{
-						// never reached
-					} break;
-				}
-			} break;
-			case 2:
-			{
-				static const d2tk_coord_t hfrac [VIEW_TYPE_MAX + 1] = {
-					16, 16, 16,
-					0
-				};
-
-				D2TK_BASE_LAYOUT(vrect, VIEW_TYPE_MAX + 1, hfrac, D2TK_FLAG_LAYOUT_X_ABS, hlay)
-				{
-					const d2tk_rect_t *hrect = d2tk_layout_get_rect(hlay);
-					const uint32_t vx = d2tk_layout_get_index(hlay);
-					const d2tk_id_t id = D2TK_ID_IDX(iview*VIEW_TYPE_MAX + vx);
-
-					switch(vx)
-					{
-						case VIEW_TYPE_PLUGIN_LIST:
-							// fall-through
-						case VIEW_TYPE_PRESET_LIST:
-							// fall-through
-						case VIEW_TYPE_PATCH_BAY:
-						{
-							if(d2tk_base_toggle_is_changed(base, id, hrect, &view->selector[vx]))
-							{
-								//FIXME
-							}
-						} break;
-						case VIEW_TYPE_MAX:
-						{
-							// never reached
-						} break;
-					}
-				}
+				_expose_plugin_list_body(handle, vrect);
 			} break;
 		}
 	}
-
-	return 0;
 }
 
-static int
-_expose_patch(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
+static inline void
+_expose_sidebar_top(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	DBG;
+
+	_expose_plugin_list(handle, rect);
+	//FIXME
+}
+
+static inline void
+_expose_sidebar_bottom(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	DBG;
+	//FIXME
+}
+
+static inline void
+_expose_sidebar(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	DBG;
+	d2tk_pugl_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+
+	D2TK_BASE_PANE(base, rect, D2TK_ID, D2TK_FLAG_PANE_Y,
+		0.6f, 1.f, 0.05f, vpane)
+	{
+		const d2tk_rect_t *prect =  d2tk_pane_get_rect(vpane);
+		const uint32_t py = d2tk_pane_get_index(vpane);
+
+		switch(py)
+		{
+			case 0:
+			{
+				_expose_sidebar_top(handle, prect);
+			} break;
+			case 1:
+			{
+				_expose_sidebar_bottom(handle, prect);
+			} break;
+		}
+	}
+}
+
+static inline void
+_expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
 	d2tk_pugl_t *dpugl = handle->dpugl;
@@ -530,8 +514,80 @@ _expose_patch(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 		}
 	}
 #undef N
+}
 
-	return 0;
+static inline void
+_expose_status_bar(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	d2tk_pugl_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+
+	static const d2tk_coord_t hfrac [5] = { 4, 1, 1, 1, 1 };
+	D2TK_BASE_LAYOUT(rect, 5, hfrac, D2TK_FLAG_LAYOUT_X_REL, hlay)
+	{
+		const d2tk_rect_t *hrect = d2tk_layout_get_rect(hlay);
+		const uint32_t vx = d2tk_layout_get_index(hlay);
+
+		switch(vx)
+		{
+			case 0:
+			{
+				if(!handle->message.len)
+					break;
+
+				d2tk_base_label(base, handle->message.len, handle->message.buf, 1.f,
+					hrect, D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+			} break;
+			case 1:
+				// fall-through
+			case 2:
+				// fall-through
+			case 3:
+			{
+				stat_label_t *label = &handle->status.label[vx - 1];
+
+				if(!label->len)
+					break;
+
+				d2tk_base_label(base, label->len, label->buf, 1.f,
+					hrect, D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+			} break;
+			case 4:
+			{
+				d2tk_base_label(base, -1, "Synthpod "SYNTHPOD_VERSION, 1.f,
+					hrect, D2TK_ALIGN_MIDDLE | D2TK_ALIGN_RIGHT);
+			} break;
+		}
+	}
+}
+
+static inline void
+_expose_main_area(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	d2tk_pugl_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+
+	D2TK_BASE_PANE(base, rect, D2TK_ID, D2TK_FLAG_PANE_X,
+		0.0f, 0.2f, 0.05f, hpane)
+	{
+		const d2tk_rect_t *prect =  d2tk_pane_get_rect(hpane);
+		const uint32_t px = d2tk_pane_get_index(hpane);
+
+		switch(px)
+		{
+			case 0:
+			{
+				if(prect->w > 0) //FIXME in detk
+				{
+					_expose_sidebar(handle, prect);
+				}
+			} break;
+			case 1:
+			{
+				_expose_patchbay(handle, prect);
+			} break;
+		}
+	}
 }
 
 static int
@@ -539,10 +595,14 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 {
 	DBG;
 	plughandle_t *handle = data;
-
 	d2tk_pugl_t *dpugl = handle->dpugl;
 	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
 	const d2tk_rect_t rect = D2TK_RECT(0, 0, w, h);
+
+	if(_lazy_loading(handle))
+	{
+		_plug_populate(handle, handle->pplugs);
+	}
 
 	static const d2tk_coord_t vfrac [3] = { 24, 0, 16 };
 	D2TK_BASE_LAYOUT(&rect, 3, vfrac, D2TK_FLAG_LAYOUT_Y_ABS, vlay)
@@ -559,65 +619,11 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 			} break;
 			case 1:
 			{
-				D2TK_BASE_PANE(base, vrect, D2TK_ID, D2TK_FLAG_PANE_X,
-					0.1f, 0.9f, 0.1f, hpane)
-				{
-					const d2tk_rect_t *prect =  d2tk_pane_get_rect(hpane);
-					const uint32_t px = d2tk_pane_get_index(hpane);
-
-					switch(px)
-					{
-						case 0:
-						{
-							_expose_view(handle, px, prect);
-						} break;
-						case 1:
-						{
-							_expose_patch(handle, px, prect);
-						} break;
-					}
-				}
+				_expose_main_area(handle, vrect);
 			} break;
 			case 2:
 			{
-				static const d2tk_coord_t hfrac [5] = { 4, 1, 1, 1, 1 };
-				D2TK_BASE_LAYOUT(vrect, 5, hfrac, D2TK_FLAG_LAYOUT_X_REL, hlay)
-				{
-					const d2tk_rect_t *hrect = d2tk_layout_get_rect(hlay);
-					const uint32_t vx = d2tk_layout_get_index(hlay);
-
-					switch(vx)
-					{
-						case 0:
-						{
-							if(handle->message.len)
-							{
-								d2tk_base_label(base, handle->message.len, handle->message.buf, 1.f, hrect,
-									D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
-							}
-						} break;
-						case 1:
-							// fall-through
-						case 2:
-							// fall-through
-						case 3:
-						{
-							stat_label_t *label = &handle->status.label[vx - 1];
-
-							if(label->len)
-							{
-								d2tk_base_label(base, label->len, label->buf, 1.f, hrect,
-									D2TK_ALIGN_MIDDLE| D2TK_ALIGN_LEFT);
-							}
-						} break;
-						case 4:
-						{
-							d2tk_base_label(base, -1, "Synthpod "SYNTHPOD_VERSION, 1.f, hrect,
-								D2TK_ALIGN_MIDDLE| D2TK_ALIGN_RIGHT);
-						} break;
-					}
-				}
-
+				_expose_status_bar(handle, vrect);
 			} break;
 		}
 	}
@@ -838,7 +844,6 @@ _port_event_set(plughandle_t *handle, const LV2_Atom_Object *obj)
 	else if( (prop == handle->regs.synthpod.dsp_profiling.urid)
 		&& (value->type == handle->forge.Vector) )
 	{
-		const LV2_Atom_Vector *vec = (const LV2_Atom_Vector *)value;
 		const float *f32 = LV2_ATOM_CONTENTS_CONST(LV2_Atom_Vector, value);
 
 		handle->prof.min = f32[0];
