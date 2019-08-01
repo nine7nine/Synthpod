@@ -84,6 +84,8 @@ struct _plughandle_t {
 
 	stat_label_t message;
 
+	d2tk_style_t button_style [2];
+
 	unsigned nviews;
 	view_t views [32];
 };
@@ -211,6 +213,8 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 								const d2tk_id_t id = D2TK_ID_IDX(iview*dn + k);
 								entry_t *entry = &handle->lplugs[k];
 
+								d2tk_base_set_style(base, &handle->button_style[k % 2]);
+
 								if(d2tk_base_button_label_is_changed(base, id,
 									entry->name.len, entry->name.buf,
 									D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, row))
@@ -218,6 +222,8 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 									//FIXME
 								}
 							}
+
+							d2tk_base_set_style(base, NULL);
 						}
 					} break;
 					case VIEW_TYPE_PRESET_LIST:
@@ -402,6 +408,14 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	handle->message.len = snprintf(handle->message.buf, sizeof(handle->message.buf),
 		"%s ...", "Scanning for plugins");
+
+	handle->button_style[0] = *d2tk_base_get_default_style();
+	handle->button_style[0].fill_color[D2TK_TRIPLE_NONE] =
+	handle->button_style[0].fill_color[D2TK_TRIPLE_FOCUS] = 0x4f4f4fff;
+
+	handle->button_style[1] = *d2tk_base_get_default_style();
+	handle->button_style[1].fill_color[D2TK_TRIPLE_NONE] =
+	handle->button_style[1].fill_color[D2TK_TRIPLE_FOCUS] = 0x3f3f3fff;
 
 	return handle;
 }
