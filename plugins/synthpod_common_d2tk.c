@@ -35,13 +35,25 @@ typedef enum _view_type_t {
 	VIEW_TYPE_MAX
 } view_type_t;
 
+typedef struct _dyn_label_t dyn_label_t;
+typedef struct _stat_label_t stat_label_t;
 typedef struct _entry_t entry_t;
 typedef struct _view_t view_t;
 typedef struct _plughandle_t plughandle_t;
 
+struct _dyn_label_t {
+	ssize_t len;
+	const char *buf;
+};
+
+struct _stat_label_t {
+	ssize_t len;
+	char buf[256];
+};
+
 struct _entry_t {
 	const void *data;
-	const char *label;
+	dyn_label_t name;
 };
 
 struct _view_t {
@@ -53,6 +65,7 @@ struct _plughandle_t {
 	LilvWorld *world;
 
 	const LilvPlugins *plugs;
+	LilvIter *iplugs;
 	unsigned nplugs;
 	entry_t *lplugs;
 	char pplugs[32];
@@ -69,6 +82,8 @@ struct _plughandle_t {
 	LV2UI_Controller *controller;
 	LV2UI_Write_Function writer;
 
+	stat_label_t message;
+
 	unsigned nviews;
 	view_t views [32];
 };
@@ -79,26 +94,56 @@ _plug_cmp_name(const void *a, const void *b)
 	const entry_t *entry_a = (const entry_t *)a;
 	const entry_t *entry_b = (const entry_t *)b;
 
-	return strcasecmp(entry_a->label, entry_b->label);
+	return strcasecmp(entry_a->name.buf, entry_b->name.buf);
 }
 
 static int
 _plug_populate(plughandle_t *handle, const char *pattern)
 {
-	pattern = pattern ? pattern : "**";
-	handle->nplugs = 0;
-
-	LILV_FOREACH(plugins, i, handle->plugs)
+	if(handle->iplugs) // initial lazy loading
 	{
-		const LilvPlugin *plug = lilv_plugins_get(handle->plugs, i);
-		LilvNode *node = lilv_plugin_get_name(plug);
-		const char *label = lilv_node_as_string(node);
-
-		if(fnmatch(pattern, label, FNM_CASEFOLD | FNM_EXTMATCH) == 0)
+		for(unsigned i = 0;
+				(i < 600/25/4) && !lilv_plugins_is_end(handle->plugs, handle->iplugs);
+				i++, handle->iplugs = lilv_plugins_next(handle->plugs, handle->iplugs) )
 		{
-			entry_t *entry = &handle->lplugs[handle->nplugs++];
-			entry->data = plug;
-			entry->label = label;
+				const LilvPlugin *plug = lilv_plugins_get(handle->plugs, handle->iplugs);
+				LilvNode *node = lilv_plugin_get_name(plug);
+				const char *name = lilv_node_as_string(node);
+
+				entry_t *entry = &handle->lplugs[handle->nplugs++];
+				entry->data = plug;
+				entry->name.buf = name;
+				entry->name.len= strlen(name);
+		}
+
+		if(lilv_plugins_is_end(handle->plugs, handle->iplugs))
+		{
+			handle->iplugs = NULL; // initial lazy loading is done
+			handle->message.len = 0;
+		}
+		else
+		{
+			d2tk_pugl_redisplay(handle->dpugl); // schedule redisplay until done
+		}
+	}
+	else // normal operation
+	{
+		pattern = pattern ? pattern : "**";
+		handle->nplugs = 0;
+
+		LILV_FOREACH(plugins, iplugs, handle->plugs)
+		{
+			const LilvPlugin *plug = lilv_plugins_get(handle->plugs, iplugs);
+			LilvNode *node = lilv_plugin_get_name(plug);
+			const char *name = lilv_node_as_string(node);
+
+			if(fnmatch(pattern, name, FNM_CASEFOLD | FNM_EXTMATCH) == 0)
+			{
+				entry_t *entry = &handle->lplugs[handle->nplugs++];
+				entry->data = plug;
+				entry->name.buf = name;
+				entry->name.len = strlen(name);
+			}
 		}
 	}
 
@@ -142,6 +187,11 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 					{
 						const unsigned dn = 25;
 
+						if(handle->iplugs)
+						{
+							_plug_populate(handle, handle->pplugs);
+						}
+
 						D2TK_BASE_SCROLLBAR(base, vrect, D2TK_ID_IDX(iview), D2TK_FLAG_SCROLL_Y,
 							0, handle->nplugs, 0, dn, vscroll)
 						{
@@ -159,9 +209,10 @@ _expose_view(plughandle_t *handle, unsigned iview, const d2tk_rect_t *rect)
 
 								const d2tk_rect_t *row = d2tk_table_get_rect(trow);
 								const d2tk_id_t id = D2TK_ID_IDX(iview*dn + k);
+								entry_t *entry = &handle->lplugs[k];
 
 								if(d2tk_base_button_label_is_changed(base, id,
-									-1, handle->lplugs[k].label,
+									entry->name.len, entry->name.buf,
 									D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, row))
 								{
 									//FIXME
@@ -242,23 +293,13 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 		{
 			case 0:
 			{
-				if(!handle->world)
-				{
-					break;
-				}
-
 				d2tk_base_label(base, -1, "Menu", 1.f, vrect,
 					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
 			} break;
 			case 1:
 			{
-				if(!handle->world)
-				{
-					break;
-				}
-
 				D2TK_BASE_PANE(base, vrect, D2TK_ID, D2TK_FLAG_PANE_X,
-					0.05f, 0.95f, 0.05f, hpane)
+					0.1f, 0.9f, 0.1f, hpane)
 				{
 					const d2tk_rect_t *prect =  d2tk_pane_get_rect(hpane);
 					const uint32_t px = d2tk_pane_get_index(hpane);
@@ -271,9 +312,9 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 				d2tk_base_label(base, -1, "Synthpod "SYNTHPOD_VERSION, 1.f, vrect,
 					D2TK_ALIGN_MIDDLE| D2TK_ALIGN_RIGHT);
 
-				if(!handle->world)
+				if(handle->message.len)
 				{
-					d2tk_base_label(base, -1, "Loading...", 1.f, vrect,
+					d2tk_base_label(base, handle->message.len, handle->message.buf, 1.f, vrect,
 						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
 				}
 			} break;
@@ -330,8 +371,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->controller = controller;
 	handle->writer = write_function;
 
-	const d2tk_coord_t w = 800;
-	const d2tk_coord_t h = 450;
+	const d2tk_coord_t w = 1280;
+	const d2tk_coord_t h = 720;
 
 	d2tk_pugl_config_t *config = &handle->config;
 	config->parent = (uintptr_t)parent;
@@ -358,6 +399,9 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	}
 
 	strncpy(handle->pplugs, "*", sizeof(handle->pplugs));
+
+	handle->message.len = snprintf(handle->message.buf, sizeof(handle->message.buf),
+		"%s ...", "Scanning for plugins");
 
 	return handle;
 }
@@ -399,10 +443,9 @@ _init(plughandle_t *handle)
 	lilv_world_load_all(handle->world);
 
 	handle->plugs = lilv_world_get_all_plugins(handle->world);
+	handle->iplugs = lilv_plugins_begin(handle->plugs);
 	const unsigned nplugs = lilv_plugins_size(handle->plugs);
 	handle->lplugs = calloc(1, nplugs * sizeof(entry_t));
-
-	_plug_populate(handle, handle->pplugs);
 }
 
 static int
