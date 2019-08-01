@@ -65,6 +65,7 @@ struct _sandbox_io_shm_body_t {
 
 struct _sandbox_io_shm_t {
 	atomic_size_t minimum;
+	atomic_bool connected;
 };
 
 struct _sandbox_io_t {
@@ -243,6 +244,18 @@ _sandbox_io_recv(sandbox_io_t *io, _sandbox_io_recv_cb_t recv_cb,
 	return 0;
 }
 
+static inline void
+_sandbox_io_connected_set(sandbox_io_t *io, bool connected)
+{
+	atomic_store_explicit(&io->shm->connected, connected, memory_order_release);
+}
+
+static inline bool
+_sandbox_io_connected_get(sandbox_io_t *io)
+{
+	return atomic_load_explicit(&io->shm->connected, memory_order_acquire);
+}
+
 static inline int
 _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	uint32_t size, uint32_t protocol, const void *buf)
@@ -250,6 +263,12 @@ _sandbox_io_send(sandbox_io_t *io, uint32_t index,
 	sandbox_io_shm_body_t *tx = io->is_master
 		? io->from_master
 		: io->to_master;
+
+	// check connection status to slave
+	if(io->is_master && !_sandbox_io_connected_get(io))
+	{
+		return 0; // success
+	}
 
 	// reserve additional bytes for the parent atom and dictionary
 	const size_t add_sz = sizeof(LV2_Atom_Object) + 3*(sizeof(LV2_Atom_Property) + sizeof(LV2_Atom_Int));
@@ -484,6 +503,8 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 
 		varchunk_init(&io->from_master->varchunk, minimum, true);
 		varchunk_init(&io->to_master->varchunk, minimum, true);
+
+		atomic_init(&io->shm->connected, false);
 	}
 
 	lv2_atom_forge_init(&io->forge, map);

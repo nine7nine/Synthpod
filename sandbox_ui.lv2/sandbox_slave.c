@@ -603,6 +603,8 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 		goto fail;
 	}
 
+	_sandbox_io_connected_set(&sb->io, true);
+
 	sb->initialized = true;
 	*res = EXIT_SUCCESS;
 	return sb; // success
@@ -618,6 +620,8 @@ sandbox_slave_free(sandbox_slave_t *sb)
 {
 	if(!sb)
 		return;
+
+	_sandbox_io_connected_set(&sb->io, false);
 
 	xpress_deinit(&sb->xpress);
 
