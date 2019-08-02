@@ -100,12 +100,14 @@ d2tk_cairo_pre(void *data, d2tk_core_t *core __attribute((unused)),
 	cairo_save(ctx);
 
 	{
-		uint32_t *pixels = d2tk_core_get_pixels(core);
+		d2tk_rect_t rect;
+		uint32_t *pixels = d2tk_core_get_pixels(core, &rect);
 
 		cairo_surface_t *surf = cairo_image_surface_create_for_data(
 			(uint8_t *)pixels, CAIRO_FORMAT_ARGB32, w, h, w*sizeof(uint32_t));
+		//FIXME reuse/update surfaces
 
-		cairo_rectangle(ctx, 0, 0, w, h);
+		cairo_rectangle(ctx, rect.x, rect.y, rect.w, rect.h);
 		cairo_clip(ctx);
 
 		cairo_new_sub_path(ctx);
@@ -132,7 +134,8 @@ d2tk_cairo_post(void *data, d2tk_core_t *core __attribute__((unused)),
 
 #ifdef D2TK_DEBUG //FIXME needs multiple buffers to work
 	{
-		uint32_t *pixels = d2tk_core_get_pixels(core);
+		d2tk_rect_t rect;
+		uint32_t *pixels = d2tk_core_get_pixels(core, &rect);
 
 		// brighten up the pixels for proper hilighting
 		for(d2tk_coord_t y = 0, Y = 0; y < h; y++, Y+=w)
@@ -148,6 +151,7 @@ d2tk_cairo_post(void *data, d2tk_core_t *core __attribute__((unused)),
 
 		cairo_surface_t *surf = cairo_image_surface_create_for_data(
 			(uint8_t *)pixels, CAIRO_FORMAT_ARGB32, w, h, w*sizeof(uint32_t));
+		//FIXME reuse/update suface
 
 		cairo_rectangle(ctx, 0, 0, w, h);
 		cairo_clip(ctx);

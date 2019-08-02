@@ -45,7 +45,9 @@ _d2tk_mock_post(void *data, d2tk_core_t *core, d2tk_coord_t w, d2tk_coord_t h,
 	assert(h == DIM_H);
 	assert(pass == 0);
 
-	assert(d2tk_core_get_pixels(core));
+	d2tk_rect_t rect;
+	assert(d2tk_core_get_pixels(core, &rect));
+	assert( (rect.w != 0) && (rect.h != 0) );
 
 	return false; // do NOT enter 3rd pass
 }

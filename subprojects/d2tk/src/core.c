@@ -56,6 +56,7 @@ struct _d2tk_mem_t {
 struct _d2tk_bitmap_t {
 	size_t size;
 	uint32_t *pixels;
+	uint32_t *template;
 	size_t nfills;
 	d2tk_coord_t x0;
 	d2tk_coord_t x1;
@@ -342,10 +343,26 @@ _d2tk_memcaches_gc(d2tk_core_t *core)
 }
 
 static inline void
-_d2tk_bitmap_resize(d2tk_bitmap_t *bitmap, d2tk_coord_t w, d2tk_coord_t h)
+_d2tk_bitmap_template_refill(d2tk_core_t *core)
 {
-	bitmap->size = w*h*sizeof(uint32_t);
+	d2tk_bitmap_t *bitmap = &core->bitmap;
+
+	for(d2tk_coord_t x = 0; x < core->w; x++)
+	{
+		bitmap->template[x] = core->bg_color;
+	}
+}
+
+static inline void
+_d2tk_bitmap_resize(d2tk_core_t *core, d2tk_coord_t w, d2tk_coord_t h)
+{
+	d2tk_bitmap_t *bitmap = &core->bitmap;
+
+	const size_t stride = w*sizeof(uint32_t);
+	bitmap->size = h*stride;
 	bitmap->pixels = realloc(bitmap->pixels, bitmap->size);
+	bitmap->template = realloc(bitmap->template, stride);
+	_d2tk_bitmap_template_refill(core);
 }
 
 static inline void
@@ -353,14 +370,24 @@ _d2tk_bitmap_deinit(d2tk_bitmap_t *bitmap)
 {
 	free(bitmap->pixels);
 	bitmap->pixels = NULL;
+	free(bitmap->template);
+	bitmap->template = NULL;
 	bitmap->size = 0;
 	bitmap->nfills = 0;
 }
 
 static inline void
-_d2tk_bitmap_reset(d2tk_bitmap_t *bitmap)
+_d2tk_bitmap_reset(d2tk_core_t *core)
 {
-	memset(bitmap->pixels, 0x0, bitmap->size);
+	d2tk_bitmap_t *bitmap = &core->bitmap;
+
+	const size_t stride = (bitmap->x1 - bitmap->x0)*sizeof(uint32_t);
+
+	for(d2tk_coord_t y = bitmap->y0, Y = y*core->w; y < bitmap->y1; y++, Y+=core->w)
+	{
+		memset(&bitmap->pixels[Y + bitmap->x0], 0x0, stride);
+	}
+
 	bitmap->nfills = 0;
 	bitmap->x0 = INT_MAX;
 	bitmap->x1 = INT_MIN;
@@ -402,12 +429,11 @@ _d2tk_bitmap_fill(d2tk_core_t *core, const d2tk_clip_t *clip)
 	d2tk_clip_t dst;
 	_d2tk_clip_clip(core, &dst, clip);
 
+	const size_t stride = (dst.x1 - dst.x0)*sizeof(uint32_t);
+
 	for(d2tk_coord_t y = dst.y0, Y = y*core->w; y < dst.y1; y++, Y+=core->w)
 	{
-		for(d2tk_coord_t x = dst.x0; x < dst.x1; x++)
-		{
-			bitmap->pixels[Y + x] = core->bg_color;
-		}
+		memcpy(&bitmap->pixels[Y + dst.x0], bitmap->template, stride);
 	}
 
 	// update area of interest
@@ -455,8 +481,16 @@ _d2tk_bbox_mask(d2tk_core_t *core, d2tk_com_t *com)
 }
 
 uint32_t *
-d2tk_core_get_pixels(d2tk_core_t *core)
+d2tk_core_get_pixels(d2tk_core_t *core, d2tk_rect_t *rect)
 {
+	if(rect)
+	{
+		rect->x = core->bitmap.x0;
+		rect->y = core->bitmap.y0;
+		rect->w = core->bitmap.x1 - core->bitmap.x0;
+		rect->h = core->bitmap.y1 - core->bitmap.y0;
+	}
+
 	return core->bitmap.pixels;
 }
 
@@ -714,6 +748,7 @@ void
 d2tk_core_set_bg_color(d2tk_core_t *core, uint32_t rgba)
 {
 	core->bg_color = htonl(rgba);
+	_d2tk_bitmap_template_refill(core);
 }
 
 uint32_t
@@ -1304,7 +1339,7 @@ d2tk_core_post(d2tk_core_t *core)
 	d2tk_com_t *oldcom = _d2tk_mem_get_com(oldmem);
 
 	// reset num of clipping clips
-	_d2tk_bitmap_reset(bitmap);
+	_d2tk_bitmap_reset(core);
 
 	if(core->full_refresh)
 	{
@@ -1516,7 +1551,7 @@ d2tk_core_set_dimensions(d2tk_core_t *core, d2tk_coord_t w, d2tk_coord_t h)
 	core->w = w;
 	core->h = h;
 	core->full_refresh = true;
-	_d2tk_bitmap_resize(&core->bitmap, w, h);
+	_d2tk_bitmap_resize(core, w, h);
 }
 
 D2TK_API void

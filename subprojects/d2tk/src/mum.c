@@ -26,67 +26,57 @@
 
 __attribute__((always_inline))
 static inline size_t
-_sz(const void *data, ssize_t nbytes)
+_len(const void *key, ssize_t len)
 {
-	if(nbytes == -1) // is a null-terminated string
-	{
-		return strlen((const char *)data);
-	}
+	return (len == -1) ? strlen((const char *)key) : (size_t)len;
+}
 
-	return nbytes;
+__attribute__((always_inline))
+static inline uint64_t
+_d2tk_hash(uint64_t hash, const void *key, size_t len)
+{
+	return _mum_hash_aligned(hash + len, key, len);
 }
 
 D2TK_API uint64_t
-d2tk_hash(const void *data, ssize_t nbytes)
+d2tk_hash(const void *key, ssize_t len)
 {
-	nbytes = _sz(data, nbytes);
+	len = _len(key, len);
 
-	return mum_hash(data, nbytes, SEED);
+	return mum_hash(key, len, SEED);
 }
 
 D2TK_API uint64_t
-d2tk_hash_foreach(const void *data, ssize_t nbytes, ...)
+d2tk_hash_foreach(const void *key, ssize_t len, ...)
 {
 	va_list args;
-	const void *src;
+	uint64_t hash = mum_hash_init(SEED);
 
-	nbytes = _sz(data, nbytes);
+	len = _len(key, len); //FIXME remove
+	hash = _d2tk_hash(hash, key, len);
 
-	// derive total temporary buffer size
-	size_t sz = nbytes;
+	va_start(args, len);
 
-	va_start(args, nbytes);
-
-	while( (src = va_arg(args, const void *)) )
+	while( (key = va_arg(args, const void *)) )
 	{
-		sz += _sz(src, va_arg(args, int));
+		len = _len(key, va_arg(args, int)); //FIXME remove
+		hash = _d2tk_hash(hash, key, len);
 	}
 
 	va_end(args);
 
-	// fill temporary bufffer
-	uint8_t *dst = alloca(sz);
-	if(dst)
+  return mum_hash_finish(hash);
+}
+
+D2TK_API uint64_t
+d2tk_hash_dict(const d2tk_hash_dict_t *dict)
+{
+	uint64_t hash = mum_hash_init(SEED);
+
+	for( ; dict->key; dict++)
 	{
-		size_t off = 0;
-
-		memcpy(&dst[off], data, nbytes);
-		off += nbytes;
-
-		va_start(args, nbytes);
-
-		while( (src = va_arg(args, const void *)) )
-		{
-			nbytes = _sz(src, va_arg(args, int));
-
-			memcpy(&dst[off], src, nbytes);
-			off += nbytes;
-		}
-
-		va_end(args);
-
-		return mum_hash(dst, sz, SEED);
+		hash = _d2tk_hash(hash, dict->key, dict->len);
 	}
 
-	return 0;
+	return mum_hash_finish(hash);
 }
