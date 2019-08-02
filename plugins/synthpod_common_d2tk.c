@@ -34,12 +34,15 @@
 #define ATOM_BUF_MAX 0x100000 // 1M
 #define CONTROL 14 //FIXME
 #define NOTIFY 15 //FIXME
+#define MAX_MODS 0x200
+#define MASK_MODS (MAX_MODS - 1)
 
-#define ATOM_BOOL_VAL(ATOM) ((LV2_Atom_Bool *)(ATOM))->body;
-#define ATOM_INT_VAL(ATOM) ((LV2_Atom_Int *)(ATOM))->body;
-#define ATOM_LONG_VAL(ATOM) ((LV2_Atom_Long *)(ATOM))->body;
-#define ATOM_FLOAT_VAL(ATOM) ((LV2_Atom_Float *)(ATOM))->body;
-#define ATOM_DOUBLE_VAL(ATOM) ((LV2_Atom_Double *)(ATOM))->body;
+#define ATOM_BOOL_VAL(ATOM) ((const LV2_Atom_Bool *)(ATOM))->body
+#define ATOM_INT_VAL(ATOM) ((const LV2_Atom_Int *)(ATOM))->body
+#define ATOM_LONG_VAL(ATOM) ((const LV2_Atom_Long *)(ATOM))->body
+#define ATOM_FLOAT_VAL(ATOM) ((const LV2_Atom_Float *)(ATOM))->body
+#define ATOM_DOUBLE_VAL(ATOM) ((const LV2_Atom_Double *)(ATOM))->body
+#define ATOM_STRING_VAL(ATOM) (const char *)LV2_ATOM_BODY_CONST((ATOM))
 
 #define DBG_NOW fprintf(stderr, ":: %s\n", __func__)
 #if 0
@@ -48,17 +51,12 @@
 #	define DBG
 #endif
 
-typedef struct _dyn_label_t dyn_label_t;
 typedef struct _stat_label_t stat_label_t;
 typedef struct _entry_t entry_t;
 typedef struct _status_t status_t;
 typedef struct _prof_t prof_t;
+typedef struct _mod_t mod_t;
 typedef struct _plughandle_t plughandle_t;
-
-struct _dyn_label_t {
-	ssize_t len;
-	const char *buf;
-};
 
 struct _stat_label_t {
 	ssize_t len;
@@ -67,7 +65,7 @@ struct _stat_label_t {
 
 struct _entry_t {
 	const void *data;
-	dyn_label_t name;
+	stat_label_t name;
 };
 
 struct _status_t {
@@ -87,6 +85,18 @@ struct _prof_t {
 	float max;
 };
 
+struct _mod_t {
+	LV2_URID urn;
+	LV2_URID subj;
+	const LilvPlugin *plug;
+
+	stat_label_t name;
+	stat_label_t alias;
+
+	bool selected;
+	d2tk_pos_t pos;
+};
+
 struct _plughandle_t {
 	LilvWorld *world;
 	reg_t regs;
@@ -102,6 +112,7 @@ struct _plughandle_t {
 	char pplugs[32];
 
 	LV2_URID_Map *map;
+	LV2_URID_Unmap *unmap;
 	LV2_Atom_Forge forge;
 
 	LV2_Log_Log *log;
@@ -119,6 +130,9 @@ struct _plughandle_t {
 
 	status_t status;
 	prof_t prof;
+
+	d2tk_pos_t nxt_pos;
+	mod_t mods [MAX_MODS];
 };
 
 static inline void
@@ -225,13 +239,20 @@ _plug_populate(plughandle_t *handle, const char *pattern)
 				i++, handle->iplugs = lilv_plugins_next(handle->plugs, handle->iplugs) )
 		{
 				const LilvPlugin *plug = lilv_plugins_get(handle->plugs, handle->iplugs);
-				LilvNode *node = lilv_plugin_get_name(plug);
-				const char *name = lilv_node_as_string(node);
+				LilvNode *name_node = lilv_plugin_get_name(plug);
+				if(!name_node)
+				{
+					continue;
+				}
+
+				const char *name = lilv_node_as_string(name_node);
 
 				entry_t *entry = &handle->lplugs[handle->nplugs++];
 				entry->data = plug;
-				entry->name.buf = name;
-				entry->name.len= strlen(name);
+				entry->name.len = snprintf(entry->name.buf, sizeof(entry->name.buf),
+					"%s", name);
+
+				lilv_node_free(name_node);
 		}
 
 		if(lilv_plugins_is_end(handle->plugs, handle->iplugs))
@@ -252,16 +273,23 @@ _plug_populate(plughandle_t *handle, const char *pattern)
 		LILV_FOREACH(plugins, iplugs, handle->plugs)
 		{
 			const LilvPlugin *plug = lilv_plugins_get(handle->plugs, iplugs);
-			LilvNode *node = lilv_plugin_get_name(plug);
-			const char *name = lilv_node_as_string(node);
+			LilvNode *name_node = lilv_plugin_get_name(plug);
+			if(!name_node)
+			{
+				continue;
+			}
+
+			const char *name = lilv_node_as_string(name_node);
 
 			if(fnmatch(pattern, name, FNM_CASEFOLD | FNM_EXTMATCH) == 0)
 			{
 				entry_t *entry = &handle->lplugs[handle->nplugs++];
 				entry->data = plug;
-				entry->name.buf = name;
-				entry->name.len = strlen(name);
+				entry->name.len = snprintf(entry->name.buf, sizeof(entry->name.buf),
+					"%s", name);
 			}
+
+			lilv_node_free(name_node);
 		}
 	}
 
@@ -407,93 +435,46 @@ _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 	d2tk_pugl_t *dpugl = handle->dpugl;
 	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
 
-#define N 4
-	static d2tk_pos_t pos_nodes [N] = {
-		[0] = { .x = -500, .y =  200 },
-		[1] = { .x = -250, .y = -100 },
-		[2] = { .x =    0, .y =  100 },
-		[3] = { .x =  500, .y =    0 }
-	};
-	static d2tk_pos_t pos_arcs [N][N] = {
-		[0] = {
-			[3] = { .x = 150, .y = 250 }
-		}
-	};
-	static bool value [N][N][N*N];
-	static bool toggle [N];
-
 	D2TK_BASE_FLOWMATRIX(base, rect, D2TK_ID, flowm)
 	{
 		// draw arcs
-		for(unsigned i = 0; i < N; i++)
-		{
-			const unsigned nin = i + 1;
-
-			for(unsigned j = i + 1; j < N; j++)
-			{
-				const unsigned nout = j + 1;
-
-				d2tk_state_t state = D2TK_STATE_NONE;
-				D2TK_BASE_FLOWMATRIX_ARC(base, flowm, nin, nout, &pos_nodes[i],
-					&pos_nodes[j], &pos_arcs[i][j], arc, &state)
-				{
-					const d2tk_rect_t *bnd = d2tk_flowmatrix_arc_get_rect(arc);
-					const unsigned k = d2tk_flowmatrix_arc_get_index(arc);
-					const d2tk_id_t id = D2TK_ID_IDX((i*N + j)*N*N + k);
-					const unsigned x = d2tk_flowmatrix_arc_get_index_x(arc);
-					const unsigned y = d2tk_flowmatrix_arc_get_index_y(arc);
-
-					if(y == nout) // source label
-					{
-						char lbl [16];
-						const ssize_t lbl_len = snprintf(lbl, sizeof(lbl), "Source port %u", x);
-
-						d2tk_base_label(base, lbl_len, lbl, 0.8f, bnd,
-							D2TK_ALIGN_BOTTOM | D2TK_ALIGN_RIGHT);
-					}
-					else if(x == nin) // sink label
-					{
-						char lbl [16];
-						const ssize_t lbl_len = snprintf(lbl, sizeof(lbl), "Sink port %u", y);
-
-						d2tk_base_label(base, lbl_len, lbl, 0.8f, bnd,
-							D2TK_ALIGN_BOTTOM | D2TK_ALIGN_LEFT);
-					}
-					else // connector
-					{
-						bool *val = &value[i][j][k];
-
-						state = d2tk_base_dial_bool(base, id, bnd, val);
-						if(d2tk_state_is_changed(state))
-						{
-							fprintf(stderr, "Arc %u/%u %s\n", x, y, *val ? "ON" : "OFF");
-						}
-					}
-				}
-			}
-		}
+		//FIXME
 
 		// draw nodes
-		for(unsigned i = 0; i < N; i++)
+		for(unsigned m = 0; m < MAX_MODS; m++)
 		{
-			d2tk_state_t state = D2TK_STATE_NONE;
-			D2TK_BASE_FLOWMATRIX_NODE(base, flowm, &pos_nodes[i], node, &state)
-			{
-				char lbl [32];
-				const ssize_t lbl_len = snprintf(lbl, sizeof(lbl), "Node %u", i);
-				const d2tk_rect_t *bnd = d2tk_flowmatrix_node_get_rect(node);
-				const d2tk_id_t id = D2TK_ID_IDX(i);
-				bool *val = &toggle[i];
+			mod_t *mod = &handle->mods[m];
 
-				state = d2tk_base_toggle_label(base, id, lbl_len, lbl,
-					D2TK_ALIGN_CENTERED, bnd, val);
+			if(!mod->urn)
+			{
+				continue;
+			}
+
+			d2tk_state_t state = D2TK_STATE_NONE;
+			D2TK_BASE_FLOWMATRIX_NODE(base, flowm, &mod->pos, node, &state)
+			{
+				const d2tk_rect_t *bnd = d2tk_flowmatrix_node_get_rect(node);
+				const d2tk_id_t id = D2TK_ID_IDX(m);
+
+				stat_label_t *label = mod->alias.len
+					? &mod->alias
+					: &mod->name;
+
+				state = d2tk_base_toggle_label(base, id, label->len, label->buf,
+					D2TK_ALIGN_CENTERED, bnd, &mod->selected);
+
+				if(d2tk_base_get_ctrl(base))
+				{
+					continue;
+				}
+
 				if(d2tk_state_is_active(state))
 				{
-					d2tk_flowmatrix_set_src(flowm, id, &pos_nodes[i]);
+					d2tk_flowmatrix_set_src(flowm, id, &mod->pos);
 				}
 				if(d2tk_state_is_over(state))
 				{
-					d2tk_flowmatrix_set_dst(flowm, id, &pos_nodes[i]);
+					d2tk_flowmatrix_set_dst(flowm, id, &mod->pos);
 				}
 				if(d2tk_state_is_up(state))
 				{
@@ -506,14 +487,9 @@ _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 					}
 				}
 				state = D2TK_STATE_NONE;
-				//else if(d2tk_state_is_changed(state))
-				//{
-				//	fprintf(stderr, "Node %u %s\n", i, *val ? "ON" : "OFF");
-				//}
 			}
 		}
 	}
-#undef N
 }
 
 static inline void
@@ -653,6 +629,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			host_resize = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
+			handle->unmap = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->log = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_OPTIONS__options))
@@ -762,11 +740,136 @@ cleanup(LV2UI_Handle instance)
 	free(handle);
 }
 
+static inline mod_t *
+_mod_find_by_urn(plughandle_t *handle, LV2_URID urn, bool claim)
+{
+	DBG;
+	for(unsigned i = 0, idx = (urn + i*i) & MASK_MODS;
+		i < MAX_MODS;
+		i++, idx = (urn + i*i) & MASK_MODS)
+	{
+		mod_t *mod = &handle->mods[idx];
+
+		if(mod->urn == 0)
+		{
+			if(claim)
+			{
+				mod->urn = urn;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		if(mod->urn == urn)
+		{
+			return mod;
+		}
+	}
+
+	return NULL;
+}
+
+static inline void
+_mod_add(plughandle_t *handle, LV2_URID urn)
+{
+	DBG;
+	mod_t *mod = _mod_find_by_urn(handle, urn, true);
+	if(!mod)
+	{
+		return;
+	}
+
+	mod->pos.x = handle->nxt_pos.x;
+	mod->pos.y = handle->nxt_pos.y;
+
+	handle->nxt_pos.y += 30;
+	//FIXME
+}
+
+static inline void
+_add_mod(plughandle_t *handle, const LV2_Atom_URID *urn)
+{
+	DBG;
+	mod_t *mod = _mod_find_by_urn(handle, urn->body, false);
+	if(mod)
+	{
+		return;
+	}
+
+	_mod_add(handle, urn->body);
+
+	// get information for each of those, FIXME only if not already available
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			urn->body, 0, 0) )
+	{
+		_message_write(handle);
+	}
+}
+
+static inline void
+_mod_free(plughandle_t *handle, mod_t *mod)
+{
+	DBG;
+	mod->urn = 0;
+	//FIXME
+}
+
 static inline void
 _port_event_set_module_list(plughandle_t *handle, const LV2_Atom_Tuple *tup)
 {
 	DBG;
-	//FIXME
+#if 0
+	_set_module_selector(handle, NULL);
+#endif
+
+	for(unsigned m = 0; m<MAX_MODS; m++)
+	{
+		mod_t *mod = &handle->mods[m];
+
+		_mod_free(handle, mod);
+	}
+
+	LV2_ATOM_TUPLE_FOREACH(tup, itm)
+	{
+		const LV2_Atom_URID *urn = (const LV2_Atom_URID *)itm;
+
+		_add_mod(handle, urn);
+	}
+
+	// patch:Get [patch:property spod:connectionList]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.connection_list.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:nodeList]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.node_list.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property pset:preset]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.pset.preset.urid) )
+	{
+		_message_write(handle);
+	}
+
+	// patch:Get [patch:property spod:automationList]
+	if(  _message_request(handle)
+		&& synthpod_patcher_get(&handle->regs, &handle->forge,
+			0, 0, handle->regs.synthpod.automation_list.urid) )
+	{
+		_message_write(handle);
+	}
 }
 
 static inline void
@@ -916,10 +1019,158 @@ _port_event_set(plughandle_t *handle, const LV2_Atom_Object *obj)
 }
 
 static inline void
-_port_event_put(plughandle_t *handle, const LV2_Atom_Object *obj)
+_mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 {
 	DBG;
+	if(mod->plug) // already initialized
+	{
+		return;
+	}
+
+	mod->plug = plug;
+
+	LilvNode *name_node = lilv_plugin_get_name(plug);
+	if(name_node)
+	{
+		const char *name = lilv_node_as_string(name_node);
+
+		mod->name.len = snprintf(mod->name.buf, sizeof(mod->name.buf), "%s", name);
+
+		lilv_node_free(name_node);
+	}
 	//FIXME
+}
+
+static inline void
+_port_event_put(plughandle_t *handle, const LV2_Atom_Object *obj)
+{
+DBG;
+	const LV2_Atom_URID *subject = NULL;
+	const LV2_Atom_Object *body = NULL;
+
+	lv2_atom_object_get(obj,
+		handle->regs.patch.subject.urid, &subject,
+		handle->regs.patch.body.urid, &body,
+		0);
+
+	const LV2_URID subj = subject && (subject->atom.type == handle->forge.URID)
+		? subject->body
+		: 0;
+
+	if(!subj || !body)
+	{
+		return;
+	}
+
+	//printf("got patch:Put for %u\n", subj);
+
+	const LV2_Atom_URID *plugin = NULL;
+	const LV2_Atom_Float *mod_pos_x = NULL;
+	const LV2_Atom_Float *mod_pos_y = NULL;
+	const LV2_Atom_String *mod_alias = NULL;
+	const LV2_Atom_URID *ui_uri = NULL;
+
+	lv2_atom_object_get(body,
+		handle->regs.core.plugin.urid, &plugin,
+		handle->regs.synthpod.module_position_x.urid, &mod_pos_x,
+		handle->regs.synthpod.module_position_y.urid, &mod_pos_y,
+		handle->regs.synthpod.module_alias.urid, &mod_alias,
+		handle->regs.ui.ui.urid, &ui_uri, //FIXME use this
+		0); //FIXME query more
+
+	const LV2_URID urid = plugin
+		? plugin->body
+		: 0;
+	if(!urid)
+	{
+		return;
+	}
+
+	const char *uri = handle->unmap->unmap(handle->unmap->handle, urid);
+	if(!uri)
+	{
+		return;
+	}
+
+	mod_t *mod = _mod_find_by_urn(handle, subj, false);
+	if(!mod)
+	{
+		return;
+	}
+
+	LilvNode *uri_node = lilv_new_uri(handle->world, uri);
+	if(!uri_node)
+	{
+		return;
+	}
+
+	const LilvPlugin *plug = NULL;
+	plug = lilv_plugins_get_by_uri(handle->plugs, uri_node);
+	lilv_node_free(uri_node);
+
+	if(!plug)
+	{
+		return;
+	}
+
+	_mod_init(handle, mod, plug);
+
+	if(  mod_pos_x
+		&& (mod_pos_x->atom.type == handle->forge.Float)
+		&& (mod_pos_x->body != 0.f) )
+	{
+		mod->pos.x = mod_pos_x->body;
+	}
+	else if(  _message_request(handle)
+		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
+			mod->urn, 0, handle->regs.synthpod.module_position_x.urid,
+			sizeof(float), handle->forge.Float, &mod->pos.x) )
+	{
+		_message_write(handle);
+	}
+
+	if(  mod_pos_y
+		&& (mod_pos_y->atom.type == handle->forge.Float)
+		&& (mod_pos_y->body != 0.f) )
+	{
+		mod->pos.y = mod_pos_y->body;
+	}
+	else if(  _message_request(handle)
+		&& synthpod_patcher_set(&handle->regs, &handle->forge,
+			mod->urn, 0, handle->regs.synthpod.module_position_y.urid,
+			sizeof(float), handle->forge.Float, &mod->pos.y) )
+	{
+		_message_write(handle);
+	}
+
+	if(  mod_alias
+		&& (mod_alias->atom.type == handle->forge.String) )
+	{
+		mod->alias.len = snprintf(mod->alias.buf, sizeof(mod->alias.buf), "%s",
+			ATOM_STRING_VAL(&mod_alias->atom));
+	}
+
+	const LV2_URID ui_urn = ui_uri
+		? ui_uri->body
+		: 0;
+	if(!ui_urn)
+	{
+		return;
+	}
+
+#if 0
+	// look for ui, and run it
+	HASH_FOREACH(&mod->uis, mod_ui_itr)
+	{
+		mod_ui_t *mod_ui = *mod_ui_itr;
+
+		if(_mod_ui_is_running(mod_ui))
+			_mod_ui_stop(mod_ui, false);
+
+		if(mod_ui->urn == ui_urn)
+			_mod_ui_run(mod_ui, false);
+	}
+#endif
 }
 
 static inline void
@@ -996,6 +1247,13 @@ _init(plughandle_t *handle)
 		lilv_node_free(node_false);
 	}
 	lilv_world_load_all(handle->world);
+
+	LilvNode *synthpod_bundle = lilv_new_file_uri(handle->world, NULL, SYNTHPOD_BUNDLE_DIR);
+	if(synthpod_bundle)
+	{
+		lilv_world_load_bundle(handle->world, synthpod_bundle);
+		lilv_node_free(synthpod_bundle);
+	}
 
 	handle->plugs = lilv_world_get_all_plugins(handle->world);
 	handle->iplugs = lilv_plugins_begin(handle->plugs);
