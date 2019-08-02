@@ -295,7 +295,7 @@ d2tk_com_next(d2tk_com_t *bbox);
 		(BBOX) = d2tk_com_next((BBOX)))
 
 uint32_t *
-d2tk_core_get_pixels(d2tk_core_t *core);
+d2tk_core_get_pixels(d2tk_core_t *core, d2tk_rect_t *rect);
 
 void
 d2tk_core_set_bg_color(d2tk_core_t *core, uint32_t rgba);

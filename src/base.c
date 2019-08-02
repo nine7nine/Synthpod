@@ -1673,13 +1673,16 @@ _d2tk_base_draw_button(d2tk_core_t *core, ssize_t lbl_len, const char *lbl,
 		path_len = strlen(path);
 	}
 
-	const uint64_t hash = d2tk_hash_foreach(&triple, sizeof(d2tk_triple_t),
-		rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		&align, sizeof(d2tk_align_t),
-		(lbl ? lbl : path), (lbl ? lbl_len : path_len),
-		(path ? path : NULL), (path ? path_len : 0),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &triple, sizeof(d2tk_triple_t) },
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ &align, sizeof(d2tk_align_t) },
+		{ (lbl ? lbl : path), (lbl ? lbl_len : path_len) },
+		{ path, path_len },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{

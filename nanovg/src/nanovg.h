@@ -386,6 +386,9 @@ int nvgCreateImageARGB(NVGcontext* ctx, int w, int h, int imageFlags, const unsi
 // Updates image data specified by image handle.
 void nvgUpdateImage(NVGcontext* ctx, int image, const unsigned char* data);
 
+// Updates part image data specified by image handle.
+void nvgUpdateSubImage(NVGcontext* ctx, int image, const unsigned char* data, int x, int y, int w, int h);
+
 // Returns the dimensions of a created image.
 void nvgImageSize(NVGcontext* ctx, int image, int* w, int* h);
 

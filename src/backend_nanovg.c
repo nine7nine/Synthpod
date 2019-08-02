@@ -210,21 +210,23 @@ d2tk_nanovg_pre(void *data, d2tk_core_t *core, d2tk_coord_t w, d2tk_coord_t h,
 
 	{
 		// draw mask
-		uint32_t *pixels = d2tk_core_get_pixels(core);
+		d2tk_rect_t rect;
+		uint32_t *pixels = d2tk_core_get_pixels(core, &rect);
 
 		if(backend->mask)
 		{
-			nvgUpdateImage(ctx, backend->mask, (const uint8_t *)pixels);
+			nvgUpdateSubImage(ctx, backend->mask, (const uint8_t *)pixels,
+				rect.x, rect.y, rect.w, rect.h);
 		}
 		else
 		{
 			backend->mask = nvgCreateImageRGBA(ctx, w, h, NVG_IMAGE_NEAREST,
 				(const uint8_t *)pixels);
 		}
-	
+
 		const NVGpaint bg = nvgImagePattern(ctx, 0, 0, w, h, 0, backend->mask, 1.f);
 		nvgBeginPath(ctx);
-		nvgRect(ctx, 0, 0, w, h);
+		nvgRect(ctx, rect.x, rect.y, rect.w, rect.h);
 		nvgStrokeWidth(ctx, 0);
 		nvgFillPaint(ctx, bg);
 		nvgFill(ctx);
@@ -271,7 +273,8 @@ d2tk_nanovg_post(void *data, d2tk_core_t *core __attribute__((unused)),
 
 #ifdef D2TK_DEBUG
 	{
-		uint32_t *pixels = d2tk_core_get_pixels(core);
+		d2tk_rect_t rect;
+		uint32_t *pixels = d2tk_core_get_pixels(core, &rect);
 
 		// brighten up the pixels for proper hilighting
 		for(d2tk_coord_t y = 0, Y = 0; y < h; y++, Y+=w)
@@ -284,6 +287,7 @@ d2tk_nanovg_post(void *data, d2tk_core_t *core __attribute__((unused)),
 				}
 			}
 		}
+
 		if(backend->mask)
 		{
 			nvgUpdateImage(ctx, backend->mask, (const uint8_t *)pixels);
