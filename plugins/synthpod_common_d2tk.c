@@ -110,6 +110,7 @@ struct _plughandle_t {
 	unsigned nplugs;
 	entry_t *lplugs;
 	char pplugs[32];
+	const LilvPlugin *plug_info;
 
 	LV2_URID_Map *map;
 	LV2_URID_Unmap *unmap;
@@ -325,6 +326,8 @@ _expose_plugin_list_body(plughandle_t *handle, const d2tk_rect_t *rect)
 
 	const unsigned dn = rect->h / 24;
 
+	handle->plug_info = NULL;
+
 	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
 		0, handle->nplugs, 0, dn, vscroll)
 	{
@@ -346,11 +349,12 @@ _expose_plugin_list_body(plughandle_t *handle, const d2tk_rect_t *rect)
 
 			d2tk_base_set_style(base, &handle->button_style[k % 2]);
 
-			if(d2tk_base_button_label_is_changed(base, id,
+			const d2tk_state_t state = d2tk_base_button_label(base, id,
 				entry->name.len, entry->name.buf,
-				D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, row))
+				D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, row);
+			if(d2tk_state_is_focused(state))
 			{
-				//FIXME
+				handle->plug_info = entry->data;
 			}
 		}
 
@@ -395,9 +399,167 @@ _expose_sidebar_top(plughandle_t *handle, const d2tk_rect_t *rect)
 }
 
 static inline void
+_xdg_open(const LilvNode *node)
+{
+	char *buf = NULL;
+
+	if(asprintf(&buf, "xdg-open %s", lilv_node_as_uri(node)) == -1)
+	{
+		return;
+	}
+
+	system(buf);
+
+	free(buf);
+}
+
+static inline void
+_expose_plugin_property(d2tk_base_t *base, unsigned idx, const char *key,
+	const LilvNode *node, const d2tk_rect_t *rect)
+{
+	const d2tk_coord_t hfrac [2] = { 1, 5 };
+	D2TK_BASE_LAYOUT(rect, 2, hfrac, D2TK_FLAG_LAYOUT_X_REL, hlay)
+	{
+		const d2tk_rect_t *hrect = d2tk_layout_get_rect(hlay);
+		const unsigned k = d2tk_layout_get_index(hlay);
+
+		switch(k)
+		{
+			case 0:
+			{
+				d2tk_base_label(base, -1, key, 1.f, hrect,
+					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+			} break;
+			case 1:
+			{
+				if(lilv_node_is_uri(node))
+				{
+					if(d2tk_base_button_label_is_changed(base, D2TK_ID_IDX(idx),
+						-1, lilv_node_as_uri(node),
+						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, hrect))
+					{
+						_xdg_open(node);
+					}
+				}
+				else if(lilv_node_is_string(node))
+				{
+					d2tk_base_label(base, -1, lilv_node_as_string(node), 1.f, hrect,
+						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+				}
+				else
+				{
+					d2tk_base_label(base, 1, "-", 1.f, hrect,
+						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT);
+				}
+			} break;
+		}
+	}
+}
+
+static inline void
 _expose_sidebar_bottom(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
+	d2tk_pugl_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+
+	if(!handle->plug_info)
+	{
+		return;
+	}
+
+	const unsigned dn = rect->h / 16;
+	const unsigned en = 9;
+
+	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
+		0, en, 0, dn, vscroll)
+	{
+		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
+		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
+
+		D2TK_BASE_TABLE(col, 1, dn, trow)
+		{
+			const unsigned k = d2tk_table_get_index_y(trow) + voffset;
+
+			if(k >= en)
+			{
+				break;
+			}
+
+			const d2tk_rect_t *row = d2tk_table_get_rect(trow);
+
+			switch (k)
+			{
+				case 0: // name
+				{
+					LilvNode *node = lilv_plugin_get_name(handle->plug_info);
+
+					_expose_plugin_property(base, k, "Name", node, row);
+
+					lilv_node_free(node);
+				} break;
+				case 1: // class
+				{
+					const LilvPluginClass *class = lilv_plugin_get_class(handle->plug_info);
+					const LilvNode *node = class
+						? lilv_plugin_class_get_label(class)
+						: NULL;
+
+					_expose_plugin_property(base, k, "Class", node, row);
+				} break;
+				case 2: // uri
+				{
+					const LilvNode *node = lilv_plugin_get_uri(handle->plug_info);
+
+					_expose_plugin_property(base, k, "URI", node, row);
+				} break;
+
+				case 3: // separator
+				{
+					// skip
+				} break;
+
+				case 4: // author name
+				{
+					LilvNode *node = lilv_plugin_get_author_name(handle->plug_info);
+
+					_expose_plugin_property(base, k, "Author", node, row);
+
+					lilv_node_free(node);
+				} break;
+				case 5: // author email
+				{
+					LilvNode *node = lilv_plugin_get_author_email(handle->plug_info);
+
+					_expose_plugin_property(base, k, "Email", node, row);
+
+					lilv_node_free(node);
+				} break;
+
+				case 6: // separator
+				{
+					// skip
+				} break;
+
+				case 7: // project
+				{
+					LilvNode *node = lilv_plugin_get_project(handle->plug_info);
+
+					_expose_plugin_property(base, k, "Project", node, row);
+
+					lilv_node_free(node);
+				} break;
+				case 8: // bundle
+				{
+					const LilvNode *node = lilv_plugin_get_bundle_uri(handle->plug_info);
+
+					_expose_plugin_property(base, k, "Bundle", node, row);
+				} break;
+			}
+		}
+
+		d2tk_base_set_style(base, NULL);
+	}
 	//FIXME
 }
 
