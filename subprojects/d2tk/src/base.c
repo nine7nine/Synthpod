@@ -483,7 +483,7 @@ d2tk_layout_begin(const d2tk_rect_t *rect, unsigned N, const d2tk_coord_t *frac,
 
 	unsigned tot = 0;
 	unsigned missing = 0;
-	for(unsigned i = 0; i < N; i ++)
+	for(unsigned i = 0; i < N; i++)
 	{
 		tot += frac[i];
 
@@ -536,13 +536,16 @@ d2tk_layout_begin(const d2tk_rect_t *rect, unsigned N, const d2tk_coord_t *frac,
 D2TK_API bool
 d2tk_layout_not_end(d2tk_layout_t *lay)
 {
-	return lay->k < lay->N;
+	return lay;
 }
 
 D2TK_API d2tk_layout_t *
 d2tk_layout_next(d2tk_layout_t *lay)
 {
-	++lay->k;
+	if(++lay->k >= lay->N)
+	{
+		return NULL;
+	}
 
 	if(lay->flag & D2TK_FLAG_LAYOUT_Y)
 	{
@@ -3126,6 +3129,8 @@ D2TK_API d2tk_flowmatrix_t *
 d2tk_flowmatrix_begin(d2tk_base_t *base, const d2tk_rect_t *rect, d2tk_id_t id,
 	d2tk_flowmatrix_t *flowmatrix)
 {
+	memset(flowmatrix, 0x0, sizeof(d2tk_flowmatrix_t));
+
 	flowmatrix->base = base;
 	flowmatrix->id = id;
 	flowmatrix->rect = rect;
@@ -3141,9 +3146,6 @@ d2tk_flowmatrix_begin(d2tk_base_t *base, const d2tk_rect_t *rect, d2tk_id_t id,
 	flowmatrix->dd = flowmatrix->scale * 40; //FIXME
 	flowmatrix->r = flowmatrix->scale * 4; //FIXME
 	flowmatrix->s = flowmatrix->scale * 20; //FIXME
-
-	flowmatrix->src_conn = false;
-	flowmatrix->dst_conn = false;
 
 	d2tk_core_t *core = base->core;
 	flowmatrix->ref = d2tk_core_bbox_container_push(core, false, flowmatrix->rect);
@@ -3304,6 +3306,19 @@ d2tk_flowmatrix_node_begin(d2tk_base_t *base, d2tk_flowmatrix_t *flowmatrix,
 	node->rect.w = w;
 	node->rect.h = h;
 
+	d2tk_core_t *core = base->core;
+	d2tk_coord_t cw;
+	d2tk_coord_t ch;
+
+	d2tk_core_get_dimensions(core, &cw, &ch);
+	if(  (node->rect.x >= cw)
+			|| (node->rect.y >= ch)
+			|| (node->rect.x <= -node->rect.w)
+			|| (node->rect.y <= -node->rect.h) )
+	{
+		return NULL;
+	}
+
 	const d2tk_style_t *style = d2tk_base_get_style(base);
 
 	const uint64_t hash = d2tk_hash_foreach(flowmatrix, sizeof(d2tk_flowmatrix_t),
@@ -3312,7 +3327,6 @@ d2tk_flowmatrix_node_begin(d2tk_base_t *base, d2tk_flowmatrix_t *flowmatrix,
 		style, sizeof(d2tk_style_t),
 		NULL);
 
-	d2tk_core_t *core = base->core;
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
 		const d2tk_coord_t r = flowmatrix->r;
@@ -3417,6 +3431,8 @@ d2tk_flowmatrix_arc_begin(d2tk_base_t *base, d2tk_flowmatrix_t *flowmatrix,
 	unsigned N, unsigned M, const d2tk_pos_t *src, const d2tk_pos_t *dst,
 	d2tk_pos_t *pos, d2tk_flowmatrix_arc_t *arc)
 {
+	memset(arc, 0x0, sizeof(d2tk_flowmatrix_arc_t));
+
 	// derive initial position
 	if( (pos->x == 0) && (pos->y == 0) )
 	{
