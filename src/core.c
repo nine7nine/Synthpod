@@ -404,17 +404,33 @@ _d2tk_clip_clip(d2tk_core_t *core, d2tk_clip_t *dst, const d2tk_clip_t *src)
 	{
 		dst->x0 = 0;
 	}
+	if(dst->x1 < 0)
+	{
+		dst->x1 = 0;
+	}
 
 	if(dst->y0 < 0)
 	{
 		dst->y0 = 0;
 	}
+	if(dst->y1 < 0)
+	{
+		dst->y1 = 0;
+	}
 
+	if(dst->x0 >= core->w)
+	{
+		dst->x0 = core->w - 1;
+	}
 	if(dst->x1 >= core->w)
 	{
 		dst->x1 = core->w - 1;
 	}
 
+	if(dst->y0 >= core->h)
+	{
+		dst->y0 = core->h - 1;
+	}
 	if(dst->y1 >= core->h)
 	{
 		dst->y1 = core->h - 1;

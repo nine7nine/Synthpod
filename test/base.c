@@ -779,7 +779,7 @@ _test_layout_relative_x()
 	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
 	assert(base);
 
-	const d2tk_coord_t frac [N] = {
+	static const d2tk_coord_t frac [N] = {
 		1, 2, 4, 0
 	};
 	unsigned i = 0;
@@ -809,7 +809,7 @@ _test_layout_relative_y()
 	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
 	assert(base);
 
-	const d2tk_coord_t frac [N] = {
+	static const d2tk_coord_t frac [N] = {
 		1, 2, 4, 0
 	};
 	unsigned i = 0;
