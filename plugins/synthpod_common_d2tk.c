@@ -591,6 +591,45 @@ _expose_sidebar(plughandle_t *handle, const d2tk_rect_t *rect)
 }
 
 static inline void
+_expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
+{
+	d2tk_base_t *base = d2tk_pugl_get_base(handle->dpugl);
+	unsigned N = 0;
+
+	for(unsigned m = 0; m<MAX_MODS; m++)
+	{
+		mod_t *mod = &handle->mods[m];
+
+		if(mod->urn)
+		{
+			N++;
+		}
+	}
+
+	if(!N) //FIXME in d2tk_base_table_*
+	{
+		return;
+	}
+
+	D2TK_BASE_TABLE(rect, N, N, tab)
+	{
+		const d2tk_rect_t *trect = d2tk_table_get_rect(tab);
+		const unsigned x = d2tk_table_get_index_x(tab);
+		const unsigned y = d2tk_table_get_index_y(tab);
+		const unsigned k = d2tk_table_get_index(tab);
+		const d2tk_id_t id = D2TK_ID_IDX(k);
+
+		if(x == y)
+		{
+			continue;
+		}
+
+		d2tk_base_button(base, id, trect);
+	}
+	//FIXME
+}
+
+static inline void
 _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
@@ -722,7 +761,11 @@ _expose_main_area(plughandle_t *handle, const d2tk_rect_t *rect)
 			} break;
 			case 1:
 			{
+#if 0
 				_expose_patchbay(handle, prect);
+#else
+				_expose_patchmatrix(handle, prect);
+#endif
 			} break;
 		}
 	}
