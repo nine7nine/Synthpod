@@ -27,25 +27,31 @@
 static void
 _test_hash()
 {
+	const uint32_t bar = 12;
 	const char *foo = "barbarbarbar";
 
-	const uint64_t hash1 = d2tk_hash(foo, -1);
+	const uint64_t hash1 = d2tk_hash(&bar, sizeof(bar));
 	const uint64_t hash2 = d2tk_hash(foo, strlen(foo));
 
-	assert(hash1 == hash2);
+	assert(hash1 != hash2);
 }
 
 static void
 _test_hash_foreach()
 {
-	const char *foo = "barbarbarbar";
-	const char *bar = "foofoofoofoo";
+	const uint32_t bar = 12;
+	const char *foo = "foofoofoofoo";
 
-	const uint64_t hash1 = d2tk_hash_foreach(foo, -1,
-		bar, -1,
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ foo, strlen(foo) },
+		{ &bar, sizeof(bar) },
+		{ NULL, 0 }
+	};
+
+	const uint64_t hash1 = d2tk_hash_dict(dict);
+
 	const uint64_t hash2 = d2tk_hash_foreach(foo, strlen(foo),
-		bar, strlen(bar),
+		&bar, sizeof(bar),
 		NULL);
 
 	assert(hash1 == hash2);

@@ -25,13 +25,6 @@
 #define SEED 12345
 
 __attribute__((always_inline))
-static inline size_t
-_len(const void *key, ssize_t len)
-{
-	return (len == -1) ? strlen((const char *)key) : (size_t)len;
-}
-
-__attribute__((always_inline))
 static inline uint64_t
 _d2tk_hash(uint64_t hash, const void *key, size_t len)
 {
@@ -41,8 +34,6 @@ _d2tk_hash(uint64_t hash, const void *key, size_t len)
 D2TK_API uint64_t
 d2tk_hash(const void *key, ssize_t len)
 {
-	len = _len(key, len);
-
 	return mum_hash(key, len, SEED);
 }
 
@@ -52,15 +43,13 @@ d2tk_hash_foreach(const void *key, ssize_t len, ...)
 	va_list args;
 	uint64_t hash = mum_hash_init(SEED);
 
-	len = _len(key, len); //FIXME remove
 	hash = _d2tk_hash(hash, key, len);
 
 	va_start(args, len);
 
 	while( (key = va_arg(args, const void *)) )
 	{
-		len = _len(key, va_arg(args, int)); //FIXME remove
-		hash = _d2tk_hash(hash, key, len);
+		hash = _d2tk_hash(hash, key, va_arg(args, size_t));
 	}
 
 	va_end(args);

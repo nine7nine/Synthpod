@@ -105,6 +105,8 @@ typedef enum _d2tk_flag_t {
 	D2TK_FLAG_LAYOUT_Y_REL  = D2TK_FLAG_LAYOUT_Y | D2TK_FLAG_LAYOUT_REL,
 	D2TK_FLAG_LAYOUT_X_ABS  = D2TK_FLAG_LAYOUT_X | D2TK_FLAG_LAYOUT_ABS,
 	D2TK_FLAG_LAYOUT_Y_ABS  = D2TK_FLAG_LAYOUT_Y | D2TK_FLAG_LAYOUT_ABS,
+	D2TK_FLAG_TABLE_ABS     = (1 << 8),
+	D2TK_FLAG_TABLE_REL     = (1 << 9),
 } d2tk_flag_t;
 
 #define D2TK_ID_IDX(IDX) ((d2tk_id_t)__LINE__ << 16) | (IDX)
@@ -124,7 +126,7 @@ extern const size_t d2tk_pane_sz;
 
 D2TK_API d2tk_table_t *
 d2tk_table_begin(const d2tk_rect_t *rect, unsigned N, unsigned M,
-	d2tk_table_t *tab);
+	d2tk_flag_t flag, d2tk_table_t *tab);
 
 D2TK_API bool
 d2tk_table_not_end(d2tk_table_t *tab);
@@ -144,8 +146,8 @@ d2tk_table_get_index_y(d2tk_table_t *tab);
 D2TK_API const d2tk_rect_t *
 d2tk_table_get_rect(d2tk_table_t *tab);
 
-#define D2TK_BASE_TABLE(RECT, N, M, TAB) \
-	for(d2tk_table_t *(TAB) = d2tk_table_begin((RECT), (N), (M), \
+#define D2TK_BASE_TABLE(RECT, N, M, FLAG, TAB) \
+	for(d2tk_table_t *(TAB) = d2tk_table_begin((RECT), (N), (M), (FLAG), \
 			alloca(d2tk_table_sz)); \
 		d2tk_table_not_end((TAB)); \
 		(TAB) = d2tk_table_next((TAB)))
