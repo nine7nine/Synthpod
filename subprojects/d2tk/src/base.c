@@ -322,19 +322,37 @@ _d2tk_base_get_atom(d2tk_base_t *base, d2tk_id_t id, d2tk_atom_type_t type)
 
 D2TK_API d2tk_table_t *
 d2tk_table_begin(const d2tk_rect_t *rect, unsigned N, unsigned M,
-	d2tk_table_t *tab)
+	d2tk_flag_t flag, d2tk_table_t *tab)
 {
+	unsigned w;
+	unsigned h;
+
 	tab->x = 0;
 	tab->y = 0;
-	tab->N = N;
-	tab->NM = N*M;
 	tab->k = 0;
 	tab->x0 = rect->x;
 
+	if(flag & D2TK_FLAG_TABLE_REL)
+	{
+		w = rect->w / N;
+		h = rect->h / M;
+	}
+	else
+	{
+		w = N;
+		h = M;
+
+		N = rect->w / N;
+		M = rect->h / M;
+	}
+
+	tab->N = N;
+	tab->NM = N*M;
+
 	tab->rect.x = rect->x;
 	tab->rect.y = rect->y;
-	tab->rect.w = rect->w / N;
-	tab->rect.h = rect->h / M;
+	tab->rect.w = w;
+	tab->rect.h = h;
 
 	return tab;
 }
@@ -394,18 +412,28 @@ D2TK_API d2tk_frame_t *
 d2tk_frame_begin(d2tk_base_t *base, const d2tk_rect_t *rect,
 	ssize_t lbl_len, const char *lbl, d2tk_frame_t *frm)
 {
+	const bool has_lbl = lbl_len && lbl;
+
 	const d2tk_style_t *style = d2tk_base_get_style(base);
 	d2tk_core_t *core = base->core;
 	const d2tk_coord_t h = 17; //FIXME
 
+	if(has_lbl && (lbl_len == -1) ) // zero-terminated string
+	{
+		lbl_len = strlen(lbl);
+	}
+
+	const d2tk_hash_dict_t dict [] = {
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ lbl, lbl_len },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
+
 	d2tk_rect_shrink(&frm->rect, rect, 2*style->padding);
 	frm->rect.y += h;
 	frm->rect.h -= h;
-
-	const uint64_t hash = d2tk_hash_foreach(rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		lbl, lbl_len,
-		NULL);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -417,11 +445,6 @@ d2tk_frame_begin(d2tk_base_t *base, const d2tk_rect_t *rect,
 
 		if(lbl)
 		{
-			if(lbl_len == -1) // zero terminated string
-			{
-				lbl_len = strlen(lbl);
-			}
-
 			bnd_inner.h = h;
 
 			d2tk_core_begin_path(core);
@@ -1155,13 +1178,16 @@ _d2tk_draw_scrollbar(d2tk_core_t *core, d2tk_state_t hstate, d2tk_state_t vstate
 	const d2tk_rect_t *hbar, const d2tk_rect_t *vbar, const d2tk_style_t *style,
 	d2tk_flag_t flags)
 {
-	const uint64_t hash = d2tk_hash_foreach(&hstate, sizeof(d2tk_state_t),
-		&vstate, sizeof(d2tk_state_t),
-		hbar, sizeof(d2tk_rect_t),
-		vbar, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		&flags, sizeof(d2tk_flag_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &hstate, sizeof(d2tk_state_t) },
+		{ &vstate, sizeof(d2tk_state_t) },
+		{ hbar, sizeof(d2tk_rect_t) },
+		{ vbar, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ &flags, sizeof(d2tk_flag_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -1409,11 +1435,14 @@ static void
 _d2tk_draw_pane(d2tk_core_t *core, d2tk_state_t state, const d2tk_rect_t *sub,
 	const d2tk_style_t *style, d2tk_flag_t flags)
 {
-	const uint64_t hash = d2tk_hash_foreach(&state, sizeof(d2tk_state_t),
-		sub, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		&flags, sizeof(d2tk_flag_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &state, sizeof(d2tk_state_t) },
+		{ sub, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ &flags, sizeof(d2tk_flag_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -1619,9 +1648,12 @@ d2tk_base_cursor(d2tk_base_t *base, const d2tk_rect_t *rect)
 	d2tk_core_t *core = base->core;
 	const d2tk_style_t *style = d2tk_base_get_style(base);
 
-	const uint64_t hash = d2tk_hash_foreach(rect, sizeof(rect),
-		style, sizeof(d2tk_style_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ rect, sizeof(rect) },
+		{ style, sizeof(d2tk_style_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -1856,9 +1888,12 @@ d2tk_base_image(d2tk_base_t *base, ssize_t path_len, const char *path,
 		path_len = strlen(path);
 	}
 
-	const uint64_t hash = d2tk_hash_foreach(rect, sizeof(d2tk_rect_t),
-		(path ? path : NULL), (path ? path_len : 0),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ rect, sizeof(d2tk_rect_t) },
+		{ (path ? path : NULL), (path ? path_len : 0) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	d2tk_core_t *core = base->core;;
 
@@ -1880,12 +1915,15 @@ d2tk_base_bitmap(d2tk_base_t *base, uint32_t w, uint32_t h, uint32_t stride,
 	const uint32_t *argb, uint64_t rev, const d2tk_rect_t *rect,
 	d2tk_align_t align)
 {
-	const uint64_t hash = d2tk_hash_foreach(rect, sizeof(d2tk_rect_t),
-		&w, sizeof(uint32_t),
-		&h, sizeof(uint32_t),
-		&stride, sizeof(uint32_t),
-		&rev, sizeof(uint64_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ rect, sizeof(d2tk_rect_t) },
+		{ &w, sizeof(uint32_t) },
+		{ &h, sizeof(uint32_t) },
+		{ &stride, sizeof(uint32_t) },
+		{ &rev, sizeof(uint64_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	d2tk_core_t *core = base->core;;
 
@@ -1903,9 +1941,12 @@ D2TK_API void
 d2tk_base_custom(d2tk_base_t *base, uint32_t size, const void *data,
 	const d2tk_rect_t *rect, d2tk_core_custom_t custom)
 {
-	const uint64_t hash = d2tk_hash_foreach(rect, sizeof(d2tk_rect_t),
-		data, size, //FIXME
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ rect, sizeof(d2tk_rect_t) } ,
+		{ data, size }, //FIXME
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	d2tk_core_t *core = base->core;;
 
@@ -1923,11 +1964,14 @@ static inline void
 _d2tk_base_draw_meter(d2tk_core_t *core, const d2tk_rect_t *rect,
 	d2tk_state_t state, int32_t value, const d2tk_style_t *style)
 {
-	const uint64_t hash = d2tk_hash_foreach(&state, sizeof(d2tk_state_t),
-		rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		&value, sizeof(int32_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &state, sizeof(d2tk_state_t) },
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ &value, sizeof(int32_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -2132,13 +2176,16 @@ _d2tk_base_draw_combo(d2tk_core_t *core, ssize_t nitms, const char **itms,
 	const d2tk_rect_t *rect, d2tk_state_t state, int32_t value,
 	const d2tk_style_t *style)
 {
-	const uint64_t hash = d2tk_hash_foreach(&state, sizeof(d2tk_state_t),
-		rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		&value, sizeof(int32_t),
-		&nitms, sizeof(ssize_t),
-		itms, sizeof(const char **), //FIXME we should actually cache the labels
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &state, sizeof(d2tk_state_t) },
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ &value, sizeof(int32_t) },
+		{ &nitms, sizeof(ssize_t) },
+		{ itms, sizeof(const char **) }, //FIXME we should actually cache the labels
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -2360,12 +2407,15 @@ _d2tk_base_draw_text_field(d2tk_core_t *core, d2tk_state_t state,
 	const d2tk_rect_t *rect, const d2tk_style_t *style, char *value,
 	d2tk_align_t align)
 {
-	const uint64_t hash = d2tk_hash_foreach(&state, sizeof(d2tk_state_t),
-		rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		&align, sizeof(d2tk_align_t),
-		value, -1,
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &state, sizeof(d2tk_state_t) },
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ &align, sizeof(d2tk_align_t) },
+		{ value, strlen(value) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -2545,26 +2595,31 @@ D2TK_API d2tk_state_t
 d2tk_base_label(d2tk_base_t *base, ssize_t lbl_len, const char *lbl,
 	float mul, const d2tk_rect_t *rect, d2tk_align_t align)
 {
+	const bool has_lbl = lbl_len && lbl;
+
+	if(has_lbl && (lbl_len == -1) ) // zero terminated string
+	{
+		lbl_len = strlen(lbl);
+	}
+
 	const d2tk_style_t *style = d2tk_base_get_style(base);
 
-	d2tk_core_t *core = base->core;
+	const d2tk_hash_dict_t dict [] = {
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ lbl, lbl_len },
+		{ &mul, sizeof(float) },
+		{ &align, sizeof(d2tk_align_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
-	const uint64_t hash = d2tk_hash_foreach(rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		lbl, lbl_len,
-		&mul, sizeof(float),
-		&align, sizeof(d2tk_align_t),
-		NULL);
+	d2tk_core_t *core = base->core;
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
 		d2tk_rect_t bnd;
 		d2tk_rect_shrink(&bnd, rect, style->padding);
-
-		if(lbl_len == -1) // zero terminated string
-		{
-			lbl_len = strlen(lbl);
-		}
 
 		const d2tk_triple_t triple = D2TK_TRIPLE_NONE;
 
@@ -2614,11 +2669,14 @@ d2tk_base_dial_bool(d2tk_base_t *base, d2tk_id_t id, const d2tk_rect_t *rect,
 	const d2tk_style_t *style = d2tk_base_get_style(base);
 	d2tk_core_t *core = base->core;
 
-	const uint64_t hash = d2tk_hash_foreach(&state, sizeof(d2tk_state_t),
-		rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		value, sizeof(bool),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &state, sizeof(d2tk_state_t) },
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ value, sizeof(bool) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -2684,11 +2742,14 @@ static inline void
 _d2tk_base_draw_dial(d2tk_core_t *core, const d2tk_rect_t *rect,
 	d2tk_state_t state, float rel, const d2tk_style_t *style)
 {
-	const uint64_t hash = d2tk_hash_foreach(&state, sizeof(d2tk_state_t),
-		rect, sizeof(d2tk_rect_t),
-		style, sizeof(d2tk_style_t),
-		&rel, sizeof(float),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ &state, sizeof(d2tk_state_t) },
+		{ rect, sizeof(d2tk_rect_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ &rel, sizeof(float) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -3079,11 +3140,14 @@ _d2tk_flowmatrix_connect(d2tk_base_t *base, d2tk_flowmatrix_t *flowmatrix,
 		d2tk_base_get_mouse_pos(base, &dst.x, &dst.y);
 	}
 
-	const uint64_t hash = d2tk_hash_foreach(flowmatrix, sizeof(d2tk_flowmatrix_t),
-		src_pos, sizeof(d2tk_pos_t),
-		dst_pos ? dst_pos : &dst, sizeof(d2tk_pos_t),
-		style, sizeof(d2tk_style_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ flowmatrix, sizeof(d2tk_flowmatrix_t) },
+		{ src_pos, sizeof(d2tk_pos_t) },
+		{ dst_pos ? dst_pos : &dst, sizeof(d2tk_pos_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	d2tk_core_t *core = base->core;
 	D2TK_CORE_WIDGET(core, hash, widget)
@@ -3322,11 +3386,14 @@ d2tk_flowmatrix_node_begin(d2tk_base_t *base, d2tk_flowmatrix_t *flowmatrix,
 
 	const d2tk_style_t *style = d2tk_base_get_style(base);
 
-	const uint64_t hash = d2tk_hash_foreach(flowmatrix, sizeof(d2tk_flowmatrix_t),
-		pos, sizeof(d2tk_pos_t),
-		node, sizeof(d2tk_flowmatrix_node_t),
-		style, sizeof(d2tk_style_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ flowmatrix, sizeof(d2tk_flowmatrix_t) },
+		{ pos, sizeof(d2tk_pos_t) },
+		{ node, sizeof(d2tk_flowmatrix_node_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -3475,15 +3542,18 @@ d2tk_flowmatrix_arc_begin(d2tk_base_t *base, d2tk_flowmatrix_t *flowmatrix,
 
 	const d2tk_style_t *style = d2tk_base_get_style(base);
 
-	const uint64_t hash = d2tk_hash_foreach(flowmatrix, sizeof(d2tk_flowmatrix_t),
-		&N, sizeof(unsigned),
-		&M, sizeof(unsigned),
-		src, sizeof(d2tk_pos_t),
-		dst, sizeof(d2tk_pos_t),
-		pos, sizeof(d2tk_pos_t),
-		arc, sizeof(d2tk_flowmatrix_arc_t),
-		style, sizeof(d2tk_style_t),
-		NULL);
+	const d2tk_hash_dict_t dict [] = {
+		{ flowmatrix, sizeof(d2tk_flowmatrix_t) },
+		{ &N, sizeof(unsigned) },
+		{ &M, sizeof(unsigned) },
+		{ src, sizeof(d2tk_pos_t) },
+		{ dst, sizeof(d2tk_pos_t) },
+		{ pos, sizeof(d2tk_pos_t) },
+		{ arc, sizeof(d2tk_flowmatrix_arc_t) },
+		{ style, sizeof(d2tk_style_t) },
+		{ NULL, 0 }
+	};
+	const uint64_t hash = d2tk_hash_dict(dict);
 
 	d2tk_core_t *core = base->core;
 	D2TK_CORE_WIDGET(core, hash, widget)

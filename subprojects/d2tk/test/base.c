@@ -49,7 +49,7 @@ _expose_hot(d2tk_base_t *base, const d2tk_rect_t *rect, unsigned n, unsigned p)
 	};
 #undef hot_over
 
-	D2TK_BASE_TABLE(rect, n, 1, tab)
+	D2TK_BASE_TABLE(rect, n, 1, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
 		const unsigned k = d2tk_table_get_index(tab);
@@ -164,7 +164,7 @@ _expose_mouse_fwd_focus(d2tk_base_t *base, const d2tk_rect_t *rect, unsigned n,
 #undef focus_up
 #undef focus_down
 
-	D2TK_BASE_TABLE(rect, n, 1, tab)
+	D2TK_BASE_TABLE(rect, n, 1, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
 		const unsigned k = d2tk_table_get_index(tab);
@@ -292,7 +292,7 @@ _expose_mouse_bwd_focus(d2tk_base_t *base, const d2tk_rect_t *rect, unsigned n,
 #undef focus_up
 #undef focus_down
 
-	D2TK_BASE_TABLE(rect, n, 1, tab)
+	D2TK_BASE_TABLE(rect, n, 1, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
 		const unsigned k = d2tk_table_get_index(tab);
@@ -409,7 +409,7 @@ _expose_key_fwd_focus(d2tk_base_t *base, const d2tk_rect_t *rect, unsigned n,
 	};
 #undef invar
 
-	D2TK_BASE_TABLE(rect, n, 1, tab)
+	D2TK_BASE_TABLE(rect, n, 1, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
 		const unsigned k = d2tk_table_get_index(tab);
@@ -515,7 +515,7 @@ _expose_key_bwd_focus(d2tk_base_t *base, const d2tk_rect_t *rect, unsigned n,
 	};
 #undef invar
 
-	D2TK_BASE_TABLE(rect, n, 1, tab)
+	D2TK_BASE_TABLE(rect, n, 1, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
 		const unsigned k = d2tk_table_get_index(tab);
@@ -710,7 +710,44 @@ _test_get_set()
 }
 
 static void
-_test_table()
+_test_state_dump()
+{
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_NONE),
+		"................") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_DOWN),
+		"...............1") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_UP),
+		"..............1.") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_ACTIVE),
+		".............1..") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_HOT),
+		"............1...") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_FOCUS),
+		"...........1....") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_FOCUS_IN),
+		"..........1.....") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_FOCUS_OUT),
+		".........1......") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_SCROLL_DOWN),
+		"........1.......") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_SCROLL_UP),
+		".......1........") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_SCROLL_LEFT),
+		"......1.........") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_SCROLL_RIGHT),
+		".....1..........") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_MOTION),
+		"....1...........") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_CHANGED),
+		"...1............") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_ENTER),
+		"..1.............") == 0);
+	assert(strcmp(d2tk_state_dump(D2TK_STATE_OVER),
+		".1..............") == 0);
+}
+
+static void
+_test_table_rel()
 {
 #define N 12
 #define M 8
@@ -722,7 +759,7 @@ _test_table()
 	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
 	assert(base);
 
-	D2TK_BASE_TABLE(&rect, N, M, tab)
+	D2TK_BASE_TABLE(&rect, N, M, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
 		const unsigned k = d2tk_table_get_index(tab);
@@ -735,6 +772,39 @@ _test_table()
 		assert(bnd->w == rect.w / N);
 		assert(bnd->h == rect.h / M);
 		assert(y*N + x == k);
+	}
+
+	d2tk_base_free(base);
+#undef M
+#undef N
+}
+
+static void
+_test_table_abs()
+{
+#define N 12
+#define M 8
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	D2TK_BASE_TABLE(&rect, N, M, D2TK_FLAG_TABLE_ABS, tab)
+	{
+		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
+		const int k = d2tk_table_get_index(tab);
+		const int x = d2tk_table_get_index_x(tab);
+		const int y = d2tk_table_get_index_y(tab);
+
+		assert(bnd);
+		assert(bnd->x == x*N);
+		assert(bnd->y == y*M);
+		assert(bnd->w == N);
+		assert(bnd->h == M);
+		assert(y*(DIM_W/N) + x == k);
 	}
 
 	d2tk_base_free(base);
@@ -1838,7 +1908,9 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	_test_key_fwd_focus();
 	_test_key_bwd_focus();
 	_test_get_set();
-	_test_table();
+	_test_state_dump();
+	_test_table_rel();
+	_test_table_abs();
 	_test_frame();
 	_test_layout_relative_x();
 	_test_layout_relative_y();

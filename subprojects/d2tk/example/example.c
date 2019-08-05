@@ -56,6 +56,7 @@ union _val_t {
 typedef enum _bar_t {
 	BAR_MIX,
 	BAR_SEQ,
+	BAR_TABLE_ABS,
 	BAR_SCROLL,
 	BAR_PANE,
 	BAR_LAYOUT,
@@ -74,6 +75,7 @@ static bar_t bar = BAR_MIX;
 static const char *bar_lbl [BAR_MAX] = {
 	[BAR_MIX]        = "Mix of many",
 	[BAR_SEQ]        = "Sequencer",
+	[BAR_TABLE_ABS]  = "Table Abs",
 	[BAR_SCROLL]     = "Scrollbar",
 	[BAR_PANE]       = "Pane",
 	[BAR_LAYOUT]     = "Layout",
@@ -93,7 +95,7 @@ _render_c_mix(d2tk_base_t *base, const d2tk_rect_t *rect)
 #define M 24
 	static val_t value [N*M];
 
-	D2TK_BASE_TABLE(rect, N, M, tab)
+	D2TK_BASE_TABLE(rect, N, M, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const unsigned k = d2tk_table_get_index(tab);
 		const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
@@ -255,7 +257,7 @@ _render_c_seq(d2tk_base_t *base, const d2tk_rect_t *rect)
 	style.rounding = 0;
 	d2tk_base_set_style(base, &style);
 
-	D2TK_BASE_TABLE(rect, N, M, tab)
+	D2TK_BASE_TABLE(rect, N, M, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const unsigned k = d2tk_table_get_index(tab);
 		const d2tk_coord_t x = d2tk_table_get_index_x(tab);
@@ -376,6 +378,34 @@ _render_c_seq(d2tk_base_t *base, const d2tk_rect_t *rect)
 }
 
 static inline void
+_render_c_table_abs(d2tk_base_t *base, const d2tk_rect_t *rect)
+{
+	static int32_t ntile = 64;
+
+	if(d2tk_base_get_ctrl(base))
+	{
+		if(d2tk_base_get_down(base))
+		{
+			ntile >>= 1;
+		}
+		else if(d2tk_base_get_up(base))
+		{
+			ntile <<= 1;
+		}
+	}
+
+	d2tk_clip_int32(16, &ntile, 256);
+
+	D2TK_BASE_TABLE(rect, ntile, ntile, D2TK_FLAG_TABLE_ABS, tab)
+	{
+		const d2tk_rect_t *rect = d2tk_table_get_rect(tab);
+		const unsigned k = d2tk_table_get_index(tab);
+
+		d2tk_base_button(base, D2TK_ID_IDX(k), rect);
+	}
+}
+
+static inline void
 _render_c_scroll(d2tk_base_t *base, const d2tk_rect_t *rect)
 {
 #define N 12 // number of columns
@@ -391,7 +421,7 @@ _render_c_scroll(d2tk_base_t *base, const d2tk_rect_t *rect)
 		const float hoffset = d2tk_scrollbar_get_offset_x(hscroll);
 		const d2tk_rect_t *row = d2tk_scrollbar_get_rect(hscroll);
 
-		D2TK_BASE_TABLE(row, N_2, 1, tcol)
+		D2TK_BASE_TABLE(row, N_2, 1, D2TK_FLAG_TABLE_REL, tcol)
 		{
 			const unsigned j = d2tk_table_get_index_x(tcol) + hoffset;
 			const d2tk_rect_t *col = d2tk_table_get_rect(tcol);
@@ -404,7 +434,7 @@ _render_c_scroll(d2tk_base_t *base, const d2tk_rect_t *rect)
 
 				d2tk_base_set_style(base, &style);
 
-				D2TK_BASE_TABLE(sub, 1, O, tlist)
+				D2TK_BASE_TABLE(sub, 1, O, D2TK_FLAG_TABLE_REL, tlist)
 				{
 					const unsigned k = d2tk_table_get_index_y(tlist) + voffset;
 					const d2tk_rect_t *bnd = d2tk_table_get_rect(tlist);
@@ -663,7 +693,7 @@ _render_c_meter(d2tk_base_t *base, const d2tk_rect_t *rect)
 	const float fx = (float)x / w;
 	const float fy = (float)y / h;
 
-	D2TK_BASE_TABLE(rect, N, M, tab)
+	D2TK_BASE_TABLE(rect, N, M, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const unsigned k = d2tk_table_get_index(tab);
 		const unsigned a = d2tk_table_get_index_x(tab);
@@ -696,7 +726,7 @@ _render_c_frame(d2tk_base_t *base, const d2tk_rect_t *rect)
 #define N 4
 	static bool val [N];
 
-	D2TK_BASE_TABLE(rect, N, N, tab)
+	D2TK_BASE_TABLE(rect, N, N, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *bnd_outer = d2tk_table_get_rect(tab);
 		const unsigned k = d2tk_table_get_index(tab);
@@ -840,7 +870,7 @@ _render_c_browser(d2tk_base_t *base, const d2tk_rect_t *rect)
 	struct dirent *list = _file_list_new(root, &nlist, false);
 	d2tk_style_t style = *d2tk_base_get_default_style();
 
-	D2TK_BASE_TABLE(rect, 2, 1, brow)
+	D2TK_BASE_TABLE(rect, 2, 1, D2TK_FLAG_TABLE_REL, brow)
 	{
 		const unsigned r = d2tk_table_get_index(brow);
 		const d2tk_rect_t *col = d2tk_table_get_rect(brow);
@@ -867,7 +897,7 @@ _render_c_browser(d2tk_base_t *base, const d2tk_rect_t *rect)
 
 					d2tk_base_set_style(base, &style);
 
-					D2TK_BASE_TABLE(row, 1, M, tab)
+					D2TK_BASE_TABLE(row, 1, M, D2TK_FLAG_TABLE_REL, tab)
 					{
 						const unsigned k = d2tk_table_get_index(tab) + voffset;
 						const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
@@ -915,7 +945,7 @@ _render_c_browser(d2tk_base_t *base, const d2tk_rect_t *rect)
 
 					d2tk_base_set_style(base, &style);
 
-					D2TK_BASE_TABLE(row, 1, M, tab)
+					D2TK_BASE_TABLE(row, 1, M, D2TK_FLAG_TABLE_REL, tab)
 					{
 						const unsigned k = d2tk_table_get_index(tab) + voffset;
 						const d2tk_rect_t *bnd = d2tk_table_get_rect(tab);
@@ -1519,7 +1549,7 @@ d2tk_example_run(d2tk_base_t *base, d2tk_coord_t w, d2tk_coord_t h)
 		{
 			case 0:
 			{
-				D2TK_BASE_TABLE(vrect, BAR_MAX, 1, tab)
+				D2TK_BASE_TABLE(vrect, BAR_MAX, 1, D2TK_FLAG_TABLE_REL, tab)
 				{
 					const d2tk_rect_t *hrect = d2tk_table_get_rect(tab);
 					const unsigned b = d2tk_table_get_index(tab);
@@ -1544,6 +1574,10 @@ d2tk_example_run(d2tk_base_t *base, d2tk_coord_t w, d2tk_coord_t h)
 					case BAR_SEQ:
 					{
 						_render_c_seq(base, vrect);
+					} break;
+					case BAR_TABLE_ABS:
+					{
+						_render_c_table_abs(base, vrect);
 					} break;
 					case BAR_SCROLL:
 					{
