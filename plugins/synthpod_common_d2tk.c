@@ -334,7 +334,7 @@ _expose_plugin_list_body(plughandle_t *handle, const d2tk_rect_t *rect)
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
 		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
 
-		D2TK_BASE_TABLE(col, 1, dn, trow)
+		D2TK_BASE_TABLE(col, 1, dn, D2TK_FLAG_TABLE_REL, trow)
 		{
 			const unsigned k = d2tk_table_get_index_y(trow) + voffset;
 
@@ -477,7 +477,7 @@ _expose_sidebar_bottom(plughandle_t *handle, const d2tk_rect_t *rect)
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
 		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
 
-		D2TK_BASE_TABLE(col, 1, dn, trow)
+		D2TK_BASE_TABLE(col, 1, dn, D2TK_FLAG_TABLE_REL, trow)
 		{
 			const unsigned k = d2tk_table_get_index_y(trow) + voffset;
 
@@ -611,7 +611,7 @@ _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 		return;
 	}
 
-	D2TK_BASE_TABLE(rect, N, N, tab)
+	D2TK_BASE_TABLE(rect, N, N, D2TK_FLAG_TABLE_REL, tab)
 	{
 		const d2tk_rect_t *trect = d2tk_table_get_rect(tab);
 		const unsigned x = d2tk_table_get_index_x(tab);
