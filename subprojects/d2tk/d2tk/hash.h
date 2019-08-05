@@ -35,10 +35,10 @@ struct _d2tk_hash_dict_t {
 };
 
 D2TK_API uint64_t
-d2tk_hash(const void *data, ssize_t nbytes);
+d2tk_hash(const void *data, size_t nbytes);
 
 D2TK_API uint64_t
-d2tk_hash_foreach(const void *data, ssize_t nbytes, ...) __attribute__((sentinel));
+d2tk_hash_foreach(const void *data, size_t nbytes, ...) __attribute__((sentinel));
 
 D2TK_API uint64_t
 d2tk_hash_dict(const d2tk_hash_dict_t *dict);

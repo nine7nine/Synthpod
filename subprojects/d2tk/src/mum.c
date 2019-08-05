@@ -32,13 +32,13 @@ _d2tk_hash(uint64_t hash, const void *key, size_t len)
 }
 
 D2TK_API uint64_t
-d2tk_hash(const void *key, ssize_t len)
+d2tk_hash(const void *key, size_t len)
 {
 	return mum_hash(key, len, SEED);
 }
 
 D2TK_API uint64_t
-d2tk_hash_foreach(const void *key, ssize_t len, ...)
+d2tk_hash_foreach(const void *key, size_t len, ...)
 {
 	va_list args;
 	uint64_t hash = mum_hash_init(SEED);

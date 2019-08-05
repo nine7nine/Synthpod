@@ -570,7 +570,7 @@ d2tk_cairo_process(void *data, d2tk_core_t *core, const d2tk_com_t *com,
 		{
 			const d2tk_body_font_face_t *body = &com->body->font_face;
 
-			const uint64_t hash = d2tk_hash(body->face, -1);
+			const uint64_t hash = d2tk_hash(body->face, strlen(body->face));
 			uintptr_t *sprite = d2tk_core_get_sprite(core, hash, SPRITE_TYPE_FONT);
 			assert(sprite);
 
@@ -649,7 +649,7 @@ d2tk_cairo_process(void *data, d2tk_core_t *core, const d2tk_com_t *com,
 		{
 			const d2tk_body_image_t *body = &com->body->image;
 
-			const uint64_t hash = d2tk_hash(body->path, -1);
+			const uint64_t hash = d2tk_hash(body->path, strlen(body->path));
 			uintptr_t *sprite = d2tk_core_get_sprite(core, hash, SPRITE_TYPE_SURF);
 			assert(sprite);
 
