@@ -796,7 +796,11 @@ bin_show(bin_t *bin)
 			"synthpod_sandbox_x11",
 			"-p", SYNTHPOD_STEREO_URI,
 			"-P", SYNTHPOD_PLUGIN_DIR,
+#if 0
+			"-u", SYNTHPOD_ROOT_D2TK_URI,
+#else
 			"-u", SYNTHPOD_ROOT_NK_URI,
+#endif
 			"-U", SYNTHPOD_PLUGIN_DIR,
 			"-s", (char *)bin->socket_path,
 			"-w", wname,

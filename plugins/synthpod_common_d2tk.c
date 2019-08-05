@@ -133,7 +133,10 @@ struct _plughandle_t {
 	prof_t prof;
 
 	d2tk_pos_t nxt_pos;
-	mod_t mods [MAX_MODS];
+	mod_t hmods [MAX_MODS];
+
+	unsigned nmods;
+	mod_t *mods [MAX_MODS];
 };
 
 static inline void
@@ -324,7 +327,8 @@ _expose_plugin_list_body(plughandle_t *handle, const d2tk_rect_t *rect)
 	d2tk_pugl_t *dpugl = handle->dpugl;
 	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
 
-	const unsigned dn = rect->h / 24;
+	const unsigned dd = 24;
+	const unsigned dn = rect->h / dd;
 
 	handle->plug_info = NULL;
 
@@ -334,7 +338,7 @@ _expose_plugin_list_body(plughandle_t *handle, const d2tk_rect_t *rect)
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
 		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
 
-		D2TK_BASE_TABLE(col, 1, dn, D2TK_FLAG_TABLE_REL, trow)
+		D2TK_BASE_TABLE(col, col->w, dd, D2TK_FLAG_TABLE_ABS, trow)
 		{
 			const unsigned k = d2tk_table_get_index_y(trow) + voffset;
 
@@ -468,7 +472,8 @@ _expose_sidebar_bottom(plughandle_t *handle, const d2tk_rect_t *rect)
 		return;
 	}
 
-	const unsigned dn = rect->h / 16;
+	const unsigned dd = 16;
+	const unsigned dn = rect->h / dd;
 	const unsigned en = 9;
 
 	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
@@ -477,7 +482,7 @@ _expose_sidebar_bottom(plughandle_t *handle, const d2tk_rect_t *rect)
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
 		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
 
-		D2TK_BASE_TABLE(col, 1, dn, D2TK_FLAG_TABLE_REL, trow)
+		D2TK_BASE_TABLE(col, col->w, dd, D2TK_FLAG_TABLE_ABS, trow)
 		{
 			const unsigned k = d2tk_table_get_index_y(trow) + voffset;
 
@@ -591,40 +596,82 @@ _expose_sidebar(plughandle_t *handle, const d2tk_rect_t *rect)
 }
 
 static inline void
+_expose_patchmatrix_mod(plughandle_t *handle, mod_t *mod,
+	const d2tk_rect_t *rect)
+{
+	d2tk_base_t *base = d2tk_pugl_get_base(handle->dpugl);
+	const stat_label_t *label = mod->alias.len
+		? &mod->alias
+		: &mod->name;
+
+	d2tk_base_label(base, label->len, label->buf, 0.1f, rect,
+		D2TK_ALIGN_CENTERED);
+}
+
+static inline void
 _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	d2tk_base_t *base = d2tk_pugl_get_base(handle->dpugl);
-	unsigned N = 0;
-
-	for(unsigned m = 0; m<MAX_MODS; m++)
-	{
-		mod_t *mod = &handle->mods[m];
-
-		if(mod->urn)
-		{
-			N++;
-		}
-	}
+	const unsigned dd = 128;
+	const unsigned N = handle->nmods;
 
 	if(!N) //FIXME in d2tk_base_table_*
 	{
 		return;
 	}
 
-	D2TK_BASE_TABLE(rect, N, N, D2TK_FLAG_TABLE_REL, tab)
+	const unsigned M = N + 1;
+	const unsigned dw = rect->w / dd;
+	const unsigned dh = rect->h / dd;
+
+	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID,
+		D2TK_FLAG_SCROLL_X | D2TK_FLAG_SCROLL_Y, M, M, dw, dh, vscroll)
 	{
-		const d2tk_rect_t *trect = d2tk_table_get_rect(tab);
-		const unsigned x = d2tk_table_get_index_x(tab);
-		const unsigned y = d2tk_table_get_index_y(tab);
-		const unsigned k = d2tk_table_get_index(tab);
-		const d2tk_id_t id = D2TK_ID_IDX(k);
+		const float hoffset = d2tk_scrollbar_get_offset_x(vscroll);
+		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
+		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
 
-		if(x == y)
+		D2TK_BASE_TABLE(col, dd, dd, D2TK_FLAG_TABLE_ABS, tab)
 		{
-			continue;
-		}
+			const d2tk_rect_t *trect = d2tk_table_get_rect(tab);
+			const unsigned x = d2tk_table_get_index_x(tab);
+			const unsigned y = d2tk_table_get_index_y(tab);
+			const unsigned i = x + hoffset - 1;
+			const unsigned j = y + voffset - 1;
+			const unsigned k = j*N + i;
+			const d2tk_id_t id = D2TK_ID_IDX(k);
 
-		d2tk_base_button(base, id, trect);
+			if( (x == 0) && (y == 0) )
+			{
+				continue;
+			}
+			if(x == 0)
+			{
+				mod_t *mod = handle->mods[j];
+
+				_expose_patchmatrix_mod(handle, mod, trect);
+
+				continue;
+			}
+			else if(y == 0)
+			{
+				mod_t *mod = handle->mods[i];
+
+				_expose_patchmatrix_mod(handle, mod, trect);
+
+				continue;
+			}
+			else if(i > N)
+			{
+				continue;
+			}
+			else if(j > N)
+			{
+				break;
+			}
+
+			d2tk_base_button(base, id, trect);
+		}
 	}
 	//FIXME
 }
@@ -642,14 +689,9 @@ _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 		//FIXME
 
 		// draw nodes
-		for(unsigned m = 0; m < MAX_MODS; m++)
+		for(unsigned m = 0; m < handle->nmods; m++)
 		{
-			mod_t *mod = &handle->mods[m];
-
-			if(!mod->urn)
-			{
-				continue;
-			}
+			mod_t *mod = handle->mods[m];
 
 			d2tk_state_t state = D2TK_STATE_NONE;
 			D2TK_BASE_FLOWMATRIX_NODE(base, flowm, &mod->pos, node, &state)
@@ -657,7 +699,7 @@ _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 				const d2tk_rect_t *bnd = d2tk_flowmatrix_node_get_rect(node);
 				const d2tk_id_t id = D2TK_ID_IDX(m);
 
-				stat_label_t *label = mod->alias.len
+				const stat_label_t *label = mod->alias.len
 					? &mod->alias
 					: &mod->name;
 
@@ -953,7 +995,7 @@ _mod_find_by_urn(plughandle_t *handle, LV2_URID urn, bool claim)
 		i < MAX_MODS;
 		i++, idx = (urn + i*i) & MASK_MODS)
 	{
-		mod_t *mod = &handle->mods[idx];
+		mod_t *mod = &handle->hmods[idx];
 
 		if(mod->urn == 0)
 		{
@@ -976,6 +1018,47 @@ _mod_find_by_urn(plughandle_t *handle, LV2_URID urn, bool claim)
 	return NULL;
 }
 
+static int
+_mod_cmp_pos(const void *a, const void *b)
+{
+	const mod_t **ptr_a = (const mod_t **)a;
+	const mod_t **ptr_b = (const mod_t **)b;
+
+	const mod_t *mod_a = *ptr_a;
+	const mod_t *mod_b = *ptr_b;
+
+	if(mod_a->pos.x < mod_b->pos.x)
+	{
+		return -1;
+	}
+	else if(mod_a->pos.x > mod_b->pos.x)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+static inline void
+_mod_filter(plughandle_t *handle)
+{
+	handle->nmods = 0;
+
+	for(unsigned i = 0; i < MAX_MODS; i++)
+	{
+		mod_t *mod = &handle->hmods[i];
+
+		if(mod->urn == 0)
+		{
+			continue;
+		}
+
+		handle->mods[handle->nmods++] = mod;
+	}
+
+	qsort(handle->mods, handle->nmods, sizeof(mod_t *), _mod_cmp_pos);
+}
+
 static inline void
 _mod_add(plughandle_t *handle, LV2_URID urn)
 {
@@ -991,6 +1074,8 @@ _mod_add(plughandle_t *handle, LV2_URID urn)
 
 	handle->nxt_pos.y += 30;
 	//FIXME
+
+	_mod_filter(handle);
 }
 
 static inline void
@@ -1032,10 +1117,12 @@ _port_event_set_module_list(plughandle_t *handle, const LV2_Atom_Tuple *tup)
 
 	for(unsigned m = 0; m<MAX_MODS; m++)
 	{
-		mod_t *mod = &handle->mods[m];
+		mod_t *mod = &handle->hmods[m];
 
 		_mod_free(handle, mod);
 	}
+
+	_mod_filter(handle);
 
 	LV2_ATOM_TUPLE_FOREACH(tup, itm)
 	{
@@ -1320,11 +1407,14 @@ DBG;
 
 	_mod_init(handle, mod, plug);
 
+	bool needs_filtering = false;
+
 	if(  mod_pos_x
 		&& (mod_pos_x->atom.type == handle->forge.Float)
 		&& (mod_pos_x->body != 0.f) )
 	{
 		mod->pos.x = mod_pos_x->body;
+		needs_filtering = true;
 	}
 	else if(  _message_request(handle)
 		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
@@ -1339,6 +1429,7 @@ DBG;
 		&& (mod_pos_y->body != 0.f) )
 	{
 		mod->pos.y = mod_pos_y->body;
+		needs_filtering = true;
 	}
 	else if(  _message_request(handle)
 		&& synthpod_patcher_set(&handle->regs, &handle->forge,
@@ -1353,6 +1444,11 @@ DBG;
 	{
 		mod->alias.len = snprintf(mod->alias.buf, sizeof(mod->alias.buf), "%s",
 			ATOM_STRING_VAL(&mod_alias->atom));
+	}
+
+	if(needs_filtering)
+	{
+		_mod_filter(handle);
 	}
 
 	const LV2_URID ui_urn = ui_uri
