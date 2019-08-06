@@ -324,6 +324,11 @@ D2TK_API d2tk_table_t *
 d2tk_table_begin(const d2tk_rect_t *rect, unsigned N, unsigned M,
 	d2tk_flag_t flag, d2tk_table_t *tab)
 {
+	if( (N == 0) || (M == 0) )
+	{
+		return NULL;
+	}
+
 	unsigned w;
 	unsigned h;
 
@@ -360,7 +365,7 @@ d2tk_table_begin(const d2tk_rect_t *rect, unsigned N, unsigned M,
 D2TK_API bool
 d2tk_table_not_end(d2tk_table_t *tab)
 {
-	return tab->k < tab->NM;
+	return tab && (tab->k < tab->NM);
 }
 
 D2TK_API d2tk_table_t *
@@ -432,8 +437,12 @@ d2tk_frame_begin(d2tk_base_t *base, const d2tk_rect_t *rect,
 	const uint64_t hash = d2tk_hash_dict(dict);
 
 	d2tk_rect_shrink(&frm->rect, rect, 2*style->padding);
-	frm->rect.y += h;
-	frm->rect.h -= h;
+
+	if(has_lbl)
+	{
+		frm->rect.y += h;
+		frm->rect.h -= h;
+	}
 
 	D2TK_CORE_WIDGET(core, hash, widget)
 	{
@@ -443,7 +452,7 @@ d2tk_frame_begin(d2tk_base_t *base, const d2tk_rect_t *rect,
 
 		const size_t ref = d2tk_core_bbox_push(core, true, rect);
 
-		if(lbl)
+		if(has_lbl)
 		{
 			bnd_inner.h = h;
 

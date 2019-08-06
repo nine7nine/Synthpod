@@ -780,6 +780,39 @@ _test_table_rel()
 }
 
 static void
+_test_table_rel_empty()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	bool visited = false;
+
+	D2TK_BASE_TABLE(&rect, 0, 0, D2TK_FLAG_TABLE_REL, tab)
+	{
+		visited = true;
+	}
+
+	D2TK_BASE_TABLE(&rect, 0, 1, D2TK_FLAG_TABLE_REL, tab)
+	{
+		visited = true;
+	}
+
+	D2TK_BASE_TABLE(&rect, 1, 0, D2TK_FLAG_TABLE_REL, tab)
+	{
+		visited = true;
+	}
+
+	assert(visited == false);
+
+	d2tk_base_free(base);
+}
+
+static void
 _test_table_abs()
 {
 #define N 12
@@ -813,7 +846,42 @@ _test_table_abs()
 }
 
 static void
-_test_frame()
+_test_table_abs_empty()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	bool visited = false;
+
+	D2TK_BASE_TABLE(&rect, 0, 0, D2TK_FLAG_TABLE_ABS, tab)
+	{
+		visited = true;
+	}
+
+	D2TK_BASE_TABLE(&rect, 0, 1, D2TK_FLAG_TABLE_ABS, tab)
+	{
+		visited = true;
+	}
+
+	D2TK_BASE_TABLE(&rect, 1, 0, D2TK_FLAG_TABLE_ABS, tab)
+	{
+		visited = true;
+	}
+
+	assert(visited == false);
+
+	d2tk_base_free(base);
+#undef M
+#undef N
+}
+
+static void
+_test_frame_with_label()
 {
 	d2tk_mock_ctx_t ctx = {
 		.check = NULL
@@ -828,10 +896,35 @@ _test_frame()
 		const d2tk_rect_t *bnd = d2tk_frame_get_rect(frm);
 
 		assert(bnd);
-		assert(bnd->x > rect.x);
-		assert(bnd->y > rect.y);
-		assert(bnd->w < rect.w);
-		assert(bnd->h < rect.h);
+		assert(bnd->x > rect.x); //FIXME
+		assert(bnd->y > rect.y); //FIXME
+		assert(bnd->w < rect.w); //FIXME
+		assert(bnd->h < rect.h); //FIXME
+	}
+
+	d2tk_base_free(base);
+}
+
+static void
+_test_frame_wo_label()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	D2TK_BASE_FRAME(base, &rect, 0, NULL, frm)
+	{
+		const d2tk_rect_t *bnd = d2tk_frame_get_rect(frm);
+
+		assert(bnd);
+		assert(bnd->x > rect.x); //FIXME
+		assert(bnd->y > rect.y); //FIXME
+		assert(bnd->w < rect.w); //FIXME
+		assert(bnd->h < rect.h); //FIXME
 	}
 
 	d2tk_base_free(base);
@@ -1910,8 +2003,11 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	_test_get_set();
 	_test_state_dump();
 	_test_table_rel();
+	_test_table_rel_empty();
 	_test_table_abs();
-	_test_frame();
+	_test_table_abs_empty();
+	_test_frame_with_label();
+	_test_frame_wo_label();
 	_test_layout_relative_x();
 	_test_layout_relative_y();
 	_test_layout_absolute_x();
