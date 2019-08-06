@@ -732,7 +732,9 @@ _render_c_frame(d2tk_base_t *base, const d2tk_rect_t *rect)
 		const unsigned k = d2tk_table_get_index(tab);
 
 		char lbl [32];
-		const ssize_t lbl_len = snprintf(lbl, sizeof(lbl), "This is frame #%u", k);
+		const ssize_t lbl_len = (k % 2)
+			? snprintf(lbl, sizeof(lbl), "This is frame #%u", k)
+			: 0;
 
 		D2TK_BASE_FRAME(base, bnd_outer, lbl_len, lbl, frm)
 		{
