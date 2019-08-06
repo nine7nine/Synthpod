@@ -95,6 +95,23 @@ struct _mod_t {
 
 	bool selected;
 	d2tk_pos_t pos;
+
+	struct {
+		unsigned nin;
+		unsigned nout;
+	} audio;
+	struct {
+		unsigned nin;
+		unsigned nout;
+	} cv;
+	struct {
+		unsigned nin;
+		unsigned nout;
+	} control;
+	struct {
+		unsigned nin;
+		unsigned nout;
+	} atom;
 };
 
 struct _plughandle_t {
@@ -604,8 +621,42 @@ _expose_patchmatrix_mod(plughandle_t *handle, mod_t *mod,
 		? &mod->alias
 		: &mod->name;
 
-	d2tk_base_label(base, label->len, label->buf, 0.1f, rect,
-		D2TK_ALIGN_CENTERED);
+	D2TK_BASE_FRAME(base, rect, label->len, label->buf, frm)
+	{
+		const d2tk_rect_t *frect = d2tk_frame_get_rect(frm);
+
+		//FIXME inline display
+	}
+}
+
+static inline void
+_expose_patchmatrix_connection(plughandle_t *handle, unsigned o,
+	mod_t *mod_src, mod_t *mod_snk, const d2tk_rect_t *rect)
+{
+	d2tk_base_t *base = d2tk_pugl_get_base(handle->dpugl);
+
+	D2TK_BASE_FRAME(base, rect, 0, NULL, frm)
+	{
+		const d2tk_rect_t *frect = d2tk_frame_get_rect(frm);
+
+		if(!mod_snk->audio.nin || !mod_src->audio.nout) //FIXME in d2tk_base_table_*
+		{
+			break;
+		}
+
+		D2TK_BASE_TABLE(frect, mod_snk->audio.nin, mod_src->audio.nout,
+			D2TK_FLAG_TABLE_REL, tab)
+		{
+			const d2tk_rect_t *trect = d2tk_table_get_rect(tab);
+			const unsigned k = d2tk_table_get_index(tab);
+			bool val = false;
+
+			if(d2tk_base_dial_bool_is_changed(base, D2TK_ID_IDX(o*512 + k), trect, &val))
+			{
+				//FIXME
+			}
+		}
+	}
 }
 
 static inline void
@@ -639,7 +690,6 @@ _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 			const unsigned i = x + hoffset - 1;
 			const unsigned j = y + voffset - 1;
 			const unsigned k = j*N + i;
-			const d2tk_id_t id = D2TK_ID_IDX(k);
 
 			if( (x == 0) && (y == 0) )
 			{
@@ -647,30 +697,41 @@ _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 			}
 			if(x == 0)
 			{
-				mod_t *mod = handle->mods[j];
+				if(j < N)
+				{
+					mod_t *mod = handle->mods[j];
 
-				_expose_patchmatrix_mod(handle, mod, trect);
+					_expose_patchmatrix_mod(handle, mod, trect);
+				}
 
 				continue;
 			}
 			else if(y == 0)
 			{
-				mod_t *mod = handle->mods[i];
+				if(i < N)
+				{
+					mod_t *mod = handle->mods[i];
 
-				_expose_patchmatrix_mod(handle, mod, trect);
+					_expose_patchmatrix_mod(handle, mod, trect);
+				}
 
 				continue;
 			}
-			else if(i > N)
+			else if(i >= N)
 			{
 				continue;
 			}
-			else if(j > N)
+			else if(j >= N)
 			{
 				break;
 			}
 
-			d2tk_base_button(base, id, trect);
+			{
+				mod_t *mod_src = handle->mods[j];
+				mod_t *mod_dst = handle->mods[i];
+
+				_expose_patchmatrix_connection(handle, k, mod_src, mod_dst, trect);
+			}
 		}
 	}
 	//FIXME
@@ -1330,7 +1391,86 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 		lilv_node_free(name_node);
 	}
-	//FIXME
+
+	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 2; // + automation ports
+
+	mod->audio.nin = 0;
+	mod->audio.nout= 0;
+	mod->cv.nin = 0;
+	mod->cv.nout= 0;
+	mod->control.nin = 0;
+	mod->control.nout= 0;
+	mod->atom.nin = 0;
+	mod->atom.nout= 0;
+
+	for(unsigned p=0; p<num_ports - 2; p++) // - automation ports
+	{
+		const LilvPort *port = lilv_plugin_get_port_by_index(plug, p);
+
+		LilvNode *lv2_AudioPort = lilv_new_uri(handle->world, LV2_CORE__AudioPort);
+		LilvNode *lv2_CVPort = lilv_new_uri(handle->world, LV2_CORE__CVPort);
+		LilvNode *lv2_ControlPort = lilv_new_uri(handle->world, LV2_CORE__ControlPort);
+		LilvNode *atom_AtomPort = lilv_new_uri(handle->world, LV2_ATOM__AtomPort);
+		LilvNode *lv2_OutputPort= lilv_new_uri(handle->world, LV2_CORE__OutputPort);
+
+		const bool is_audio = lilv_port_is_a(plug, port, lv2_AudioPort);
+		const bool is_cv = lilv_port_is_a(plug, port, lv2_CVPort);
+		const bool is_control = lilv_port_is_a(plug, port, lv2_ControlPort);
+		const bool is_atom = lilv_port_is_a(plug, port, atom_AtomPort);
+		const bool is_output = lilv_port_is_a(plug, port, lv2_OutputPort);
+
+		if(is_audio)
+		{
+			if(is_output)
+			{
+				mod->audio.nout++;
+			}
+			else
+			{
+				mod->audio.nin++;
+			}
+		}
+		else if(is_cv)
+		{
+			if(is_output)
+			{
+				mod->cv.nout++;
+			}
+			else
+			{
+				mod->cv.nin++;
+			}
+		}
+		else if(is_control)
+		{
+			if(is_output)
+			{
+				mod->control.nout++;
+			}
+			else
+			{
+				mod->control.nin++;
+			}
+		}
+		else if(is_atom)
+		{
+			if(is_output)
+			{
+				mod->atom.nout++;
+			}
+			else
+			{
+				mod->atom.nin++;
+			}
+		}
+
+		lilv_node_free(lv2_AudioPort);
+		lilv_node_free(lv2_CVPort);
+		lilv_node_free(lv2_ControlPort);
+		lilv_node_free(atom_AtomPort);
+		lilv_node_free(lv2_OutputPort);
+		//FIXME
+	}
 }
 
 static inline void
