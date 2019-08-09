@@ -424,6 +424,13 @@ d2tk_base_label(d2tk_base_t *base, ssize_t lbl_len, const char *lbl,
 	float mul, const d2tk_rect_t *rect, d2tk_align_t align);
 
 D2TK_API d2tk_state_t
+d2tk_base_link(d2tk_base_t *base, d2tk_id_t id, ssize_t lbl_len, const char *lbl,
+	float mul, const d2tk_rect_t *rect, d2tk_align_t align);
+
+#define d2tk_base_link_is_changed(...) \
+	d2tk_state_is_changed(d2tk_base_link(__VA_ARGS__))
+
+D2TK_API d2tk_state_t
 d2tk_base_dial_bool(d2tk_base_t *base, d2tk_id_t id, const d2tk_rect_t *rect,
 	bool *value);
 
