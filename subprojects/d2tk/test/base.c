@@ -1764,6 +1764,26 @@ _test_label()
 }
 
 static void
+_test_link()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	const char *lbl= "link";
+	const d2tk_state_t state = d2tk_base_link(base, D2TK_ID, -1, lbl, 0.8f, &rect,
+		D2TK_ALIGN_LEFT);
+	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
+		| D2TK_STATE_OVER) );
+
+	d2tk_base_free(base);
+}
+
+static void
 _test_dial_bool()
 {
 	d2tk_mock_ctx_t ctx = {
@@ -2036,6 +2056,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	_test_combo_scroll_down();
 	_test_text_field();
 	_test_label();
+	_test_link();
 	_test_dial_bool();
 	_test_dial_int32();
 	_test_dial_int64();

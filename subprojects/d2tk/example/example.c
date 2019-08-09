@@ -91,7 +91,7 @@ static const char *bar_lbl [BAR_MAX] = {
 static inline void
 _render_c_mix(d2tk_base_t *base, const d2tk_rect_t *rect)
 {
-#define N 14
+#define N 15
 #define M 24
 	static val_t value [N*M];
 
@@ -229,6 +229,17 @@ _render_c_mix(d2tk_base_t *base, const d2tk_rect_t *rect)
 
 				d2tk_base_bitmap(base, 2, 2, 2*sizeof(uint32_t), argb, rev, bnd,
 					D2TK_ALIGN_CENTERED);
+			} break;
+			case 14:
+			{
+				char lbl [32];
+				const size_t lbl_len = snprintf(lbl, sizeof(lbl), "%03X", k);
+
+				if(d2tk_base_link_is_changed(base, id, lbl_len, lbl, 0.5f, bnd,
+					D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT))
+				{
+					fprintf(stdout, "link %016"PRIx64" DOWN\n", id);
+				}
 			} break;
 			default:
 			{
