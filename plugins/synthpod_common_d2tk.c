@@ -455,9 +455,9 @@ _expose_plugin_property(d2tk_base_t *base, unsigned idx, const char *key,
 			{
 				if(lilv_node_is_uri(node))
 				{
-					if(d2tk_base_button_label_is_changed(base, D2TK_ID_IDX(idx),
-						-1, lilv_node_as_uri(node),
-						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT, hrect))
+					if(d2tk_base_link_is_changed(base, D2TK_ID_IDX(idx),
+						-1, lilv_node_as_uri(node), 1.f, hrect,
+						D2TK_ALIGN_MIDDLE | D2TK_ALIGN_LEFT))
 					{
 						_xdg_open(node);
 					}
