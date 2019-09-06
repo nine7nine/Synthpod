@@ -7888,6 +7888,8 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 					{
 						nk_layout_row_dynamic(ctx, dy, nuis);
 
+						const bool single_ui = _hash_size(&mod->uis) == 1;
+
 						HASH_FOREACH(&mod->uis, mod_ui_itr)
 						{
 							mod_ui_t *mod_ui = *mod_ui_itr;
@@ -7895,22 +7897,25 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const LilvNode *ui_node = lilv_ui_get_uri(ui);
 
 							const bool is_running = _mod_ui_is_running(mod_ui);
-							const char *label = "UI";
+							const char *label = "Show plugin GUI";
 
-							if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
-								label = "X11";
-							else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
-								label = "Gtk2";
-							else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
-								label = "Gtk3";
-							else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
-								label = "Qt4";
-							else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
-								label = "Qt5";
-							else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
-								label = "KX";
-							else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
-								label = "Show";
+							if(!single_ui)
+							{
+								if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+									label = "X11";
+								else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+									label = "Gtk2";
+								else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+									label = "Gtk3";
+								else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+									label = "Qt4";
+								else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+									label = "Qt5";
+								else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+									label = "KX";
+								else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
+									label = "Show";
+							}
 
 							const bool is_still_running = _toolbar_label(ctx, is_running, 0x0, label);
 							if(is_still_running != is_running)
