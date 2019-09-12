@@ -64,6 +64,9 @@ sandbox_master_signal_rx(sandbox_master_t *sb);
 void
 sandbox_master_signal_tx(sandbox_master_t *sb);
 
+bool
+sandbox_master_connected_get(sandbox_master_t *sb);
+
 #ifdef __cplusplus
 }
 #endif

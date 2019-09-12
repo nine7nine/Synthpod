@@ -106,3 +106,9 @@ sandbox_master_signal_tx(sandbox_master_t *sb)
 {
 	_sandbox_io_signal_tx(&sb->io);
 }
+
+bool
+sandbox_master_connected_get(sandbox_master_t *sb)
+{
+	return _sandbox_io_connected_get(&sb->io);
+}

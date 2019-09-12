@@ -3017,11 +3017,6 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name && mod_ui->sbox.minimum
 		&& mod_ui->sbox.sample_rate && mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
-		_mod_subscribe_all(handle, mod);
-
-		_patch_notification_add_patch_get(handle, mod,
-			handle->regs.port.event_transfer.urid, mod->subj, 0, 0); // patch:Get []
-
 		const pid_t pid = vfork();
 		if(pid == 0) // child
 		{
@@ -3063,6 +3058,31 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 
 		// parent
 		mod_ui->pid = pid;
+
+		bool connected = false;
+
+		for(unsigned i = 0; i < 10; i++)
+		{
+			if(sandbox_master_connected_get(mod_ui->sbox.sb))
+			{
+				connected = true;
+				break;
+			}
+
+			// wait for connection
+			_log_note(handle, "waiting for UI IPC\n");
+			usleep(100000);
+		}
+
+		if(!connected)
+		{
+			_log_error(handle, "UI IPC was not up after 1s\n");
+		}
+
+		_mod_subscribe_all(handle, mod);
+
+		_patch_notification_add_patch_get(handle, mod,
+			handle->regs.port.event_transfer.urid, mod->subj, 0, 0); // patch:Get []
 
 		if(sync)
 		{
