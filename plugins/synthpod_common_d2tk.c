@@ -671,12 +671,11 @@ _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 		return;
 	}
 
-	const unsigned M = N + 1;
 	const unsigned dw = rect->w / dd;
 	const unsigned dh = rect->h / dd;
 
 	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID,
-		D2TK_FLAG_SCROLL_X | D2TK_FLAG_SCROLL_Y, M, M, dw, dh, vscroll)
+		D2TK_FLAG_SCROLL_X | D2TK_FLAG_SCROLL_Y, N, N, dw, dh, vscroll)
 	{
 		const float hoffset = d2tk_scrollbar_get_offset_x(vscroll);
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
@@ -687,37 +686,11 @@ _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 			const d2tk_rect_t *trect = d2tk_table_get_rect(tab);
 			const unsigned x = d2tk_table_get_index_x(tab);
 			const unsigned y = d2tk_table_get_index_y(tab);
-			const unsigned i = x + hoffset - 1;
-			const unsigned j = y + voffset - 1;
+			const unsigned i = x + hoffset;
+			const unsigned j = y + voffset;
 			const unsigned k = j*N + i;
 
-			if( (x == 0) && (y == 0) )
-			{
-				continue;
-			}
-			if(x == 0)
-			{
-				if(j < N)
-				{
-					mod_t *mod = handle->mods[j];
-
-					_expose_patchmatrix_mod(handle, mod, trect);
-				}
-
-				continue;
-			}
-			else if(y == 0)
-			{
-				if(i < N)
-				{
-					mod_t *mod = handle->mods[i];
-
-					_expose_patchmatrix_mod(handle, mod, trect);
-				}
-
-				continue;
-			}
-			else if(i >= N)
+			if(i >= N)
 			{
 				continue;
 			}
@@ -725,7 +698,13 @@ _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 			{
 				break;
 			}
+			else if(i == j)
+			{
+				mod_t *mod = handle->mods[i];
 
+				_expose_patchmatrix_mod(handle, mod, trect);
+			}
+			else
 			{
 				mod_t *mod_src = handle->mods[j];
 				mod_t *mod_dst = handle->mods[i];
