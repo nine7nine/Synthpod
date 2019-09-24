@@ -721,6 +721,18 @@ _alsa_init(prog_t *handle, const char *id)
 	handle->queue = snd_seq_alloc_queue(handle->seq);
 	if(handle->queue < 0)
 		bin_log_error(bin, "%s: could not allocate queue\n", __func__);
+	
+	// set high resolution timer
+	snd_seq_queue_timer_t *qtimer = NULL;
+	snd_seq_queue_timer_alloca(&qtimer);
+	if(qtimer)
+	{
+		snd_seq_get_queue_timer(handle->seq, handle->queue, qtimer);
+		snd_seq_queue_timer_set_resolution(qtimer, UINT_MAX);
+		snd_seq_set_queue_timer(handle->seq, handle->queue, qtimer);
+	}
+
+	// start queue
 	snd_seq_start_queue(handle->seq, handle->queue, NULL);
 
 	// init alsa pcm
