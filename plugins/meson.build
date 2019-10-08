@@ -73,7 +73,7 @@ if use_x11
 		install_dir : plug_dir)
 
 	configure_file(
-		input : join_paths('..', 'subprojects', 'd2tk', 'nanovg', 'example', 'Roboto-Bold.ttf'),
+		input : join_paths('..', 'data', 'font', 'Abel-Regular.ttf'),
 		output : 'Roboto-Bold.ttf',
 		copy : true,
 		install : true,
@@ -105,8 +105,6 @@ dsp_ttl = configure_file(
 ttls += dsp_ttl
 
 #FIXME paths
-install_data('../data/font/Abel-Regular.ttf', install_dir : plug_dir)
-
 install_data('../data/pix/audio.png', install_dir : plug_dir )
 install_data('../data/pix/control.png', install_dir : plug_dir )
 install_data('../data/pix/cv.png', install_dir : plug_dir )
