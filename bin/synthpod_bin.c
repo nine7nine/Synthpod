@@ -519,7 +519,10 @@ bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driv
 					bin->child = 0; // invalidate
 
 					if(nsmc_managed())
+					{
+						sp_app_visibility_set(bin->app, false);
 						nsmc_hidden(bin->nsm);
+					}
 
 					if(bin->kill_gui)
 						atomic_store_explicit(&done, true, memory_order_relaxed);
@@ -577,13 +580,87 @@ bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driv
 	}
 }
 
+int
+bin_show(bin_t *bin)
+{
+	char srate [32];
+	char urate [32];
+	char wname [384];
+	char minimum [32];
+	snprintf(srate, sizeof(srate), "%"PRIu32, bin->sample_rate);
+	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
+	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
+	snprintf(minimum, sizeof(minimum), "%zu", SBOX_BUF_SIZE);
+
+	bin->child = vfork();
+	if(bin->child == 0) // child
+	{
+		char *const args [] = {
+			"synthpod_sandbox_x11",
+			"-p", SYNTHPOD_STEREO_URI,
+			"-P", SYNTHPOD_PLUGIN_DIR,
+#if 0
+			"-u", SYNTHPOD_ROOT_D2TK_URI,
+#else
+			"-u", SYNTHPOD_ROOT_NK_URI,
+#endif
+			"-U", SYNTHPOD_PLUGIN_DIR,
+			"-s", (char *)bin->socket_path,
+			"-w", wname,
+			"-m", minimum,
+			"-r", srate,
+			"-f", urate,
+			NULL
+		};
+
+		execvp(args[0], args);
+	}
+	else if(bin->child == -1)
+	{
+		return -1;
+	}
+
+	sp_app_visibility_set(bin->app, true);
+
+	return 0;
+}
+
+static int
+_bin_hide(bin_t *bin)
+{
+	if(bin->child > 0)
+	{
+		int status;
+
+		kill(bin->child, SIGINT);
+		waitpid(bin->child, &status, WUNTRACED); // blocking waitpid
+		bin->child = 0;
+	}
+
+	return 0;
+}
+
+int
+bin_hide(bin_t *bin)
+{
+	sp_app_visibility_set(bin->app, false);
+
+	return _bin_hide(bin);
+}
+
+bool
+bin_visibility(bin_t *bin)
+{
+	return sp_app_visibility_get(bin->app);
+}
+
 __non_realtime void
 bin_stop(bin_t *bin)
 {
 	// NSM deinit
 	nsmc_free(bin->nsm);
 
-	bin_hide(bin);
+	_bin_hide(bin);
 
 	if(bin->path)
 		free(bin->path);
@@ -775,62 +852,4 @@ bin_log_trace(bin_t *bin, const char *fmt, ...)
   va_end(args);
 
 	return ret;
-}
-
-int
-bin_show(bin_t *bin)
-{
-	char srate [32];
-	char urate [32];
-	char wname [384];
-	char minimum [32];
-	snprintf(srate, sizeof(srate), "%"PRIu32, bin->sample_rate);
-	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
-	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
-	snprintf(minimum, sizeof(minimum), "%zu", SBOX_BUF_SIZE);
-
-	bin->child = vfork();
-	if(bin->child == 0) // child
-	{
-		char *const args [] = {
-			"synthpod_sandbox_x11",
-			"-p", SYNTHPOD_STEREO_URI,
-			"-P", SYNTHPOD_PLUGIN_DIR,
-#if 0
-			"-u", SYNTHPOD_ROOT_D2TK_URI,
-#else
-			"-u", SYNTHPOD_ROOT_NK_URI,
-#endif
-			"-U", SYNTHPOD_PLUGIN_DIR,
-			"-s", (char *)bin->socket_path,
-			"-w", wname,
-			"-m", minimum,
-			"-r", srate,
-			"-f", urate,
-			NULL
-		};
-
-		execvp(args[0], args);
-	}
-	else if(bin->child == -1)
-	{
-		return -1;
-	}
-
-	return 0;
-}
-
-int
-bin_hide(bin_t *bin)
-{
-	if(bin->child > 0)
-	{
-		int status;
-
-		kill(bin->child, SIGINT);
-		waitpid(bin->child, &status, WUNTRACED); // blocking waitpid
-		bin->child = 0;
-	}
-
-	return 0;
 }

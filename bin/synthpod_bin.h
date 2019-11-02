@@ -169,4 +169,7 @@ bin_show(bin_t *bin);
 int
 bin_hide(bin_t *bin);
 
+bool
+bin_visibility(bin_t *bin);
+
 #endif // _SYNTHPOD_BIN_H

@@ -36,12 +36,14 @@ typedef int (*nsmc_open_t)(const char *path, const char *name,
 typedef int (*nsmc_save_t)(void *data);
 typedef int (*nsmc_show_t)(void *data);
 typedef int (*nsmc_hide_t)(void *data);
+typedef bool (*nsmc_visibility_t)(void *data);
 
 struct _nsmc_driver_t {
 	nsmc_open_t open;
 	nsmc_save_t save;
 	nsmc_show_t show;
 	nsmc_hide_t hide;
+	nsmc_visibility_t visibility;
 	bool supports_switch;
 };
 
@@ -162,6 +164,41 @@ _client_open(LV2_OSC_Reader *reader, nsmc_t *nsm)
 
 	if(nsm->driver->open && nsm->driver->open(resolvedpath, name, id, nsm->data))
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
+
+	const bool has_gui = nsm->driver->show && nsm->driver->hide;
+	const bool visibility = nsm->driver->visibility
+		? nsm->driver->visibility(nsm->data)
+		: false;
+
+	if(has_gui)
+	{
+		uint8_t *tx;
+		size_t max;
+		if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+		{
+			LV2_OSC_Writer writer;
+			lv2_osc_writer_initialize(&writer, tx, max);
+
+			if(visibility && (nsm->driver->show(nsm->data) == 0) )
+			{
+				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+			}
+			else
+			{
+				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
+			}
+
+			size_t written;
+			if(lv2_osc_writer_finalize(&writer, &written))
+			{
+				varchunk_write_advance(nsm->tx, written);
+			}
+			else
+			{
+				fprintf(stderr, "OSC sending failed\n");
+			}
+		}
+	}
 }
 
 static void
@@ -225,31 +262,8 @@ _announce(nsmc_t *nsm)
 		LV2_OSC_Writer writer;
 		lv2_osc_writer_initialize(&writer, tx, max);
 
-		LV2_OSC_Writer_Frame bndl = {0}, itm = {0};
-		lv2_osc_writer_push_bundle(&writer, &bndl, LV2_OSC_IMMEDIATE);
-		{
-			lv2_osc_writer_push_item(&writer, &itm);
-			lv2_osc_writer_message_vararg(&writer, "/nsm/server/announce", "sssiii",
-				nsm->call, capabilities, nsm->exe, 1, 2, pid);
-			lv2_osc_writer_pop_item(&writer, &itm);
-		}
-		if(has_gui)
-		{
-			// report initial gui visibility //FIXME should be saved in state somewhere
-			if(nsm->driver->show(nsm->data) == 0)
-			{
-				lv2_osc_writer_push_item(&writer, &itm);
-				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
-				lv2_osc_writer_pop_item(&writer, &itm);
-			}
-			else
-			{
-				lv2_osc_writer_push_item(&writer, &itm);
-				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
-				lv2_osc_writer_pop_item(&writer, &itm);
-			}
-		}
-		lv2_osc_writer_pop_bundle(&writer, &bndl);
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/announce", "sssiii",
+			nsm->call, capabilities, nsm->exe, 1, 2, pid);
 
 		size_t written;
 		if(lv2_osc_writer_finalize(&writer, &written))

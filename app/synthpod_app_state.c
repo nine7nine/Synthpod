@@ -906,6 +906,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 	}
 */
 
+	// store visibility
+	const int32_t visibility = sp_app_visibility_get(app);
+	store(hndl, app->regs.synthpod.visibility.urid,
+		&visibility, sizeof(int32_t), app->forge.Bool,
+		LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+
 	// store minor version
 	const int32_t minor_version = SYNTHPOD_MINOR_VERSION;
 	store(hndl, app->regs.core.minor_version.urid,
@@ -1523,6 +1529,14 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 	size_t size;
 	uint32_t _flags;
 	uint32_t type;
+
+	// retrieve visibility
+	const int32_t *visibility = retrieve(hndl, app->regs.synthpod.visibility.urid,
+		&size, &type, &_flags);
+	if(visibility && (type == app->forge.Bool) && (size == sizeof(int32_t)) )
+	{
+		sp_app_visibility_set(app, *visibility);
+	}
 
 	// retrieve minor version
 	const int32_t *minor_version = retrieve(hndl, app->regs.core.minor_version.urid,

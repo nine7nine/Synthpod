@@ -207,6 +207,12 @@ void
 sp_app_bundle_save(sp_app_t *app, LV2_URID urn, bool via_app);
 
 void
+sp_app_visibility_set(sp_app_t *app, bool visibility);
+
+bool
+sp_app_visibility_get(sp_app_t *app);
+
+void
 sp_app_xrun_report(sp_app_t *app);
 
 #endif // _SYNTHPOD_APP_H

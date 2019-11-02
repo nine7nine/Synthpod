@@ -445,6 +445,8 @@ struct _sp_app_t {
 	sp_app_driver_t *driver;
 	void *data;
 
+	atomic_bool visibility;
+
 	atomic_bool dirty;
 	unsigned skip_reweighting;
 

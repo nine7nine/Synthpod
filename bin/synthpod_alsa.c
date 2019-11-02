@@ -849,11 +849,20 @@ _hide(void *data)
 	return bin_hide(bin);
 }
 
+__non_realtime static bool
+_visibility(void *data)
+{
+	bin_t *bin = data;
+
+	return bin_visibility(bin);
+}
+
 static const nsmc_driver_t nsm_driver = {
 	.open = _open,
 	.save = _save,
 	.show = _show,
 	.hide = _hide,
+	.visibility = _visibility,
 	.supports_switch = true
 };
 

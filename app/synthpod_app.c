@@ -808,6 +808,8 @@ sp_app_new(const LilvWorld *world, sp_app_driver_t *driver, void *data)
 	if(!app)
 		return NULL;
 
+	atomic_init(&app->visibility, false);
+
 	atomic_init(&app->dirty, false);
 
 	app->dir.home = getenv("HOME");
@@ -1552,4 +1554,26 @@ sp_app_xrun_report(sp_app_t *app)
 	dsp_master_t *dsp_master = &app->dsp_master;
 
 	atomic_store(&dsp_master->xrun_report, true);
+}
+
+void
+sp_app_visibility_set(sp_app_t *app, bool visibility)
+{
+	if(!app)
+	{
+		return;
+	}
+
+	atomic_store(&app->visibility, visibility);
+}
+
+bool
+sp_app_visibility_get(sp_app_t *app)
+{
+	if(!app)
+	{
+		return false;
+	}
+
+	return atomic_load(&app->visibility);
 }
