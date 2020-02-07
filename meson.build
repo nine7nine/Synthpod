@@ -5,6 +5,8 @@ project('synthpod', ['c', 'cpp'], default_options : [
 	'b_lto=false',
 	'c_std=gnu11'])
 
+build_root = meson.build_root()
+
 d2tk = subproject('d2tk')
 
 use_backend = get_option('ui-backend')
@@ -148,7 +150,6 @@ if cc.compiles(builtin_assume_aligned, name : 'builtin_assume_aligned')
 endif
 
 c_args = ['-fvisibility=hidden',
-	'-ffast-math',
 	'-Wno-attributes',
 	'-Wno-unused-function',
 	'-Wno-unused-variable']
