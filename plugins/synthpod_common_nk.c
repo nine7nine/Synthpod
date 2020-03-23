@@ -4457,6 +4457,13 @@ _refresh_main_plugin_list(plughandle_t *handle)
 	LILV_FOREACH(plugins, i, plugs)
 	{
 		const LilvPlugin *plug = lilv_plugins_get(plugs, i);
+		const char *plug_uri = lilv_node_as_uri(lilv_plugin_get_uri(plug));
+
+		if(  !strcmp(plug_uri, SYNTHPOD_PREFIX"sink")
+			|| !strcmp(plug_uri, SYNTHPOD_PREFIX"source") )
+		{
+			continue;
+		}
 
 		LilvNode *name_node = lilv_plugin_get_name(plug);
 		if(name_node)
