@@ -1012,6 +1012,12 @@ sp_app_save(sp_app_t *app, LV2_State_Store_Function store,
 						}
 
 						if(ref)
+						{
+							ref = lv2_atom_forge_key(forge, app->regs.synthpod.module_created.urid)
+								&& lv2_atom_forge_int(forge, mod->created);
+						}
+
+						if(ref)
 							lv2_atom_forge_pop(forge, &mod_frame);
 					}
 					else
@@ -1384,6 +1390,7 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 	const LV2_Atom_URID *mod_ui = NULL;
 	const LV2_Atom_Bool *mod_visible = NULL;
 	const LV2_Atom_Bool *mod_disabled = NULL;
+	const LV2_Atom_Int *mod_created = NULL;
 	lv2_atom_object_get(mod_obj,
 		app->regs.synthpod.module_position_x.urid, &mod_pos_x,
 		app->regs.synthpod.module_position_y.urid, &mod_pos_y,
@@ -1391,10 +1398,14 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 		app->regs.ui.ui.urid, &mod_ui,
 		app->regs.synthpod.module_visible.urid, &mod_visible,
 		app->regs.synthpod.module_disabled.urid, &mod_disabled,
+		app->regs.synthpod.module_created.urid, &mod_created,
 		0);
 
+	const uint32_t created = mod_created && (mod_created->atom.type == app->forge.Int)
+		? mod_created->body : 0;
+
 	const char *mod_uri_str = app->driver->unmap->unmap(app->driver->unmap->handle, mod_obj->body.otype);
-	mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn);
+	mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn, created);
 	if(!mod)
 	{
 		sp_app_log_error(app, "%s: _sp_app_mod_add fialed\n", __func__);
@@ -1526,6 +1537,9 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 		return LV2_STATE_ERR_UNKNOWN;
 	}
 
+	// reset created counter
+	app->created = 0;
+
 	size_t size;
 	uint32_t _flags;
 	uint32_t type;
@@ -1574,10 +1588,16 @@ sp_app_restore(sp_app_t *app, LV2_State_Retrieve_Function retrieve,
 			{
 				mod_obj->body.otype = app->regs.synthpod.placeholder.urid;
 				mod = _mod_inject(app, mod_index, mod_urn, mod_obj, map_path);
-				if(mod)
+				if(!mod)
 				{
 					snprintf(mod->alias, sizeof(mod->alias), "%s", "!!! Failed to load !!!");
+					continue;
 				}
+			}
+
+			if(mod->created > app->created)
+			{
+				app->created = mod->created;
 			}
 		}
 

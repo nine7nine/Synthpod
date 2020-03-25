@@ -351,7 +351,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		case JOB_TYPE_REQUEST_MODULE_ADD:
 		{
 			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
-			mod_t *mod = uri ? _sp_app_mod_add(app, uri, 0) : NULL;
+			mod_t *mod = uri ? _sp_app_mod_add(app, uri, 0, 0) : NULL;
 			if(!mod)
 				break; //TODO report
 

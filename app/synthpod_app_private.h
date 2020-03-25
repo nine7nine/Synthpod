@@ -263,6 +263,7 @@ struct _mod_t {
 	LV2_URID urn;
 	LV2_URID visible;
 	bool disabled;
+	uint32_t created;
 
 	bool delete_request;
 	bool needs_bypassing;
@@ -513,6 +514,7 @@ struct _sp_app_t {
 
 	int32_t column_enabled;
 	int32_t row_enabled;
+	uint32_t created;
 };
 
 extern const port_driver_t control_port_driver;
@@ -673,7 +675,7 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path);
  * Mod
  */
 mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn);
+_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created);
 
 void
 _sp_app_mod_eject(sp_app_t *app, mod_t *mod);

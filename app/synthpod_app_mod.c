@@ -587,7 +587,7 @@ _mod_queue_draw(void *data)
 }
 
 mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
+_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created)
 {
 	const LilvPlugin *plug;
 
@@ -597,12 +597,19 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 		return NULL;
 	}
 
+	if(created == 0)
+	{
+		created = ++app->created;
+	}
+
 	mod_t *mod = calloc(1, sizeof(mod_t));
 	if(!mod)
 	{
 		sp_app_log_error(app, "%s: allocation failed\n", __func__);
 		return NULL;
 	}
+
+	mod->created = created;
 
 	mod->needs_bypassing = false; // plugins with control ports only need no bypassing upon preset load
 	mod->bypassed = false;
@@ -789,7 +796,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn)
 				asprintf(&pretty_name, "#%"PRIu32" - %s",
 					mod->urn, lilv_node_as_string(port_name_node));
 				designation = port_designation ? lilv_node_as_string(port_designation) : NULL;
-				const uint32_t order = (mod->urn << 16) | tar->index;
+				const uint32_t order = (mod->created << 16) | tar->index;
 
 				tar->sys.data = app->driver->system_port_add(app->data, tar->sys.type,
 					short_name, pretty_name, designation,
