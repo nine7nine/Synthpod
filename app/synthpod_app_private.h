@@ -121,6 +121,7 @@ enum _job_type_request_t {
 	JOB_TYPE_REQUEST_MODULE_ADD,
 	JOB_TYPE_REQUEST_MODULE_DEL,
 	JOB_TYPE_REQUEST_MODULE_REINSTANTIATE,
+	JOB_TYPE_REQUEST_MODULE_SYSTEM_PORTS_UPDATE,
 	JOB_TYPE_REQUEST_PRESET_LOAD,
 	JOB_TYPE_REQUEST_PRESET_SAVE,
 	JOB_TYPE_REQUEST_BUNDLE_LOAD,
@@ -675,7 +676,8 @@ _sp_app_state_bundle_load(sp_app_t *app, const char *bundle_path);
  * Mod
  */
 mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created);
+_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
+	const char *alias);
 
 void
 _sp_app_mod_eject(sp_app_t *app, mod_t *mod);

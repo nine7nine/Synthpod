@@ -721,6 +721,39 @@ _system_port_del(void *data, void *sys_port)
 }
 
 __non_realtime static void
+_system_port_set(void *data, void *sys_port, const char *key, const void *body)
+{
+	bin_t *bin = data;
+	sp_app_t *app = bin->app;
+	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
+
+	jack_port_t *jack_port = sys_port;
+
+	if(!jack_port || !handle->client)
+		return;
+
+	if(!strcmp(key, SYNTHPOD_PREFIX"#moduleAlias"))
+	{
+#if defined(JACK_HAS_METADATA_API)
+		jack_uuid_t uuid = jack_port_uuid(jack_port);
+		if(!jack_uuid_empty(uuid))
+		{
+			char pretty_name [128];
+			const char *alias = body;
+
+			const char *port_name = jack_port_name(jack_port);
+			uint32_t idx =  port_name[strlen(port_name) - 1] - '0';
+
+			snprintf(pretty_name, sizeof(pretty_name), "%s - %"PRIu32, alias, idx);
+
+			jack_set_property(handle->client, uuid,
+				JACK_METADATA_PRETTY_NAME, pretty_name, "text/plain");
+		}
+#endif
+	}
+}
+
+__non_realtime static void
 _shutdown(void *data)
 {
 	prog_t *handle = data;
@@ -1150,6 +1183,7 @@ main(int argc, char **argv)
 
 	bin->app_driver.system_port_add = _system_port_add;
 	bin->app_driver.system_port_del = _system_port_del;
+	bin->app_driver.system_port_set = _system_port_set;
 
 	handle.osc_sched.osc2frames = _osc_schedule_osc2frames;
 	handle.osc_sched.frames2osc = _osc_schedule_frames2osc;

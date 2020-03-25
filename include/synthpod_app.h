@@ -48,6 +48,8 @@ typedef void *(*sp_system_port_add)(void *data, system_port_t type,
 	const char *short_name, const char *pretty_name, const char *designation,
 	bool input, uint32_t order);
 typedef void (*sp_system_port_del)(void *data, void *sys_port);
+typedef void (*sp_system_port_set)(void *data, void *sys_port, const char *key,
+	const void *body);
 
 typedef void (*sp_close_request_t)(void *data);
 
@@ -110,6 +112,7 @@ struct _sp_app_driver_t {
 	// system_port
 	sp_system_port_add system_port_add;
 	sp_system_port_del system_port_del;
+	sp_system_port_set system_port_set;
 
 	// clock_sync
 	LV2_OSC_Schedule *osc_sched;

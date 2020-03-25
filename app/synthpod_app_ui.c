@@ -865,6 +865,23 @@ _sp_app_from_ui_patch_set(sp_app_t *app, const LV2_Atom *atom)
 				&& (value->type == app->forge.String) )
 			{
 				strncpy(mod->alias, LV2_ATOM_BODY_CONST(value), ALIAS_MAX - 1);
+
+				if(mod->system_ports)
+				{
+					// send request to worker thread
+					size_t size = sizeof(job_t);
+					job_t *job = _sp_app_to_worker_request(app, size);
+					if(job)
+					{
+						job->request = JOB_TYPE_REQUEST_MODULE_SYSTEM_PORTS_UPDATE;
+						job->mod = mod;
+						_sp_app_to_worker_advance(app, size);
+					}
+					else
+					{
+						sp_app_log_trace(app, "%s: buffer request failed\n", __func__);
+					}
+				}
 			}
 			else if( (prop == app->regs.ui.ui.urid)
 				&& (value->type == app->forge.URID) )

@@ -771,7 +771,7 @@ _sp_app_populate(sp_app_t *app)
 
 	// inject source mod
 	uri_str = SYNTHPOD_PREFIX"source";
-	mod = _sp_app_mod_add(app, uri_str, 0, 0);
+	mod = _sp_app_mod_add(app, uri_str, 0, 0, NULL);
 	if(mod)
 	{
 		app->mods[app->num_mods] = mod;
@@ -784,7 +784,7 @@ _sp_app_populate(sp_app_t *app)
 
 	// inject sink mod
 	uri_str = SYNTHPOD_PREFIX"sink";
-	mod = _sp_app_mod_add(app, uri_str, 0, 0);
+	mod = _sp_app_mod_add(app, uri_str, 0, 0, NULL);
 	if(mod)
 	{
 		app->mods[app->num_mods] = mod;

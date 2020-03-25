@@ -1403,9 +1403,11 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 
 	const uint32_t created = mod_created && (mod_created->atom.type == app->forge.Int)
 		? mod_created->body : 0;
+	const char *alias = mod_alias && (mod_alias->atom.type == app->forge.String)
+		? (const char *)LV2_ATOM_BODY_CONST(mod_alias) : NULL;
 
 	const char *mod_uri_str = app->driver->unmap->unmap(app->driver->unmap->handle, mod_obj->body.otype);
-	mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn, created);
+	mod_t *mod = _sp_app_mod_add(app, mod_uri_str, mod_urn, created, alias);
 	if(!mod)
 	{
 		sp_app_log_error(app, "%s: _sp_app_mod_add fialed\n", __func__);
@@ -1424,8 +1426,6 @@ _mod_inject(sp_app_t *app, int32_t mod_uid, LV2_URID mod_urn, const LV2_Atom_Obj
 		? mod_visible->body : 0;
 	mod->disabled = mod_disabled && (mod_disabled->atom.type == app->forge.Bool)
 		? mod_disabled->body : false;
-	if(mod_alias)
-		strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX - 1);
 	mod->ui = mod_ui && (mod_ui->atom.type == app->forge.URID)
 		? mod_ui->body : 0;
 

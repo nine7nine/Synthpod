@@ -587,7 +587,8 @@ _mod_queue_draw(void *data)
 }
 
 mod_t *
-_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created)
+_sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
+	const char *alias)
 {
 	const LilvPlugin *plug;
 
@@ -610,6 +611,11 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created)
 	}
 
 	mod->created = created;
+
+	if(alias != NULL)
+	{
+		strncpy(mod->alias, alias, ALIAS_MAX - 1);
+	}
 
 	mod->needs_bypassing = false; // plugins with control ports only need no bypassing upon preset load
 	mod->bypassed = false;
@@ -806,6 +812,12 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created)
 				lilv_node_free(port_name_node);
 				free(short_name);
 				free(pretty_name);
+			}
+
+			if(strlen(mod->alias) && app->driver->system_port_set)
+			{
+				app->driver->system_port_set(app->data, tar->sys.data,
+					SYNTHPOD_PREFIX"#moduleAlias", mod->alias);
 			}
 		}
 		else

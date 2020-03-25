@@ -351,7 +351,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 		case JOB_TYPE_REQUEST_MODULE_ADD:
 		{
 			const char *uri = app->driver->unmap->unmap(app->driver->unmap->handle, job->urn);
-			mod_t *mod = uri ? _sp_app_mod_add(app, uri, 0, 0) : NULL;
+			mod_t *mod = uri ? _sp_app_mod_add(app, uri, 0, 0, NULL) : NULL;
 			if(!mod)
 				break; //TODO report
 
@@ -409,6 +409,23 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 			else
 			{
 				sp_app_log_error(app, "%s: buffer request failed\n", __func__);
+			}
+
+			break;
+		}
+		case JOB_TYPE_REQUEST_MODULE_SYSTEM_PORTS_UPDATE:
+		{
+			mod_t *mod = job->mod;
+
+			if(mod->system_ports && strlen(mod->alias) && app->driver->system_port_set)
+			{
+				for(unsigned i=0; i<mod->num_ports - 2; i++) // - automation ports
+				{
+					port_t *tar = &mod->ports[i];
+
+					app->driver->system_port_set(app->data, tar->sys.data,
+						SYNTHPOD_PREFIX"#moduleAlias", mod->alias);
+				}
 			}
 
 			break;
