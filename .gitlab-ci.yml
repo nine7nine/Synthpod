@@ -18,7 +18,7 @@ stages:
 .build_template: &build_definition
   <<: *common_definition
   script:
-    - meson --prefix="${CI_PROJECT_DIR}/${CI_PROJECT_NAME}-$(cat VERSION)/${CI_BUILD_NAME}" -Dlv2libdir="" --cross-file "${CI_BUILD_NAME}" "${BUILD_OPTS}" build
+    - meson --prefix="${CI_PROJECT_DIR}/${CI_PROJECT_NAME}-$(cat VERSION)/${CI_BUILD_NAME}" -Dlv2libdir="" --cross-file "${CI_BUILD_NAME}" ${BUILD_OPTS} build
     - ninja -C build
     - ninja -C build test
     - ninja -C build install
