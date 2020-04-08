@@ -58,7 +58,7 @@ use_qt5 = get_option('use-qt5')
 
 m_dep = cc.find_library('m')
 rt_dep = cc.find_library('rt')
-lv2_dep = dependency('lv2', version : '>=1.14.0')
+lv2_dep = dependency('lv2', version : '>=1.17.2')
 thread_dep = dependency('threads')
 lilv_dep = dependency('lilv-0', version : '>=0.24.0', static : static_link)
 alsa_dep = dependency('alsa', version : '>=1.1.0', required : use_alsa)

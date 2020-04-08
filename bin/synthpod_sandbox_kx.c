@@ -119,11 +119,31 @@ _deinit(void *data)
 	cross_clock_deinit(&app->clk_mono);
 }
 
+static inline int
+_request(void *data, LV2_URID key, size_t path_len, char *path)
+{
+	app_t *app = data;
+	(void)app;
+
+	FILE *fin = popen("zenity --file-selection", "r");
+	const size_t len = fread(path, sizeof(char), path_len, fin);
+	pclose(fin);
+
+	if(len)
+	{
+		path[len] = '\0';
+		return 0;
+	}
+
+	return 1;
+}
+
 static const sandbox_slave_driver_t driver = {
 	.init_cb = _init,
 	.run_cb = _run,
 	.deinit_cb = _deinit,
-	.resize_cb = NULL
+	.resize_cb = NULL,
+	.request_cb = _request
 };
 
 int

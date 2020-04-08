@@ -19,6 +19,7 @@
 #define _SANDBOX_SLAVE_H
 
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
+#include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,12 +32,15 @@ typedef int (*sandbox_slave_driver_init_t)(sandbox_slave_t *sb, void *data);
 typedef void (*sandbox_slave_driver_run_t)(sandbox_slave_t *sb, float update_rate, void *data);
 typedef void (*sandbox_slave_driver_deinit_t)(void *data);
 typedef int (*sandbox_slave_driver_resize_t)(void *data, int width, int height);
+typedef int (*sandbox_slave_driver_request_t)(void *data, LV2_URID key,
+	size_t len, char *path);
 
 struct _sandbox_slave_driver_t {
 	sandbox_slave_driver_init_t init_cb;
 	sandbox_slave_driver_run_t run_cb;
 	sandbox_slave_driver_deinit_t deinit_cb;
 	sandbox_slave_driver_resize_t resize_cb;
+	sandbox_slave_driver_request_t request_cb;
 };
 
 sandbox_slave_t *

@@ -31,6 +31,8 @@
 
 #include <lv2/lv2plug.in/ns/ext/log/log.h>
 #include <lv2/lv2plug.in/ns/ext/options/options.h>
+#include <lv2/lv2plug.in/ns/ext/atom/forge.h>
+#include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 #include <lv2/lv2plug.in/ns/ext/uri-map/uri-map.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
@@ -49,6 +51,13 @@ struct _sandbox_slave_t {
 	LV2_URI_Map_Feature uri_id;
 #pragma GCC diagnostic pop
 
+	LV2_Atom_Forge forge;
+
+	LV2_URID atom_eventTransfer;
+	LV2_URID patch_Set;
+	LV2_URID patch_property;
+	LV2_URID patch_value;
+
 	LV2_URID log_trace;
 	LV2_URID log_error;
 	LV2_URID log_warning;
@@ -59,6 +68,7 @@ struct _sandbox_slave_t {
 	LV2UI_Port_Map port_map;
 	LV2UI_Port_Subscribe port_subscribe;
 	LV2UI_Touch touch;
+	LV2UI_Request_Value request_value;
 	xpress_map_t xmap;
 	xpress_t xpress;
 
@@ -272,6 +282,77 @@ _touch(LV2UI_Feature_Handle handle, uint32_t index, bool grabbed)
 	return;
 }
 
+static inline LV2UI_Request_Value_Status
+_request_value(LV2UI_Feature_Handle handle, LV2_URID key, LV2_URID type,
+	const LV2_Feature* const* features __attribute__((unused)))
+{
+	sandbox_slave_t *sb = handle;
+	char path [PATH_MAX];
+
+	if(!sb->driver || !sb->driver->request_cb)
+	{
+			return LV2UI_REQUEST_VALUE_ERR_UNKNOWN;
+	}
+
+	if(sb->driver->request_cb(sb->data, key, sizeof(path), path) != 0)
+	{
+		return LV2UI_REQUEST_VALUE_ERR_UNKNOWN;
+	}
+
+	if(type == sb->forge.Path)
+	{
+		const uint32_t index = 0; //FIXME
+		uint8_t buf [1204]; //FIXME use ser_atom
+		const LV2_Atom *atom = (const LV2_Atom *)buf;
+		LV2_Atom_Forge_Frame frame;
+
+		lv2_atom_forge_set_buffer(&sb->forge, buf, sizeof(buf));
+		lv2_atom_forge_object(&sb->forge, &frame, 0, sb->patch_Set);
+		lv2_atom_forge_key(&sb->forge, sb->patch_property);
+		lv2_atom_forge_urid(&sb->forge, key);
+		lv2_atom_forge_key(&sb->forge, sb->patch_value);
+		lv2_atom_forge_path(&sb->forge, path, strlen(path));
+		lv2_atom_forge_pop(&sb->forge, &frame);
+
+		_write_function(handle, index, lv2_atom_total_size(atom),
+			sb->atom_eventTransfer, buf);
+
+		return LV2UI_REQUEST_VALUE_SUCCESS;
+	}
+	else if( (type == sb->forge.String)
+		|| (type == sb->forge.Chunk) )
+	{
+		const uint32_t index = 0; //FIXME send to patch ports only
+		uint8_t buf [1204]; //FIXME use ser_atom
+		const LV2_Atom *atom = (const LV2_Atom *)buf;
+		LV2_Atom_Forge_Frame frame;
+
+		const size_t size = 0; //FIXME send to patch ports only
+		const void *body = NULL; //FIXME
+
+		if(body)
+		{
+			lv2_atom_forge_set_buffer(&sb->forge, buf, sizeof(buf));
+			lv2_atom_forge_object(&sb->forge, &frame, 0, sb->patch_Set);
+			lv2_atom_forge_key(&sb->forge, sb->patch_property);
+			lv2_atom_forge_urid(&sb->forge, key);
+			lv2_atom_forge_key(&sb->forge, sb->patch_value);
+			lv2_atom_forge_atom(&sb->forge, size, type);
+			lv2_atom_forge_write(&sb->forge, body, size);
+			lv2_atom_forge_pop(&sb->forge, &frame);
+
+			_write_function(handle, index, lv2_atom_total_size(atom),
+				sb->atom_eventTransfer, buf);
+
+			free(body);
+		}
+
+		return LV2UI_REQUEST_VALUE_SUCCESS;
+	}
+
+	return LV2UI_REQUEST_VALUE_ERR_UNKNOWN;
+}
+
 static inline bool
 _sandbox_recv_cb(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	uint32_t protocol, const void *buf)
@@ -456,6 +537,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	sb->touch.handle = sb;
 	sb->touch.touch = _touch;
 
+	sb->request_value.handle = sb;
+	sb->request_value.request= _request_value;
+
 	sb->host_resize.handle = data;
 	sb->host_resize.ui_resize = driver->resize_cb;
 
@@ -469,6 +553,13 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	sb->unmap = mapper_get_unmap(sb->mapper);
 	sb->uri_id.callback_data = sb;
 	sb->uri_id.uri_to_id = _sb_uri_to_id;
+
+	lv2_atom_forge_init(&sb->forge, sb->map);
+
+	sb->atom_eventTransfer = sb->map->map(sb->map->handle, LV2_ATOM__eventTransfer);
+	sb->patch_Set = sb->map->map(sb->map->handle, LV2_PATCH__Set);
+	sb->patch_property = sb->map->map(sb->map->handle, LV2_PATCH__property);
+	sb->patch_value = sb->map->map(sb->map->handle, LV2_PATCH__value);
 
 	sb->log_trace = sb->map->map(sb->map->handle, LV2_LOG__Trace);
 	sb->log_error = sb->map->map(sb->map->handle, LV2_LOG__Error);
@@ -740,6 +831,10 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		.URI = LV2_UI__touch,
 		.data = &sb->touch
 	};
+	const LV2_Feature request_value_feature = {
+		.URI = LV2_UI__requestValue,
+		.data = &sb->request_value
+	};
 	const LV2_Feature options_feature = {
 		.URI = LV2_OPTIONS__options,
 		.data = options
@@ -761,6 +856,7 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		&port_map_feature,
 		&port_subscribe_feature,
 		&touch_feature,
+		&request_value_feature,
 		&options_feature,
 		&voice_map_feature,
 		sb->host_resize.ui_resize ? &resize_feature : parent_feature,
