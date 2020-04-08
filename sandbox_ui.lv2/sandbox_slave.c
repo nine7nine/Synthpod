@@ -301,7 +301,7 @@ _request_value(LV2UI_Feature_Handle handle, LV2_URID key, LV2_URID type,
 
 	if(type == sb->forge.Path)
 	{
-		const uint32_t index = 0; //FIXME
+		const uint32_t index = 0; //FIXME send to patch ports only
 		uint8_t buf [1204]; //FIXME use ser_atom
 		const LV2_Atom *atom = (const LV2_Atom *)buf;
 		LV2_Atom_Forge_Frame frame;
@@ -327,8 +327,8 @@ _request_value(LV2UI_Feature_Handle handle, LV2_URID key, LV2_URID type,
 		const LV2_Atom *atom = (const LV2_Atom *)buf;
 		LV2_Atom_Forge_Frame frame;
 
-		const size_t size = 0; //FIXME send to patch ports only
-		const void *body = NULL; //FIXME
+		const size_t size = 0;
+		void *body = NULL; //FIXME
 
 		if(body)
 		{
