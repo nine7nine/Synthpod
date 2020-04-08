@@ -15,8 +15,8 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#ifndef _D2TK_MURMUR32_H
-#define _D2TK_MURMUR32_H
+#ifndef _D2TK_HASH_H
+#define _D2TK_HASH_H
 
 #include <stdint.h>
 #include <unistd.h>
@@ -47,4 +47,4 @@ d2tk_hash_dict(const d2tk_hash_dict_t *dict);
 }
 #endif
 
-#endif // _D2TK_MURMUR32_H
+#endif // _D2TK_HASH_H
