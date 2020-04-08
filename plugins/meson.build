@@ -60,7 +60,7 @@ if use_x11
 
 	configure_file(
 		input : join_paths('..', 'data', 'font', 'Abel-Regular.ttf'),
-		output : 'Roboto-Bold.ttf',
+		output : 'Abel-Regular.ttf',
 		copy : true,
 		install : true,
 		install_dir : plug_dir)
@@ -122,7 +122,7 @@ endif
 
 if lv2lint.found()
 	test('LV2 lint', lv2lint,
-		args : ['-I', join_paths(build_root, ''),
+		args : ['-I', join_paths(build_root, 'plugins', ''),
 			'-Ewarn',
 			'http://open-music-kontrollers.ch/lv2/synthpod#control2cv',
 			'http://open-music-kontrollers.ch/lv2/synthpod#cv2control',
