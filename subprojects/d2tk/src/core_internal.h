@@ -29,12 +29,15 @@ extern "C" {
 typedef struct _d2tk_clip_t d2tk_clip_t;
 typedef struct _d2tk_com_t d2tk_com_t;
 
-typedef void *(*d2tk_core_new_t)(const char *bundle_path, void *pctx);
+typedef void *(*d2tk_core_new_t)(const char *bundle_path);
 typedef void (*d2tk_core_free_t)(void *data);
+typedef int (*d2tk_core_context_t)(void *data, void *pctx);
 typedef void (*d2tk_core_pre_t)(void *data, d2tk_core_t *core,
 	d2tk_coord_t w, d2tk_coord_t h, unsigned pass);
 typedef bool (*d2tk_core_post_t)(void *data, d2tk_core_t *core,
 	d2tk_coord_t w, d2tk_coord_t h, unsigned pass);
+typedef void (*d2tk_core_end_t)(void *data, d2tk_core_t *core,
+	d2tk_coord_t w, d2tk_coord_t h);
 typedef void (*d2tk_core_process_t)(void *data, d2tk_core_t *core,
 	const d2tk_com_t *com, d2tk_coord_t xo, d2tk_coord_t yo,
 	const d2tk_clip_t *clip, unsigned pass);
@@ -73,9 +76,11 @@ struct _d2tk_clip_t {
 struct _d2tk_core_driver_t {
 	d2tk_core_new_t new;
 	d2tk_core_free_t free;
+	d2tk_core_context_t context;
 	d2tk_core_pre_t pre;
 	d2tk_core_process_t process;
 	d2tk_core_post_t post;
+	d2tk_core_end_t end;
 	d2tk_core_sprite_free_t sprite_free;
 };
 
@@ -268,35 +273,20 @@ d2tk_core_get_sprite(d2tk_core_t *core, uint64_t hash, uint8_t type);
 const d2tk_com_t *
 d2tk_com_begin_const(const d2tk_com_t *com);
 
+const d2tk_com_t *
+d2tk_com_get_end_const(const d2tk_com_t *com);
+
 bool
-d2tk_com_not_end_const(const d2tk_com_t *com, const d2tk_com_t *bbox);
+d2tk_com_not_end_const(const d2tk_com_t *end, const d2tk_com_t *bbox);
 
 const d2tk_com_t *
 d2tk_com_next_const(const d2tk_com_t *bbox);
 
 #define D2TK_COM_FOREACH_CONST(COM, BBOX) \
-	for(const d2tk_com_t *(BBOX) = d2tk_com_begin_const((COM)); \
-		d2tk_com_not_end_const((COM), (BBOX)); \
+	for(const d2tk_com_t *(BBOX) = d2tk_com_begin_const((COM)), \
+			*__end = d2tk_com_get_end_const((COM)); \
+		d2tk_com_not_end_const(__end, (BBOX)); \
 		(BBOX) = d2tk_com_next_const((BBOX)))
-
-d2tk_com_t *
-d2tk_com_begin(d2tk_com_t *com);
-
-bool
-d2tk_com_not_end(d2tk_com_t *com, d2tk_com_t *bbox);
-
-d2tk_com_t *
-d2tk_com_next(d2tk_com_t *bbox);
-
-#define D2TK_COM_FOREACH(COM, BBOX) \
-	for(d2tk_com_t *(BBOX) = d2tk_com_begin((COM)); \
-		d2tk_com_not_end((COM), (BBOX)); \
-		(BBOX) = d2tk_com_next((BBOX)))
-
-#define D2TK_COM_FOREACH_FROM(COM, FROM, BBOX) \
-	for(d2tk_com_t *(BBOX) = (FROM); \
-		d2tk_com_not_end((COM), (BBOX)); \
-		(BBOX) = d2tk_com_next((BBOX)))
 
 uint32_t *
 d2tk_core_get_pixels(d2tk_core_t *core, d2tk_rect_t *rect);
@@ -306,6 +296,10 @@ d2tk_core_set_bg_color(d2tk_core_t *core, uint32_t rgba);
 
 uint32_t
 d2tk_core_get_bg_color(d2tk_core_t *core);
+
+int
+d2tk_core_get_font_path(d2tk_core_t *core, const char *bundle_path,
+	const char *rel_path, size_t abs_len, char *abs_path);
 
 #ifdef __cplusplus
 }

@@ -32,7 +32,8 @@ typedef struct _app_t app_t;
 typedef void (*foreach_t)(const char *path, const char *d_name);
 
 struct _app_t {
-	d2tk_fbdev_t *fbdev;
+	d2tk_frontend_t *fbdev;
+	bool show_cursor;
 };
 
 static sig_atomic_t done = false;
@@ -47,16 +48,19 @@ static inline int
 _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 {
 	app_t *app = data;
-	d2tk_fbdev_t *fbdev = app->fbdev;
-	d2tk_base_t *base = d2tk_fbdev_get_base(fbdev);
+	d2tk_frontend_t *fbdev = app->fbdev;
+	d2tk_base_t *base = d2tk_frontend_get_base(fbdev);
 
 	d2tk_example_run(base, w, h);
 
-	d2tk_coord_t x = 0;
-	d2tk_coord_t y = 0;
+	if(app->show_cursor)
+	{
+		d2tk_coord_t x = 0;
+		d2tk_coord_t y = 0;
 
-	d2tk_base_get_mouse_pos(base, &x, &y);
-	d2tk_base_cursor(base, &D2TK_RECT(x, y, 24, 24));
+		d2tk_base_get_mouse_pos(base, &x, &y);
+		d2tk_base_cursor(base, &D2TK_RECT(x, y, 24, 24));
+	}
 
 	return EXIT_SUCCESS;
 }
@@ -153,7 +157,7 @@ main(int argc, char **argv)
 	static char fb_device [PATH_MAX] = AUTO;
 
 	int c;
-	while( (c = getopt(argc, argv, "f:")) != -1)
+	while( (c = getopt(argc, argv, "f:c")) != -1)
 	{
 		switch(c)
 		{
@@ -161,11 +165,16 @@ main(int argc, char **argv)
 			{
 				strncpy(fb_device, optarg, PATH_MAX-1);
 			} break;
+			case 'c':
+			{
+				app.show_cursor = true;
+			} break;
 
 			default:
 			{
 				fprintf(stderr, "Usage: %s\n"
-					"  -f  fb_device    (auto)\n\n",
+					"  -f  fb_device    (auto)\n"
+					"  -c               show cursor\n\n",
 					argv[0]);
 			} return EXIT_FAILURE;
 		}
@@ -209,9 +218,9 @@ main(int argc, char **argv)
 
 		d2tk_example_init();
 
-		d2tk_fbdev_run(app.fbdev, &done);
+		d2tk_frontend_run(app.fbdev, &done);
 
-		d2tk_fbdev_free(app.fbdev);
+		d2tk_frontend_free(app.fbdev);
 
 		d2tk_example_deinit();
 

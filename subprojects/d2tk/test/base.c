@@ -82,7 +82,7 @@ _test_hot()
 
 		d2tk_base_set_mouse_pos(base, mx, my);
 
-		d2tk_base_pre(base);
+		d2tk_base_pre(base, NULL);
 
 		_expose_hot(base, &rect, N, p);
 
@@ -93,7 +93,7 @@ _test_hot()
 	// trigger garbage collector
 	for(unsigned i = 0; i < 0x400; i++)
 	{
-		d2tk_base_pre(base);
+		d2tk_base_pre(base, NULL);
 		d2tk_base_post(base);
 		assert(!d2tk_base_get_again(base));
 	}
@@ -197,9 +197,9 @@ _test_mouse_fwd_focus()
 
 		{
 			d2tk_base_set_mouse_pos(base, mx, my);
-			d2tk_base_set_mouse_l(base, true);
+			d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_mouse_fwd_focus(base, &rect, N, p, true);
 
@@ -208,9 +208,9 @@ _test_mouse_fwd_focus()
 		}
 
 		{
-			d2tk_base_set_mouse_l(base, false);
+			d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, false);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_mouse_fwd_focus(base, &rect, N, p, false);
 
@@ -222,7 +222,7 @@ _test_mouse_fwd_focus()
 	// trigger garbage collector
 	for(unsigned i = 0; i < 0x400; i++)
 	{
-		d2tk_base_pre(base);
+		d2tk_base_pre(base, NULL);
 		d2tk_base_post(base);
 		assert(!d2tk_base_get_again(base));
 	}
@@ -325,9 +325,9 @@ _test_mouse_bwd_focus()
 
 		{
 			d2tk_base_set_mouse_pos(base, mx, my);
-			d2tk_base_set_mouse_l(base, true);
+			d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_mouse_bwd_focus(base, &rect, N, p, true);
 
@@ -336,9 +336,9 @@ _test_mouse_bwd_focus()
 		}
 
 		{
-			d2tk_base_set_mouse_l(base, false);
+			d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, false);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_mouse_bwd_focus(base, &rect, N, p, false);
 
@@ -350,7 +350,7 @@ _test_mouse_bwd_focus()
 	// trigger garbage collector
 	for(unsigned i = 0; i < 0x400; i++)
 	{
-		d2tk_base_pre(base);
+		d2tk_base_pre(base, NULL);
 		d2tk_base_post(base);
 		assert(!d2tk_base_get_again(base));
 	}
@@ -437,10 +437,10 @@ _test_key_fwd_focus()
 	for(unsigned p = 0; p < N; p++)
 	{
 		{
-			d2tk_base_set_ctrl(base, true);
-			d2tk_base_set_right(base, true);
+			d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, true);
+			d2tk_base_set_keymask(base, D2TK_KEYMASK_RIGHT, true);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_key_fwd_focus(base, &rect, N, p, true);
 
@@ -449,10 +449,10 @@ _test_key_fwd_focus()
 		}
 
 		{
-			d2tk_base_set_right(base, false);
-			d2tk_base_set_ctrl(base, false);
+			d2tk_base_set_keymask(base, D2TK_KEYMASK_RIGHT, false);
+			d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, false);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_key_fwd_focus(base, &rect, N, p, false);
 
@@ -464,7 +464,7 @@ _test_key_fwd_focus()
 	// trigger garbage collector
 	for(unsigned i = 0; i < 0x400; i++)
 	{
-		d2tk_base_pre(base);
+		d2tk_base_pre(base, NULL);
 		d2tk_base_post(base);
 		assert(!d2tk_base_get_again(base));
 	}
@@ -543,10 +543,10 @@ _test_key_bwd_focus()
 	for(unsigned p = 0; p < N; p++)
 	{
 		{
-			d2tk_base_set_ctrl(base, true);
-			d2tk_base_set_left(base, true);
+			d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, true);
+			d2tk_base_set_keymask(base, D2TK_KEYMASK_LEFT, true);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_key_bwd_focus(base, &rect, N, p, true);
 
@@ -555,10 +555,10 @@ _test_key_bwd_focus()
 		}
 
 		{
-			d2tk_base_set_left(base, false);
-			d2tk_base_set_ctrl(base, false);
+			d2tk_base_set_keymask(base, D2TK_KEYMASK_LEFT, false);
+			d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, false);
 
-			d2tk_base_pre(base);
+			d2tk_base_pre(base, NULL);
 
 			_expose_key_bwd_focus(base, &rect, N, p, false);
 
@@ -570,7 +570,7 @@ _test_key_bwd_focus()
 	// trigger garbage collector
 	for(unsigned i = 0; i < 0x400; i++)
 	{
-		d2tk_base_pre(base);
+		d2tk_base_pre(base, NULL);
 		d2tk_base_post(base);
 		assert(!d2tk_base_get_again(base));
 	}
@@ -612,10 +612,18 @@ _test_get_set()
 	}
 
 	{
-		d2tk_base_set_mouse_l(base, true);
-		d2tk_base_set_mouse_m(base, true);
-		d2tk_base_set_mouse_r(base, true);
-		//FIXME add getter
+		d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
+		d2tk_base_set_butmask(base, D2TK_BUTMASK_MIDDLE, true);
+		d2tk_base_set_butmask(base, D2TK_BUTMASK_RIGHT, true);
+
+		assert(d2tk_base_get_butmask(base, D2TK_BUTMASK_LEFT, true) == true);
+		assert(d2tk_base_get_butmask(base, D2TK_BUTMASK_LEFT, true) == false);
+
+		assert(d2tk_base_get_butmask(base, D2TK_BUTMASK_MIDDLE, true) == true);
+		assert(d2tk_base_get_butmask(base, D2TK_BUTMASK_MIDDLE, true) == false);
+
+		assert(d2tk_base_get_butmask(base, D2TK_BUTMASK_RIGHT, true) == true);
+		assert(d2tk_base_get_butmask(base, D2TK_BUTMASK_RIGHT, true) == false);
 	}
 
 	{
@@ -637,73 +645,178 @@ _test_get_set()
 
 	{
 		d2tk_base_add_mouse_scroll(base, 2, 3);
-		//FIXME add getter
+
+		int dx = 0;
+		int dy = 0;
+
+		d2tk_base_get_mouse_scroll(base, &dx, &dy, false);
+		assert(dx == 2);
+		assert(dy == 3);
+
+		dx = 0;
+		dy = 0;
+		d2tk_base_get_mouse_scroll(base, NULL, &dy, false);
+		assert(dx == 0);
+		assert(dy == 3);
+
+		dx = 0;
+		dy = 0;
+		d2tk_base_get_mouse_scroll(base, &dx, NULL, false);
+		assert(dx == 2);
+		assert(dy == 0);
+
+		dx = 0;
+		dy = 0;
+		d2tk_base_get_mouse_scroll(base, NULL, NULL, false);
+		assert(dx == 0);
+		assert(dy == 0);
+
+		dx = 0;
+		dy = 0;
+		d2tk_base_get_mouse_scroll(base, &dx, &dy, true);
+		assert(dx == 2);
+		assert(dy == 3);
+
+		dx = 0;
+		dy = 0;
+		d2tk_base_get_mouse_scroll(base, &dx, &dy, false);
+		assert(dx == 0);
+		assert(dy == 0);
 	}
 
 	{
-		d2tk_base_set_shift(base, false);
-		d2tk_base_set_ctrl(base, false);
-		d2tk_base_set_alt(base, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_SHIFT, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_ALT, false);
 
-		assert(d2tk_base_get_shift(base) == false);
-		assert(d2tk_base_get_ctrl(base) == false);
-		assert(d2tk_base_get_alt(base) == false);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_SHIFT, false) == false);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_CTRL, false) == false);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_ALT, false) == false);
 
-		d2tk_base_set_shift(base, true);
-		d2tk_base_set_ctrl(base, true);
-		d2tk_base_set_alt(base, true);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_SHIFT, true);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, true);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_ALT, true);
 
-		assert(d2tk_base_get_shift(base) == true);
-		assert(d2tk_base_get_ctrl(base) == true);
-		assert(d2tk_base_get_alt(base) == true);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_SHIFT, true) == true);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_SHIFT, false) == false);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_CTRL, true) == true);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_CTRL, false) == false);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_ALT, true) == true);
+		assert(d2tk_base_get_modmask(base, D2TK_MODMASK_ALT, false) == false);
 	}
 
 	{
-		d2tk_base_set_shift(base, false);
-		d2tk_base_set_ctrl(base, false);
-		d2tk_base_set_alt(base, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_SHIFT, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_ALT, false);
 
 		assert(d2tk_base_get_mod(base) == false);
 
-		d2tk_base_set_shift(base, true);
-		d2tk_base_set_ctrl(base, false);
-		d2tk_base_set_alt(base, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_SHIFT, true);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_ALT, false);
 
 		assert(d2tk_base_get_mod(base) == true);
 
-		d2tk_base_set_shift(base, false);
-		d2tk_base_set_ctrl(base, true);
-		d2tk_base_set_alt(base, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_SHIFT, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, true);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_ALT, false);
 
 		assert(d2tk_base_get_mod(base) == true);
 
-		d2tk_base_set_shift(base, false);
-		d2tk_base_set_ctrl(base, false);
-		d2tk_base_set_alt(base, true);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_SHIFT, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_CTRL, false);
+		d2tk_base_set_modmask(base, D2TK_MODMASK_ALT, true);
 
 		assert(d2tk_base_get_mod(base) == true);
 	}
 
 	{
-		d2tk_base_set_left(base, false);
-		d2tk_base_set_right(base, false);
-		d2tk_base_set_up(base, false);
-		d2tk_base_set_down(base, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_BACKSPACE, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_ESCAPE, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_DEL, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_ENTER, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_TAB, false);
 
-		assert(d2tk_base_get_left(base) == false);
-		assert(d2tk_base_get_right(base) == false);
-		assert(d2tk_base_get_up(base) == false);
-		assert(d2tk_base_get_down(base) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_BACKSPACE, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_ESCAPE, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_DEL, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_ENTER, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_TAB, true) == false);
 
-		d2tk_base_set_left(base, true);
-		d2tk_base_set_right(base, true);
-		d2tk_base_set_up(base, true);
-		d2tk_base_set_down(base, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_BACKSPACE, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_ESCAPE, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_DEL, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_ENTER, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_TAB, true);
 
-		assert(d2tk_base_get_left(base) == true);
-		assert(d2tk_base_get_right(base) == true);
-		assert(d2tk_base_get_up(base) == true);
-		assert(d2tk_base_get_down(base) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_BACKSPACE, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_BACKSPACE, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_ESCAPE, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_ESCAPE, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_DEL, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_DEL, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_ENTER, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_ENTER, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_TAB, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_TAB, true) == false);
+	}
+
+	{
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_LEFT, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_RIGHT, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_UP, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_DOWN, false);
+
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_LEFT, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_RIGHT, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_UP, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_DOWN, true) == false);
+
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_LEFT, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_RIGHT, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_UP, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_DOWN, true);
+
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_LEFT, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_LEFT, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_RIGHT, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_RIGHT, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_UP, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_UP, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_DOWN, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_DOWN, true) == false);
+	}
+
+	{
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_PAGEUP, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_PAGEDOWN, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_HOME, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_END, false);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_INS, false);
+
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_PAGEUP, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_PAGEDOWN, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_HOME, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_END, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_INS, true) == false);
+
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_PAGEUP, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_PAGEDOWN, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_HOME, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_END, true);
+		d2tk_base_set_keymask(base, D2TK_KEYMASK_INS, true);
+
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_PAGEUP, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_PAGEUP, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_PAGEDOWN, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_PAGEDOWN, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_HOME, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_HOME, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_END, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_END, true) == false);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_INS, true) == true);
+		assert(d2tk_base_get_keymask(base, D2TK_KEYMASK_INS, true) == false);
 	}
 
 	d2tk_base_free(base);
@@ -961,6 +1074,66 @@ _test_layout_relative_x()
 }
 
 static void
+_test_layout_relative_zero_x()
+{
+#define N 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	const d2tk_coord_t frac [N] = {
+		0, 0, 0, 0
+	};
+	unsigned i = 0;
+	D2TK_BASE_LAYOUT(&rect, N, frac, D2TK_FLAG_LAYOUT_X | D2TK_FLAG_LAYOUT_REL, lay)
+	{
+		const d2tk_rect_t *bnd = d2tk_layout_get_rect(lay);
+		const unsigned k = d2tk_layout_get_index(lay);
+
+		assert(k == i++);
+		assert(bnd);
+		//FIXME bnd->x/y/w/h
+	}
+
+	d2tk_base_free(base);
+#undef N
+}
+
+static void
+_test_layout_relative_all_x()
+{
+#define N 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	const d2tk_coord_t frac [N] = {
+		1, 1, 1, 1
+	};
+	unsigned i = 0;
+	D2TK_BASE_LAYOUT(&rect, N, frac, D2TK_FLAG_LAYOUT_X | D2TK_FLAG_LAYOUT_REL, lay)
+	{
+		const d2tk_rect_t *bnd = d2tk_layout_get_rect(lay);
+		const unsigned k = d2tk_layout_get_index(lay);
+
+		assert(k == i++);
+		assert(bnd);
+		//FIXME bnd->x/y/w/h
+	}
+
+	d2tk_base_free(base);
+#undef N
+}
+
+static void
 _test_layout_relative_y()
 {
 #define N 4
@@ -974,6 +1147,66 @@ _test_layout_relative_y()
 
 	static const d2tk_coord_t frac [N] = {
 		1, 2, 4, 0
+	};
+	unsigned i = 0;
+	D2TK_BASE_LAYOUT(&rect, N, frac, D2TK_FLAG_LAYOUT_Y | D2TK_FLAG_LAYOUT_REL, lay)
+	{
+		const d2tk_rect_t *bnd = d2tk_layout_get_rect(lay);
+		const unsigned k = d2tk_layout_get_index(lay);
+
+		assert(k == i++);
+		assert(bnd);
+		//FIXME bnd->x/y/w/h
+	}
+
+	d2tk_base_free(base);
+#undef N
+}
+
+static void
+_test_layout_relative_zero_y()
+{
+#define N 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	const d2tk_coord_t frac [N] = {
+		0, 0, 0, 0
+	};
+	unsigned i = 0;
+	D2TK_BASE_LAYOUT(&rect, N, frac, D2TK_FLAG_LAYOUT_Y | D2TK_FLAG_LAYOUT_REL, lay)
+	{
+		const d2tk_rect_t *bnd = d2tk_layout_get_rect(lay);
+		const unsigned k = d2tk_layout_get_index(lay);
+
+		assert(k == i++);
+		assert(bnd);
+		//FIXME bnd->x/y/w/h
+	}
+
+	d2tk_base_free(base);
+#undef N
+}
+
+static void
+_test_layout_relative_all_y()
+{
+#define N 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	const d2tk_coord_t frac [N] = {
+		1, 1, 1, 1
 	};
 	unsigned i = 0;
 	D2TK_BASE_LAYOUT(&rect, N, frac, D2TK_FLAG_LAYOUT_Y | D2TK_FLAG_LAYOUT_REL, lay)
@@ -1201,6 +1434,12 @@ _test_state()
 
 	assert(d2tk_state_is_over(D2TK_STATE_OVER));
 	assert(!d2tk_state_is_over(D2TK_STATE_NONE));
+
+	assert(d2tk_state_is_close(D2TK_STATE_CLOSE));
+	assert(!d2tk_state_is_close(D2TK_STATE_NONE));
+
+	assert(d2tk_state_is_bell(D2TK_STATE_BELL));
+	assert(!d2tk_state_is_bell(D2TK_STATE_NONE));
 }
 
 static void
@@ -1288,7 +1527,9 @@ _test_scrollbar_x()
 
 #define H 128
 #define h 32
-	D2TK_BASE_SCROLLBAR(base, &rect, D2TK_ID, D2TK_FLAG_SCROLL_X, H, 0, h, 0, scroll)
+	const uint32_t max [2] = { H, 0 };
+	const uint32_t num [2] = { h, 0 };
+	D2TK_BASE_SCROLLBAR(base, &rect, D2TK_ID, D2TK_FLAG_SCROLL_X, max, num, scroll)
 	{
 		const d2tk_rect_t *bnd = d2tk_scrollbar_get_rect(scroll);
 		const float xo = d2tk_scrollbar_get_offset_x(scroll);
@@ -1318,7 +1559,9 @@ _test_scrollbar_y()
 
 #define V 128
 #define v 32
-	D2TK_BASE_SCROLLBAR(base, &rect, D2TK_ID, D2TK_FLAG_SCROLL_Y, 0, V, 0, v, scroll)
+	const uint32_t max [2] = { 0, V };
+	const uint32_t num [2] = { 0, v };
+	D2TK_BASE_SCROLLBAR(base, &rect, D2TK_ID, D2TK_FLAG_SCROLL_Y, max, num, scroll)
 	{
 		const d2tk_rect_t *bnd = d2tk_scrollbar_get_rect(scroll);
 		const float xo = d2tk_scrollbar_get_offset_x(scroll);
@@ -1541,7 +1784,7 @@ _test_toggle()
 	assert(base);
 
 	bool val = false;
-	d2tk_base_set_mouse_l(base, true);
+	d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
 	const d2tk_state_t state = d2tk_base_toggle(base, D2TK_ID, &rect, &val);
 	assert(state == (D2TK_STATE_DOWN | D2TK_STATE_ACTIVE | D2TK_STATE_HOT
 		| D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN | D2TK_STATE_CHANGED
@@ -1636,6 +1879,27 @@ _test_meter()
 }
 
 static void
+_test_meter_down()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
+
+	const int32_t val = -32;
+	const d2tk_state_t state = d2tk_base_meter(base, D2TK_ID, &rect, &val);
+	assert(state == (D2TK_STATE_DOWN | D2TK_STATE_ACTIVE | D2TK_STATE_HOT
+		| D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN | D2TK_STATE_OVER) );
+
+	d2tk_base_free(base);
+}
+
+static void
 _test_combo()
 {
 #define nitms 4
@@ -1678,11 +1942,39 @@ _test_combo_scroll_up()
 	const char *itms [nitms] = {
 		"1", "2", "3", "4"
 	};
-	int32_t val = 0;
+	int32_t val = 1;
 	const d2tk_state_t state = d2tk_base_combo(base, D2TK_ID, nitms, itms, &rect, &val);
 	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
-		|D2TK_STATE_SCROLL_UP | D2TK_STATE_CHANGED | D2TK_STATE_OVER) );
-	assert(val == 1);
+		| D2TK_STATE_SCROLL_UP | D2TK_STATE_OVER | D2TK_STATE_CHANGED) );
+	assert(val == 2);
+	//FIXME test toggling
+
+	d2tk_base_free(base);
+#undef ntims
+}
+
+static void
+_test_combo_scroll_right()
+{
+#define nitms 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_base_add_mouse_scroll(base, 1.f, 0.f);
+
+	const char *itms [nitms] = {
+		"1", "2", "3", "4"
+	};
+	int32_t val = 1;
+	const d2tk_state_t state = d2tk_base_combo(base, D2TK_ID, nitms, itms, &rect, &val);
+	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
+		| D2TK_STATE_SCROLL_RIGHT | D2TK_STATE_OVER | D2TK_STATE_CHANGED) );
+	assert(val == 2);
 	//FIXME test toggling
 
 	d2tk_base_free(base);
@@ -1706,11 +1998,128 @@ _test_combo_scroll_down()
 	const char *itms [nitms] = {
 		"1", "2", "3", "4"
 	};
-	int32_t val = 0;
+	int32_t val = 1;
 	const d2tk_state_t state = d2tk_base_combo(base, D2TK_ID, nitms, itms, &rect, &val);
 	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
-		| D2TK_STATE_SCROLL_DOWN | D2TK_STATE_OVER) );
+		| D2TK_STATE_SCROLL_DOWN | D2TK_STATE_OVER | D2TK_STATE_CHANGED) );
 	assert(val == 0);
+	//FIXME test toggling
+
+	d2tk_base_free(base);
+#undef ntims
+}
+
+static void
+_test_combo_scroll_left()
+{
+#define nitms 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_base_add_mouse_scroll(base, -1.f, 0.f);
+
+	const char *itms [nitms] = {
+		"1", "2", "3", "4"
+	};
+	int32_t val = 1;
+	const d2tk_state_t state = d2tk_base_combo(base, D2TK_ID, nitms, itms, &rect, &val);
+	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
+		| D2TK_STATE_SCROLL_LEFT | D2TK_STATE_OVER | D2TK_STATE_CHANGED) );
+	assert(val == 0);
+	//FIXME test toggling
+
+	d2tk_base_free(base);
+#undef ntims
+}
+
+static void
+_test_combo_mouse_down_dec()
+{
+#define nitms 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_base_set_mouse_pos(base, 0, 0);
+	d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
+
+	const char *itms [nitms] = {
+		"1", "2", "3", "4"
+	};
+	int32_t val = 1;
+	const d2tk_state_t state = d2tk_base_combo(base, D2TK_ID, nitms, itms, &rect, &val);
+	assert(state == (D2TK_STATE_DOWN | D2TK_STATE_ACTIVE | D2TK_STATE_HOT
+		| D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN | D2TK_STATE_OVER
+		| D2TK_STATE_CHANGED) );
+	assert(val == 0);
+	//FIXME test toggling
+
+	d2tk_base_free(base);
+#undef ntims
+}
+
+static void
+_test_combo_mouse_down_inc()
+{
+#define nitms 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_base_set_mouse_pos(base, DIM_W-1, DIM_H-1);
+	d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
+
+	const char *itms [nitms] = {
+		"1", "2", "3", "4"
+	};
+	int32_t val = 1;
+	const d2tk_state_t state = d2tk_base_combo(base, D2TK_ID, nitms, itms, &rect, &val);
+	assert(state == (D2TK_STATE_DOWN | D2TK_STATE_ACTIVE | D2TK_STATE_HOT
+		| D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN | D2TK_STATE_OVER
+		| D2TK_STATE_CHANGED) );
+	assert(val == 2);
+	//FIXME test toggling
+
+	d2tk_base_free(base);
+#undef ntims
+}
+
+static void
+_test_combo_mouse_down_equ()
+{
+#define nitms 4
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_base_set_mouse_pos(base, DIM_W/2, DIM_H/2);
+	d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
+
+	const char *itms [nitms] = {
+		NULL, NULL, NULL, NULL
+	};
+	int32_t val = 3;
+	const d2tk_state_t state = d2tk_base_combo(base, D2TK_ID, nitms, itms, &rect, &val);
+	assert(state == (D2TK_STATE_DOWN | D2TK_STATE_ACTIVE | D2TK_STATE_HOT
+		| D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN | D2TK_STATE_OVER) );
+	assert(val == 3);
 	//FIXME test toggling
 
 	d2tk_base_free(base);
@@ -1728,11 +2137,11 @@ _test_text_field()
 	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
 	assert(base);
 
-	d2tk_base_append_char(base, 'h');
-	d2tk_base_append_char(base, 'e');
-	d2tk_base_append_char(base, 'l');
-	d2tk_base_append_char(base, 'l');
-	d2tk_base_append_char(base, 'o');
+	d2tk_base_append_utf8(base, 'h');
+	d2tk_base_append_utf8(base, 'e');
+	d2tk_base_append_utf8(base, 'l');
+	d2tk_base_append_utf8(base, 'l');
+	d2tk_base_append_utf8(base, 'o');
 
 	char txt [32] = "foo bar";
 	const d2tk_state_t state = d2tk_base_text_field(base, D2TK_ID, &rect,
@@ -1764,7 +2173,7 @@ _test_label()
 }
 
 static void
-_test_link()
+_test_label_null()
 {
 	d2tk_mock_ctx_t ctx = {
 		.check = NULL
@@ -1774,10 +2183,85 @@ _test_link()
 	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
 	assert(base);
 
+	const char *lbl= NULL;
+	const d2tk_state_t state = d2tk_base_label(base, -1, lbl, 0.8f, &rect,
+		D2TK_ALIGN_LEFT);
+	assert(state == D2TK_STATE_NONE);
+
+	d2tk_base_free(base);
+}
+
+static void
+_test_label_filled()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_style_t style = *d2tk_base_get_default_style();
+	style.text_fill_color[D2TK_TRIPLE_NONE] = 0xff0000ff;
+	d2tk_base_set_style(base, &style);
+
+	const char *lbl= "label";
+	const d2tk_state_t state = d2tk_base_label(base, -1, lbl, 0.8f, &rect,
+		D2TK_ALIGN_LEFT);
+	assert(state == D2TK_STATE_NONE);
+
+	d2tk_base_free(base);
+}
+
+static void
+_test_link()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	assert(base);
+
+	{
+		const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W/2, DIM_H);
+		const char *lbl= "link1";
+		const d2tk_state_t state = d2tk_base_link(base, D2TK_ID, -1, lbl, 0.8f,
+			&rect, D2TK_ALIGN_LEFT);
+		assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
+			| D2TK_STATE_OVER) );
+	}
+
+	{
+		const d2tk_rect_t rect = D2TK_RECT(DIM_W/2, 0, DIM_W/2, DIM_H);
+		const char *lbl= "link2";
+		const d2tk_state_t state = d2tk_base_link(base, D2TK_ID, -1, lbl, 0.8f,
+			&rect, D2TK_ALIGN_LEFT);
+		assert(state == (D2TK_STATE_NONE) );
+	}
+
+	d2tk_base_free(base);
+}
+
+static void
+_test_link_down()
+{
+	d2tk_mock_ctx_t ctx = {
+		.check = NULL
+	};
+
+	d2tk_base_t *base = d2tk_base_new(&d2tk_mock_driver_lazy, &ctx);
+	const d2tk_rect_t rect = D2TK_RECT(0, 0, DIM_W, DIM_H);
+	assert(base);
+
+	d2tk_base_set_butmask(base, D2TK_BUTMASK_LEFT, true);
+
 	const char *lbl= "link";
 	const d2tk_state_t state = d2tk_base_link(base, D2TK_ID, -1, lbl, 0.8f, &rect,
 		D2TK_ALIGN_LEFT);
-	assert(state == (D2TK_STATE_HOT | D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN
+	assert(state == (D2TK_STATE_DOWN | D2TK_STATE_ACTIVE | D2TK_STATE_HOT
+		| D2TK_STATE_FOCUS | D2TK_STATE_FOCUS_IN | D2TK_STATE_CHANGED
 		| D2TK_STATE_OVER) );
 
 	d2tk_base_free(base);
@@ -2029,7 +2513,11 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	_test_frame_with_label();
 	_test_frame_wo_label();
 	_test_layout_relative_x();
+	_test_layout_relative_zero_x();
+	_test_layout_relative_all_x();
 	_test_layout_relative_y();
+	_test_layout_relative_zero_y();
+	_test_layout_relative_all_y();
 	_test_layout_absolute_x();
 	_test_layout_absolute_y();
 	_test_clip();
@@ -2051,12 +2539,21 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	_test_bitmap();
 	_test_custom();
 	_test_meter();
+	_test_meter_down();
 	_test_combo();
 	_test_combo_scroll_up();
+	_test_combo_scroll_right();
 	_test_combo_scroll_down();
+	_test_combo_scroll_left();
+	_test_combo_mouse_down_dec();
+	_test_combo_mouse_down_inc();
+	_test_combo_mouse_down_equ();
 	_test_text_field();
 	_test_label();
+	_test_label_null();
+	_test_label_filled();
 	_test_link();
+	_test_link_down();
 	_test_dial_bool();
 	_test_dial_int32();
 	_test_dial_int64();

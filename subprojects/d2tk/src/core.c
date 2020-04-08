@@ -33,6 +33,10 @@
 #include "core_internal.h"
 #include <d2tk/hash.h>
 
+#if D2TK_FONTCONFIG
+#	include <fontconfig/fontconfig.h>
+#endif
+
 #define _D2TK_SPRITES_MAX			0x10000 //FIXME how big?
 #define _D2TK_SPRITES_MASK		(_D2TK_SPRITES_MAX - 1)
 #define _D2TK_SPRITES_TTL			0x100
@@ -260,7 +264,7 @@ _d2tk_mem_reset(d2tk_mem_t *mem)
 	memset(mem->buf, 0x0, mem->size);
 }
 
-static uintptr_t *
+static inline uintptr_t *
 _d2tk_core_get_memcache(d2tk_core_t *core, uint64_t hash)
 {
 	for(unsigned i = 0; i < _D2TK_MEMCACHES_MAX; i++)
@@ -484,7 +488,74 @@ _d2tk_bitmap_fill(d2tk_core_t *core, const d2tk_clip_t *clip)
 	bitmap->nfills++;
 }
 
-static void
+static inline d2tk_com_t *
+_d2tk_com_begin(d2tk_com_t *com)
+{
+	d2tk_com_t *bbox = (d2tk_com_t *)((uint8_t *)com + sizeof(d2tk_com_t)
+		+ D2TK_PAD_SIZE(sizeof(d2tk_body_bbox_t)));
+
+	return bbox;
+}
+
+static inline d2tk_com_t *
+_d2tk_com_get_end(d2tk_com_t *com)
+{
+	return (d2tk_com_t *)((uint8_t *)com + sizeof(d2tk_com_t)
+		+ com->size);
+}
+
+static inline bool
+_d2tk_com_not_end(d2tk_com_t *end, d2tk_com_t *bbox)
+{
+	return bbox < end;
+}
+
+static inline d2tk_com_t *
+_d2tk_com_next(d2tk_com_t *bbox)
+{
+	d2tk_com_t *nxt = (d2tk_com_t *)((uint8_t *)bbox + sizeof(d2tk_com_t)
+		+ D2TK_PAD_SIZE(bbox->size));
+
+	return nxt;
+}
+
+const d2tk_com_t *
+d2tk_com_begin_const(const d2tk_com_t *com)
+{
+	return _d2tk_com_begin((d2tk_com_t *)com);
+}
+
+const d2tk_com_t *
+d2tk_com_get_end_const(const d2tk_com_t *com)
+{
+	return _d2tk_com_get_end((d2tk_com_t *)com);
+}
+
+bool
+d2tk_com_not_end_const(const d2tk_com_t *end, const d2tk_com_t *bbox)
+{
+	return _d2tk_com_not_end((d2tk_com_t *)end, (d2tk_com_t *)bbox);
+}
+
+const d2tk_com_t *
+d2tk_com_next_const(const d2tk_com_t *bbox)
+{
+	return _d2tk_com_next((d2tk_com_t *)bbox);
+}
+
+#define D2TK_COM_FOREACH_FROM(COM, FROM, BBOX) \
+	for(d2tk_com_t *(BBOX) = (FROM), \
+			*__end = _d2tk_com_get_end((COM)); \
+		_d2tk_com_not_end(__end, (BBOX)); \
+		(BBOX) = _d2tk_com_next((BBOX)))
+
+#define D2TK_COM_FOREACH(COM, BBOX) \
+	for(d2tk_com_t *(BBOX) = _d2tk_com_begin((COM)), \
+			*__end = _d2tk_com_get_end((COM)); \
+		_d2tk_com_not_end(__end, (BBOX)); \
+		(BBOX) = _d2tk_com_next((BBOX)))
+
+static inline void
 _d2tk_bbox_mask(d2tk_core_t *core, d2tk_com_t *com)
 {
 	d2tk_body_bbox_t *body = &com->body->bbox;
@@ -518,7 +589,7 @@ d2tk_core_get_pixels(d2tk_core_t *core, d2tk_rect_t *rect)
 	return core->bitmap.pixels;
 }
 
-static bool
+static inline bool
 _d2tk_bitmap_query(d2tk_core_t *core, d2tk_body_bbox_t *body)
 {
 	const d2tk_clip_t *clip = &body->clip;
@@ -561,7 +632,7 @@ _d2tk_mem_compact(d2tk_mem_t *mem)
 	}
 }
 
-static d2tk_com_t *
+static inline d2tk_com_t *
 _d2tk_mem_get_com(d2tk_mem_t *mem)
 {
 	return (d2tk_com_t *)&mem->buf[0];
@@ -1162,58 +1233,8 @@ d2tk_core_stroke_width(d2tk_core_t *core, d2tk_coord_t width)
 	}
 }
 
-const d2tk_com_t *
-d2tk_com_begin_const(const d2tk_com_t *com)
-{
-	d2tk_com_t *bbox = (d2tk_com_t *)((uint8_t *)com + sizeof(d2tk_com_t)
-		+ D2TK_PAD_SIZE(sizeof(d2tk_body_bbox_t)));
-
-	return bbox;
-}
-
-bool
-d2tk_com_not_end_const(const d2tk_com_t *com, const d2tk_com_t *bbox)
-{
-	return bbox < (d2tk_com_t *)((uint8_t *)com + sizeof(d2tk_com_t)
-		+ com->size);
-}
-
-const d2tk_com_t *
-d2tk_com_next_const(const d2tk_com_t *bbox)
-{
-	d2tk_com_t *nxt = (d2tk_com_t *)((uint8_t *)bbox + sizeof(d2tk_com_t)
-		+ D2TK_PAD_SIZE(bbox->size));
-
-	return nxt;
-}
-
-d2tk_com_t *
-d2tk_com_begin(d2tk_com_t *com)
-{
-	d2tk_com_t *bbox = (d2tk_com_t *)((uint8_t *)com + sizeof(d2tk_com_t)
-		+ D2TK_PAD_SIZE(sizeof(d2tk_body_bbox_t)));
-
-	return bbox;
-}
-
-bool
-d2tk_com_not_end(d2tk_com_t *com, d2tk_com_t *bbox)
-{
-	return bbox < (d2tk_com_t *)((uint8_t *)com + sizeof(d2tk_com_t)
-		+ com->size);
-}
-
-d2tk_com_t *
-d2tk_com_next(d2tk_com_t *bbox)
-{
-	d2tk_com_t *nxt = (d2tk_com_t *)((uint8_t *)bbox + sizeof(d2tk_com_t)
-		+ D2TK_PAD_SIZE(bbox->size));
-
-	return nxt;
-}
-
-D2TK_API void
-d2tk_core_pre(d2tk_core_t *core)
+D2TK_API int
+d2tk_core_pre(d2tk_core_t *core, void *pctx)
 {
 	d2tk_mem_t *curmem = &core->mem[core->curmem];
 
@@ -1221,11 +1242,12 @@ d2tk_core_pre(d2tk_core_t *core)
 
 	core->parent = d2tk_core_bbox_container_push(core, 0,
 		&D2TK_RECT(0, 0, core->w, core->h));
+
+	return core->driver->context(core->data, pctx);
 }
 
-static bool
-_d2tk_com_equal(const d2tk_com_t *curcom, const d2tk_com_t *oldcom,
-	bool check_for_container)
+static inline bool
+_d2tk_com_equal_container(const d2tk_com_t *curcom, const d2tk_com_t *oldcom)
 {
 	const d2tk_body_bbox_t *curbbox = &curcom->body->bbox;
 	const d2tk_body_bbox_t *oldbbox = &oldcom->body->bbox;
@@ -1239,7 +1261,7 @@ _d2tk_com_equal(const d2tk_com_t *curcom, const d2tk_com_t *oldcom,
 		{
 			return true;
 		}
-		else if(check_for_container && curbbox->container && oldbbox->container)
+		else if(curbbox->container && oldbbox->container)
 		{
 			return true;
 		}
@@ -1248,11 +1270,29 @@ _d2tk_com_equal(const d2tk_com_t *curcom, const d2tk_com_t *oldcom,
 	return false;
 }
 
-static void
+static inline bool
+_d2tk_com_equal(const d2tk_com_t *curcom, const d2tk_com_t *oldcom)
+{
+	const d2tk_body_bbox_t *curbbox = &curcom->body->bbox;
+	const d2tk_body_bbox_t *oldbbox = &oldcom->body->bbox;
+
+	if(  (curcom->instr == oldcom->instr)
+		&& (curbbox->clip.x0 == oldbbox->clip.x0)
+		&& (curbbox->clip.y0 == oldbbox->clip.y0)
+		&& (curcom->size == oldcom->size)
+		&& (curbbox->hash == oldbbox->hash) )
+	{
+		return true;
+	}
+
+	return false;
+}
+
+static inline void
 _d2tk_diff(d2tk_core_t *core, d2tk_com_t *curcom_ref, d2tk_com_t *oldcom_ref)
 {
 	// look for (dis)appeared instructions
-	d2tk_com_t *tmpcom = d2tk_com_begin(curcom_ref);
+	d2tk_com_t *tmpcom = _d2tk_com_begin(curcom_ref);
 
 	D2TK_COM_FOREACH(oldcom_ref, oldcom)
 	{
@@ -1271,11 +1311,11 @@ _d2tk_diff(d2tk_core_t *core, d2tk_com_t *curcom_ref, d2tk_com_t *oldcom_ref)
 			}
 
 			// check for matching size, instruction, hash and position
-			if(_d2tk_com_equal(curcom, oldcom, true))
+			if(_d2tk_com_equal_container(curcom, oldcom))
 			{
 				for(d2tk_com_t *curcom2 = tmpcom;
 					curcom2 != curcom;
-					curcom2 = d2tk_com_next(curcom2))
+					curcom2 = _d2tk_com_next(curcom2))
 				{
 					if(curcom2->instr != D2TK_INSTR_BBOX)
 					{
@@ -1305,7 +1345,7 @@ _d2tk_diff(d2tk_core_t *core, d2tk_com_t *curcom_ref, d2tk_com_t *oldcom_ref)
 				}
 
 				match = true;
-				tmpcom = d2tk_com_next(curcom);
+				tmpcom = _d2tk_com_next(curcom);
 
 				break;
 			}
@@ -1378,7 +1418,7 @@ d2tk_core_post(d2tk_core_t *core)
 		_d2tk_sprites_free(core);
 		_d2tk_memcaches_free(core);
 	}
-	else if(!_d2tk_com_equal(curcom, oldcom, false))
+	else if(!_d2tk_com_equal(curcom, oldcom))
 	{
 		_d2tk_diff(core, curcom, oldcom);
 	}
@@ -1504,6 +1544,8 @@ d2tk_core_post(d2tk_core_t *core)
 		}
 	}
 
+	core->driver->end(core->data, core, core->w, core->h);
+
 	_d2tk_sprites_gc(core);
 	_d2tk_memcaches_gc(core);
 
@@ -1576,7 +1618,7 @@ d2tk_core_set_dimensions(d2tk_core_t *core, d2tk_coord_t w, d2tk_coord_t h)
 {
 	core->w = w;
 	core->h = h;
-	core->full_refresh = true;
+	d2tk_core_set_full_refresh(core);
 	_d2tk_bitmap_resize(core, w, h);
 }
 
@@ -1592,4 +1634,53 @@ d2tk_core_get_dimensions(d2tk_core_t *core, d2tk_coord_t *w, d2tk_coord_t *h)
 	{
 		*h = core->h;
 	}
+}
+
+D2TK_API void
+d2tk_core_set_full_refresh(d2tk_core_t *core)
+{
+	core->full_refresh = true;
+}
+
+int
+d2tk_core_get_font_path(d2tk_core_t *core, const char *bundle_path,
+	const char *rel_path, size_t abs_len, char *abs_path)
+{
+	int ret = 1;
+
+#if D2TK_FONTCONFIG
+	(void)core;
+	(void)bundle_path;
+
+	FcConfig *config = FcInitLoadConfigAndFonts();
+	FcPattern *pat = FcNameParse((FcChar8 *)rel_path);
+	FcConfigSubstitute(config, pat, FcMatchPattern);
+	FcDefaultSubstitute(pat);
+
+	//FcPatternPrint(pat);
+
+	FcResult result;
+	FcPattern *font = FcFontMatch(config, pat, &result);
+	if(font)
+	{
+		FcChar8 *file = NULL;
+		if(FcPatternGetString(font, FC_FILE, 0, &file) == FcResultMatch)
+		{
+			snprintf(abs_path, abs_len, "%s", file);
+			ret = 0;
+		}
+
+		FcPatternDestroy(font);
+	}
+
+	FcPatternDestroy(pat);
+
+	FcConfigDestroy(config);
+#else
+	(void)core;
+	snprintf(abs_path, abs_len, "%s%s.ttf", bundle_path, rel_path);
+	ret = 0;
+#endif
+
+	return ret;
 }
