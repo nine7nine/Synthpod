@@ -8,7 +8,7 @@ dsp_srcs = ['synthpod_lv2.c',
 	'synthpod_placeholder.c',
 	'synthpod_stereo.c']
 
-nk_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, cairo_dep]
+nk_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, cairo_dep, nk_pugl_dep]
 nk_srcs = ['synthpod_lv2_nk.c',
 	'synthpod_keyboard_nk.c',
 	'synthpod_common_nk.c']
@@ -31,24 +31,10 @@ conf_data.set('MODULE_SUFFIX', '.' + suffix)
 	
 if host_machine.system() == 'linux'
 	conf_data.set('UI_TYPE', 'X11UI')
-	nk_deps += gl_dep
-	nk_deps += x11_dep
-	nk_deps += xext_dep
-	nk_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_x11.c')
 elif host_machine.system() == 'windows'
-	add_languages('cpp')
 	conf_data.set('UI_TYPE', 'WindowsUI')
-	nk_deps += cc.find_library('opengl32')
-	nk_deps += cc.find_library('gdi32')
-	nk_deps += cc.find_library('user32')
-	nk_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_win.cpp')
 elif host_machine.system() == 'darwin'
-	#add_languages('objc')
 	conf_data.set('UI_TYPE', 'CocoaUI')
-	#nk_deps += cc.find_library('Cocoa')
-	#nk_deps += cc.find_library('gl')
-	#nk_deps += dependency('appleframeworks', modules : 'cocoa')
-	#nk_srcs += join_paths('..', 'pugl', 'pugl', 'pugl_osx.m')
 endif
 
 ttls = []

@@ -40,6 +40,7 @@
 #include <errno.h> // waitpid
 #include <time.h>
 #include <signal.h> // kill
+#include <inttypes.h> // kill
 
 #define NK_PUGL_API
 #include <nk_pugl/nk_pugl.h>
@@ -698,7 +699,10 @@ _image_new(plughandle_t *handle, unsigned w, unsigned h, const void *data)
 	}
 #endif
 
-	puglEnterContext(handle->win.view);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+	puglEnterContext(handle->win.view, false);
+#pragma GCC diagnostic pop
 	{
 		glGenTextures(1, &tex);
 		glBindTexture(GL_TEXTURE_2D, tex);
@@ -712,7 +716,10 @@ _image_new(plughandle_t *handle, unsigned w, unsigned h, const void *data)
 		if(handle->win.glGenerateMipmap)
 			handle->win.glGenerateMipmap(GL_TEXTURE_2D);
 	}
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 	puglLeaveContext(handle->win.view, false);
+#pragma GCC diagnostic pop
 
 	return nk_image_id(tex);
 }
@@ -723,12 +730,18 @@ _image_free(plughandle_t *handle, struct nk_image *img)
 	DBG;
 	if(img->handle.id)
 	{
-		puglEnterContext(handle->win.view);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+		puglEnterContext(handle->win.view, false);
+#pragma GCC diagnostic pop
 		{
 			glDeleteTextures(1, (const GLuint *)&img->handle.id);
 			img->handle.id = 0;
 		}
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 		puglLeaveContext(handle->win.view, false);
+#pragma GCC diagnostic pop
 	}
 }
 

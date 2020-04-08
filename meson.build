@@ -8,6 +8,7 @@ project('synthpod', ['c', 'cpp'], default_options : [
 build_root = meson.build_root()
 
 d2tk = subproject('d2tk')
+nk_pugl = subproject('nk_pugl')
 
 use_backend = get_option('ui-backend')
 if use_backend == 'nanovg'
@@ -17,6 +18,8 @@ elif use_backend == 'cairo'
 else
 	error('no valid UI backend given')
 endif
+	
+nk_pugl_dep = nk_pugl.get_variable('nk_pugl_gl')
 
 cc = meson.get_compiler('c')
 lv2_validate = find_program('lv2_validate', native : true, required : false)
@@ -37,13 +40,13 @@ mapper_incs = include_directories('mapper.lv2')
 sbox_incs = include_directories('sandbox_ui.lv2')
 netatom_incs = include_directories('netatom.lv2')
 props_incs = include_directories('props.lv2')
-pugl_incs = include_directories('pugl')
 jackey_incs = include_directories('jackey')
 nsmc_incs = include_directories('nsmc')
 self_incs = include_directories('')
 d2tk_incs = include_directories(join_paths('subprojects', 'd2tk'))
+nk_pugl_incs = include_directories(join_paths('subprojects', 'nk_pugl'))
 
-bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, pugl_incs, jackey_incs, nsmc_incs, self_incs, d2tk_incs]
+bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, jackey_incs, nsmc_incs, self_incs, d2tk_incs, nk_pugl_incs]
 
 static_link = meson.is_cross_build() and false #FIXME
 
