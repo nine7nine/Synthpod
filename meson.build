@@ -10,10 +10,9 @@ build_root = meson.build_root()
 d2tk = subproject('d2tk')
 nk_pugl = subproject('nk_pugl')
 
-use_backend = get_option('ui-backend')
-if use_backend == 'nanovg'
+if get_option('use-backend-nanovg').enabled()
 	d2tk_dep = d2tk.get_variable('d2tk_nanovg')
-elif use_backend == 'cairo'
+elif get_option('use-backend-cairo').enabled()
 	d2tk_dep = d2tk.get_variable('d2tk_cairo')
 else
 	error('no valid UI backend given')

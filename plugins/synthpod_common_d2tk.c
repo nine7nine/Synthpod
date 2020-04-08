@@ -137,7 +137,7 @@ struct _plughandle_t {
 	LV2_Log_Logger logger;
 
 	d2tk_pugl_config_t config;
-	d2tk_pugl_t *dpugl;
+	d2tk_frontend_t *dpugl;
 
 	LV2UI_Controller *controller;
 	LV2UI_Write_Function writer;
@@ -283,7 +283,7 @@ _plug_populate(plughandle_t *handle, const char *pattern)
 		}
 		else
 		{
-			d2tk_pugl_redisplay(handle->dpugl); // schedule redisplay until done
+			d2tk_frontend_redisplay(handle->dpugl); // schedule redisplay until done
 		}
 	}
 	else // normal operation
@@ -321,8 +321,8 @@ static inline void
 _expose_plugin_list_header(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	if(_initializing(handle) || _lazy_loading(handle)) // still loading ?
 	{
@@ -341,16 +341,17 @@ static inline void
 _expose_plugin_list_body(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	const unsigned dd = 24;
 	const unsigned dn = rect->h / dd;
 
 	handle->plug_info = NULL;
 
-	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
-		0, handle->nplugs, 0, dn, vscroll)
+	const uint32_t max [2] = { 0, handle->nplugs };
+	const uint32_t num [2] = { 0, dn };
+	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y, max, num, vscroll)
 	{
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
 		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
@@ -387,8 +388,8 @@ static inline void
 _expose_plugin_list(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	static const d2tk_coord_t vfrac [3] = { 24, 0 };
 	D2TK_BASE_LAYOUT(rect, 2, vfrac, D2TK_FLAG_LAYOUT_Y_ABS, vlay)
@@ -481,8 +482,8 @@ static inline void
 _expose_sidebar_bottom(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	if(!handle->plug_info)
 	{
@@ -493,8 +494,9 @@ _expose_sidebar_bottom(plughandle_t *handle, const d2tk_rect_t *rect)
 	const unsigned dn = rect->h / dd;
 	const unsigned en = 9;
 
-	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y,
-		0, en, 0, dn, vscroll)
+	const uint32_t max [2] = { 0, en };
+	const uint32_t num [2] = { 0, dn };
+	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID, D2TK_FLAG_SCROLL_Y, max, num, vscroll)
 	{
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
 		const d2tk_rect_t *col = d2tk_scrollbar_get_rect(vscroll);
@@ -589,8 +591,8 @@ static inline void
 _expose_sidebar(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	D2TK_BASE_PANE(base, rect, D2TK_ID, D2TK_FLAG_PANE_Y,
 		0.6f, 1.f, 0.05f, vpane)
@@ -616,7 +618,7 @@ static inline void
 _expose_patchmatrix_mod(plughandle_t *handle, mod_t *mod,
 	const d2tk_rect_t *rect)
 {
-	d2tk_base_t *base = d2tk_pugl_get_base(handle->dpugl);
+	d2tk_base_t *base = d2tk_frontend_get_base(handle->dpugl);
 	const stat_label_t *label = mod->alias.len
 		? &mod->alias
 		: &mod->name;
@@ -633,7 +635,7 @@ static inline void
 _expose_patchmatrix_connection(plughandle_t *handle, unsigned o,
 	mod_t *mod_src, mod_t *mod_snk, const d2tk_rect_t *rect)
 {
-	d2tk_base_t *base = d2tk_pugl_get_base(handle->dpugl);
+	d2tk_base_t *base = d2tk_frontend_get_base(handle->dpugl);
 
 	D2TK_BASE_FRAME(base, rect, 0, NULL, frm)
 	{
@@ -662,7 +664,7 @@ _expose_patchmatrix_connection(plughandle_t *handle, unsigned o,
 static inline void
 _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 {
-	d2tk_base_t *base = d2tk_pugl_get_base(handle->dpugl);
+	d2tk_base_t *base = d2tk_frontend_get_base(handle->dpugl);
 	const unsigned dd = 128;
 	const unsigned N = handle->nmods;
 
@@ -674,8 +676,10 @@ _expose_patchmatrix(plughandle_t *handle, const d2tk_rect_t *rect)
 	const unsigned dw = rect->w / dd;
 	const unsigned dh = rect->h / dd;
 
+	const uint32_t max [2] = { N, N };
+	const uint32_t num [2] = { dw, dh };
 	D2TK_BASE_SCROLLBAR(base, rect, D2TK_ID,
-		D2TK_FLAG_SCROLL_X | D2TK_FLAG_SCROLL_Y, N, N, dw, dh, vscroll)
+		D2TK_FLAG_SCROLL_X | D2TK_FLAG_SCROLL_Y, max, num, vscroll)
 	{
 		const float hoffset = d2tk_scrollbar_get_offset_x(vscroll);
 		const float voffset = d2tk_scrollbar_get_offset_y(vscroll);
@@ -720,8 +724,8 @@ static inline void
 _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 {
 	DBG;
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	D2TK_BASE_FLOWMATRIX(base, rect, D2TK_ID, flowm)
 	{
@@ -746,7 +750,7 @@ _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 				state = d2tk_base_toggle_label(base, id, label->len, label->buf,
 					D2TK_ALIGN_CENTERED, bnd, &mod->selected);
 
-				if(d2tk_base_get_ctrl(base))
+				if(d2tk_base_get_modmask(base, D2TK_MODMASK_CTRL, false))
 				{
 					continue;
 				}
@@ -778,8 +782,8 @@ _expose_patchbay(plughandle_t *handle, const d2tk_rect_t *rect)
 static inline void
 _expose_status_bar(plughandle_t *handle, const d2tk_rect_t *rect)
 {
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	static const d2tk_coord_t hfrac [5] = { 4, 1, 1, 1, 1 };
 	D2TK_BASE_LAYOUT(rect, 5, hfrac, D2TK_FLAG_LAYOUT_X_REL, hlay)
@@ -823,8 +827,8 @@ _expose_status_bar(plughandle_t *handle, const d2tk_rect_t *rect)
 static inline void
 _expose_main_area(plughandle_t *handle, const d2tk_rect_t *rect)
 {
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 
 	D2TK_BASE_PANE(base, rect, D2TK_ID, D2TK_FLAG_PANE_X,
 		0.0f, 0.2f, 0.05f, hpane)
@@ -858,8 +862,8 @@ _expose(void *data, d2tk_coord_t w, d2tk_coord_t h)
 {
 	DBG;
 	plughandle_t *handle = data;
-	d2tk_pugl_t *dpugl = handle->dpugl;
-	d2tk_base_t *base = d2tk_pugl_get_base(dpugl);
+	d2tk_frontend_t *dpugl = handle->dpugl;
+	d2tk_base_t *base = d2tk_frontend_get_base(dpugl);
 	const d2tk_rect_t rect = D2TK_RECT(0, 0, w, h);
 
 	if(_lazy_loading(handle))
@@ -1016,7 +1020,7 @@ cleanup(LV2UI_Handle instance)
 	DBG;
 	plughandle_t *handle = instance;
 
-	d2tk_pugl_free(handle->dpugl);
+	d2tk_frontend_free(handle->dpugl);
 
 	sp_regs_deinit(&handle->regs);
 
@@ -1651,7 +1655,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 		return;
 	}
 
-	d2tk_pugl_redisplay(handle->dpugl); //FIXME only do when needed
+	d2tk_frontend_redisplay(handle->dpugl); //FIXME only do when needed
 }
 
 static void
@@ -1761,7 +1765,7 @@ _idle(LV2UI_Handle instance)
 	DBG;
 	plughandle_t *handle = instance;
 
-	const int res = d2tk_pugl_step(handle->dpugl);
+	const int res = d2tk_frontend_step(handle->dpugl);
 
 	if(_initializing(handle))
 	{
@@ -1781,7 +1785,7 @@ _resize(LV2UI_Handle instance, int width, int height)
 	DBG;
 	plughandle_t *handle = instance;
 
-	return d2tk_pugl_resize(handle->dpugl, width, height);
+	return d2tk_frontend_set_size(handle->dpugl, width, height);
 }
 
 static const LV2UI_Resize resize_ext = {
