@@ -71,6 +71,7 @@ x11_dep = dependency('x11', version : '>=1.6.0', required : use_x11)
 xext_dep = dependency('xext', version : '>=1.3.0', required : use_x11)
 xcb_dep = dependency('xcb', version : '>=1.12', required : use_x11)
 xcbicccm_dep = dependency('xcb-icccm', version : '>=0.4.0', required : use_x11)
+xcbxrm_dep = dependency('xcb-xrm', version : '>=1.3', required : use_x11)
 gtk2_dep = dependency('gtk+-2.0', version : '>=2.24', required : use_gtk2)
 gtk3_dep = dependency('gtk+-3.0', version : '>=3.22', required : use_gtk3)
 qt4_dep = dependency('qt4', modules : ['Core', 'Gui'], required : use_qt4)
@@ -100,7 +101,7 @@ if use_x11 and gl_dep.found()
 	add_project_arguments('-DPUGL_HAVE_GL', language : 'c')
 endif
 
-if use_x11 and xcb_dep.found() and xcbicccm_dep.found()
+if use_x11 and xcb_dep.found() and xcbicccm_dep.found() and xcbxrm_dep.found()
 	message('building X11 sandbox')
 endif
 

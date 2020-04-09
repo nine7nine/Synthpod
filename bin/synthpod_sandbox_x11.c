@@ -30,6 +30,7 @@
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_icccm.h>
+#include <xcb/xcb_xrm.h>
 #include <signal.h>
 
 typedef struct _app_t app_t;
@@ -134,6 +135,27 @@ _init(sandbox_slave_t *sb, void *data)
 	xcb_create_window(app->conn, XCB_COPY_FROM_PARENT, app->win, app->screen->root,
 		0, 0, app->w, app->h, 0,
 		XCB_WINDOW_CLASS_INPUT_OUTPUT, app->screen->root_visual, mask, values);
+
+	const float dpi0 = 96.f;
+	float dpi1 = dpi0;
+
+	// read DPI from users's ~/.Xresources
+	xcb_xrm_database_t *database = xcb_xrm_database_from_default(app->conn);
+	if(database != NULL)
+	{
+		char *value = NULL;
+
+		if(xcb_xrm_resource_get_string(database, "Xft.dpi", NULL, &value) >= 0)
+		{
+			dpi1 = atof(value);
+			free(value);
+		}
+
+		xcb_xrm_database_free(database);
+	}
+
+	const float scale_factor = dpi1 / dpi0;
+	sandbox_slave_scale_factor_set(sb, scale_factor);
 
 	const char *title = sandbox_slave_title_get(sb);
 	if(title)

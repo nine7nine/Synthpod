@@ -1130,3 +1130,12 @@ sandbox_slave_no_user_resize_get(sandbox_slave_t *sb)
 
 	return false;
 }
+
+void
+sandbox_slave_scale_factor_set(sandbox_slave_t *sb, float scale_factor)
+{
+	if(sb)
+	{
+		sb->scale_factor = scale_factor;
+	}
+}

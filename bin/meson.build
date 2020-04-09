@@ -50,13 +50,13 @@ if use_jack and jack_dep.found()
 	install_man('synthpod_jack.1')
 endif
 
-if use_x11 and xcb_dep.found() and xcbicccm_dep.found()
+if use_x11 and xcb_dep.found() and xcbicccm_dep.found() and xcbxrm_dep.found()
 	x11_srcs = ['synthpod_sandbox_x11.c']
 
 	x11 = executable('synthpod_sandbox_x11', x11_srcs,
 		include_directories : bin_incs,
 		c_args : c_args,
-		dependencies : [lv2_dep, rt_dep, thread_dep, xcb_dep, xcbicccm_dep],
+		dependencies : [lv2_dep, rt_dep, thread_dep, xcb_dep, xcbicccm_dep, xcbxrm_dep],
 		link_with : [sbox_slave],
 		install : true)
 endif
