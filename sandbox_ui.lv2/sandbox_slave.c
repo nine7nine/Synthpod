@@ -161,17 +161,27 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 
 	int idx = COLOR_LOG;
 	if(type == sb->log_trace)
+	{
 		idx = COLOR_TRACE;
+	}
 	else if(type == sb->log_error)
+	{
 		idx = COLOR_ERROR;
+	}
 	else if(type == sb->log_note)
+	{
 		idx = COLOR_NOTE;
+	}
 	else if(type == sb->log_warning)
+	{
 		idx = COLOR_WARNING;
+	}
 
 	char *buf;
 	if(vasprintf(&buf, fmt, args) == -1)
+	{
 		buf = NULL;
+	}
 
 	if(buf)
 	{
@@ -185,7 +195,9 @@ _log_vprintf(LV2_Log_Handle handle, LV2_URID type, const char *fmt, va_list args
 			{
 				fprintf(stderr, "%s %s ", prefix[istty][COLOR_UI], prefix[istty][idx]);
 				if(sb->plugin_urn)
+				{
 					fprintf(stderr, "%s%s%s ", prefix[istty][COLOR_URN1], sb->plugin_urn, prefix[istty][COLOR_URN2]);
+				}
 				fprintf(stderr, "%s\n", pch);
 			}
 		}
@@ -220,7 +232,9 @@ _port_index(LV2UI_Feature_Handle handle, const char *symbol)
 		const LilvPort *port = lilv_plugin_get_port_by_symbol(sb->plug, symbol_uri);
 
 		if(port)
+		{
 			index = lilv_port_get_index(sb->plug, port);
+		}
 
 		lilv_node_free(symbol_uri);
 	}
@@ -282,6 +296,31 @@ _touch(LV2UI_Feature_Handle handle, uint32_t index, bool grabbed)
 	return;
 }
 
+static uint8_t *
+_file_read(const char *path, size_t *len)
+{
+	const int fd = open(path, O_RDONLY);
+
+	if(fd == -1)
+	{
+		fprintf(stderr, "open: %s '%s'\n", path, strerror(errno));
+		return NULL;
+	}
+
+	lseek(fd, 0, SEEK_SET);
+	*len = lseek(fd, 0, SEEK_END);
+
+	uint8_t *buf = malloc(*len);
+	memset(buf, 0x0, *len);
+
+	lseek(fd, 0, SEEK_SET);
+	read(fd, buf, *len);
+
+	close(fd);
+
+	return buf;
+}
+
 static inline LV2UI_Request_Value_Status
 _request_value(LV2UI_Feature_Handle handle, LV2_URID key, LV2_URID type,
 	const LV2_Feature* const* features __attribute__((unused)))
@@ -289,63 +328,159 @@ _request_value(LV2UI_Feature_Handle handle, LV2_URID key, LV2_URID type,
 	sandbox_slave_t *sb = handle;
 	char path [PATH_MAX];
 
+	if(type == 0)
+	{
+		LilvNode *subj = lilv_new_uri(sb->world, sb->unmap->unmap(sb->unmap->handle, key));
+		LilvNode *pred = lilv_new_uri(sb->world, LILV_NS_RDFS"range");
+		LilvNode *obj = lilv_world_get(sb->world, subj, pred, NULL);
+
+		type = sb->map->map(sb->map->handle, lilv_node_as_uri(obj));
+
+		lilv_node_free(subj);
+		lilv_node_free(pred);
+		lilv_node_free(obj);
+	}
+
 	if(!sb->driver || !sb->driver->request_cb)
 	{
 			return LV2UI_REQUEST_VALUE_ERR_UNKNOWN;
 	}
+
+	memset(path, 0x0, sizeof(path));
 
 	if(sb->driver->request_cb(sb->data, key, sizeof(path), path) != 0)
 	{
 		return LV2UI_REQUEST_VALUE_ERR_UNKNOWN;
 	}
 
+	if(strlen(path) == 0)
+	{
+		return LV2UI_REQUEST_VALUE_ERR_UNKNOWN;
+	}
+
+	// replace NL/CR with zero byte
+	char *endl = strpbrk(path, "\n\r");
+	if(endl)
+	{
+		*endl = '\0';
+	}
+
 	if(type == sb->forge.Path)
 	{
-		const uint32_t index = 0; //FIXME send to patch ports only
-		uint8_t buf [1204]; //FIXME use ser_atom
-		const LV2_Atom *atom = (const LV2_Atom *)buf;
-		LV2_Atom_Forge_Frame frame;
+		const uint32_t nports = lilv_plugin_get_num_ports(sb->plug);
+		LilvNode *patch_message_node = lilv_new_uri(sb->world, LV2_PATCH__Message);
+		LilvNode *core_inputport_node = lilv_new_uri(sb->world, LV2_CORE__InputPort);
+		LilvNode *atom_atomport_node = lilv_new_uri(sb->world, LV2_ATOM__AtomPort);
 
-		lv2_atom_forge_set_buffer(&sb->forge, buf, sizeof(buf));
-		lv2_atom_forge_object(&sb->forge, &frame, 0, sb->patch_Set);
-		lv2_atom_forge_key(&sb->forge, sb->patch_property);
-		lv2_atom_forge_urid(&sb->forge, key);
-		lv2_atom_forge_key(&sb->forge, sb->patch_value);
-		lv2_atom_forge_path(&sb->forge, path, strlen(path));
-		lv2_atom_forge_pop(&sb->forge, &frame);
+		for(uint32_t index= 0; index < nports; index++)
+		{
+			const LilvPort *port = lilv_plugin_get_port_by_index(sb->plug, index);
 
-		_write_function(handle, index, lv2_atom_total_size(atom),
-			sb->atom_eventTransfer, buf);
+			if(!lilv_port_is_a(sb->plug, port, core_inputport_node))
+			{
+				continue;
+			}
+
+			if(!lilv_port_is_a(sb->plug, port, atom_atomport_node))
+			{
+				continue;
+			}
+
+			if(!lilv_port_supports_event(sb->plug, port, patch_message_node))
+			{
+				continue;
+			}
+
+			uint8_t buf [PATH_MAX]; //FIXME use ser_atom
+			const LV2_Atom *atom = (const LV2_Atom *)buf;
+			LV2_Atom_Forge_Frame frame;
+
+			lv2_atom_forge_set_buffer(&sb->forge, buf, sizeof(buf));
+			lv2_atom_forge_object(&sb->forge, &frame, 0, sb->patch_Set);
+			lv2_atom_forge_key(&sb->forge, sb->patch_property);
+			lv2_atom_forge_urid(&sb->forge, key);
+			lv2_atom_forge_key(&sb->forge, sb->patch_value);
+			lv2_atom_forge_path(&sb->forge, path, strlen(path));
+			lv2_atom_forge_pop(&sb->forge, &frame);
+
+			_write_function(handle, index, lv2_atom_total_size(atom),
+				sb->atom_eventTransfer, buf);
+		}
+
+		lilv_node_free(patch_message_node);
+		lilv_node_free(core_inputport_node);
+		lilv_node_free(atom_atomport_node);
 
 		return LV2UI_REQUEST_VALUE_SUCCESS;
 	}
 	else if( (type == sb->forge.String)
 		|| (type == sb->forge.Chunk) )
 	{
-		const uint32_t index = 0; //FIXME send to patch ports only
-		uint8_t buf [1204]; //FIXME use ser_atom
-		const LV2_Atom *atom = (const LV2_Atom *)buf;
-		LV2_Atom_Forge_Frame frame;
+		const uint32_t nports = lilv_plugin_get_num_ports(sb->plug);
+		LilvNode *patch_message_node = lilv_new_uri(sb->world, LV2_PATCH__Message);
+		LilvNode *core_inputport_node = lilv_new_uri(sb->world, LV2_CORE__InputPort);
+		LilvNode *atom_atomport_node = lilv_new_uri(sb->world, LV2_ATOM__AtomPort);
 
-		const size_t size = 0;
-		void *body = NULL; //FIXME
-
-		if(body)
+		for(uint32_t index= 0; index < nports; index++)
 		{
-			lv2_atom_forge_set_buffer(&sb->forge, buf, sizeof(buf));
+			const LilvPort *port = lilv_plugin_get_port_by_index(sb->plug, index);
+
+			if(!lilv_port_is_a(sb->plug, port, core_inputport_node))
+			{
+				continue;
+			}
+
+			if(!lilv_port_is_a(sb->plug, port, atom_atomport_node))
+			{
+				continue;
+			}
+
+			if(!lilv_port_supports_event(sb->plug, port, patch_message_node))
+			{
+				continue;
+			}
+
+			size_t body_len= 0;
+			uint8_t *body = _file_read(path, &body_len);
+
+			if(!body)
+			{
+				continue;
+			}
+
+			const size_t buf_len = 1024 + body_len; //FIXME use ser_atom
+			uint8_t *buf = malloc(buf_len);
+
+			if(!buf)
+			{
+				free(body);
+				continue;
+			}
+
+			memset(buf, 0x0, buf_len);
+
+			const LV2_Atom *atom = (const LV2_Atom *)buf;
+			LV2_Atom_Forge_Frame frame;
+
+			lv2_atom_forge_set_buffer(&sb->forge, buf, buf_len);
 			lv2_atom_forge_object(&sb->forge, &frame, 0, sb->patch_Set);
 			lv2_atom_forge_key(&sb->forge, sb->patch_property);
 			lv2_atom_forge_urid(&sb->forge, key);
 			lv2_atom_forge_key(&sb->forge, sb->patch_value);
-			lv2_atom_forge_atom(&sb->forge, size, type);
-			lv2_atom_forge_write(&sb->forge, body, size);
+			lv2_atom_forge_atom(&sb->forge, body_len, type);
+			lv2_atom_forge_write(&sb->forge, body, body_len);
 			lv2_atom_forge_pop(&sb->forge, &frame);
 
 			_write_function(handle, index, lv2_atom_total_size(atom),
 				sb->atom_eventTransfer, buf);
 
 			free(body);
+			free(buf);
 		}
+
+		lilv_node_free(core_inputport_node);
+		lilv_node_free(atom_atomport_node);
+		lilv_node_free(patch_message_node);
 
 		return LV2UI_REQUEST_VALUE_SUCCESS;
 	}
@@ -360,7 +495,9 @@ _sandbox_recv_cb(LV2UI_Handle handle, uint32_t index, uint32_t size,
 	sandbox_slave_t *sb = handle;
 
 	if(sb->desc && sb->desc->port_event)
+	{
 		sb->desc->port_event(sb->handle, index, size, protocol, buf);
+	}
 
 	return true; // continue handling messages
 }
@@ -488,11 +625,17 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 				break;
 			case '?':
 				if( (optopt == 'n') || (optopt == 'p') || (optopt == 'P') || (optopt == 'u') || (optopt == 'U') || (optopt == 's') || (optopt == 'w') || (optopt == 'm') || (optopt == 'r') || (optopt == 'f') )
+				{
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
+				}
 				else if(isprint(optopt))
+				{
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+				}
 				else
+				{
 					fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+				}
 				goto fail;
 			default:
 				goto fail;
@@ -667,7 +810,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	{
 		const LV2UI_Descriptor *desc = desc_func(i);
 		if(!desc) // sentinel
+		{
 			break;
+		}
 
 		if(!strcmp(desc->URI, sb->ui_uri))
 		{
@@ -884,7 +1029,9 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 #endif
 
 	if(sb->handle)
+	{
 		return sb->handle; // success
+	}
 
 	return NULL;
 }
@@ -893,7 +1040,9 @@ int
 sandbox_slave_recv(sandbox_slave_t *sb)
 {
 	if(sb)
+	{
 		return _sandbox_io_recv(&sb->io, _sandbox_recv_cb, NULL, sb);
+	}
 
 	return -1;
 }
@@ -914,7 +1063,9 @@ const void *
 sandbox_slave_extension_data(sandbox_slave_t *sb, const char *URI)
 {
 	if(sb && sb->desc && sb->desc->extension_data)
+	{
 		return sb->desc->extension_data(URI);
+	}
 
 	return NULL;
 }
@@ -923,14 +1074,18 @@ void
 sandbox_slave_run(sandbox_slave_t *sb)
 {
 	if(sb && sb->driver && sb->driver->run_cb)
+	{
 		sb->driver->run_cb(sb, sb->update_rate, sb->data);
+	}
 }
 
 const char *
 sandbox_slave_title_get(sandbox_slave_t *sb)
 {
 	if(sb)
+	{
 		return sb->window_title;
+	}
 
 	return NULL;
 }
@@ -939,7 +1094,9 @@ bool
 sandbox_slave_no_user_resize_get(sandbox_slave_t *sb)
 {
 	if(sb)
+	{
 		return sb->no_user_resize;
+	}
 
 	return false;
 }

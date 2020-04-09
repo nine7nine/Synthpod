@@ -385,6 +385,7 @@ struct _plughandle_t {
 	LV2_URID_Unmap *unmap;
 	LV2UI_Write_Function writer;
 	LV2UI_Controller controller;
+	LV2UI_Request_Value *reqval;
 	
 	nk_pugl_window_t win;
 
@@ -8310,6 +8311,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			opts = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->log = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_UI__requestValue))
+			handle->reqval= features[i]->data;
 	}
 
 	if(!parent)

@@ -31,7 +31,7 @@ synthpod:common_4_nk
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
@@ -41,7 +41,7 @@ synthpod:root_4_nk
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
@@ -53,7 +53,7 @@ synthpod:common_5_d2tk
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
@@ -63,12 +63,12 @@ synthpod:root_5_d2tk
 		lv2:symbol "notify" ;
 		ui:protocol atom:eventTransfer ;
 	] ;
-	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options ;
+	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
 
-# Keybaord UIs
+# Keyboard UIs
 synthpod:keyboard_4_nk
 	lv2:optionalFeature ui:resize ;
 	lv2:requiredFeature ui:idleInterface, urid:map ;
