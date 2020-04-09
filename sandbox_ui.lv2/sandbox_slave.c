@@ -106,6 +106,9 @@ struct _sandbox_slave_t {
 	uint32_t minimum;
 	float sample_rate;
 	float update_rate;
+	float scale_factor;
+	uint32_t background_color;
+	uint32_t foreground_color;
 };
 
 #define ANSI_COLOR_BOLD    "\x1b[1m"
@@ -539,6 +542,9 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	sb->minimum = 0x100000; // fall-back
 	sb->sample_rate = 44100.f; // fall-back
 	sb->update_rate = 25.f; // fall-back
+	sb->scale_factor = 1.f; // fall-back
+	sb->background_color = 0x222222ff; // fall-back
+	sb->foreground_color = 0xccccccff; // fall-back
 
 	fprintf(stderr,
 		"Synthpod "SYNTHPOD_VERSION"\n"
@@ -943,6 +949,30 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 			.value = &sb->update_rate
 		},
 		[3] = {
+			.context = LV2_OPTIONS_INSTANCE,
+			.subject = 0,
+			.key = sb->io.ui_scale_factor,
+			.size = sizeof(float),
+			.type = sb->io.forge.Float,
+			.value = &sb->scale_factor
+		},
+		[4] = {
+			.context = LV2_OPTIONS_INSTANCE,
+			.subject = 0,
+			.key = sb->io.ui_background_color,
+			.size = sizeof(int32_t),
+			.type = sb->io.forge.Int,
+			.value = &sb->background_color
+		},
+		[5] = {
+			.context = LV2_OPTIONS_INSTANCE,
+			.subject = 0,
+			.key = sb->io.ui_foreground_color,
+			.size = sizeof(int32_t),
+			.type = sb->io.forge.Int,
+			.value = &sb->foreground_color
+		},
+		[6] = {
 			.key = 0,
 			.value = NULL
 		}

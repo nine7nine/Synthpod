@@ -93,6 +93,9 @@ struct _sandbox_io_t {
 	LV2_URID ui_window_title;
 	LV2_URID ui_port_subscribe;
 	LV2_URID ui_update_rate;
+	LV2_URID ui_scale_factor;
+	LV2_URID ui_background_color;
+	LV2_URID ui_foreground_color;
 	LV2_URID params_sample_rate;
 
 	char *name;
@@ -523,6 +526,9 @@ _sandbox_io_init(sandbox_io_t *io, LV2_URID_Map *map, LV2_URID_Unmap *unmap,
 	io->ui_window_title = map->map(map->handle, LV2_UI__windowTitle);
 	io->ui_port_subscribe = map->map(map->handle, LV2_UI__portSubscribe);
 	io->ui_update_rate = map->map(map->handle, LV2_UI__updateRate);
+	io->ui_scale_factor = map->map(map->handle, LV2_UI__scaleFactor);
+	io->ui_background_color = map->map(map->handle, LV2_UI__backgroundColor);
+	io->ui_foreground_color = map->map(map->handle, LV2_UI__foregroundColor);
 	io->params_sample_rate = map->map(map->handle, LV2_PARAMETERS__sampleRate);
 
 	return 0;
