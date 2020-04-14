@@ -1048,6 +1048,7 @@ main(int argc, char **argv)
 	bin->bad_plugins = false;
 	bin->has_gui = false;
 	bin->kill_gui = false;
+	bin->threaded_gui = false;
 	snprintf(bin->socket_path, sizeof(bin->socket_path), "shm:///synthpod-%i", getpid());
 	bin->update_rate = 25;
 	bin->cpu_affinity = false;
@@ -1058,7 +1059,7 @@ main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGkKbBaAl:n:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGkKtTbBaAl:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -1091,6 +1092,8 @@ main(int argc, char **argv)
 					"   [-G]                 do NOT load GUI (default)\n"
 					"   [-k]                 kill DSP with GUI\n"
 					"   [-K]                 do NOT kill DSP with GUI (default)\n"
+					"   [-t]                 run GUI in threaded mode\n"
+					"   [-T]                 run GUI in separate process (default)\n"
 					"   [-b]                 enable bad plugins\n"
 					"   [-B]                 disable bad plugins (default)\n"
 					"   [-a]                 enable CPU affinity\n"
@@ -1113,6 +1116,12 @@ main(int argc, char **argv)
 				break;
 			case 'K':
 				bin->kill_gui = false;
+				break;
+			case 't': 
+				bin->threaded_gui = true;
+				break;
+			case 'T':
+				bin->threaded_gui = false;
 				break;
 			case 'b':
 				bin->bad_plugins = true;

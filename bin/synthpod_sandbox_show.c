@@ -33,6 +33,7 @@ typedef struct _app_t app_t;
 
 struct _app_t {
 	sandbox_slave_t *sb;
+	void *dsp_instance; //FIXME use this
 	LV2UI_Handle *handle;
 	const LV2UI_Idle_Interface *idle_iface;
 	const LV2UI_Show_Interface *show_iface;
@@ -55,14 +56,19 @@ _init(sandbox_slave_t *sb, void *data)
 	signal(SIGINT, _sig);
 
 	void *widget = NULL;
-	if(!(app->handle = sandbox_slave_instantiate(sb, NULL, &widget)))
+	if(!(app->handle = sandbox_slave_instantiate(sb, NULL, app->dsp_instance,
+		&widget)))
+	{
 		return -1;
+	}
 
 	app->idle_iface = sandbox_slave_extension_data(sb, LV2_UI__idleInterface);
 	app->show_iface = sandbox_slave_extension_data(sb, LV2_UI__showInterface);
 
 	if(app->show_iface)
+	{
 		app->show_iface->show(app->handle);
+	}
 
 	cross_clock_init(&app->clk_mono, CROSS_CLOCK_MONOTONIC);
 

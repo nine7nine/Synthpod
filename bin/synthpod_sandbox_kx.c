@@ -34,6 +34,7 @@ typedef struct _app_t app_t;
 
 struct _app_t {
 	sandbox_slave_t *sb;
+	void *dsp_instance; //FIXME use this
 
 	LV2_External_UI_Host host;
 	LV2_External_UI_Widget *widget;
@@ -72,10 +73,15 @@ _init(sandbox_slave_t *sb, void *data)
 		.data = &app->host
 	};
 
-	if(!sandbox_slave_instantiate(sb, &parent_feature, &app->widget))
+	if(!sandbox_slave_instantiate(sb, &parent_feature, app->dsp_instance,
+		&app->widget))
+	{
 		return -1;
+	}
 	if(!app->widget)
+	{
 		return -1;
+	}
 
 	LV2_EXTERNAL_UI_SHOW(app->widget);
 

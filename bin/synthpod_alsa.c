@@ -941,6 +941,7 @@ main(int argc, char **argv)
 	bin->bad_plugins = false;
 	bin->has_gui = false;
 	bin->kill_gui = false;
+	bin->threaded_gui = false;
 	snprintf(bin->socket_path, sizeof(bin->socket_path), "shm:///synthpod-%i", getpid());
 	bin->update_rate = 25;
 	bin->cpu_affinity = false;
@@ -956,7 +957,7 @@ main(int argc, char **argv)
 	*/
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGbkKBaAIOtTxXy:Yw:Wl:d:i:o:r:p:n:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbkKtTBaAIO2xXy:Yw:Wl:d:i:o:r:p:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -989,14 +990,15 @@ main(int argc, char **argv)
 					"   [-G]                 do NOT load GUI (default)\n"
 					"   [-k]                 kill DSP with GUI\n"
 					"   [-K]                 do NOT kill DSP with GUI (default)\n"
+					"   [-t]                 run GUI in threaded mode\n"
+					"   [-T]                 run GUI in separate process (default)\n"
 					"   [-b]                 enable bad plugins\n"
 					"   [-B]                 disable bad plugins (default)\n"
 					"   [-a]                 enable CPU affinity\n"
 					"   [-A]                 disable CPU affinity (default)\n"
 					"   [-I]                 disable capture\n"
 					"   [-O]                 disable playback\n"
-					"   [-t]                 force 2 channel mode\n"
-					"   [-T]                 do NOT force 2 channel mode (default)\n"
+					"   [-2]                 force 2 channel mode\n"
 					"   [-x]                 notify about XRuns\n"
 					"   [-X]                 do NOT notify about XRuns (default)\n"
 					"   [-y] audio-priority  audio thread realtime priority (70)\n"
@@ -1027,6 +1029,12 @@ main(int argc, char **argv)
 			case 'K':
 				bin->kill_gui = false;
 				break;
+			case 't': 
+				bin->threaded_gui = true;
+				break;
+			case 'T':
+				bin->threaded_gui = false;
+				break;
 			case 'b':
 				bin->bad_plugins = true;
 				break;
@@ -1045,11 +1053,8 @@ main(int argc, char **argv)
 			case 'O':
 				handle.do_play = false;
 				break;
-			case 't':
+			case '2':
 				handle.twochan = true;
-				break;
-			case 'T':
-				handle.twochan = false;
 				break;
 			case 'x':
 				handle.debug = true;

@@ -161,7 +161,27 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 				}
 			}
 
-			//FIXME signal to ui
+			// signal to ui
+			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
+			if(answer)
+			{
+				const int64_t dsp_instance = (int64_t)mod->handle;
+				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
+					&app->regs, &app->forge, mod->urn, 0, app->regs.instance.access.urid, //FIXME seqnum
+					sizeof(int64_t), app->forge.Long, &dsp_instance);
+				if(ref)
+				{
+					_sp_app_to_ui_advance_atom(app, answer);
+				}
+				else
+				{
+					_sp_app_to_ui_overflow(app);
+				}
+			}
+			else
+			{
+				_sp_app_to_ui_overflow(app);
+			}
 
 			break;
 		}

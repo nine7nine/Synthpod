@@ -88,12 +88,17 @@ struct _bin_t {
 
 	LV2_Log_Log log;
 
+	bool last_rolling;
+	atomic_bool gui_done;
+
+	pthread_t gui_thread;
 	pthread_t worker_thread;
 	pthread_t dsp_thread;
 	atomic_flag trace_lock;
 
 	bool has_gui;
 	bool kill_gui;
+	bool threaded_gui;
 	int audio_prio;
 	int worker_prio;
 	int num_slaves;

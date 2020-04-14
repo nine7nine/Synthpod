@@ -23,6 +23,7 @@
 #include <signal.h>
 
 #include <synthpod_bin.h>
+#include <sandbox_slave.h>
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -410,6 +411,8 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 	bin->worker_thread = pthread_self(); // thread ID of UI thread
 	bin->first = true;
 
+	atomic_init(&bin->gui_done, true);
+
 	bin->sb_driver.socket_path = bin->socket_path;
 	bin->sb_driver.map = bin->map;
 	bin->sb_driver.unmap = bin->unmap;
@@ -432,6 +435,58 @@ bin_init(bin_t *bin, uint32_t sample_rate)
 
 	cross_clock_init(&bin->clk_mono, CROSS_CLOCK_MONOTONIC);
 	cross_clock_init(&bin->clk_real, CROSS_CLOCK_REALTIME);
+}
+
+static bool
+_gui_rolling_threaded(bin_t *bin)
+{
+	const bool done = atomic_load(&bin->gui_done);
+
+	return !done;
+}
+
+static bool
+_gui_rolling_ipc(bin_t *bin)
+{
+	bool rolling = true;
+
+	if(bin->child > 0)
+	{
+		int status;
+		const int res = waitpid(bin->child, &status, WUNTRACED | WNOHANG);
+		if(res < 0)
+		{
+			if(errno == ECHILD) // child not existing
+			{
+				rolling = false;
+			}
+		}
+		else if(res == bin->child)
+		{
+			if(!WIFSTOPPED(status) && !WIFCONTINUED(status)) // child exited/crashed
+			{
+				rolling = false;
+			}
+		}
+	}
+
+	if(!rolling)
+	{
+		bin->child = 0; // invalidate
+	}
+
+	return rolling;
+}
+
+static bool
+_gui_rolling(bin_t *bin)
+{
+	if(bin->threaded_gui)
+	{
+		return _gui_rolling_threaded(bin);
+	}
+
+	return _gui_rolling_ipc(bin);
 }
 
 __realtime void
@@ -497,37 +552,23 @@ bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driv
 		if(timedout)
 		{
 			// check if GUI still running
-			if(bin->child > 0)
+			const bool rolling = _gui_rolling(bin);
+
+			if(bin->last_rolling && !rolling)
 			{
-				bool rolling = true;
-
-				int status;
-				const int res = waitpid(bin->child, &status, WUNTRACED | WNOHANG);
-				if(res < 0)
+				if(nsmc_managed())
 				{
-					if(errno == ECHILD) // child not existing
-						rolling = false;
-				}
-				else if(res == bin->child)
-				{
-					if(!WIFSTOPPED(status) && !WIFCONTINUED(status)) // child exited/crashed
-						rolling = false;
+					sp_app_visibility_set(bin->app, false);
+					nsmc_hidden(bin->nsm);
 				}
 
-				if(!rolling)
+				if(bin->kill_gui || bin->threaded_gui)
 				{
-					bin->child = 0; // invalidate
-
-					if(nsmc_managed())
-					{
-						sp_app_visibility_set(bin->app, false);
-						nsmc_hidden(bin->nsm);
-					}
-
-					if(bin->kill_gui)
-						atomic_store_explicit(&done, true, memory_order_relaxed);
+					atomic_store_explicit(&done, true, memory_order_relaxed);
 				}
 			}
+
+			bin->last_rolling = rolling;
 
 			// schedule next timeout
 			uint64_t nanos = to.tv_nsec + nstep;
@@ -580,8 +621,63 @@ bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driv
 	}
 }
 
-int
-bin_show(bin_t *bin)
+#include <synthpod_sandbox_x11_driver.h>
+
+#define ARGC 19
+static void *
+_gui_thread(void *data)
+{
+	bin_t *bin = data;
+
+	char srate [32];
+	char urate [32];
+	char wname [384];
+	char minimum [32];
+	snprintf(srate, sizeof(srate), "%"PRIu32, bin->sample_rate);
+	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
+	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
+	snprintf(minimum, sizeof(minimum), "%zu", SBOX_BUF_SIZE);
+
+	char *argv [ARGC + 1] = {
+		"synthpod_sandbox_x11",
+		"-p", SYNTHPOD_STEREO_URI,
+		"-P", SYNTHPOD_PLUGIN_DIR,
+#if 0
+		"-u", SYNTHPOD_ROOT_D2TK_URI,
+#else
+		"-u", SYNTHPOD_ROOT_NK_URI,
+#endif
+		"-U", SYNTHPOD_PLUGIN_DIR,
+		"-s", (char *)bin->socket_path,
+		"-w", wname,
+		"-m", minimum,
+		"-r", srate,
+		"-f", urate,
+		NULL
+	};
+
+	atomic_store(&bin->gui_done, false);
+	x11_app_run(ARGC, argv, bin, &bin->gui_done);
+
+	return NULL;
+}
+#undef ARGC
+
+static int
+_bin_show_threaded(bin_t *bin)
+{
+	if(pthread_create(&bin->gui_thread, NULL, _gui_thread, bin) != 0)
+	{
+		return -1;
+	};
+
+	sp_app_visibility_set(bin->app, true);
+
+	return 0;
+}
+
+static int
+_bin_show_ipc(bin_t *bin)
 {
 	char srate [32];
 	char urate [32];
@@ -625,8 +721,28 @@ bin_show(bin_t *bin)
 	return 0;
 }
 
+int
+bin_show(bin_t *bin)
+{
+	if(bin->threaded_gui)
+	{
+		return _bin_show_threaded(bin);
+	}
+
+	return _bin_show_ipc(bin);
+}
+
 static int
-_bin_hide(bin_t *bin)
+_bin_hide_threaded(bin_t *bin)
+{
+	atomic_store(&bin->gui_done, true);
+	pthread_join(bin->gui_thread, NULL);
+
+	return 0;
+}
+
+static int
+_bin_hide_ipc(bin_t *bin)
 {
 	if(bin->child > 0)
 	{
@@ -638,6 +754,17 @@ _bin_hide(bin_t *bin)
 	}
 
 	return 0;
+}
+
+static int
+_bin_hide(bin_t *bin)
+{
+	if(bin->threaded_gui)
+	{
+		return _bin_hide_threaded(bin);
+	}
+
+	return _bin_hide_ipc(bin);
 }
 
 int

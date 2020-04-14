@@ -26,6 +26,7 @@ sord_validate = find_program('sord_validate', native : true, required : false)
 lv2lint = find_program('lv2lint', required : false)
 
 inc_incs = include_directories('include')
+binbin_incs = include_directories('bin')
 app_incs = include_directories('app')
 xpress_incs = include_directories('xpress.lv2')
 osc_incs = include_directories('osc.lv2')
@@ -45,7 +46,7 @@ self_incs = include_directories('')
 d2tk_incs = include_directories(join_paths('subprojects', 'd2tk'))
 nk_pugl_incs = include_directories(join_paths('subprojects', 'nk_pugl'))
 
-bin_incs = [inc_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, jackey_incs, nsmc_incs, self_incs, d2tk_incs, nk_pugl_incs]
+bin_incs = [inc_incs, binbin_incs, app_incs, xpress_incs, osc_incs, canvas_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs, lfrtm_incs, mapper_incs, sbox_incs, props_incs, jackey_incs, nsmc_incs, self_incs, d2tk_incs, nk_pugl_incs, netatom_incs]
 
 static_link = meson.is_cross_build() and false #FIXME
 

@@ -123,7 +123,7 @@ _init(sandbox_slave_t *sb, void *data)
 		.data = (void *)app->win
 	};
 
-	if(!sandbox_slave_instantiate(sb, &parent_feature, (void *)&app->widget))
+	if(!sandbox_slave_instantiate(sb, &parent_feature, NULL, (void *)&app->widget))
 		return -1;
 	if(!app->widget)
 		return -1;

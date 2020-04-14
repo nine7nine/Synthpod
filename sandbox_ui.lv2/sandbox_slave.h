@@ -18,6 +18,9 @@
 #ifndef _SANDBOX_SLAVE_H
 #define _SANDBOX_SLAVE_H
 
+#include <stddef.h>
+#include <stdbool.h>
+
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 
@@ -51,7 +54,8 @@ void
 sandbox_slave_free(sandbox_slave_t *sb);
 
 void *
-sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature, void *widget);
+sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature,
+	void *dsp_instance, void *widget);
 
 int
 sandbox_slave_recv(sandbox_slave_t *sb);

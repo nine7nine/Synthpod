@@ -421,6 +421,10 @@ struct _reg_t {
 	struct {
 		reg_item_t surface;
 	} idisp;
+
+	struct {
+		reg_item_t access;
+	} instance;
 };
 
 static inline void
@@ -712,6 +716,8 @@ sp_regs_init(reg_t *regs, LilvWorld *world, LV2_URID_Map *map)
 	_register(&regs->midi.controller_number, world, map, LV2_MIDI__controllerNumber);
 
 	_register(&regs->idisp.surface, world, map, LV2_INLINEDISPLAY_PREFIX"surface");
+
+	_register(&regs->instance.access, world, map, LV2_INSTANCE_ACCESS_URI);
 }
 
 static inline void
@@ -973,6 +979,8 @@ sp_regs_deinit(reg_t *regs)
 	_unregister(&regs->midi.controller_number);
 
 	_unregister(&regs->idisp.surface);
+
+	_unregister(&regs->instance.access);
 }
 
 #if 0

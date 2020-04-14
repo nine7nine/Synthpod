@@ -15,12 +15,9 @@
  * http://www.perlfoundation.org/artistic_license_2_0.
  */
 
-#include <synthpod_sandbox_x11_driver.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdatomic.h>
 
 int
-main(int argc, char **argv)
-{
-	atomic_bool done = ATOMIC_VAR_INIT(false);
-
-	return x11_app_run(argc, argv, NULL, &done);
-}
+x11_app_run(int argc, char **argv, void *dsp_instance, atomic_bool *done);

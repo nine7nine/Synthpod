@@ -1,9 +1,11 @@
-bin_srcs = ['synthpod_bin.c']
+bin_srcs = ['synthpod_bin.c',
+	join_paths('..', 'sandbox_ui.lv2', 'sandbox_slave.c'),
+	'synthpod_sandbox_x11_driver.c']
 
 bin = static_library('synthpod_bin', bin_srcs,
 	include_directories : bin_incs,
 	c_args : c_args,
-	dependencies : bin_deps)
+	dependencies : [bin_deps, xcb_dep, xcbicccm_dep, xcbxrm_dep])
 
 if use_dummy
 	dummy_srcs = ['synthpod_dummy.c']
@@ -51,7 +53,8 @@ if use_jack and jack_dep.found()
 endif
 
 if use_x11 and xcb_dep.found() and xcbicccm_dep.found() and xcbxrm_dep.found()
-	x11_srcs = ['synthpod_sandbox_x11.c']
+	x11_srcs = ['synthpod_sandbox_x11.c',
+		'synthpod_sandbox_x11_driver.c']
 
 	x11 = executable('synthpod_sandbox_x11', x11_srcs,
 		include_directories : bin_incs,

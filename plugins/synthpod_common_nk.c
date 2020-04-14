@@ -28,11 +28,13 @@
 #include "lv2/lv2plug.in/ns/ext/port-groups/port-groups.h"
 #include "lv2/lv2plug.in/ns/ext/presets/presets.h"
 #include "lv2/lv2plug.in/ns/ext/patch/patch.h"
+#include "lv2/lv2plug.in/ns/ext/instance-access/instance-access.h"
 
 #include <osc.lv2/osc.h>
 #include <xpress.lv2/xpress.h>
 
 #include <sandbox_master.h>
+#include <synthpod_sandbox_x11_driver.h>
 
 #include <math.h>
 #include <unistd.h> // vfork
@@ -41,6 +43,8 @@
 #include <time.h>
 #include <signal.h> // kill
 #include <inttypes.h> // kill
+#include <pthread.h> // kill
+#include <stdatomic.h> // kill
 
 #define NK_PUGL_API
 #include <nk_pugl/nk_pugl.h>
@@ -268,6 +272,8 @@ struct _prof_t {
 struct _mod_t {
 	plughandle_t *handle;
 
+	void *dsp_instance;
+
 	LV2_URID urn;
 	LV2_URID subj;
 	const LilvPlugin *plug;
@@ -343,6 +349,8 @@ struct _mod_ui_t {
 	const char *uri;
 	LV2_URID urn;
 
+	bool threaded;
+
 	pid_t pid;
 	struct {
 		sandbox_master_driver_t driver;
@@ -355,6 +363,10 @@ struct _mod_ui_t {
 		char *sample_rate;
 		char *update_rate;
 	} sbox;
+
+	pthread_t gui_thread;
+	bool last_rolling;
+	atomic_bool gui_done;
 };
 
 struct _pset_group_t {
@@ -371,6 +383,8 @@ struct _pset_preset_t {
 struct _plughandle_t {
 	LilvWorld *world;
 	LilvNodes *bundles;
+
+	void *dsp_instance;
 
 	LV2_Atom_Forge forge;
 
@@ -1813,10 +1827,60 @@ _mod_find_by_urn(plughandle_t *handle, LV2_URID urn)
 }
 
 static bool
-_mod_ui_is_running(mod_ui_t *mod_ui)
+_mod_ui_is_rolling_threaded(mod_ui_t *mod_ui)
 {
 	DBG;
-	return (mod_ui->pid != 0) && mod_ui->sbox.sb;
+	const bool done = atomic_load(&mod_ui->gui_done);
+	const bool rolling = !done && mod_ui->sbox.sb;
+
+	return rolling;
+}
+
+static bool
+_mod_ui_is_rolling_ipc(mod_ui_t *mod_ui)
+{
+	DBG;
+
+	bool rolling = true;
+
+	if( (mod_ui->pid > 0) && mod_ui->sbox.sb)
+	{
+		int status;
+		const int res = waitpid(mod_ui->pid, &status, WUNTRACED | WNOHANG);
+		if(res < 0)
+		{
+			if(errno == ECHILD) // child not existing
+			{
+				rolling = false;
+			}
+		}
+		else if(res == mod_ui->pid)
+		{
+			if(!WIFSTOPPED(status) && !WIFCONTINUED(status)) // child exited/crashed
+			{
+				rolling = false;
+			}
+		}
+	}
+	else
+	{
+		rolling = false;
+	}
+
+	return rolling ;
+}
+
+static bool
+_mod_ui_is_rolling(mod_ui_t *mod_ui)
+{
+	DBG;
+
+	if(mod_ui->threaded)
+	{
+		return _mod_ui_is_rolling_threaded(mod_ui);
+	}
+
+	return _mod_ui_is_rolling_ipc(mod_ui);
 }
 
 static void
@@ -1830,11 +1894,15 @@ _mod_uis_send(mod_t *mod, uint32_t index, uint32_t size, uint32_t format,
 	{
 		mod_ui_t *mod_ui = *mod_ui_itr;
 
-		if(!_mod_ui_is_running(mod_ui))
+		if(!_mod_ui_is_rolling(mod_ui))
+		{
 			continue;
+		}
 
 		if(sandbox_master_send(mod_ui->sbox.sb, index, size, format, buf) == -1)
+		{
 			_log_error(handle, "%s: buffer overflow\n", __func__);
+		}
 		sandbox_master_signal_tx(mod_ui->sbox.sb);
 	}
 }
@@ -2899,7 +2967,7 @@ _mod_ui_subscribe_function(LV2UI_Controller controller, uint32_t index,
 }
 
 static mod_ui_t *
-_mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
+_mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui, bool threaded)
 {
 	DBG;
 	const LilvNode *ui_node = lilv_ui_get_uri(ui);
@@ -2936,10 +3004,13 @@ _mod_ui_add(plughandle_t *handle, mod_t *mod, const LilvUI *ui)
 	mod_ui_t *mod_ui = calloc(1, sizeof(mod_ui_t));
 	if(mod_ui)
 	{
+		mod_ui->threaded = threaded;
 		mod_ui->mod = mod;
 		mod_ui->ui = ui;
 		mod_ui->uri = lilv_node_as_uri(ui_node);
 		mod_ui->urn = handle->map->map(handle->map->handle, mod_ui->uri);
+
+		atomic_init(&mod_ui->gui_done, true);
 
 		const char *plugin_bundle_uri = plugin_bundle_node
 			? lilv_node_as_uri(plugin_bundle_node)
@@ -2993,6 +3064,43 @@ _check_support_for_ui(const char *exec_uri)
 	return (res == 0);
 }
 
+#define ARGC 21
+static void *
+_gui_thread(void *data)
+{
+	mod_ui_t *mod_ui = data;
+	mod_t *mod = mod_ui->mod;
+	plughandle_t *handle = mod->handle;
+
+	const LilvNode *plugin_node = lilv_plugin_get_uri(mod->plug);
+	const char *plugin_uri = plugin_node ? lilv_node_as_uri(plugin_node) : NULL;
+	const char *plugin_urn = handle->unmap->unmap(handle->unmap->handle, mod_ui->mod->urn);
+
+	char *argv [ARGC + 1] = {
+		"synthpod_sandbox_x11",
+		"-n", (char *)plugin_urn,
+		"-p", (char *)plugin_uri,
+		"-P", mod_ui->sbox.plugin_bundle_path,
+		"-u", (char *)mod_ui->uri,
+		"-U", mod_ui->sbox.ui_bundle_path,
+		"-s", mod_ui->sbox.socket_uri,
+		"-w", mod_ui->sbox.window_name,
+		"-m", mod_ui->sbox.minimum,
+		"-r", mod_ui->sbox.sample_rate,
+		"-f", mod_ui->sbox.update_rate,
+		NULL
+	};
+	
+	if(mod->dsp_instance)
+	{
+		atomic_store(&mod_ui->gui_done, false);
+		x11_app_run(ARGC, argv, mod->dsp_instance, &mod_ui->gui_done);
+	}
+
+	return NULL;
+}
+#undef ARGC
+
 static void
 _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 {
@@ -3008,19 +3116,33 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 
 	const char *exec_uri = NULL;
 	if(lilv_ui_is_a(ui, handle->regs.ui.x11.node))
+	{
 		exec_uri = "synthpod_sandbox_x11";
+	}
 	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk2.node))
+	{
 		exec_uri = "synthpod_sandbox_gtk2";
+	}
 	else if(lilv_ui_is_a(ui, handle->regs.ui.gtk3.node))
+	{
 		exec_uri = "synthpod_sandbox_gtk3";
+	}
 	else if(lilv_ui_is_a(ui, handle->regs.ui.qt4.node))
+	{
 		exec_uri = "synthpod_sandbox_qt4";
+	}
 	else if(lilv_ui_is_a(ui, handle->regs.ui.qt5.node))
+	{
 		exec_uri = "synthpod_sandbox_qt5";
+	}
 	else if(lilv_ui_is_a(ui, handle->regs.ui.kx_widget.node))
+	{
 		exec_uri = "synthpod_sandbox_kx";
+	}
 	else if(lilv_world_ask(handle->world, ui_node, handle->regs.core.extension_data.node, handle->regs.ui.show_interface.node))
+	{
 		exec_uri = "synthpod_sandbox_show";
+	}
 
 	mod_ui->sbox.sb = sandbox_master_new(&mod_ui->sbox.driver, mod_ui, mod->minimum);
 
@@ -3031,47 +3153,57 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 		&& mod_ui->sbox.socket_uri && mod_ui->sbox.window_name && mod_ui->sbox.minimum
 		&& mod_ui->sbox.sample_rate && mod_ui->sbox.update_rate && mod_ui->sbox.sb)
 	{
-		const pid_t pid = vfork();
-		if(pid == 0) // child
+#if 0
+		fprintf(stderr, "%s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s\n",
+			(char *)exec_uri,
+			"-n", (char *)plugin_urn,
+			"-p", (char *)plugin_uri,
+			"-P", mod_ui->sbox.plugin_bundle_path,
+			"-u", (char *)mod_ui->uri,
+			"-U", mod_ui->sbox.ui_bundle_path,
+			"-s", mod_ui->sbox.socket_uri,
+			"-w", mod_ui->sbox.window_name,
+			"-m", mod_ui->sbox.minimum,
+			"-r", mod_ui->sbox.sample_rate,
+			"-f", mod_ui->sbox.update_rate);
+#endif
+
+		if(mod_ui->threaded)
 		{
-			char *const args [] = {
-#if 0
-				"gdb", "--args",
-#endif
-				(char *)exec_uri,
-				"-n", (char *)plugin_urn,
-				"-p", (char *)plugin_uri,
-				"-P", mod_ui->sbox.plugin_bundle_path,
-				"-u", (char *)mod_ui->uri,
-				"-U", mod_ui->sbox.ui_bundle_path,
-				"-s", mod_ui->sbox.socket_uri,
-				"-w", mod_ui->sbox.window_name,
-				"-m", mod_ui->sbox.minimum,
-				"-r", mod_ui->sbox.sample_rate,
-				"-f", mod_ui->sbox.update_rate,
-				NULL
+			if(pthread_create(&mod_ui->gui_thread, NULL, _gui_thread, mod_ui) != 0)
+			{
+				//FIXME
 			};
-
-#if 0
-			fprintf(stderr, "%s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s \\\n%s %s\n",
-				(char *)exec_uri,
-				"-n", (char *)plugin_urn,
-				"-p", (char *)plugin_uri,
-				"-P", mod_ui->sbox.plugin_bundle_path,
-				"-u", (char *)mod_ui->uri,
-				"-U", mod_ui->sbox.ui_bundle_path,
-				"-s", mod_ui->sbox.socket_uri,
-				"-w", mod_ui->sbox.window_name,
-				"-m", mod_ui->sbox.minimum,
-				"-r", mod_ui->sbox.sample_rate,
-				"-f", mod_ui->sbox.update_rate);
-#endif
-
-			execvp(args[0], args);
 		}
+		else
+		{
+			const pid_t pid = vfork();
+			if(pid == 0) // child
+			{
+				char *const args [] = {
+#if 0
+					"gdb", "--args",
+#endif
+					(char *)exec_uri,
+					"-n", (char *)plugin_urn,
+					"-p", (char *)plugin_uri,
+					"-P", mod_ui->sbox.plugin_bundle_path,
+					"-u", (char *)mod_ui->uri,
+					"-U", mod_ui->sbox.ui_bundle_path,
+					"-s", mod_ui->sbox.socket_uri,
+					"-w", mod_ui->sbox.window_name,
+					"-m", mod_ui->sbox.minimum,
+					"-r", mod_ui->sbox.sample_rate,
+					"-f", mod_ui->sbox.update_rate,
+					NULL
+				};
 
-		// parent
-		mod_ui->pid = pid;
+				execvp(args[0], args);
+			}
+
+			// parent
+			mod_ui->pid = pid;
+		}
 
 		bool connected = false;
 
@@ -3112,12 +3244,15 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 }
 
 static void
-_mod_ui_stop(mod_ui_t *mod_ui, bool sync)
+_mod_ui_stop_threaded(mod_ui_t *mod_ui)
 {
-	DBG;
-	mod_t *mod = mod_ui->mod;
-	plughandle_t *handle = mod->handle;
+	atomic_store(&mod_ui->gui_done, true);
+	pthread_join(mod_ui->gui_thread, NULL);
+}
 
+static void
+_mod_ui_stop_ipc(mod_ui_t *mod_ui)
+{
 	if(mod_ui->pid)
 	{
 		int status;
@@ -3125,6 +3260,23 @@ _mod_ui_stop(mod_ui_t *mod_ui, bool sync)
 		kill(mod_ui->pid, SIGINT);
 		waitpid(mod_ui->pid, &status, WUNTRACED); // blocking waitpid
 		mod_ui->pid = 0;
+	}
+}
+
+static void
+_mod_ui_stop(mod_ui_t *mod_ui, bool sync)
+{
+	DBG;
+	mod_t *mod = mod_ui->mod;
+	plughandle_t *handle = mod->handle;
+
+	if(mod_ui->threaded)
+	{
+		_mod_ui_stop_threaded(mod_ui);
+	}
+	else
+	{
+		_mod_ui_stop_ipc(mod_ui);
 	}
 
 	if(mod_ui->sbox.sb)
@@ -3157,8 +3309,10 @@ _mod_ui_free(mod_ui_t *mod_ui)
 	const LilvNode *ui_node = lilv_ui_get_uri(mod_ui->ui);
 	const LilvNode *bundle_node = lilv_plugin_get_bundle_uri(mod->plug);
 
-	if(_mod_ui_is_running(mod_ui))
+	if(_mod_ui_is_rolling(mod_ui))
+	{
 		_mod_ui_stop(mod_ui, false);
+	}
 
 	lilv_world_unload_resource(handle->world, ui_node);
 	//lilv_world_unload_bundle(handle->world, (LilvNode *)bundle_node);
@@ -3360,6 +3514,18 @@ static void
 _patch_mod_reinstantiate_set(plughandle_t *handle, mod_t *mod, int32_t state)
 {
 	DBG;
+
+	HASH_FOREACH(&mod->uis, mod_ui_itr)
+	{
+		mod_ui_t *mod_ui = *mod_ui_itr;
+
+		if(_mod_ui_is_rolling(mod_ui))
+		{
+			_mod_ui_stop(mod_ui, true); // stop existing UI
+		}
+	}
+
+	mod->dsp_instance = 0;
 
 	if(  _message_request(handle)
 		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
@@ -3904,14 +4070,27 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	{
 		const LilvUI *ui = lilv_uis_get(mod->ui_nodes, itr);
 		const LilvNode *ui_uri = lilv_ui_get_uri(ui);
+		bool threaded = false;
 
-		const bool needs_instance_access = lilv_world_ask(handle->world, ui_uri,
-			handle->regs.core.required_feature.node, handle->regs.ui.instance_access.node);
-		if(needs_instance_access)
+		const bool wants_instance_access = lilv_world_ask(handle->world, ui_uri,
+			handle->regs.core.required_feature.node, handle->regs.ui.instance_access.node)
+		|| lilv_world_ask(handle->world, ui_uri,
+			handle->regs.core.optional_feature.node, handle->regs.ui.instance_access.node);
+		const bool x11ui = lilv_ui_is_a(ui, handle->regs.ui.x11.node);
+		if(wants_instance_access)
 		{
-			if(handle->log)
-				_log_warning(handle, "<%s> instance-access extension not supported\n", lilv_node_as_uri(ui_uri));
-			continue;
+			if(x11ui && handle->dsp_instance)
+			{
+				threaded = true;
+			}
+			else
+			{
+				if(handle->log)
+				{
+					_log_warning(handle, "<%s> instance-access extension not supported\n", lilv_node_as_uri(ui_uri));
+				}
+				continue;
+			}
 		}
 
 		const bool needs_data_access = lilv_world_ask(handle->world, ui_uri,
@@ -3919,13 +4098,15 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		if(needs_data_access)
 		{
 			if(handle->log)
+			{
 				_log_warning(handle, "<%s> data-access extension not supported\n", lilv_node_as_uri(ui_uri));
+			}
 			continue;
 		}
 
 		//FIXME check for more unsupported features
 
-		_mod_ui_add(handle, mod, ui);
+		_mod_ui_add(handle, mod, ui, threaded);
 	}
 
 	_set_module_idisp_subscription(handle, mod, 1);
@@ -6442,10 +6623,14 @@ _show_selected_nodes(plughandle_t *handle)
 			{
 				mod_ui_t *mod_ui = *mod_ui_itr;
 
-				if(_mod_ui_is_running(mod_ui))
+				if(_mod_ui_is_rolling(mod_ui))
+				{
 					_mod_ui_stop(mod_ui, true); // stop existing UI
+				}
 				else
+				{
 					_mod_ui_run(mod_ui, true); // run UI
+				}
 
 				break; //FIXME only consider first UI
 			}
@@ -7937,7 +8122,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 							const LilvUI *ui = mod_ui->ui;
 							const LilvNode *ui_node = lilv_ui_get_uri(ui);
 
-							const bool is_running = _mod_ui_is_running(mod_ui);
+							const bool is_rolling = _mod_ui_is_rolling(mod_ui);
 							const char *label = "Show plugin GUI";
 
 							if(!single_ui)
@@ -7958,13 +8143,17 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 									label = "Show";
 							}
 
-							const bool is_still_running = _toolbar_label(ctx, is_running, 0x0, label);
-							if(is_still_running != is_running)
+							const bool is_still_running = _toolbar_label(ctx, is_rolling, 0x0, label);
+							if(is_still_running != is_rolling)
 							{
-								if(is_running)
+								if(is_rolling)
+								{
 									_mod_ui_stop(mod_ui, true); // stop existing UI
+								}
 								else
+								{
 									_mod_ui_run(mod_ui, true); // run UI
+								}
 							}
 						}
 					}
@@ -8313,6 +8502,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 			handle->log = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_UI__requestValue))
 			handle->reqval= features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_INSTANCE_ACCESS_URI))
+			handle->dsp_instance = features[i]->data;
 	}
 
 	if(!parent)
@@ -8498,11 +8689,6 @@ cleanup(LV2UI_Handle instance)
 	_icon_unload(handle, handle->icon.settings);
 	_icon_unload(handle, handle->icon.menu);
 
-	if(handle->win.cfg.font.face)
-		free(handle->win.cfg.font.face);
-	nk_pugl_hide(&handle->win);
-	nk_pugl_shutdown(&handle->win);
-
 	_set_module_selector(handle, NULL);
 
 	HASH_FREE(&handle->mods, ptr)
@@ -8510,6 +8696,11 @@ cleanup(LV2UI_Handle instance)
 		mod_t *mod = ptr;
 		_mod_free(handle, mod);
 	}
+
+	if(handle->win.cfg.font.face)
+		free(handle->win.cfg.font.face);
+	nk_pugl_hide(&handle->win);
+	nk_pugl_shutdown(&handle->win);
 
 	HASH_FREE(&handle->conns, ptr)
 	{
@@ -9013,6 +9204,18 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								nk_pugl_post_redisplay(&handle->win);
 							}
 						}
+						else if( (prop == handle->regs.instance.access.urid)
+							&& (value->type == handle->forge.Long)
+							&& subj )
+						{
+							const LV2_Atom_Long *ptr = (const LV2_Atom_Long *)value;
+
+							mod_t *mod = _mod_find_by_urn(handle, subj);
+							if(mod)
+							{
+								mod->dsp_instance = (void *)ptr->body;
+							}
+						}
 						else if( (prop == handle->regs.synthpod.graph_position_x.urid)
 							&& (value->type == handle->forge.Float) )
 						{
@@ -9140,6 +9343,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 						const LV2_Atom_Float *mod_pos_y = NULL;
 						const LV2_Atom_String *mod_alias = NULL;
 						const LV2_Atom_URID *ui_uri = NULL;
+						const LV2_Atom_Long *instance_access = NULL;
 
 						lv2_atom_object_get(body,
 							handle->regs.core.plugin.urid, &plugin,
@@ -9147,6 +9351,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							handle->regs.synthpod.module_position_y.urid, &mod_pos_y,
 							handle->regs.synthpod.module_alias.urid, &mod_alias,
 							handle->regs.ui.ui.urid, &ui_uri, //FIXME use this
+							handle->regs.instance.access.urid, &instance_access,
 							0); //FIXME query more
 
 						const LV2_URID urid = plugin
@@ -9209,6 +9414,11 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								strncpy(mod->alias, LV2_ATOM_BODY_CONST(&mod_alias->atom), ALIAS_MAX-1);
 							}
 
+							if(instance_access && (instance_access->atom.type == handle->forge.Long) )
+							{
+								mod->dsp_instance = (void *)instance_access->body;
+							}
+
 							if(ui_urn)
 							{
 								// look for ui, and run it
@@ -9216,11 +9426,15 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								{
 									mod_ui_t *mod_ui = *mod_ui_itr;
 
-									if(_mod_ui_is_running(mod_ui))
+									if(_mod_ui_is_rolling(mod_ui))
+									{
 										_mod_ui_stop(mod_ui, false);
+									}
 
 									if(mod_ui->urn == ui_urn)
+									{
 										_mod_ui_run(mod_ui, false);
+									}
 								}
 							}
 						}
@@ -9364,33 +9578,27 @@ _idle(LV2UI_Handle instance)
 		{
 			mod_ui_t *mod_ui = *mod_ui_itr;
 
-			if(!_mod_ui_is_running(mod_ui))
+			bool rolling = _mod_ui_is_rolling(mod_ui);
+
+			if(!mod_ui->last_rolling && !rolling)
+			{
 				continue;
-
-			bool rolling = true;
-
-			int status;
-			const int res = waitpid(mod_ui->pid, &status, WUNTRACED | WNOHANG);
-			if(res < 0)
-			{
-				if(errno == ECHILD) // child not existing
-					rolling = false;
-			}
-			else if(res == mod_ui->pid)
-			{
-				if(!WIFSTOPPED(status) && !WIFCONTINUED(status)) // child exited/crashed
-					rolling = false;
 			}
 
-			if(!rolling || sandbox_master_recv(mod_ui->sbox.sb))
+			if( (mod_ui->last_rolling && !rolling) || sandbox_master_recv(mod_ui->sbox.sb))
 			{
 				_mod_ui_stop(mod_ui, true);
+				rolling = false;
 			}
+
+			mod_ui->last_rolling = rolling;
 		}
 	}
 
 	if(nk_pugl_process_events(&handle->win) || handle->done)
+	{
 		return 1;
+	}
 
 	return 0;
 }

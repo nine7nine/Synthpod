@@ -34,6 +34,7 @@
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 #include <lv2/lv2plug.in/ns/ext/uri-map/uri-map.h>
+#include <lv2/lv2plug.in/ns/ext/instance-access/instance-access.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <lilv/lilv.h>
@@ -551,6 +552,8 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
+	optind = 1; // needed when called from thread that already ran getopt
+
 	int c;
 	while((c = getopt(argc, argv, "vhtn:p:P:u:U:s:w:m:r:f:")) != -1)
 	{
@@ -921,7 +924,8 @@ sandbox_slave_free(sandbox_slave_t *sb)
 }
 
 void *
-sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature, void *widget)
+sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature,
+	void *dsp_instance, void *widget)
 {
 	LV2_Options_Option options [] = {
 		[0] = {
@@ -1022,22 +1026,39 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 		.URI = LV2_UI__resize,
 		.data = &sb->host_resize
 	};
-
-	const LV2_Feature *const features [] = {
-		&map_feature,
-		&unmap_feature,
-		&uri_id_feature,
-		&log_feature,
-		&port_map_feature,
-		&port_subscribe_feature,
-		&touch_feature,
-		&request_value_feature,
-		&options_feature,
-		&voice_map_feature,
-		sb->host_resize.ui_resize ? &resize_feature : parent_feature,
-		sb->host_resize.ui_resize && parent_feature ? parent_feature : NULL,
-		NULL
+	const LV2_Feature instance_access_feature = {
+		.URI = LV2_INSTANCE_ACCESS_URI,
+		.data = dsp_instance
 	};
+
+	unsigned i = 0;
+	const LV2_Feature *features [16];
+	features[i++] = &map_feature;
+	features[i++] = &unmap_feature;
+	features[i++] = &uri_id_feature;
+	features[i++] = &log_feature;
+	features[i++] = &port_map_feature;
+	features[i++] = &port_subscribe_feature;
+	features[i++] = &touch_feature;
+	features[i++] = &request_value_feature;
+	features[i++] = &options_feature;
+	features[i++] = &voice_map_feature;
+	if(sb->host_resize.ui_resize)
+	{
+		features[i++] = &resize_feature;
+
+		if(parent_feature)
+		{
+			features[i++] = parent_feature;
+		}
+	}
+	if(dsp_instance)
+	{
+		features[i++] = &instance_access_feature;
+	}
+
+	features[i] = NULL;
+	assert(i <= 16);
 
 	//FIXME check features
 

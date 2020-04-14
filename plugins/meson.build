@@ -11,11 +11,15 @@ dsp_srcs = ['synthpod_lv2.c',
 nk_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, cairo_dep, nk_pugl_dep]
 nk_srcs = ['synthpod_lv2_nk.c',
 	'synthpod_keyboard_nk.c',
-	'synthpod_common_nk.c']
+	'synthpod_common_nk.c',
+	join_paths('..', 'sandbox_ui.lv2', 'sandbox_slave.c'),
+	join_paths('..', 'bin', 'synthpod_sandbox_x11_driver.c')]
 
 ui_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, d2tk_dep]
 ui_srcs = ['synthpod_lv2_d2tk.c',
-	'synthpod_common_d2tk.c']
+	'synthpod_common_d2tk.c',
+	join_paths('..', 'sandbox_ui.lv2', 'sandbox_slave.c'),
+	join_paths('..', 'bin', 'synthpod_sandbox_x11_driver.c')]
 
 dsp = shared_module('synthpod', dsp_srcs,
 	c_args : c_args,

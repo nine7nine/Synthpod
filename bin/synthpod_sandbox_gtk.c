@@ -103,7 +103,7 @@ _init(sandbox_slave_t *sb, void *data)
 		.data = app->win
 	};
 
-	if(!sandbox_slave_instantiate(sb, &parent_feature, &app->widget))
+	if(!sandbox_slave_instantiate(sb, &parent_feature, NULL, &app->widget))
 		goto fail;
 	if(!app->widget)
 		goto fail;
