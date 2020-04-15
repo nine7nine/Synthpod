@@ -69,7 +69,6 @@
 #endif
 
 typedef enum _property_type_t property_type_t;
-typedef enum _bundle_selector_search_t bundle_selector_search_t;
 typedef enum _plugin_selector_search_t plugin_selector_search_t;
 typedef enum _preset_selector_search_t preset_selector_search_t;
 typedef enum _property_selector_search_t property_selector_search_t;
@@ -113,12 +112,6 @@ enum _property_type_t {
 	PROPERTY_TYPE_XPRESS			= (1 << 12),
 
 	PROPERTY_TYPE_MAX
-};
-
-enum _bundle_selector_search_t {
-	BUNDLE_SELECTOR_SEARCH_NAME = 0,
-
-	BUNDLE_SELECTOR_SEARCH_MAX
 };
 
 enum _plugin_selector_search_t {
@@ -452,7 +445,6 @@ struct _plughandle_t {
 	enum nk_collapse_states plugin_info_collapse_states;
 	enum nk_collapse_states preset_info_collapse_states;
 
-	bundle_selector_search_t bundle_search_selector;
 	plugin_selector_search_t plugin_search_selector;
 	preset_selector_search_t preset_search_selector;
 	property_selector_search_t property_search_selector;
@@ -464,13 +456,11 @@ struct _plughandle_t {
 	hash_t param_matches;
 	hash_t dynam_matches;
 
-	char bundle_search_buf [SEARCH_BUF_MAX];
 	char plugin_search_buf [SEARCH_BUF_MAX];
 	char preset_search_buf [SEARCH_BUF_MAX];
 	char port_search_buf [SEARCH_BUF_MAX];
 	char mod_alias_buf [ALIAS_MAX];
 
-	struct nk_text_edit bundle_search_edit;
 	struct nk_text_edit plugin_search_edit;
 	struct nk_text_edit preset_search_edit;
 	struct nk_text_edit port_search_edit;
@@ -563,10 +553,6 @@ struct _plughandle_t {
 	bool supports_qt5;
 	bool supports_kx;
 	bool supports_show;
-};
-
-static const char *bundle_search_labels [BUNDLE_SELECTOR_SEARCH_MAX] = {
-	[BUNDLE_SELECTOR_SEARCH_NAME] = "Name"
 };
 
 static const char *plugin_search_labels [PLUGIN_SELECTOR_SEARCH_MAX] = {
@@ -4541,100 +4527,6 @@ _undiscover_bundles(plughandle_t *handle)
 }
 
 static void
-_refresh_main_bundle_list(plughandle_t *handle)
-{
-	DBG;
-	_hash_free(&handle->bundle_matches);
-
-	bool search = _textedit_len(&handle->bundle_search_edit) != 0;
-
-	LILV_FOREACH(nodes, itr, handle->bundles)
-	{
-		const LilvNode *bundle = lilv_nodes_get(handle->bundles, itr);
-
-		//FIXME support other search criteria
-		LilvNode *label_node = lilv_world_get(handle->world, bundle, handle->node.rdfs_label, NULL);
-		if(!label_node)
-			label_node = lilv_world_get(handle->world, bundle, handle->node.lv2_name, NULL);
-		if(label_node)
-		{
-			const char *label_str = lilv_node_as_string(label_node);
-
-			if(!search || strcasestr(label_str, _textedit_const(&handle->bundle_search_edit)))
-			{
-				_hash_add(&handle->bundle_matches, (void *)bundle);
-			}
-
-			lilv_node_free(label_node);
-		}
-	}
-
-	_hash_sort_r(&handle->bundle_matches, _sort_rdfs_label, handle);
-}
-
-static void
-_expose_main_bundle_list(plughandle_t *handle, struct nk_context *ctx,
-	bool find_matches)
-{
-	DBG;
-	if(_hash_empty(&handle->bundle_matches) || find_matches)
-		_refresh_main_bundle_list(handle);
-
-	int count = 0;
-	HASH_FOREACH(&handle->bundle_matches, itr)
-	{
-		const LilvNode *bundle = *itr;
-		if(bundle)
-		{
-			LilvNode *label_node = lilv_world_get(handle->world, bundle, handle->node.rdfs_label, NULL);
-			if(!label_node)
-				label_node = lilv_world_get(handle->world, bundle, handle->node.lv2_name, NULL);
-			if(label_node)
-			{
-				const char *label_str = lilv_node_as_string(label_node);
-				const char *offset = NULL;
-				if( (offset = strstr(label_str, ".lv2/")))
-					label_str = offset + 5; // skip path prefix
-
-				nk_style_push_style_item(ctx, &ctx->style.selectable.normal, (count++ % 2)
-					? nk_style_item_color(nk_rgb(40, 40, 40))
-					: nk_style_item_color(nk_rgb(45, 45, 45))); // NK_COLOR_WINDOW
-
-				if(nk_select_label(ctx, label_str, NK_TEXT_LEFT, nk_false))
-				{
-					char *bundle_path = lilv_node_get_path(bundle, NULL);
-					if(bundle_path)
-					{
-						char *tmp = strdup(bundle_path);
-						if(tmp)
-						{
-							char *end = strrchr(tmp, '/');
-							if(end)
-								*end = '\0';
-
-							const LV2_URID bundle_urid = handle->map->map(handle->map->handle, tmp);
-							if(  _message_request(handle)
-								&&  synthpod_patcher_copy(&handle->regs, &handle->forge,
-									bundle_urid, 0, 0) )
-							{
-								_message_write(handle);
-							}
-
-							free(tmp);
-						}
-						lilv_free(bundle_path);
-					}
-				}
-
-				nk_style_pop_style_item(ctx);
-
-				lilv_node_free(label_node);
-			}
-		}
-	}
-}
-
-static void
 _refresh_main_plugin_list(plughandle_t *handle)
 {
 	DBG;
@@ -7754,43 +7646,7 @@ _expose_main_body(plughandle_t *handle, struct nk_context *ctx, float dh, float 
 
 		if(handle->show_bottombar)
 		{
-			nk_layout_row_dynamic(ctx, lower_h, 4);
-
-			if(_group_begin(ctx, "Bundles", NK_WINDOW_TITLE, &bb))
-			{
-				nk_menubar_begin(ctx);
-				{
-					const float dim [2] = {0.6, 0.4};
-					nk_layout_row(ctx, NK_DYNAMIC, dy, 2, dim);
-
-					const size_t old_len = _textedit_len(&handle->bundle_search_edit);
-					const nk_flags args = NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_AUTO_SELECT;
-					if(!handle->has_initial_focus)
-					{
-						nk_edit_focus(ctx, args);
-						handle->has_initial_focus = true;
-					}
-					const nk_flags flags = nk_edit_buffer(ctx, args, &handle->bundle_search_edit, nk_filter_default);
-					_textedit_zero_terminate(&handle->bundle_search_edit);
-					if( (flags & NK_EDIT_COMMITED) || (old_len != _textedit_len(&handle->bundle_search_edit)) )
-						handle->bundle_find_matches = true;
-					if( (flags & NK_EDIT_ACTIVE) && handle->has_control_a)
-						nk_textedit_select_all(&handle->bundle_search_edit);
-
-					const bundle_selector_search_t old_sel = handle->bundle_search_selector;
-					handle->bundle_search_selector = nk_combo(ctx, bundle_search_labels, BUNDLE_SELECTOR_SEARCH_MAX,
-						handle->bundle_search_selector, dy, nk_vec2(nk_widget_width(ctx), 7*dy));
-					if(old_sel != handle->bundle_search_selector)
-						handle->bundle_find_matches = true;
-				}
-				nk_menubar_end(ctx);
-
-				nk_layout_row_dynamic(ctx, handle->dy2, 1);
-				nk_spacing(ctx, 1); // fixes mouse-over bug
-				_expose_main_bundle_list(handle, ctx, handle->bundle_find_matches);
-
-				_group_end(ctx, &bb);
-			}
+			nk_layout_row_dynamic(ctx, lower_h, 3);
 
 			if(_group_begin(ctx, "Plugins", NK_WINDOW_TITLE, &bb))
 			{
@@ -8614,7 +8470,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->plugin_info_collapse_states = NK_MINIMIZED;
 	handle->preset_info_collapse_states = NK_MINIMIZED;
 
-	nk_textedit_init_fixed(&handle->bundle_search_edit, handle->bundle_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->plugin_search_edit, handle->plugin_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->preset_search_edit, handle->preset_search_buf, SEARCH_BUF_MAX);
 	nk_textedit_init_fixed(&handle->port_search_edit, handle->port_search_buf, SEARCH_BUF_MAX);
