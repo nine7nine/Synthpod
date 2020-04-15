@@ -957,7 +957,7 @@ main(int argc, char **argv)
 	*/
 	
 	int c;
-	while((c = getopt(argc, argv, "vhgGbkKtTBaAIO2xXy:Yw:Wl:d:i:o:r:p:n:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGbkKtTBaAIO2xXy:Yw:Wul:d:i:o:r:p:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -1005,6 +1005,7 @@ main(int argc, char **argv)
 					"   [-Y]                 do NOT use audio thread realtime priority\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
+					"   [-u]                 show alternate UI\n"
 					"   [-l] link-path       socket link path (shm:///synthpod)\n"
 					"   [-d] device          capture/playback device (\"hw:0\")\n"
 					"   [-i] capture-device  capture device (\"hw:0\")\n"
@@ -1073,6 +1074,9 @@ main(int argc, char **argv)
 				break;
 			case 'W':
 				bin->worker_prio = 0;
+				break;
+			case 'u':
+				bin->d2tk_gui = true;
 				break;
 			case 'l':
 				snprintf(bin->socket_path, sizeof(bin->socket_path), "%s", optarg);

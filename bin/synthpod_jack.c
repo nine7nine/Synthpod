@@ -1059,7 +1059,7 @@ main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGkKtTbBaAl:n:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGkKtTbBaAul:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -1098,6 +1098,7 @@ main(int argc, char **argv)
 					"   [-B]                 disable bad plugins (default)\n"
 					"   [-a]                 enable CPU affinity\n"
 					"   [-A]                 disable CPU affinity (default)\n"
+					"   [-u]                 show alternate UI\n"
 					"   [-l] link-path       socket link path (shm:///synthpod)\n"
 					"   [-n] server-name     connect to named JACK daemon\n"
 					"   [-s] sequence-size   minimum sequence size (8192)\n"
@@ -1134,6 +1135,9 @@ main(int argc, char **argv)
 				break;
 			case 'A':
 				bin->cpu_affinity = false;
+				break;
+			case 'u':
+				bin->d2tk_gui = true;
 				break;
 			case 'l':
 				snprintf(bin->socket_path, sizeof(bin->socket_path), "%s", optarg);

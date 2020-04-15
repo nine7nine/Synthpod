@@ -24,6 +24,7 @@
 
 #include <synthpod_bin.h>
 #include <sandbox_slave.h>
+#include <synthpod_sandbox_x11_driver.h>
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -621,8 +622,6 @@ bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driv
 	}
 }
 
-#include <synthpod_sandbox_x11_driver.h>
-
 #define ARGC 19
 static void *
 _gui_thread(void *data)
@@ -637,16 +636,15 @@ _gui_thread(void *data)
 	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
 	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
 	snprintf(minimum, sizeof(minimum), "%zu", SBOX_BUF_SIZE);
+	char *ui_uri = bin->d2tk_gui
+		? SYNTHPOD_ROOT_D2TK_URI
+		: SYNTHPOD_ROOT_NK_URI;
 
 	char *argv [ARGC + 1] = {
 		"synthpod_sandbox_x11",
 		"-p", SYNTHPOD_STEREO_URI,
 		"-P", SYNTHPOD_PLUGIN_DIR,
-#if 0
-		"-u", SYNTHPOD_ROOT_D2TK_URI,
-#else
-		"-u", SYNTHPOD_ROOT_NK_URI,
-#endif
+		"-u", ui_uri,
 		"-U", SYNTHPOD_PLUGIN_DIR,
 		"-s", (char *)bin->socket_path,
 		"-w", wname,
@@ -687,6 +685,9 @@ _bin_show_ipc(bin_t *bin)
 	snprintf(urate, sizeof(urate), "%"PRIu32, bin->update_rate);
 	snprintf(wname, sizeof(wname), "Synthpod - %s", bin->socket_path);
 	snprintf(minimum, sizeof(minimum), "%zu", SBOX_BUF_SIZE);
+	char *ui_uri = bin->d2tk_gui
+		? SYNTHPOD_ROOT_D2TK_URI
+		: SYNTHPOD_ROOT_NK_URI;
 
 	bin->child = vfork();
 	if(bin->child == 0) // child
@@ -695,11 +696,7 @@ _bin_show_ipc(bin_t *bin)
 			"synthpod_sandbox_x11",
 			"-p", SYNTHPOD_STEREO_URI,
 			"-P", SYNTHPOD_PLUGIN_DIR,
-#if 0
-			"-u", SYNTHPOD_ROOT_D2TK_URI,
-#else
-			"-u", SYNTHPOD_ROOT_NK_URI,
-#endif
+			"-u", ui_uri,
 			"-U", SYNTHPOD_PLUGIN_DIR,
 			"-s", (char *)bin->socket_path,
 			"-w", wname,

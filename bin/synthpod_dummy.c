@@ -488,7 +488,7 @@ main(int argc, char **argv)
 		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGkKtTbBaAy:Yw:Wl:r:p:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhgGkKtTbBaAy:Yw:Wul:r:p:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
@@ -531,6 +531,7 @@ main(int argc, char **argv)
 					"   [-Y]                 do NOT use audio thread realtime priority\n"
 					"   [-w] worker-priority worker thread realtime priority (60)\n"
 					"   [-W]                 do NOT use worker thread realtime priority\n"
+					"   [-u]                 show alternate UI\n"
 					"   [-l] link-path       socket link path (shm:///synthpod)\n"
 					"   [-r] sample-rate     sample rate (48000)\n"
 					"   [-p] sample-period   frames per period (1024)\n"
@@ -580,6 +581,9 @@ main(int argc, char **argv)
 				break;
 			case 'W':
 				bin->worker_prio = 0;
+				break;
+			case 'u':
+				bin->d2tk_gui = true;
 				break;
 			case 'l':
 				snprintf(bin->socket_path, sizeof(bin->socket_path), "%s", optarg);

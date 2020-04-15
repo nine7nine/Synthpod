@@ -96,6 +96,7 @@ struct _bin_t {
 	pthread_t dsp_thread;
 	atomic_flag trace_lock;
 
+	bool d2tk_gui;
 	bool has_gui;
 	bool kill_gui;
 	bool threaded_gui;
