@@ -8,14 +8,14 @@ dsp_srcs = ['synthpod_lv2.c',
 	'synthpod_placeholder.c',
 	'synthpod_stereo.c']
 
-nk_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, cairo_dep, nk_pugl_dep]
+nk_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, cairo_dep, nk_pugl_dep, xcb_dep, xcbicccm_dep, xcbxrm_dep]
 nk_srcs = ['synthpod_lv2_nk.c',
 	'synthpod_keyboard_nk.c',
 	'synthpod_common_nk.c',
 	join_paths('..', 'sandbox_ui.lv2', 'sandbox_slave.c'),
 	join_paths('..', 'bin', 'synthpod_sandbox_x11_driver.c')]
 
-ui_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, d2tk_dep]
+ui_deps = [m_dep, rt_dep, thread_dep, lv2_dep, lilv_dep, d2tk_dep, xcb_dep, xcbicccm_dep, xcbxrm_dep]
 ui_srcs = ['synthpod_lv2_d2tk.c',
 	'synthpod_common_d2tk.c',
 	join_paths('..', 'sandbox_ui.lv2', 'sandbox_slave.c'),
