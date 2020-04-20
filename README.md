@@ -86,7 +86,7 @@ When paired with realtime scripting via [Moony](/lv2/moony/#),
 it turns Synthpod into a versatile realtime programmable, remote controllable
 LV2 host framework.
 
-![Synthpod screenshot](https://git.open-music-kontrollers.ch/lv2/synthpod/plain/screenshots/screenshot_1.png)
+![Synthpod screenshot](/screenshots/screenshot_1.png)
 
 ### LV2 specifications support status
 
