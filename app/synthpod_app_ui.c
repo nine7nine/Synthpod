@@ -796,9 +796,9 @@ _sp_app_from_ui_patch_get(sp_app_t *app, const LV2_Atom *atom)
 						}
 
 						if(ref)
-							ref = lv2_atom_forge_key(&app->forge, app->regs.instance.access.urid);
+							ref = lv2_atom_forge_key(&app->forge, app->regs.ui.instance_access.urid);
 						if(ref)
-							ref = lv2_atom_forge_long(&app->forge, (intptr_t)mod->handle);
+							ref = lv2_atom_forge_long(&app->forge, (intptr_t)mod->inst);
 					}
 					if(ref)
 					{

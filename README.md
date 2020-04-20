@@ -120,8 +120,8 @@ The full LV2 specification is located at <http://lv2plug.in/ns/>.
 		<td>Data Access</td>
 		<td>data-access</td>
 		<td>Provides access to LV2_Descriptor::extension_data().</td>
-		<td style="color:#b00;">No</td>
-		<td>won't, ever</td>
+		<td style="color:#0b0;">Yes</td>
+		<td>X11UI only</td>
 	</tr><tr>
 		<td>Dynamic Manifest</td>
 		<td>dynmanifest</td>
@@ -138,8 +138,8 @@ The full LV2 specification is located at <http://lv2plug.in/ns/>.
 		<td>Instance Access</td>
 		<td>instance-access</td>
 		<td>Provides access to the LV2_Handle of a plugin.</td>
-		<td style="color:#b00;">No</td>
-		<td>won't, ever</td>
+		<td style="color:#0b0;">Yes</td>
+		<td>X11UI only</td>
 	</tr><tr>
 		<td>Log</td>
 		<td>log</td>

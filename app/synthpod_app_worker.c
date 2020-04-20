@@ -165,9 +165,9 @@ sp_app_from_worker(sp_app_t *app, uint32_t len, const void *data)
 			LV2_Atom *answer = _sp_app_to_ui_request_atom(app);
 			if(answer)
 			{
-				const int64_t dsp_instance = (int64_t)mod->handle;
+				const int64_t dsp_instance = (intptr_t )mod->inst;
 				LV2_Atom_Forge_Ref ref = synthpod_patcher_set(
-					&app->regs, &app->forge, mod->urn, 0, app->regs.instance.access.urid, //FIXME seqnum
+					&app->regs, &app->forge, mod->urn, 0, app->regs.ui.instance_access.urid, //FIXME seqnum
 					sizeof(int64_t), app->forge.Long, &dsp_instance);
 				if(ref)
 				{

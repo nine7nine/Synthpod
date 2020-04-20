@@ -265,7 +265,7 @@ struct _prof_t {
 struct _mod_t {
 	plughandle_t *handle;
 
-	void *dsp_instance;
+	LilvInstance *dsp_instance;
 
 	LV2_URID urn;
 	LV2_URID subj;
@@ -3511,7 +3511,7 @@ _patch_mod_reinstantiate_set(plughandle_t *handle, mod_t *mod, int32_t state)
 		}
 	}
 
-	mod->dsp_instance = 0;
+	mod->dsp_instance = NULL;
 
 	if(  _message_request(handle)
 		&&  synthpod_patcher_set(&handle->regs, &handle->forge,
@@ -4057,12 +4057,12 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 		const LilvUI *ui = lilv_uis_get(mod->ui_nodes, itr);
 		const LilvNode *ui_uri = lilv_ui_get_uri(ui);
 		bool threaded = false;
+		const bool x11ui = lilv_ui_is_a(ui, handle->regs.ui.x11.node);
 
 		const bool wants_instance_access = lilv_world_ask(handle->world, ui_uri,
 			handle->regs.core.required_feature.node, handle->regs.ui.instance_access.node)
 		|| lilv_world_ask(handle->world, ui_uri,
 			handle->regs.core.optional_feature.node, handle->regs.ui.instance_access.node);
-		const bool x11ui = lilv_ui_is_a(ui, handle->regs.ui.x11.node);
 		if(wants_instance_access)
 		{
 			if(x11ui && handle->dsp_instance)
@@ -4079,15 +4079,24 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			}
 		}
 
-		const bool needs_data_access = lilv_world_ask(handle->world, ui_uri,
-			handle->regs.core.required_feature.node, handle->regs.ui.data_access.node);
-		if(needs_data_access)
+		const bool wants_data_access = lilv_world_ask(handle->world, ui_uri,
+			handle->regs.core.required_feature.node, handle->regs.ui.data_access.node)
+		|| lilv_world_ask(handle->world, ui_uri,
+			handle->regs.core.optional_feature.node, handle->regs.ui.data_access.node);
+		if(wants_data_access)
 		{
-			if(handle->log)
+			if(x11ui && handle->dsp_instance)
 			{
-				_log_warning(handle, "<%s> data-access extension not supported\n", lilv_node_as_uri(ui_uri));
+				threaded = true;
 			}
-			continue;
+			else
+			{
+				if(handle->log)
+				{
+					_log_warning(handle, "<%s> data-access extension not supported\n", lilv_node_as_uri(ui_uri));
+				}
+				continue;
+			}
 		}
 
 		//FIXME check for more unsupported features
@@ -9059,7 +9068,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 								nk_pugl_post_redisplay(&handle->win);
 							}
 						}
-						else if( (prop == handle->regs.instance.access.urid)
+						else if( (prop == handle->regs.ui.instance_access.urid)
 							&& (value->type == handle->forge.Long)
 							&& subj )
 						{
@@ -9068,7 +9077,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							mod_t *mod = _mod_find_by_urn(handle, subj);
 							if(mod)
 							{
-								mod->dsp_instance = (void *)ptr->body;
+								mod->dsp_instance = (LilvInstance *)ptr->body;
 							}
 						}
 						else if( (prop == handle->regs.synthpod.graph_position_x.urid)
@@ -9206,7 +9215,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 							handle->regs.synthpod.module_position_y.urid, &mod_pos_y,
 							handle->regs.synthpod.module_alias.urid, &mod_alias,
 							handle->regs.ui.ui.urid, &ui_uri, //FIXME use this
-							handle->regs.instance.access.urid, &instance_access,
+							handle->regs.ui.instance_access.urid, &instance_access,
 							0); //FIXME query more
 
 						const LV2_URID urid = plugin
@@ -9271,7 +9280,7 @@ port_event(LV2UI_Handle instance, uint32_t port_index, uint32_t size,
 
 							if(instance_access && (instance_access->atom.type == handle->forge.Long) )
 							{
-								mod->dsp_instance = (void *)instance_access->body;
+								mod->dsp_instance = (LilvInstance *)instance_access->body;
 							}
 
 							if(ui_urn)

@@ -35,6 +35,7 @@
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
 #include <lv2/lv2plug.in/ns/ext/uri-map/uri-map.h>
 #include <lv2/lv2plug.in/ns/ext/instance-access/instance-access.h>
+#include <lv2/lv2plug.in/ns/ext/data-access/data-access.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 
 #include <lilv/lilv.h>
@@ -70,6 +71,7 @@ struct _sandbox_slave_t {
 	LV2UI_Port_Subscribe port_subscribe;
 	LV2UI_Touch touch;
 	LV2UI_Request_Value request_value;
+	LV2_Extension_Data_Feature data_access;
 	xpress_map_t xmap;
 	xpress_t xpress;
 
@@ -925,8 +927,32 @@ sandbox_slave_free(sandbox_slave_t *sb)
 
 void *
 sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature,
-	void *dsp_instance, void *widget)
+	void *_dsp_instance, void *widget)
 {
+	const intptr_t dummy = 1;
+	LilvInstance *dsp_instance = _dsp_instance;
+
+	void *dsp_handle = NULL;
+	const LV2_Descriptor *desc = NULL;
+
+	if(dsp_instance)
+	{
+		if((intptr_t)dsp_instance == dummy)
+		{
+			dsp_handle = dsp_instance;
+		}
+		else
+		{
+			dsp_handle = lilv_instance_get_handle(dsp_instance);
+			desc = lilv_instance_get_descriptor(dsp_instance);
+
+			if(desc && desc->extension_data)
+			{
+				sb->data_access.data_access = desc->extension_data;
+			}
+		}
+	}
+
 	LV2_Options_Option options [] = {
 		[0] = {
 			.context = LV2_OPTIONS_INSTANCE,
@@ -1028,7 +1054,11 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 	};
 	const LV2_Feature instance_access_feature = {
 		.URI = LV2_INSTANCE_ACCESS_URI,
-		.data = dsp_instance
+		.data = dsp_handle
+	};
+	const LV2_Feature data_access_feature = {
+		.URI = LV2_DATA_ACCESS_URI,
+		.data = &sb->data_access
 	};
 
 	unsigned i = 0;
@@ -1055,6 +1085,10 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 	if(dsp_instance)
 	{
 		features[i++] = &instance_access_feature;
+	}
+	if(sb->data_access.data_access)
+	{
+		features[i++] = &data_access_feature;
 	}
 
 	features[i] = NULL;

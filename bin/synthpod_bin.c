@@ -654,8 +654,9 @@ _gui_thread(void *data)
 		NULL
 	};
 
+	const intptr_t dummy = 1;
 	atomic_store(&bin->gui_done, false);
-	x11_app_run(ARGC, argv, bin, &bin->gui_done);
+	x11_app_run(ARGC, argv, (void *)dummy, &bin->gui_done);
 
 	return NULL;
 }
