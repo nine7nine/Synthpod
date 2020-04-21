@@ -1343,6 +1343,9 @@ _sp_app_reinitialize(sp_app_t *app)
 		}
 
 		lilv_instance_activate(mod->inst);
+
+		// some plugins need to run before they can be configured
+		lilv_instance_run(mod->inst, app->driver->min_block_size);
 	}
 }
 

@@ -1015,6 +1015,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 	// activate
 	lilv_instance_activate(mod->inst);
 
+	// some plugins need to run before they can be configured
+	lilv_instance_run(mod->inst, app->driver->min_block_size);
+
 	// load default state
 	if(load_default_state && _sp_app_state_preset_load(app, mod, uri, false))
 		sp_app_log_error(app, "%s: default state loading failed\n", __func__);
@@ -1196,6 +1199,9 @@ _sp_app_mod_reinstantiate(sp_app_t *app, mod_t *mod)
 		_sp_app_mod_reinitialize_soft(mod);
 
 		lilv_instance_activate(mod->inst);
+
+		// some plugins need to run before they can be configured
+		lilv_instance_run(mod->inst, app->driver->min_block_size);
 
 		_sp_app_state_preset_restore(app, mod, state, false);
 
