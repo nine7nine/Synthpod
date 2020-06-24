@@ -23,6 +23,7 @@
 @prefix bufsz: <http://lv2plug.in/ns/ext/buf-size#> .
 @prefix pg:   <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
+@prefix urid: <http://lv2plug.in/ns/ext/urid#> .
 
 @prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
@@ -108,7 +109,7 @@ synthpod:sink
 		"Synthpod Syschtem Ziiu"@gsw ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, synthpod:systemPorts ;
 
 	lv2:port [
@@ -221,7 +222,7 @@ synthpod:source
 		"Synthpod System Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength ;
+	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, synthpod:systemPorts ;
 
 	lv2:port [
@@ -322,7 +323,7 @@ synthpod:midi_sink
 		"Synthpod MIDI Ziel"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
 
 	lv2:port [
@@ -346,7 +347,7 @@ synthpod:midi_source
 		"Synthpod MIDI Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
 
 	lv2:port [
@@ -370,7 +371,7 @@ synthpod:osc_sink
 		"Synthpod OSC Ziel"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
 
 	lv2:port [
@@ -395,7 +396,7 @@ synthpod:osc_source
 		"Synthpod OSC Quelle"@de ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:synthpod ;
-	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
+	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
 
 	lv2:port [
@@ -430,6 +431,9 @@ synthpod:cv_sink
 		lv2:index 0 ;
 		lv2:symbol "cv_sink_1" ;
 		lv2:name "CV Sink 1" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
@@ -438,6 +442,9 @@ synthpod:cv_sink
 		lv2:index 1 ;
 		lv2:symbol "cv_sink_2" ;
 		lv2:name "CV Sink 2" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
@@ -446,6 +453,9 @@ synthpod:cv_sink
 		lv2:index 2 ;
 		lv2:symbol "cv_sink_3" ;
 		lv2:name "CV Sink 3" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] , [
 	  a lv2:InputPort ,
@@ -454,6 +464,9 @@ synthpod:cv_sink
 		lv2:index 3 ;
 		lv2:symbol "cv_sink_4" ;
 		lv2:name "CV Sink 4" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
 		pg:group synthpod:group_sink ;
 	] .
 
