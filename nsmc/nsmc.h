@@ -111,8 +111,10 @@ struct _nsmc_t {
 };
 
 static void
-_reply(LV2_OSC_Reader *reader, nsmc_t *nsm)
+_reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
+	void *data)
 {
+	nsmc_t *nsm = data;
 	const char *target = NULL;
 	lv2_osc_reader_get_string(reader, &target);
 
@@ -133,8 +135,10 @@ _reply(LV2_OSC_Reader *reader, nsmc_t *nsm)
 }
 
 static void
-_error(LV2_OSC_Reader *reader, nsmc_t *nsm)
+_error(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
+	void *data)
 {
+	nsmc_t *nsm = data;
 	const char *msg = NULL;
 	int32_t code = 0;
 	const char *err = NULL;
@@ -147,8 +151,10 @@ _error(LV2_OSC_Reader *reader, nsmc_t *nsm)
 }
 
 static void
-_client_open(LV2_OSC_Reader *reader, nsmc_t *nsm)
+_client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
+	void *data)
 {
+	nsmc_t *nsm = data;
 	const char *dir = NULL;
 	const char *name = NULL;
 	const char *id = NULL;
@@ -206,8 +212,11 @@ _client_open(LV2_OSC_Reader *reader, nsmc_t *nsm)
 }
 
 static void
-_client_save(LV2_OSC_Reader *reader, nsmc_t *nsm)
+_client_save(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
+	void *data)
 {
+	nsmc_t *nsm = data;
+
 	// save app
 	if(nsm->driver->save && nsm->driver->save(nsm->data))
 	{
@@ -216,8 +225,11 @@ _client_save(LV2_OSC_Reader *reader, nsmc_t *nsm)
 }
 
 static void
-_client_show_optional_gui(LV2_OSC_Reader *reader, nsmc_t *nsm)
+_client_show_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
+	const LV2_OSC_Tree *tree, void *data)
 {
+	nsmc_t *nsm = data;
+
 	// show gui
 	if(nsm->driver->show && nsm->driver->show(nsm->data))
 	{
@@ -229,8 +241,11 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, nsmc_t *nsm)
 }
 
 static void
-_client_hide_optional_gui(LV2_OSC_Reader *reader, nsmc_t *nsm)
+_client_hide_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
+	const LV2_OSC_Tree *tree, void *data)
 {
+	nsmc_t *nsm = data;
+
 	// hide gui
 	if(nsm->driver->hide && nsm->driver->hide(nsm->data))
 	{
@@ -283,46 +298,69 @@ _announce(nsmc_t *nsm)
 	}
 }
 
-static const osc_msg_t messages [] = {
-	{"/reply", _reply},
-	{"/error", _error},
-
-	{"/nsm/client/open", _client_open},
-	{"/nsm/client/save", _client_save},
-	{"/nsm/client/show_optional_gui", _client_show_optional_gui},
-	{"/nsm/client/hide_optional_gui", _client_hide_optional_gui},
-
-	{NULL, NULL}
+static const LV2_OSC_Tree tree_client [] = {
+	{
+		.name = "open",
+		.trees = NULL,
+		.branch = _client_open
+	},
+	{
+		.name = "save",
+		.trees = NULL,
+		.branch = _client_save
+	},
+	{
+		.name = "show_optional_gui",
+		.trees = NULL,
+		.branch = _client_show_optional_gui
+	},
+	{
+		.name = "hide_optional_gui",
+		.trees = NULL,
+		.branch = _client_hide_optional_gui
+	},
+	{ // sentinel
+		.name = NULL,
+		.trees = NULL,
+		.branch = NULL
+	}
 };
 
-static void
-_unpack_messages(LV2_OSC_Reader *reader, size_t len, nsmc_t *nsm)
-{
-	if(lv2_osc_reader_is_message(reader))
+static const LV2_OSC_Tree tree_nsm [] = {
 	{
-		const char *path = NULL;
-		const char *fmt = NULL;
-		lv2_osc_reader_get_string(reader, &path);
-		lv2_osc_reader_get_string(reader, &fmt);
-		for(const osc_msg_t *msg = messages; msg->cb; msg++)
-		{
-			if(!strcmp(msg->path, path))
-			{
-				msg->cb(reader, nsm);
-				break;
-			}
-		}
+		.name = "client",
+		.trees = tree_client,
+		.branch = NULL
+	},
+	{ // sentinel
+		.name = NULL,
+		.trees = NULL,
+		.branch = NULL
 	}
-	else if(lv2_osc_reader_is_bundle(reader))
+};
+
+static const LV2_OSC_Tree tree_root [] = {
 	{
-		OSC_READER_BUNDLE_FOREACH(reader, itm, len)
-		{
-			LV2_OSC_Reader reader2;
-			lv2_osc_reader_initialize(&reader2, itm->body, itm->size);
-			_unpack_messages(&reader2, itm->size, nsm);
-		}
+		.name = "reply",
+		.trees = NULL,
+		.branch = _reply
+	},
+	{
+		.name = "error",
+		.trees = NULL,
+		.branch = _error
+	},
+	{
+		.name = "nsm",
+		.trees = tree_nsm,
+		.branch = NULL
+	},
+	{ // sentinel
+		.name = NULL,
+		.trees = NULL,
+		.branch = NULL
 	}
-}
+};
 
 static void *
 _recv_req(void *data, size_t size, size_t *max)
@@ -506,7 +544,7 @@ nsmc_run(nsmc_t *nsm)
 			LV2_OSC_Reader reader;
 
 			lv2_osc_reader_initialize(&reader, rx, size);
-			_unpack_messages(&reader, size, nsm);
+			lv2_osc_reader_match(&reader, size, tree_root, nsm);
 
 			varchunk_read_advance(nsm->rx);
 		}
