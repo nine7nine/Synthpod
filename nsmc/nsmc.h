@@ -160,10 +160,14 @@ _client_open(LV2_OSC_Reader *reader, nsmc_t *nsm)
 	char tmp [PATH_MAX];
 	const char *resolvedpath = realpath(dir, tmp);
 	if(!resolvedpath)
+	{
 		resolvedpath = dir;
+	}
 
 	if(nsm->driver->open && nsm->driver->open(resolvedpath, name, id, nsm->data))
+	{
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
+	}
 
 	const bool has_gui = nsm->driver->show && nsm->driver->hide;
 	const bool visibility = nsm->driver->visibility
@@ -206,7 +210,9 @@ _client_save(LV2_OSC_Reader *reader, nsmc_t *nsm)
 {
 	// save app
 	if(nsm->driver->save && nsm->driver->save(nsm->data))
+	{
 		fprintf(stderr, "NSM save failed:\n");
+	}
 }
 
 static void
@@ -362,11 +368,15 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	const nsmc_driver_t *nsm_driver, void *data)
 {
 	if(!nsm_driver)
+	{
 		return NULL;
+	}
 
 	nsmc_t *nsm = calloc(1, sizeof(nsmc_t));
 	if(!nsm)
+	{
 		return NULL;
+	}
 
 	nsm->driver = nsm_driver;
 	nsm->data = data;
@@ -381,32 +391,46 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 
 		nsm->url = strdup(nsm->url); //FIXME
 		if(!nsm->url)
+		{
 			return NULL;
+		}
 
 		// remove trailing slash
 		if(!isdigit(nsm->url[strlen(nsm->url)-1]))
+		{
 			nsm->url[strlen(nsm->url)-1] = '\0';
+		}
 
 		nsm->tx = varchunk_new(8192, false);
 		if(!nsm->tx)
+		{
 			return NULL;
+		}
 
 		nsm->rx = varchunk_new(8192, false);
 		if(!nsm->rx)
+		{
 			return NULL;
+		}
 
 		if(lv2_osc_stream_init(&nsm->stream, nsm->url, &driver, nsm) != 0)
+		{
 			return NULL;
+		}
 	}
 	else if(fallback_path)
 	{
 		char tmp [PATH_MAX];
 		const char *resolvedfallback_path = realpath(fallback_path, tmp);
 		if(!resolvedfallback_path)
+		{
 			resolvedfallback_path = fallback_path;
+		}
 
 		if(nsm->driver->open && nsm->driver->open(resolvedfallback_path, "unmanaged", nsm->call, nsm->data))
+		{
 			fprintf(stderr, "NSM load failed: '%s'\n", fallback_path);
+		}
 	}
 
 	return nsm;
@@ -418,17 +442,26 @@ nsmc_free(nsmc_t *nsm)
 	if(nsm)
 	{
 		if(nsm->call)
+		{
 			free(nsm->call);
+		}
+
 		if(nsm->exe)
+		{
 			free(nsm->exe);
+		}
 
 		if(nsm->url)
 		{
 			if(nsm->rx)
+			{
 				varchunk_free(nsm->rx);
+			}
 
 			if(nsm->tx)
+			{
 				varchunk_free(nsm->tx);
+			}
 
 			lv2_osc_stream_deinit(&nsm->stream);
 
@@ -443,7 +476,9 @@ NSMC_API void
 nsmc_run(nsmc_t *nsm)
 {
 	if(!nsm || !nsm->tx)
+	{
 		return;
+	}
 
 	const LV2_OSC_Enum ev = lv2_osc_stream_run(&nsm->stream);
 
@@ -482,7 +517,9 @@ NSMC_API void
 nsmc_opened(nsmc_t *nsm, int status)
 {
 	if(!nsm || !nsm->tx)
+	{
 		return;
+	}
 
 	uint8_t *tx;
 	size_t max;
@@ -518,7 +555,9 @@ NSMC_API void
 nsmc_shown(nsmc_t *nsm)
 {
 	if(!nsm || !nsm->tx)
+	{
 		return;
+	}
 
 	uint8_t *tx;
 	size_t max;
@@ -545,7 +584,9 @@ NSMC_API void
 nsmc_hidden(nsmc_t *nsm)
 {
 	if(!nsm || !nsm->tx)
+	{
 		return;
+	}
 
 	uint8_t *tx;
 	size_t max;
@@ -572,7 +613,9 @@ NSMC_API void
 nsmc_saved(nsmc_t *nsm, int status)
 {
 	if(!nsm || !nsm->tx)
+	{
 		return;
+	}
 
 	uint8_t *tx;
 	size_t max;
@@ -608,7 +651,9 @@ NSMC_API bool
 nsmc_managed()
 {
 	if(getenv("NSM_URL"))
+	{
 		return true;
+	}
 
 	return false;
 }
