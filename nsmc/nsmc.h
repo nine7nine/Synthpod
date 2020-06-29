@@ -72,6 +72,51 @@ nsmc_saved(nsmc_t *nsm, int status);
 NSMC_API bool
 nsmc_managed();
 
+NSMC_API void
+nsmc_progress(nsmc_t *nsm, float progress);
+
+NSMC_API void
+nsmc_dirty(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_clean(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_message(nsmc_t *nsm, int priority, const char *message);
+
+NSMC_API void
+nsmc_server_add(nsmc_t *nsm, const char *exe);
+
+NSMC_API void
+nsmc_server_save(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_server_load(nsmc_t *nsm, const char *porj_name);
+
+NSMC_API void
+nsmc_server_new(nsmc_t *nsm, const char *porj_name);
+
+NSMC_API void
+nsmc_server_duplicate(nsmc_t *nsm, const char *porj_name);
+
+NSMC_API void
+nsmc_server_close(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_server_abort(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_server_quit(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_server_list(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_server_broadcast_valist(nsmc_t *nsm, const char *fmt, va_list args);
+
+NSMC_API void
+nsmc_server_broadcast_vararg(nsmc_t *nsm, const char *fmt, ...);
+
 #ifdef NSMC_IMPLEMENTATION
 
 #include <stdio.h>
@@ -84,14 +129,6 @@ nsmc_managed();
 #include <osc.lv2/stream.h>
 
 #include <varchunk.h>
-
-typedef void (*osc_cb_t)(LV2_OSC_Reader *reader, nsmc_t *nsm);
-typedef struct _osc_msg_t osc_msg_t;
-
-struct _osc_msg_t {
-	const char *path;
-	osc_cb_t cb;
-};
 
 struct _nsmc_t {
 	bool connected;
@@ -225,6 +262,15 @@ _client_save(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 }
 
 static void
+_client_session_is_loaded(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
+	void *data)
+{
+	nsmc_t *nsm = data;
+
+	//FIXME
+}
+
+static void
 _client_show_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	const LV2_OSC_Tree *tree, void *data)
 {
@@ -299,67 +345,25 @@ _announce(nsmc_t *nsm)
 }
 
 static const LV2_OSC_Tree tree_client [] = {
-	{
-		.name = "open",
-		.trees = NULL,
-		.branch = _client_open
-	},
-	{
-		.name = "save",
-		.trees = NULL,
-		.branch = _client_save
-	},
-	{
-		.name = "show_optional_gui",
-		.trees = NULL,
-		.branch = _client_show_optional_gui
-	},
-	{
-		.name = "hide_optional_gui",
-		.trees = NULL,
-		.branch = _client_hide_optional_gui
-	},
-	{ // sentinel
-		.name = NULL,
-		.trees = NULL,
-		.branch = NULL
-	}
+	{ .name = "open",              .trees = NULL, .branch = _client_open },
+	{ .name = "save",              .trees = NULL, .branch = _client_save },
+	{ .name = "session_is_loaded", .trees = NULL, .branch = _client_session_is_loaded},
+	{ .name = "show_optional_gui", .trees = NULL, .branch = _client_show_optional_gui },
+	{ .name = "hide_optional_gui", .trees = NULL, .branch = _client_hide_optional_gui },
+	{ .name = NULL,                .trees = NULL, .branch = NULL } // sentinel
 };
 
 static const LV2_OSC_Tree tree_nsm [] = {
-	{
-		.name = "client",
-		.trees = tree_client,
-		.branch = NULL
-	},
-	{ // sentinel
-		.name = NULL,
-		.trees = NULL,
-		.branch = NULL
-	}
+	{ .name = "client", .trees = tree_client, .branch = NULL },
+	{ .name = NULL,     .trees = NULL,        .branch = NULL } // sentinel
 };
 
 static const LV2_OSC_Tree tree_root [] = {
-	{
-		.name = "reply",
-		.trees = NULL,
-		.branch = _reply
-	},
-	{
-		.name = "error",
-		.trees = NULL,
-		.branch = _error
-	},
-	{
-		.name = "nsm",
-		.trees = tree_nsm,
-		.branch = NULL
-	},
-	{ // sentinel
-		.name = NULL,
-		.trees = NULL,
-		.branch = NULL
-	}
+	{ .name = "reply", .trees = NULL,     .branch = _reply },
+	{ .name = "error", .trees = NULL,     .branch = _error },
+	{ .name = "nsm",   .trees = tree_nsm, .branch = NULL },
+
+	{ .name = NULL,    .trees = NULL,     .branch = NULL } // sentinel
 };
 
 static void *
@@ -694,6 +698,126 @@ nsmc_managed()
 	}
 
 	return false;
+}
+
+NSMC_API void
+nsmc_progress(nsmc_t *nsm, float progress)
+{
+	//FIXME needs client :progress: capability
+}
+
+NSMC_API void
+nsmc_dirty(nsmc_t *nsm)
+{
+	//FIXME needs client :dirty: capability
+}
+
+NSMC_API void
+nsmc_clean(nsmc_t *nsm)
+{
+	//FIXME needs client :dirty: capability
+}
+
+NSMC_API void
+nsmc_message(nsmc_t *nsm, int priority, const char *message)
+{
+	//FIXME
+}
+
+NSMC_API void
+nsmc_server_add(nsmc_t *nsm, const char *exe)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_save(nsmc_t *nsm)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_load(nsmc_t *nsm, const char *porj_name)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_new(nsmc_t *nsm, const char *porj_name)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_duplicate(nsmc_t *nsm, const char *porj_name)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_close(nsmc_t *nsm)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_abort(nsmc_t *nsm)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_quit(nsmc_t *nsm)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_list(nsmc_t *nsm)
+{
+	//FIXME needs server :server_control: capability
+}
+
+NSMC_API void
+nsmc_server_broadcast_valist(nsmc_t *nsm, const char *fmt, va_list args)
+{
+	if(!nsm || !nsm->tx)
+	{
+		return;
+	}
+
+	//FIXME needs server :broadcast: capability
+
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_varlist(&writer, "/nsm/server/broadcast", fmt, args);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
+}
+
+NSMC_API void
+nsmc_server_broadcast_vararg(nsmc_t *nsm, const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+
+	nsmc_server_broadcast_valist(nsm, fmt, args);
+
+	va_end(args);
 }
 
 #endif /* NSMC_IMPLEMENTATION */
