@@ -722,6 +722,11 @@ _bin_show_ipc(bin_t *bin)
 int
 bin_show(bin_t *bin)
 {
+	if(sp_app_visibility_get(bin->app))
+	{
+		return 0;
+	}
+
 	if(bin->threaded_gui)
 	{
 		return _bin_show_threaded(bin);
@@ -899,7 +904,25 @@ bin_bundle_load(bin_t *bin, const char *bundle_path)
 		return;
 	}
 
+	const bool visibility_old = sp_app_visibility_get(bin->app);
+
 	sp_app_bundle_load(bin->app, urn, false);
+
+	const bool visibility_new = sp_app_visibility_get(bin->app);
+
+	if(visibility_old != visibility_new)
+	{
+		sp_app_visibility_set(bin->app, visibility_old);
+
+		if(visibility_new)
+		{
+			bin_show(bin);
+		}
+		else
+		{
+			bin_hide(bin);
+		}
+	}
 }
 
 __non_realtime void
