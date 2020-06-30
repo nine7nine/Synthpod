@@ -408,7 +408,9 @@ static const nsmc_driver_t nsm_driver = {
 	.show = _show,
 	.hide = _hide,
 	.visibility = _visibility,
-	.supports_switch = true
+	.capability = NSMC_CAPABILITY_MESSAGE
+		| NSMC_CAPABILITY_SWITCH
+		| NSMC_CAPABILITY_OPTIONAL_GUI
 };
 
 // rt

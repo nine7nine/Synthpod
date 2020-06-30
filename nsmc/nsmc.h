@@ -28,6 +28,18 @@ extern "C" {
 
 #include <stdbool.h>
 
+typedef enum _nsmc_capability_t {
+	NSMC_CAPABILITY_NONE           = 0,
+	NSMC_CAPABILITY_SWITCH         = (1 << 0),
+	NSMC_CAPABILITY_MESSAGE        = (1 << 1),
+	NSMC_CAPABILITY_OPTIONAL_GUI   = (1 << 2),
+	NSMC_CAPABILITY_DIRTY          = (1 << 3),
+	NSMC_CAPABILITY_PROGRESS       = (1 << 4),
+
+	NSMC_CAPABILITY_SERVER_CONTROL = (1 << 16),
+	NSMC_CAPABILITY_BROADCAST      = (1 << 17),
+} nsmc_capability_t;
+
 typedef struct _nsmc_t nsmc_t;
 typedef struct _nsmc_driver_t nsmc_driver_t;
 	
@@ -44,7 +56,7 @@ struct _nsmc_driver_t {
 	nsmc_show_t show;
 	nsmc_hide_t hide;
 	nsmc_visibility_t visibility;
-	bool supports_switch;
+	nsmc_capability_t capability;
 };
 
 NSMC_API nsmc_t *
@@ -145,6 +157,8 @@ struct _nsmc_t {
 
 	varchunk_t *tx;
 	varchunk_t *rx;
+
+	nsmc_capability_t capability;
 };
 
 static void
@@ -157,7 +171,7 @@ _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 
 	//fprintf(stdout, "nsmc reply: %s\n", target);
 
-	if(target && !strcmp(target, "/nsm/server/announce"))
+	if(target && !strcasecmp(target, "/nsm/server/announce"))
 	{
 		const char *message = NULL;
 		const char *manager = NULL;
@@ -167,7 +181,21 @@ _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		lv2_osc_reader_get_string(reader, &manager);
 		lv2_osc_reader_get_string(reader, &capabilities);
 
-		//TODO, e.g. toggle SM LED, check capabilities
+		char *caps = alloca(strlen(capabilities) + 1);
+		strcpy(caps, capabilities);
+
+		char *tok;
+		while( (tok = strsep(&caps, ":")) )
+		{
+			if(!strcasecmp(tok, "server_control"))
+			{
+				nsm->capability |= NSMC_CAPABILITY_SERVER_CONTROL;
+			}
+			else if(!strcasecmp(tok, "broadcast"))
+			{
+				nsm->capability |= NSMC_CAPABILITY_BROADCAST;
+			}
+		}
 	}
 }
 
@@ -212,12 +240,11 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
 	}
 
-	const bool has_gui = nsm->driver->show && nsm->driver->hide;
 	const bool visibility = nsm->driver->visibility
 		? nsm->driver->visibility(nsm->data)
 		: false;
 
-	if(has_gui)
+	if(nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
 	{
 		uint8_t *tx;
 		size_t max;
@@ -305,22 +332,27 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 static void
 _announce(nsmc_t *nsm)
 {
-	char capabilities [64] = ":message:";
+	char capabilities [64] = "";
+
+	if(nsm->driver->capability & NSMC_CAPABILITY_SWITCH)
+	{
+		strcat(capabilities, ":switch:");
+	}
+	if(nsm->driver->capability & NSMC_CAPABILITY_MESSAGE)
+	{
+		strcat(capabilities, ":message:");
+	}
+	if(nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
+	{
+		strcat(capabilities, ":optional-gui:");
+	}
+	if(nsm->driver->capability & NSMC_CAPABILITY_DIRTY)
+	{
+		strcat(capabilities, ":dirty:");
+	}
 
 	// send announce message
 	pid_t pid = getpid();
-
-	const bool has_gui = nsm->driver->show && nsm->driver->hide;
-
-	if(has_gui)
-	{
-		strcat(capabilities, "optional-gui:");
-	}
-
-	if(nsm->driver->supports_switch)
-	{
-		strcat(capabilities, "switch:");
-	}
 
 	uint8_t *tx;
 	size_t max;
@@ -703,79 +735,144 @@ nsmc_managed()
 NSMC_API void
 nsmc_progress(nsmc_t *nsm, float progress)
 {
-	//FIXME needs client :progress: capability
+	if(!(nsm->driver->capability & NSMC_CAPABILITY_PROGRESS))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_dirty(nsmc_t *nsm)
 {
-	//FIXME needs client :dirty: capability
+	if(!(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_clean(nsmc_t *nsm)
 {
-	//FIXME needs client :dirty: capability
+	if(!(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_message(nsmc_t *nsm, int priority, const char *message)
 {
+	if(!(nsm->driver->capability & NSMC_CAPABILITY_MESSAGE))
+	{
+		return;
+	}
+
 	//FIXME
 }
 
 NSMC_API void
 nsmc_server_add(nsmc_t *nsm, const char *exe)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_save(nsmc_t *nsm)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_load(nsmc_t *nsm, const char *porj_name)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_new(nsmc_t *nsm, const char *porj_name)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_duplicate(nsmc_t *nsm, const char *porj_name)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_close(nsmc_t *nsm)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_abort(nsmc_t *nsm)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_quit(nsmc_t *nsm)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
 nsmc_server_list(nsmc_t *nsm)
 {
-	//FIXME needs server :server_control: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	{
+		return;
+	}
+
+	//FIXME
 }
 
 NSMC_API void
@@ -786,7 +883,10 @@ nsmc_server_broadcast_valist(nsmc_t *nsm, const char *fmt, va_list args)
 		return;
 	}
 
-	//FIXME needs server :broadcast: capability
+	if(!(nsm->capability & NSMC_CAPABILITY_BROADCAST))
+	{
+		return;
+	}
 
 	uint8_t *tx;
 	size_t max;
