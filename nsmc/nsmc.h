@@ -797,7 +797,26 @@ nsmc_progress(nsmc_t *nsm, float progress)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/client/progress", "f",
+			progress);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -808,7 +827,25 @@ nsmc_dirty(nsmc_t *nsm)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/client/is_dirty", "");
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -819,7 +856,25 @@ nsmc_clean(nsmc_t *nsm)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/client/is_clean", "");
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -830,7 +885,26 @@ nsmc_message(nsmc_t *nsm, int priority, const char *message)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/client/message", "is",
+			priority, message);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -841,7 +915,26 @@ nsmc_server_add(nsmc_t *nsm, const char *exe)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/add", "s",
+			exe);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -852,40 +945,115 @@ nsmc_server_save(nsmc_t *nsm)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/save", "");
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
-nsmc_server_load(nsmc_t *nsm, const char *porj_name)
+nsmc_server_load(nsmc_t *nsm, const char *proj_name)
 {
 	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/load", "s",
+			proj_name);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
-nsmc_server_new(nsmc_t *nsm, const char *porj_name)
+nsmc_server_new(nsmc_t *nsm, const char *proj_name)
 {
 	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/new", "s",
+			proj_name);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
-nsmc_server_duplicate(nsmc_t *nsm, const char *porj_name)
+nsmc_server_duplicate(nsmc_t *nsm, const char *proj_name)
 {
 	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/duplicate", "s",
+			proj_name);
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -896,7 +1064,25 @@ nsmc_server_close(nsmc_t *nsm)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/close", "");
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -907,7 +1093,25 @@ nsmc_server_abort(nsmc_t *nsm)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/abort", "");
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -918,7 +1122,25 @@ nsmc_server_quit(nsmc_t *nsm)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/quit", "");
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
@@ -929,7 +1151,25 @@ nsmc_server_list(nsmc_t *nsm)
 		return;
 	}
 
-	//FIXME
+	uint8_t *tx;
+	size_t max;
+	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	{
+		LV2_OSC_Writer writer;
+		lv2_osc_writer_initialize(&writer, tx, max);
+
+		lv2_osc_writer_message_vararg(&writer, "/nsm/server/list", "");
+
+		size_t written;
+		if(lv2_osc_writer_finalize(&writer, &written))
+		{
+			varchunk_write_advance(nsm->tx, written);
+		}
+		else
+		{
+			fprintf(stderr, "OSC sending failed\n");
+		}
+	}
 }
 
 NSMC_API void
