@@ -30,14 +30,21 @@ extern "C" {
 
 typedef enum _nsmc_capability_t {
 	NSMC_CAPABILITY_NONE           = 0,
-	NSMC_CAPABILITY_SWITCH         = (1 << 0),
-	NSMC_CAPABILITY_MESSAGE        = (1 << 1),
-	NSMC_CAPABILITY_OPTIONAL_GUI   = (1 << 2),
-	NSMC_CAPABILITY_DIRTY          = (1 << 3),
-	NSMC_CAPABILITY_PROGRESS       = (1 << 4),
 
-	NSMC_CAPABILITY_SERVER_CONTROL = (1 << 16),
-	NSMC_CAPABILITY_BROADCAST      = (1 << 17),
+	// client only
+	NSMC_CAPABILITY_SWITCH         = (1 << 0),
+	NSMC_CAPABILITY_DIRTY          = (1 << 1),
+	NSMC_CAPABILITY_PROGRESS       = (1 << 2),
+	NSMC_CAPABILITY_MESSAGE        = (1 << 3),
+
+	// client + server
+	NSMC_CAPABILITY_OPTIONAL_GUI   = (1 << 4),
+
+	// server only
+	NSMC_CAPABILITY_SERVER_CONTROL = (1 << 5),
+	NSMC_CAPABILITY_BROADCAST      = (1 << 6),
+
+	NSMC_CAPABILITY_MAX
 } nsmc_capability_t;
 
 typedef struct _nsmc_t nsmc_t;
@@ -57,6 +64,16 @@ struct _nsmc_driver_t {
 	nsmc_hide_t hide;
 	nsmc_visibility_t visibility;
 	nsmc_capability_t capability;
+};
+
+static const char *nsmc_capability_labels [NSMC_CAPABILITY_MAX] = {
+	[NSMC_CAPABILITY_SWITCH] = "switch",
+	[NSMC_CAPABILITY_DIRTY] = "dirty",
+	[NSMC_CAPABILITY_PROGRESS] = "progress",
+	[NSMC_CAPABILITY_MESSAGE] = "message",
+	[NSMC_CAPABILITY_OPTIONAL_GUI] = "optional-gui",
+	[NSMC_CAPABILITY_SERVER_CONTROL] = "server-control",
+	[NSMC_CAPABILITY_BROADCAST] = "broadcast"
 };
 
 NSMC_API nsmc_t *
@@ -161,25 +178,58 @@ struct _nsmc_t {
 	nsmc_capability_t capability;
 };
 
+static const char *
+_arg_to_string(LV2_OSC_Reader *reader, LV2_OSC_Arg **arg)
+{
+	if(lv2_osc_reader_arg_is_end(reader, *arg))
+	{
+		return NULL;
+	}
+
+	if((*arg)->type[0] != LV2_OSC_STRING)
+	{
+		return NULL;
+	}
+
+	const char *s = (*arg)->s;
+
+	*arg = lv2_osc_reader_arg_next(reader, *arg);
+
+	return s;
+}
+
+static int32_t
+_arg_to_int32(LV2_OSC_Reader *reader, LV2_OSC_Arg **arg)
+{
+	if(lv2_osc_reader_arg_is_end(reader, *arg))
+	{
+		return 0;
+	}
+
+	if((*arg)->type[0] != LV2_OSC_INT32)
+	{
+		return 0;
+	}
+
+	const int32_t i = (*arg)->i;
+
+	*arg = lv2_osc_reader_arg_next(reader, *arg);
+
+	return i;
+}
+
 static void
 _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	void *data)
 {
 	nsmc_t *nsm = data;
-	const char *target = NULL;
-	lv2_osc_reader_get_string(reader, &target);
-
-	//fprintf(stdout, "nsmc reply: %s\n", target);
+	const char *target = _arg_to_string(reader, &arg);
 
 	if(target && !strcasecmp(target, "/nsm/server/announce"))
 	{
-		const char *message = NULL;
-		const char *manager = NULL;
-		const char *capabilities = NULL;
-
-		lv2_osc_reader_get_string(reader, &message);
-		lv2_osc_reader_get_string(reader, &manager);
-		lv2_osc_reader_get_string(reader, &capabilities);
+		const char *message = _arg_to_string(reader, &arg);
+		const char *manager = _arg_to_string(reader, &arg);
+		const char *capabilities = _arg_to_string(reader, &arg);
 
 		char *caps = alloca(strlen(capabilities) + 1);
 		strcpy(caps, capabilities);
@@ -187,13 +237,15 @@ _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		char *tok;
 		while( (tok = strsep(&caps, ":")) )
 		{
-			if(!strcasecmp(tok, "server_control"))
+			for(nsmc_capability_t cap = NSMC_CAPABILITY_NONE;
+				cap < NSMC_CAPABILITY_MAX;
+				cap++)
 			{
-				nsm->capability |= NSMC_CAPABILITY_SERVER_CONTROL;
-			}
-			else if(!strcasecmp(tok, "broadcast"))
-			{
-				nsm->capability |= NSMC_CAPABILITY_BROADCAST;
+				if(  nsmc_capability_labels[cap]
+					&& !strcasecmp(nsmc_capability_labels[cap], tok) )
+				{
+					nsm->capability |= cap;
+				}
 			}
 		}
 	}
@@ -204,13 +256,9 @@ _error(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	void *data)
 {
 	nsmc_t *nsm = data;
-	const char *msg = NULL;
-	int32_t code = 0;
-	const char *err = NULL;
-
-	lv2_osc_reader_get_string(reader, &msg);
-	lv2_osc_reader_get_int32(reader, &code);
-	lv2_osc_reader_get_string(reader, &err);
+	const char *msg = _arg_to_string(reader, &arg);
+	const int32_t code = _arg_to_int32(reader, &arg);
+	const char *err = _arg_to_string(reader, &arg);
 
 	fprintf(stderr, "nsmc error: #%i in %s: %s\n", code, msg, err);
 }
@@ -220,13 +268,9 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	void *data)
 {
 	nsmc_t *nsm = data;
-	const char *dir = NULL;
-	const char *name = NULL;
-	const char *id = NULL;
-
-	lv2_osc_reader_get_string(reader, &dir);
-	lv2_osc_reader_get_string(reader, &name);
-	lv2_osc_reader_get_string(reader, &id);
+	const char *dir = _arg_to_string(reader, &arg);
+	const char *name = _arg_to_string(reader, &arg);
+	const char *id = _arg_to_string(reader, &arg);
 
 	char tmp [PATH_MAX];
 	const char *resolvedpath = realpath(dir, tmp);
@@ -246,30 +290,41 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 
 	if(nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
 	{
-		uint8_t *tx;
-		size_t max;
-		if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+		if(nsm->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
 		{
-			LV2_OSC_Writer writer;
-			lv2_osc_writer_initialize(&writer, tx, max);
-
-			if(visibility && (nsm->driver->show(nsm->data) == 0) )
+			uint8_t *tx;
+			size_t max;
+			if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
 			{
-				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+				LV2_OSC_Writer writer;
+				lv2_osc_writer_initialize(&writer, tx, max);
+
+				if(visibility && nsm->driver->show && (nsm->driver->show(nsm->data) == 0) )
+				{
+					lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
+				}
+				else
+				{
+					lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
+				}
+
+				size_t written;
+				if(lv2_osc_writer_finalize(&writer, &written))
+				{
+					varchunk_write_advance(nsm->tx, written);
+				}
+				else
+				{
+					fprintf(stderr, "OSC sending failed\n");
+				}
 			}
 			else
 			{
-				lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
-			}
-
-			size_t written;
-			if(lv2_osc_writer_finalize(&writer, &written))
-			{
-				varchunk_write_advance(nsm->tx, written);
-			}
-			else
-			{
-				fprintf(stderr, "OSC sending failed\n");
+				// always show gui when server does not support optional guis
+				if(nsm->driver->show)
+				{
+					nsm->driver->show(nsm->data);
+				}
 			}
 		}
 	}
@@ -304,13 +359,14 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	nsmc_t *nsm = data;
 
 	// show gui
-	if(nsm->driver->show && nsm->driver->show(nsm->data))
+	if(  (nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
+		&& nsm->driver->show
+		&& (nsm->driver->show(nsm->data) == 0) )
 	{
-		fprintf(stderr, "NSM show GUI failed\n");
-		return;
+		nsmc_shown(nsm);
 	}
 
-	nsmc_shown(nsm);
+	fprintf(stderr, "NSM show GUI failed\n");
 }
 
 static void
@@ -320,35 +376,36 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	nsmc_t *nsm = data;
 
 	// hide gui
-	if(nsm->driver->hide && nsm->driver->hide(nsm->data))
+	if(  (nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
+		&& nsm->driver->hide
+		&& (nsm->driver->hide(nsm->data) == 0) )
 	{
-		fprintf(stderr, "NSM hide GUI failed\n");
-		return;
+		nsmc_hidden(nsm);
 	}
 
-	nsmc_hidden(nsm);
+	fprintf(stderr, "NSM hide GUI failed\n");
 }
 
 static void
 _announce(nsmc_t *nsm)
 {
-	char capabilities [64] = "";
+	char capabilities [128] = "";
 
-	if(nsm->driver->capability & NSMC_CAPABILITY_SWITCH)
+	for(nsmc_capability_t cap = NSMC_CAPABILITY_NONE;
+		cap < NSMC_CAPABILITY_MAX;
+		cap++)
 	{
-		strcat(capabilities, ":switch:");
+		if(  (nsm->driver->capability & cap)
+			&& nsmc_capability_labels[cap] )
+		{
+			strcat(capabilities, ":");
+			strcat(capabilities, nsmc_capability_labels[cap]);
+		}
 	}
-	if(nsm->driver->capability & NSMC_CAPABILITY_MESSAGE)
+
+	if(strlen(capabilities) > 0)
 	{
-		strcat(capabilities, ":message:");
-	}
-	if(nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
-	{
-		strcat(capabilities, ":optional-gui:");
-	}
-	if(nsm->driver->capability & NSMC_CAPABILITY_DIRTY)
-	{
-		strcat(capabilities, ":dirty:");
+		strcat(capabilities, ":");
 	}
 
 	// send announce message
