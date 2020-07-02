@@ -181,6 +181,16 @@ struct _nsmc_t {
 static int
 _nsmc_message_varlist(nsmc_t *nsm, const char *path, const char *fmt, va_list args)
 {
+	if(!nsm)
+	{
+		return 1;
+	}
+
+	if(!nsmc_managed())
+	{
+		return 0;
+	}
+
 	size_t max = 0;
 	uint8_t *tx = varchunk_write_request_max(nsm->tx, 1024, &max);
 	if(!tx)
