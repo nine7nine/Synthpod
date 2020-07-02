@@ -86,64 +86,64 @@ nsmc_free(nsmc_t *nsm);
 NSMC_API void
 nsmc_run(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_opened(nsmc_t *nsm, int status);
 
-NSMC_API void
+NSMC_API int
 nsmc_shown(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_hidden(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_saved(nsmc_t *nsm, int status);
 
 NSMC_API bool
 nsmc_managed();
 
-NSMC_API void
+NSMC_API int
 nsmc_progress(nsmc_t *nsm, float progress);
 
-NSMC_API void
+NSMC_API int
 nsmc_dirty(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_clean(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_message(nsmc_t *nsm, int priority, const char *message);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_add(nsmc_t *nsm, const char *exe);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_save(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_load(nsmc_t *nsm, const char *porj_name);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_new(nsmc_t *nsm, const char *porj_name);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_duplicate(nsmc_t *nsm, const char *porj_name);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_close(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_abort(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_quit(nsmc_t *nsm);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_list(nsmc_t *nsm);
 
-NSMC_API void
-nsmc_server_broadcast_valist(nsmc_t *nsm, const char *fmt, va_list args);
+NSMC_API int
+nsmc_server_broadcast_varlist(nsmc_t *nsm, const char *fmt, va_list args);
 
-NSMC_API void
+NSMC_API int
 nsmc_server_broadcast_vararg(nsmc_t *nsm, const char *fmt, ...);
 
 #ifdef NSMC_IMPLEMENTATION
@@ -177,6 +177,48 @@ struct _nsmc_t {
 
 	nsmc_capability_t capability;
 };
+
+static int
+_nsmc_message_varlist(nsmc_t *nsm, const char *path, const char *fmt, va_list args)
+{
+	size_t max = 0;
+	uint8_t *tx = varchunk_write_request_max(nsm->tx, 1024, &max);
+	if(!tx)
+	{
+		return 1;
+	}
+
+	LV2_OSC_Writer writer;
+	lv2_osc_writer_initialize(&writer, tx, max);
+
+	if(lv2_osc_writer_message_varlist(&writer, path, fmt, args) == false)
+	{
+		return 1;
+	}
+
+	size_t written;
+	if(lv2_osc_writer_finalize(&writer, &written) == NULL)
+	{
+		return 1;
+	}
+
+	varchunk_write_advance(nsm->tx, written);
+
+	return 0;
+}
+
+static int
+_nsmc_message_vararg(nsmc_t *nsm, const char *path, const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+
+	const int ret = _nsmc_message_varlist(nsm, path, fmt, args);
+
+	va_end(args);
+
+	return ret;
+}
 
 static const char *
 _arg_to_string(LV2_OSC_Reader *reader, LV2_OSC_Arg **arg)
@@ -284,49 +326,35 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
 	}
 
+	// return if client does not support optional gui
+	if(!(nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI))
+	{
+		return;
+	}
+
+	// always show gui if server does not support optional gui
+	if(!(nsm->capability & NSMC_CAPABILITY_OPTIONAL_GUI))
+	{
+		if(nsm->driver->show)
+		{
+			nsm->driver->show(nsm->data);
+		}
+
+		return;
+	}
+
+	// put gui visibility into last known state
 	const bool visibility = nsm->driver->visibility
 		? nsm->driver->visibility(nsm->data)
 		: false;
 
-	if(nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
+	if(visibility && nsm->driver->show && (nsm->driver->show(nsm->data) == 0) )
 	{
-		if(nsm->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
-		{
-			uint8_t *tx;
-			size_t max;
-			if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-			{
-				LV2_OSC_Writer writer;
-				lv2_osc_writer_initialize(&writer, tx, max);
-
-				if(visibility && nsm->driver->show && (nsm->driver->show(nsm->data) == 0) )
-				{
-					lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
-				}
-				else
-				{
-					lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
-				}
-
-				size_t written;
-				if(lv2_osc_writer_finalize(&writer, &written))
-				{
-					varchunk_write_advance(nsm->tx, written);
-				}
-				else
-				{
-					fprintf(stderr, "OSC sending failed\n");
-				}
-			}
-			else
-			{
-				// always show gui when server does not support optional guis
-				if(nsm->driver->show)
-				{
-					nsm->driver->show(nsm->data);
-				}
-			}
-		}
+		_nsmc_message_vararg(nsm, "/nsm/client/gui_is_shown", "");
+	}
+	else
+	{
+		_nsmc_message_vararg(nsm, "/nsm/client/gui_is_hidden", "");
 	}
 }
 
@@ -386,7 +414,7 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	fprintf(stderr, "NSM hide GUI failed\n");
 }
 
-static void
+static int
 _announce(nsmc_t *nsm)
 {
 	char capabilities [128] = "";
@@ -411,26 +439,8 @@ _announce(nsmc_t *nsm)
 	// send announce message
 	pid_t pid = getpid();
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/announce", "sssiii",
-			nsm->call, capabilities, nsm->exe, 1, 2, pid);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/announce", "sssiii",
+		nsm->call, capabilities, nsm->exe, 1, 2, pid);
 }
 
 static const LV2_OSC_Tree tree_client [] = {
@@ -644,138 +654,62 @@ nsmc_run(nsmc_t *nsm)
 	}
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_opened(nsmc_t *nsm, int status)
 {
-	if(!nsm || !nsm->tx)
+	if(!nsm)
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	if(status == 0)
 	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		if(status == 0)
-		{
-			lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
-				"/nsm/client/open", "opened");
-		}
-		else
-		{
-			lv2_osc_writer_message_vararg(&writer, "/error", "sis",
-				"/nsm/client/open", 2, "opening failed");
-		}
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
+		return _nsmc_message_vararg(nsm, "/reply", "ss",
+					"/nsm/client/open", "opened");
 	}
+
+	return _nsmc_message_vararg(nsm, "/error", "sis",
+		"/nsm/client/open", 2, "opening failed");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_shown(nsmc_t *nsm)
 {
-	if(!nsm || !nsm->tx)
+	if(!nsm)
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		// reply
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-		lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_shown", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/client/gui_is_shown", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_hidden(nsmc_t *nsm)
 {
-	if(!nsm || !nsm->tx)
+	if(!nsm)
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		// reply
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-		lv2_osc_writer_message_vararg(&writer, "/nsm/client/gui_is_hidden", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/client/gui_is_hidden", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_saved(nsmc_t *nsm, int status)
 {
-	if(!nsm || !nsm->tx)
+	if(!nsm)
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
+	if(status == 0)
 	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		if(status == 0)
-		{
-			lv2_osc_writer_message_vararg(&writer, "/reply", "ss",
-				"/nsm/client/save", "saved");
-		}
-		else
-		{
-			lv2_osc_writer_message_vararg(&writer, "/error", "sis",
-				"/nsm/client/save", 1, "save failed");
-		}
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
+		return _nsmc_message_vararg(nsm, "/reply", "ss",
+			"/nsm/client/save", "saved");
 	}
+
+	return _nsmc_message_vararg(nsm, "/error", "sis",
+		"/nsm/client/save", 1, "save failed");
 }
 
 NSMC_API bool
@@ -789,432 +723,172 @@ nsmc_managed()
 	return false;
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_progress(nsmc_t *nsm, float progress)
 {
-	if(!(nsm->driver->capability & NSMC_CAPABILITY_PROGRESS))
+	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_PROGRESS))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/client/progress", "f",
-			progress);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/client/progress", "f", progress);
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_dirty(nsmc_t *nsm)
 {
-	if(!(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
+	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/client/is_dirty", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/client/is_dirty", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_clean(nsmc_t *nsm)
 {
-	if(!(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
+	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/client/is_clean", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/client/is_clean", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_message(nsmc_t *nsm, int priority, const char *message)
 {
-	if(!(nsm->driver->capability & NSMC_CAPABILITY_MESSAGE))
+	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_MESSAGE))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/client/message", "is",
-			priority, message);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/client/message", "is",
+		priority, message);
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_add(nsmc_t *nsm, const char *exe)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/add", "s",
-			exe);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/add", "s", exe);
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_save(nsmc_t *nsm)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/save", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/save", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_load(nsmc_t *nsm, const char *proj_name)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/load", "s",
-			proj_name);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/load", "s", proj_name);
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_new(nsmc_t *nsm, const char *proj_name)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/new", "s",
-			proj_name);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/new", "s", proj_name);
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_duplicate(nsmc_t *nsm, const char *proj_name)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/duplicate", "s",
-			proj_name);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/duplicate", "s", proj_name);
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_close(nsmc_t *nsm)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/close", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/close", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_abort(nsmc_t *nsm)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/abort", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/abort", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_quit(nsmc_t *nsm)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/quit", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/quit", "");
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_list(nsmc_t *nsm)
 {
-	if(!(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
-		return;
+		return 1;
 	}
 
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_vararg(&writer, "/nsm/server/list", "");
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_vararg(nsm, "/nsm/server/list", "");
 }
 
-NSMC_API void
-nsmc_server_broadcast_valist(nsmc_t *nsm, const char *fmt, va_list args)
+NSMC_API int
+nsmc_server_broadcast_varlist(nsmc_t *nsm, const char *fmt, va_list args)
 {
-	if(!nsm || !nsm->tx)
+	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_BROADCAST))
 	{
-		return;
+		return 1;
 	}
 
-	if(!(nsm->capability & NSMC_CAPABILITY_BROADCAST))
-	{
-		return;
-	}
-
-	uint8_t *tx;
-	size_t max;
-	if( (tx = varchunk_write_request_max(nsm->tx, 1024, &max)) )
-	{
-		LV2_OSC_Writer writer;
-		lv2_osc_writer_initialize(&writer, tx, max);
-
-		lv2_osc_writer_message_varlist(&writer, "/nsm/server/broadcast", fmt, args);
-
-		size_t written;
-		if(lv2_osc_writer_finalize(&writer, &written))
-		{
-			varchunk_write_advance(nsm->tx, written);
-		}
-		else
-		{
-			fprintf(stderr, "OSC sending failed\n");
-		}
-	}
+	return _nsmc_message_varlist(nsm, "/nsm/server/broadcast", fmt, args);
 }
 
-NSMC_API void
+NSMC_API int
 nsmc_server_broadcast_vararg(nsmc_t *nsm, const char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
 
-	nsmc_server_broadcast_valist(nsm, fmt, args);
+	const int ret = nsmc_server_broadcast_varlist(nsm, fmt, args);
 
 	va_end(args);
+
+	return ret;
 }
 
 #endif /* NSMC_IMPLEMENTATION */
