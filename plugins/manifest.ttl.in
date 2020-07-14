@@ -17,16 +17,8 @@
 @prefix owl:			<http://www.w3.org/2002/07/owl#> .
 @prefix rdfs:     <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix ui:       <http://lv2plug.in/ns/extensions/ui#> .
-@prefix kx:				<http://kxstudio.sf.net/ns/lv2ext/external-ui#> .
 
 @prefix synthpod: <http://open-music-kontrollers.ch/lv2/synthpod#> .
-
-# to please sord_validate
-kx:Widget
-	a rdfs:Class, owl:Class ;
-	rdfs:subClassOf ui:UI .
-kx:Host
-	a lv2:Feature .
 
 # Synthpod Stereo
 synthpod:stereo
