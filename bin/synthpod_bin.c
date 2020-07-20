@@ -491,8 +491,7 @@ _gui_rolling(bin_t *bin)
 }
 
 __realtime void
-bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driver,
-	nsmc_callback_t nsm_callback)
+bin_run(bin_t *bin, const char *name, char **argv, nsmc_callback_t callback)
 {
 	char *fallback_path = NULL;
 
@@ -513,7 +512,7 @@ bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driv
 	const char *exe = strrchr(argv[0], '/');
 	exe = exe ? exe + 1 : argv[0]; // we only want the program name without path
 	bin->nsm = nsmc_new(name, exe, fallback_path ? fallback_path : argv[optind],
-		nsm_driver, nsm_callback, bin); //TODO check
+		callback, bin); //TODO check
 
 	if(fallback_path)
 	{

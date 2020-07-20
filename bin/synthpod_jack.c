@@ -975,12 +975,6 @@ _visibility(void *data)
 	return bin_visibility(bin);
 }
 
-static const nsmc_driver_t nsm_driver = {
-	.capability = NSMC_CAPABILITY_MESSAGE
-		| NSMC_CAPABILITY_SWITCH
-		| NSMC_CAPABILITY_OPTIONAL_GUI
-};
-
 __non_realtime static int
 _nsm_callback(void *data, const nsmc_event_t *ev)
 {
@@ -996,6 +990,10 @@ _nsm_callback(void *data, const nsmc_event_t *ev)
 			return _hide(data);
 		case NSMC_EVENT_TYPE_VISIBILITY:
 			return _visibility(data);
+		case NSMC_EVENT_TYPE_CAPABILITY:
+			return NSMC_CAPABILITY_MESSAGE
+				| NSMC_CAPABILITY_SWITCH
+				| NSMC_CAPABILITY_OPTIONAL_GUI;
 
 		case NSMC_EVENT_TYPE_NONE:
 			// fall-through
@@ -1230,7 +1228,7 @@ main(int argc, char **argv)
 	bin->app_driver.features = SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH; // always true for JACK
 
 	// run
-	bin_run(bin, "Synthpod-JACK", argv, &nsm_driver, _nsm_callback);
+	bin_run(bin, "Synthpod-JACK", argv, _nsm_callback);
 
 	// stop
 	bin_stop(bin);

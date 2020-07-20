@@ -54,21 +54,18 @@ typedef enum _nsmc_event_type_t {
 	NSMC_EVENT_TYPE_SAVE,
 	NSMC_EVENT_TYPE_SHOW,
 	NSMC_EVENT_TYPE_HIDE,
+
 	NSMC_EVENT_TYPE_VISIBILITY,
+	NSMC_EVENT_TYPE_CAPABILITY,
 
 	NSMC_EVENT_TYPE_MAX
 } nsmc_event_type_t;
 
 typedef struct _nsmc_t nsmc_t;
-typedef struct _nsmc_driver_t nsmc_driver_t;
 typedef struct _nsmc_event_open_t nsmc_event_open_t;
 typedef struct _nsmc_event_t nsmc_event_t;
 	
 typedef int (*nsmc_callback_t)(void *data, const nsmc_event_t *ev);
-
-struct _nsmc_driver_t {
-	nsmc_capability_t capability;
-};
 
 struct _nsmc_event_open_t {
 	const char *path;
@@ -95,7 +92,7 @@ static const char *nsmc_capability_labels [NSMC_CAPABILITY_MAX] = {
 
 NSMC_API nsmc_t *
 nsmc_new(const char *call, const char *exe, const char *fallback_path,
-	const nsmc_driver_t *driver, nsmc_callback_t nsm_callback, void *data);
+	nsmc_callback_t callback, void *data);
 
 NSMC_API void
 nsmc_free(nsmc_t *nsm);
@@ -184,7 +181,7 @@ struct _nsmc_t {
 	char *call;
 	char *exe;
 
-	const nsmc_driver_t *driver;
+	nsmc_capability_t client_capability;
 	nsmc_callback_t callback;
 	void *data;
 
@@ -193,7 +190,7 @@ struct _nsmc_t {
 	varchunk_t *tx;
 	varchunk_t *rx;
 
-	nsmc_capability_t capability;
+	nsmc_capability_t host_capability;
 };
 
 static int
@@ -314,7 +311,7 @@ _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 				if(  nsmc_capability_labels[cap]
 					&& !strcasecmp(nsmc_capability_labels[cap], tok) )
 				{
-					nsm->capability |= cap;
+					nsm->host_capability |= cap;
 				}
 			}
 		}
@@ -364,7 +361,7 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	}
 
 	// return if client does not support optional gui
-	if(!(nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI))
+	if(!(nsm->client_capability & NSMC_CAPABILITY_OPTIONAL_GUI))
 	{
 		return;
 	}
@@ -374,7 +371,7 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	};
 
 	// always show gui if server does not support optional gui
-	if(!(nsm->capability & NSMC_CAPABILITY_OPTIONAL_GUI))
+	if(!(nsm->host_capability & NSMC_CAPABILITY_OPTIONAL_GUI))
 	{
 		if(nsm->callback(nsm->data, &ev_show) != 0)
 		{
@@ -436,7 +433,7 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	};
 
 	// show gui
-	if(  (nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
+	if(  (nsm->client_capability & NSMC_CAPABILITY_OPTIONAL_GUI)
 		&& (nsm->callback(nsm->data, &ev_show) == 0) )
 	{
 		nsmc_shown(nsm);
@@ -453,7 +450,7 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	};
 
 	// hide gui
-	if(  (nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
+	if(  (nsm->client_capability & NSMC_CAPABILITY_OPTIONAL_GUI)
 		&& (nsm->callback(nsm->data, &ev_hide) == 0) )
 	{
 		nsmc_hidden(nsm);
@@ -469,7 +466,7 @@ _announce(nsmc_t *nsm)
 		cap < NSMC_CAPABILITY_MAX;
 		cap++)
 	{
-		if(  (nsm->driver->capability & cap)
+		if(  (nsm->client_capability & cap)
 			&& nsmc_capability_labels[cap] )
 		{
 			strcat(capabilities, ":");
@@ -552,9 +549,9 @@ static const LV2_OSC_Driver driver = {
 
 NSMC_API nsmc_t *
 nsmc_new(const char *call, const char *exe, const char *fallback_path,
-	const nsmc_driver_t *nsm_driver, nsmc_callback_t nsm_callback, void *data)
+	nsmc_callback_t callback, void *data)
 {
-	if(!nsm_driver)
+	if(!callback)
 	{
 		return NULL;
 	}
@@ -565,9 +562,14 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 		return NULL;
 	}
 
-	nsm->driver = nsm_driver;
-	nsm->callback = nsm_callback;
+	nsm->callback = callback;
 	nsm->data = data;
+
+	const nsmc_event_t ev_capability = {
+		.type = NSMC_EVENT_TYPE_CAPABILITY,
+	};
+
+	nsm->client_capability = nsm->callback(nsm->data, &ev_capability);
 
 	nsm->call = call ? strdup(call) : NULL;
 	nsm->exe = exe ? strdup(exe) : NULL;
@@ -783,7 +785,7 @@ nsmc_managed()
 NSMC_API int
 nsmc_progress(nsmc_t *nsm, float progress)
 {
-	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_PROGRESS))
+	if(!nsm || !(nsm->client_capability & NSMC_CAPABILITY_PROGRESS))
 	{
 		return 1;
 	}
@@ -794,7 +796,7 @@ nsmc_progress(nsmc_t *nsm, float progress)
 NSMC_API int
 nsmc_dirty(nsmc_t *nsm)
 {
-	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
+	if(!nsm || !(nsm->client_capability & NSMC_CAPABILITY_DIRTY))
 	{
 		return 1;
 	}
@@ -805,7 +807,7 @@ nsmc_dirty(nsmc_t *nsm)
 NSMC_API int
 nsmc_clean(nsmc_t *nsm)
 {
-	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_DIRTY))
+	if(!nsm || !(nsm->client_capability & NSMC_CAPABILITY_DIRTY))
 	{
 		return 1;
 	}
@@ -816,7 +818,7 @@ nsmc_clean(nsmc_t *nsm)
 NSMC_API int
 nsmc_message(nsmc_t *nsm, int priority, const char *message)
 {
-	if(!nsm || !(nsm->driver->capability & NSMC_CAPABILITY_MESSAGE))
+	if(!nsm || !(nsm->client_capability & NSMC_CAPABILITY_MESSAGE))
 	{
 		return 1;
 	}
@@ -828,7 +830,7 @@ nsmc_message(nsmc_t *nsm, int priority, const char *message)
 NSMC_API int
 nsmc_server_add(nsmc_t *nsm, const char *exe)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -839,7 +841,7 @@ nsmc_server_add(nsmc_t *nsm, const char *exe)
 NSMC_API int
 nsmc_server_save(nsmc_t *nsm)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -850,7 +852,7 @@ nsmc_server_save(nsmc_t *nsm)
 NSMC_API int
 nsmc_server_load(nsmc_t *nsm, const char *proj_name)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -861,7 +863,7 @@ nsmc_server_load(nsmc_t *nsm, const char *proj_name)
 NSMC_API int
 nsmc_server_new(nsmc_t *nsm, const char *proj_name)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -872,7 +874,7 @@ nsmc_server_new(nsmc_t *nsm, const char *proj_name)
 NSMC_API int
 nsmc_server_duplicate(nsmc_t *nsm, const char *proj_name)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -883,7 +885,7 @@ nsmc_server_duplicate(nsmc_t *nsm, const char *proj_name)
 NSMC_API int
 nsmc_server_close(nsmc_t *nsm)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -894,7 +896,7 @@ nsmc_server_close(nsmc_t *nsm)
 NSMC_API int
 nsmc_server_abort(nsmc_t *nsm)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -905,7 +907,7 @@ nsmc_server_abort(nsmc_t *nsm)
 NSMC_API int
 nsmc_server_quit(nsmc_t *nsm)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -916,7 +918,7 @@ nsmc_server_quit(nsmc_t *nsm)
 NSMC_API int
 nsmc_server_list(nsmc_t *nsm)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_SERVER_CONTROL))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_SERVER_CONTROL))
 	{
 		return 1;
 	}
@@ -927,7 +929,7 @@ nsmc_server_list(nsmc_t *nsm)
 NSMC_API int
 nsmc_server_broadcast_varlist(nsmc_t *nsm, const char *fmt, va_list args)
 {
-	if(!nsm || !(nsm->capability & NSMC_CAPABILITY_BROADCAST))
+	if(!nsm || !(nsm->host_capability & NSMC_CAPABILITY_BROADCAST))
 	{
 		return 1;
 	}
