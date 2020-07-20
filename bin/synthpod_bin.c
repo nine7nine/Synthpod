@@ -887,21 +887,21 @@ bin_process_post(bin_t *bin)
 	// nothing
 }
 
-__non_realtime void
+__non_realtime int
 bin_bundle_new(bin_t *bin)
 {
 	// simply load the default state
-	bin_bundle_load(bin, SYNTHPOD_PREFIX"stereo");
+	return bin_bundle_load(bin, SYNTHPOD_PREFIX"stereo");
 }
 
-__non_realtime void
+__non_realtime int
 bin_bundle_load(bin_t *bin, const char *bundle_path)
 {
 	const LV2_URID urn = bin->map->map(bin->map->handle, bundle_path);
 	if(!urn)
 	{
 		bin_log_error(bin, "%s: invalid path: %s\n", __func__, bundle_path);
-		return;
+		return 1;
 	}
 
 	const bool visibility_old = sp_app_visibility_get(bin->app);
@@ -923,6 +923,8 @@ bin_bundle_load(bin_t *bin, const char *bundle_path)
 			bin_hide(bin);
 		}
 	}
+
+	return 0;
 }
 
 __non_realtime void
@@ -931,17 +933,18 @@ bin_bundle_reset(bin_t *bin)
 	sp_app_bundle_reset(bin->app);
 }
 
-__non_realtime void
+__non_realtime int
 bin_bundle_save(bin_t *bin, const char *bundle_path)
 {
 	const LV2_URID urn = bin->map->map(bin->map->handle, bundle_path);
 	if(!urn)
 	{
 		bin_log_error(bin, "%s: invalid path: %s\n", __func__, bundle_path);
-		return;
+		return 1;
 	}
 
-	sp_app_bundle_save(bin->app, urn, false);
+	sp_app_bundle_save(bin->app, urn, false); //FIXME check
+	return 0;
 }
 
 __realtime void

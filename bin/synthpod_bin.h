@@ -142,16 +142,16 @@ bin_process_pre(bin_t *bin, uint32_t nsamples, bool bypassed);
 void
 bin_process_post(bin_t *bin);
 
-void
+int
 bin_bundle_new(bin_t *bin);
 
 void
 bin_bundle_reset(bin_t *bin);
 
-void
+int
 bin_bundle_load(bin_t *bin, const char *bundle_path);
 
-void
+int
 bin_bundle_save(bin_t *bin, const char *bundle_path);
 
 void

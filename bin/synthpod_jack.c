@@ -883,9 +883,8 @@ _jack_deinit(prog_t *handle)
 }
 
 __non_realtime static int
-_open(const char *path, const char *name, const char *id, void *data)
+_open(const char *path, const char *name, const char *id, bin_t *bin)
 {
-	bin_t *bin = data;
 	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
 	(void)name;
 
@@ -935,61 +934,26 @@ _open(const char *path, const char *name, const char *id, void *data)
 
 	jack_activate(handle->client); //TODO check
 
-	bin_bundle_load(bin, bin->path);
-
-	return 0; // success
-}
-
-__non_realtime static int
-_save(void *data)
-{
-	bin_t *bin = data;
-	prog_t *handle = (void *)bin - offsetof(prog_t, bin);
-
-	bin_bundle_save(bin, bin->path);
-
-	return 0; // success
-}
-
-__non_realtime static int
-_show(void *data)
-{
-	bin_t *bin = data;
-
-	return bin_show(bin);
-}
-
-__non_realtime static int
-_hide(void *data)
-{
-	bin_t *bin = data;
-
-	return bin_hide(bin);
-}
-
-__non_realtime static int
-_visibility(void *data)
-{
-	bin_t *bin = data;
-
-	return bin_visibility(bin);
+	return bin_bundle_load(bin, bin->path);
 }
 
 __non_realtime static int
 _nsm_callback(void *data, const nsmc_event_t *ev)
 {
+	bin_t *bin = data;
+
 	switch(ev->type)
 	{
 		case NSMC_EVENT_TYPE_OPEN:
-			return _open(ev->open.path, ev->open.name, ev->open.id, data);
+			return _open(ev->open.path, ev->open.name, ev->open.id, bin);
 		case NSMC_EVENT_TYPE_SAVE:
-			return _save(data);
+			return bin_bundle_save(bin, bin->path);
 		case NSMC_EVENT_TYPE_SHOW:
-			return _show(data);
+			return bin_show(bin);
 		case NSMC_EVENT_TYPE_HIDE:
-			return _hide(data);
+			return bin_hide(bin);
 		case NSMC_EVENT_TYPE_VISIBILITY:
-			return _visibility(data);
+			return bin_visibility(bin);
 		case NSMC_EVENT_TYPE_CAPABILITY:
 			return NSMC_CAPABILITY_MESSAGE
 				| NSMC_CAPABILITY_SWITCH
