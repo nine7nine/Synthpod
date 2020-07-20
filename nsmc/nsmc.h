@@ -54,6 +54,7 @@ typedef enum _nsmc_event_type_t {
 	NSMC_EVENT_TYPE_SAVE,
 	NSMC_EVENT_TYPE_SHOW,
 	NSMC_EVENT_TYPE_HIDE,
+	NSMC_EVENT_TYPE_VISIBILITY,
 
 	NSMC_EVENT_TYPE_MAX
 } nsmc_event_type_t;
@@ -63,11 +64,9 @@ typedef struct _nsmc_driver_t nsmc_driver_t;
 typedef struct _nsmc_event_open_t nsmc_event_open_t;
 typedef struct _nsmc_event_t nsmc_event_t;
 	
-typedef bool (*nsmc_visibility_t)(void *data);
 typedef int (*nsmc_callback_t)(void *data, const nsmc_event_t *ev);
 
 struct _nsmc_driver_t {
-	nsmc_visibility_t visibility;
 	nsmc_capability_t capability;
 };
 
@@ -385,10 +384,12 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		return;
 	}
 
+	const nsmc_event_t ev_visibility = {
+		.type = NSMC_EVENT_TYPE_VISIBILITY
+	};
+
 	// put gui visibility into last known state
-	const bool visibility = nsm->driver->visibility
-		? nsm->driver->visibility(nsm->data)
-		: false;
+	const int visibility = nsm->callback(nsm->data, &ev_visibility);
 
 	if(visibility && (nsm->callback(nsm->data, &ev_show) == 0) )
 	{

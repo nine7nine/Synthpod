@@ -394,7 +394,7 @@ _hide(void *data)
 	return bin_hide(bin);
 }
 
-__non_realtime static bool
+__non_realtime static int
 _visibility(void *data)
 {
 	bin_t *bin = data;
@@ -403,7 +403,6 @@ _visibility(void *data)
 }
 
 static const nsmc_driver_t nsm_driver = {
-	.visibility = _visibility,
 	.capability = NSMC_CAPABILITY_MESSAGE
 		| NSMC_CAPABILITY_SWITCH
 		| NSMC_CAPABILITY_OPTIONAL_GUI
@@ -422,6 +421,8 @@ _nsm_callback(void *data, const nsmc_event_t *ev)
 			return _show(data);
 		case NSMC_EVENT_TYPE_HIDE:
 			return _hide(data);
+		case NSMC_EVENT_TYPE_VISIBILITY:
+			return _visibility(data);
 
 		case NSMC_EVENT_TYPE_NONE:
 			// fall-through
