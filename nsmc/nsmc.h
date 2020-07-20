@@ -47,23 +47,41 @@ typedef enum _nsmc_capability_t {
 	NSMC_CAPABILITY_MAX
 } nsmc_capability_t;
 
+typedef enum _nsmc_event_type_t {
+	NSMC_EVENT_TYPE_NONE = 0,
+
+	NSMC_EVENT_TYPE_OPEN,
+	NSMC_EVENT_TYPE_SAVE,
+	NSMC_EVENT_TYPE_SHOW,
+	NSMC_EVENT_TYPE_HIDE,
+
+	NSMC_EVENT_TYPE_MAX
+} nsmc_event_type_t;
+
 typedef struct _nsmc_t nsmc_t;
 typedef struct _nsmc_driver_t nsmc_driver_t;
+typedef struct _nsmc_event_open_t nsmc_event_open_t;
+typedef struct _nsmc_event_t nsmc_event_t;
 	
-typedef int (*nsmc_open_t)(const char *path, const char *name,
-	const char *id, void *data);
-typedef int (*nsmc_save_t)(void *data);
-typedef int (*nsmc_show_t)(void *data);
-typedef int (*nsmc_hide_t)(void *data);
 typedef bool (*nsmc_visibility_t)(void *data);
+typedef int (*nsmc_callback_t)(void *data, const nsmc_event_t *ev);
 
 struct _nsmc_driver_t {
-	nsmc_open_t open;
-	nsmc_save_t save;
-	nsmc_show_t show;
-	nsmc_hide_t hide;
 	nsmc_visibility_t visibility;
 	nsmc_capability_t capability;
+};
+
+struct _nsmc_event_open_t {
+	const char *path;
+	const char *name;
+	const char *id;
+};
+
+struct _nsmc_event_t {
+	nsmc_event_type_t type;
+	union {
+		nsmc_event_open_t open;
+	};
 };
 
 static const char *nsmc_capability_labels [NSMC_CAPABILITY_MAX] = {
@@ -78,7 +96,7 @@ static const char *nsmc_capability_labels [NSMC_CAPABILITY_MAX] = {
 
 NSMC_API nsmc_t *
 nsmc_new(const char *call, const char *exe, const char *fallback_path,
-	const nsmc_driver_t *driver, void *data);
+	const nsmc_driver_t *driver, nsmc_callback_t nsm_callback, void *data);
 
 NSMC_API void
 nsmc_free(nsmc_t *nsm);
@@ -168,6 +186,7 @@ struct _nsmc_t {
 	char *exe;
 
 	const nsmc_driver_t *driver;
+	nsmc_callback_t callback;
 	void *data;
 
 	LV2_OSC_Stream stream;
@@ -331,7 +350,16 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		resolvedpath = dir;
 	}
 
-	if(nsm->driver->open && nsm->driver->open(resolvedpath, name, id, nsm->data))
+	const nsmc_event_t ev_open = {
+		.type = NSMC_EVENT_TYPE_OPEN,
+		.open = {
+			.path = resolvedpath,
+			.name = name,
+			.id = id
+		}
+	};
+
+	if(nsm->callback(nsm->data, &ev_open) != 0)
 	{
 		fprintf(stderr, "NSM load failed: '%s'\n", dir);
 	}
@@ -342,12 +370,16 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		return;
 	}
 
+	const nsmc_event_t ev_show = {
+		.type = NSMC_EVENT_TYPE_SHOW
+	};
+
 	// always show gui if server does not support optional gui
 	if(!(nsm->capability & NSMC_CAPABILITY_OPTIONAL_GUI))
 	{
-		if(nsm->driver->show)
+		if(nsm->callback(nsm->data, &ev_show) != 0)
 		{
-			nsm->driver->show(nsm->data);
+			//FIXME report error
 		}
 
 		return;
@@ -358,7 +390,7 @@ _client_open(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		? nsm->driver->visibility(nsm->data)
 		: false;
 
-	if(visibility && nsm->driver->show && (nsm->driver->show(nsm->data) == 0) )
+	if(visibility && (nsm->callback(nsm->data, &ev_show) == 0) )
 	{
 		_nsmc_message_vararg(nsm, "/nsm/client/gui_is_shown", "");
 	}
@@ -373,9 +405,12 @@ _client_save(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	void *data)
 {
 	nsmc_t *nsm = data;
+	const nsmc_event_t ev_save = {
+		.type = NSMC_EVENT_TYPE_SAVE
+	};
 
 	// save app
-	if(nsm->driver->save && nsm->driver->save(nsm->data))
+	if(nsm->callback(nsm->data, &ev_save) != 0)
 	{
 		fprintf(stderr, "NSM save failed:\n");
 	}
@@ -395,16 +430,16 @@ _client_show_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	const LV2_OSC_Tree *tree, void *data)
 {
 	nsmc_t *nsm = data;
+	const nsmc_event_t ev_show = {
+		.type = NSMC_EVENT_TYPE_SHOW
+	};
 
 	// show gui
 	if(  (nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
-		&& nsm->driver->show
-		&& (nsm->driver->show(nsm->data) == 0) )
+		&& (nsm->callback(nsm->data, &ev_show) == 0) )
 	{
 		nsmc_shown(nsm);
 	}
-
-	fprintf(stderr, "NSM show GUI failed\n");
 }
 
 static void
@@ -412,16 +447,16 @@ _client_hide_optional_gui(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	const LV2_OSC_Tree *tree, void *data)
 {
 	nsmc_t *nsm = data;
+	const nsmc_event_t ev_hide = {
+		.type = NSMC_EVENT_TYPE_HIDE
+	};
 
 	// hide gui
 	if(  (nsm->driver->capability & NSMC_CAPABILITY_OPTIONAL_GUI)
-		&& nsm->driver->hide
-		&& (nsm->driver->hide(nsm->data) == 0) )
+		&& (nsm->callback(nsm->data, &ev_hide) == 0) )
 	{
 		nsmc_hidden(nsm);
 	}
-
-	fprintf(stderr, "NSM hide GUI failed\n");
 }
 
 static int
@@ -516,7 +551,7 @@ static const LV2_OSC_Driver driver = {
 
 NSMC_API nsmc_t *
 nsmc_new(const char *call, const char *exe, const char *fallback_path,
-	const nsmc_driver_t *nsm_driver, void *data)
+	const nsmc_driver_t *nsm_driver, nsmc_callback_t nsm_callback, void *data)
 {
 	if(!nsm_driver)
 	{
@@ -530,6 +565,7 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	}
 
 	nsm->driver = nsm_driver;
+	nsm->callback = nsm_callback;
 	nsm->data = data;
 
 	nsm->call = call ? strdup(call) : NULL;
@@ -543,7 +579,7 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 		nsm->url = strdup(nsm->url); //FIXME
 		if(!nsm->url)
 		{
-			return NULL;
+			return NULL; //FIXME free
 		}
 
 		// remove trailing slash
@@ -555,18 +591,18 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 		nsm->tx = varchunk_new(8192, false);
 		if(!nsm->tx)
 		{
-			return NULL;
+			return NULL; //FIXME free
 		}
 
 		nsm->rx = varchunk_new(8192, false);
 		if(!nsm->rx)
 		{
-			return NULL;
+			return NULL; //FIXME free
 		}
 
 		if(lv2_osc_stream_init(&nsm->stream, nsm->url, &driver, nsm) != 0)
 		{
-			return NULL;
+			return NULL; //FIXME free
 		}
 	}
 	else if(fallback_path)
@@ -578,9 +614,19 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 			resolvedfallback_path = fallback_path;
 		}
 
-		if(nsm->driver->open && nsm->driver->open(resolvedfallback_path, "unmanaged", nsm->call, nsm->data))
+		const nsmc_event_t ev_open = {
+			.type = NSMC_EVENT_TYPE_OPEN,
+			.open = {
+				.path = resolvedfallback_path,
+				.name = "unmanaged",
+				.id = nsm->call
+			}
+		};
+
+		if(nsm->callback(nsm->data, &ev_open) != 0)
 		{
 			fprintf(stderr, "NSM load failed: '%s'\n", fallback_path);
+			return NULL; //FIXME free
 		}
 	}
 

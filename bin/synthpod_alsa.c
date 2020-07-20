@@ -858,15 +858,36 @@ _visibility(void *data)
 }
 
 static const nsmc_driver_t nsm_driver = {
-	.open = _open,
-	.save = _save,
-	.show = _show,
-	.hide = _hide,
 	.visibility = _visibility,
 	.capability = NSMC_CAPABILITY_MESSAGE
 		| NSMC_CAPABILITY_SWITCH
 		| NSMC_CAPABILITY_OPTIONAL_GUI
 };
+
+__non_realtime static int
+_nsm_callback(void *data, const nsmc_event_t *ev)
+{
+	switch(ev->type)
+	{
+		case NSMC_EVENT_TYPE_OPEN:
+			return _open(ev->open.path, ev->open.name, ev->open.id, data);
+		case NSMC_EVENT_TYPE_SAVE:
+			return _save(data);
+		case NSMC_EVENT_TYPE_SHOW:
+			return _show(data);
+		case NSMC_EVENT_TYPE_HIDE:
+			return _hide(data);
+
+		case NSMC_EVENT_TYPE_NONE:
+			// fall-through
+		case NSMC_EVENT_TYPE_MAX:
+			// fall-through
+		default:
+			return 1;
+	}
+
+	return 0;
+}
 
 // rt
 __realtime static double
@@ -1155,7 +1176,7 @@ main(int argc, char **argv)
 		bin->app_driver.features |= SP_APP_FEATURE_POWER_OF_2_BLOCK_LENGTH;
 
 	// run
-	bin_run(bin, "Synthpod-ALSA", argv, &nsm_driver);
+	bin_run(bin, "Synthpod-ALSA", argv, &nsm_driver, _nsm_callback);
 
 	// stop
 	bin_stop(bin);

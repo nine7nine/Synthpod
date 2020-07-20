@@ -128,7 +128,8 @@ void
 bin_init(bin_t *bin, uint32_t sample_rate);
 
 void
-bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driver);
+bin_run(bin_t *bin, const char *name, char **argv, const nsmc_driver_t *nsm_driver,
+	nsmc_callback_t nsm_callback);
 
 void
 bin_stop(bin_t *bin);
