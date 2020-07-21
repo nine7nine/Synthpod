@@ -286,36 +286,58 @@ _arg_to_int32(LV2_OSC_Reader *reader, LV2_OSC_Arg **arg)
 }
 
 static void
+_reply_server_announce(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
+	const LV2_OSC_Tree *tree, nsmc_t *nsm)
+{
+	const char *message = _arg_to_string(reader, &arg);
+	const char *manager = _arg_to_string(reader, &arg);
+	const char *capabilities = _arg_to_string(reader, &arg);
+
+	char *caps = alloca(strlen(capabilities) + 1);
+	strcpy(caps, capabilities);
+
+	char *tok;
+	while( (tok = strsep(&caps, ":")) )
+	{
+		for(nsmc_capability_t cap = NSMC_CAPABILITY_NONE;
+			cap < NSMC_CAPABILITY_MAX;
+			cap++)
+		{
+			if(  nsmc_capability_labels[cap]
+				&& !strcasecmp(nsmc_capability_labels[cap], tok) )
+			{
+				nsm->host_capability |= cap;
+			}
+		}
+	}
+}
+
+static void
 _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	void *data)
 {
 	nsmc_t *nsm = data;
 	const char *target = _arg_to_string(reader, &arg);
 
-	if(target && !strcasecmp(target, "/nsm/server/announce"))
+	if(!target)
 	{
-		const char *message = _arg_to_string(reader, &arg);
-		const char *manager = _arg_to_string(reader, &arg);
-		const char *capabilities = _arg_to_string(reader, &arg);
-
-		char *caps = alloca(strlen(capabilities) + 1);
-		strcpy(caps, capabilities);
-
-		char *tok;
-		while( (tok = strsep(&caps, ":")) )
-		{
-			for(nsmc_capability_t cap = NSMC_CAPABILITY_NONE;
-				cap < NSMC_CAPABILITY_MAX;
-				cap++)
-			{
-				if(  nsmc_capability_labels[cap]
-					&& !strcasecmp(nsmc_capability_labels[cap], tok) )
-				{
-					nsm->host_capability |= cap;
-				}
-			}
-		}
+		return;
 	}
+
+	if(!strcasecmp(target, "/nsm/server/announce"))
+	{
+		_reply_server_announce(reader, arg, tree, nsm);
+	}
+	else
+	{
+		fprintf(stderr, "nsmc reply for %s\n", target);
+	}
+}
+
+static void
+_error_server_announce(nsmc_t *nsm)
+{
+	//FIXME
 }
 
 static void
@@ -323,11 +345,31 @@ _error(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	void *data)
 {
 	nsmc_t *nsm = data;
-	const char *msg = _arg_to_string(reader, &arg);
-	const int32_t code = _arg_to_int32(reader, &arg);
-	const char *err = _arg_to_string(reader, &arg);
 
-	fprintf(stderr, "nsmc error: #%i in %s: %s\n", code, msg, err);
+	const char *target = _arg_to_string(reader, &arg);
+	if(!target)
+	{
+		return;
+	}
+
+	const int32_t code = _arg_to_int32(reader, &arg);
+	if(!code)
+	{
+		return;
+	}
+
+	const char *err = _arg_to_string(reader, &arg);
+	if(!err)
+	{
+		return;
+	}
+
+	fprintf(stderr, "nsmc error #%i for %s: %s\n", code, target, err);
+
+	if(!strcasecmp(target, "/nsm/server/announce"))
+	{
+		_error_server_announce(nsm);
+	}
 }
 
 static void
