@@ -952,6 +952,9 @@ _nsm_callback(void *data, const nsmc_event_t *ev)
 			return bin_show(bin);
 		case NSMC_EVENT_TYPE_HIDE:
 			return bin_hide(bin);
+		case NSMC_EVENT_TYPE_SESSION_IS_LOADED:
+			return 0;
+
 		case NSMC_EVENT_TYPE_VISIBILITY:
 			return bin_visibility(bin);
 		case NSMC_EVENT_TYPE_CAPABILITY:
@@ -959,6 +962,7 @@ _nsm_callback(void *data, const nsmc_event_t *ev)
 				| NSMC_CAPABILITY_SWITCH
 				| NSMC_CAPABILITY_OPTIONAL_GUI;
 
+			// fall-through
 		case NSMC_EVENT_TYPE_NONE:
 			// fall-through
 		case NSMC_EVENT_TYPE_MAX:

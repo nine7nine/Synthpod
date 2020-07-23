@@ -28,6 +28,19 @@ extern "C" {
 
 #include <stdbool.h>
 
+typedef enum _nsmc_err_t {
+	NSMC_ERR_GENERAL          = -1,
+	NSMC_ERR_INCOMPATIBLE_API = -2,
+	NSMC_ERR_BLACKLISTED      = -3,
+	NSMC_ERR_LAUNCH_FAILED    = -4,
+	NSMC_ERR_NO_SUCH_FILE     = -5,
+	NSMC_ERR_NO_SESSION_OPEN  = -6,
+	NSMC_ERR_UNSAVED_CHANGES  = -7,
+	NSMC_ERR_NOT_NOW          = -8,
+	NSMC_ERR_BAD_PROJECT      = -9,
+	NSMC_ERR_CREATE_FAILED    = -10
+} nsmc_err_t;
+
 typedef enum _nsmc_capability_t {
 	NSMC_CAPABILITY_NONE           = 0,
 
@@ -54,6 +67,7 @@ typedef enum _nsmc_event_type_t {
 	NSMC_EVENT_TYPE_SAVE,
 	NSMC_EVENT_TYPE_SHOW,
 	NSMC_EVENT_TYPE_HIDE,
+	NSMC_EVENT_TYPE_SESSION_IS_LOADED,
 
 	NSMC_EVENT_TYPE_VISIBILITY,
 	NSMC_EVENT_TYPE_CAPABILITY,
@@ -328,6 +342,42 @@ _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	{
 		_reply_server_announce(reader, arg, tree, nsm);
 	}
+	else if(!strcasecmp(target, "/nsm/server/add"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/save"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/open"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/new"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/duplicate"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/close"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/abort"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/quit"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/list"))
+	{
+		//FIXME
+	}
 	else
 	{
 		fprintf(stderr, "nsmc reply for %s\n", target);
@@ -335,7 +385,7 @@ _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 }
 
 static void
-_error_server_announce(nsmc_t *nsm)
+_error_server_announce(nsmc_t *nsm, nsmc_err_t code)
 {
 	//FIXME
 }
@@ -352,7 +402,7 @@ _error(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		return;
 	}
 
-	const int32_t code = _arg_to_int32(reader, &arg);
+	const nsmc_err_t code = _arg_to_int32(reader, &arg);
 	if(!code)
 	{
 		return;
@@ -368,7 +418,43 @@ _error(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 
 	if(!strcasecmp(target, "/nsm/server/announce"))
 	{
-		_error_server_announce(nsm);
+		_error_server_announce(nsm, code);
+	}
+	else if(!strcasecmp(target, "/nsm/server/add"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/save"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/open"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/new"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/duplicate"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/close"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/abort"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/quit"))
+	{
+		//FIXME
+	}
+	else if(!strcasecmp(target, "/nsm/server/list"))
+	{
+		//FIXME
 	}
 }
 
@@ -461,8 +547,15 @@ _client_session_is_loaded(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OS
 	void *data)
 {
 	nsmc_t *nsm = data;
+	const nsmc_event_t ev_session_is_loaded = {
+		.type = NSMC_EVENT_TYPE_SESSION_IS_LOADED
+	};
 
-	//FIXME
+	// save app
+	if(nsm->callback(nsm->data, &ev_session_is_loaded) != 0)
+	{
+		fprintf(stderr, "NSM session_is_loaded failed:\n");
+	}
 }
 
 static void
@@ -770,7 +863,7 @@ nsmc_opened(nsmc_t *nsm, int status)
 	}
 
 	return _nsmc_message_vararg(nsm, "/error", "sis",
-		"/nsm/client/open", 2, "opening failed");
+		"/nsm/client/open", NSMC_ERR_GENERAL, "opening failed");
 }
 
 NSMC_API int
@@ -810,7 +903,7 @@ nsmc_saved(nsmc_t *nsm, int status)
 	}
 
 	return _nsmc_message_vararg(nsm, "/error", "sis",
-		"/nsm/client/save", 1, "save failed");
+		"/nsm/client/save", NSMC_ERR_GENERAL, "save failed");
 }
 
 NSMC_API bool
