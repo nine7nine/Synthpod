@@ -962,6 +962,12 @@ _nsm_callback(void *data, const nsmc_event_t *ev)
 				| NSMC_CAPABILITY_SWITCH
 				| NSMC_CAPABILITY_OPTIONAL_GUI;
 
+		case NSMC_EVENT_TYPE_ERROR:
+			return bin_log_error(bin, "%s: (%i) %s", ev->error.request,
+				ev->error.code, ev->error.message);
+		case NSMC_EVENT_TYPE_REPLY:
+			return bin_log_note(bin, "%s", ev->reply.request);
+
 			// fall-through
 		case NSMC_EVENT_TYPE_NONE:
 			// fall-through

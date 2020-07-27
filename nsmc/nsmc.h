@@ -72,11 +72,16 @@ typedef enum _nsmc_event_type_t {
 	NSMC_EVENT_TYPE_VISIBILITY,
 	NSMC_EVENT_TYPE_CAPABILITY,
 
+	NSMC_EVENT_TYPE_REPLY,
+	NSMC_EVENT_TYPE_ERROR,
+
 	NSMC_EVENT_TYPE_MAX
 } nsmc_event_type_t;
 
 typedef struct _nsmc_t nsmc_t;
 typedef struct _nsmc_event_open_t nsmc_event_open_t;
+typedef struct _nsmc_event_error_t nsmc_event_error_t;
+typedef struct _nsmc_event_reply_t nsmc_event_reply_t;
 typedef struct _nsmc_event_t nsmc_event_t;
 	
 typedef int (*nsmc_callback_t)(void *data, const nsmc_event_t *ev);
@@ -87,10 +92,23 @@ struct _nsmc_event_open_t {
 	const char *id;
 };
 
+struct _nsmc_event_error_t {
+	const char *request;
+	nsmc_err_t code;
+	const char *message;
+};
+
+struct _nsmc_event_reply_t {
+	const char *request;
+	const char *message;
+};
+
 struct _nsmc_event_t {
 	nsmc_event_type_t type;
 	union {
 		nsmc_event_open_t open;
+		nsmc_event_error_t error;
+		nsmc_event_reply_t reply;
 	};
 };
 
@@ -342,52 +360,15 @@ _reply(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 	{
 		_reply_server_announce(reader, arg, tree, nsm);
 	}
-	else if(!strcasecmp(target, "/nsm/server/add"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/save"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/open"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/new"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/duplicate"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/close"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/abort"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/quit"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/list"))
-	{
-		//FIXME
-	}
-	else
-	{
-		fprintf(stderr, "nsmc reply for %s\n", target);
-	}
-}
 
-static void
-_error_server_announce(nsmc_t *nsm, nsmc_err_t code)
-{
-	//FIXME
+	const nsmc_event_t ev_reply = {
+		.type = NSMC_EVENT_TYPE_REPLY,
+		.reply = {
+			.request = target
+		}
+	};
+
+	nsm->callback(nsm->data, &ev_reply);
 }
 
 static void
@@ -414,48 +395,16 @@ _error(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg, const LV2_OSC_Tree *tree,
 		return;
 	}
 
-	fprintf(stderr, "nsmc error #%i for %s: %s\n", code, target, err);
+	const nsmc_event_t ev_error = {
+		.type = NSMC_EVENT_TYPE_ERROR,
+		.error = {
+			.request = target,
+			.code = code,
+			.message = err
+		}
+	};
 
-	if(!strcasecmp(target, "/nsm/server/announce"))
-	{
-		_error_server_announce(nsm, code);
-	}
-	else if(!strcasecmp(target, "/nsm/server/add"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/save"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/open"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/new"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/duplicate"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/close"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/abort"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/quit"))
-	{
-		//FIXME
-	}
-	else if(!strcasecmp(target, "/nsm/server/list"))
-	{
-		//FIXME
-	}
+	nsm->callback(nsm->data, &ev_error);
 }
 
 static void
@@ -709,15 +658,15 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	nsm->call = call ? strdup(call) : NULL;
 	nsm->exe = exe ? strdup(exe) : NULL;
 
-	nsm->url = getenv("NSM_URL");
-	if(nsm->url)
+	char *nsm_url = getenv("NSM_URL");
+	if(nsm_url)
 	{
 		nsm->connectionless = !strncmp(nsm->url, "osc.udp", 7) ? true : false;
 
-		nsm->url = strdup(nsm->url); //FIXME
+		nsm->url = strdup(nsm_url);
 		if(!nsm->url)
 		{
-			return NULL; //FIXME free
+			goto fail;
 		}
 
 		// remove trailing slash
@@ -729,18 +678,18 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 		nsm->tx = varchunk_new(8192, false);
 		if(!nsm->tx)
 		{
-			return NULL; //FIXME free
+			goto fail;
 		}
 
 		nsm->rx = varchunk_new(8192, false);
 		if(!nsm->rx)
 		{
-			return NULL; //FIXME free
+			goto fail;
 		}
 
 		if(lv2_osc_stream_init(&nsm->stream, nsm->url, &driver, nsm) != 0)
 		{
-			return NULL; //FIXME free
+			goto fail;
 		}
 	}
 	else if(fallback_path)
@@ -764,11 +713,16 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 		if(nsm->callback(nsm->data, &ev_open) != 0)
 		{
 			fprintf(stderr, "NSM load failed: '%s'\n", fallback_path);
-			return NULL; //FIXME free
+			goto fail;
 		}
 	}
 
 	return nsm;
+
+fail:
+	nsmc_free(nsm);
+
+	return NULL;
 }
 
 NSMC_API void
