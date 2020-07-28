@@ -27,6 +27,7 @@ extern "C" {
 #endif
 
 #include <stdbool.h>
+#include <stdarg.h>
 
 typedef enum _nsmc_err_t {
 	NSMC_ERR_GENERAL          = -1,
@@ -112,22 +113,15 @@ struct _nsmc_event_t {
 	};
 };
 
-static const char *nsmc_capability_labels [NSMC_CAPABILITY_MAX] = {
-	[NSMC_CAPABILITY_SWITCH] = "switch",
-	[NSMC_CAPABILITY_DIRTY] = "dirty",
-	[NSMC_CAPABILITY_PROGRESS] = "progress",
-	[NSMC_CAPABILITY_MESSAGE] = "message",
-	[NSMC_CAPABILITY_OPTIONAL_GUI] = "optional-gui",
-	[NSMC_CAPABILITY_SERVER_CONTROL] = "server-control",
-	[NSMC_CAPABILITY_BROADCAST] = "broadcast"
-};
-
 NSMC_API nsmc_t *
 nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	nsmc_callback_t callback, void *data);
 
 NSMC_API void
 nsmc_free(nsmc_t *nsm);
+
+NSMC_API void
+nsmc_pollin(nsmc_t *nsm, int timeout_ms);
 
 NSMC_API void
 nsmc_run(nsmc_t *nsm);
@@ -223,6 +217,16 @@ struct _nsmc_t {
 	varchunk_t *rx;
 
 	nsmc_capability_t host_capability;
+};
+
+static const char *nsmc_capability_labels [NSMC_CAPABILITY_MAX] = {
+	[NSMC_CAPABILITY_SWITCH] = "switch",
+	[NSMC_CAPABILITY_DIRTY] = "dirty",
+	[NSMC_CAPABILITY_PROGRESS] = "progress",
+	[NSMC_CAPABILITY_MESSAGE] = "message",
+	[NSMC_CAPABILITY_OPTIONAL_GUI] = "optional-gui",
+	[NSMC_CAPABILITY_SERVER_CONTROL] = "server-control",
+	[NSMC_CAPABILITY_BROADCAST] = "broadcast"
 };
 
 static int
@@ -324,6 +328,9 @@ _reply_server_announce(LV2_OSC_Reader *reader, LV2_OSC_Arg *arg,
 	const char *message = _arg_to_string(reader, &arg);
 	const char *manager = _arg_to_string(reader, &arg);
 	const char *capabilities = _arg_to_string(reader, &arg);
+
+	(void)message; //FIXME
+	(void)manager; //FIXME
 
 	char *caps = alloca(strlen(capabilities) + 1);
 	strcpy(caps, capabilities);
@@ -661,7 +668,7 @@ nsmc_new(const char *call, const char *exe, const char *fallback_path,
 	char *nsm_url = getenv("NSM_URL");
 	if(nsm_url)
 	{
-		nsm->connectionless = !strncmp(nsm->url, "osc.udp", 7) ? true : false;
+		nsm->connectionless = !strncmp(nsm_url, "osc.udp", 7) ? true : false;
 
 		nsm->url = strdup(nsm_url);
 		if(!nsm->url)
@@ -762,18 +769,17 @@ nsmc_free(nsmc_t *nsm)
 }
 
 NSMC_API void
-nsmc_run(nsmc_t *nsm)
+nsmc_pollin(nsmc_t *nsm, int timeout_ms)
 {
-	if(!nsm || !nsm->tx)
+	if(!nsm || !nsm->rx)
 	{
 		return;
 	}
 
-	const LV2_OSC_Enum ev = lv2_osc_stream_run(&nsm->stream);
+	const LV2_OSC_Enum ev = lv2_osc_stream_pollin(&nsm->stream, timeout_ms);
 
 	if(ev & LV2_OSC_ERR)
 	{
-		fprintf(stderr, "%s: %s\n", __func__, strerror(ev & LV2_OSC_ERR));
 		nsm->connected = false;
 	}
 
@@ -800,6 +806,12 @@ nsmc_run(nsmc_t *nsm)
 			varchunk_read_advance(nsm->rx);
 		}
 	}
+}
+
+NSMC_API void
+nsmc_run(nsmc_t *nsm)
+{
+	return nsmc_pollin(nsm, 0);
 }
 
 NSMC_API int
