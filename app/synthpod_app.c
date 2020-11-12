@@ -269,12 +269,6 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 
 			varchunk_read_advance(mod_worker->app_from_worker);
 		}
-
-		// handle end of work
-		if(mod->worker.iface && mod->worker.iface->end_run)
-		{
-			mod->worker.iface->end_run(mod->handle);
-		}
 	}
 
 	// is module currently loading a preset asynchronously?
@@ -285,6 +279,12 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		{
 			lilv_instance_run(mod->inst, nsamples);
 		}
+	}
+
+	// handle end of work
+	if(mod->worker.iface && mod->worker.iface->end_run)
+	{
+		mod->worker.iface->end_run(mod->handle);
 	}
 
 	//handle automation output
