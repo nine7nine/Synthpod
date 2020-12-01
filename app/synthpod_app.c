@@ -337,8 +337,12 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 					{
 						const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 
-						if(  lv2_atom_forge_is_object_type(&forge, obj->atom.type)
-							&& (obj->body.otype == app->regs.patch.set.urid) ) //FIXME also consider patch:Put
+						if(!lv2_atom_forge_is_object_type(&forge, obj->atom.type))
+						{
+							continue;
+						}
+
+						if(obj->body.otype == app->regs.patch.set.urid)
 						{
 							const LV2_Atom_URID *patch_property = NULL;
 							const LV2_Atom *patch_value = NULL;
@@ -349,7 +353,9 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 								0);
 
 							if(!patch_property || (patch_property->atom.type != forge.URID) || !patch_value)
+							{
 								continue;
+							}
 
 							auto_t *automation = _sp_app_find_automation_for_property(mod, patch_property->body);
 							if(automation && automation->src_enabled && (patch_value->type == automation->range))
@@ -374,6 +380,50 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 									ref = _sp_app_automation_out(app, &forge, automation, ev->time.frames, value);
 
 								t0 = ev->time.frames;
+							}
+						}
+						else if(obj->body.otype == app->regs.patch.put.urid)
+						{
+							const LV2_Atom_Object *patch_body = NULL;
+
+							lv2_atom_object_get(obj,
+								app->regs.patch.body.urid, &patch_body,
+								0);
+
+							if(!patch_body || !lv2_atom_forge_is_object_type(&forge, patch_body->atom.type))
+							{
+								continue;
+							}
+
+							LV2_ATOM_OBJECT_FOREACH(patch_body, prop)
+							{
+								const LV2_Atom *patch_value = &prop->value;
+
+								auto_t *automation = _sp_app_find_automation_for_property(mod, prop->key);
+								//FIXME deduplicate code with patch:Set
+								if(automation && automation->src_enabled && (patch_value->type == automation->range))
+								{
+									double val = 0.0;
+
+									if(patch_value->type == forge.Bool)
+										val = ((const LV2_Atom_Bool *)patch_value)->body;
+									else if(patch_value->type == forge.Int)
+										val = ((const LV2_Atom_Int *)patch_value)->body;
+									else if(patch_value->type == forge.Long)
+										val = ((const LV2_Atom_Long *)patch_value)->body;
+									else if(patch_value->type == forge.Float)
+										val = ((const LV2_Atom_Float *)patch_value)->body;
+									else if(patch_value->type == forge.Double)
+										val = ((const LV2_Atom_Double *)patch_value)->body;
+									//FIXME support more types
+
+									const double value = (val - automation->add) / automation->mul;
+
+									if(ref)
+										ref = _sp_app_automation_out(app, &forge, automation, ev->time.frames, value);
+
+									t0 = ev->time.frames;
+								}
 							}
 						}
 					}
