@@ -3688,11 +3688,11 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 
 	mod->plug = plug;
 	mod->subj = handle->map->map(handle->map->handle, mod_uri);
-	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 2; // + automation ports
+	const unsigned num_ports = lilv_plugin_get_num_ports(plug) + 3; // + automation ports
 
 	mod->minimum = sizeof(LV2_Atom_Object);
 
-	for(unsigned p=0; p<num_ports - 2; p++) // - automation ports
+	for(unsigned p=0; p<num_ports - 3; p++) // - automation ports
 	{
 		port_t *port = calloc(1, sizeof(port_t));
 		if(!port)
@@ -3931,6 +3931,30 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	}
 
 	mod->minimum *= 8; // to be on the safe side
+
+	// debug output port
+	{
+		const unsigned p = num_ports - 3;
+
+		port_t *port = calloc(1, sizeof(port_t));
+		if(port)
+		{
+			_hash_add(&mod->ports, port);
+
+			port->mod = mod;
+			port->index = p;
+			port->port = NULL;
+			port->symbol = "__debug__out__";
+			port->groups = NULL;
+			port->name = strdup("UI Debug Out");
+			port->automation = true;
+
+			port->type = PROPERTY_TYPE_ATOM;
+
+			_hash_add(&mod->sources, port);
+			mod->source_type |= port->type;
+		}
+	}
 
 	// automation input port
 	{

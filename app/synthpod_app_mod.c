@@ -703,7 +703,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 	mod->urn = urn;
 	mod->plug = plug;
 	mod->plug_urid = app->driver->map->map(app->driver->map->handle, uri);
-	mod->num_ports = lilv_plugin_get_num_ports(plug) + 2; // + automation ports
+	mod->num_ports = lilv_plugin_get_num_ports(plug) + 3; // + automation ports
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
 	if(!mod->inst)
 	{
@@ -756,7 +756,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 		return NULL; // failed to alloc ports
 	}
 
-	for(unsigned i=0; i<mod->num_ports - 2; i++) // - automation ports
+	for(unsigned i=0; i<mod->num_ports - 3; i++) // - automation ports
 	{
 		port_t *tar = &mod->ports[i];
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
@@ -908,6 +908,30 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
 	}
 
+	// debug output port //FIXME check
+	{
+		const unsigned i = mod->num_ports - 3;
+		port_t *tar = &mod->ports[i];
+
+		tar->mod = mod;
+		tar->index = i;
+		tar->symbol = "__debug__out__";
+		tar->direction = PORT_DIRECTION_OUTPUT;
+
+		tar->size = app->driver->seq_size;
+		tar->type = PORT_TYPE_ATOM;
+		tar->protocol = app->regs.port.event_transfer.urid;
+		tar->driver = &seq_port_driver;
+
+		tar->atom.buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
+
+		tar->sys.type = SYSTEM_PORT_NONE;
+		tar->sys.data = NULL;
+
+		// increase pool sizes
+		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
+	}
+
 	// automation input port //FIXME check
 	{
 		const unsigned i = mod->num_ports - 2;
@@ -986,7 +1010,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
 		_sp_app_mod_slice_pool(mod, pool);
 
-	for(unsigned i=0; i<mod->num_ports - 2; i++)
+	for(unsigned i=0; i<mod->num_ports - 3; i++)
 	{
 		port_t *tar = &mod->ports[i];
 
@@ -1171,7 +1195,7 @@ _sp_app_mod_reinitialize_soft(mod_t *mod)
 	mod->handle = lilv_instance_get_handle(mod->inst);
 
 	// refresh all connections
-	for(unsigned i=0; i<mod->num_ports - 2; i++)
+	for(unsigned i=0; i<mod->num_ports - 3; i++)
 	{
 		port_t *tar = &mod->ports[i];
 

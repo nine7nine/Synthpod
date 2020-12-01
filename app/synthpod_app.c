@@ -238,7 +238,8 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		{
 			if(  (port->type == PORT_TYPE_ATOM)
 				&& (port->atom.buffer_type == PORT_BUFFER_TYPE_SEQUENCE)
-				&& (!mod->system_ports) ) // don't overwrite source buffer events
+				&& (!mod->system_ports) // don't overwrite source buffer events
+				&& (p != mod->num_ports - 3) ) // ignore debug port
 			{
 				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(port);
 				seq->atom.size = port->size;
@@ -629,6 +630,28 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 			}
 
 			automation->sync = false;
+		}
+	}
+
+	//handle debug output (for next cycle)
+	{
+		const unsigned ao = mod->num_ports - 3;
+		port_t *auto_port = &mod->ports[ao];
+		LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(auto_port);
+		//const uint32_t capacity = seq->atom.size;
+		const uint32_t capacity = PORT_SIZE(auto_port);
+		LV2_Atom_Forge_Frame frame;
+
+		LV2_Atom_Forge forge = app->forge; //FIXME do this only once
+		lv2_atom_forge_set_buffer(&forge, (uint8_t *)seq, capacity);
+		LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
+
+		if(ref)
+			lv2_atom_forge_pop(&forge, &frame);
+		else
+		{
+			lv2_atom_sequence_clear(seq);
+			sp_app_log_trace(app, "%s: debug out buffer overflow\n", __func__);
 		}
 	}
 }
@@ -1384,7 +1407,7 @@ _sp_app_reinitialize(sp_app_t *app)
 	{
 		mod_t *mod = app->mods[m];
 
-		for(unsigned i=0; i<mod->num_ports - 2; i++)
+		for(unsigned i=0; i<mod->num_ports - 3; i++)
 		{
 			port_t *tar = &mod->ports[i];
 

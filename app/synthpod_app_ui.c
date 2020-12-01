@@ -1443,42 +1443,42 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 {
 	//printf("got patch:add for notificationList:\n");
 
-	const LV2_URID src_proto = obj->body.otype;
-	const LV2_Atom_URID *src_module = NULL;
-	const LV2_Atom *src_symbol = NULL;
-	const LV2_Atom *src_value = NULL;
+	const LV2_URID snk_proto = obj->body.otype;
+	const LV2_Atom_URID *snk_module = NULL;
+	const LV2_Atom *snk_symbol = NULL;
+	const LV2_Atom *snk_value = NULL;
 
 	lv2_atom_object_get(obj,
-		app->regs.synthpod.sink_module.urid, &src_module,
-		app->regs.synthpod.sink_symbol.urid, &src_symbol,
-		app->regs.rdf.value.urid, &src_value,
+		app->regs.synthpod.sink_module.urid, &snk_module,
+		app->regs.synthpod.sink_symbol.urid, &snk_symbol,
+		app->regs.rdf.value.urid, &snk_value,
 		0);
 
-	const LV2_URID src_urn = src_module
-		? src_module->body : 0;
-	const char *src_sym = src_symbol
-		? LV2_ATOM_BODY_CONST(src_symbol) : NULL;
+	const LV2_URID snk_urn = snk_module
+		? snk_module->body : 0;
+	const char *snk_sym = snk_symbol
+		? LV2_ATOM_BODY_CONST(snk_symbol) : NULL;
 
-	if(src_urn && src_sym && src_value)
+	if(snk_urn && snk_sym && snk_value)
 	{
-		port_t *src_port = _port_find_by_symbol(app, src_urn, src_sym);
+		port_t *snk_port = _port_find_by_symbol(app, snk_urn, snk_sym);
 
-		if(src_port)
+		if(snk_port)
 		{
-			if(  (src_proto == app->regs.port.float_protocol.urid)
-				&& (src_value->type == app->forge.Float) )
+			if(  (snk_proto == app->regs.port.float_protocol.urid)
+				&& (snk_value->type == app->forge.Float) )
 			{
-				const float val = ((const LV2_Atom_Float *)src_value)->body;
-				float *buf_ptr = PORT_BASE_ALIGNED(src_port);
+				const float val = ((const LV2_Atom_Float *)snk_value)->body;
+				float *buf_ptr = PORT_BASE_ALIGNED(snk_port);
 
-				if(src_port->type == PORT_TYPE_CONTROL)
+				if(snk_port->type == PORT_TYPE_CONTROL)
 				{
 					*buf_ptr = val;
-					src_port->control.last = *buf_ptr; // we don't want any notification
-					src_port->control.auto_dirty = true;
-					_sp_app_port_control_stash(src_port);
+					snk_port->control.last = *buf_ptr; // we don't want any notification
+					snk_port->control.auto_dirty = true;
+					_sp_app_port_control_stash(snk_port);
 				}
-				else if(src_port->type == PORT_TYPE_CV)
+				else if(snk_port->type == PORT_TYPE_CV)
 				{
 					for(unsigned i = 0; i < app->driver->max_block_size; i++)
 					{
@@ -1487,32 +1487,57 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 					}
 				}
 			}
-			else if( (src_proto == app->regs.port.event_transfer.urid)
-				&& (src_port->type == PORT_TYPE_ATOM) )
+			else if( (snk_proto == app->regs.port.event_transfer.urid)
+				&& (snk_port->type == PORT_TYPE_ATOM) )
 			{
 				//printf("got atom:eventTransfer\n");
 
 				// messages from UI are ALWAYS appended to default port buffer, no matter
 				// how many sources the port may have
-				const uint32_t capacity = PORT_SIZE(src_port);
-				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(src_port);
+				const uint32_t capacity = PORT_SIZE(snk_port);
+				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(snk_port);
 
-				const LV2_Atom_Event *dummy = (const void *)src_value - offsetof(LV2_Atom_Event, body);
+				const LV2_Atom_Event *dummy = (const void *)snk_value - offsetof(LV2_Atom_Event, body);
 				LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, dummy);
 				if(ev)
 					ev->time.frames = 0;
 				else
 					sp_app_log_trace(app, "%s: failed to append\n", __func__);
-
-				//FIXME handle output automation
 			}
-			else if( (src_proto == app->regs.port.atom_transfer.urid)
-				&& (src_port->type == PORT_TYPE_ATOM) )
+			else if( (snk_proto == app->regs.port.atom_transfer.urid)
+				&& (snk_port->type == PORT_TYPE_ATOM) )
 			{
 				//printf("got atom:atomTransfer\n");
-				LV2_Atom *atom = PORT_BASE_ALIGNED(src_port);
-				//FIXME memcpy(atom, src_value, lv2_atom_total-size(src_value));
+				LV2_Atom *atom = PORT_BASE_ALIGNED(snk_port);
+				//FIXME memcpy(atom, snk_value, lv2_atom_total-size(snk_value));
 			}
+		}
+
+		port_t *dbg_port = _port_find_by_symbol(app, snk_urn, "__debug__out__");
+
+		if(dbg_port)
+		{
+			const uint32_t capacity = PORT_SIZE(dbg_port);
+			LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(dbg_port);
+			/*
+			LV2_Atom_Forge_Frame frame;
+
+			LV2_Atom_Forge forge = app->forge; //FIXME do this only once
+			lv2_atom_forge_set_buffer(&forge, (uint8_t *)seq, capacity);
+			LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
+
+			//lv2_atom_forge_frame_time(&forge, 0);
+			//lv2_atom_forge_int(&forge, 12);
+
+			lv2_atom_forge_pop(&forge, &frame);
+			*/
+
+			const LV2_Atom_Event *dummy = (const void *)obj - offsetof(LV2_Atom_Event, body);
+			LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, dummy);
+			if(ev)
+				ev->time.frames = 0;
+			else
+				sp_app_log_trace(app, "%s: failed to append\n", __func__);
 		}
 	}
 }
