@@ -109,6 +109,7 @@ install_data('../data/pix/time.png', install_dir : plug_dir )
 install_data('../data/pix/patch.png', install_dir : plug_dir )
 install_data('../data/pix/xpress.png', install_dir : plug_dir )
 install_data('../data/pix/automaton.png', install_dir : plug_dir )
+install_data('../data/pix/bug.png', install_dir : plug_dir )
 
 install_data('../data/png/plus.png', install_dir : plug_dir )
 install_data('../data/png/download.png', install_dir : plug_dir )

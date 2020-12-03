@@ -228,6 +228,7 @@ struct _port_t {
 	const LilvPort *port;
 	LilvNodes *groups;
 	bool automation;
+	bool debug;
 
 	union {
 		control_port_t control;
@@ -497,6 +498,7 @@ struct _plughandle_t {
 
 	property_type_t type;
 	bool show_automation;
+	bool show_debug;
 
 	bool done;
 
@@ -519,6 +521,7 @@ struct _plughandle_t {
 		struct nk_image time;
 		struct nk_image xpress;
 		struct nk_image automaton;
+		struct nk_image bug;
 
 		struct nk_image plus;
 		struct nk_image download;
@@ -3947,7 +3950,7 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			port->symbol = "__debug__out__";
 			port->groups = NULL;
 			port->name = strdup("UI Debug Out");
-			port->automation = true;
+			port->debug = true;
 
 			port->type = PROPERTY_TYPE_ATOM;
 
@@ -4385,7 +4388,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 	nk_menubar_begin(ctx);
 	{
 		bool is_hovered;
-		nk_layout_row_static(ctx, dy, 1.2*dy, 18);
+		nk_layout_row_static(ctx, dy, 1.2*dy, 19);
 
 		{
 			if(_toolbar_button(ctx, 'n', handle->icon.plus, "New"))
@@ -4427,6 +4430,7 @@ _expose_main_header(plughandle_t *handle, struct nk_context *ctx, float dy)
 			nk_spacing(ctx, 1);
 
 			_toolbar_toggle(ctx, &handle->show_automation, 'd', handle->icon.automaton, "Automation");
+			_toolbar_toggle(ctx, &handle->show_debug, 'g', handle->icon.bug, "Debug");
 
 			nk_spacing(ctx, 1);
 
@@ -6355,6 +6359,8 @@ _type_match(plughandle_t *handle, port_t *port)
 	DBG;
 	if(!handle->show_automation && port->automation)
 		return false;
+	else if(!handle->show_debug && port->debug)
+		return false;
 
 	return handle->type & port->type;
 }
@@ -6387,6 +6393,8 @@ _mod_num_sources(mod_t *mod, property_type_t type)
 
 			if(!mod->handle->show_automation && port->automation)
 				continue;
+			else if(!mod->handle->show_debug && port->debug)
+				continue;
 
 			if(port->type & type)
 				num += 1;
@@ -6411,6 +6419,8 @@ _mod_num_sinks(mod_t *mod, property_type_t type)
 			port_t *port = *port_itr;
 
 			if(!mod->handle->show_automation && port->automation)
+				continue;
+			if(!mod->handle->show_debug && port->debug)
 				continue;
 
 			if(port->type & type)
@@ -8522,6 +8532,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	handle->icon.time = _icon_load(handle, bundle_path, "time.png");
 	handle->icon.xpress = _icon_load(handle, bundle_path, "xpress.png");
 	handle->icon.automaton = _icon_load(handle, bundle_path, "automaton.png");
+	handle->icon.bug = _icon_load(handle, bundle_path, "bug.png");
 	handle->icon.plus = _icon_load(handle, bundle_path, "plus.png");
 	handle->icon.download = _icon_load(handle, bundle_path, "download.png");
 	handle->icon.cancel = _icon_load(handle, bundle_path, "cancel.png");
@@ -8568,6 +8579,7 @@ cleanup(LV2UI_Handle instance)
 	_icon_unload(handle, handle->icon.time);
 	_icon_unload(handle, handle->icon.xpress);
 	_icon_unload(handle, handle->icon.automaton);
+	_icon_unload(handle, handle->icon.bug);
 	_icon_unload(handle, handle->icon.plus);
 	_icon_unload(handle, handle->icon.download);
 	_icon_unload(handle, handle->icon.cancel);
