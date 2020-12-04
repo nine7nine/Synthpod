@@ -908,6 +908,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
 	}
 
+	// rough guestimate of minimal debug port size
+	const size_t dbg_sz = mod->pools[PORT_TYPE_ATOM].size * 8;
+
 	// debug dsp port //FIXME check
 	{
 		const unsigned i = mod->num_ports - 4;
@@ -918,7 +921,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 		tar->symbol = "__debug__dsp__";
 		tar->direction = PORT_DIRECTION_OUTPUT;
 
-		tar->size = app->driver->seq_size * 8; //FIXME how big?
+		tar->size = dbg_sz;
 		tar->type = PORT_TYPE_ATOM;
 		tar->protocol = app->regs.port.event_transfer.urid;
 		tar->driver = &seq_port_driver;
@@ -942,7 +945,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 		tar->symbol = "__debug__ui__";
 		tar->direction = PORT_DIRECTION_OUTPUT;
 
-		tar->size = app->driver->seq_size * 8; //FIXME how big?
+		tar->size = dbg_sz;
 		tar->type = PORT_TYPE_ATOM;
 		tar->protocol = app->regs.port.event_transfer.urid;
 		tar->driver = &seq_port_driver;
