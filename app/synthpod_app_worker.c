@@ -439,7 +439,7 @@ sp_worker_from_app(sp_app_t *app, uint32_t len, const void *data)
 
 			if(mod->system_ports && strlen(mod->alias) && app->driver->system_port_set)
 			{
-				for(unsigned i=0; i<mod->num_ports - 3; i++) // - automation ports
+				for(unsigned i=0; i<mod->num_ports - 4; i++) // - automation/debug ports
 				{
 					port_t *tar = &mod->ports[i];
 

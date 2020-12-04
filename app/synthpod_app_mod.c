@@ -703,7 +703,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 	mod->urn = urn;
 	mod->plug = plug;
 	mod->plug_urid = app->driver->map->map(app->driver->map->handle, uri);
-	mod->num_ports = lilv_plugin_get_num_ports(plug) + 3; // + automation ports
+	mod->num_ports = lilv_plugin_get_num_ports(plug) + 4; // + automation/debug ports
 	mod->inst = lilv_plugin_instantiate(plug, app->driver->sample_rate, mod->features);
 	if(!mod->inst)
 	{
@@ -756,7 +756,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 		return NULL; // failed to alloc ports
 	}
 
-	for(unsigned i=0; i<mod->num_ports - 3; i++) // - automation ports
+	for(unsigned i=0; i<mod->num_ports - 4; i++) // - automation/debug ports
 	{
 		port_t *tar = &mod->ports[i];
 		const LilvPort *port = lilv_plugin_get_port_by_index(plug, i);
@@ -908,17 +908,41 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
 	}
 
-	// debug output port //FIXME check
+	// debug dsp port //FIXME check
+	{
+		const unsigned i = mod->num_ports - 4;
+		port_t *tar = &mod->ports[i];
+
+		tar->mod = mod;
+		tar->index = i;
+		tar->symbol = "__debug__dsp__";
+		tar->direction = PORT_DIRECTION_OUTPUT;
+
+		tar->size = app->driver->seq_size * 8; //FIXME how big?
+		tar->type = PORT_TYPE_ATOM;
+		tar->protocol = app->regs.port.event_transfer.urid;
+		tar->driver = &seq_port_driver;
+
+		tar->atom.buffer_type = PORT_BUFFER_TYPE_SEQUENCE;
+
+		tar->sys.type = SYSTEM_PORT_NONE;
+		tar->sys.data = NULL;
+
+		// increase pool sizes
+		mod->pools[tar->type].size += lv2_atom_pad_size(tar->size);
+	}
+
+	// debug ui port //FIXME check
 	{
 		const unsigned i = mod->num_ports - 3;
 		port_t *tar = &mod->ports[i];
 
 		tar->mod = mod;
 		tar->index = i;
-		tar->symbol = "__debug__out__";
+		tar->symbol = "__debug__ui__";
 		tar->direction = PORT_DIRECTION_OUTPUT;
 
-		tar->size = app->driver->seq_size;
+		tar->size = app->driver->seq_size * 8; //FIXME how big?
 		tar->type = PORT_TYPE_ATOM;
 		tar->protocol = app->regs.port.event_transfer.urid;
 		tar->driver = &seq_port_driver;
@@ -1010,7 +1034,7 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 	for(port_type_t pool=0; pool<PORT_TYPE_NUM; pool++)
 		_sp_app_mod_slice_pool(mod, pool);
 
-	for(unsigned i=0; i<mod->num_ports - 3; i++)
+	for(unsigned i=0; i<mod->num_ports - 4; i++)
 	{
 		port_t *tar = &mod->ports[i];
 
@@ -1195,7 +1219,7 @@ _sp_app_mod_reinitialize_soft(mod_t *mod)
 	mod->handle = lilv_instance_get_handle(mod->inst);
 
 	// refresh all connections
-	for(unsigned i=0; i<mod->num_ports - 3; i++)
+	for(unsigned i=0; i<mod->num_ports - 4; i++)
 	{
 		port_t *tar = &mod->ports[i];
 

@@ -979,6 +979,43 @@ _patch_notification_add(sp_app_t *app, port_t *source_port,
 			&& _patch_notification_internal(app, source_port, size, type, body) )
 		{
 			synthpod_patcher_pop(&app->forge, frame, 3);
+
+			const LV2_Atom_Object *patch_add = NULL;
+			const LV2_Atom_Object *obj = NULL;
+
+			// dsp debug out
+			lv2_atom_object_get((const LV2_Atom_Object *)answer,
+				app->regs.patch.add.urid, &patch_add,
+				0);
+
+			if(patch_add)
+			{
+				lv2_atom_object_get(patch_add,
+					app->regs.synthpod.notification_list.urid, &obj,
+					0);
+			}
+
+			if(obj)
+			{
+				mod_t *mod = source_port->mod;
+				port_t *dbg_port = &mod->ports[mod->num_ports - 4];
+				const uint32_t capacity = PORT_SIZE(dbg_port);
+				LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(dbg_port);
+
+				const LV2_Atom_Event *dummy = (const void *)obj - offsetof(LV2_Atom_Event, body);
+				LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, dummy);
+				if(ev)
+				{
+					ev->time.frames = 0;
+				}
+				else
+				{
+					sp_app_log_trace(app, "%s: failed to append to: %s\n",
+						__func__, dbg_port->symbol);
+				}
+			}
+			// dsp debug out
+
 			_sp_app_to_ui_advance_atom(app, answer);
 		}
 		else

@@ -1500,9 +1500,14 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 				const LV2_Atom_Event *dummy = (const void *)snk_value - offsetof(LV2_Atom_Event, body);
 				LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, dummy);
 				if(ev)
+				{
 					ev->time.frames = 0;
+				}
 				else
-					sp_app_log_trace(app, "%s: failed to append\n", __func__);
+				{
+					sp_app_log_trace(app, "%s: failed to append to: %s\n",
+						__func__, snk_port->symbol);
+				}
 			}
 			else if( (snk_proto == app->regs.port.atom_transfer.urid)
 				&& (snk_port->type == PORT_TYPE_ATOM) )
@@ -1513,31 +1518,23 @@ _notification_list_add(sp_app_t *app, const LV2_Atom_Object *obj)
 			}
 		}
 
-		port_t *dbg_port = _port_find_by_symbol(app, snk_urn, "__debug__out__");
-
+		port_t *dbg_port = _port_find_by_symbol(app, snk_urn, "__debug__ui__");
 		if(dbg_port)
 		{
 			const uint32_t capacity = PORT_SIZE(dbg_port);
 			LV2_Atom_Sequence *seq = PORT_BASE_ALIGNED(dbg_port);
-			/*
-			LV2_Atom_Forge_Frame frame;
-
-			LV2_Atom_Forge forge = app->forge; //FIXME do this only once
-			lv2_atom_forge_set_buffer(&forge, (uint8_t *)seq, capacity);
-			LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
-
-			//lv2_atom_forge_frame_time(&forge, 0);
-			//lv2_atom_forge_int(&forge, 12);
-
-			lv2_atom_forge_pop(&forge, &frame);
-			*/
 
 			const LV2_Atom_Event *dummy = (const void *)obj - offsetof(LV2_Atom_Event, body);
 			LV2_Atom_Event *ev = lv2_atom_sequence_append_event(seq, capacity, dummy);
 			if(ev)
+			{
 				ev->time.frames = 0;
+			}
 			else
-				sp_app_log_trace(app, "%s: failed to append\n", __func__);
+			{
+				sp_app_log_trace(app, "%s: failed to append to: %s\n",
+					__func__, dbg_port->symbol);
+			}
 		}
 	}
 }
