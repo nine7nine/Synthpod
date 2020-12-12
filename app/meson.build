@@ -7,7 +7,7 @@ srcs = ['synthpod_app.c',
 ]
 
 incs = [inc_incs, app_incs, canvas_incs, xpress_incs, osc_incs, extui_incs, ardour_incs, varchunk_incs, crossclock_incs]
-deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
+deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep, sratom_dep]
 
 app = static_library('synthpod_app', srcs,
 	include_directories : incs,

@@ -64,6 +64,7 @@ rt_dep = cc.find_library('rt')
 lv2_dep = dependency('lv2', version : '>=1.18.0')
 thread_dep = dependency('threads')
 lilv_dep = dependency('lilv-0', version : '>=0.24.0', static : static_link)
+sratom_dep = dependency('sratom-0', version : '>=0.6.0', static : static_link)
 alsa_dep = dependency('alsa', version : '>=1.1.0', required : use_alsa)
 zita_dep = cc.find_library('zita-alsa-pcmi', required : use_alsa)
 jack_dep = dependency('jack', required : use_jack)
@@ -79,7 +80,7 @@ qt4_dep = dependency('qt4', modules : ['Core', 'Gui'], required : use_qt4)
 qt5_dep = dependency('qt5', modules : ['Core', 'Widgets', 'Gui'], required : use_qt5)
 cairo_dep = dependency('cairo', static : static_link, required : false)
 
-bin_deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep]
+bin_deps = [m_dep, rt_dep, lv2_dep, thread_dep, lilv_dep, sratom_dep]
 
 rawvers = run_command('cat', 'VERSION').stdout().strip()
 version = rawvers.split('.')
