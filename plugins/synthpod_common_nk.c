@@ -4082,21 +4082,35 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 	mod->readables = lilv_plugin_get_value(plug, handle->node.patch_readable);
 	mod->writables = lilv_plugin_get_value(plug, handle->node.patch_writable);
 
-	LILV_FOREACH(nodes, i, mod->readables)
-	{
-		const LilvNode *param_node= lilv_nodes_get(mod->readables, i);
-
-		param_t *param = _param_add(mod, &mod->params, true);
-		if(param)
-			_param_fill(handle, param, param_node);
-	}
 	LILV_FOREACH(nodes, i, mod->writables)
 	{
 		const LilvNode *param_node = lilv_nodes_get(mod->readables, i);
 
 		param_t *param = _param_add(mod, &mod->params, false);
 		if(param)
+		{
 			_param_fill(handle, param, param_node);
+		}
+	}
+	LILV_FOREACH(nodes, i, mod->readables)
+	{
+		const LilvNode *param_node= lilv_nodes_get(mod->readables, i);
+
+		// ignore it if already defined as patch:writable
+		if(lilv_world_ask(handle->world, uri_node, handle->node.patch_writable,
+			param_node))
+		{
+			_log_note(handle, "ignoring superfluous patch:readable param <%s>\n",
+				lilv_node_as_uri(param_node));
+
+			continue;
+		}
+
+		param_t *param = _param_add(mod, &mod->params, true);
+		if(param)
+		{
+			_param_fill(handle, param, param_node);
+		}
 	}
 
 	_hash_sort(&mod->params, _sort_param_name);
@@ -4124,7 +4138,8 @@ _mod_init(plughandle_t *handle, mod_t *mod, const LilvPlugin *plug)
 			{
 				if(handle->log)
 				{
-					_log_warning(handle, "<%s> instance-access extension not supported\n", lilv_node_as_uri(ui_uri));
+					_log_warning(handle, "<%s> instance-access extension not supported\n",
+						lilv_node_as_uri(ui_uri));
 				}
 				continue;
 			}
