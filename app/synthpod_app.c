@@ -434,11 +434,15 @@ _sp_app_process_single_run(mod_t *mod, uint32_t nsamples)
 		}
 
 		if(ref)
+		{
 			lv2_atom_forge_pop(&forge, &frame);
+		}
 		else
 		{
+			sp_app_log_trace(app, "%s: automation out buffer overflow (%zu) <%s>\n", __func__,
+				auto_port->size, mod->urn_uri);
+
 			lv2_atom_sequence_clear(seq);
-			sp_app_log_trace(app, "%s: automation out buffer overflow\n", __func__);
 		}
 	}
 
@@ -542,11 +546,15 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 		LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
 
 		if(ref)
+		{
 			lv2_atom_forge_pop(&forge, &frame);
+		}
 		else
 		{
+			sp_app_log_trace(app, "%s: dsp debug buffer overflow (%zu) <%s>\n", __func__,
+				auto_port->size, mod->urn_uri);
+
 			lv2_atom_sequence_clear(seq);
-			sp_app_log_trace(app, "%s: dsp debug buffer overflow\n", __func__);
 		}
 	}
 
@@ -670,11 +678,15 @@ _sp_app_process_single_post(mod_t *mod, uint32_t nsamples, bool sparse_update_ti
 		LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&forge, &frame, 0);
 
 		if(ref)
+		{
 			lv2_atom_forge_pop(&forge, &frame);
+		}
 		else
 		{
+			sp_app_log_trace(app, "%s: ui debug buffer overflow (%zu) <%s>\n", __func__,
+				auto_port->size, mod->urn_uri);
+
 			lv2_atom_sequence_clear(seq);
-			sp_app_log_trace(app, "%s: ui debug buffer overflow\n", __func__);
 		}
 	}
 }

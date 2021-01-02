@@ -909,7 +909,9 @@ _sp_app_mod_add(sp_app_t *app, const char *uri, LV2_URID urn, uint32_t created,
 	}
 
 	// rough guestimate of minimal debug port size
-	const size_t dbg_sz = mod->pools[PORT_TYPE_ATOM].size * 8;
+	const size_t dbg_sz = 8 * (mod->pools[PORT_TYPE_ATOM].size
+		? mod->pools[PORT_TYPE_ATOM].size
+		: app->driver->seq_size);
 
 	// debug dsp port //FIXME check
 	{
