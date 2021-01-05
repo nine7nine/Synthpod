@@ -498,7 +498,7 @@ _request_value(LV2UI_Feature_Handle handle, LV2_URID key, LV2_URID type,
 		return LV2UI_REQUEST_VALUE_SUCCESS;
 	}
 
-	return LV2UI_REQUEST_VALUE_ERR_UNKNOWN;
+	return LV2UI_REQUEST_VALUE_ERR_UNSUPPORTED;
 }
 
 static inline bool
