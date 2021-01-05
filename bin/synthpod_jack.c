@@ -1027,6 +1027,68 @@ _osc_schedule_frames2osc(LV2_OSC_Schedule_Handle instance, double frames)
 	return timestamp;
 }
 
+static void
+_header()
+{
+	fprintf(stderr,
+		"Synthpod "SYNTHPOD_VERSION"\n"
+		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
+}
+
+static void
+_version()
+{
+	_header();
+
+	fprintf(stderr,
+		"--------------------------------------------------------------------\n"
+		"This is free software: you can redistribute it and/or modify\n"
+		"it under the terms of the Artistic License 2.0 as published by\n"
+		"The Perl Foundation.\n"
+		"\n"
+		"This source is distributed in the hope that it will be useful,\n"
+		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
+		"Artistic License 2.0 for more details.\n"
+		"\n"
+		"You should have received a copy of the Artistic License 2.0\n"
+		"along the source as a COPYING file. If not, obtain it from\n"
+		"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
+}
+
+static void
+_usage(char **argv)
+{
+	_header();
+
+	fprintf(stderr,
+		"--------------------------------------------------------------------\n"
+		"USAGE\n"
+		"   %s [OPTIONS] [BUNDLE_PATH]\n"
+		"\n"
+		"OPTIONS\n"
+		"   [-v]                 print version and full license information\n"
+		"   [-h]                 print usage information\n"
+		"   [-g]                 load GUI\n"
+		"   [-G]                 do NOT load GUI (default)\n"
+		"   [-k]                 kill DSP with GUI\n"
+		"   [-K]                 do NOT kill DSP with GUI (default)\n"
+		"   [-t]                 run GUI in threaded mode\n"
+		"   [-T]                 run GUI in separate process (default)\n"
+		"   [-b]                 enable bad plugins\n"
+		"   [-B]                 disable bad plugins (default)\n"
+		"   [-a]                 enable CPU affinity\n"
+		"   [-A]                 disable CPU affinity (default)\n"
+		"   [-u]                 show alternate UI\n"
+		"   [-l] link-path       socket link path (shm:///synthpod)\n"
+		"   [-n] server-name     connect to named JACK daemon\n"
+		"   [-s] sequence-size   minimum sequence size (8192)\n"
+		"   [-c] slave-cores     number of slave cores (auto)\n"
+		"   [-f] update-rate     GUI update rate (25)\n\n"
+		, argv[0]);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1049,59 +1111,22 @@ main(int argc, char **argv)
 	bin->update_rate = 25;
 	bin->cpu_affinity = false;
 
-	fprintf(stderr,
-		"Synthpod "SYNTHPOD_VERSION"\n"
-		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
-		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
+	bool quiet = false;
 
 	int c;
-	while((c = getopt(argc, argv, "vhgGkKtTbBaAul:n:s:c:f:")) != -1)
+	while((c = getopt(argc, argv, "vhqgGkKtTbBaAul:n:s:c:f:")) != -1)
 	{
 		switch(c)
 		{
 			case 'v':
-				fprintf(stderr,
-					"--------------------------------------------------------------------\n"
-					"This is free software: you can redistribute it and/or modify\n"
-					"it under the terms of the Artistic License 2.0 as published by\n"
-					"The Perl Foundation.\n"
-					"\n"
-					"This source is distributed in the hope that it will be useful,\n"
-					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
-					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
-					"Artistic License 2.0 for more details.\n"
-					"\n"
-					"You should have received a copy of the Artistic License 2.0\n"
-					"along the source as a COPYING file. If not, obtain it from\n"
-					"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
+				_version();
 				return 0;
 			case 'h':
-				fprintf(stderr,
-					"--------------------------------------------------------------------\n"
-					"USAGE\n"
-					"   %s [OPTIONS] [BUNDLE_PATH]\n"
-					"\n"
-					"OPTIONS\n"
-					"   [-v]                 print version and full license information\n"
-					"   [-h]                 print usage information\n"
-					"   [-g]                 load GUI\n"
-					"   [-G]                 do NOT load GUI (default)\n"
-					"   [-k]                 kill DSP with GUI\n"
-					"   [-K]                 do NOT kill DSP with GUI (default)\n"
-					"   [-t]                 run GUI in threaded mode\n"
-					"   [-T]                 run GUI in separate process (default)\n"
-					"   [-b]                 enable bad plugins\n"
-					"   [-B]                 disable bad plugins (default)\n"
-					"   [-a]                 enable CPU affinity\n"
-					"   [-A]                 disable CPU affinity (default)\n"
-					"   [-u]                 show alternate UI\n"
-					"   [-l] link-path       socket link path (shm:///synthpod)\n"
-					"   [-n] server-name     connect to named JACK daemon\n"
-					"   [-s] sequence-size   minimum sequence size (8192)\n"
-					"   [-c] slave-cores     number of slave cores (auto)\n"
-					"   [-f] update-rate     GUI update rate (25)\n\n"
-					, argv[0]);
+				_usage(argv);
 				return 0;
+			case 'q':
+				quiet = true;
+				break;
 			case 'g':
 				bin->has_gui = true;
 				break;
@@ -1163,6 +1188,11 @@ main(int argc, char **argv)
 			default:
 				return -1;
 		}
+	}
+
+	if(!quiet)
+	{
+		_header();
 	}
 
 	if(_jack_probe_prio(&handle))

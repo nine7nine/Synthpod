@@ -3184,6 +3184,7 @@ _mod_ui_run(mod_ui_t *mod_ui, bool sync)
 					"-m", mod_ui->sbox.minimum,
 					"-r", mod_ui->sbox.sample_rate,
 					"-f", mod_ui->sbox.update_rate,
+					"-q",
 					NULL
 				};
 

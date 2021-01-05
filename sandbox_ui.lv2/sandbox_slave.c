@@ -535,6 +535,64 @@ _voice_map_new_uuid(void *data, uint32_t flags __attribute__((unused)))
 	return xpress_map(xpress);
 }
 
+static void
+_header()
+{
+	fprintf(stderr,
+		"Synthpod "SYNTHPOD_VERSION"\n"
+		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
+		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
+}
+
+static void
+_version()
+{
+	_header();
+
+	fprintf(stderr,
+		"--------------------------------------------------------------------\n"
+		"This is free software: you can redistribute it and/or modify\n"
+		"it under the terms of the Artistic License 2.0 as published by\n"
+		"The Perl Foundation.\n"
+		"\n"
+		"This source is distributed in the hope that it will be useful,\n"
+		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
+		"Artistic License 2.0 for more details.\n"
+		"\n"
+		"You should have received a copy of the Artistic License 2.0\n"
+		"along the source as a COPYING file. If not, obtain it from\n"
+		"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
+}
+
+static void
+_usage(char **argv)
+{
+	_header();
+
+	fprintf(stderr,
+		"--------------------------------------------------------------------\n"
+		"USAGE\n"
+		"   %s [OPTIONS]\n"
+		"\n"
+		"OPTIONS\n"
+		"   [-v]                 Print version and full license information\n"
+		"   [-h]                 Print usage information\n"
+		"   [-q]                 Quiet output\n"
+		"   [-t]                 Testing mode\n\n"
+		"   [-n] plugin-urn      Plugin URN\n"
+		"   [-p] plugin-uri      Plugin URI\n"
+		"   [-P] plugin-bundle   Plugin bundle path\n"
+		"   [-u] ui-uri          Plugin UI URI\n"
+		"   [-U] ui-bundle       Plugin UI bundle path\n"
+		"   [-s] socket-path     Socket path\n"
+		"   [-w] window-title    Window title\n"
+		"   [-m] minimum-size    Minimum ringbuffer size\n"
+		"   [-r] sample-rate     Sample rate (44100)\n"
+		"   [-f] update-rate     GUI update rate (25)\n\n"
+		, argv[0]);
+}
+
 sandbox_slave_t *
 sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	void *data, int *res)
@@ -547,6 +605,7 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	}
 
 	bool testing = false;
+	bool quiet = false;
 	sb->plugin_urn = NULL;
 	sb->window_title = "Untitled"; // fall-back
 	sb->minimum = 0x100000; // fall-back
@@ -556,58 +615,24 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 	sb->background_color = 0x222222ff; // fall-back
 	sb->foreground_color = 0xccccccff; // fall-back
 
-	fprintf(stderr,
-		"Synthpod "SYNTHPOD_VERSION"\n"
-		"Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)\n"
-		"Released under Artistic License 2.0 by Open Music Kontrollers\n");
-
 	optind = 1; // needed when called from thread that already ran getopt
 
 	int c;
-	while((c = getopt(argc, argv, "vhtn:p:P:u:U:s:w:m:r:f:")) != -1)
+	while((c = getopt(argc, argv, "vhqtn:p:P:u:U:s:w:m:r:f:")) != -1)
 	{
 		switch(c)
 		{
 			case 'v':
-				fprintf(stderr,
-					"--------------------------------------------------------------------\n"
-					"This is free software: you can redistribute it and/or modify\n"
-					"it under the terms of the Artistic License 2.0 as published by\n"
-					"The Perl Foundation.\n"
-					"\n"
-					"This source is distributed in the hope that it will be useful,\n"
-					"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
-					"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
-					"Artistic License 2.0 for more details.\n"
-					"\n"
-					"You should have received a copy of the Artistic License 2.0\n"
-					"along the source as a COPYING file. If not, obtain it from\n"
-					"http://www.perlfoundation.org/artistic_license_2_0.\n\n");
+				_version();
 				*res = EXIT_SUCCESS;
 				return NULL;
 			case 'h':
-				fprintf(stderr,
-					"--------------------------------------------------------------------\n"
-					"USAGE\n"
-					"   %s [OPTIONS]\n"
-					"\n"
-					"OPTIONS\n"
-					"   [-v]                 Print version and full license information\n"
-					"   [-h]                 Print usage information\n"
-					"   [-t]                 Testing mode\n\n"
-					"   [-n] plugin-urn      Plugin URN\n"
-					"   [-p] plugin-uri      Plugin URI\n"
-					"   [-P] plugin-bundle   Plugin bundle path\n"
-					"   [-u] ui-uri          Plugin UI URI\n"
-					"   [-U] ui-bundle       Plugin UI bundle path\n"
-					"   [-s] socket-path     Socket path\n"
-					"   [-w] window-title    Window title\n"
-					"   [-m] minimum-size    Minimum ringbuffer size\n"
-					"   [-r] sample-rate     Sample rate (44100)\n"
-					"   [-f] update-rate     GUI update rate (25)\n\n"
-					, argv[0]);
+				_usage(argv);
 				*res = EXIT_SUCCESS;
 				return NULL;
+			case 'q':
+				quiet = true;
+				break;
 			case 't':
 				testing = true;
 				break;
@@ -658,6 +683,11 @@ sandbox_slave_new(int argc, char **argv, const sandbox_slave_driver_t *driver,
 			default:
 				goto fail;
 		}
+	}
+
+	if(!quiet)
+	{
+		_header();
 	}
 
 	if(  !sb->plugin_uri

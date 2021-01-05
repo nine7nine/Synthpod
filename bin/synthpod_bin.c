@@ -704,6 +704,7 @@ _bin_show_ipc(bin_t *bin)
 			"-m", minimum,
 			"-r", srate,
 			"-f", urate,
+			"-q",
 			NULL
 		};
 
