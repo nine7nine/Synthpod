@@ -473,8 +473,15 @@ _request_value(LV2UI_Feature_Handle handle, LV2_URID key, LV2_URID type,
 			lv2_atom_forge_key(&sb->forge, sb->patch_property);
 			lv2_atom_forge_urid(&sb->forge, key);
 			lv2_atom_forge_key(&sb->forge, sb->patch_value);
-			lv2_atom_forge_atom(&sb->forge, body_len, type);
-			lv2_atom_forge_write(&sb->forge, body, body_len);
+			if(type == sb->forge.String)
+			{
+				lv2_atom_forge_string(&sb->forge, (char *)body, body_len);
+			}
+			else
+			{
+				lv2_atom_forge_atom(&sb->forge, body_len, type);
+				lv2_atom_forge_write(&sb->forge, body, body_len);
+			}
 			lv2_atom_forge_pop(&sb->forge, &frame);
 
 			_write_function(handle, index, lv2_atom_total_size(atom),
