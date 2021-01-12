@@ -653,7 +653,7 @@ _expose_patchmatrix_connection(plughandle_t *handle, unsigned o,
 			const unsigned k = d2tk_table_get_index(tab);
 			bool val = false;
 
-			if(d2tk_base_dial_bool_is_changed(base, D2TK_ID_IDX(o*512 + k), trect, &val))
+			if(d2tk_base_dial_bool_is_changed(base, D2TK_ID_IDX(o*512 + k), trect, &val, D2TK_FLAG_NONE))
 			{
 				//FIXME
 			}
