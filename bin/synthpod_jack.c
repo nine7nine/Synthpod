@@ -686,7 +686,7 @@ _system_port_add(void *data, system_port_t type, const char *short_name,
 			if(designation)
 			{
 				jack_set_property(handle->client, uuid,
-					JACKEY_DESIGNATION, designation, "text/plain");
+					JACK_METADATA_PORT_GROUP, designation, "text/plain");
 			}
 
 			char order_str [32];
