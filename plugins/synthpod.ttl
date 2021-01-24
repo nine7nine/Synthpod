@@ -36,7 +36,6 @@
 @prefix opts: <http://lv2plug.in/ns/ext/options#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 
-@prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:	<http://open-music-kontrollers.ch/lv2/> .
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
@@ -84,7 +83,7 @@ synthpod:stereo
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod Stereo" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:extensionData work:interface ,
 		state:interface ,
@@ -303,7 +302,7 @@ synthpod:keyboard
 	a lv2:Plugin ,
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod Keyboard" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive ,
@@ -419,7 +418,7 @@ synthpod:cv2control
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Synthpod CV2Control" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:optionalFeature lv2:isLive ,
 		lv2:hardRTCapable ;
@@ -608,7 +607,7 @@ synthpod:control2cv
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Synthpod Control2CV" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:optionalFeature lv2:isLive ,
 		lv2:hardRTCapable ;
@@ -758,7 +757,7 @@ synthpod:midisplitter
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Synthpod MIDI Splitter" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:isLive ,
@@ -926,7 +925,7 @@ synthpod:heavyload
 	a lv2:Plugin ,
 		lv2:UtilityPlugin ;
 	doap:name "Synthpod HeavyLoad" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:optionalFeature lv2:isLive ,
 		lv2:hardRTCapable ;
@@ -972,7 +971,7 @@ synthpod:panic
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Synthpod Panic" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature urid:map,
 		state:loadDefaultState ;
@@ -1018,7 +1017,7 @@ synthpod:placeholder
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Synthpod Placeholder" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature urid:map ,
 		state:loadDefaultState ;
