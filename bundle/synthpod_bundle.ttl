@@ -25,7 +25,6 @@
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
 @prefix urid: <http://lv2plug.in/ns/ext/urid#> .
 
-@prefix lic:	<http://opensource.org/licenses/> .
 @prefix omk:	<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:	<http://open-music-kontrollers.ch/lv2/> .
 @prefix synthpod:	<http://open-music-kontrollers.ch/lv2/synthpod#> .
@@ -107,7 +106,7 @@ synthpod:sink
 	doap:name "Synthpod System Sink" ,
 		"Synthpod System Ziel"@de ,
 		"Synthpod Syschtem Ziiu"@gsw ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, synthpod:systemPorts ;
@@ -220,7 +219,7 @@ synthpod:source
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod System Source" ,
 		"Synthpod System Quelle"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, synthpod:systemPorts ;
@@ -321,7 +320,7 @@ synthpod:midi_sink
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod MIDI Sink" ,
 		"Synthpod MIDI Ziel"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -345,7 +344,7 @@ synthpod:midi_source
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod MIDI Source" ,
 		"Synthpod MIDI Quelle"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -369,7 +368,7 @@ synthpod:osc_sink
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod OSC Sink" ,
 		"Synthpod OSC Ziel"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -394,7 +393,7 @@ synthpod:osc_source
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod OSC Source" ,
 		"Synthpod OSC Quelle"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts, urid:map ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -419,7 +418,7 @@ synthpod:cv_sink
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod CV Sink" ,
 		"Synthpod CV Ziel"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -476,7 +475,7 @@ synthpod:cv_source
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod CV Source" ,
 		"Synthpod CV Quelle"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -521,7 +520,7 @@ synthpod:audio_sink
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod Audio Sink" ,
 		"Synthpod Audio Ziel"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
@@ -566,7 +565,7 @@ synthpod:audio_source
 		lv2:InstrumentPlugin ;
 	doap:name "Synthpod Audio Source" ,
 		"Synthpod Audio Quelle"@de ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:synthpod ;
 	lv2:requiredFeature bufsz:boundedBlockLength, synthpod:systemPorts ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
