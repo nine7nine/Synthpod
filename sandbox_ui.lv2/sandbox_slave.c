@@ -1113,11 +1113,10 @@ sandbox_slave_instantiate(sandbox_slave_t *sb, const LV2_Feature *parent_feature
 	if(sb->host_resize.ui_resize)
 	{
 		features[i++] = &resize_feature;
-
-		if(parent_feature)
-		{
-			features[i++] = parent_feature;
-		}
+	}
+	if(parent_feature)
+	{
+		features[i++] = parent_feature;
 	}
 	if(dsp_instance)
 	{
