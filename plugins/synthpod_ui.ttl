@@ -33,7 +33,7 @@ synthpod:common_4_nk
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
-	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
 synthpod:root_4_nk
@@ -43,7 +43,7 @@ synthpod:root_4_nk
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
-	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
 
@@ -55,7 +55,7 @@ synthpod:common_5_d2tk
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
-	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
 synthpod:root_5_d2tk
@@ -65,12 +65,12 @@ synthpod:root_5_d2tk
 		ui:protocol atom:eventTransfer ;
 	] ;
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
-	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface ;
+	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
 	opts:supportedOption param:sampleRate, ui:updateRate .
 
 # Keyboard UIs
 synthpod:keyboard_4_nk
 	lv2:optionalFeature ui:resize ;
-	lv2:requiredFeature ui:idleInterface, urid:map ;
+	lv2:requiredFeature ui:idleInterface, urid:map, ui:parent ;
   lv2:extensionData ui:idleInterface, ui:resize .
