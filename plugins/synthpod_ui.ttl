@@ -35,7 +35,7 @@ synthpod:common_4_nk
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
-	opts:supportedOption param:sampleRate, ui:updateRate .
+	opts:supportedOption param:sampleRate, ui:updateRate, ui:scaleFactor .
 synthpod:root_4_nk
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
@@ -45,7 +45,7 @@ synthpod:root_4_nk
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
-	opts:supportedOption param:sampleRate, ui:updateRate .
+	opts:supportedOption param:sampleRate, ui:updateRate, ui:scaleFactor .
 
 # D2TK UIs
 synthpod:common_5_d2tk
@@ -57,7 +57,7 @@ synthpod:common_5_d2tk
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
-	opts:supportedOption param:sampleRate, ui:updateRate .
+	opts:supportedOption param:sampleRate, ui:updateRate, ui:scaleFactor .
 synthpod:root_5_d2tk
 	ui:portNotification [
 		ui:plugin synthpod:stereo ;
@@ -67,7 +67,7 @@ synthpod:root_5_d2tk
 	lv2:optionalFeature ui:resize, log:log, ui:portSubscribe, opts:options, ui:requestValue, instacc: ;
 	lv2:requiredFeature ui:portMap, urid:map, urid:unmap, ui:idleInterface, ui:parent ;
 	lv2:extensionData ui:idleInterface, ui:resize ;
-	opts:supportedOption param:sampleRate, ui:updateRate .
+	opts:supportedOption param:sampleRate, ui:updateRate, ui:scaleFactor .
 
 # Keyboard UIs
 synthpod:keyboard_4_nk

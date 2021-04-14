@@ -8338,7 +8338,6 @@ _expose(struct nk_context *ctx, struct nk_rect wbounds, void *data)
 	const struct nk_user_font *font = ctx->style.font;
 	const struct nk_style *style = &handle->win.ctx.style;
 
-	handle->scale = nk_pugl_get_scale(&handle->win);
 	handle->dy = 20.f * handle->scale;
 	handle->dy2 = font->height + 2 * style->window.header.label_padding.y;
 
@@ -8484,6 +8483,8 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		LV2_PARAMETERS__sampleRate);
 	const LV2_URID ui_update_rate= handle->map->map(handle->map->handle,
 		LV2_UI__updateRate);
+	const LV2_URID ui_scaleFactor = handle->map->map(handle->map->handle,
+		LV2_UI__scaleFactor);
 
 	handle->sample_rate = 48000.f; // fall-back
 	handle->update_rate = 60.f; // fall-back
@@ -8493,18 +8494,31 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 		opt++)
 	{
 		if( (opt->key == params_sample_rate) && (opt->type == atom_float) )
+		{
 			handle->sample_rate = *(float*)opt->value;
+		}
 		else if( (opt->key == ui_update_rate) && (opt->type == atom_float) )
+		{
 			handle->update_rate = *(float*)opt->value;
+		}
+		if( (opt->key == ui_scaleFactor) && (opt->type == handle->forge.Float) )
+		{
+			handle->scale = *(float*)opt->value;
+		}
 		//TODO handle more options
 	}
 
 	handle->controller = controller;
 	handle->writer = write_function;
 
+	if(handle->scale == 0.f)
+	{
+		handle->scale = nk_pugl_get_scale();
+	}
+
 	nk_pugl_config_t *cfg = &handle->win.cfg;
-	cfg->width = 1280;
-	cfg->height = 720;
+	cfg->width = 1280 * handle->scale;
+	cfg->height = 720 * handle->scale;
 	cfg->resizable = true;
 	cfg->ignore = false;
 	cfg->class = "synthpod";
@@ -8516,7 +8530,7 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
 	if(asprintf(&cfg->font.face, "%sAbel-Regular.ttf", bundle_path) == -1)
 		cfg->font.face = NULL;
-	cfg->font.size = 15;
+	cfg->font.size = 15 * handle->scale;
 
 	*(intptr_t *)widget = nk_pugl_init(&handle->win);
 	nk_pugl_show(&handle->win);
@@ -8542,8 +8556,6 @@ instantiate(const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 	bst->image_padding.y = -1;
 	bst->text_hover = nk_rgb(0xff, 0xff, 0xff);
 	bst->text_active = nk_rgb(0xff, 0xff, 0xff);
-
-	handle->scale = nk_pugl_get_scale(&handle->win);
 
 	handle->scrolling = nk_vec2(0.f, 0.f);
 
