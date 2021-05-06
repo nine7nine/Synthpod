@@ -128,7 +128,8 @@ endif
 if lv2lint.found()
 	test('LV2 lint', lv2lint,
 		args : ['-I', join_paths(build_root, 'plugins', ''),
-			'-Ewarn',
+			'-E', 'warn',
+			'-t', 'UI Hints',
 			'http://open-music-kontrollers.ch/lv2/synthpod#control2cv',
 			'http://open-music-kontrollers.ch/lv2/synthpod#cv2control',
 			'http://open-music-kontrollers.ch/lv2/synthpod#heavyload',
