@@ -54,7 +54,7 @@
 #if defined(USE_CAIRO_CANVAS)
 #	include <canvas.lv2/canvas.h>
 #	include <canvas.lv2/forge.h>
-#	include <canvas.lv2/render.h>
+#	include <canvas.lv2/render_cairo.h>
 #endif
 
 #define SEARCH_BUF_MAX 128
@@ -8924,7 +8924,7 @@ _add_automation(plughandle_t *handle, const LV2_Atom_Object *obj)
 		oauto->a = src_min ? src_min->body : 0x0;
 		oauto->b = src_max ? src_max->body : 0x7f;
 
-		strncpy(oauto->path, LV2_ATOM_BODY_CONST(osc_path), 128); //FIXME
+		strncpy(oauto->path, LV2_ATOM_BODY_CONST(osc_path), sizeof(oauto->path) - 1);
 	}
 }
 
