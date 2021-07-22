@@ -1205,9 +1205,11 @@ _mod_subscription_is_persistent(plughandle_t *handle, mod_t *mod, port_t *port)
 
 	if(port->type & PROPERTY_TYPE_PATCH)
 	{
+#if defined(USE_CAIRO_CANVAS)
 		param = param
 			? param
 			: _mod_param_find_by_property(mod, handle->canvas.urid.Canvas_graph);
+#endif
 
 		if(param)
 		{
@@ -2208,10 +2210,12 @@ _param_free(plughandle_t *handle, param_t *param)
 	}
 	else if(param->range == handle->forge.Tuple)
 	{
+#if defined(USE_CAIRO_CANVAS)
 		if(param->property == handle->canvas.urid.Canvas_graph)
 		{
 			_image_free(handle, &param->mod->idisp.img);
 		}
+#endif
 	}
 
 	HASH_FREE(&param->points, ptr2)
@@ -2249,6 +2253,7 @@ _set_string(struct nk_str *str, uint32_t size, const char *body)
 	nk_str_append_text_utf8(str, from, end-from);
 }
 
+#if defined(USE_CAIRO_CANVAS)
 static inline LV2_Inline_Display_Image_Surface *
 _cairo_init(mod_t *mod, int w, int h)
 {
@@ -2358,6 +2363,7 @@ _render(plughandle_t *handle, mod_t *mod, uint32_t w, uint32_t h,
 
 	nk_pugl_post_redisplay(&handle->win);
 }
+#endif
 
 static inline bool
 _param_matches_type(plughandle_t *handle, param_t *param, LV2_URID type)
@@ -2427,10 +2433,12 @@ _param_set_value(plughandle_t *handle, mod_t *mod, param_t *param,
 	}
 	else if(param->range == handle->forge.Tuple)
 	{
+#if defined(USE_CAIRO_CANVAS)
 		if(param->property == handle->canvas.urid.Canvas_graph)
 		{
 			_render(handle, mod, 256, 256, (const LV2_Atom_Tuple *)value); //FIXME how big?
 		}
+#endif
 	}
 	else
 	{
@@ -4265,7 +4273,9 @@ _mod_free(plughandle_t *handle, mod_t *mod)
 	_image_free(handle, &mod->idisp.img);
 	_set_module_idisp_subscription(handle, mod, 0);
 
+#if defined(USE_CAIRO_CANVAS)
 	_cairo_deinit(mod);
+#endif
 }
 
 static bool
@@ -6992,6 +7002,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 				.h = h
 			};
 
+#if defined(USE_CAIRO_CANVAS)
 			const bool is_prev_hov = nk_input_is_mouse_prev_hovering_rect(in, body2);
 			const bool is_hov = nk_input_is_mouse_hovering_rect(in, body2);
 			if(is_prev_hov != is_hov)
@@ -7107,6 +7118,7 @@ _expose_mod(plughandle_t *handle, struct nk_context *ctx, struct nk_rect space_b
 					}
 				}
 			}
+#endif
 
 			nk_draw_image(canvas, body2, &mod->idisp.img, nk_rgb(0xff, 0xff, 0xff));
 			nk_stroke_rect(canvas, body2, style->rounding, style->border, style->border_color);
