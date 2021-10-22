@@ -2054,6 +2054,19 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 			//FIXME
 			lilv_node_free(min);
 		}
+		else
+		{
+			if(param->range == handle->forge.Int)
+				param->min.i = 0;
+			else if(param->range == handle->forge.Bool)
+				param->min.i = false;
+			else if(param->range == handle->forge.Long)
+				param->min.h = 0;
+			else if(param->range == handle->forge.Float)
+				param->min.f = 0.f;
+			else if(param->range == handle->forge.Double)
+				param->min.d = 0.0;
+		}
 
 		LilvNode *max = lilv_world_get(handle->world, param_node, handle->node.lv2_maximum, NULL);
 		if(max)
@@ -2070,6 +2083,19 @@ _param_fill(plughandle_t *handle, param_t *param, const LilvNode *param_node)
 				param->max.d = _node_as_double(max, 1.0);
 			//FIXME
 			lilv_node_free(max);
+		}
+		else
+		{
+			if(param->range == handle->forge.Int)
+				param->max.i = 1;
+			else if(param->range == handle->forge.Bool)
+				param->max.i = true;
+			else if(param->range == handle->forge.Long)
+				param->max.h = 1;
+			else if(param->range == handle->forge.Float)
+				param->max.f = 1.f;
+			else if(param->range == handle->forge.Double)
+				param->max.d = 1.0;
 		}
 
 		_param_update_span(handle, param);
