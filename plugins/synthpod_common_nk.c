@@ -575,13 +575,13 @@ static const char *property_search_labels [PROPERTY_SELECTOR_SEARCH_MAX] = {
 };
 
 static const struct nk_color grid_line_color = {40, 40, 40, 255};
-static const struct nk_color grid_background_color = {30, 30, 30, 255};
-static const struct nk_color hilight_color = {0, 200, 200, 255};
+static const struct nk_color grid_background_color = {0, 0, 0, 255};
+static const struct nk_color hilight_color = {255, 165, 48, 255};
 static const struct nk_color selection_color = {0, 50, 50, 127};
 static const struct nk_color automation_color = {200, 0, 100, 255};
-static const struct nk_color button_border_color = {100, 100, 100, 255};
-static const struct nk_color grab_handle_color = {100, 100, 100, 255};
-static const struct nk_color toggle_color = {150, 150, 150, 255};
+static const struct nk_color button_border_color = {0, 162, 255, 255};
+static const struct nk_color grab_handle_color = {191, 71, 255, 255};
+static const struct nk_color toggle_color = {151, 255, 71, 255};
 static const struct nk_color head_color = {12, 12, 12, 255};
 static const struct nk_color group_color = {24, 24, 24, 255};
 static const struct nk_color invisible_color = {0, 0, 0, 0};
